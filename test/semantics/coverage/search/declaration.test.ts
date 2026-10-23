@@ -418,3 +418,19 @@ describe('Tool.search — security: statement text is bounded data, not a denyli
     ).not.toThrow();
   });
 });
+
+describe('Tool.search — the stored declaration is frozen, its value words a null-prototype map', () => {
+  it('freezeSearch copies, freezes and gives said no prototype', async () => {
+    const { freezeSearch } = await import(
+      '../../../../src/semantics/coverage/search/declaration.js'
+    );
+    const frozen = freezeSearch(SEARCH);
+    expect(frozen).not.toBe(SEARCH);
+    expect(Object.isFrozen(frozen)).toBe(true);
+    const severity = frozen.arguments.find((a) => a.name === 'severity');
+    expect(Object.getPrototypeOf(severity?.said)).toBeNull();
+    expect(Object.isFrozen(severity?.said)).toBe(true);
+    expect(severity?.said?.critical).toEqual(['sev1']);
+    expect((severity?.said as Record<string, unknown>).toString).toBeUndefined();
+  });
+});

@@ -28,6 +28,7 @@ import { resolvedFor } from './binding.js';
 import type { ArgumentReading } from './inEffect.js';
 import type { ResolvedDeclaration } from './resultFacts.js';
 import { relativeSpan, resultSpan } from './span.js';
+import { valueWords } from './valueWords.js';
 import type { SearchArgument, ToolSearch } from './types.js';
 import type { PeriodShapes } from '../../../time/periodForm.js';
 
@@ -82,7 +83,7 @@ function sourceItem(input: FacetInput): ComposedItem | undefined {
       if (isDefault(reading.value)) {
         return { ...declared, argument: arg.name, value: reading.value, from: 'call', quote: true };
       }
-      const words = arg.said?.[valueText(reading.value)];
+      const words = valueWords(arg.said, valueText(reading.value));
       return {
         what: `${arg.name}: ${valueText(reading.value)}`,
         facet: 'source',
@@ -132,7 +133,7 @@ function argumentItems(
   const values =
     arg.role === 'population' && Array.isArray(reading.value) ? reading.value : [reading.value];
   return values.map((value: unknown): ComposedItem => {
-    const words = arg.role === 'filter' ? arg.said?.[valueText(value)] : undefined;
+    const words = arg.role === 'filter' ? valueWords(arg.said, valueText(value)) : undefined;
     const resolved =
       arg.role === 'population' ? resolvedFor(arg.name, value, input.resolved) : undefined;
     const span: ComposedSpan | undefined =

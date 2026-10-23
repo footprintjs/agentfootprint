@@ -55,7 +55,8 @@ describe('search over MCP — unit', () => {
       search: SEARCH,
       execute: () => [],
     });
-    expect(toolExtrasOf(tool)?.search).toBe(SEARCH);
+    expect(toolExtrasOf(tool)?.search).toBe(tool.search);
+    expect(tool.search).toEqual(SEARCH);
   });
 
   it('a well-formed remote search is kept', () => {

@@ -689,3 +689,37 @@ describe('security — composed text is the library’s, values are what the cal
     expect(service?.what).toBe('service: {"id":"p","from":"tool"}');
   });
 });
+
+describe('security — a sent value never indexes the declaration', () => {
+  const worded: ToolSearch = {
+    ...INCIDENTS,
+    arguments: [
+      ...INCIDENTS.arguments.filter((a) => a.name !== 'severity'),
+      { name: 'severity', role: 'filter', said: { critical: ['sev1'] } },
+      { name: 'db', role: 'source', whenOmitted: 'primary', said: { replica: ['the replica'] } },
+    ],
+  };
+
+  it.each(['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf'])(
+    'a sent %s composes no said words and does not throw',
+    (key) => {
+      const { checked } = compose(
+        call({ service: 'p', severity: key, db: key }, { search: worded }),
+        NONE,
+      );
+      const severity = item(checked, 'severity')[0];
+      const db = checked.find((i) => i.facet === 'source');
+      expect(severity?.value).toBe(key);
+      expect(severity?.said).toBeUndefined();
+      expect(db?.said).toBeUndefined();
+    },
+  );
+
+  it('a declared value still finds its words', () => {
+    const { checked } = compose(
+      call({ service: 'p', severity: 'critical' }, { search: worded }),
+      NONE,
+    );
+    expect(item(checked, 'severity')[0]?.said).toEqual(['sev1']);
+  });
+});

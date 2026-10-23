@@ -26,7 +26,11 @@ import {
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './declare.js';
-import { assertToolSearch, periodArgumentsOf } from '../semantics/coverage/search/declaration.js';
+import {
+  assertToolSearch,
+  freezeSearch,
+  periodArgumentsOf,
+} from '../semantics/coverage/search/declaration.js';
 import { searchReviewItems } from '../semantics/coverage/search/review.js';
 import type { ToolSearch } from '../semantics/coverage/search/types.js';
 import { isDevMode } from 'footprintjs';
@@ -1193,7 +1197,8 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.repeatedWhen !== undefined && { repeatedWhen: options.repeatedWhen }),
     ...(options.askOrAssume !== undefined && { askOrAssume: options.askOrAssume }),
     ...(options.period !== undefined && { period: options.period }),
-    ...(options.search !== undefined && { search: options.search }),
+    // Stored frozen, its value words a null-prototype map (`freezeSearch`).
+    ...(options.search !== undefined && { search: freezeSearch(options.search) }),
     execute: options.execute,
   };
 }

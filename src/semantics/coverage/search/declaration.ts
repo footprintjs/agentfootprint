@@ -115,6 +115,63 @@ export function isAnyValue(v: unknown): v is { readonly any: true } {
 }
 
 /**
+ * The declaration as it is STORED — a deep copy, frozen, each argument's
+ * `said` a null-prototype map — so nothing downstream can mutate it and no
+ * value a call sends can reach an inherited property through it
+ * (`valueWords.ts`). `defineTool` and the MCP ingest door store this, after
+ * `assertToolSearch` accepted the declaration.
+ */
+export function freezeSearch(search: ToolSearch): ToolSearch {
+  const words = (list: readonly string[]): readonly string[] => Object.freeze([...list]);
+  const said = (map: Readonly<Record<string, readonly string[]>>) => {
+    const out = Object.create(null) as Record<string, readonly string[]>;
+    for (const [value, list] of Object.entries(map)) out[value] = words(list);
+    return Object.freeze(out);
+  };
+  const bears = (b: GapFacet): GapFacet =>
+    typeof b === 'string'
+      ? b
+      : Object.freeze({
+          filter: b.filter,
+          ...(b.values !== undefined && { values: Object.freeze([...b.values]) }),
+        });
+  return Object.freeze({
+    source: Object.freeze({ what: search.source.what, said: words(search.source.said) }),
+    subject: Object.freeze({ what: search.subject.what, said: words(search.subject.said) }),
+    ...(search.fixed !== undefined && {
+      fixed: Object.freeze(
+        search.fixed.map((q) =>
+          Object.freeze({ name: q.name, value: q.value, said: words(q.said) }),
+        ),
+      ),
+    }),
+    arguments: Object.freeze(
+      search.arguments.map((a) =>
+        Object.freeze({
+          name: a.name,
+          role: a.role,
+          ...(a.whenOmitted !== undefined && {
+            whenOmitted: Array.isArray(a.whenOmitted)
+              ? Object.freeze([...a.whenOmitted])
+              : isAnyValue(a.whenOmitted)
+              ? Object.freeze({ any: true as const })
+              : a.whenOmitted,
+          }),
+          ...(a.said !== undefined && { said: said(a.said) }),
+        }),
+      ),
+    ),
+    ...(search.complete !== undefined && { complete: search.complete }),
+    ...(search.gaps !== undefined && {
+      gaps: Object.freeze(
+        search.gaps.map((g) => Object.freeze({ what: g.what, why: g.why, bears: bears(g.bears) })),
+      ),
+    }),
+    ...(search.limits !== undefined && { limits: Object.freeze({ cap: search.limits.cap }) }),
+  }) as ToolSearch;
+}
+
+/**
  * The arguments a tool's `period` names — its single argument, its zone
  * argument and every argument of its forms — or `undefined` when it declares
  * no period. What a `period`-role search argument must be one of.

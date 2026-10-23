@@ -68,7 +68,9 @@ describe('hostFillsOf — unit', () => {
   });
 
   it('the search declaration rides the wrapped tool unchanged', () => {
-    expect(hostFilled(tool(), { tenantId: fromIdentity('tenant') }).search).toBe(SEARCH);
+    const base = tool();
+    expect(hostFilled(base, { tenantId: fromIdentity('tenant') }).search).toBe(base.search);
+    expect(base.search).toEqual(SEARCH);
   });
 });
 

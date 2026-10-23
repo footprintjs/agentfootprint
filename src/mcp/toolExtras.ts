@@ -66,7 +66,11 @@ import {
 } from '../tools/tools.js';
 import type { ToolResultClass } from '../semantics/types.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from '../tools/declare.js';
-import { assertToolSearch, periodArgumentsOf } from '../semantics/coverage/search/declaration.js';
+import {
+  assertToolSearch,
+  freezeSearch,
+  periodArgumentsOf,
+} from '../semantics/coverage/search/declaration.js';
 import type { ToolSearch } from '../semantics/coverage/search/types.js';
 import { readTimeContext, TIME_CONTEXT_META_KEY, type TimeContext } from '../time/wire.js';
 
@@ -302,7 +306,9 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
     ...(gates !== undefined && { gates }),
     ...(askOrAssume !== undefined && { askOrAssume }),
     ...(period !== undefined && { period }),
-    ...(search !== undefined && { search }),
+    // Stored frozen, its value words a null-prototype map — a remote server's
+    // words never index anything through an inherited key.
+    ...(search !== undefined && { search: freezeSearch(search) }),
   };
 }
 
