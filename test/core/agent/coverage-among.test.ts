@@ -32,6 +32,7 @@ import {
 } from '../../../src/semantics/coverage/among.js';
 import { servedToModel } from '../../../src/semantics/coverage/read.js';
 import { normalizeToken } from '../../../src/lib/normalize.js';
+import { expectScalesLinearly, expectWithinTimes } from '../../helpers/perf.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
 
@@ -278,26 +279,39 @@ describe('security — names only for the caller, and never in the envelope', ()
 // ── Security — the ranking cost is bounded ──────────────────────────────
 
 describe('security — ranking costs at most a stated bound, whatever the inputs', () => {
-  const many = (n: number, length: number) =>
-    Array.from({ length: n }, (_, i) => `n${String(i).padStart(length - 1, '0')}`.slice(0, length));
-
-  it('a 1 MB looked-for value over 10,000 names serves the count only, inside 1 s', () => {
-    const names = many(10_000, 12);
-    const started = performance.now();
-    const v = absent({
-      what: `PS-${'x'.repeat(1024 * 1024)}`,
+  // Timed by the repo's load-insensitive helpers (`test/helpers/perf.ts`):
+  // RATIOS measured in this process, never an absolute millisecond figure —
+  // coverage instrumentation alone slows the ranking loop about 20×.
+  const next = rng(9);
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  /** A random name of `length` characters — the ranking's worst case. */
+  const pick = (length: number) =>
+    Array.from({ length }, () => alphabet[Math.floor(next() * alphabet.length)]).join('');
+  const listOf = (n: number, length: number) => Array.from({ length: n }, () => pick(length));
+  const mintOver = (what: string, names: readonly string[], visible: boolean) => () =>
+    absent({
+      what,
       among: {
-        argument: 'array_id',
+        argument: 'name',
         source: SOURCE,
         measuredAt: READ_AT,
         count: names.length,
         names,
-        visible: 'caller',
+        ...(visible && { visible: 'caller' as const }),
       },
-    }) as AmongAbsence;
-    expect(performance.now() - started).toBeLessThan(1000);
-    expect(namesOf(v)).toEqual({ count: 10_000 });
-  });
+    });
+
+  it('a 1 MB looked-for value ranks nothing: the count only, at the cost of no ranking', async () => {
+    const names = listOf(10_000, 12);
+    const huge = `PS-${'x'.repeat(1024 * 1024)}`;
+    expect(namesOf(mintOver(huge, names, true)())).toEqual({ count: 10_000 });
+    await expectWithinTimes({
+      subject: mintOver(huge, names, true),
+      baseline: mintOver(huge, names, false),
+      times: 5,
+      why: 'a looked-for value over 128 characters must cost what a mint with no ranking costs',
+    });
+  }, 60_000);
 
   it('a looked-for value over 128 characters serves the count only', () => {
     const v = absent({
@@ -310,50 +324,35 @@ describe('security — ranking costs at most a stated bound, whatever the inputs
         names: ['a'],
         visible: 'caller',
       },
-    }) as AmongAbsence;
+    });
     expect(namesOf(v)).toEqual({ count: 1 });
   });
 
-  it(`a list over ${MAX_NAMES_RANKED} names is counted, never ranked`, () => {
+  it(`a list over ${MAX_NAMES_RANKED} names is counted, never ranked`, async () => {
     expect(MAX_NAMES_RANKED).toBe(10_000);
-    const names = many(MAX_NAMES_RANKED + 1, 12);
-    const started = performance.now();
-    const v = absent({
-      what: ASKED,
-      among: {
-        argument: 'array_id',
-        source: SOURCE,
-        measuredAt: READ_AT,
-        count: names.length,
-        names,
-        visible: 'caller',
-      },
-    }) as AmongAbsence;
-    expect(performance.now() - started).toBeLessThan(1000);
-    expect(namesOf(v)).toEqual({ count: MAX_NAMES_RANKED + 1 });
-  });
+    const names = listOf(MAX_NAMES_RANKED + 1, 128);
+    const asked = pick(128);
+    expect(namesOf(mintOver(asked, names, true)())).toEqual({ count: MAX_NAMES_RANKED + 1 });
+    await expectWithinTimes({
+      subject: mintOver(asked, names, true),
+      baseline: mintOver(asked, names, false),
+      times: 5,
+      why: 'a list over the bound must cost what a mint with no ranking costs',
+    });
+  }, 60_000);
 
-  it('the worst ranked case — 10,000 names of 128 characters — stays inside 5 s', () => {
-    const next = rng(9);
-    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    const pick = () =>
-      Array.from({ length: 128 }, () => alphabet[Math.floor(next() * alphabet.length)]).join('');
-    const names = Array.from({ length: MAX_NAMES_RANKED }, pick);
-    const started = performance.now();
-    const v = absent({
-      what: pick(),
-      among: {
-        argument: 'name',
-        source: SOURCE,
-        measuredAt: READ_AT,
-        count: names.length,
-        names,
-        visible: 'caller',
-      },
-    }) as AmongAbsence;
-    expect(performance.now() - started).toBeLessThan(5000);
-    expect(namesOf(v)?.nearest).toHaveLength(KNOWN_NAMES_SHOWN);
-  });
+  it('the ranked worst case grows linearly with the list: each name costs at most 128 x 128', async () => {
+    const asked = pick(128);
+    const small = listOf(100, 128);
+    const large = listOf(1_000, 128);
+    expect(namesOf(mintOver(asked, large, true)())?.nearest).toHaveLength(KNOWN_NAMES_SHOWN);
+    await expectScalesLinearly({
+      small: mintOver(asked, small, true),
+      large: mintOver(asked, large, true),
+      scale: 10,
+      why: 'ranking 10x the names of 128 random characters must cost about 10x, never more',
+    });
+  }, 60_000);
 });
 
 // ── Functional — what the model is served, what the events may carry ────
