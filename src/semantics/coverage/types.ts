@@ -310,11 +310,12 @@ export interface SourceGapItem extends CoverageItem {
 }
 
 /**
- * `known_names` on an `among` absence — what the model may know of the list.
- * The count always; the nearest names only when the declaration said
- * `visible: 'caller'`. MODEL-ONLY: it rides the served value and so the
- * conversation, and no event field (`stream.tool_end` loses it,
- * `tools.absent` never had it).
+ * `known_names` — what the model may know of the list an `among` miss
+ * searched, served only when the declaration said `visible: 'caller'`. It is
+ * NEVER part of the result: `absent()` keeps it on the library's channel
+ * (`among.ts` · `knownNamesFor`) and the dispatch door attaches it to the
+ * model-bound message alone, after every rule — so no rule, event or row ever
+ * sees it.
  */
 export interface KnownNames {
   readonly count: number;
@@ -386,9 +387,6 @@ export interface ToolAbsence {
   /** What the search's read covered in time — `queried`, `held` (or
    *  `'unknown'`), `read_at` — honesty step 7b. */
   readonly period?: PeriodOnWire;
-  /** What the model may know of the list an `among` miss searched — the
-   *  count, and the nearest names only for the caller. Model-only. */
-  readonly known_names?: KnownNames;
   /** The static sentence. Never interpolated — see `absent.ts`. */
   readonly note: string;
 }

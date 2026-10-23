@@ -63,7 +63,7 @@
 
 import { mintProvenance } from '../described.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
-import { mintAmong } from './among.js';
+import { keepKnownNames, mintAmong } from './among.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
@@ -278,8 +278,9 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  * A name looked up in a known list is a search over that list: declare the
  * list as `among` (see {@link AbsenceAmongDeclaration}) and the mint composes
  * the names facet, the gap "names outside <source>" — which only
- * `among.authoritative` removes — the `provenance`, and the model-only
- * `known_names`.
+ * `among.authoritative` removes — and the `provenance`. The nearest names
+ * (`visible: 'caller'` only) are kept OFF the envelope, on the library's
+ * channel, and attached to the model's message alone.
  *
  * @example a port-lookup tool that found no matching FLOGI
  *   defineTool({
@@ -371,7 +372,7 @@ export function absent(decl: AbsenceDeclaration | AbsenceAmongDeclaration): Tool
       : mintProvenance(declared.provenance);
   const period = mintPeriod(decl.period);
 
-  return {
+  const envelope: ToolAbsence = {
     af_absent: true,
     outcome: 'nothing_found',
     looked_for: what,
@@ -383,9 +384,13 @@ export function absent(decl: AbsenceDeclaration | AbsenceAmongDeclaration): Tool
     retry_returns_the_same: true,
     ...(tryInstead !== undefined && { try_instead: tryInstead }),
     ...(tryInsteadTool !== undefined && { try_instead_tool: tryInsteadTool }),
-    ...(among !== undefined && { known_names: among.knownNames }),
     note: ABSENCE_NOTE,
   };
+  // The names a model may be served ride the library's channel, never the
+  // envelope: every rule, event and row then sees a result that never held
+  // them (`among.ts` · "why it is never in the result").
+  if (among?.knownNames !== undefined) keepKnownNames(envelope, among.knownNames);
+  return envelope;
 }
 
 /** The absence's coverage, in the normalized three-list shape everything

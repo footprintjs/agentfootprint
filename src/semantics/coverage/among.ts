@@ -3,9 +3,11 @@
  * tool read, never "it does not exist".
  *
  * Pattern: one rule set, two doors — `absent()` mints by it
- *          ({@link mintAmong}), and the dispatch door reads the names facet by
- *          it ({@link namesFacetOf}, {@link withoutKnownNames}).
- * Role:    core/ layer (L1), pure. The spelling the names are ranked in is the
+ *          ({@link mintAmong}), and the dispatch door reads the names facet and
+ *          the names channel by it ({@link namesFacetOf}, {@link knownNamesFor},
+ *          {@link withKnownNames}).
+ * Role:    core/ layer (L1), pure but for one module-private `WeakMap` (the
+ *          names channel). The spelling the names are ranked in is the
  *          evidence gate's own (`lib/normalize.ts` · `normalizeToken`).
  * Emits:   N/A.
  *
@@ -21,19 +23,31 @@
  * 'bears', bears: 'source' }`. The only opt-out is `authoritative: { why }`,
  * and `check:semantics` lists every use of it.
  *
- * ## What the model may know of the list
+ * ## What the model may know of the list — and why it is never in the result
  *
- * `known_names` serves the count always and, only when the tool read the list
- * under the caller's own identity (`visible: 'caller'` — no default), the
- * {@link KNOWN_NAMES_SHOWN} names nearest the looked-for value. Names come from
- * the tool's data and may carry injection text or another principal's names,
- * so a name outside one plain printable line or over {@link MAX_NAME_CHARS}
- * characters is dropped and counted, the shown list is capped, and the whole
- * block is MODEL-ONLY: it rides the served value and so the conversation, and
- * {@link withoutKnownNames} takes it off `stream.tool_end` — no event field
- * carries it. The dispatch door strips it BEFORE `maxToolResultChars` caps the
- * event's copy (`stages/toolCalls.ts` · `capResults`), because a truncated
- * head is a string no strip can read.
+ * Only when the tool read the list under the caller's own identity
+ * (`visible: 'caller'` — no default) does the model see the count and the
+ * {@link KNOWN_NAMES_SHOWN} names nearest the looked-for value. Names come
+ * from the tool's data and may carry injection text or another principal's
+ * names, so a name outside one plain printable line or over
+ * {@link MAX_NAME_CHARS} characters is dropped and counted, and the shown list
+ * is capped.
+ *
+ * The names are NEVER part of the result. A filter that strips them on the
+ * way to an event loses to the first rule that reshapes the result — JSON
+ * text, a wrapper, a truncated head — so the mint does not put them in the
+ * envelope at all: it keeps them on a library-owned channel keyed by the
+ * envelope object it returns ({@link knownNamesFor}). The after-tool rules,
+ * every event, the ledger and the coverage rows therefore see a result that
+ * never held them, whatever a rule does to it. The dispatch door attaches
+ * them in ONE place — the model-bound message, after every rule, the
+ * placement and the cap (`stages/toolCalls.ts` · `messageTextOf`, through
+ * {@link withKnownNames}) — and not at all when an after-tool rule denied the
+ * result. The conversation is where they live: what the model read.
+ *
+ * A copy of the envelope (`{ ...absent(…) }`, a JSON round trip, a value a
+ * non-JavaScript tool minted) carries no channel, so its names are not served
+ * — the safe direction.
  *
  * Ranking is bounded, because both inputs are untrusted: a looked-for value
  * over {@link MAX_NAME_CHARS} code points, or a list over
@@ -69,8 +83,18 @@ export const MAX_NAMES_RANKED = 10_000;
 /** The code a count that disagrees with its names is refused under. */
 export const NAMES_COUNT_MISMATCH = 'names-count-mismatch';
 
-/** The wire key of the model-only block. */
-const KNOWN_NAMES_KEY = 'known_names';
+/** The key the names are served under in the model-bound message. */
+export const KNOWN_NAMES_KEY = 'known_names';
+
+/** The line a model-bound TEXT result carries its names on, after the text. */
+export const KNOWN_NAMES_LINE = '\n\nknown_names: ';
+
+/**
+ * The names channel: envelope object → the block the model may be served.
+ * Weak, so a result the run drops takes its names with it; module-private, so
+ * nothing but this file writes or reads it.
+ */
+const NAMES_CHANNEL = new WeakMap<object, KnownNames>();
 
 /** The declaration's keys, tied to {@link AmongDeclaration} in BOTH directions. */
 const AMONG_KEYS: readonly string[] = Object.keys({
@@ -91,8 +115,9 @@ export interface MintedAmong {
   readonly gap?: SourceGapItem;
   /** The absence's provenance, in the declaration's camelCase form. */
   readonly provenance: { readonly measuredAt: string; readonly source: string };
-  /** The model-only block. */
-  readonly knownNames: KnownNames;
+  /** The names the model may be served — only under `visible: 'caller'`.
+   *  `absent()` puts it on the names channel, never in the envelope. */
+  readonly knownNames?: KnownNames;
 }
 
 const isPlainObject = (raw: unknown): raw is Record<string, unknown> => {
@@ -176,14 +201,14 @@ export function mintAmong(raw: unknown, lookedFor: string): MintedAmong {
     from: 'result',
     ...(authoritative !== undefined && { authoritative }),
   };
-  const shown = visible === 'caller' && names !== undefined ? nearestNames(lookedFor, names) : {};
   return {
     facet,
     ...(authoritative === undefined && {
       gap: { what: `names outside ${source}`, kind: 'scope', relevance: 'bears', bears: 'source' },
     }),
     provenance: { measuredAt, source },
-    knownNames: { count, ...shown },
+    ...(visible === 'caller' &&
+      names !== undefined && { knownNames: { count, ...nearestNames(lookedFor, names) } }),
   };
 }
 
@@ -323,30 +348,53 @@ export function namesFacetOf(absence: ToolAbsence): NamesFacetItem | undefined {
 }
 
 /**
- * `value` without the model-only `known_names` block — asked where a tool's
- * result becomes an EVENT field (`stages/toolCalls.ts` · `emitToolEnd`, for
- * `result` and `modelResult`). It walks the shapes the serve door walks: a
- * bare absence, and a ledger's `result` to any depth.
- *
- * Only an absence that carries the names facet loses the key: a tool that
- * attached its own `known_names` to an absence minted WITHOUT `among` keeps
- * the bytes it always had. Every other value — and an among absence with no
- * block — comes back as the SAME reference.
+ * Put `names` on the names channel of `envelope` — the object `absent()` is
+ * about to return. Called by the mint only.
  */
-export function withoutKnownNames(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
-  if (typeof value === 'object' && value !== null) {
-    if (seen.has(value)) return value;
-    seen.add(value);
+export function keepKnownNames(envelope: ToolAbsence, names: KnownNames): void {
+  NAMES_CHANNEL.set(envelope, names);
+}
+
+/**
+ * The names a tool's OWN returned value carries on the channel — a bare
+ * absence `absent()` minted, or one a `coverage()` ledger bounds, to any
+ * depth — or `undefined`. Asked with the value the tool returned, before any
+ * rule saw it; a copy of the envelope carries no channel.
+ */
+export function knownNamesFor(value: unknown): KnownNames | undefined {
+  const seen = new Set<unknown>();
+  let at: unknown = value;
+  while (typeof at === 'object' && at !== null && !seen.has(at)) {
+    seen.add(at);
+    const names = NAMES_CHANNEL.get(at);
+    if (names !== undefined) return names;
+    const covered = readCoverageLedger(at);
+    if (covered === undefined) return undefined;
+    at = covered.result;
   }
-  const absence = readAbsence(value);
-  if (absence !== undefined) {
-    if (!Object.hasOwn(absence, KNOWN_NAMES_KEY) || namesFacetOf(absence) === undefined) {
-      return value;
-    }
-    return Object.fromEntries(Object.entries(absence).filter(([key]) => key !== KNOWN_NAMES_KEY));
-  }
+  return undefined;
+}
+
+/**
+ * The model-bound value with `names` attached — the ONE attaching rule,
+ * applied by the dispatch door after every rule, the placement and the cap:
+ *
+ *   • an absence, bare or bounded by a ledger to any depth, gains
+ *     `known_names` beside its own fields (where the evidence projection reads
+ *     an absence's tool-authored keys);
+ *   • any other plain object gains `known_names` at its top level;
+ *   • anything else — text, a list, a number — is returned as found, and the
+ *     caller appends {@link KNOWN_NAMES_LINE} and the block to its text.
+ *
+ * Never mutates `value`.
+ */
+export function withKnownNames(value: unknown, names: KnownNames): unknown {
+  if (!isPlainObject(value)) return value;
+  if (readAbsence(value) !== undefined) return { ...value, [KNOWN_NAMES_KEY]: names };
   const covered = readCoverageLedger(value);
-  if (covered === undefined) return value;
-  const result = withoutKnownNames(covered.result, seen);
-  return result === covered.result ? value : { ...covered, result };
+  if (covered !== undefined && isPlainObject(covered.result)) {
+    const inner = withKnownNames(covered.result, names);
+    return { ...covered, result: inner };
+  }
+  return { ...value, [KNOWN_NAMES_KEY]: names };
 }

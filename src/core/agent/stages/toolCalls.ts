@@ -235,7 +235,11 @@ import {
 import { readItemExtras, type CoverageSection } from '../../../semantics/coverage/items.js';
 import { copyInProgressItem } from '../../../semantics/coverage/inProgress.js';
 import { copyPeriod } from '../../../semantics/coverage/period.js';
-import { withoutKnownNames } from '../../../semantics/coverage/among.js';
+import {
+  KNOWN_NAMES_LINE,
+  knownNamesFor,
+  withKnownNames,
+} from '../../../semantics/coverage/among.js';
 import { servedToModel, strippedOnly } from '../../../semantics/coverage/read.js';
 import {
   pruneLeases,
@@ -1798,34 +1802,8 @@ export function buildToolCallsHandler(
    *
    * Absent cap → both values come back by reference, so an agent that did not
    * ask for a ceiling is byte-identical.
-   *
-   * `event` is the pair `stream.tool_end` carries. The model-only
-   * `known_names` of an `among` absence (`coverage/among.ts`) comes off it
-   * BEFORE the cap: a truncated head is a string no strip can read, so a strip
-   * after the cap would ship the names inside it. Every value with no such
-   * block keeps its references, so `event` IS the capped pair.
    */
   const capResults = (
-    toolName: string,
-    values: { readonly result: unknown; readonly modelResult: unknown },
-  ): {
-    readonly result: unknown;
-    readonly modelResult: unknown;
-    readonly event: { readonly result: unknown; readonly modelResult: unknown };
-  } => {
-    const capped = capPair(toolName, values);
-    const result = withoutKnownNames(values.result);
-    const modelResult =
-      values.modelResult === values.result ? result : withoutKnownNames(values.modelResult);
-    const event =
-      result === values.result && modelResult === values.modelResult
-        ? capped
-        : capPair(toolName, { result, modelResult });
-    return { ...capped, event };
-  };
-
-  /** Both channels against `maxToolResultChars` — see {@link capResults}. */
-  const capPair = (
     toolName: string,
     values: { readonly result: unknown; readonly modelResult: unknown },
   ): { readonly result: unknown; readonly modelResult: unknown } => {
@@ -2805,8 +2783,6 @@ export function buildToolCallsHandler(
     ran: boolean,
     declaredStatus: string | undefined = payload.status,
   ): void => {
-    // A tool's result arrives here as `capResults`' `event` pair, which has
-    // already lost the model-only `known_names` (`coverage/among.ts`).
     typedEmit(scope, 'agentfootprint.stream.tool_end', payload);
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;
@@ -3716,6 +3692,34 @@ export function buildToolCallsHandler(
    * returned while the history carries what the rules allowed through — and
    * the ledger row beside them says which is which.
    */
+  /**
+   * The calls whose result an after-tool rule DENIED, by call id. Each
+   * `afterMoment` resets its own call's entry and `messageTextOf` takes it
+   * out, so the set holds a call only between those two lines.
+   */
+  const deniedAfterTool = new Set<string>();
+
+  /**
+   * THE ONE PLACE a call's model-bound message text is made from what the
+   * rules, the placement and the cap let through — and so the one place the
+   * names an `absent({ among })` read for the caller are attached
+   * (`coverage/among.ts`). They ride the library's channel, keyed by the value
+   * the TOOL returned, never the result: no after-tool rule was handed them,
+   * and no event, ledger or coverage row carries them, whatever a rule did to
+   * the result. A result an after-tool rule denied is served none. Every other
+   * call gets the text it always got.
+   */
+  const messageTextOf = (toolCallId: string, toolResult: unknown, modelResult: unknown): string => {
+    const denied = deniedAfterTool.delete(toolCallId);
+    const names = denied ? undefined : knownNamesFor(toolResult);
+    const text = (value: unknown): string =>
+      typeof value === 'string' ? value : safeStringify(value);
+    if (names === undefined) return text(modelResult);
+    const attached = withKnownNames(modelResult, names);
+    if (attached !== modelResult) return text(attached);
+    return `${text(modelResult)}${KNOWN_NAMES_LINE}${safeStringify(names)}`;
+  };
+
   const afterMoment = async (
     scope: TypedScope<AgentState>,
     call: {
@@ -3740,6 +3744,7 @@ export function buildToolCallsHandler(
     // declare neither serves the bytes it always did, and the callers'
     // reference-inequality stamp of `tool_end.modelResult` stays unstamped.
     const served = servedToModel(call.result);
+    deniedAfterTool.delete(call.toolCallId);
     const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
     // beyond the ones this dispatch already made. An agent whose middleware
@@ -3759,6 +3764,7 @@ export function buildToolCallsHandler(
       ...(call.signal && { signal: call.signal }),
     });
     recordDecisions(scope, verdict.decisions);
+    if (verdict.kind === 'deny') deniedAfterTool.add(call.toolCallId);
     return verdict.kind === 'deny' ? verdict.reason : verdict.result;
   };
 
@@ -5867,7 +5873,7 @@ export function buildToolCallsHandler(
           tc.name,
           {
             toolCallId: tc.id,
-            result: capped.event.result,
+            result: capped.result,
             durationMs,
             ...(error === true && { error: true }),
             // The tool's own declared outcome (9.19.0) — additive, envelope
@@ -5880,14 +5886,14 @@ export function buildToolCallsHandler(
             // always was: a call that failed to run on its own (an unknown name,
             // an args rejection, a credential block) keeps saying so with
             // `error: true` alone.
-            ...(modelResult !== capped.result && { modelResult: capped.event.modelResult }),
+            ...(modelResult !== capped.result && { modelResult }),
             ...(executed && changedKeys.length > 0 && { changedArgKeys: changedKeys }),
             ...(denied && { notExecuted: true as const }),
           },
           executed,
           toolEnvelope?.status,
         );
-        let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let resultStr = messageTextOf(tc.id, result, modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
         // the repeated-call ledger fingerprints. Fingerprinting the decorated
         // string instead would compare our own additions (a step that advanced
@@ -6519,8 +6525,7 @@ export function buildToolCallsHandler(
         );
         const askCapped = capResults(toolName, askPlaced);
         modelResult = askCapped.modelResult;
-        let askResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let askResultStr = messageTextOf(toolCallId, result, modelResult);
         // Step boundary (9.18.0) — a result finalized HERE is as final as one
         // from the batch loop; the answered call advances the pointer before
         // the push, exactly as it would have inline.
@@ -6581,12 +6586,12 @@ export function buildToolCallsHandler(
           toolName,
           {
             toolCallId,
-            result: askCapped.event.result,
+            result: askCapped.result,
             durationMs: Date.now() - startMs,
             ...(error === true && { error: true }),
             ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
             ...(askCapped.modelResult !== askCapped.result && {
-              modelResult: askCapped.event.modelResult,
+              modelResult: askCapped.modelResult,
             }),
           },
           toolRan,
@@ -6723,8 +6728,7 @@ export function buildToolCallsHandler(
         );
         const decisionCapped = capResults(toolName, decisionPlaced);
         modelResult = decisionCapped.modelResult;
-        let decisionResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let decisionResultStr = messageTextOf(toolCallId, result, modelResult);
         // Step boundary (9.18.0) — an approved consequential step (a checkIn
         // tool CAN be a step's tool) advances on the resumed dispatch.
         if (deps.stepPlanFor && stepToolRan) {
@@ -6784,12 +6788,12 @@ export function buildToolCallsHandler(
           toolName,
           {
             toolCallId,
-            result: decisionCapped.event.result,
+            result: decisionCapped.result,
             durationMs: Date.now() - startMs,
             ...(error === true && { error: true }),
             ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
             ...(decisionCapped.modelResult !== decisionCapped.result && {
-              modelResult: decisionCapped.event.modelResult,
+              modelResult: decisionCapped.modelResult,
             }),
           },
           toolRan,
@@ -6876,8 +6880,7 @@ export function buildToolCallsHandler(
         );
         const consentCapped = capResults(toolName, consentPlaced);
         modelResult = consentCapped.modelResult;
-        let consentResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let consentResultStr = messageTextOf(toolCallId, result, modelResult);
         // Step boundary (9.18.0) — a step tool that waited on 3LO consent
         // advances the moment its resumed dispatch really ran, clean. A
         // ceiling-refused result is not clean (9.20.0): the model holds no
@@ -6944,12 +6947,12 @@ export function buildToolCallsHandler(
           toolName,
           {
             toolCallId,
-            result: consentCapped.event.result,
+            result: consentCapped.result,
             durationMs: Date.now() - startMs,
             ...(error === true && { error: true }),
             ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
             ...(consentCapped.modelResult !== consentCapped.result && {
-              modelResult: consentCapped.event.modelResult,
+              modelResult: consentCapped.modelResult,
             }),
           },
           dispatched.executed === true,
@@ -7037,7 +7040,7 @@ export function buildToolCallsHandler(
       );
       const pauseCapped = capResults(toolName, pausePlaced);
       const modelResult = pauseCapped.modelResult;
-      let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+      let resultStr = messageTextOf(toolCallId, input, modelResult);
       // Step boundary (9.18.0) — THE HITL step ("ask a human, then export"):
       // the tool paused mid-step, the person's answer IS its result, and the
       // completed step advances here at the same boundary it would have
@@ -7085,10 +7088,10 @@ export function buildToolCallsHandler(
           // The REAL value the pause returned, not what a rule let the model read
           // — the same split the other four paths keep. Capped when a ceiling is
           // configured, because the marker IS the result on every channel.
-          result: pauseCapped.event.result,
+          result: pauseCapped.result,
           durationMs: Date.now() - startMs,
           ...(pauseCapped.modelResult !== pauseCapped.result && {
-            modelResult: pauseCapped.event.modelResult,
+            modelResult: pauseCapped.modelResult,
           }),
         },
         true,

@@ -4,21 +4,39 @@
  * What a run does with a named miss: a WELL-FORMED unknown value reaches the
  * tool and comes back an absence (status `'absent'`), never a refusal; a
  * SCHEMA-MALFORMED value is still refused before dispatch
- * (`tools/toolArgsValidation.ts`). The model is served the names the tool
- * read for the caller; no event FIELD carries them — `stream.tool_end` loses
- * `known_names` (`stages/toolCalls.ts` · `emitToolEnd`), `tools.absent` and
- * the `coverageDeclared` row never had it. The conversation itself — what the
- * model read, which `iteration_end.history` and the committed history copy —
- * and the messages slot's `context.injected` record copy — is the one place
- * the names live; that limit is pinned here so it cannot widen unseen.
+ * (`tools/toolArgsValidation.ts`).
+ *
+ * The names a tool read for the caller are NEVER part of the result: the mint
+ * keeps them on a library-owned channel keyed by the envelope it returned
+ * (`coverage/among.ts` · `knownNamesFor`), so the after-tool middleware, every
+ * event (`stream.tool_end`'s `result` and `modelResult`, `tools.absent`), the
+ * ledger and the `coverageDeclared` row see a result that never held them —
+ * whatever a middleware does to it. They are attached in ONE place, the
+ * model-bound message (`stages/toolCalls.ts` · `messageTextOf`), after every
+ * middleware, the placement and the cap, and only when no after-tool rule
+ * denied the result. The conversation — that message, which history,
+ * `iteration_end.history`, the messages slot's `context.injected` and a
+ * narrative entry's `rawValue` copy — is the one place they live; that limit
+ * is pinned here so it cannot widen unseen.
  *
  * Sections (Convention 3): Integration (batch door, a resumed door) ·
- * Security (no event field carries a name) · Scenario (malformed vs unknown).
+ * Security (middleware that stringifies, wraps or denies; truncation; a seeded
+ * property over JSON-ish middleware transforms — no fast-check in the tree) ·
+ * Scenario (malformed vs unknown).
  */
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { absent, Agent, ask, checkInApproved, defineTool, isPaused } from '../../../src/index.js';
+import {
+  absent,
+  Agent,
+  allow,
+  ask,
+  checkInApproved,
+  defineTool,
+  deny,
+  isPaused,
+} from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
@@ -36,12 +54,22 @@ interface Run {
   readonly requests: LLMRequest[];
   readonly events: { type: string; payload: Record<string, unknown> }[];
   readonly executed: unknown[];
+  /** What each after-tool rule was handed, as JSON. */
+  readonly ruleSaw: string[];
 }
 
-function build(args: readonly unknown[], gate = false, maxToolResultChars?: number): Run {
+interface Options {
+  readonly gate?: boolean;
+  readonly maxToolResultChars?: number;
+  /** An after-tool rule over the result (its return is the rule's outcome). */
+  readonly onToolResult?: (result: unknown) => unknown;
+}
+
+function build(args: readonly unknown[], options: Options = {}): Run {
   const requests: LLMRequest[] = [];
   const events: { type: string; payload: Record<string, unknown> }[] = [];
   const executed: unknown[] = [];
+  const ruleSaw: string[] = [];
   const inner = mock({
     replies: [
       {
@@ -88,16 +116,28 @@ function build(args: readonly unknown[], gate = false, maxToolResultChars?: numb
   let builder = Agent.create({
     provider,
     model: 'mock',
-    ...(maxToolResultChars !== undefined && { maxToolResultChars }),
+    ...(options.maxToolResultChars !== undefined && {
+      maxToolResultChars: options.maxToolResultChars,
+    }),
   }).tool(tool);
-  if (gate) {
+  if (options.gate === true) {
     builder = builder.toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'ok?' }) });
+  }
+  const rule = options.onToolResult;
+  if (rule !== undefined) {
+    builder = builder.toolMiddleware({
+      name: 'rule',
+      onToolResult: (call) => {
+        ruleSaw.push(JSON.stringify(call.result) ?? String(call.result));
+        return rule(call.result) as ReturnType<typeof allow>;
+      },
+    });
   }
   const agent = builder.build();
   agent.on('*', (e) =>
     events.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
   );
-  return { agent, requests, events, executed };
+  return { agent, requests, events, executed, ruleSaw };
 }
 
 const toolMessages = (r: Run): string[] =>
@@ -117,10 +157,51 @@ const CONVERSATION_CARRIERS = new Set([
   'agentfootprint.context.injected',
 ]);
 
+/** Run, capturing every console line. */
+async function runLogged(r: Run, message: string): Promise<string[]> {
+  const logged: string[] = [];
+  const spies = (['log', 'warn', 'error', 'info', 'debug'] as const).map((level) =>
+    vi.spyOn(console, level).mockImplementation((...parts: unknown[]) => {
+      logged.push(parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
+    }),
+  );
+  try {
+    await r.agent.run({ message });
+  } finally {
+    for (const spy of spies) spy.mockRestore();
+  }
+  return logged;
+}
+
+/**
+ * The law: no name outside the conversation. No event field, no log line, no
+ * narrative sentence, nothing an after-tool rule was handed, and nothing on
+ * the ledger rows names one.
+ */
+function expectNamesOnlyInTheConversation(r: Run, logged: readonly string[]): void {
+  for (const e of r.events.filter((x) => JSON.stringify(x.payload).includes(NEAREST))) {
+    expect(CONVERSATION_CARRIERS.has(e.type), e.type).toBe(true);
+    if (e.type === 'agentfootprint.context.injected') expect(e.payload.slot).toBe('messages');
+  }
+  for (const end of payloadsOf(r, 'agentfootprint.stream.tool_end')) {
+    expect(JSON.stringify(end)).not.toContain(NEAREST);
+    expect(JSON.stringify(end)).not.toContain('known_names');
+  }
+  for (const line of logged) expect(line).not.toContain(NEAREST);
+  for (const seen of r.ruleSaw) expect(seen).not.toContain(NEAREST);
+  for (const entry of r.agent.getLastNarrativeEntries()) expect(entry.text).not.toContain(NEAREST);
+  const state = r.agent.getSnapshot()?.sharedState as Record<string, unknown>;
+  expect(JSON.stringify(state.coverageDeclared ?? null)).not.toContain(NEAREST);
+  expect(JSON.stringify(state.toolCallLedger ?? null)).not.toContain(NEAREST);
+}
+
+/** The names the model read, from its last request. */
+const namesTheModelRead = (r: Run): boolean => toolMessages(r).some((m) => m.includes(NEAREST));
+
 describe('integration — a well-formed unknown name is an absence, never a refusal', () => {
   it('reaches the tool, delivers status absent, and the model reads the nearest names', async () => {
     const r = build(['PS-ARRAY-99']);
-    expect(await r.agent.run({ message: 'details of PS-ARRAY-99?' })).toContain('not among');
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
     expect(r.executed).toEqual(['PS-ARRAY-99']);
     const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
     expect(end?.status).toBe('absent');
@@ -138,6 +219,7 @@ describe('integration — a well-formed unknown name is an absence, never a refu
       relevance: 'bears',
       bears: 'source',
     });
+    expectNamesOnlyInTheConversation(r, logged);
   });
 
   it('the coverageDeclared row carries the facet and the gap — never the names', async () => {
@@ -156,34 +238,9 @@ describe('integration — a well-formed unknown name is an absence, never a refu
     expect(JSON.stringify(row)).not.toContain(NEAREST);
     expect(JSON.stringify(row)).not.toContain('known_names');
   });
-});
 
-describe('security — no event field carries a name the tool read', () => {
-  it('tool_end loses known_names on result and modelResult; tools.absent never had it', async () => {
-    const r = build(['PS-ARRAY-99']);
-    await r.agent.run({ message: 'details of PS-ARRAY-99?' });
-    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
-    expect(end?.result).not.toHaveProperty('known_names');
-    expect(end?.modelResult).not.toHaveProperty('known_names');
-    // The rest of the envelope rides as the tool wrote it.
-    expect(end?.result).toMatchObject({ af_absent: true, looked_for: 'PS-ARRAY-99' });
-    const [absence] = payloadsOf(r, 'agentfootprint.tools.absent');
-    expect(absence).toBeDefined();
-    expect(JSON.stringify(absence)).not.toContain('known_names');
-  });
-
-  it('only the conversation carries the names — no other event mentions one', async () => {
-    const r = build(['PS-ARRAY-99']);
-    await r.agent.run({ message: 'details of PS-ARRAY-99?' });
-    const carrying = r.events.filter((e) => JSON.stringify(e.payload).includes(NEAREST));
-    for (const e of carrying) {
-      expect(CONVERSATION_CARRIERS.has(e.type), e.type).toBe(true);
-      if (e.type === 'agentfootprint.context.injected') expect(e.payload.slot).toBe('messages');
-    }
-  });
-
-  it('a resumed door strips the same way (an approved middleware ask)', async () => {
-    const r = build(['PS-ARRAY-99'], true);
+  it('a resumed door attaches the same way (an approved middleware ask)', async () => {
+    const r = build(['PS-ARRAY-99'], { gate: true });
     const first = await r.agent.run({ message: 'details of PS-ARRAY-99?' });
     expect(isPaused(first)).toBe(true);
     if (!isPaused(first)) return;
@@ -193,52 +250,107 @@ describe('security — no event field carries a name the tool read', () => {
     );
     const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
     expect(end?.status).toBe('absent');
-    expect(end?.result).not.toHaveProperty('known_names');
-    expect(toolMessages(r)[0]).toContain('known_names');
+    expect(JSON.stringify(end)).not.toContain(NEAREST);
+    expect(namesTheModelRead(r)).toBe(true);
   });
 });
 
-describe('security — a truncated result never carries the names to an event', () => {
-  // The absence serializes to about 1,230 characters with `known_names` at
-  // about 520, so a 900-character cap keeps the names inside the truncated
-  // head: a cap that truncated FIRST and stripped after would ship them in a
-  // string the strip cannot read.
-  const CAP = 900;
+describe('security — no middleware can carry the names to an event', () => {
+  it('a rule that turns the result into JSON text: the names reach the model, not the event', async () => {
+    const r = build(['PS-ARRAY-99'], {
+      onToolResult: (result) => allow(JSON.stringify(result), 'as text'),
+    });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
+    expect(typeof end?.modelResult).toBe('string');
+    expectNamesOnlyInTheConversation(r, logged);
+    expect(namesTheModelRead(r)).toBe(true);
+  });
 
-  it('the event channel is stripped before it is capped; the model channel is capped as served', async () => {
-    const r = build(['PS-ARRAY-99'], false, CAP);
-    const logged: string[] = [];
-    const spies = (['log', 'warn', 'error', 'info', 'debug'] as const).map((level) =>
-      vi.spyOn(console, level).mockImplementation((...parts: unknown[]) => {
-        logged.push(parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
-      }),
-    );
-    try {
-      await r.agent.run({ message: 'details of PS-ARRAY-99?' });
-    } finally {
-      for (const spy of spies) spy.mockRestore();
-    }
-    // The model read a truncated head that still carries the names.
+  it('a rule that wraps the result in another object: the same', async () => {
+    const r = build(['PS-ARRAY-99'], {
+      onToolResult: (result) => allow({ wrapped: result, by: 'rule' }, 'wrapped'),
+    });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
+    expect(end?.modelResult).toMatchObject({ by: 'rule' });
+    expectNamesOnlyInTheConversation(r, logged);
+    expect(namesTheModelRead(r)).toBe(true);
+  });
+
+  it('a rule that denies the result: the model is served no names either', async () => {
+    const r = build(['PS-ARRAY-99'], { onToolResult: () => deny('not for the model') });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    expectNamesOnlyInTheConversation(r, logged);
+    expect(namesTheModelRead(r)).toBe(false);
+  });
+
+  it('a capped result: the event never held the names, and the model keeps them', async () => {
+    // The absence serializes to about 900 characters; a 600-character cap
+    // truncates it, and the names are attached after the cap.
+    const r = build(['PS-ARRAY-99'], { maxToolResultChars: 600 });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
+    expect(end?.result).toMatchObject({ truncated: true });
+    expectNamesOnlyInTheConversation(r, logged);
     const [served] = toolMessages(r);
     expect(JSON.parse(served!)).toMatchObject({ truncated: true });
     expect(served).toContain(NEAREST);
-    // tool_end carries a truncated head too — of the STRIPPED envelope.
-    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
-    expect(end?.result).toMatchObject({ truncated: true });
-    expect(JSON.stringify(end?.result)).toContain('looked_for');
-    expect(JSON.stringify(end?.result)).not.toContain(NEAREST);
-    expect(JSON.stringify(end?.modelResult ?? null)).not.toContain(NEAREST);
-    // No event outside the conversation carries a name; no log line does.
-    for (const e of r.events.filter((x) => JSON.stringify(x.payload).includes(NEAREST))) {
-      expect(CONVERSATION_CARRIERS.has(e.type), e.type).toBe(true);
+  });
+});
+
+// ── Property — a seeded generator over JSON-ish middleware transforms ────
+
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
+}
+
+type Transform = { readonly name: string; readonly apply: (v: unknown) => unknown };
+
+/** One JSON-ish thing a rule may do to a result. */
+const TRANSFORMS: readonly Transform[] = [
+  { name: 'identity', apply: (v) => v },
+  { name: 'stringify', apply: (v) => JSON.stringify(v) },
+  { name: 'pretty', apply: (v) => JSON.stringify(v, null, 2) },
+  { name: 'clone', apply: (v) => JSON.parse(JSON.stringify(v ?? null)) as unknown },
+  { name: 'wrap', apply: (v) => ({ data: v }) },
+  { name: 'list', apply: (v) => [v, 'tail'] },
+  {
+    name: 'spread',
+    apply: (v) => (typeof v === 'object' && v !== null ? { ...v, note2: 'x' } : v),
+  },
+  { name: 'pick', apply: (v) => (typeof v === 'object' && v !== null ? Object.values(v)[3] : v) },
+  { name: 'replace', apply: () => ({ summary: 'nothing matched' }) },
+  { name: 'prefix', apply: (v) => `rule says: ${typeof v === 'string' ? v : JSON.stringify(v)}` },
+];
+
+describe('property — whatever a rule does to the result, the names never reach an event', () => {
+  it('60 generated rule chains', async () => {
+    const next = rng(20261023);
+    for (let n = 0; n < 60; n++) {
+      const chain = Array.from(
+        { length: 1 + Math.floor(next() * 3) },
+        () => TRANSFORMS[Math.floor(next() * TRANSFORMS.length)]!,
+      );
+      const denies = next() < 0.15;
+      const r = build(['PS-ARRAY-99'], {
+        onToolResult: (result) =>
+          denies
+            ? deny('withheld by a rule')
+            : allow(
+                chain.reduce((v, t) => t.apply(v), result),
+                chain.map((t) => t.name).join(' > '),
+              ),
+      });
+      const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+      expectNamesOnlyInTheConversation(r, logged);
+      // The model still receives them — unless the rule denied the result.
+      expect(namesTheModelRead(r), chain.map((t) => t.name).join(' > ')).toBe(!denies);
     }
-    for (const line of logged) expect(line).not.toContain(NEAREST);
-    // The narrative SAYS no name the tool read. (An entry's `rawValue` is a
-    // live reference to the state it describes — the conversation: history,
-    // `lastToolResult`, `toolResults` — the one copy the names live in.)
-    const narrative = r.agent.getLastNarrativeEntries();
-    expect(narrative.length).toBeGreaterThan(0);
-    for (const entry of narrative) expect(entry.text).not.toContain(NEAREST);
   });
 });
 

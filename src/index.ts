@@ -883,8 +883,9 @@ export type { InstructionLease, PendingToolTransition } from './injection-engine
 //
 // `absent({ what, among })` — a name looked up in a known list that resolves
 // to nothing is a named miss over the names the tool read: the mint composes
-// the names facet and an irremovable "names outside <source>" gap, and serves
-// the count (plus the nearest names, only with `visible: 'caller'`).
+// the names facet and an irremovable "names outside <source>" gap; the
+// nearest names (only with `visible: 'caller'`) never enter the result — the
+// library attaches them to the model's message alone.
 export {
   ABSENCE_MARKER,
   ABSENCE_NOTE,
@@ -896,9 +897,6 @@ export {
   readAbsence,
   readCoverageLedger,
   readCoverageResult,
-  KNOWN_NAMES_SHOWN,
-  MAX_NAME_CHARS,
-  MAX_NAMES_RANKED,
   type AbsenceAmongDeclaration,
   type AbsenceDeclaration,
   type AmongDeclaration,
@@ -913,9 +911,6 @@ export {
   type CoverageReading,
   type CoveredResult,
   type DeclaredCoverage,
-  type KnownNames,
-  type NamesFacetItem,
-  type SourceGapItem,
   type ToolAbsence,
   type TryInsteadTool,
 } from './semantics/coverage/index.js';

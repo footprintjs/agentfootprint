@@ -93,7 +93,7 @@ describe('unit — the non-existence and wrongness packs', () => {
   });
 
   it('folds case, curly apostrophes and Unicode composition before matching', () => {
-    expect(nonExistencePhrase('THAT ARRAY DOESN’T EXIST')).toBeDefined();
+    expect(nonExistencePhrase('THAT ARRAY DOESN\u2019T EXIST')).toBeDefined();
     expect(wrongnessPhrase('WRONG IDENTIFIER')).toBeDefined();
   });
 });

@@ -99,7 +99,11 @@ const WRONGNESS: readonly RegExp[] = [
 ];
 
 /** One spelling for matching: composed, case-folded, straight apostrophes. */
-const folded = (text: string): string => text.normalize('NFC').toLowerCase().replace(/[‘’ʼ]/g, "'");
+const folded = (text: string): string =>
+  text
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u02BC]/g, "'");
 
 function firstHit(text: string, pack: readonly RegExp[]): string | undefined {
   const plain = folded(text);
