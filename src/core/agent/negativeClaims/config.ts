@@ -1,25 +1,47 @@
-/** The typed negative-claims arm: app configuration and the model's citation schema.
+/** Negative-claim arms: app configuration and the typed model citation schema.
  * This module never calls a parser or decides whether a search establishes a claim.
  * Delivery adds its own statement after parsing; that enriched field is not model input. */
 import { copyJson, ownData } from '../../../lib/boundedJson.js';
 import { MAX_NEGATIVE_CLAIMS } from '../../../integrity/negative-claim/limits.js';
 import { MAX_CITED_READS } from '../../../integrity/negative-claim/citation.js';
 import type { Tool } from '../../../tools/tools.js';
+import {
+  resolveNegativeClaimPhrases,
+  type NegativeClaimPhraseExtensions,
+  type ResolvedNegativeClaimPhrases,
+} from '../../../integrity/negative-claim/phrases.js';
 
-/** Configure library-written statements for a typed answer's negative citations.
- * The named field must be a required, top-level array in the output JSON Schema.
+/** Configure typed library-written statements or observe ordinary answer prose.
+ * `{ prose: true }` needs no schema or tool list and never rewrites or blocks an answer.
+ * Both modes can add bounded literal phrase data; prose findings remain unverified.
+ *
+ * In the typed arm, the named field must be a required, top-level array in the output JSON Schema.
  * Every cited tool must be registered locally. A search declaration or an admitted
  * `absent({ among })` result supplies its coverage at runtime.
  *
- * Available, but not recommended until the typed benchmark gates pass. Model prose is observed with a bounded grammar; it remains unchecked.
+ * Typed enforcement is available, but not recommended until its benchmark gates pass.
+ * Model prose is observed with a bounded grammar; it remains unchecked.
  * Prose enforcement is unavailable.
  */
-export interface NegativeClaimsOptions {
-  readonly field: string;
-  readonly tools: readonly string[];
-  /** Default `withhold`. `state-searched` reports what was read without upgrading its verdict. */
-  readonly unestablished?: 'withhold' | 'state-searched';
-}
+export type NegativeClaimsOptions = (
+  | {
+      readonly field: string;
+      readonly tools: readonly string[];
+      /** Default `withhold`. `state-searched` reports what was read without upgrading its verdict. */
+      readonly unestablished?: 'withhold' | 'state-searched';
+      readonly prose?: never;
+    }
+  | {
+      /** Observe ordinary answers without a schema, citations, correction or withholding. */
+      readonly prose: true;
+      readonly field?: never;
+      readonly tools?: never;
+      readonly unestablished?: never;
+    }
+) & {
+  /** Optional bounded literal phrases. They only add observations, never verification or enforcement. */
+  readonly phrases?: NegativeClaimPhraseExtensions;
+};
 
 /** What the model may put in one entry. The runtime owns every delivered statement. */
 export interface NegativeClaimCitation {
@@ -29,11 +51,22 @@ export interface NegativeClaimCitation {
 }
 
 /** @internal Detached configuration carried by the chart, never by the model. */
-export interface ResolvedNegativeClaims {
+export interface ResolvedTypedNegativeClaims {
+  readonly mode: 'typed';
   readonly field: string;
   readonly tools: readonly string[];
   readonly unestablished: 'withhold' | 'state-searched';
+  readonly phrases?: ResolvedNegativeClaimPhrases;
 }
+
+/** @internal Observation has no citation contract or delivery authority. */
+export interface ResolvedProseNegativeClaims {
+  readonly mode: 'prose';
+  readonly phrases?: ResolvedNegativeClaimPhrases;
+}
+
+/** @internal The two arms share native capture, not enforcement. */
+export type ResolvedNegativeClaims = ResolvedTypedNegativeClaims | ResolvedProseNegativeClaims;
 
 export const NEGATIVE_HANDLE_PATTERN = '^r[1-9][0-9]{0,3}$';
 const KINDS = ['none', 'not-found', 'complete'];
@@ -52,13 +85,29 @@ export function resolveNegativeClaims(options: NegativeClaimsOptions): ResolvedN
   } catch {
     return fail('options must be a plain data object.');
   }
-  if (['strictProse', 'prose', 'enforceProse'].some((key) => Object.hasOwn(source, key))) {
+  if (['strictProse', 'enforceProse'].some((key) => Object.hasOwn(source, key))) {
     return fail(
-      'prose and strictProse options are not available; prose is observed, never enforced.',
+      'strictProse and enforceProse options are not available; prose is observed, never enforced.',
     );
   }
-  if (Object.keys(source).some((key) => !['field', 'tools', 'unestablished'].includes(key))) {
-    return fail('options accept only field, tools and unestablished.');
+  if (
+    Object.keys(source).some(
+      (key) => !['field', 'tools', 'unestablished', 'prose', 'phrases'].includes(key),
+    )
+  ) {
+    return fail('options accept only field, tools, unestablished, prose and phrases.');
+  }
+  const phrases =
+    source.phrases === undefined
+      ? undefined
+      : resolveNegativeClaimPhrases(source.phrases as NegativeClaimPhraseExtensions);
+  if (Object.hasOwn(source, 'prose')) {
+    if (
+      source.prose !== true ||
+      ['field', 'tools', 'unestablished'].some((key) => Object.hasOwn(source, key))
+    )
+      return fail('prose must be true and cannot be combined with field, tools or unestablished.');
+    return Object.freeze({ mode: 'prose', ...(phrases !== undefined && { phrases }) });
   }
   const field = source.field;
   if (
@@ -84,12 +133,18 @@ export function resolveNegativeClaims(options: NegativeClaimsOptions): ResolvedN
   if (unestablished !== 'withhold' && unestablished !== 'state-searched') {
     return fail("unestablished must be 'withhold' or 'state-searched'.");
   }
-  return Object.freeze({ field, tools: Object.freeze([...tools] as string[]), unestablished });
+  return Object.freeze({
+    mode: 'typed',
+    field,
+    tools: Object.freeze([...tools] as string[]),
+    unestablished,
+    ...(phrases !== undefined && { phrases }),
+  });
 }
 
 /** Provider-only and MCP tools cannot become trusted by being named in this list. */
 export function assertNegativeClaimsTools(
-  config: ResolvedNegativeClaims,
+  config: ResolvedTypedNegativeClaims,
   tools: readonly Tool[],
 ): void {
   for (const name of config.tools) {
@@ -112,7 +167,7 @@ function schemaObject(value: unknown, at: string): Record<string, unknown> {
  * Root/field/item references and unions are deliberately not guessed: expose this
  * one citation field directly while the rest of the app's schema is preserved. */
 export function negativeClaimsSchema(
-  config: ResolvedNegativeClaims,
+  config: ResolvedTypedNegativeClaims,
   schema: Readonly<Record<string, unknown>> | undefined,
 ): Readonly<Record<string, unknown>> {
   if (schema === undefined)
@@ -207,7 +262,7 @@ export function negativeClaimsSchema(
 
 /** One always-on instruction; handles themselves are served beside admitted results. */
 export function negativeClaimsInstruction(
-  config: ResolvedNegativeClaims,
+  config: ResolvedTypedNegativeClaims,
   schema: Readonly<Record<string, unknown>>,
 ): string {
   const fieldSchema = (schema.properties as Record<string, unknown>)[config.field];

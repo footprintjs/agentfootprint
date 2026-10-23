@@ -29,7 +29,7 @@ import type {
 } from '../../../src/events/payloads.js';
 
 describe('findings events — registered at every site', () => {
-  it('EVENT_NAMES.findings names the seven events in the three-segment form', () => {
+  it('EVENT_NAMES.findings names the eight events in the three-segment form', () => {
     expect(EVENT_NAMES.findings).toEqual({
       declared: 'agentfootprint.findings.declared',
       standing: 'agentfootprint.findings.standing',
@@ -43,10 +43,11 @@ describe('findings events — registered at every site', () => {
       argument: 'agentfootprint.findings.argument',
       // The results layer (honesty layer 3, step 7b) — its verdict on one call's period.
       period: 'agentfootprint.findings.period',
+      negative_claim: 'agentfootprint.findings.negative_claim',
     });
   });
 
-  it('all six are in ALL_EVENT_TYPES, directly after the middleware domain', () => {
+  it('all eight are in ALL_EVENT_TYPES, directly after the middleware domain', () => {
     const list = [...ALL_EVENT_TYPES];
     const at = list.indexOf('agentfootprint.middleware.decision');
     expect(at).toBeGreaterThan(-1);
@@ -57,6 +58,7 @@ describe('findings events — registered at every site', () => {
     expect(list[at + 5]).toBe('agentfootprint.findings.contingent');
     expect(list[at + 6]).toBe('agentfootprint.findings.argument');
     expect(list[at + 7]).toBe('agentfootprint.findings.period');
+    expect(list[at + 8]).toBe('agentfootprint.findings.negative_claim');
   });
 
   it('the period event is a key of AgentfootprintEventMap with its own payload type (step 7b)', () => {

@@ -1,9 +1,10 @@
 /**
- * prose — the prose door (design § 5.2): every negative claim the grammar finds in a text,
- * resolved to the reads it names and NOTED against them. Observe-only: a note never withholds,
- * whatever the validation mode; a claim may carry no note.
+ * prose — the prose door (design § 5.2): negative phrases anchored in a dispatched read's
+ * declared words, sent values or resolved names are resolved and NOTED against the record.
+ * An anchor permits a finding, never binds an entity or establishes a claim. Observe-only:
+ * a note never withholds, whatever the validation mode; a claim may carry no note.
  *
- * Pattern: detect (`detect.ts`) → resolve (`resolve.ts`) → containment notes
+ * Pattern: detect (`detect.ts`) → data anchor (`anchor.ts`) → resolve (`resolve.ts`) → containment notes
  *          (`containment.ts`), one row per claim and one per unit the grammar could not judge
  *          (`in-code-block`, `language-unsupported`), in text order. A record that may be missing
  *          a call, or keeps one out by redaction, notes every claim `record-incomplete` and
@@ -17,11 +18,13 @@
  */
 
 import { claimWordsOf, entityNotes } from './containment.js';
+import { proseAnchorOf } from './anchor.js';
 import { detectNegativeClaims, type DetectedClaim } from './detect.js';
 import { PROSE_NOTES } from './types.js';
 import { MAX_NEGATIVE_CLAIMS } from './limits.js';
-import { NEGATIVE_CLAIM_PHRASES_VERSION } from './phrases.js';
+import { NEGATIVE_CLAIM_PHRASES_VERSION, type ResolvedNegativeClaimPhrases } from './phrases.js';
 import { isCurrent, resolveProseClaim } from './resolve.js';
+import { createProseWorkBudget, ProseWorkLimit, type ProseWorkBudget } from './work.js';
 import type {
   ProseClaimRow,
   ProseNote,
@@ -39,6 +42,10 @@ export interface ProseCheckInput {
   readonly record: TurnRecord;
   /** The person's last message — names a CANDIDATE for an entity-less claim, never a binding. */
   readonly personMessage?: string;
+  /** App literal extensions, admitted once at configuration time. */
+  readonly phrases?: ResolvedNegativeClaimPhrases;
+  /** @internal One runtime observation shares this allowance across every field. */
+  readonly work?: ProseWorkBudget;
 }
 
 const ordered = (notes: readonly ProseNote[]): ProseNote[] =>
@@ -77,11 +84,11 @@ function judgeClaim(
   if (!record.ledgerComplete || peers.some((call) => call.keptOut === true)) {
     return claimRow(field, claim, ['record-incomplete'], []);
   }
-  const resolution = resolveProseClaim(claim, text, record, input.personMessage);
+  const resolution = resolveProseClaim(claim, text, record, input.personMessage, input.work);
   if (resolution.status === 'entity-unresolved') {
     return claimRow(field, claim, ['entity-unresolved'], [], { candidates: resolution.candidates });
   }
-  const words = claimWordsOf(claim, text, record.clock);
+  const words = claimWordsOf(claim, text, record.clock, input.work);
   const notes: ProseNote[] = [];
   const results: TurnCall[] = [];
   let staleSince: StaleSince | undefined;
@@ -103,7 +110,7 @@ function judgeClaim(
 /** Note each claim, or one whole-text overflow note without judging any claim. */
 export function judgeProseNegatives(input: ProseCheckInput): ProseRow[] {
   const { field, text, record } = input;
-  const detection = detectNegativeClaims(text);
+  const detection = detectNegativeClaims(text, input.phrases);
   if (detection.claims.length > MAX_NEGATIVE_CLAIMS) {
     return [
       {
@@ -111,21 +118,41 @@ export function judgeProseNegatives(input: ProseCheckInput): ProseRow[] {
         field,
         code: 'too-many-claims',
         span: { start: 0, end: text.length },
-        packVersion: NEGATIVE_CLAIM_PHRASES_VERSION,
+        packVersion: input.phrases?.version ?? NEGATIVE_CLAIM_PHRASES_VERSION,
       },
     ];
   }
-  const peers = record.calls.filter((call) => isCurrent(call, record));
-  const rows: ProseRow[] = [
-    ...detection.notes.map((note) => ({
-      kind: 'negative-claim-note' as const,
-      field,
-      code: note.code,
-      span: note.span,
-      packVersion: note.packVersion,
-      ...(note.phraseId === undefined ? {} : { phraseId: note.phraseId }),
-    })),
-    ...detection.claims.map((claim) => judgeClaim(input, claim, peers)),
-  ];
-  return rows.sort((a, b) => a.span.start - b.span.start);
+  // Detection and its cap precede every record read. A phrase alone is not
+  // a data claim; anchoring only permits a note, never resolves its entity.
+  const work = input.work ?? createProseWorkBudget();
+  try {
+    work.charge(0);
+    const anchored = detection.claims.length === 0 ? undefined : proseAnchorOf(record, work);
+    const peers = record.calls.filter((call) => isCurrent(call, record));
+    const rows: ProseRow[] = [
+      ...detection.notes.map((note) => ({
+        kind: 'negative-claim-note' as const,
+        field,
+        code: note.code,
+        span: note.span,
+        packVersion: note.packVersion,
+        ...(note.phraseId === undefined ? {} : { phraseId: note.phraseId }),
+      })),
+      ...detection.claims
+        .filter((claim) => anchored?.(claim, text) === true)
+        .map((claim) => judgeClaim({ ...input, work }, claim, peers)),
+    ];
+    return rows.sort((a, b) => a.span.start - b.span.start);
+  } catch (error) {
+    if (!(error instanceof ProseWorkLimit)) throw error;
+    return [
+      {
+        kind: 'negative-claim-note',
+        field,
+        code: 'input-limit',
+        span: { start: 0, end: text.length },
+        packVersion: input.phrases?.version ?? NEGATIVE_CLAIM_PHRASES_VERSION,
+      },
+    ];
+  }
 }

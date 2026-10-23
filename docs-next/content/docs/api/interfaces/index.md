@@ -213,7 +213,7 @@ title: Interfaces
 - [`Milestone`](/docs/api/interfaces/Milestone)
 - [`NamesAndNumbersOptions`](/docs/api/interfaces/NamesAndNumbersOptions)
 - [`NegativeClaimCitation`](/docs/api/interfaces/NegativeClaimCitation)
-- [`NegativeClaimsOptions`](/docs/api/interfaces/NegativeClaimsOptions)
+- [`NegativeClaimPhraseExtensions`](/docs/api/interfaces/NegativeClaimPhraseExtensions)
 - [`NormaliseOptions`](/docs/api/interfaces/NormaliseOptions)
 - [`ObserverStats`](/docs/api/interfaces/ObserverStats)
 - [`OutputAttempt`](/docs/api/interfaces/OutputAttempt)

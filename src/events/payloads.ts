@@ -1160,6 +1160,48 @@ export interface FindingsPeriodPayload {
 }
 
 /**
+ * One observe-only prose finding, filed with the answer: a detected claim or
+ * a unit the bounded grammar could not judge. This is a warning, never an
+ * enforcement decision or proof that the remaining prose is true.
+ *
+ * Only locations, checker codes, phrase-pack identities and native result
+ * references leave the ledger. No answer text, candidate entity labels,
+ * tool values or stale-read dates are included. Codes are owned by the
+ * checker, not duplicated in this low-level event contract.
+ */
+interface FindingsNegativeClaimLocation {
+  readonly iteration: number;
+  /** The conversation turn when stamped by the runtime. */
+  readonly turn?: number;
+  /** JSON pointer into the answer; at most 4,096 UTF-16 code units. */
+  readonly field: string;
+  readonly span: { readonly start: number; readonly end: number };
+  /** At most 128 UTF-16 code units. */
+  readonly packVersion: string;
+  /** At most 128 UTF-16 code units. */
+  readonly phraseId?: string;
+  /** Some metadata was shortened or omitted; references are not exhaustive. */
+  readonly truncated?: true;
+}
+
+export type FindingsNegativeClaimPayload = FindingsNegativeClaimLocation &
+  (
+    | {
+        readonly kind: 'negative-claim';
+        readonly claim: 'none' | 'complete';
+        /** At most 32 checker codes, each at most 128 UTF-16 code units. */
+        readonly notes: readonly string[];
+        /** At most 32 native result ids, each at most 256 UTF-16 code units. */
+        readonly results: readonly string[];
+      }
+    | {
+        readonly kind: 'negative-claim-note';
+        /** The checker's unread-unit code, at most 128 UTF-16 code units. */
+        readonly code: string;
+      }
+  );
+
+/**
  * A classifier picked a tool for one model call (9.105.0, `.toolChoice()`):
  * the provider's pick among the OFFERED tools (the merged wire minus the
  * always-served doors), its confidence, how many were offered and how many

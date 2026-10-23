@@ -3,8 +3,10 @@
 import { copyJson } from '../../../lib/boundedJson.js';
 import { detectNegativeClaims } from '../../../integrity/negative-claim/detect.js';
 import { judgeProseNegatives } from '../../../integrity/negative-claim/prose.js';
+import { createProseWorkBudget } from '../../../integrity/negative-claim/work.js';
 import { MAX_NEGATIVE_CLAIMS } from '../../../integrity/negative-claim/limits.js';
 import { NEGATIVE_CLAIM_PHRASES_VERSION } from '../../../integrity/negative-claim/phrases.js';
+import type { ResolvedNegativeClaimPhrases } from '../../../integrity/negative-claim/phrases.js';
 import type { ProseRow, TurnRecord } from '../../../integrity/negative-claim/types.js';
 
 // Whole-answer budgets, not per-field multipliers. Length is UTF-16 code units.
@@ -20,11 +22,9 @@ const MAX_PROSE_FIELDS = 256;
 export function observeNegativeProse(
   candidate: unknown,
   record: TurnRecord,
-  citationField: string,
+  citationField?: string,
+  phrases?: ResolvedNegativeClaimPhrases,
 ): ProseRow[] {
-  const data = copyJson(candidate, 1024 * 1024, true);
-  const fields: { field: string; text: string }[] = [];
-  const pending = [{ value: data, path: '' }];
   let chars = 0;
   const note = (code: 'input-limit' | 'too-many-claims'): ProseRow[] => [
     {
@@ -32,9 +32,21 @@ export function observeNegativeProse(
       field: '/',
       code,
       span: { start: 0, end: chars },
-      packVersion: NEGATIVE_CLAIM_PHRASES_VERSION,
+      packVersion: phrases?.version ?? NEGATIVE_CLAIM_PHRASES_VERSION,
     },
   ];
+  let data: unknown;
+  try {
+    if (typeof candidate === 'string' && candidate.length > MAX_PROSE_CHARS) {
+      chars = candidate.length;
+      return note('input-limit');
+    }
+    data = copyJson(candidate, 1024 * 1024, true);
+  } catch {
+    return note('input-limit');
+  }
+  const fields: { field: string; text: string }[] = [];
+  const pending = [{ value: data, path: '' }];
   while (pending.length > 0) {
     const entry = pending.pop();
     if (entry === undefined) break;
@@ -44,6 +56,7 @@ export function observeNegativeProse(
       // Their free-form about label still passes through the observer.
       const parts = path.split('/');
       if (
+        citationField !== undefined &&
         parts[1] === citationField &&
         /^\d+$/.test(parts[2] ?? '') &&
         ((parts.length === 4 &&
@@ -70,11 +83,20 @@ export function observeNegativeProse(
   }
   let claims = 0;
   for (const { text } of fields) {
-    const detection = detectNegativeClaims(text);
+    const detection = detectNegativeClaims(text, phrases);
     // Unread units must share the budget: thousands of fenced/code snippets
     // must not amplify one long field path into an unbounded findings ledger.
     claims += detection.claims.length + detection.notes.length;
     if (claims > MAX_NEGATIVE_CLAIMS) return note('too-many-claims');
   }
-  return fields.flatMap(({ field, text }) => judgeProseNegatives({ field, text, record }));
+  const work = createProseWorkBudget();
+  const rows: ProseRow[] = [];
+  for (const { field, text } of fields) {
+    const found = judgeProseNegatives({ field, text, record, phrases, work });
+    if (found.some((row) => row.kind === 'negative-claim-note' && row.code === 'input-limit')) {
+      return note('input-limit');
+    }
+    rows.push(...found);
+  }
+  return rows;
 }

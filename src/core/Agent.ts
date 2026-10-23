@@ -320,7 +320,11 @@ import type {
 } from './agent/types.js';
 import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { negativeCheckpointOf } from './agent/negativeClaims/checkpoint.js';
-import type { ResolvedNegativeClaims } from './agent/negativeClaims/config.js';
+import type {
+  ResolvedNegativeClaims,
+  ResolvedTypedNegativeClaims,
+} from './agent/negativeClaims/config.js';
+import { withNegativeProse } from './agent/negativeClaims/observe.js';
 import { negativeRecheckStage } from './agent/negativeClaims/recheck.js';
 import type { AnswerNegatives } from './agent/negativeClaims/delivery.js';
 import { withAnswerValidation } from './agent/stages/answerValidation.js';
@@ -1083,6 +1087,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private readonly receiptDigests: ReceiptDigests = createReceiptDigests();
   private readonly answerValidationConfig?: ResolvedAnswerValidation;
   private readonly negativeClaimsConfig?: ResolvedNegativeClaims;
+  private readonly typedNegativeClaimsConfig?: ResolvedTypedNegativeClaims;
   private readonly applicationAnswerValidation: boolean;
 
   constructor(
@@ -1145,10 +1150,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.servingConversation?.startsWith('hosted:') === true && { oneShot: true }),
     }));
     this.negativeClaimsConfig = negativeClaimsConfig;
+    this.typedNegativeClaimsConfig =
+      negativeClaimsConfig?.mode === 'typed' ? negativeClaimsConfig : undefined;
     this.applicationAnswerValidation = answerValidationConfig !== undefined;
     this.answerValidationConfig =
       answerValidationConfig ??
-      (negativeClaimsConfig === undefined
+      (this.typedNegativeClaimsConfig === undefined
         ? undefined
         : resolveAnswerValidation({
             id: 'negative-claims',
@@ -1206,7 +1213,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.evidenceGate =
       evidenceGate !== undefined &&
       evidenceGate.posture !== 'assist' &&
-      (answerValidationConfig?.mode === 'enforce' || negativeClaimsConfig !== undefined)
+      (answerValidationConfig?.mode === 'enforce' || this.typedNegativeClaimsConfig !== undefined)
         ? { ...evidenceGate, toolsOffAfterRevision: true }
         : evidenceGate;
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
@@ -3079,7 +3086,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    */
   private revisionWithholdsTools(): boolean {
     return (
-      this.negativeClaimsConfig !== undefined || this.evidenceGate?.toolsOffAfterRevision === true
+      this.typedNegativeClaimsConfig !== undefined ||
+      this.evidenceGate?.toolsOffAfterRevision === true
     );
   }
 
@@ -3968,15 +3976,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         }),
       );
     }
-    // Same wiring for `agentfootprint.findings.*` (9.101.0) — the ledger's two
-    // events, filed by `recordFindings` on scope. Attached only under
-    // `.findings()`: an unarmed agent gains no bridge, no listener and no
+    // Same wiring for `agentfootprint.findings.*` (9.101.0) — the ledger's
+    // events, filed by `recordFindings` on scope. An unarmed agent gains
+    // no bridge, no listener and no
     // per-event work, and `agent.on('agentfootprint.findings.*')` can only
     // ever fire on an agent that could have filed a row.
     // Also under the inputs layer (honesty layer 2): its `argument` rows are
     // filed through the same writer and ride the same domain — and under the
     // results layer (honesty layer 3), whose `period` rows do the same.
-    if (this.findingsOptions !== undefined || this.inputsLayerArmed || this.resultsLayerArmed) {
+    // Negative claims also file prose warnings, independently of those layers.
+    if (
+      this.findingsOptions !== undefined ||
+      this.inputsLayerArmed ||
+      this.resultsLayerArmed ||
+      this.negativeClaimsConfig !== undefined
+    ) {
       attachObserver(
         new EmitBridge({
           id: 'agentfootprint.findings-bridge',
@@ -4802,8 +4816,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The findings ledger's restore (9.101.0), WIDENED (honesty layer 2): wired
     // whenever the ledger OR an honesty layer is armed — an agent without
     // `.findings()` files argument rows too, and a continued conversation must
-    // keep them. Still value-conditional inside seed (only when rows exist).
-    let ledgerRestoreArmed = this.findingsOptions !== undefined;
+    // keep them. Negative-claim observations also persist independently of those
+    // layers. Still value-conditional inside seed (only when rows exist).
+    let ledgerRestoreArmed =
+      this.findingsOptions !== undefined || this.negativeClaimsConfig !== undefined;
     const consumeResumeLedger = (): FindingsLedger | undefined => {
       const l = this.pendingResumeFindingsLedger;
       this.pendingResumeFindingsLedger = undefined;
@@ -4853,8 +4869,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // under the arm (refused at build without the inputs layer).
       ...(this.argumentSourcesArmed === true && { argumentSources: true as const }),
       // The answer check's tool-call ledger — value-conditional, so an agent
-      // without `answerValidation` hands seed the deps it always did.
-      ...(this.answerValidationConfig !== undefined && { toolCallLedger: true }),
+      // without answer validation or negative claims keeps its prior shape.
+      ...((this.answerValidationConfig !== undefined ||
+        this.negativeClaimsConfig !== undefined) && { toolCallLedger: true }),
       ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
       get consumePendingResumeFindingsLedger() {
         return ledgerRestoreArmed ? consumeResumeLedger : undefined;
@@ -4918,7 +4935,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
       // The evidence gate's one bounded revision (9.35.0) — a per-turn budget,
       // reset here. Only a posture that can revise writes the key.
-      ...((this.negativeClaimsConfig !== undefined ||
+      ...((this.typedNegativeClaimsConfig !== undefined ||
         (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
         hasEvidenceRevision: true,
       }),
@@ -5412,7 +5429,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         )
           retainReplayRetirements(this.checkpointTracker, preparation);
       },
-      ...((this.negativeClaimsConfig !== undefined ||
+      ...((this.typedNegativeClaimsConfig !== undefined ||
         (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
         hasEvidenceRecovery: true,
       }),
@@ -5655,7 +5672,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       answerArmed ? true : undefined,
     );
 
-    const routeDecider =
+    const validatedRouteDecider =
       this.answerValidationConfig === undefined
         ? baseRouteDecider
         : withAnswerValidation(
@@ -5667,14 +5684,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             this.outputEnforcement?.outputFormat !== undefined,
             // Read only when `agentChecks` lists 'claims' (the agent's own rows).
             this.claimContract,
-            this.negativeClaimsConfig === undefined
+            this.typedNegativeClaimsConfig === undefined
               ? undefined
               : {
-                  config: this.negativeClaimsConfig,
+                  config: this.typedNegativeClaimsConfig,
+                  phrases: this.typedNegativeClaimsConfig.phrases,
                   applicationValidation: this.applicationAnswerValidation,
                   runId: () => this.currentRunContext.runId,
                 },
           );
+    const routeDecider =
+      this.negativeClaimsConfig?.mode === 'prose'
+        ? withNegativeProse(validatedRouteDecider, {
+            runId: () => this.currentRunContext.runId,
+            hasOutstandingConsent: () => this.consentOutstanding.size > 0,
+            structured: this.outputSchemaParser !== undefined,
+            phrases: this.negativeClaimsConfig.phrases,
+          })
+        : validatedRouteDecider;
     // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
     // An output schema makes the answer JSON, and the appended block would
     // make it JSON followed by prose, which `runTyped()` cannot parse. So the
@@ -5790,9 +5817,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // handler exactly the deps object it always did.
       ...(this.repeatedCallNudge === false && { repeatedCallNudge: false }),
       // The answer check's tool-call ledger (`context.toolCalls`) — kept ONLY
-      // when `answerValidation` is configured, so no other agent's record changes.
-      ...(this.answerValidationConfig !== undefined && {
-        toolCallLedger: { maxCalls: this.answerValidationConfig.limits.maxToolCalls },
+      // for answer validation or negative claims; other records stay unchanged.
+      ...((this.answerValidationConfig !== undefined ||
+        this.negativeClaimsConfig !== undefined) && {
+        toolCallLedger: { maxCalls: this.answerValidationConfig?.limits.maxToolCalls ?? 1000 },
       }),
       ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
       // Skill-graph read_skill gate: bound the model's read_skill jumps to the
@@ -6072,7 +6100,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.timeOptions !== undefined && { timeWindows: true as const }),
       ...(inputsArmed && this.timeOptions !== undefined && { timeLimits: true as const }),
       ...(this.answerValidationConfig !== undefined && { hasAnswerValidation: true }),
-      ...(this.negativeClaimsConfig !== undefined && {
+      ...(this.typedNegativeClaimsConfig !== undefined && {
         negativeRecheckStage: negativeRecheckStage as (scope: never) => void,
       }),
       ...(governsOutput && { releaseOutputTokens: true as const }),

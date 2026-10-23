@@ -11,6 +11,7 @@ import {
 
 const options: NegativeClaimsOptions = { field: 'negatives', tools: ['lookup'] };
 const config = resolveNegativeClaims(options);
+if (config.mode !== 'typed') throw new Error('typed fixture required');
 const schema = () => ({
   type: 'object',
   properties: {
@@ -44,17 +45,20 @@ describe('negativeClaims configuration', () => {
     const tools = ['lookup'];
     const resolved = resolveNegativeClaims({ field: 'negatives', tools });
     tools.push('later');
-    expect(resolved).toEqual({ field: 'negatives', tools: ['lookup'], unestablished: 'withhold' });
+    expect(resolved).toEqual({
+      mode: 'typed',
+      field: 'negatives',
+      tools: ['lookup'],
+      unestablished: 'withhold',
+    });
+    if (resolved.mode !== 'typed') throw new Error('typed configuration required');
     expect(Object.isFrozen(resolved)).toBe(true);
     expect(Object.isFrozen(resolved.tools)).toBe(true);
   });
 
-  it.each(['strictProse', 'prose', 'enforceProse'])(
-    'refuses deferred %s even when false',
-    (key) => {
-      expect(() => resolveNegativeClaims({ ...options, [key]: false })).toThrow(/not available/);
-    },
-  );
+  it.each(['strictProse', 'enforceProse'])('refuses deferred %s even when false', (key) => {
+    expect(() => resolveNegativeClaims({ ...options, [key]: false })).toThrow(/not available/);
+  });
 
   it.each([
     [{ ...options, tools: [] }, /non-empty/],
@@ -201,7 +205,7 @@ describe('AgentBuilder.negativeClaims', () => {
           validate: () => ({ checks: [] }),
         })
         .build(),
-    ).toThrow(/requires .negativeClaims/);
+    ).toThrow(/requires typed .negativeClaims/);
     expect(() =>
       builder()
         .tool(lookup)

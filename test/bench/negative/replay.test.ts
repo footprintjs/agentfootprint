@@ -6,8 +6,8 @@
  * Test types:
  *   - UNIT — the split (flagships held out, the per-kind quota, deterministic), the exact
  *     case-level bound (Clopper-Pearson over cases), the floors;
- *   - FUNCTIONAL — a whole folder read and replayed: the detector's hits against the labels, the
- *     baseline equal to detector + record while no call carries a composed row, the gates, a
+ *   - FUNCTIONAL — a whole folder read and replayed: the detector's hits against the labels,
+ *     the raw detector versus the anchored observer when no native calls are available, the gates, a
  *     label set without a key rebuilt by the sheet rule;
  *   - CONTRACT — the printed report carries no reply text.
  */
@@ -345,13 +345,27 @@ describe('FUNCTIONAL — a synthetic folder, read and replayed', () => {
     expect(cell.detector.sensitivity.point).toBe(1);
     expect(cell.detector.firesOnNotFlat.point).toBe(0);
     expect(cell.baseline.missedOverclaims.point).toBe(0);
-    expect(cell.record.sameAsBaseline).toBe(true);
+    expect(cell.record.sameAsBaseline).toBe(false);
+    expect(cell.record.missedOverclaims.point).toBe(1);
   });
 
-  it('with no composed row, detector + record IS the baseline; every claim notes entity-unresolved', () => {
+  it('keeps raw detection but files no anchored claim when the replay has no native calls', () => {
+    // PR5 requires a dispatched native read to supply data anchors. The frozen
+    // replay supplies an empty record; its historical baseline is still the raw
+    // detector, but it cannot measure the current runtime observer's recall.
+    // PR6 needs a separate replay with native call evidence, not relabelled data.
+    expect(readReply({ reply: FLAT }, LIB)).toMatchObject({
+      detected: true,
+      noted: false,
+      notes: {},
+    });
     const result = replay(loadStudy(dir), LIB);
-    for (const cell of result.cells) expect(cell.record.sameAsBaseline).toBe(true);
-    expect(Object.keys(result.notes)).toEqual(['entity-unresolved']);
+    expect(
+      result.cells.some(
+        (cell: { record: { sameAsBaseline: boolean } }) => !cell.record.sameAsBaseline,
+      ),
+    ).toBe(true);
+    expect(result.notes).toEqual({});
   });
 
   it('reads the gates on held-out test-arm replies, per model and resolution; floors enforced', () => {

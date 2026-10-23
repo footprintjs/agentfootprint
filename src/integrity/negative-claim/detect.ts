@@ -15,7 +15,11 @@
  */
 
 import { isSupportedLanguage } from './language.js';
-import { NEGATIVE_CLAIM_PHRASES, NEGATIVE_CLAIM_PHRASES_VERSION } from './phrases.js';
+import {
+  NEGATIVE_CLAIM_PHRASES,
+  NEGATIVE_CLAIM_PHRASES_VERSION,
+  type ResolvedNegativeClaimPhrases,
+} from './phrases.js';
 import { insideAny, unitsOf, type TextSpan } from './units.js';
 import { firstHit, tokensOf, type PhraseHit, type Token } from './matcher.js';
 
@@ -53,11 +57,15 @@ const spanOf = (tokens: readonly Token[], hit: PhraseHit): TextSpan => ({
 });
 
 /** Detect the negative claims of a reply. */
-export function detectNegativeClaims(text: string): Detection {
+export function detectNegativeClaims(
+  text: string,
+  phrases?: ResolvedNegativeClaimPhrases,
+): Detection {
   const claims: DetectedClaim[] = [];
   const notes: DetectionNote[] = [];
   const { units, inlineCode } = unitsOf(text);
-  const packVersion = NEGATIVE_CLAIM_PHRASES_VERSION;
+  const packVersion = phrases?.version ?? NEGATIVE_CLAIM_PHRASES_VERSION;
+  const packs = phrases?.packs ?? NEGATIVE_CLAIM_PHRASES;
   for (const unit of units) {
     const tokens = tokensOf(text, unit.start, unit.end);
     if (tokens.length === 0) continue;
@@ -71,7 +79,7 @@ export function detectNegativeClaims(text: string): Detection {
       continue;
     }
     for (const kind of ['none', 'complete'] as const) {
-      const hit = firstHit(text, tokens, NEGATIVE_CLAIM_PHRASES[kind]);
+      const hit = firstHit(text, tokens, packs[kind]);
       if (hit === undefined) continue;
       const span = spanOf(tokens, hit);
       if (unit.fenced || insideAny(span, inlineCode)) {

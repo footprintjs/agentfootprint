@@ -15,10 +15,10 @@ claim to that record, by code: no model, no clock, no I/O.
 
 **Two doors.**
 
-| Door | The claim | What it can do |
-| --- | --- | --- |
+| Door                                       | The claim                                                                                                                                                                                              | What it can do                                                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | typed (`judge.ts` · `judgeTypedNegatives`) | `{ kind: 'none' \| 'not-found' \| 'complete', restsOn: [resultId, …], about? }` — a CITATION of the library-minted result identities (`claim-result/<ns>/<runId>/<ordinal>`), never a provider call id | one row per claim; established ⇒ `not-applicable` and the library's statement; anything else withholds (`checked-fail` or `unreachable`) |
-| prose (`prose.ts` · `judgeProseNegatives`) | a sentence the fixed grammar finds (`detect.ts`, `phrases.ts`) | NOTES only — observe, never withhold |
+| prose (`prose.ts` · `judgeProseNegatives`) | a negative phrase the grammar finds, anchored in a dispatched read's data (`detect.ts`, `anchor.ts`, `phrases.ts`)                                                                                     | NOTES only — observe, never withhold                                                                                                     |
 
 **The typed rules** (`citation.ts`). Only the cited read itself can establish a claim: it must be
 of this turn (a pause between legs of one turn keeps it current; an earlier turn is `stale-turn`),
@@ -37,8 +37,11 @@ by the tool)", "(the tool's declared default)", "(as sent by the model)", "(as t
 says)". Every gap is listed; an unsent argument is worded with care ("was not sent, so the tool may
 have applied its own default and this may cover only part").
 
-**The prose notes** (`containment.ts`). Resolve by the entity each call was SENT for (or a
-population-less search's `source.said` words); then note what a citation would have made exact:
+**The prose notes** (`anchor.ts`, `resolve.ts`, `containment.ts`). A clause first needs an anchor:
+a dispatched read's declared `said` words, actual sent value or resolved name/alias. Host-only
+and kept-out values cannot anchor it; another clause, a user message and model prose cannot
+supply evidence. Anchoring never binds an entity. Resolve separately by a population's native
+`resolved` identity (or a population-less search's `source.said` words); then note what a citation would have made exact:
 `scope-wider`, `coverage-gap`, `subject-unmatched`, `rows-undecided`, `period-*`, `cap-reached`,
 `paged`, `partial` and the rest. A hedge is not scope. A search with no note leaves the claim with
 no note; the others then note only what they BEAR on it. Nothing here throws on model text
@@ -48,6 +51,17 @@ The prose door shares the typed door's 32-claim field limit (`limits.ts`). Above
 `too-many-claims` note covers the entire text; no record is read and no claim is judged. It
 does not return a checked prefix. Detection still scans the supplied text; this bounds record
 checking, not input length. Code and unsupported-language notes do not count as claims.
+The runtime adds whole-answer limits on text, fields, and claims plus unjudged units.
+Prose record matching also has a fixed 8,000,000-unit work allowance (`work.ts`): native
+pattern preparation, token visits and exact name comparisons are charged before the work.
+The pure door defaults to one allowance per text; the runtime shares one across every answer
+field. Exhaustion replaces all partial rows with one `input-limit` note. A long repeated name
+therefore cannot hide an unread suffix behind earlier successful observations. Prefix matching
+is linear; the final name comparison still uses `sameName`, including its case and digit rules.
+`resolveNegativeClaimPhrases` admits at most 32 app literal phrases of 128 UTF-16 units each,
+extends only `none` and `complete`, and derives a version/hash from the effective frozen packs.
+Regexes and slot patterns are rejected. Extensions keep the same language, code, anchor and
+budget rules; the built-in packs and their hash remain unchanged.
 
 **Same search** (`readings.ts`) means the same COMPOSED executed scope — filters in effect,
 defaults as if sent, fixed qualifiers, host-filled identities by reference, a period by its
@@ -62,8 +76,9 @@ and the declarations its `ToolSearch`. Words are spelled by the library's one sp
 half-open ranges and #199's `span.ts`: a read's window is the span it ran with at dispatch.
 A claim may cite a read by its result identity or by the handle the library serves (`r3`).
 
-**Not wired.** Nothing in the agent calls this folder yet: PR 4 mounts the typed door, PR 5 the
-prose door. The free replay over recorded replies is `bench/negative/`.
+**Runtime.** `core/agent/negativeClaims/` admits the native record, mounts the typed door and
+observes original model strings. The pure checker never reads conversation text as evidence.
+The frozen free replay over recorded replies is `bench/negative/`.
 
 **Example.**
 

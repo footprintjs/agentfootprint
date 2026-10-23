@@ -27,6 +27,9 @@
  *          (9.113.0, filed by the same two moments through
  *          `unsettled.ts · withUnsettledRows`) emits nothing of its own, as
  *          a conflict row emits nothing of its own.
+ *          Observe-only negative prose rows emit
+ *          `agentfootprint.findings.negative_claim`: bounded locations,
+ *          checker codes and native references, never the prose or values.
  *
  * ## Append only, last wins, conflicts are a fold
  *
@@ -52,6 +55,7 @@ import { isPlacedToolResult } from '../../../artifacts/placement.js';
 import { conflictsOf, type Conflict } from '../../../integrity/assertion/conflicts.js';
 import { assertionKey, type Assertion } from '../../../integrity/assertion/types.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
+import type { FindingsNegativeClaimPayload } from '../../../events/payloads.js';
 import { HIDDEN_VALUE, type ArgumentRow } from '../arguments/rows.js';
 import { isTimeRowKind } from '../../../time/rows.js';
 import {
@@ -64,6 +68,7 @@ import {
   type FindingsLedger,
   type FindingsRow,
   type JudgmentRow,
+  type NegativeProseFinding,
   type Standing,
   type StandingRow,
   type UnsettledByAbsenceRow,
@@ -376,6 +381,10 @@ export function emitRow(
     });
     return;
   }
+  if (row.kind === 'negative-claim' || row.kind === 'negative-claim-note') {
+    emitNegativeProseRow(scope, row);
+    return;
+  }
   if (row.kind !== 'standing') return;
   const conflictKeys = newConflicts
     .filter((c) => c.witnesses.some((w) => w.toolCallId === row.toolCallId))
@@ -397,6 +406,47 @@ export function emitRow(
     ...(conflictKeys.length > 0 && { conflictKeys }),
     ...(row.unknownId === true && { unknownId: true }),
     ...(judged !== undefined && { agrees: judged.standing === row.standing }),
+  });
+}
+
+/** A bounded projection, not another checker: the filed row remains the authority. */
+function emitNegativeProseRow(scope: FindingsScope, row: NegativeProseFinding): void {
+  let truncated = false;
+  const text = (value: string, limit: number): string => {
+    if (value.length <= limit) return value;
+    truncated = true;
+    return value.slice(0, limit);
+  };
+  const references = (values: readonly string[], chars: number): string[] => {
+    if (values.length > 32) truncated = true;
+    // Never shorten an identity into a different, apparently valid identity.
+    return values.slice(0, 32).filter((value) => {
+      if (value.length <= chars) return true;
+      truncated = true;
+      return false;
+    });
+  };
+  const location = {
+    iteration: row.iteration,
+    ...(row.turn !== undefined && { turn: row.turn }),
+    field: text(row.field, 4096),
+    span: { start: row.span.start, end: row.span.end },
+    packVersion: text(row.packVersion, 128),
+    ...(row.phraseId !== undefined && { phraseId: text(row.phraseId, 128) }),
+  };
+  const payload: FindingsNegativeClaimPayload =
+    row.kind === 'negative-claim'
+      ? {
+          ...location,
+          kind: row.kind,
+          claim: row.claim,
+          notes: references(row.notes, 128),
+          results: references(row.results, 256),
+        }
+      : { ...location, kind: row.kind, code: text(row.code, 128) };
+  typedEmit(scope, 'agentfootprint.findings.negative_claim', {
+    ...payload,
+    ...(truncated ? { truncated: true as const } : {}),
   });
 }
 

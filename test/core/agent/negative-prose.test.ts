@@ -14,16 +14,43 @@ const EMPTY: TurnRecord = {
   ledgerComplete: true,
   tools: {},
 };
-const observe = (value: unknown, record = EMPTY) =>
-  observeNegativeProse(value, record, 'negatives');
+// An actual dispatched read supplies the anchor. Its sent label does not claim
+// a resolved identity: these tests exercise observation, never establishment.
+const READ: TurnRecord = {
+  ...EMPTY,
+  calls: [
+    {
+      resultId: 'claim-result/synthetic-prose-review/synthetic-run/1',
+      toolName: 'read_incidents',
+      turn: 1,
+      batch: 1,
+      dispatched: true,
+      outcome: 'ok',
+      effect: 'read',
+      arguments: { service: 'payments' },
+    },
+  ],
+};
+const observe = (value: unknown, record = READ) => observeNegativeProse(value, record, 'negatives');
 const poisonedRecord = () => {
   const read = vi.fn(() => {
     throw new Error('Evidence must not be read after a budget refusal.');
   });
   return { read, record: new Proxy({} as TurnRecord, { get: read }) };
 };
+const expectInputLimit = (value: unknown): void => {
+  const poison = poisonedRecord();
+  expect(observe(value, poison.record)).toEqual([
+    expect.objectContaining({ kind: 'negative-claim-note', field: '/', code: 'input-limit' }),
+  ]);
+  expect(poison.read).not.toHaveBeenCalled();
+};
 
 describe('runtime negative prose — whole-answer preflight', () => {
+  it('a claim phrase without any dispatched read has no data anchor', () => {
+    expect(observe({ summary: TEXT }, EMPTY)).toEqual([]);
+  });
+
   for (const [label, value, code] of [
     ['total characters', { a: TEXT, b: ' '.repeat(65_536) }, 'input-limit'],
     ['total strings', { values: Array.from({ length: 257 }, () => TEXT) }, 'input-limit'],
@@ -112,39 +139,126 @@ describe('runtime negative prose — whole-answer preflight', () => {
     expect(rows.map((row) => row.field)).toEqual(['/negatives/0/kind', '/negatives/0/restsOn/0']);
   });
 
-  it('only the configured citation field receives the protocol exclusion', () => {
-    const rows = observeNegativeProse({ negatives: [{ kind: 'none' }] }, EMPTY, 'citations');
+  it('a typed-like key outside the configured citation field is ordinary model prose', () => {
+    const rows = observeNegativeProse({ negatives: [{ kind: TEXT }] }, READ, 'citations');
     expect(rows).toEqual([
       expect.objectContaining({ kind: 'negative-claim', field: '/negatives/0/kind' }),
     ]);
+  });
+
+  it('closed protocol values outside the configured citation field still spend the string budget', () => {
+    const citations = Array.from({ length: 32 }, () => ({
+      kind: 'none',
+      restsOn: Array.from({ length: 16 }, () => 'r1'),
+    }));
+    const poison = poisonedRecord();
+    expect(observeNegativeProse({ negatives: citations }, poison.record, 'citations')).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', field: '/', code: 'input-limit' }),
+    ]);
+    expect(poison.read).not.toHaveBeenCalled();
   });
 
   it('nested field addresses use JSON pointer escaping', () => {
     const rows = observe({ 'a/b~c': [{ note: TEXT }] });
     expect(rows[0]?.field).toBe('/a~1b~0c/0/note');
   });
+
+  it('shares matching work across admitted fields and replaces prior findings on exhaustion', () => {
+    const names = Array.from({ length: 7 }, (_, index) =>
+      Array.from({ length: 300 }, (_, position) => (position === index ? 'A' : 'a')).join(' '),
+    );
+    const record: TurnRecord = {
+      ...READ,
+      calls: [
+        ...READ.calls,
+        ...names.map((name, index) => ({
+          ...READ.calls[0],
+          resultId: `claim-result/synthetic-prose-review/synthetic-run/${index + 2}`,
+          toolName: 'lookup_name',
+          arguments: { lookup: name },
+        })),
+      ],
+    };
+    const text = `There are no ${'a '.repeat(1000)}items.`;
+    expect(observe(TEXT, record)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim', notes: ['entity-unresolved'] }),
+    ]);
+    // Each field fits by itself. Only the combined work should refuse the
+    // answer, discarding the previously collected genuine observation too.
+    expect(observe(text, record)).toEqual([]);
+    expect(observe(text, record)).toEqual([]);
+    const candidate = { summary: TEXT, first: text, second: text, later: TEXT };
+    expect(observe(candidate, record)).toEqual([
+      expect.objectContaining({
+        kind: 'negative-claim-note',
+        field: '/',
+        code: 'input-limit',
+        span: { start: 0, end: 2 * (TEXT.length + text.length) },
+      }),
+    ]);
+  });
+
+  it('charges resolution work even when a public subject is a cheap data anchor', () => {
+    const names = Array.from({ length: 7 }, (_, index) =>
+      Array.from({ length: 300 }, (_, position) => (position === index ? 'A' : 'a')).join(' '),
+    );
+    const record: TurnRecord = {
+      ...READ,
+      tools: {
+        lookup_name: {
+          name: 'lookup_name',
+          search: {
+            subject: { what: 'items', said: ['items'] },
+            source: { what: 'store', said: ['store'] },
+            arguments: [{ name: 'lookup', role: 'population' }],
+          },
+        },
+      },
+      calls: names.map((name, index) => ({
+        ...READ.calls[0],
+        resultId: `claim-result/synthetic-prose-review/synthetic-run/${index + 1}`,
+        toolName: 'lookup_name',
+        arguments: { lookup: name },
+        scope: [
+          {
+            from: 'call',
+            facet: 'population',
+            what: 'lookup',
+            argument: 'lookup',
+            value: name,
+            resolved: { id: `item-${index}`, name },
+          },
+        ],
+      })),
+    };
+    const text = `There are no ${'a '.repeat(1000)}items.`;
+    expect(observe(text, record)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim', notes: ['entity-unresolved'] }),
+    ]);
+    expect(observe({ first: text, second: text }, record)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', field: '/', code: 'input-limit' }),
+    ]);
+  });
 });
 
-describe('runtime negative prose — unsafe candidate rejection', () => {
+describe('runtime negative prose — unreadable candidates are noted', () => {
   it('does not invoke a model/parser-owned getter', () => {
     const getter = vi.fn(() => TEXT);
     const value = Object.defineProperty({}, 'summary', { enumerable: true, get: getter });
-    expect(() => observe(value)).toThrow();
+    expectInputLimit(value);
     expect(getter).not.toHaveBeenCalled();
   });
 
   it('does not call a toJSON function', () => {
     const toJSON = vi.fn(() => ({ summary: TEXT }));
-    expect(() => observe({ toJSON })).toThrow();
+    expectInputLimit({ toJSON });
     expect(toJSON).not.toHaveBeenCalled();
   });
 
-  it('refuses cycles before reading evidence', () => {
+  it('notes cycles before reading evidence', () => {
     const value: Record<string, unknown> = {};
     value.self = value;
-    const poison = poisonedRecord();
-    expect(() => observe(value, poison.record)).toThrow();
-    expect(poison.read).not.toHaveBeenCalled();
+    expectInputLimit(value);
   });
 
   for (const [name, value] of [
@@ -154,8 +268,8 @@ describe('runtime negative prose — unsafe candidate rejection', () => {
     ['sparse array', new Array(2)],
     ['over one megabyte', { summary: 'x'.repeat(1024 * 1024) }],
   ] as const) {
-    it(`refuses ${name}`, () => {
-      expect(() => observe(value)).toThrow();
+    it(`notes ${name} without reading evidence`, () => {
+      expectInputLimit(value);
     });
   }
 });

@@ -4,7 +4,7 @@ title: NegativeClaimCitation
 
 # Interface: NegativeClaimCitation
 
-Defined in: [src/core/agent/negativeClaims/config.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L25)
+Defined in: [src/core/agent/negativeClaims/config.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L47)
 
 What the model may put in one entry. The runtime owns every delivered statement.
 
@@ -14,7 +14,7 @@ What the model may put in one entry. The runtime owns every delivered statement.
 
 > `readonly` **about**: `string` \| `number`
 
-Defined in: [src/core/agent/negativeClaims/config.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L27)
+Defined in: [src/core/agent/negativeClaims/config.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L49)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/agent/negativeClaims/config.ts:27](https://github.com/foot
 
 > `readonly` **kind**: `"none"` \| `"not-found"` \| `"complete"`
 
-Defined in: [src/core/agent/negativeClaims/config.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L26)
+Defined in: [src/core/agent/negativeClaims/config.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L48)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/core/agent/negativeClaims/config.ts:26](https://github.com/foot
 
 > `readonly` **restsOn**: readonly `string`[]
 
-Defined in: [src/core/agent/negativeClaims/config.ts:28](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L28)
+Defined in: [src/core/agent/negativeClaims/config.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L50)

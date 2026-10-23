@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-143 exported from `agentfootprint`.
+144 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -76,6 +76,7 @@ title: Type Aliases
 - [`MilestoneKind`](/docs/api/type-aliases/MilestoneKind)
 - [`NaiveValues`](/docs/api/type-aliases/NaiveValues)
 - [`NarrowSkipReason`](/docs/api/type-aliases/NarrowSkipReason)
+- [`NegativeClaimsOptions`](/docs/api/type-aliases/NegativeClaimsOptions)
 - [`NextStepInput`](/docs/api/type-aliases/NextStepInput)
 - [`NoConversationReason`](/docs/api/type-aliases/NoConversationReason)
 - [`NormalisedAxis`](/docs/api/type-aliases/NormalisedAxis)
