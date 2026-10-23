@@ -2227,6 +2227,74 @@ export interface ToolAbsentPayload {
    * step 7b) — instants verbatim, camelCase like `lookedFor`. Default-omitted.
    */
   readonly period?: PeriodPayload;
+  /**
+   * What the LIBRARY composed for a tool that declares its `search` — the
+   * facets by reference, the gaps, `complete`. Present only for such a tool;
+   * every other absence carries no key. Composed VALUES ride no event in any
+   * mode: they live on the committed `coverageDeclared` row, under the run's
+   * redaction policy. For a `checked: 'declared'` absence, `checked` above
+   * holds the declaration's constants only (the source, the fixed
+   * qualifiers) and may be empty.
+   */
+  readonly composition?: CoverageCompositionPayload;
+  /**
+   * In place of `lookedFor` while `.negativeClaims()` is armed — a reference
+   * to the committed row's field. Unarmed, `lookedFor` is today's bytes.
+   */
+  readonly lookedForRef?: CoverageFieldReference;
+}
+
+/** Where a value an event leaves out lives: the row the result identity addresses. */
+export interface CoverageFieldReference {
+  /** The row's address — `claim-result/<namespace>/<runId>/<ordinal>`. */
+  readonly resultId: string;
+  readonly field: 'lookedFor';
+}
+
+/**
+ * One composed facet as it rides an event — a REFERENCE, never its value:
+ * `{ resultId, argument }` names the committed row and the argument whose
+ * value lives there.
+ */
+export interface CoverageFacetReferencePayload {
+  readonly facet: 'source' | 'population' | 'filter' | 'period';
+  readonly from: 'call' | 'default' | 'host' | 'result';
+  readonly ref: { readonly resultId: string; readonly argument?: string };
+  /** Omission narrowed nothing (`whenOmitted: { any: true }`) — no value to keep out. */
+  readonly any?: true;
+}
+
+/** One typed gap as it rides an event — the words name arguments and verdicts, never a value. */
+export interface CoverageGapPayload {
+  readonly kind:
+    | 'argument-unsent'
+    | 'cap-reached'
+    | 'paged'
+    | 'period'
+    | 'partial'
+    | 'scope'
+    | 'prose';
+  readonly what: string;
+  readonly why?: string;
+  readonly bears?:
+    | 'source'
+    | 'population'
+    | 'period'
+    | 'completeness'
+    | { readonly filter: string; readonly values?: readonly (string | number | boolean)[] };
+  readonly argument?: string;
+}
+
+/** What the library composed for one call of a `search` tool, as an event carries it. */
+export interface CoverageCompositionPayload {
+  /** `'remote'` — a declaration over MCP or from a ToolProvider; it establishes nothing. */
+  readonly origin: 'local' | 'remote';
+  /** The committed row's address. */
+  readonly resultId: string;
+  readonly complete: boolean;
+  /** Each facet that came from the call, a default, the host or the result — by reference. */
+  readonly facets: readonly CoverageFacetReferencePayload[];
+  readonly gaps: readonly CoverageGapPayload[];
 }
 
 /** An absence's source and time as it rides an event — detached plain data. */
@@ -2317,6 +2385,8 @@ export interface ToolCoverageDeclaredPayload {
    * the ledger declared a well-formed, non-empty `in_progress`.
    */
   readonly inProgress?: readonly InProgressItemPayload[];
+  /** What the library composed for a `search` tool — see {@link ToolAbsentPayload.composition}. */
+  readonly composition?: CoverageCompositionPayload;
 }
 
 /** One thing a read found still running, as it rides an event: detached plain
