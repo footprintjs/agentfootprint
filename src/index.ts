@@ -219,6 +219,10 @@ export {
   pauseDemandsDecision,
   DecisionRequiredError,
   StaleDecisionError,
+  // A decision for another request, for a call that changed after the ask, or
+  // for a request already answered — refused by name, the tool never runs.
+  ResumeDecisionError,
+  type ResumeDecisionRefusal,
   // 8.18.0 — an askHuman/pauseHere pause resumed with NO value. The answer
   // becomes the tool's result, so "no answer" and "carry on" are two different
   // conversations and the caller picks; the library used to pick silently and
@@ -344,6 +348,12 @@ export {
   type EvidencePreset,
   type CheckInBuilderOptions,
 } from './core/checkin.js';
+// A decision answers ONE request, once: every consent pause mints a request id
+// bound to the exact paused call, a decision names it, and a resume holds it
+// to it (`ResumeDecisionError`). The ledger is where answered requests are
+// spent — per agent by default, shared across agents via
+// `Agent.create({ decisionLedger })`.
+export { inMemoryDecisionLedger, type DecisionLedger } from './core/consentRequest.js';
 // The context-unit shape a `CheckInScorer` ranks — also exported from
 // `agentfootprint/observe` (alongside `explainChoice`), surfaced here because it
 // is part of the `CheckInScoreInput` contract.

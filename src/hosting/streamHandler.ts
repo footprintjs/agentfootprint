@@ -45,7 +45,9 @@
  * (several serverless instances, several workers) do not see each other's
  * turns: route a thread to one instance (sticky sessions), or a double-sent
  * answer can resume one paused run twice and a later persist can overwrite an
- * earlier one. The session store port has no compare-and-set yet.
+ * earlier one. The session store port has no compare-and-set yet. A consent
+ * decision itself is used once per LEDGER: the agents every instance builds
+ * share one only if they are given one (`decisionLedger`).
  *
  * The laws it keeps from `httpHost`:
  *   - The door guard runs first, on the headers alone (`doorGuard.ts`): a Host
@@ -64,14 +66,18 @@ import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { Runner } from '../core/runner.js';
 import { toWireJson } from '../lib/wireJson.js';
-import { checkSessionId, doorGuard, type CrossSiteOptions } from './doorGuard.js';
 import {
-  envelopeOwner,
-  readEnvelope,
-  readPausedRun,
-  toEnvelope,
-  toPausedEnvelope,
-} from './envelope.js';
+  afterFailedAnswer,
+  answeredRefusal,
+  closedConversation,
+  readStoredSession,
+  unanswerablePause,
+  watchAnswer,
+  type FailedAnswerOutcome,
+} from './answeredPause.js';
+import type { DecisionUseWatch, UnanswerableReason } from '../core/consentRequest.js';
+import { checkSessionId, doorGuard, type CrossSiteOptions } from './doorGuard.js';
+import { envelopeOwner, toEnvelope, toPausedEnvelope } from './envelope.js';
 import { RequestTooLargeError, WireRequestRefusal } from './errors.js';
 import { describePause } from './pendingAsk.js';
 import type {
@@ -162,7 +168,15 @@ export type StreamHandler = (request: Request) => Promise<Response>;
 interface Held {
   readonly view: HeldConversation;
   readonly prior?: AgentRunCheckpoint;
+  /** The pause still waiting on a person — the only one an answer may continue. */
   readonly paused?: PausedRun;
+  /** A pause whose decision a resume already used (`answeredPause.ts`). */
+  readonly answered?: PausedRun;
+  /**
+   * A pause no answer can reach any more, closed by this request: `prior` is
+   * the conversation it goes on from (`answeredPause.ts`).
+   */
+  readonly closed?: { readonly paused: PausedRun; readonly reason: UnanswerableReason };
 }
 
 /** Everything one accepted request runs with. */
@@ -174,6 +188,12 @@ interface Turn<TEvent> {
   readonly translation: RunTranslation<TEvent>;
   /** This request's sealed credential — its run's alone. */
   readonly request?: RequestContext;
+  /**
+   * An answer to a pause no answer can reach (`Held.closed`): nothing runs —
+   * the pause is closed and the run ends cancelled, so a client still holding
+   * the question lets it go.
+   */
+  readonly closes?: true;
 }
 
 /**
@@ -268,12 +288,30 @@ export function streamHandler<TRequest, TEvent>(
     return stored;
   }
 
-  /** Read what the server holds for the bound conversation — under the turn's claim. */
+  /**
+   * Read what the server holds for the bound conversation — under the turn's
+   * claim. The one reading every door uses (`answeredPause.ts`): a pause still
+   * waiting is offered to the adapter as awaiting; a pause whose decision a
+   * resume already used is a conversation to continue, never offered again.
+   */
   async function hold(thread: ThreadBinding | undefined): Promise<Held> {
     const stored = await ownersOnly(thread);
     if (stored === undefined) return { view: { continues: false } };
-    if (stored.format === 'flowchart-v1') {
-      const paused = readPausedRun(stored);
+    const { waiting: paused, prior, answered } = readStoredSession(stored);
+    // A pause no answer can reach any more — paused before requests were
+    // named, or its call changed after the ask — would hold the thread for
+    // good: closed instead, the conversation goes on, and the calls it left
+    // open are recorded as not run. (An ask's rules are the runner's, built
+    // later: a redeploy that changed them is found when an answer is refused.)
+    const reason = paused === undefined ? undefined : unanswerablePause(paused);
+    if (paused !== undefined && reason !== undefined) {
+      return {
+        prior: closedConversation(paused),
+        closed: { paused, reason },
+        view: { continues: true },
+      };
+    }
+    if (paused !== undefined) {
       const record = paused.wire?.protocol === adapter.name ? paused.wire.record : undefined;
       return {
         paused,
@@ -286,8 +324,11 @@ export function streamHandler<TRequest, TEvent>(
         },
       };
     }
-    const prior = readEnvelope(stored);
-    return { prior, view: { continues: true } };
+    return {
+      ...(prior !== undefined && { prior }),
+      ...(answered !== undefined && { answered }),
+      view: { continues: true },
+    };
   }
 
   /** A fresh runner for this request — never one the factory handed out before. */
@@ -343,14 +384,27 @@ export function streamHandler<TRequest, TEvent>(
       const conversation = runner.checkpoint?.();
       if (conversation !== undefined)
         await store.persist(thread.sessionId, toEnvelope(conversation));
-      // A runner that keeps no conversation still clears the pause it continued.
-      else if (held.paused !== undefined)
+      // A runner that keeps no conversation still clears the pause it continued
+      // — or closed.
+      else if (held.paused !== undefined || held.closed !== undefined)
         await store.persist(
           thread.sessionId,
           toEnvelope(noConversation(turn, recordRunId, thread.identity)),
         );
     }
     return { kind: 'finished' };
+  }
+
+  /**
+   * Close the pause an answer could not reach (`Turn.closes`): the
+   * conversation it goes on from replaces it in the store — the run ends
+   * cancelled, nothing having run.
+   */
+  async function keepClosed(turn: Turn<TEvent>): Promise<RunSettlement> {
+    const { thread, held } = turn;
+    if (sessions !== undefined && thread !== undefined && held.prior !== undefined)
+      await sessions.persist(thread.sessionId, toEnvelope(held.prior));
+    return { kind: 'cancelled' };
   }
 
   /** Run the turn; every event the run serves goes through the translation; settle once. */
@@ -373,6 +427,10 @@ export function streamHandler<TRequest, TEvent>(
     let runId: string | undefined;
     let off: unknown;
     let settlement: RunSettlement;
+    /** The answer was handed to the runner: from here its decision may be used. */
+    let answering = false;
+    /** Opened as the answer is handed over (`answeredPause.ts`). */
+    let watch: DecisionUseWatch | undefined;
     try {
       // The runner is this request's alone; the run filter still holds a fact a
       // shared resource stamped for another run or session out of the stream.
@@ -385,33 +443,67 @@ export function streamHandler<TRequest, TEvent>(
         safely(() => translation.event(event));
       });
       if (signal.aborted) throw new Error('the caller left before the run started');
-      const runOptions = {
-        signal,
-        ...(thread !== undefined && { sessionId: thread.sessionId }),
-        ...(thread?.identity !== undefined && { identity: thread.identity }),
-        ...(request !== undefined && { request }),
-      };
-      const out =
-        plan.turn.kind === 'answer'
-          ? await runner.resume(
-              (held.paused as PausedRun).checkpoint as never,
-              plan.turn.answer as never,
-              runOptions as never,
-            )
-          : await runner.run(
-              (typeof runner.checkpoint === 'function' && held.prior !== undefined
-                ? { message: plan.turn.message, continueFrom: held.prior }
-                : { message: plan.turn.message }) as never,
-              runOptions as never,
-            );
-      settlement = await keep(turn, out, runId);
+      if (turn.closes === true) {
+        // An answer to a pause no answer can reach (`hold`): nothing runs. The
+        // pause is closed in the store, and the run ends cancelled, so a
+        // client still holding the question lets it go.
+        settlement = await keepClosed(turn);
+      } else {
+        const runOptions = {
+          signal,
+          ...(thread !== undefined && { sessionId: thread.sessionId }),
+          ...(thread?.identity !== undefined && { identity: thread.identity }),
+          ...(request !== undefined && { request }),
+        };
+        answering = plan.turn.kind === 'answer';
+        if (answering && held.paused !== undefined) watch = watchAnswer(held.paused);
+        const out =
+          plan.turn.kind === 'answer'
+            ? await runner.resume(
+                (held.paused as PausedRun).checkpoint as never,
+                plan.turn.answer as never,
+                runOptions as never,
+              )
+            : await runner.run(
+                (typeof runner.checkpoint === 'function' && held.prior !== undefined
+                  ? { message: plan.turn.message, continueFrom: held.prior }
+                  : { message: plan.turn.message }) as never,
+                runOptions as never,
+              );
+        settlement = await keep(turn, out, runId);
+      }
     } catch (err) {
-      settlement = signal.aborted ? { kind: 'cancelled' } : failedSettlement(err);
+      // An answer handed to the runner that then failed — in the run, or in
+      // keeping its result: when its decision may have been used, the stored
+      // pause is answered before the caller hears the end; refused for a
+      // reason no decision can change, it is closed (`answeredPause.ts`). A
+      // caller who left before the run started handed nothing over.
+      let outcome: FailedAnswerOutcome = 'kept';
+      if (
+        answering &&
+        held.paused !== undefined &&
+        thread !== undefined &&
+        sessions !== undefined
+      ) {
+        outcome = await afterFailedAnswer({
+          store: sessions,
+          sessionId: thread.sessionId,
+          paused: held.paused,
+          watch,
+          answer: plan.turn.kind === 'answer' ? plan.turn.answer : undefined,
+          error: err,
+        }).catch((): FailedAnswerOutcome => 'kept');
+      }
+      // A pause closed for good ends the run cancelled, as above: the client
+      // lets the question go, and its next message continues the conversation.
+      settlement =
+        signal.aborted || outcome === 'closed' ? { kind: 'cancelled' } : failedSettlement(err);
     } finally {
       // The conversation is free BEFORE the caller hears the end — and before
       // anything else that could throw: a client that answers on RUN_FINISHED
       // must not find its own turn still running, ever.
       release();
+      watch?.release();
       try {
         if (typeof off === 'function') off();
       } catch {
@@ -536,14 +628,29 @@ export function streamHandler<TRequest, TEvent>(
         claimed = thread.sessionId;
       }
       const held = await hold(thread);
-      const plan = adapter.plan(read, held.view, {
-        headers,
-        ...(thread !== undefined && { thread }),
-        keepsConversation: threads !== undefined,
-        keepsPauses: threads !== undefined && sessions !== undefined,
-      });
-      // Sealed only for a request that runs: every refusal is behind it.
-      const sealed = await seal?.({ headers });
+      let plan: ProtocolPlan;
+      let closes = false;
+      try {
+        plan = adapter.plan(read, held.view, {
+          headers,
+          ...(thread !== undefined && { thread }),
+          keepsConversation: threads !== undefined,
+          keepsPauses: threads !== undefined && sessions !== undefined,
+        });
+      } catch (err) {
+        // An answer with nothing pending, on a thread whose last pause a
+        // resume already answered: say which (`answeredPause.ts`) — the
+        // request was answered, and its outcome is not known here.
+        const nothingPending = (err as { code?: unknown } | null)?.code === 'ERR_NO_PENDING_ASK';
+        if (nothingPending && held.answered !== undefined) throw answeredRefusal(held.answered);
+        if (!nothingPending || held.closed === undefined) throw err;
+        // An answer to a pause no answer can reach: nothing runs (`serve`).
+        plan = { turn: { kind: 'answer', answer: undefined } };
+        closes = true;
+      }
+      // Sealed only for a request that runs: every refusal is behind it, and an
+      // answer that closes a pause runs nothing.
+      const sealed = closes ? undefined : await seal?.({ headers });
       const runner = build({
         tools: plan.tools ?? [],
         accepted: plan.accepted ?? {},
@@ -564,6 +671,7 @@ export function streamHandler<TRequest, TEvent>(
           runner,
           translation,
           ...(sealed !== undefined && { request: sealed }),
+          ...(closes && { closes: true as const }),
         },
         request,
         () => {

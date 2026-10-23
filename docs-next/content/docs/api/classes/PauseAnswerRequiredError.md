@@ -4,7 +4,7 @@ title: PauseAnswerRequiredError
 
 # Class: PauseAnswerRequiredError
 
-Defined in: [src/core/pause.ts:364](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L364)
+Defined in: [src/core/pause.ts:509](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L509)
 
 Raised when an `askHuman()` / `pauseHere()` pause is resumed with NO answer.
 
@@ -32,7 +32,7 @@ and resume the same checkpoint again.
 
 > **new PauseAnswerRequiredError**(`ctx`): `PauseAnswerRequiredError`
 
-Defined in: [src/core/pause.ts:371](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L371)
+Defined in: [src/core/pause.ts:516](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L516)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_PAUSE_ANSWER_REQUIRED"`
 
-Defined in: [src/core/pause.ts:365](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L365)
+Defined in: [src/core/pause.ts:510](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L510)
 
 ***
 
@@ -138,7 +138,7 @@ not capture any frames.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/pause.ts:369](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L369)
+Defined in: [src/core/pause.ts:514](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L514)
 
 The tool call id the pause is filed under.
 
@@ -148,7 +148,7 @@ The tool call id the pause is filed under.
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/core/pause.ts:367](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L367)
+Defined in: [src/core/pause.ts:512](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L512)
 
 The tool whose `execute()` paused.
 

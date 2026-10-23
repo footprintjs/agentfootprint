@@ -17,6 +17,7 @@ import type { CheckpointEnvelope, SessionLifecycle } from '../types.js';
 export type SessionLifecycleCaseName =
   | 'absent-session-hydrates-undefined'
   | 'persist-hydrate-round-trip'
+  | 'answered-pause-round-trips'
   | 'unreadable-is-not-absent'
   | 'forget-removes-the-conversation'
   | 'ownership-is-derived-from-the-envelope'
@@ -27,6 +28,7 @@ export type SessionLifecycleCaseName =
   | 'owner-of-is-undefined-for-missing-and-unowned'
   | 'list-by-user-pages-with-a-stable-tie-break'
   | 'list-by-user-is-newest-first'
+  | 'list-by-user-shows-an-answered-pause-as-a-conversation'
   | 'an-id-the-store-hands-back-is-not-a-second-address'
   | 'awkward-session-ids-round-trip'
   | 'retention-says-who-deletes-and-deletes-only-the-old'

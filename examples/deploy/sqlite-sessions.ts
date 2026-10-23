@@ -38,7 +38,6 @@ import { join } from 'node:path';
 import { Agent, defineTool, isPaused, type LLMProvider } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
 import { askHuman } from '../../src/core/pause.js';
-import { checkInApproved } from '../../src/core/checkin.js';
 import {
   nodeHost,
   readEnvelope,
@@ -57,7 +56,7 @@ export const meta: ExampleMeta = {
   title: 'SQLite sessions — a conversation, and a paused run, that survive a restart',
   group: 'deploy',
   description:
-    'sqliteSessions({ file }) is the SessionLifecycle port backed by Node\'s built-in node:sqlite: conversations and runs paused waiting on a person live in one file, so a restart or a deploy does not lose them. Zero dependencies; one machine, one file, one writer at a time.',
+    "sqliteSessions({ file }) is the SessionLifecycle port backed by Node's built-in node:sqlite: conversations and runs paused waiting on a person live in one file, so a restart or a deploy does not lose them. Zero dependencies; one machine, one file, one writer at a time.",
   defaultInput: 'Refund my order.',
   providerSlots: ['default'],
   tags: ['deploy', 'hosting', 'sessions', 'durability', 'sqlite', 'pause-resume'],
@@ -191,10 +190,15 @@ async function aPauseThatOutlivesTheProcess(
     // A fresh agent: its model answers from the restored conversation, which
     // already contains the tool call and the decision now attached to it.
     const answering = refundAgent(ran, { replies: [{ content: "Done — I've refunded $40." }] });
-    const answer = await answering.resume(
-      paused.checkpoint,
-      checkInApproved({ by: 'alice@ops', note: 'verified with the customer' }),
-    );
+    // An askHuman() pause takes the person's answer as a VALUE — it becomes
+    // the tool's result. (A consent gate — a tool's checkIn, a middleware's
+    // ask — takes a decision that names its request instead:
+    // checkInApproved({ request: paused.pending.checkIn, by }).)
+    const answer = await answering.resume(paused.checkpoint, {
+      approved: true,
+      by: 'alice@ops',
+      note: 'verified with the customer',
+    });
 
     return {
       askedWith: (outcome.pauseData as { question?: string }).question,

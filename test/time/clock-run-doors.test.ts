@@ -44,6 +44,7 @@ import {
 import type { LLMResponse } from '../../src/provider-contract/types.js';
 import { defineMemory, MEMORY_STRATEGIES, MEMORY_TYPES } from '../../src/memory/index.js';
 import { InMemoryStore } from '../../src/memory/store/index.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -294,7 +295,10 @@ describe('the other wired sites', () => {
     if (!isPaused(paused)) throw new Error('expected the check-in pause');
     expect(ofKind<CallRow>(agent, 'call')).toEqual([]);
     clock.mockReturnValue(RESUME_AT);
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'reviewer' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'reviewer' }),
+    );
     expect(ofKind<CallRow>(agent, 'call').map((c) => [c.toolCallId, c.dispatchedAt])).toEqual([
       ['c1', new Date(RESUME_AT).toISOString()],
     ]);

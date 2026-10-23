@@ -7,15 +7,18 @@
  * BEFORE the tool executes and hands back a `CheckInRequest` carrying an
  * EVIDENCE PACK: what the tool will do (`willDo`), what context the run
  * consumed (`read`), which context drove the choice (`drivers`), and a compact
- * run-so-far `trail`. A human answers with `checkInApproved` / `checkInDeclined`;
- * on approve the tool runs, on decline the model sees the note and adapts.
+ * run-so-far `trail`. A human answers with `checkInApproved` / `checkInDeclined`,
+ * naming the request they were shown (`checkIn.id`) — a decision answers that
+ * request once and no other. On approve the tool runs, on decline the model
+ * sees the note and adapts.
  *
  * It rides the SAME pause/checkpoint machinery as `pauseHere` — the checkpoint
  * is JSON, so Process A (ask) and Process B (decide) can be days and servers
  * apart. `isCheckInPause(outcome)` distinguishes a check-in from a plain pause.
  *
  * Two exports model the two phases (build a FRESH agent in each — only the
- * checkpoint crosses the boundary). CLI mode chains them for a quick demo.
+ * checkpoint and the request the person was shown cross the boundary). CLI
+ * mode chains them for a quick demo.
  */
 
 import {
@@ -25,6 +28,7 @@ import {
   isPaused,
   checkInApproved,
   CheckInRecorder,
+  type CheckInRequest,
   type LLMProvider,
 } from '../../src/index.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -49,7 +53,12 @@ function defaultProvider(): LLMProvider {
     complete: async (req) => {
       const done = req.messages.some((m) => m.role === 'tool');
       return done
-        ? { content: 'All done.', toolCalls: [], usage: { input: 10, output: 5 }, stopReason: 'stop' }
+        ? {
+            content: 'All done.',
+            toolCalls: [],
+            usage: { input: 10, output: 5 },
+            stopReason: 'stop',
+          }
         : {
             content: 'This is a large refund — confirming with a human first.',
             toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 5000 } }],
@@ -66,27 +75,29 @@ function defaultProvider(): LLMProvider {
  */
 function buildAgent(provider?: LLMProvider) {
   // #region declare
-  return Agent.create({ provider: provider ?? defaultProvider(), model: 'mock' })
-    .system('You are a refunds assistant. Refund only verified orders; confirm the amount first.')
-    .tool(
-      defineTool<{ amount: number }, string>({
-        name: 'issue_refund',
-        description: 'Issue a refund to the customer',
-        inputSchema: {
-          type: 'object',
-          properties: { amount: { type: 'number' } },
-          required: ['amount'],
-        },
-        // Demand a human check-in ONLY for big refunds (a predicate; use
-        // 'always' to gate every call). A refund under the line runs untouched.
-        checkIn: (args) => args.amount > 1000,
-        execute: ({ amount }) => `refunded ${amount}`,
-      }),
-    )
-    // Configure the evidence pack that rides the ask (optional — 'standard' is
-    // the default; 'minimal' ships only `willDo`; or pass your own assembler).
-    .checkIn({ evidence: 'standard' })
-    .build();
+  return (
+    Agent.create({ provider: provider ?? defaultProvider(), model: 'mock' })
+      .system('You are a refunds assistant. Refund only verified orders; confirm the amount first.')
+      .tool(
+        defineTool<{ amount: number }, string>({
+          name: 'issue_refund',
+          description: 'Issue a refund to the customer',
+          inputSchema: {
+            type: 'object',
+            properties: { amount: { type: 'number' } },
+            required: ['amount'],
+          },
+          // Demand a human check-in ONLY for big refunds (a predicate; use
+          // 'always' to gate every call). A refund under the line runs untouched.
+          checkIn: (args) => args.amount > 1000,
+          execute: ({ amount }) => `refunded ${amount}`,
+        }),
+      )
+      // Configure the evidence pack that rides the ask (optional — 'standard' is
+      // the default; 'minimal' ships only `willDo`; or pass your own assembler).
+      .checkIn({ evidence: 'standard' })
+      .build()
+  );
   // #endregion declare
 }
 
@@ -104,8 +115,14 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     console.log(`Approve "${tool}"?  args=${JSON.stringify(args)}`);
     console.log(`  will do : ${evidence.willDo}`);
     console.log(`  because : ${intent ?? '(no stated reason)'}`);
-    console.log(`  drivers : ${(evidence.drivers ?? []).slice(0, 3).map((d) => d.id).join(', ')}`);
-    // Persist `outcome.checkpoint` (JSON) until the human answers.
+    console.log(
+      `  drivers : ${(evidence.drivers ?? [])
+        .slice(0, 3)
+        .map((d) => d.id)
+        .join(', ')}`,
+    );
+    // Persist `outcome.checkpoint` (JSON) until the human answers, and keep
+    // `outcome.checkIn` — the decision names it (`checkIn.id`).
   }
   return outcome;
   // #endregion ask
@@ -114,9 +131,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
 /**
  * Process B — the human answered. Approve → the tool runs; decline → the model
  * sees "declined by human: <note>" and adapts. Build a fresh agent (same chart).
+ * `request` is the check-in the person was shown: the decision names it, so it
+ * answers that request once, for exactly the call they saw.
  */
 export async function resume(
   checkpoint: FlowchartCheckpoint,
+  request: CheckInRequest,
   provider?: LLMProvider,
 ): Promise<unknown> {
   const agent = buildAgent(provider);
@@ -124,8 +144,12 @@ export async function resume(
   // Attach the built-in store to capture the ask + decision as an audit record.
   const audit = new CheckInRecorder();
   agent.attach(audit);
-  const final = await agent.resume(checkpoint, checkInApproved({ by: 'alice@ops', note: 'verified' }));
-  // audit.getDecisions() → [{ toolName: 'issue_refund', approved: true, by: 'alice@ops', ... }]
+  const decision = checkInApproved({ request, by: 'alice@ops', note: 'verified' });
+  const final = await agent.resume(checkpoint, decision);
+  // A second resume with the same decision is refused (ResumeDecisionError,
+  // 'already-answered') — on this agent, or on every agent sharing its
+  // `decisionLedger`. So is this decision on any other paused request.
+  // audit.getDecisions() → [{ toolName: 'issue_refund', requestId, approved: true, by: 'alice@ops', ... }]
   return final;
   // #endregion decide
 }
@@ -135,14 +159,14 @@ export async function resume(
 if (isCliEntry(import.meta.url)) {
   (async () => {
     const first = await run(meta.defaultInput ?? '');
-    if (!isPaused(first)) {
+    if (!isPaused(first) || !isCheckInPause(first)) {
       console.log('Finished without a check-in:', first);
       printResult(first);
       return;
     }
     // Simulate a Redis / Postgres round-trip — the checkpoint is JSON.
     const restored: FlowchartCheckpoint = JSON.parse(JSON.stringify(first.checkpoint));
-    const final = await resume(restored);
+    const final = await resume(restored, first.checkIn);
     console.log('\nFinal:', final);
     printResult(final);
   })().catch(console.error);

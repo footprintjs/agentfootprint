@@ -41,8 +41,9 @@ export interface RunnerPauseOutcome {
    * Present ONLY when this pause is an evidence-carrying check-in (a tool
    * declared `checkIn`). Carries the typed ask + evidence pack. Absent for
    * plain `askHuman` / `pauseHere` pauses — that's the clean discriminant
-   * between the two pause kinds. Resume with a `CheckInDecision`
-   * (`checkInApproved` / `checkInDeclined`).
+   * between the two pause kinds. Resume with a `CheckInDecision` built from
+   * it (`checkInApproved({ request: outcome.checkIn, by })` /
+   * `checkInDeclined(...)`) — `checkIn.id` names the request it answers.
    */
   readonly checkIn?: CheckInRequest;
   /**
@@ -50,7 +51,8 @@ export interface RunnerPauseOutcome {
    * to a person, plus the middleware that asked. Absent for every other pause,
    * which is the discriminant.
    *
-   * Resume with a `CheckInDecision` (`checkInApproved` / `checkInDeclined`).
+   * Resume with a `CheckInDecision` built from it
+   * (`checkInApproved({ request: outcome.ask, by })` / `checkInDeclined(...)`).
    * That is deliberate rather than a second decision type: a person approving
    * is a person approving, whether the gate was a tool's `checkIn` or a
    * middleware's `ask`, and one word for one thing beats a synonym.
@@ -65,6 +67,13 @@ export interface RunnerPauseOutcome {
 
 /** The question a `toolMiddleware` put to a person, as it rides the checkpoint. */
 export interface MiddlewareAsk {
+  /**
+   * Names this request: the id a decision quotes
+   * (`checkInApproved({ request: outcome.ask, by })`). Minted when the run
+   * paused, unique to this pause, and bound to the exact call that runs on
+   * approval — see `core/consentRequest.ts`.
+   */
+  readonly id: string;
   /** The question, in the middleware author's own words. */
   readonly question: string;
   /** Anything else the answering UI should render. Never interpreted here. */
@@ -131,7 +140,7 @@ export function requestInput(declaration: InputRequestDeclaration): never {
  *   const out = await agent.run({ message });
  *   if (isCheckInPause(out)) {
  *     showToHuman(out.checkIn.evidence);       // the receipts
- *     const decision = checkInApproved({ by: 'alice' });
+ *     const decision = checkInApproved({ request: out.checkIn, by: 'alice' });
  *     await agent.resume(out.checkpoint, decision);
  *   }
  */
@@ -151,8 +160,8 @@ export function isCheckInPause(
  *   if (isAskPause(out)) {
  *     const yes = await showToHuman(out.ask.question);      // asked by out.ask.middleware
  *     await agent.resume(out.checkpoint, yes
- *       ? checkInApproved({ by: 'alice' })
- *       : checkInDeclined({ by: 'alice', note: 'not this one' }));
+ *       ? checkInApproved({ request: out.ask, by: 'alice' })
+ *       : checkInDeclined({ request: out.ask, by: 'alice', note: 'not this one' }));
  *   }
  */
 export function isAskPause(
@@ -168,7 +177,8 @@ export function isAskPause(
  *
  * A **`'checkIn'`** pause is the tool's own consent demand, and its identity is
  * the evidence pack. A **`'ask'`** pause is a `toolMiddleware`'s own question.
- * Both are answered with `checkInApproved()` / `checkInDeclined()`.
+ * Both are answered with `checkInApproved()` / `checkInDeclined()`, built from
+ * the paused request so the decision names it (`ResumeDecisionError`).
  *
  * Everything else — `pauseHere()` / `askHuman()`, and the 3LO credential-consent
  * pause — is NOT a consent gate in this sense: there the human's answer either
@@ -330,8 +340,9 @@ export class DecisionRequiredError extends Error {
       `[resume] this run paused on a consent gate — ${who}${
         gate.toolName ? ` on tool '${gate.toolName}'` : ''
       } — and a consent gate is answered with a DECISION, not a value. Got ${received}. ` +
-        `Resume with checkInApproved({ by }) or checkInDeclined({ by, note }) from ` +
-        `'agentfootprint'; \`by\` is who decided, and it is what the record says. Nothing was ` +
+        `Resume with checkInApproved({ request, by }) or checkInDeclined({ request, by, note }) ` +
+        `from 'agentfootprint'; \`request\` is the paused request (outcome.checkIn or ` +
+        `outcome.ask) and \`by\` is who decided, and both are what the record says. Nothing was ` +
         `executed and the checkpoint is unchanged — answer it and resume again. (An askHuman() ` +
         `/ pauseHere() pause is different: there the human's answer IS the tool's result, and ` +
         `any value is accepted.)`,
@@ -341,6 +352,140 @@ export class DecisionRequiredError extends Error {
     if (gate.toolName !== undefined) this.toolName = gate.toolName;
     if (gate.middleware !== undefined) this.middleware = gate.middleware;
     this.received = received;
+  }
+}
+
+/**
+ * Why a decision could not answer the request a run is paused on — the
+ * {@link ResumeDecisionError} `reason`:
+ *
+ *   - `'no-request'` — the decision names no request (`requestId` missing):
+ *     one built by an older release, or by hand.
+ *   - `'request-not-recorded'` — the PAUSE recorded no request to answer: a
+ *     checkpoint written before requests were named, or one whose record was
+ *     removed.
+ *   - `'other-request'` — the decision names a different request: another
+ *     conversation's, an earlier pause of this run, a parallel sibling's.
+ *   - `'call-changed'` — the decision names this request, but the paused call
+ *     is no longer the one the person was asked about (the checkpoint's tool,
+ *     arguments, call id, served party, or — for an ask — the middleware
+ *     position or the rules recorded after it changed).
+ *   - `'chain-changed'` — an ask only: the decision names this request and
+ *     the checkpoint is intact, but the agent resuming it would continue the
+ *     middleware chain under other rules than the ones the person was asked
+ *     under — the link that asked, or a link after it, was removed, added,
+ *     renamed or moved (a redeploy). An approval holds for the rules it was
+ *     given under, so a rule it was given under is never skipped.
+ *   - `'already-answered'` — a resume already used a decision for this
+ *     request, approved or declined. Whether that resume finished — and so
+ *     whether the call ran — is not known to the one refused.
+ */
+export type ResumeDecisionRefusal =
+  | 'no-request'
+  | 'request-not-recorded'
+  | 'other-request'
+  | 'call-changed'
+  | 'chain-changed'
+  | 'already-answered';
+
+/**
+ * Raised by a resume when the decision cannot answer the request the run is
+ * paused on. **The tool never runs**: the refusal comes before it, and a
+ * decision is never re-read as a decline or as anyone else's answer.
+ *
+ * A consent gate (a tool's `checkIn`, a middleware's `ask`) mints a request id
+ * when it pauses (`CheckInRequest.id`, `MiddlewareAsk.id`). The id is unique to
+ * that pause and bound to the exact call that runs on approval — the tool, its
+ * arguments, the call id, the served party and, for an ask, where the chain
+ * resumes and the names of the rules from there on. A decision names it
+ * (`checkInApproved({ request, by })`), and a resume holds the decision to it:
+ * the same request, the same call, once.
+ *
+ * Every refusal but `'already-answered'` is decided before anything moves on
+ * an agent's own `resume()`; the checkpoint is unchanged and can be answered
+ * with the right decision. `'already-answered'` — and every refusal of a
+ * composition's nested agent — is decided where the decision is used, inside
+ * the resumed run and still before the tool. See {@link ResumeDecisionRefusal}.
+ *
+ * **It names no request id** — not in its message, not on a field — and a
+ * host sends its message as the refusal's body. A refusal that named the
+ * request the run is paused on would hand out the very id it exists to
+ * require: a client that retried with it would approve a request nobody was
+ * shown. The paused request is the server's to show; it is in the stored
+ * pause (`PendingAsk.checkIn` / `.ask`), never in an error.
+ */
+export class ResumeDecisionError extends Error {
+  readonly code = 'ERR_RESUME_DECISION' as const;
+  /** Which rule refused the decision. */
+  readonly reason: ResumeDecisionRefusal;
+  /** Which kind of consent gate the run is paused on. */
+  readonly gate: ConsentGateKind;
+
+  constructor(reason: ResumeDecisionRefusal, gate: ConsentGateKind) {
+    super(resumeDecisionMessage(reason));
+    this.name = 'ResumeDecisionError';
+    this.reason = reason;
+    this.gate = gate;
+  }
+}
+
+/**
+ * What a host that keeps the pause does with one no decision can answer
+ * (`hosting/answeredPause.ts`): it closes it rather than hold the session.
+ */
+const CLOSED_BY_A_HOST =
+  'A host that keeps the pause (standingAgent, streamHandler) closes it: the next message ' +
+  'continues the conversation, the call recorded as not run.';
+
+function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
+  switch (reason) {
+    case 'no-request':
+      return (
+        `[resume] this decision names no request. A person's decision answers ONE paused ` +
+        `request: build it with checkInApproved({ request, by }) or checkInDeclined({ request, ` +
+        `by }), passing the request the person was shown — outcome.checkIn or outcome.ask ` +
+        `(PendingAsk.checkIn / .ask on a hosted door). A decision without \`requestId\` cannot ` +
+        `say which request it answers, so it answers none. Nothing was executed.`
+      );
+    case 'request-not-recorded':
+      return (
+        `[resume] this run paused on a consent gate without a record of the request it asked — ` +
+        `a checkpoint written before requests were named, or one whose record was removed. No ` +
+        `decision can answer it. Nothing was executed; abandon this pause and ask again in a ` +
+        `new run. ${CLOSED_BY_A_HOST}`
+      );
+    case 'other-request':
+      return (
+        `[resume] this decision answers a different request than the one this run is paused ` +
+        `on. A decision answers only the request it names — not a later pause of the same run, ` +
+        `not a parallel sibling's, not another conversation's. Nothing was executed; show the ` +
+        `person the paused request and build the decision from what they were shown.`
+      );
+    case 'call-changed':
+      return (
+        `[resume] this decision names the paused request, but the paused call is no longer the ` +
+        `call the person was asked about: the checkpoint's tool, arguments, call id, served ` +
+        `party or middleware position changed after the ask. An approval binds to the exact ` +
+        `call it was shown. Nothing was executed; treat the checkpoint as altered — no ` +
+        `decision can answer it. ${CLOSED_BY_A_HOST}`
+      );
+    case 'chain-changed':
+      return (
+        `[resume] this decision names the paused request, but this agent's toolMiddleware ` +
+        `chain is not the one the request was asked under: the link that asked, or a link ` +
+        `after it, was removed, added, renamed or moved since (a redeploy). The rest of the ` +
+        `chain would not be the rules the approval was given under, so the approval is not ` +
+        `used. Nothing was executed; resume on an agent built with the same chain, or abandon ` +
+        `the pause and ask again in a new run. ${CLOSED_BY_A_HOST}`
+      );
+    case 'already-answered':
+      return (
+        `[resume] the request this decision names was already answered by an earlier resume — ` +
+        `one decision runs one call, and a request is spent the moment a resume uses its ` +
+        `decision, approved or declined. This resume ran nothing. Whether the earlier resume ` +
+        `finished, and so whether the call ran, is not known here: check the call's own ` +
+        `record (its system, the conversation) before the person is asked again.`
+      );
   }
 }
 

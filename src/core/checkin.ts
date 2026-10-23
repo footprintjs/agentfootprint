@@ -39,6 +39,16 @@ import type { AttributionUnit } from '../influence-core/types.js';
  * surfaced on `RunnerPauseOutcome.checkIn` (`core/pause.ts`). JSON/clone-safe.
  */
 export interface CheckInRequest {
+  /**
+   * Names this request: the id a decision quotes
+   * (`checkInApproved({ request: outcome.checkIn, by })`). Minted when the run
+   * paused, unique to this pause, and bound to the exact call that runs on
+   * approval — the tool, {@link args}, the call id and the served party. A
+   * decision for any other request, or for a call that changed after the ask,
+   * is refused (`ResumeDecisionError`). An opaque fingerprint: it carries no
+   * value from the run.
+   */
+  readonly id: string;
   /** The tool the agent wants to run (its name). */
   readonly tool: string;
   /**
@@ -175,9 +185,19 @@ export interface DecisionValue {
 }
 
 export interface CheckInDecision {
+  /**
+   * The request this decision answers — the paused request's `id`
+   * (`CheckInRequest.id`, `MiddlewareAsk.id`). A resume refuses a decision for
+   * any other request, and answers each request once (`ResumeDecisionError`).
+   */
+  readonly requestId: string;
   /** True to run the tool, false to decline it. */
   readonly approved: boolean;
-  /** Who decided (an operator id, an email, a queue name — your call). */
+  /**
+   * Who decided (an operator id, an email, a queue name — your call). Recorded
+   * as given: a claim, not proof. Authenticate the person before you build the
+   * decision; the library binds WHICH request and WHAT call, never who.
+   */
   readonly by: string;
   /** Optional note. On decline it is surfaced to the model so it can adapt. */
   readonly note?: string;
@@ -194,7 +214,14 @@ export interface CheckInDecision {
 
 /** Options for {@link checkInApproved} / {@link checkInDeclined}. */
 export interface CheckInDecisionInput {
-  /** Who decided. */
+  /**
+   * The paused request being answered — the one the person was shown:
+   * `outcome.checkIn` or `outcome.ask` (`PendingAsk.checkIn` / `.ask` on a
+   * hosted door). Only its `id` is read; the decision answers that request and
+   * no other.
+   */
+  readonly request: { readonly id: string };
+  /** Who decided. Recorded as given — see {@link CheckInDecision.by}. */
   readonly by: string;
   /** Optional free-text note. */
   readonly note?: string;
@@ -205,31 +232,57 @@ export interface CheckInDecisionInput {
 /**
  * Approve a pending check-in — the paused tool executes normally on resume.
  *
+ * The decision names the request it answers (`request.id`), so it answers that
+ * request once and no other: a resume refuses it on a different pause, on a
+ * call that changed after the ask, or a second time (`ResumeDecisionError`).
+ *
+ * @throws TypeError when `request` is not a paused request (it has no `id`).
+ *
  * @example
- *   const decision = checkInApproved({ by: 'alice@ops', note: 'verified with customer' });
+ *   const decision = checkInApproved({
+ *     request: outcome.checkIn,
+ *     by: 'alice@ops',
+ *     note: 'verified with customer',
+ *   });
  *   const final = await agent.resume(outcome.checkpoint, decision);
  */
 export function checkInApproved(input: CheckInDecisionInput): CheckInDecision {
-  return {
-    approved: true,
-    by: input.by,
-    at: Date.now(),
-    ...(input.note && { note: input.note }),
-    ...(input.value && { value: input.value }),
-  };
+  return decide(true, input, 'checkInApproved');
 }
 
 /**
  * Decline a pending check-in — the tool is NOT executed; the model receives
  * a `"declined by human: <note>"` tool result and adapts in-loop.
  *
+ * A decline is an answer too: it names its request and spends it, so an
+ * approval presented for the same request afterwards is refused.
+ *
+ * @throws TypeError when `request` is not a paused request (it has no `id`).
+ *
  * @example
- *   const decision = checkInDeclined({ by: 'alice@ops', note: 'amount too high' });
+ *   const decision = checkInDeclined({
+ *     request: outcome.checkIn,
+ *     by: 'alice@ops',
+ *     note: 'amount too high',
+ *   });
  *   const final = await agent.resume(outcome.checkpoint, decision);
  */
 export function checkInDeclined(input: CheckInDecisionInput): CheckInDecision {
+  return decide(false, input, 'checkInDeclined');
+}
+
+function decide(approved: boolean, input: CheckInDecisionInput, door: string): CheckInDecision {
+  const requestId = (input as { request?: { id?: unknown } } | undefined)?.request?.id;
+  if (typeof requestId !== 'string' || requestId.length === 0) {
+    throw new TypeError(
+      `${door}: \`request\` must be the paused request this decision answers — ` +
+        `outcome.checkIn or outcome.ask (PendingAsk.checkIn / .ask on a hosted door). A ` +
+        `decision names its request, so it can answer that request once and no other.`,
+    );
+  }
   return {
-    approved: false,
+    requestId,
+    approved,
     by: input.by,
     at: Date.now(),
     ...(input.note && { note: input.note }),
@@ -241,15 +294,42 @@ export function checkInDeclined(input: CheckInDecisionInput): CheckInDecision {
 
 /**
  * Type guard — is this resume input a {@link CheckInDecision}? Distinguishes
- * a check-in answer from a plain `askHuman` tool-result value.
+ * a check-in answer from a plain `askHuman` tool-result value. A decision
+ * names its request: an object without a `requestId` is not one.
  */
 export function isCheckInDecision(x: unknown): x is CheckInDecision {
+  return (
+    looksLikeDecision(x) &&
+    typeof (x as CheckInDecision).requestId === 'string' &&
+    (x as CheckInDecision).requestId.length > 0
+  );
+}
+
+/**
+ * The SHAPE of a decision before it names a request — `approved` and `by`.
+ * What tells "a decision that names no request" (refused by name, with the
+ * migration) apart from "not a decision at all" (`DecisionRequiredError`).
+ *
+ * @internal
+ */
+export function looksLikeDecision(x: unknown): x is Omit<CheckInDecision, 'requestId'> {
   return (
     typeof x === 'object' &&
     x !== null &&
     typeof (x as CheckInDecision).approved === 'boolean' &&
     typeof (x as CheckInDecision).by === 'string'
   );
+}
+
+/**
+ * What the model reads for a call a person declined: the result the dispatch
+ * loop records, and the host's notice for a declined call a failed run left
+ * open (`hosting/answeredPause.ts`). Either way the call did not run.
+ *
+ * @internal
+ */
+export function declinedResult(note?: string): string {
+  return note ? `declined by human: ${note}` : 'declined by human';
 }
 
 // ─── The declarative demand (per-tool) ─────────────────────────────────

@@ -355,6 +355,42 @@ describe('planAgUiTurn — an answer is taken only for the pause the server keep
     expect(plan(body, interruptWait())).toEqual({ turn: { kind: 'answer', answer: { ok: true } } });
   });
 
+  it('names a decision for the consent request its interrupt stands for — the page never saw the id', () => {
+    const interruptId = 'run-0/interrupt/0/x#paused';
+    const answering = (payload: unknown) =>
+      base({ resume: [{ interruptId, status: 'resolved', payload }] });
+    const held = (pending: Record<string, unknown>): HeldConversation => {
+      const wait = interruptWait();
+      return {
+        ...wait,
+        awaiting: { ...wait.awaiting!, pending: { pauseData: {}, ...pending } as never },
+      };
+    };
+    const checkIn = held({ checkIn: { id: 'req-check-in', tool: 't', args: {}, evidence: {} } });
+    const ask = held({ ask: { id: 'req-ask', question: 'ok?', middleware: 'gate' } });
+    const decision = { approved: true, by: 'alice', at: 1 };
+
+    expect(plan(answering(decision), checkIn).turn).toEqual({
+      kind: 'answer',
+      answer: { ...decision, requestId: 'req-check-in' },
+    });
+    expect(plan(answering(decision), ask).turn).toEqual({
+      kind: 'answer',
+      answer: { ...decision, requestId: 'req-ask' },
+    });
+    // A decision that names a request keeps it: the resume holds it to the
+    // paused request like any other, and refuses a wrong one.
+    const named = { ...decision, requestId: 'req-other' };
+    expect(plan(answering(named), checkIn).turn).toEqual({ kind: 'answer', answer: named });
+    // Not a decision: passed through, for the resume to refuse as not one.
+    expect(plan(answering('yes'), checkIn).turn).toEqual({ kind: 'answer', answer: 'yes' });
+    // A plain ask (no consent gate): the page's value is the answer, unchanged.
+    expect(plan(answering(decision), interruptWait()).turn).toEqual({
+      kind: 'answer',
+      answer: decision,
+    });
+  });
+
   it('refuses an answer to nothing, and to an interrupt that is not the one waiting', () => {
     const body = base({ resume: [{ interruptId: 'guess', status: 'resolved', payload: 1 }] });
     expect(refusalOf(() => plan(body))).toEqual({ code: 'ERR_NO_PENDING_ASK', status: 409 });

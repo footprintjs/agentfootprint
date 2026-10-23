@@ -51,6 +51,8 @@ export interface InProcessHost extends AgentHost {
      *  exercises the composer's named not-carried refusal. */
     readonly session?: SessionWireRequest;
     readonly headers?: Readonly<Record<string, string>>;
+    /** The caller's hang-up — what a transport hands the run. */
+    readonly signal?: AbortSignal;
   }): Promise<DeliveredReply>;
 }
 
@@ -120,6 +122,7 @@ export function inProcessHost(options: { readonly streaming?: boolean } = {}): I
               ...(request.artifact !== undefined && { artifact: request.artifact }),
               ...(request.session !== undefined && { session: request.session }),
               ...(request.headers !== undefined && { headers: request.headers }),
+              ...(request.signal !== undefined && { signal: request.signal }),
             },
             reply,
           );

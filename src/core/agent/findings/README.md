@@ -1149,6 +1149,10 @@ no fresh backend read or assertion truth is inferred. The host's
 `input-cancelled` notice is different: the paused tool may already have
 entered, but the cancellation message is not its completed result. Its
 identity is known, while execution remains unknown for admission purposes.
+The host's `outcome-unknown` notice is the same kind of fact: a call a run
+left open after a person's decision was used, settled by the door that kept
+the pause when that resume failed (`hosting/answeredPause.ts`) — not its
+result.
 
 The marker survives ordinary JSON history/checkpoints and is stripped before
 provider transport. Older history without it retains the existing trusted

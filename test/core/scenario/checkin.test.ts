@@ -40,6 +40,7 @@ import type {
   CredentialRequest,
   CredentialResult,
 } from '../../../src/identity/types.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ── Test doubles ────────────────────────────────────────────────────────
 
@@ -236,7 +237,10 @@ describe('check-in — gate order', () => {
     // and the tool runs — the resolution happens only AFTER the human said yes.
     const agent2 = buildAgent();
     const checkpoint = JSON.parse(JSON.stringify((out as RunnerPauseOutcome).checkpoint));
-    const final = await agent2.resume(checkpoint, checkInApproved({ by: 'alice' }));
+    const final = await agent2.resume(
+      checkpoint,
+      checkInApproved({ request: pausedRequest(out), by: 'alice' }),
+    );
     expect(final).toBe('done');
     expect(getCredential).toHaveBeenCalledTimes(1);
   });
@@ -281,7 +285,10 @@ describe('check-in — pause/resume round-trip', () => {
 
     const out = (await build().run({ message: 'refund' })) as RunnerPauseOutcome;
     const checkpoint = JSON.parse(JSON.stringify(out.checkpoint));
-    const final = await build().resume(checkpoint, checkInApproved({ by: 'ops' }));
+    const final = await build().resume(
+      checkpoint,
+      checkInApproved({ request: pausedRequest(out), by: 'ops' }),
+    );
     expect(final).toBe('done');
   });
 });
@@ -299,7 +306,10 @@ describe('check-in — decision', () => {
 
     const out = (await build().run({ message: 'refund' })) as RunnerPauseOutcome;
     expect(exec).not.toHaveBeenCalled();
-    const final = await build().resume(out.checkpoint, checkInApproved({ by: 'alice' }));
+    const final = await build().resume(
+      out.checkpoint,
+      checkInApproved({ request: pausedRequest(out), by: 'alice' }),
+    );
     expect(final).toBe('all set');
     expect(exec).toHaveBeenCalledTimes(1);
     expect(exec).toHaveBeenCalledWith({ amount: 500 }, expect.anything());
@@ -328,7 +338,7 @@ describe('check-in — decision', () => {
     const out = (await build().run({ message: 'refund' })) as RunnerPauseOutcome;
     const final = await build().resume(
       out.checkpoint,
-      checkInDeclined({ by: 'alice', note: 'amount too high' }),
+      checkInDeclined({ request: pausedRequest(out), by: 'alice', note: 'amount too high' }),
     );
     expect(final).toBe('understood, cancelling');
     expect(exec).not.toHaveBeenCalled();
@@ -491,7 +501,10 @@ describe('check-in — events + recorder', () => {
     expect(typeof requests[0].iteration).toBe('number');
     expect((requests[0].request as { tool: string }).tool).toBe('issue_refund');
 
-    await agent.resume(out.checkpoint, checkInApproved({ by: 'alice', note: 'ok' }));
+    await agent.resume(
+      out.checkpoint,
+      checkInApproved({ request: pausedRequest(out), by: 'alice', note: 'ok' }),
+    );
     expect(decisions).toHaveLength(1);
     expect(decisions[0]).toMatchObject({
       toolName: 'issue_refund',
@@ -523,7 +536,10 @@ describe('check-in — events + recorder', () => {
     expect(rec.getRequests()).toHaveLength(1);
     expect(rec.getStats()).toEqual({ requested: 1, approved: 0, declined: 0, pending: 1 });
 
-    await agent.resume(out.checkpoint, checkInDeclined({ by: 'bob', note: 'no' }));
+    await agent.resume(
+      out.checkpoint,
+      checkInDeclined({ request: pausedRequest(out), by: 'bob', note: 'no' }),
+    );
     expect(rec.getDecisions()).toHaveLength(1);
     expect(rec.getDecisions()[0]).toMatchObject({ approved: false, by: 'bob', note: 'no' });
     expect(rec.getStats()).toEqual({ requested: 1, approved: 0, declined: 1, pending: 0 });
@@ -633,7 +649,10 @@ describe('check-in — a mis-shaped resume REFUSES instead of inventing a declin
     const { agent, paused, exec } = await pauseOnCheckIn();
 
     await expect(agent.resume(paused.checkpoint, 'yes')).rejects.toThrow(DecisionRequiredError);
-    const final = await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    const final = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
 
     expect(final).toBe('done');
     expect(exec).toHaveBeenCalledOnce();

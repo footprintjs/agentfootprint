@@ -515,20 +515,21 @@ describe('what enrolling the container runtime’s two stores actually proved', 
     const report = await runSessionLifecycleConformance(agentCoreFileHarness);
     expect(formatConformanceReport(report)).toContain('0 FAILED');
     expect(report.declared).toBe(0);
-    // Reading, writing, an unreadable session refused rather than answered as
-    // absent, opaque ids, its retention sweep, and feature detection.
-    expect(report.passed).toBe(6);
-    // It keeps no owner index and no listing — six ownership cases, the
-    // listing, and `forget`, none of which the port demands of it.
-    expect(report.notApplicable).toBe(10);
+    // Reading, writing, a stored pause and its answered mark, an unreadable
+    // session refused rather than answered as absent, opaque ids, its
+    // retention sweep, and feature detection.
+    expect(report.passed).toBe(7);
+    // It keeps no owner index and no listing — six ownership cases, the four
+    // listing cases, and `forget`, none of which the port demands of it.
+    expect(report.notApplicable).toBe(11);
   });
 
   it('the event-backed mode holds the same laws, minus the retention it cannot honestly offer', async () => {
     const report = await runSessionLifecycleConformance(agentCoreMemoryHarness);
     expect(formatConformanceReport(report)).toContain('0 FAILED');
     expect(report.declared).toBe(0);
-    expect(report.passed).toBe(5);
-    expect(report.notApplicable).toBe(11);
+    expect(report.passed).toBe(6);
+    expect(report.notApplicable).toBe(12);
     // The one difference between the two modes, asserted rather than implied:
     // this store has no way to delete an event it wrote, so it implements no
     // retention member and the case is n/a — never a sweep that reports zero.
@@ -638,7 +639,7 @@ describe('the battery covers what it claims to', () => {
   it('holds every case the port names, each with a law', () => {
     // A battery that quietly lost a case would pass every store trivially —
     // the same vacuous-pass shape `no-vendor-names` guards against.
-    expect(sessionLifecycleConformance.length).toBe(16);
+    expect(sessionLifecycleConformance.length).toBe(18);
     for (const testCase of sessionLifecycleConformance) {
       expect(testCase.law.length, `${testCase.name} has no law`).toBeGreaterThan(20);
     }

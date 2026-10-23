@@ -1248,14 +1248,15 @@ inference on purpose — reading approval out of prose ("yes, go ahead") is a
 guess, and a consent gate may not be built on a guess.
 
 ```ts
-// The run stopped and asked. Answer it on the same session:
+// The run stopped and asked; `awaiting` is the PendingAsk the host replied with.
+// Answer it on the same session — the decision names the request it answers:
 await fetch(`${url}/invoke`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
     input: '',
     sessionId: 'c-1',
-    decision: checkInApproved({ by: 'alice@ops' }),
+    decision: checkInApproved({ request: awaiting.checkIn, by: 'alice@ops' }),
   }),
 });
 ```
@@ -1263,8 +1264,14 @@ await fetch(`${url}/invoke`, {
 The port never interprets `decision`. It is handed to
 `agent.resume(checkpoint, decision)` exactly as it arrived — the shipped
 `checkInApproved()` / `checkInDeclined()` vocabulary answers a `checkIn` or a
-middleware `ask`; a plain `askHuman` pause is answered with whatever that tool's
-author documented.
+middleware `ask`, built from `awaiting.checkIn` / `awaiting.ask` so it carries
+that request's `requestId`; a plain `askHuman` pause is answered with whatever
+that tool's author documented. A decision for any other request — a duplicate
+that arrives after the first one resumed the run and it paused again, say — is
+refused with `ResumeDecisionError` rather than answering a question nobody was
+shown ([Check-in](doc:checkin#a-decision-answers-one-request-once)). Over AG-UI
+the page never sees the request id and needs none: the interrupt it answers is
+matched to the kept pause, and the adapter names that pause's request.
 
 Two mismatches are refused by name rather than guessed at:
 
@@ -1272,11 +1279,86 @@ Two mismatches are refused by name rather than guessed at:
   (`ERR_AWAITING_DECISION`, `409`), naming the pending ask. The message is not
   run and the pause is not discarded — answering the message would step over an
   outstanding consent gate, and dropping the question to answer the message
-  would throw away work somebody was asked to approve.
+  would throw away work somebody was asked to approve. The one exception is a
+  question **no answer can reach any more** — see below.
 - **a decision when nothing is pending** → `NoPendingAskError`
   (`ERR_NO_PENDING_ASK`, `409`). Usually a duplicate delivery; running it as an
   ordinary message would put a raw approval into the conversation as if a
   person had typed it.
+
+A refusal never names a request id — not in its body, not on the error — so a
+client that retries a `409` learns nothing it could answer a different request
+with. The request to show the person is the pending ask the host replied with.
+
+**A question no answer can reach is closed, not held.** Some consent pauses can
+never be answered, whatever the decision: one stored by a release before
+requests were named (`'request-not-recorded'`), one whose call changed after the
+ask (`'call-changed'`), and a middleware ask made under rules the serving agent
+no longer runs — a redeploy renamed, moved or removed a link after the asking
+one (`'chain-changed'`). Held, such a pause would hold the session for good. So
+both doors close it: the next message continues the conversation, and every call
+the pause left open is recorded for the model as not run ("That call did not
+run: the question it waited on could no longer be answered."). A decision for
+it is refused by name (`ERR_RESUME_DECISION`, `409`, its `reason`), runs nothing
+and closes it too — except, on `standingAgent`, a pause stored by an earlier
+release, whose question names no request: the next message closes that one.
+Over AG-UI an answer to it ends the run cancelled — nothing runs — so the page's
+client lets the interrupt go and the next message goes through. `standingAgent`
+tells all three before a message runs, and its pending-question op reports
+nothing pending for one it can already tell is unanswerable (a redeployed chain
+only when it serves one shared agent); `streamHandler` tells the first two
+before anything runs, and a redeployed chain when an answer is refused.
+
+**Once, across what a host does to a session.** A decision is spent in a
+`DecisionLedger`, and "once" holds per ledger. Every agent a door serves that
+names no ledger shares this process's — one per process, even when an app loads
+both the CommonJS and the ESM build of this package — so an instance the pool
+evicted and rebuilt, or the runner `streamHandler` builds per request, still
+refuses a decision already used. That ledger lives in memory: it grows by one id
+per answered request for as long as the process runs, and a restart forgets it.
+
+When a resume of a consent gate fails — the next model call after the approved
+tool, say, or storing the finished run's result — the door that keeps the pause
+(`standingAgent`, `streamHandler`) asks whether the decision may have been used.
+The call can have run only if the decision reached a ledger, and the library
+sees every spend. Spent, refused as spent already, or a spend that failed where
+the ledger cannot say it never landed (`DecisionLedger.isSpent`): the door
+**marks the pause answered** before the failure is reported. A resume that never
+took the decision to a ledger — refused (a decision for another request, a value
+that is not a decision, another caller) or abandoned because the caller hung up
+first — used nothing, and the pause stays answerable. A resume whose run ended
+— the caller hung up, a deadline passed — never runs the call afterwards: its
+signal is checked before the spend, after it, and at the last moment before the
+tool runs, after its credential and artifacts resolve. Ended after the spend,
+the pause is marked answered like any other (the door cannot tell the call never
+ran). None of this is read from what an error calls
+itself, or from the decision object, which a door may copy or wrap. A store that
+cannot be read while marking is marked anyway; one that holds nothing — the
+session expired or was forgotten meanwhile — is left so.
+
+Once marked, a retry, a rebuilt instance, a restart or another host on the same
+store is refused (`ERR_RESUME_DECISION`, `'already-answered'`, whose message says
+the call's outcome is not known there), the pending-question op reports nothing
+pending, and the session's next message continues the conversation this session
+stored — what the run kept while it ran under durable writes, else the
+conversation as of the pause, never the agent's own state — with any call left
+open settled as unknown, and a call the person declined settled as declined: a
+decline never runs its call (`PausedRun.answered`). Only a decline the ledger
+spent counts: a decline refused because the request was already spent — an
+approval, here or in another process, may have run the call — is settled as
+unknown. Both doors read a stored
+session one way, so an answered pause is never offered for an answer at either.
+Code that reads stored pauses itself with `readPausedRun` — a dashboard, a
+custom door — must do the same: a pause with `answered` is a conversation to
+continue, never a question to show.
+
+Three limits are stated, not closed: the session store has no compare-and-set,
+so two processes that receive the same decision at the same moment both read
+the unmarked pause; a process that dies mid-resume marks nothing; and a store
+that refuses the mark's write leaves only this process's ledger refusing the
+decision (the door prints a warning). More than one process therefore needs one
+shared `decisionLedger` (a store whose `spend` is atomic, and ideally an
+`isSpent`) — that is what makes "once" hold across them.
 
 ### A pause the wire could not describe
 
@@ -2503,7 +2585,12 @@ answer the sidebar everyone actually builds:
 // → { "transcript": { "sessionId": "…", "messages": [ { "role": "user", "content": "…" } ] } }
 ```
 
-`SessionSummary` is a listing row; `TranscriptMessage` is one projected
+`SessionSummary` is a listing row. Its `format` is `'flowchart-v1'` only for a
+session still waiting on somebody's answer — what a sidebar badges "awaiting
+you" — and `'conversation-v1'` otherwise, including a pause whose decision a
+resume already used and a pause no answer can reach any more: every store that
+lists reports `listedFormatOf(envelope)`, so a row never offers a question no
+door would take an answer to. `TranscriptMessage` is one projected
 message; `SessionWireRequest` and `SessionWireResult` are the port-side shapes
 behind them. `HostRequest.session` carries the operation and `HostReply.sessions`
 is the terminal it ends through — a host without that terminal answers
@@ -2728,7 +2815,7 @@ evidence that means anything about a claim like this. A third test greps the
 hosting sources for vendor names, file by file, including every new port file.
 
 **The store contract** is the third suite, and the only one that is also
-*exported*: `runSessionLifecycleConformance` runs 14 cases against any
+*exported*: `runSessionLifecycleConformance` runs 18 cases against any
 `SessionLifecycle`, in this repository or yours — six in-tree harnesses every
 build. It exists because a split-brain ownership defect was live in four stores
 at once and no adapter's own tests could see it. See
@@ -2791,7 +2878,7 @@ its own.
 | Session ownership (`envelopeOwner`, write-once) + `session-list` / `session-transcript` | `agentfootprint/hosting` | — | **Contract field-validated 2026-08-13** — an independent field trial exercised write-once ownership, the cross-user 404, feature detection and `mayOpenSession` on the ordinary turn. **The store underneath was the trial's own Firestore adapter**, so the CONTRACT earned this rung and no shipped adapter borrows it |
 | `resolveSessionOwner` + `SessionOwnershipConflictError` — the one owner-transition rule | `agentfootprint/hosting` | — | Shipped (9.37.0). A turn signed by a **different** person is refused whole; a leaner turn is still accepted. Behaviour change — see [Writing a session store](doc:session-stores) |
 | `retention()` + `sessionRetention()` — how long a conversation is kept | `agentfootprint/hosting` | — | Shipped (9.42.0). OPTIONAL and feature-detected, additive: a store that does not implement it is byte-identical to 9.41, and a caller that needs it gets `ERR_SESSION_RETENTION_UNAVAILABLE` rather than a sweep that silently deletes nothing. Five of six in-tree stores implement it. **Tested, not field-validated** — nothing in this repository has watched a policy expire a real conversation |
-| `runSessionLifecycleConformance` — the store conformance battery | `agentfootprint/hosting` | — | Shipped (9.37.0). 14 cases, run against **six** in-tree harnesses every build and exported for stores nobody here has written. `agentCoreSessions` was enrolled in 9.42.0, in both modes, after an audit found the fifth shipped store had appeared zero times and its absence was not declared anywhere |
+| `runSessionLifecycleConformance` — the store conformance battery | `agentfootprint/hosting` | — | Shipped (9.37.0). 18 cases, run against **six** in-tree harnesses every build and exported for stores nobody here has written. `agentCoreSessions` was enrolled in 9.42.0, in both modes, after an audit found the fifth shipped store had appeared zero times and its absence was not declared anywhere |
 | `onIngressDecision` — the ingress record | `agentfootprint/hosting` | — | Shipped (9.32.0). A stream you chain into your own sink; explicitly **not** part of `auditExport()`'s hash chain |
 | `firestoreSessions` | `agentfootprint/hosting` | `@google-cloud/firestore` | **Shipped 9.33.0; field-validated except the ownership refusal (2026-08).** An indexed `orderBy` + document cursor and a write-once owner inside a transaction. An independent trial ran it against a real Firestore and exercised seven of its eight areas live; the eighth — refusing a turn signed by somebody else — was added afterwards and is held by tests here and by nothing in the field. **The TTL policy this row used to promise did NOT ship in 9.33.0** and does now, as 9.42.0's `retention()`: every write stamps `expiresAt` (a timestamp, beside `savedAt`, which is a number and stays one) when the store is built with `expireAfterMs`, and one `gcloud` line an operator runs once arms the native policy — `store.retention().enableWith` prints it with your collection and database filled in. See [Google Cloud](doc:google-cloud#retention-a-native-ttl-policy-on-expiresat) |
 | Agent Runtime host (`agentRuntimeHost`) — the second route | — | — | **Tracked ticket, deliberately unbuilt** — a Node service really does run on Vertex Agent Runtime through the custom-container door (proven by an independent field trial, 2026-08-14; the recipe is on [the Google page](doc:google-cloud)). What is missing is not the runtime but the CONTRACT: `httpHost` serves ONE invoke path and frames streams as SSE, while that runtime wants a SECOND route at its own path framed as NDJSON. That is a port-shape change, so it is its own release, gated on real demand |

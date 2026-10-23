@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { checkInApproved, checkInDeclined } from '../../../src/index.js';
+import { checkInApproved, checkInDeclined, type CheckInRequest } from '../../../src/index.js';
 import {
   runDemo,
   assembleStatusDoc,
@@ -21,8 +21,14 @@ import {
   WORK_REQUEST,
 } from '../../../examples/features/34-checkin-coworker.js';
 
-const APPROVE = { decide: () => checkInApproved({ by: 'alice@ops', note: 'verified' }) };
-const DECLINE = { decide: () => checkInDeclined({ by: 'bob@ops', note: 'not this week' }) };
+const APPROVE = {
+  decide: (request: CheckInRequest) =>
+    checkInApproved({ request, by: 'alice@ops', note: 'verified' }),
+};
+const DECLINE = {
+  decide: (request: CheckInRequest) =>
+    checkInDeclined({ request, by: 'bob@ops', note: 'not this week' }),
+};
 
 describe('coworker demo — the check-in pauses before the consequential action', () => {
   it('pauses BEFORE post_to_channel and carries a full evidence pack', async () => {

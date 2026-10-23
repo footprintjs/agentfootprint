@@ -29,6 +29,7 @@ const askedAgainst = (propsRef?: string) => ({
 
 const chosenFrom = (from?: string) =>
   checkInApproved({
+    request: { id: 'c'.repeat(64) },
     by: 'alice@ops',
     value: { kind: 'row-choice', value: { rowId: 'r1' }, ...(from !== undefined && { from }) },
   } as never);
@@ -72,7 +73,10 @@ describe('a decision chosen against different bytes than the ask', () => {
 
   it('says nothing for a plain approve/decline, which is what it always was', () => {
     expect(() =>
-      assertDecisionIsNotStale(askedAgainst(ASKED), checkInApproved({ by: 'a' })),
+      assertDecisionIsNotStale(
+        askedAgainst(ASKED),
+        checkInApproved({ request: { id: 'c'.repeat(64) }, by: 'a' }),
+      ),
     ).not.toThrow();
     expect(() =>
       assertDecisionIsNotStale(askedAgainst(ASKED), 'a plain askHuman answer'),

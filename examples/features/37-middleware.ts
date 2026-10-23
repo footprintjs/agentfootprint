@@ -116,7 +116,9 @@ function show(rows: readonly MiddlewareDecision[]): void {
     // keyed on. (`at` / `phase` say the same thing in the 7.18 spelling.)
     const where = r.toolName ? `${r.moment}:${r.toolName}` : r.moment;
     const what = r.changed ? `${JSON.stringify(r.before)} → ${JSON.stringify(r.after)}` : '';
-    console.log(`  ${r.middleware.padEnd(16)} ${r.outcome.padEnd(6)} ${where.padEnd(26)} ${r.why ?? ''}`);
+    console.log(
+      `  ${r.middleware.padEnd(16)} ${r.outcome.padEnd(6)} ${where.padEnd(26)} ${r.why ?? ''}`,
+    );
     if (what) console.log(`  ${' '.repeat(16)}        ${what}`);
   }
 }
@@ -167,7 +169,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
   const parked = JSON.parse(JSON.stringify(first.checkpoint)) as typeof first.checkpoint;
 
   // ── A person approves. The chain resumes; the REAL tool runs. ────
-  const answer = await agent.resume(parked, checkInApproved({ by: 'dana@ops' }));
+  // The decision names the ask it answers (`first.ask.id`): it answers this
+  // request once, for exactly the call the person saw, and no other.
+  const answer = await agent.resume(
+    parked,
+    checkInApproved({ request: first.ask, by: 'dana@ops' }),
+  );
 
   console.log('\nAfter the approval:');
   show(ledgerOf(agent));

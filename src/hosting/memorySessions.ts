@@ -29,6 +29,7 @@
  * missing the same half of it.
  */
 
+import { listedFormatOf } from './answeredPause.js';
 import { envelopeOwner } from './envelope.js';
 import { resolveSessionOwner } from './sessionOwnership.js';
 import { DEFAULT_SWEEP_LIMIT } from './types.js';
@@ -110,7 +111,9 @@ export function memorySessions(): SessionLifecycle {
         rows.push({
           sessionId,
           savedAt: envelope.savedAt,
-          format: envelope.format,
+          // What the row SAYS the session is — a pause whose decision was
+          // already used lists as a conversation (`answeredPause.ts`).
+          format: listedFormatOf(envelope),
           messageCount: countOf(envelope),
         });
       }

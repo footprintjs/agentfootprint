@@ -97,7 +97,9 @@ function approveOnce(): {
 
 function show(rows: readonly MiddlewareDecision[]): void {
   for (const r of rows) {
-    console.log(`  ${r.moment.padEnd(12)} ${r.middleware.padEnd(14)} ${r.outcome.padEnd(6)} ${r.why ?? ''}`);
+    console.log(
+      `  ${r.moment.padEnd(12)} ${r.middleware.padEnd(14)} ${r.outcome.padEnd(6)} ${r.why ?? ''}`,
+    );
   }
 }
 
@@ -125,7 +127,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
 
   const by = 'dana@ops';
   trust.remember(first.ask, by);
-  const answer = await agent.resume(first.checkpoint, checkInApproved({ by }));
+  const answer = await agent.resume(first.checkpoint, checkInApproved({ request: first.ask, by }));
 
   // ── Turn two: the SAME call. No question — and the record says why. ──
   const second = Agent.create({ provider: mock({ replies: scripted() }), model: 'small-model' })

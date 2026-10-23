@@ -37,6 +37,7 @@ import type {
   ReturnedEvidence,
   ScopeDeclaration,
 } from '../../../src/integrity/claim-binding/types.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 type Mode = 'classic' | 'dynamic' | 'dynamic-grouped';
 type Reply = {
@@ -236,13 +237,12 @@ describe('public-Agent seam: what executed, not what the model proposed', () => 
         {
           name: 'before-ask',
           onToolCall: (call) =>
-            allow({ ...call.args, region: 'east' }, 'Select authorized region.'),
+            allow({ ...call.args, region: 'east', currency: 'EUR' }, 'Select authorized scope.'),
         },
         { name: 'approval', onToolCall: () => ask({ question: 'Read this source?' }) },
-        {
-          name: 'after-ask',
-          onToolCall: (call) => allow({ ...call.args, currency: 'EUR' }, 'Approved currency.'),
-        },
+        // Runs on resume and lets the approved call through unchanged — a link
+        // after the ask that rewrote it would not be covered by the approval.
+        { name: 'after-ask', onToolCall: () => allow() },
       ],
     });
     const paused = await first.agent.run({ message: 'Read the regional fixture.' });
@@ -254,18 +254,17 @@ describe('public-Agent seam: what executed, not what the model proposed', () => 
         {
           name: 'before-ask',
           onToolCall: (call) =>
-            allow({ ...call.args, region: 'east' }, 'Select authorized region.'),
+            allow({ ...call.args, region: 'east', currency: 'EUR' }, 'Select authorized scope.'),
         },
         { name: 'approval', onToolCall: () => ask({ question: 'Read this source?' }) },
-        {
-          name: 'after-ask',
-          onToolCall: (call) => allow({ ...call.args, currency: 'EUR' }, 'Approved currency.'),
-        },
+        // Runs on resume and lets the approved call through unchanged — a link
+        // after the ask that rewrote it would not be covered by the approval.
+        { name: 'after-ask', onToolCall: () => allow() },
       ],
     });
     await next.agent.resume(
       JSON.parse(JSON.stringify(paused.checkpoint)),
-      checkInApproved({ by: 'synthetic reviewer' }),
+      checkInApproved({ request: pausedRequest(paused), by: 'synthetic reviewer' }),
     );
     expect(next.executions.map((execution) => execution.args)).toEqual([
       { region: 'east', currency: 'EUR' },
@@ -358,7 +357,10 @@ describe('public-Agent seam: what executed, not what the model proposed', () => 
     if (!isPaused(paused)) throw new Error('Expected check-in pause.');
     expect(captured).toBeUndefined();
     vi.setSystemTime(nowMs + 30 * 60000);
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'synthetic reviewer' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'synthetic reviewer' }),
+    );
     expect(executed).toMatchObject({ start_time: Date.parse(window.from), end_time: nowMs });
     expect(executed).not.toHaveProperty('window');
     if (captured === undefined || returned === undefined || end === undefined)

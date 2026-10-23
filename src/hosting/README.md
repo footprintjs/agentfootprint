@@ -278,6 +278,22 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   `ERR_ANSWER_VALIDATION`: the request was fine, the answer did not pass; the
   tools that turn already ran are not undone); `pendingAsk.ts` — the one
   projection of what a paused run waits on.
+- `answeredPause.ts` — a stored pause whose decision a resume may have used and
+  did not finish. The ONE reading of a stored session every door uses
+  (`readStoredSession`: an answered pause is a conversation to continue, never a
+  pause to answer), the watch a door opens before it hands an answer over
+  (`watchAnswer`), and the one step after that answer's resume failed
+  (`afterFailedAnswer` — marked when the watch says the decision reached a
+  ledger; closed when nothing was used and no decision could ever answer it),
+  shared by `standingAgent` and `streamHandler`; it settles the calls that run
+  left open (a declined one as declined, when the decline is what the ledger
+  spent) so the next message can continue. A pause no answer can reach any
+  more (`unanswerablePause`) is closed rather than held: the next message
+  continues `closedConversation`, every open call recorded as not run. `listedFormatOf` is the same reading for a session
+  listing — `'flowchart-v1'` only for a pause still waiting — and every store
+  that lists reports it (memory and Agent Engine at list time; SQLite and
+  Firestore in the column they persist, a row that still says `'flowchart-v1'`
+  read again from its envelope when they list — `listedFormatOfRow`).
 
 ## A hosted agent under `redact` — the record served, the person answered
 
