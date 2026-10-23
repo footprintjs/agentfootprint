@@ -4,7 +4,7 @@ title: ServedView
 
 # Interface: ServedView
 
-Defined in: [src/time-travel/servedView.ts:838](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L838)
+Defined in: [src/time-travel/servedView.ts:839](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L839)
 
 THE SERVED VIEW: what the model was handed on one epoch, rebuilt.
 
@@ -34,7 +34,7 @@ view.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults'] on an a
 
 > `readonly` `optional` **basis?**: `object`
 
-Defined in: [src/time-travel/servedView.ts:875](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L875)
+Defined in: [src/time-travel/servedView.ts:876](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L876)
 
 WHICH MODEL SAW THIS, and through which provider — read off the receipt's
 own `basis`, which is the only place the run records them.
@@ -82,7 +82,7 @@ const view = servedAt(agent.getSnapshot()!, 1)!;
 
 > `readonly` **callRuntimeStageId**: `string`
 
-Defined in: [src/time-travel/servedView.ts:848](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L848)
+Defined in: [src/time-travel/servedView.ts:849](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L849)
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: [src/time-travel/servedView.ts:848](https://github.com/footprintjs/a
 
 > `readonly` **epoch**: `number`
 
-Defined in: [src/time-travel/servedView.ts:847](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L847)
+Defined in: [src/time-travel/servedView.ts:848](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L848)
 
 WHICH TURN THIS IS, as the fold read it — the run's own committed
 `iteration`, and its POSITION in run order when the fold could not read
@@ -105,7 +105,7 @@ recording can number a turn differently from the receipt that turn minted.
 
 > `readonly` **gaps**: readonly [`ServedGap`](/docs/api/interfaces/ServedGap)[]
 
-Defined in: [src/time-travel/servedView.ts:906](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L906)
+Defined in: [src/time-travel/servedView.ts:907](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L907)
 
 What this rebuild could NOT recover, each naming the receipt field it
  explains. Never empty — see [SERVED\_GAPS](/docs/api/variables/SERVED_GAPS).
@@ -116,7 +116,7 @@ What this rebuild could NOT recover, each naming the receipt field it
 
 > `readonly` **messages**: `object`
 
-Defined in: [src/time-travel/servedView.ts:885](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L885)
+Defined in: [src/time-travel/servedView.ts:886](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L886)
 
 #### asSent
 
@@ -138,7 +138,7 @@ Lines composed for this request and written to no history.
 
 > `readonly` **system**: `object`
 
-Defined in: [src/time-travel/servedView.ts:881](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L881)
+Defined in: [src/time-travel/servedView.ts:882](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L882)
 
 #### pieces
 
@@ -154,7 +154,7 @@ Defined in: [src/time-travel/servedView.ts:881](https://github.com/footprintjs/a
 
 > `readonly` **tools**: `object`
 
-Defined in: [src/time-travel/servedView.ts:893](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L893)
+Defined in: [src/time-travel/servedView.ts:894](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L894)
 
 #### forced?
 
@@ -177,6 +177,6 @@ The schemas the log holds. Short of `names` by the forced tool — see
 
 #### withheld?
 
-> `readonly` `optional` **withheld?**: `"wrap-up"`
+> `readonly` `optional` **withheld?**: `"wrap-up"` \| `"evidence-revision"`
 
 Why the tool list is empty when it would not otherwise be.

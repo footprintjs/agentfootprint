@@ -275,6 +275,36 @@ describe('UNIT — each reason from its one row', () => {
     expect(reasonsOf(unreachable)).toEqual(['check-unreachable']);
     expect(unreachable.reasons[0]!.layer).toBeUndefined(); // a reason of every layer
   });
+
+  it('a failed report that also counts unreachable checks fires both reasons', () => {
+    // A contradiction found beside checks that could not reach a verdict: the
+    // report is `failed`, and the unreachable rows are not hidden by it.
+    const both = run({
+      answerValidation: {
+        mode: 'enforce',
+        status: 'failed',
+        reason: 'unreachable-checks',
+        failed: 1,
+        unreachable: 2,
+      },
+    });
+    expect(reasonsOf(both)).toEqual(['answer-check-failed', 'check-unreachable']);
+    expect(both.reasons[1]!.witness).toEqual([
+      { kind: 'state', key: 'answerValidation', path: '/unreachable' },
+    ]);
+    // A failed report with nothing unreachable fires the one reason, as before.
+    expect(
+      reasonsOf(run({ answerValidation: { mode: 'enforce', status: 'failed', unreachable: 0 } })),
+    ).toEqual(['answer-check-failed']);
+    // …and a failed report whose validator did not finish says so too.
+    const broken = run({
+      answerValidation: { mode: 'enforce', status: 'failed', reason: 'validator-error' },
+    });
+    expect(reasonsOf(broken)).toEqual(['answer-check-failed', 'check-unreachable']);
+    expect(broken.reasons[1]!.witness).toEqual([
+      { kind: 'state', key: 'answerValidation', path: '/reason' },
+    ]);
+  });
 });
 
 describe('UNIT — the inputs layer’s note is the library’s words, never the tool’s (the tool-bytes boundary)', () => {

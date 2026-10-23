@@ -36,7 +36,7 @@ import type { Assertion, SubjectRef } from '../assertion/types.js';
 import { comparableValueOf } from '../assertion/types.js';
 import type { ContextError } from '../finding/types.js';
 import type { Disposition } from '../disposition/types.js';
-import { evaluateClaimPair } from './evaluate.js';
+import { evaluateClaimPair, type ClaimPairEvaluation } from './evaluate.js';
 
 /** One entry of the operator's declared contract: answer field → ledger fact. */
 export interface DeclaredClaim {
@@ -75,6 +75,83 @@ function readPath(answer: unknown, path: string): unknown {
 }
 
 /**
+ * One declared claim, compared — the selection and the evaluation every
+ * reader of a claim derives from (`unsupportedClaimsOf` here; the delivery
+ * verdict in `delivered.ts`, which answer validation's rows read), so a row
+ * can never accuse where the detector does not.
+ *
+ * - `omitted` — the answer does not state the field (the schema allowed it).
+ * - `uncollected` — no ledger row settled the declared fact.
+ * - `compared` — the latest row asserts, earlier rows ride as `rows`;
+ *   `evaluation` is the shared pair evaluator's verdict (`evaluate.ts`).
+ */
+export type ClaimComparison =
+  | { readonly kind: 'omitted' }
+  | { readonly kind: 'uncollected' }
+  | {
+      readonly kind: 'compared';
+      readonly evaluation: ClaimPairEvaluation;
+      readonly claimed: unknown;
+      readonly rows: readonly ClaimLedgerRow[];
+      readonly settledRow: ClaimLedgerRow;
+      readonly subject: SubjectRef;
+      readonly ledgerProvenance: string;
+      readonly evidence: Assertion;
+      readonly assertion: Assertion;
+    };
+
+/**
+ * Compare ONE declared claim of the parsed answer against the ledger. Pure.
+ * Throws exactly what the pair evaluator throws (a value JSON cannot render).
+ */
+export function compareClaim(
+  claim: DeclaredClaim,
+  ledger: readonly ClaimLedgerRow[],
+  answer: unknown,
+  epoch: number,
+): ClaimComparison {
+  const claimed = readPath(answer, claim.answerField);
+  if (claimed === undefined) return { kind: 'omitted' };
+  const rows = ledger.filter((r) => r.entity === claim.entity && r.field === claim.field);
+  const settledRow = rows[rows.length - 1];
+  if (settledRow === undefined) return { kind: 'uncollected' };
+
+  const subject: SubjectRef = { kind: 'entity', id: claim.entity };
+  const ledgerProvenance =
+    `${settledRow.toolName} (call ${settledRow.toolCallId}, iteration ` +
+    `${String(settledRow.iteration)})` +
+    (settledRow.measuredAt !== undefined ? `, measured_at ${String(settledRow.measuredAt)}` : '');
+
+  const evidence: Assertion = {
+    subject,
+    predicate: claim.field,
+    value: settledRow.value,
+    epoch,
+    stratum: 'asserted',
+    provenance: ledgerProvenance,
+  };
+  const assertion: Assertion = {
+    subject,
+    predicate: claim.field,
+    value: claimed,
+    epoch,
+    stratum: 'asserted',
+    provenance: `answer field '${claim.answerField}'`,
+  };
+  return {
+    kind: 'compared',
+    evaluation: evaluateClaimPair(evidence, assertion),
+    claimed,
+    rows,
+    settledRow,
+    subject,
+    ledgerProvenance,
+    evidence,
+    assertion,
+  };
+}
+
+/**
  * Compare the parsed answer's declared claims against the ledger.
  * Pure; the caller files findings and dispositions.
  */
@@ -88,43 +165,27 @@ export function unsupportedClaimsOf(
   const dispositions: { claim: string; disposition: Disposition }[] = [];
 
   for (const claim of declared) {
-    const claimed = readPath(answer, claim.answerField);
-    if (claimed === undefined) {
+    const comparison = compareClaim(claim, ledger, answer, epoch);
+    if (comparison.kind === 'omitted') {
       // The schema allowed the absence: the model claimed nothing here.
       dispositions.push({ claim: claim.answerField, disposition: 'not-applicable' });
       continue;
     }
-    const rows = ledger.filter((r) => r.entity === claim.entity && r.field === claim.field);
-    const settledRow = rows[rows.length - 1];
-    if (settledRow === undefined) {
+    if (comparison.kind === 'uncollected') {
       // Never collected — incomparable, never an accusation.
       dispositions.push({ claim: claim.answerField, disposition: 'unreachable' });
       continue;
     }
-
-    const subject: SubjectRef = { kind: 'entity', id: claim.entity };
-    const ledgerProvenance =
-      `${settledRow.toolName} (call ${settledRow.toolCallId}, iteration ` +
-      `${String(settledRow.iteration)})` +
-      (settledRow.measuredAt !== undefined ? `, measured_at ${String(settledRow.measuredAt)}` : '');
-
-    const evidence: Assertion = {
+    const {
+      evaluation,
+      claimed,
+      rows,
+      settledRow,
       subject,
-      predicate: claim.field,
-      value: settledRow.value,
-      epoch,
-      stratum: 'asserted',
-      provenance: ledgerProvenance,
-    };
-    const assertion: Assertion = {
-      subject,
-      predicate: claim.field,
-      value: claimed,
-      epoch,
-      stratum: 'asserted',
-      provenance: `answer field '${claim.answerField}'`,
-    };
-    const evaluation = evaluateClaimPair(evidence, assertion);
+      ledgerProvenance,
+      evidence,
+      assertion,
+    } = comparison;
     if (evaluation === 'evidence-unavailable') {
       dispositions.push({ claim: claim.answerField, disposition: 'unreachable' });
       continue;

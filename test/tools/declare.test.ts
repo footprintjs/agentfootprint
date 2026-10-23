@@ -283,6 +283,22 @@ describe('sameArgumentValue — the evidence module’s same-value rule', () => 
     expect(sameArgumentValue(true, true)).toBe(true);
   });
 
+  it('a colon inside a value is part of it: an IPv6 address is not the number after it', () => {
+    for (const [a, b] of [
+      ['::1234', '1234'],
+      ['::1', '1'],
+      ['fe80::1', '1'],
+      ['2001:db8::1234', '1234'],
+      ['::ffff:192.0.2.1', '192.0.2.1'],
+      [':8080', '8080'],
+    ]) {
+      expect(sameArgumentValue(a, b)).toBe(false);
+      expect(sameArgumentValue(b, a)).toBe(false);
+    }
+    expect(sameArgumentValue('::1234', '::1234')).toBe(true);
+    expect(sameArgumentValue('2001:DB8::1234', '2001:db8::1234')).toBe(true);
+  });
+
   it('not equal across types, across tokens, or with nothing to compare', () => {
     expect(sameArgumentValue('5', 5)).toBe(false);
     expect(sameArgumentValue('-24h', '24h')).toBe(false);

@@ -290,7 +290,8 @@ export interface AgentIterationEndPayload {
 export type FixedRouteRationale =
   | 'LLM produced no tool calls — final answer'
   | 'maxIterations reached — forcing final'
-  | 'costBudget reached (onExceed: halt) — forcing final';
+  | 'costBudget reached (onExceed: halt) — forcing final'
+  | 'tools are off after the evidence revision (answer validation enforces) — forcing final';
 
 /**
  * The `pause.request` reason the library writes when the pause carries none —
@@ -1173,7 +1174,12 @@ export interface ToolChoicePickedPayload {
   readonly offered: number;
   readonly served: number;
   readonly narrowed: boolean;
-  readonly narrowedSkipped?: 'unavailable' | 'too-few' | 'after-miss' | 'wrap-up';
+  readonly narrowedSkipped?:
+    | 'unavailable'
+    | 'too-few'
+    | 'after-miss'
+    | 'wrap-up'
+    | 'evidence-revision';
   readonly latencyMs: number;
   readonly inputTokens?: number;
   readonly outputTokens?: number;

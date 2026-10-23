@@ -46,8 +46,21 @@ export type RunSettlement =
    * provider's response body may hold anything — so an adapter is never
    * handed it. It states the failure in the words of the record's served
    * `error.fatal` event when the run filed one, else in fixed words of its own.
+   *
+   * `refusal`, when present, says the run did not break but a library
+   * REFUSAL ended it — a code from a closed set ({@link RunRefusal}), chosen
+   * by the host from the error's class, never from its words. An adapter
+   * names it in the protocol's own fixed words and code, so a refusal never
+   * reads as a crash.
    */
-  | { readonly kind: 'failed' };
+  | { readonly kind: 'failed'; readonly refusal?: RunRefusal };
+
+/**
+ * A library refusal that ended a run, by its code. `ERR_ANSWER_VALIDATION`:
+ * an enforcing `.answerValidation()` withheld the answer
+ * (`AnswerValidationError`) — the same code the HTTP doors answer with (422).
+ */
+export type RunRefusal = 'ERR_ANSWER_VALIDATION';
 
 /**
  * One run's translation into a protocol's events. Opened per run, fed every

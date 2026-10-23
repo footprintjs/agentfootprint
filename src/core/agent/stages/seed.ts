@@ -284,6 +284,12 @@ export interface SeedStageDeps {
    */
   readonly hasEvidenceRevision?: boolean;
   /**
+   * The evidence gate's revision calls no tools (an enforcing answer
+   * validation). Read only when a resumed run restores a spent revision: its
+   * tools stay off (`AgentState.toolsOffAfterRevision`). Present only then.
+   */
+  readonly toolsOffAfterRevision?: true;
+  /**
    * The name of the synthetic tool the `'tool-forced'` output strategy puts on
    * every request (9.88.0). Present ONLY under that strategy; absent → this
    * stage commits exactly the keys it always did.
@@ -930,6 +936,9 @@ function seedFrom(
   if (deps.hasEvidenceRevision === true) {
     const recovery = mounted ? undefined : deps.consumePendingEvidenceRecovery?.();
     scope.evidenceRevisionSpent = recovery?.revisionSpent === true;
+    if (deps.toolsOffAfterRevision === true && recovery?.revisionSpent === true) {
+      scope.toolsOffAfterRevision = true;
+    }
     if (recovery?.pending !== undefined) {
       scope.evidenceRecovery = {
         instruction: recovery.pending.instruction,

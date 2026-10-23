@@ -102,6 +102,8 @@ export interface InputsLayerState {
   readonly maxIterations: number;
   readonly costBudgetHit?: boolean;
   readonly costBudgetOnExceed?: 'warn' | 'halt';
+  /** Handed in only when the run's tools are off (`AgentState.toolsOffAfterRevision`). */
+  readonly toolsOff?: true;
   readonly turnNumber: number;
   /**
    * This turn's answers KEPT for a call the batch that asked could not finish
@@ -126,6 +128,9 @@ export interface InputsLayerState {
 export interface InputsLayerDeps {
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
+  /** The evidence gate's revision turns the tools off — present only then;
+   *  only then is the `toolsOff` input read. */
+  readonly toolsOffAfterRevision?: true;
   /** Route's dispatch test (`stages/route.ts` · `willDispatch`). */
   readonly willDispatch: (values: {
     readonly callCount: number;
@@ -133,6 +138,7 @@ export interface InputsLayerDeps {
     readonly maxIterations: number;
     readonly costBudgetHit?: boolean;
     readonly costBudgetOnExceed?: 'warn' | 'halt';
+    readonly toolsOff?: boolean;
   }) => boolean;
   /** The ledger's emit half — one `findings.argument` event per row. */
   readonly emitRows: (scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRow[]) => void;
@@ -269,6 +275,7 @@ export function declareArgumentsStage(
     maxIterations: scope.maxIterations as number,
     ...(costBudgetHit !== undefined && { costBudgetHit }),
     ...(costBudgetOnExceed !== undefined && { costBudgetOnExceed }),
+    ...(deps.toolsOffAfterRevision === true && scope.toolsOff === true && { toolsOff: true }),
   });
   scope.argumentPlan = dispatches
     ? declareBatch(calls, deps.toolOf, armOf(declaredOf(deps, calls)))

@@ -484,6 +484,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           userMessage: parent.userMessage as string | undefined,
           ...(parent.toolChoices !== undefined && { priorToolChoices: parent.toolChoices }),
           ...(parent.wrapUpAsked === true && { wrapUpAsked: true }),
+          ...(parent.toolsOffAfterRevision === true && { toolsOffAfterRevision: true }),
         }),
         activatedInjectionIds: parent.activatedInjectionIds as readonly string[] | undefined,
         runIdentity: parent.runIdentity as
@@ -800,6 +801,11 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // ran out of budget, so every other boundary's args are the exact
           // bytes they always were.
           ...(p.wrapUpAsked === true && { wrapUpAsked: true }),
+          // The tools off after the evidence revision (an enforcing answer
+          // validation) — the same trip: written by the EvidenceRecheck branch
+          // on the OUTER scope, read by callLLM in here. Value-conditional, so
+          // every other boundary's args are the exact bytes they always were.
+          ...(p.toolsOffAfterRevision === true && { toolsOffAfterRevision: true }),
           // `.configure()` results, resolved + committed by seed on the OUTER
           // chart. callLLM and the System Prompt slot both live in here, so
           // the values have to cross the boundary. Read-only inside (nothing

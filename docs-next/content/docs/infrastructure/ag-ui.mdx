@@ -205,7 +205,8 @@ tool that declares it:
 - **Enforced answer validation holds through any framing.** With
   `.answerValidation()` in enforce mode the agent streams no text until the
   validator passed, so no framing can write any before; a refused draft is never
-  written at all, and the run ends in `RUN_ERROR`.
+  written at all, and the run ends in `RUN_ERROR` with
+  `code: 'ERR_ANSWER_VALIDATION'`.
 - `translation` is refused beside `custom` or `reasoning`, and `framing` beside
   `encoder`: each tunes the default only. A `translation` must return a new
   translation for every run; one it returned before is refused.
@@ -244,6 +245,7 @@ stated on `RUN_STARTED`.
 | `pause.request`, then the run pauses | `RUN_FINISHED` with an `interrupt` outcome (`AgUiRunOutcome`, `AgUiInterrupt`) |
 | the run pauses on a tool the CLIENT runs (`settle({ kind: 'paused', awaiting: 'caller' })`) | `RUN_FINISHED` with a `success` outcome naming the call in `pendingToolCallIds` |
 | `error.fatal`, then the run fails | `RUN_ERROR` — the served `error.fatal` when it is one of the library's fixed sentences, else "The run failed." — never the thrown value |
+| an enforcing `.answerValidation()` withholds the answer | `RUN_ERROR` with `code: 'ERR_ANSWER_VALIDATION'` and the fixed sentence "The answer was withheld: it did not pass the app's answer checks." — a refusal, not a crash |
 | an event on the CUSTOM allow-list | `CUSTOM`, named by the event type, carrying only its listed fields |
 | anything else | nothing |
 
@@ -285,7 +287,9 @@ A failure is described in FIXED words: `RUN_ERROR` repeats the served
 `error.fatal` only when it is one of the library's fixed sentences (a provider
 unreachable, a key rejected, a rate limit, a timeout), else it says "The run
 failed." — never the thrown value, its stack or a provider's response body,
-which the record's own fallback quotes. A pause's interrupt
+which the record's own fallback quotes. A withheld answer is a refusal, told
+apart by its code: `RUN_ERROR` carries `code: 'ERR_ANSWER_VALIDATION'`, the
+code the HTTP doors answer with (422), in fixed words of its own. A pause's interrupt
 carries the question's text and nothing else of the pause's payload. The run's
 identity (`principal`, `tenant`, `sessionId`) is never written.
 
@@ -383,7 +387,10 @@ carries the wire's own record of it (`PausedWire`, on the stored `PausedRun`).
 The translation implements a **port** on `agentfootprint/hosting`:
 `RunTranslation` (one run's served events in, protocol events out) and
 `RunSettlement` (how the run ended: `finished`, `paused`, `cancelled`, `failed` —
-the failed one carries nothing of the thrown value).
+the failed one carries nothing of the thrown value, only, when a library refusal
+ended the run, its `refusal`: a `RunRefusal` code the host reads from the
+error's class, today `ERR_ANSWER_VALIDATION` for an answer an enforcing
+`.answerValidation()` withheld).
 
 The framing is a **strategy**: `SseFraming` says how one event becomes one
 frame. `agUiSse` is one; `agentfootprintSse` — the frames `toSSE` has always

@@ -131,6 +131,7 @@ export type {
   ProtocolPlan,
   ProtocolRequestFacts,
   ProtocolTurn,
+  RunRefusal,
   RunSettlement,
   RunTranslation,
   StreamRunContext,
