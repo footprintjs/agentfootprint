@@ -103,9 +103,12 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   (a matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
   Values are compared after one declared normalization
   (`integrity/unsupported-claim/evaluate.ts` · `compareClaimValues`: text in
-  NFC, trimmed, white space collapsed, a word case-folded; a number and a
-  plain decimal string by value; a unit only against the same unit, written
-  exactly; a currency, separators, a date or a time only as written).
+  NFC, trimmed, white space collapsed, under a full case fold without the
+  Turkic mappings — case agrees only for a word of more than three letters
+  cased differently in its first letter or as a whole; a number and a plain
+  decimal string by value; a unit only against the same unit, written
+  exactly; a currency, separators, a dot-grouped number, a date or a time
+  only as written).
   The contract is unscoped — `(entity, field)` rows from ANY tool, with no
   scope or age check, and any result carrying the semantics marker settles a
   fact — so any reading may be forged or stale, and the row obeys ONE law: a

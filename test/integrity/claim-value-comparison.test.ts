@@ -32,6 +32,57 @@ describe('UNIT — the declared normalization', () => {
     expect(compareClaimValues('settled', 'pending')).toBe('contradicts');
   });
 
+  it('case agrees only where it cannot carry meaning — both directions', () => {
+    // Agrees: a plain word of more than three letters, first letter or whole word.
+    for (const [a, b] of [
+      ['settled', 'Settled'],
+      ['settled', 'SETTLED'],
+      ['Settled', 'SETTLED'],
+      ['true', 'TRUE'],
+      ['Settled Today', 'settled today'],
+      ['Straße', 'STRASSE'],
+      ['STRAẞE', 'Straße'],
+    ]) {
+      expect(compareClaimValues(a, b)).toBe('agrees');
+      expect(compareClaimValues(b, a)).toBe('agrees');
+    }
+    // Not compared: short words, mixed case, units, letters with other marks, ß/ss in one case.
+    for (const [a, b] of [
+      ['MW', 'mW'],
+      ['Mb', 'MB'],
+      ['mS', 'ms'],
+      ['Co', 'CO'],
+      ['Yes', 'yes'],
+      ['dQwXyZaBcDe', 'DqWxYzAbCdE'],
+      ['iPhone', 'IPHONE'],
+      ['sETTLED', 'settled'],
+      ['N/A', 'n/a'],
+      ['New York', 'new york'],
+      ['Masse', 'Maße'],
+      ['STRAẞE', 'STRASSE'],
+      ['ılık', 'ilik'],
+      ['ISPARTA', 'ısparta'],
+      ['İstanbul', 'istanbul'],
+    ]) {
+      expect(compareClaimValues(a, b)).toBe('incomparable');
+      expect(compareClaimValues(b, a)).toBe('incomparable');
+    }
+    // A real difference still contradicts.
+    expect(compareClaimValues('settled', 'pending')).toBe('contradicts');
+    expect(compareClaimValues('MW', 'kW')).toBe('contradicts');
+  });
+
+  it('a dot-grouped or comma decimal is a format: agrees only as written', () => {
+    expect(compareClaimValues('1.250', 1.25)).toBe('incomparable');
+    expect(compareClaimValues('1.250', '1.25')).toBe('incomparable');
+    expect(compareClaimValues('12.345.678', 12345678)).toBe('incomparable');
+    expect(compareClaimValues('1,5', '1,50')).toBe('incomparable');
+    expect(compareClaimValues('1.250', '1.250')).toBe('agrees');
+    // Not dot-grouped: a leading zero, or four digits before the point.
+    expect(compareClaimValues('0.125', 0.125)).toBe('agrees');
+    expect(compareClaimValues('1250.000', 1250)).toBe('agrees');
+  });
+
   it("an identifier's case may matter: text with a digit that differs only in case is not compared", () => {
     expect(compareClaimValues('aB3xZ9', 'Ab3Xz9')).toBe('incomparable');
     expect(compareClaimValues('ORD-44710', 'ord-44710')).toBe('incomparable');
@@ -112,11 +163,13 @@ describe('UNIT — the declared normalization', () => {
   });
 
   it('lists item by item in order, objects key by key; a definite difference wins', () => {
-    expect(compareClaimValues(['A', '1'], ['a', 1])).toBe('agrees');
+    expect(compareClaimValues(['Settled', '1'], ['settled', 1])).toBe('agrees');
+    // …a one-letter word keeps its case (short words can carry meaning).
+    expect(compareClaimValues(['A', '1'], ['a', 1])).toBe('incomparable');
     expect(compareClaimValues([1, 2], [2, 1])).toBe('contradicts');
     expect(compareClaimValues([1, 'x'], [1, ['x']])).toBe('incomparable');
     expect(compareClaimValues([1, 'x'], [2, ['x']])).toBe('contradicts');
-    expect(compareClaimValues({ a: 'X', b: '2' }, { b: 2, a: 'x' })).toBe('agrees');
+    expect(compareClaimValues({ a: 'Paid', b: '2' }, { b: 2, a: 'paid' })).toBe('agrees');
     expect(compareClaimValues({ a: 1 }, { a: 1, b: 2 })).toBe('contradicts');
   });
 
@@ -136,12 +189,15 @@ describe('UNIT — one exact key per value, for reading several values at once',
     expect(claimValueKey(1e21)).toBe(claimValueKey('1000000000000000000000'));
     expect(claimValueKey(1.5e-7)).toBe(claimValueKey('0.00000015'));
     expect(claimValueKey(known(1250, 'src'))).toBe(claimValueKey('1250'));
-    expect(claimValueKey(['A', { b: '2' }])).toBe(claimValueKey(['a', { b: 2 }]));
+    expect(claimValueKey(['Settled', { b: '2' }])).toBe(claimValueKey(['settled', { b: 2 }]));
     // A double cannot tell these apart; their keys can.
     expect(claimValueKey('9007199254740993')).not.toBe(claimValueKey(9007199254740992));
     expect(claimValueKey('1250 ms')).not.toBe(claimValueKey(1250));
     // The text rules, exactly: a word folds, a unit and an identifier keep their case.
-    expect(claimValueKey('Straße')).toBe(claimValueKey('STRASSE'));
+    expect(claimValueKey('Settled')).toBe(claimValueKey('settled'));
+    expect(claimValueKey('Masse')).not.toBe(claimValueKey('Maße'));
+    expect(claimValueKey('MW')).not.toBe(claimValueKey('mW'));
+    expect(claimValueKey('ılık')).not.toBe(claimValueKey('ilik'));
     expect(claimValueKey('caf\u00e9')).toBe(claimValueKey('cafe\u0301'));
     expect(claimValueKey('5 MW')).not.toBe(claimValueKey('5 mW'));
     expect(claimValueKey('aB3xZ9')).not.toBe(claimValueKey('Ab3Xz9'));
@@ -322,6 +378,21 @@ describe('SECURITY — depth, cycles and unknowns', () => {
       '5 mW',
       'Straße',
       'STRASSE',
+      'STRAẞE',
+      'MASSE',
+      'Masse',
+      'Maße',
+      'ılık',
+      'ilik',
+      'ILIK',
+      'İlik',
+      'MW',
+      'mW',
+      'true',
+      'TRUE',
+      'True',
+      '1.250',
+      1.25,
       'caf\u00e9',
       'cafe\u0301',
       'aB3xZ9',

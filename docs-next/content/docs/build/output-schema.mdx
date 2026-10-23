@@ -517,16 +517,26 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   contradicts any value the run read, the row fails, whatever else was read.
 - **A different spelling is not a contradiction.** A claim is compared after
   one declared normalization. Text is compared in Unicode NFC, trimmed, with
-  its white space collapsed, and a word is case-folded (`'Settled '` agrees
-  with `'settled'`, `'Straße'` with `'STRASSE'`). A number and a string
-  written as a plain decimal compare by value, both ways (`42.5` agrees with
-  `'42.50'`, `1250` with `'1250'`). A number with a unit compares only with
-  the same unit, written exactly: `'5 MW'` is not `'5 mW'`. Values that cannot
-  be compared safely are `unreachable`, with the reason "could not compare",
-  never `checked-fail`: a list or an object against a single value, a unit
-  against a bare number (`'1250 ms'` against `1250`), text against a number,
-  text with a digit that differs only in case (an identifier's case may
-  matter), and a value written with a currency symbol, thousands separators, a
+  its white space collapsed, under a full case fold without the Turkic
+  mappings (`ß` and `ẞ` fold to `ss`; the dotless `ı` stays `ı`). A number and
+  a string written as a plain decimal compare by value, both ways (`42.5`
+  agrees with `'42.50'`, `1250` with `'1250'`). A number with a unit compares
+  only with the same unit, written exactly: `'5 MW'` is not `'5 mW'`.
+- **Case agrees only where it cannot carry meaning.** Two texts that differ
+  only in case agree when every word that differs is a word of letters, more
+  than three of them, whose first letter or whole word is cased differently:
+  `'Settled '` agrees with `'settled'`, `'TRUE'` with `'true'`, `'STRASSE'`
+  and `'STRAẞE'` with `'Straße'`. Any other case difference is "could not
+  compare" — `unreachable`, never agreement: a short word or a unit (`'MW'`
+  and `'mW'`, `'Co'` and `'CO'`), a mixed-case word (`'iPhone'`), anything
+  with a digit (`'ORD-44710'`), `ß` against `ss` in the same casing (`'Masse'`
+  and `'Maße'` are two German words), and a dotted against a dotless i
+  (`'ılık'` and `'ilik'`).
+- **What cannot be compared safely is `unreachable`**, with the reason "could
+  not compare", never `checked-fail`: a list or an object against a single
+  value, a unit against a bare number (`'1250 ms'` against `1250`), text
+  against a number, and a value written with a currency symbol, digit
+  separators, a dot-grouped number (`'1.250'` is 1.25 or 1250, by locale), a
   date or a time (`'$1,250.00'`, `'2026-01-01T00:00:00Z'`) unless both are
   written the same.
 - **Agreement on doubt verifies nothing.** When the tool settled a field only

@@ -423,6 +423,28 @@ describe('oracle: a claim row compares values after the declared normalization',
     ['a real case fold', 'Straße', 'STRASSE', AGREES],
     ["an id's case may matter", 'ORD-44710', 'ord-44710', INCOMPARABLE],
     ['a mixed-case token', 'aB3xZ9', 'Ab3Xz9', INCOMPARABLE],
+    // Case agrees only for a plain word of more than three letters whose first
+    // letter's case or whole-word case differs; any other case-only difference
+    // is not compared — case can carry meaning.
+    ['a whole word in capitals', 'true', 'TRUE', AGREES],
+    ['a bare unit', 'MW', 'mW', INCOMPARABLE],
+    ['megabits and megabytes, bare', 'Mb', 'MB', INCOMPARABLE],
+    ['cobalt and carbon monoxide', 'Co', 'CO', INCOMPARABLE],
+    ['a mixed-case word with no digit', 'dQwXyZaBcDe', 'DqWxYzAbCdE', INCOMPARABLE],
+    ['a short word in a phrase', 'New York', 'new york', INCOMPARABLE],
+    ['letters and a slash', 'N/A', 'n/a', INCOMPARABLE],
+    ['a unit inside an object', { amount: 5, unit: 'MW' }, { amount: 5, unit: 'mW' }, INCOMPARABLE],
+    ['a unit inside a list', [5, 'MW'], [5, 'mW'], INCOMPARABLE],
+    // A full case fold without the Turkic mappings: ı stays ı, ẞ and ß are ss.
+    ['dotless and dotted i', 'ılık', 'ilik', INCOMPARABLE],
+    ['a Turkish capital I', 'ISPARTA', 'ısparta', INCOMPARABLE],
+    ['the capital sharp s', 'STRAẞE', 'Straße', AGREES],
+    ['capitals of a word with ß', 'MASSE', 'Maße', AGREES],
+    ['ß and ss in one case: two words', 'Masse', 'Maße', INCOMPARABLE],
+    // A dot-grouped or comma decimal may be read either way round.
+    ['a dot-grouped number', '1.250', 1.25, INCOMPARABLE],
+    ['a dot-grouped number with a unit', '1.250 kg', '1.25 kg', INCOMPARABLE],
+    ['a decimal comma', '1,5', '1,50', INCOMPARABLE],
     ['another id', 'ORD-44710', 'ORD-44711', CONTRADICTS],
     // formatted values: a currency symbol, thousands separators, a date or a time
     ['a currency amount spelled two ways', '$1,250.00', '$1,250', INCOMPARABLE],

@@ -72,14 +72,17 @@ const WITH_UNIT = /^(-?(?:0|[1-9]\d*)(?:\.\d+)?)\s*([^\d\s][^\d]*)$/;
 /** Lists and objects nest; past this depth (or around a cycle) values are not compared. */
 const MAX_DEPTH = 64;
 /**
- * A value written in a FORMAT — a currency symbol, thousands separators, a
- * date or a time — has more than one spelling of one value (`$1,250.00` and
- * `$1,250`, `2026-01-01` and `2026-01-01T00:00:00Z`), so two of them agree
- * only as written and are otherwise never compared.
+ * A value written in a FORMAT — a currency symbol, digit separators, a date
+ * or a time — has more than one spelling of one value (`$1,250.00` and
+ * `$1,250`, `2026-01-01` and `2026-01-01T00:00:00Z`), or one spelling of two
+ * (`1.250` is 1.25 or 1250, by locale), so two of them agree only as written
+ * and are otherwise never compared.
  */
 const FORMATTED: readonly RegExp[] = [
   /\p{Sc}/u, // a currency symbol: $ € £ ¥ ₹ …
-  /\d[ ,'\u00a0\u202f]\d{3}(?!\d)/u, // thousands separators: 1,250 · 1 250 · 1'250
+  /\d[,'\u00a0\u202f]\d/u, // a separator between digits: 1,250 · 1,5 · 1'250
+  /\d \d{3}(?!\d)/, // a space between thousands: 1 250
+  /(?:^|[^\d.])[1-9]\d{0,2}(?:\.\d{3})+(?![\d.])/, // dot-grouped: 1.250 · 12.345.678
   /\d{4}-\d{2}-\d{2}/, // an ISO date, with or without its time
   /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/, // 01/02/2026 · 1-2-26
   /\b\d{1,2}\.\d{1,2}\.\d{4}\b/, // 01.02.2026
@@ -90,9 +93,62 @@ const FORMATTED: readonly RegExp[] = [
 
 /** Text as compared: Unicode NFC, trimmed, every run of white space one space. */
 const textOf = (value: string): string => value.normalize('NFC').trim().replace(/\s+/g, ' ');
-/** A real case fold: `Straße` and `STRASSE` both fold to `strasse`. */
-const foldCase = (text: string): string => text.toUpperCase().toLowerCase().normalize('NFC');
+/**
+ * A full Unicode case fold WITHOUT the Turkic mappings: each character
+ * upper- then lower-cased on its own (so `ß` and `ẞ` fold to `ss`, `ﬁ` to
+ * `fi`, a final `ς` to `σ`), except the dotless `ı`, which stays `ı`.
+ */
+const foldCase = (text: string): string =>
+  Array.from(text, (ch) => (ch === 'ı' ? ch : ch.toUpperCase().toLowerCase()))
+    .join('')
+    .replace(/ß/g, 'ss')
+    .normalize('NFC');
+/** Dotted and dotless i as one letter — only to tell an i/ı difference apart. */
+const dotlessAsDotted = (folded: string): string =>
+  folded.replace(/ı/g, 'i').replace(/i\u0307/g, 'i');
 const hasDigit = (text: string): boolean => /\p{Nd}/u.test(text);
+
+/** How a word is cased: all lower, all upper, a capital first letter, or mixed. */
+function casing(word: string): 'lower' | 'upper' | 'capitalized' | 'mixed' {
+  if (word === word.toLowerCase()) return 'lower';
+  if (word === word.toUpperCase()) return 'upper';
+  const [first = '', ...rest] = Array.from(word);
+  const tail = rest.join('');
+  return first === first.toUpperCase() && tail === tail.toLowerCase() ? 'capitalized' : 'mixed';
+}
+
+/**
+ * A word whose case may differ without changing what it says: letters only,
+ * more than three of them, cased all lower, all upper or with a capital first
+ * letter. A short word (`MW`, `Co`), a mixed-case one (`aB3xZ9`, `iPhone`)
+ * and anything with a digit or another mark keeps its case as written.
+ */
+const foldableWord = (word: string): boolean =>
+  /^\p{L}+$/u.test(word) && Array.from(word).length > 3 && casing(word) !== 'mixed';
+
+/**
+ * Two word texts that fold alike: they agree only when every word that
+ * differs is a foldable word that differs in its casing — a capital first
+ * letter, or the whole word — not in its letters (`Masse` and `Maße` are both
+ * capitalized: two words, not one in two cases).
+ */
+function caseOnly(a: string, b: string): boolean {
+  const wordsA = a.split(' ');
+  const wordsB = b.split(' ');
+  return (
+    wordsA.length === wordsB.length &&
+    wordsA.every((word, index) => {
+      const other = wordsB[index] ?? '';
+      if (word === other) return true;
+      return (
+        foldableWord(word) &&
+        foldableWord(other) &&
+        casing(word) !== casing(other) &&
+        foldCase(word) === foldCase(other)
+      );
+    })
+  );
+}
 const isFormatted = (text: string): boolean => FORMATTED.some((format) => format.test(text));
 /** Every number inside a text by its value: `USD 42.50` and `USD 42.5` mask alike. */
 const masked = (text: string): string =>
@@ -100,24 +156,39 @@ const masked = (text: string): string =>
 
 /**
  * Two texts (each `textOf`). Equal: they agree. Otherwise a formatted one is
- * never compared; texts that differ only in case agree when they are words,
- * and are not compared when they carry a digit (an identifier's case may
- * matter: `aB3xZ9`); texts that differ only in how a number inside them is
- * spelled are not compared (`USD 42.50`, `v1.20`); anything else contradicts.
+ * never compared. Texts that fold alike agree only when they differ in the
+ * casing of foldable words (`caseOnly`); any other case difference — a short
+ * word, a mixed-case one, a digit, ß against ss in one casing — is not
+ * compared, because case can carry meaning (`MW`, `Co`, `aB3xZ9`). Texts that
+ * differ only by a dotted or dotless i (`ılık`, `ilik`), or only in how a
+ * number inside them is spelled (`USD 42.50`, `v1.20`), are not compared.
+ * Anything else contradicts.
  */
 function compareText(a: string, b: string): ClaimValueComparison {
   if (a === b) return 'agrees';
   if (isFormatted(a) || isFormatted(b)) return 'incomparable';
   const foldedA = foldCase(a);
   const foldedB = foldCase(b);
-  if (foldedA === foldedB) return hasDigit(a) || hasDigit(b) ? 'incomparable' : 'agrees';
+  if (foldedA === foldedB) {
+    return !hasDigit(a) && !hasDigit(b) && caseOnly(a, b) ? 'agrees' : 'incomparable';
+  }
+  if (dotlessAsDotted(foldedA) === dotlessAsDotted(foldedB)) return 'incomparable';
   return masked(foldedA) === masked(foldedB) ? 'incomparable' : 'contradicts';
 }
 
-/** The exact key of a text: equal keys exactly where `compareText` agrees. */
+/**
+ * The exact key of a text: equal keys only where `compareText` agrees. A
+ * foldable word in lower case or with a capital first letter keys lower-cased
+ * (`Settled` as `settled`); every other word, and any text with a digit or a
+ * format, keys exactly as written.
+ */
 function textKey(text: string): string {
   if (isFormatted(text)) return `f:${JSON.stringify(text)}`;
-  return hasDigit(text) ? `t:${JSON.stringify(text)}` : `w:${JSON.stringify(foldCase(text))}`;
+  if (hasDigit(text)) return `t:${JSON.stringify(text)}`;
+  const words = text
+    .split(' ')
+    .map((word) => (foldableWord(word) && casing(word) !== 'upper' ? word.toLowerCase() : word));
+  return `w:${JSON.stringify(words.join(' '))}`;
 }
 /**
  * The own keys a well-formed Claim of each kind may have, and the ones it must
@@ -253,11 +324,13 @@ function readingOf(value: unknown): Reading {
   }
   if (typeof value === 'string') {
     const text = textOf(value);
+    // A currency, a separator, a date, a time or a dot-grouped number is
+    // compared as written — before it could read as a plain decimal.
+    if (isFormatted(text)) return { kind: 'text', text };
     if (PLAIN_DECIMAL.test(text)) {
       return { kind: 'number', value: Number(text), written: decimalKey(text) };
     }
-    // A currency, a separator, a date or a time is compared as written.
-    const unit = isFormatted(text) ? null : WITH_UNIT.exec(text);
+    const unit = WITH_UNIT.exec(text);
     if (unit?.[1] !== undefined && unit[2] !== undefined) {
       return { kind: 'with-unit', written: decimalKey(unit[1]), unit: unit[2].trim() };
     }
@@ -365,14 +438,18 @@ function keyAt(value: unknown, depth: number): string | undefined {
  * findings are pinned); this rule exists so a representational difference
  * never withholds a correct answer as a contradiction:
  *
- * - text is Unicode NFC, trimmed, its white space collapsed; a word is
- *   case-folded (`'Settled'` and `'settled '` agree, `'Straße'` and
- *   `'STRASSE'` too), but text with a digit that differs only in case is not
- *   compared (an identifier's case may matter);
- * - a value written in a format — a currency symbol, thousands separators, a
- *   date or a time — agrees only as written and is otherwise not compared,
- *   and so is text that differs only in how a number inside it is spelled
- *   (`'USD 42.50'`, `'USD 42.5'`);
+ * - text is Unicode NFC, trimmed, its white space collapsed, and folded with
+ *   a full case fold without the Turkic mappings (`ß` and `ẞ` are `ss`, `ı`
+ *   stays `ı`). Case agrees only for a word of letters, more than three of
+ *   them, whose first letter or whole word is cased differently (`'Settled'`
+ *   and `'settled '`, `'Straße'` and `'STRASSE'`); any other case difference
+ *   is not compared — a short word or a unit (`'MW'`, `'Co'`), a mixed-case
+ *   word, anything with a digit, ß against ss in one casing (`'Masse'`,
+ *   `'Maße'`) — and neither is a dotted against a dotless i (`'ılık'`);
+ * - a value written in a format — a currency symbol, digit separators, a
+ *   dot-grouped number (`'1.250'`: 1.25 or 1250), a date or a time — agrees
+ *   only as written and is otherwise not compared, and so is text that
+ *   differs only in how a number inside it is spelled (`'USD 42.50'`);
  * - a number and a string written as a plain decimal (`-?digits[.digits]`, no
  *   leading zero, sign or exponent) compare by value, both ways: two decimal
  *   strings digit for digit (`'42.50'` = `'42.5'`), a JS number at the double

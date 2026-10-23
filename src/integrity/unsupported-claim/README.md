@@ -79,15 +79,19 @@ judge coverage or write records. The detector compares by that exact equality, a
 are pinned to it. `evaluate.ts` · `compareClaimValues` is the one other value comparison, and only
 the delivery verdict (`delivered.ts`) reads it, because a verdict that can withhold an answer must
 not accuse it over a representational difference. Its normalization is declared and closed: text
-is Unicode NFC, trimmed, its white space collapsed, and a word is case-folded (upper- then
-lower-cased, so `Straße` meets `STRASSE`) — but text with a digit that differs only in case is not
-compared, because an identifier's case may matter; a number and a plain decimal string
+is Unicode NFC, trimmed, its white space collapsed, under a full case fold WITHOUT the Turkic
+mappings (each character upper- then lower-cased on its own, `ß`/`ẞ` → `ss`, the dotless `ı` kept);
+case agrees ONLY for a word of letters, more than three of them, whose first letter or whole word
+is cased differently (`Settled`/`settled`, `STRASSE`/`Straße`) — any other case difference is not
+compared, because case can carry meaning: a short word or unit (`MW`/`mW`, `Co`/`CO`), a mixed-case
+word, text with a digit, ß against ss in the same casing (`Masse`/`Maße`: two words), and a dotted
+against a dotless i (`ılık`/`ilik`); a number and a plain decimal string
 (`-?digits[.digits]`, no leading zero, sign or exponent) compare by value, both ways — two decimal
 strings digit for digit, a JS number at the double precision it has; a number with a unit only with
 the same unit, written exactly (`MW` is not `mW`); lists item by item in order, objects key by key.
-A value written in a format — a currency symbol, thousands separators, a date or a time — agrees
-only as written, and text that differs only in how a number inside it is spelled (`USD 42.50`,
-`USD 42.5`) is not compared. Kinds that cannot be compared safely — a list or an object against a
+A value written in a format — a currency symbol, digit separators, a dot-grouped number (`1.250`
+is 1.25 or 1250, by locale), a date or a time — agrees only as written, and text that differs only
+in how a number inside it is spelled (`USD 42.50`, `USD 42.5`) is not compared. Kinds that cannot be compared safely — a list or an object against a
 scalar, a unit against a bare number, text against a number or `true`/`false` — are `incomparable`
 (the row says "could not compare"), never a contradiction. A Claim wrapper is read
 only where the contract puts one — at the TOP of a settled value or of a claimed field — and only a
