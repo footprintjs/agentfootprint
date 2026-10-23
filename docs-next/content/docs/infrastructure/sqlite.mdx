@@ -126,7 +126,7 @@ finishes the run:
 const sessions = sqliteSessions({ file: './sessions.db' });
 const paused = readPausedRun(await sessions.hydrate(sessionId));
 
-// A pause whose resume failed after its decision could have been used is
+// A pause whose decision a resume took to the ledger before failing is
 // marked `answered`: it must not be answered again — continue its
 // conversation with the next message instead.
 if (paused.answered !== undefined) throw new Error('already answered');

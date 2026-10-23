@@ -61,8 +61,8 @@
  * restart and no other process sees it: where more than one process (or a
  * restart) can resume the same paused run, every agent that can resume it is
  * given one ledger in a store they all reach (`Agent.create({ decisionLedger })`).
- * A host that keeps the pause stops offering it once a resume of it fails
- * after the decision could have reached a ledger (`hosting/answeredPause.ts`).
+ * A host that keeps the pause stops offering it once a resume whose decision
+ * reached the ledger fails (`decisionTakenToLedger`, `hosting/answeredPause.ts`).
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -323,17 +323,48 @@ export function checkDecisionAgainst(
 }
 
 /**
+ * Each decision object a caller handed to a resume, and the requests it was
+ * taken to a ledger for ({@link decisionTakenToLedger}). Keyed by the object
+ * itself — a resume's input reaches the paused stage by reference — so the
+ * answer is about THAT resume's decision for THAT request: no global record
+ * to bound, and nothing kept once the caller drops the object.
+ */
+const takenToLedger = new WeakMap<object, Set<string>>();
+
+/**
  * Spend the decision's request in `ledger`.
  *
+ * @param input the decision as the caller handed it to the resume — recorded
+ *   as taken to a ledger BEFORE the ledger answers: from here the call may
+ *   run, whatever happens next.
  * @throws ResumeDecisionError `'already-answered'` when a resume already spent it.
  */
 export async function spendDecision(
   ledger: DecisionLedger,
   decision: CheckInDecision,
   gate: ConsentGateKind,
+  input?: unknown,
 ): Promise<void> {
+  if (typeof input === 'object' && input !== null) {
+    const requests = takenToLedger.get(input) ?? new Set<string>();
+    requests.add(decision.requestId);
+    takenToLedger.set(input, requests);
+  }
   const fresh = await ledger.spend(decision.requestId);
   if (fresh !== true) throw new ResumeDecisionError('already-answered', gate);
+}
+
+/**
+ * Whether the decision `input` — the very object a door handed to a resume —
+ * was taken to a ledger for `requestId`. Past that point the call may have
+ * run, so a door that keeps the pause stops offering it once that resume (or
+ * anything after it, storing its result included) fails; before it, nothing
+ * of that decision was used. Internal: no barrel exports it.
+ */
+export function decisionTakenToLedger(input: unknown, requestId: string): boolean {
+  return (
+    typeof input === 'object' && input !== null && takenToLedger.get(input)?.has(requestId) === true
+  );
 }
 
 /** The request's id for `call` under `nonce`, or `undefined` when the call is not faithful JSON. */

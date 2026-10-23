@@ -380,8 +380,6 @@ export function streamHandler<TRequest, TEvent>(
     let runId: string | undefined;
     let off: unknown;
     let settlement: RunSettlement;
-    /** The answer was handed to the runner: from here its decision may be used. */
-    let answering = false;
     try {
       // The runner is this request's alone; the run filter still holds a fact a
       // shared resource stamped for another run or session out of the stream.
@@ -400,7 +398,6 @@ export function streamHandler<TRequest, TEvent>(
         ...(thread?.identity !== undefined && { identity: thread.identity }),
         ...(request !== undefined && { request }),
       };
-      answering = plan.turn.kind === 'answer';
       const out =
         plan.turn.kind === 'answer'
           ? await runner.resume(
@@ -415,13 +412,13 @@ export function streamHandler<TRequest, TEvent>(
               runOptions as never,
             );
       settlement = await keep(turn, out, runId);
-    } catch (err) {
-      // An answer handed to the runner that then failed: unless it was refused
-      // before its decision could be used, the stored pause is answered before
-      // the caller hears the end — failing closed (`answeredPause.ts`). A
-      // caller who left before the run started handed nothing over.
+    } catch {
+      // A failure in the resume or in keeping its result: once the answer's
+      // decision reached the ledger the call may have run, so the stored pause
+      // is answered before the caller hears the end (`answeredPause.ts`). A
+      // caller who left before the run started handed nothing to a ledger.
       if (
-        answering &&
+        plan.turn.kind === 'answer' &&
         held.paused !== undefined &&
         thread !== undefined &&
         sessions !== undefined
@@ -430,7 +427,7 @@ export function streamHandler<TRequest, TEvent>(
           store: sessions,
           sessionId: thread.sessionId,
           paused: held.paused,
-          error: err,
+          decision: plan.turn.answer,
         }).catch(() => undefined);
       }
       settlement = { kind: signal.aborted ? 'cancelled' : 'failed' };

@@ -1293,13 +1293,16 @@ with. The request to show the person is the pending ask the host replied with.
 `DecisionLedger`, and "once" holds per ledger. Every agent a door serves that
 names no ledger shares this process's, so an instance the pool evicted and
 rebuilt, or the runner `streamHandler` builds per request, still refuses a
-decision already used. When a resume of a consent gate fails — the approved
-tool ran, then the next model call failed, say — the door that keeps the pause
-(`standingAgent`, `streamHandler`) **marks it answered** before the failure is
-reported, unless the resume was refused before its decision could be used (a
-decision for another request, a value that is not a decision, another caller).
-It fails closed: a resume that failed early for any other reason leaves a pause
-the person cannot answer again, and the question is asked afresh. Once marked,
+decision already used. Once a resume's decision has reached the ledger, the
+call may have run, so any failure after that point — the next model call after
+the approved tool, say, or storing the finished run's result — makes the door
+that keeps the pause (`standingAgent`, `streamHandler`) **mark it answered**
+before the failure is reported. A resume that failed before its decision reached
+the ledger (a decision for another request, a value that is not a decision,
+another caller) used nothing, and the pause stays answerable. Which side of that
+point a failure came from is read from the resume itself — the decision is
+recorded as it reaches the ledger — never from what the error calls itself.
+Once marked,
 a retry, a rebuilt instance, a restart or another host on the same store is
 refused (`ERR_RESUME_DECISION`, `'already-answered'`, whose
 message says the call's outcome is not known there), the pending-question op

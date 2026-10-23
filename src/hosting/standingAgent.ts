@@ -1741,25 +1741,31 @@ export async function standingAgent<TH extends HostHandle>(
           }
         }
         const resumeOptions = await withSealedRequest();
-        let resumed: Awaited<ReturnType<Agent['resume']>>;
         try {
-          resumed = await runner.resume(paused.checkpoint, request.decision, resumeOptions);
+          await deliver(
+            lane,
+            await runner.resume(paused.checkpoint, request.decision, resumeOptions),
+            store,
+            reply,
+            sessionId,
+            offer,
+            paused,
+          );
         } catch (err) {
-          // Unless it was refused before its decision could be used, the
-          // stored pause is answered before anyone hears of the failure —
-          // failing closed (`answeredPause.ts`).
+          // A failure in the resume or in storing its result: once the
+          // decision reached the ledger the call may have run, so the stored
+          // pause is answered before anyone hears of it (`answeredPause.ts`).
           if (sessionId !== undefined) {
             await markAnsweredAfterFailure({
               store,
               sessionId,
               paused,
-              error: err,
+              decision: request.decision,
               settle: () => lane.writer?.settle(),
             });
           }
           throw err;
         }
-        await deliver(lane, resumed, store, reply, sessionId, offer, paused);
         return;
       }
       if (paused && sessionId !== undefined) {

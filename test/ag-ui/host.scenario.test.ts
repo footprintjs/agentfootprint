@@ -344,6 +344,78 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     expect(refunded).toEqual([40]);
   });
 
+  it('a check-in whose run finished but whose result could not be stored is answered — whatever the store’s error calls itself', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const usage = { input: 1, output: 1 };
+    const provider = {
+      name: 'scripted',
+      complete: async (req: LLMRequest) => {
+        const last = req.messages[req.messages.length - 1];
+        return last?.role === 'tool'
+          ? { content: 'Refunded.', toolCalls: [], usage, stopReason: 'stop' }
+          : {
+              content: '',
+              toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }],
+              usage,
+              stopReason: 'tool_use',
+            };
+      },
+    } as never;
+    const inner = memorySessions();
+    let armed = false;
+    const sessions = {
+      hydrate: (id: string) => inner.hydrate(id),
+      async persist(id: string, envelope: Parameters<typeof inner.persist>[1]) {
+        if (armed) {
+          armed = false;
+          // Named like a refusal decided before use — it is not one.
+          throw Object.assign(new Error('the store refused the write'), {
+            code: 'ERR_DECISION_REQUIRED',
+          });
+        }
+        return inner.persist(id, envelope);
+      },
+    };
+    const first = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions,
+    });
+    first.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await first.runAgent();
+    const [interrupt] = first.pendingInterrupts;
+    const answer = {
+      interruptId: interrupt!.id,
+      status: 'resolved' as const,
+      payload: { approved: true, by: 'alice', at: 1 },
+    };
+    armed = true; // the finished run's write
+    await first.runAgent({ resume: [answer] }).catch(() => undefined);
+    expect(refunded).toEqual([40]);
+
+    const restarted = frontend({
+      agent: () =>
+        Agent.create({ provider, model: 'm', decisionLedger: inMemoryDecisionLedger() })
+          .system('s')
+          .tool(refund)
+          .build(),
+      threads: signedIn,
+      sessions: inner,
+    });
+    await expect(restarted.runAgent({ resume: [answer] })).rejects.toThrow('ERR_RESUME_DECISION');
+    expect(refunded).toEqual([40]);
+  });
+
   it('an answer whose caller left before its run started handed nothing over: the pause still waits', async () => {
     const refunded: number[] = [];
     const refund = defineTool<{ amount: number }, string>({

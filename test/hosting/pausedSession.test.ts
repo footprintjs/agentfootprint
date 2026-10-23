@@ -1160,9 +1160,10 @@ describe('a consent gate over the wire — a decision whose resume failed after 
     }
   });
 
-  it('a resume that fails before its run starts, on a shared agent, marks the pause with ITS session’s conversation — never another session’s', async () => {
-    // The shared agent's last run is another person's. A mark must never be
-    // written from the agent's own state: only from what this session stored.
+  it('a resume that fails before its run starts, on a shared agent, leaves its OWN pause answerable — and never takes another session’s conversation', async () => {
+    // The shared agent's last run is another person's. Nothing about this
+    // session's pause may come from the agent's own state; and a resume
+    // refused before its decision reached a ledger used nothing.
     const ran: number[] = [];
     const inner = memorySessions();
     let poison = false;
@@ -1198,14 +1199,86 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       expect(failed.error).toBeDefined();
       expect(ran).toEqual([]);
 
-      const marked = readPausedRun(await inner.hydrate('b'));
-      expect(marked.answered).toEqual({ at: expect.any(Number) });
-      expect(JSON.stringify(marked.conversation)).not.toContain('4242');
-      expect(marked.conversation.history[0]).toMatchObject({ role: 'user', content: 'refund me' });
+      const stored = readPausedRun(await inner.hydrate('b'));
+      expect(stored.answered).toBeUndefined();
+      expect(JSON.stringify(stored)).not.toContain('4242');
+      expect(stored.conversation.history[0]).toMatchObject({ role: 'user', content: 'refund me' });
+      // Nothing was used: the same decision still answers it, once.
+      const done = await host.deliver({ input: '', sessionId: 'b', decision });
+      expect(done.error).toBeUndefined();
+      expect(ran).toEqual([10]);
     } finally {
       await handle.close();
     }
   });
+
+  it.each([
+    ['a plain store failure', {}],
+    ['an error that calls itself ERR_DECISION_REQUIRED', { code: 'ERR_DECISION_REQUIRED' }],
+    ['an error that calls itself ERR_STALE_DECISION', { code: 'ERR_STALE_DECISION' }],
+    [
+      'an error that calls itself ERR_SESSION_OWNERSHIP_CONFLICT',
+      { code: 'ERR_SESSION_OWNERSHIP_CONFLICT' },
+    ],
+    ['an error that calls itself ERR_RESUME_REDACTION', { code: 'ERR_RESUME_REDACTION' }],
+    [
+      'an error that calls itself a refused decision',
+      { code: 'ERR_RESUME_DECISION', reason: 'other-request' },
+    ],
+  ])(
+    'a resume that ran the tool, then failed to store its result (%s), leaves the pause answered — a retry elsewhere is refused',
+    async (_label, fields) => {
+      // What failed, and what it calls itself, says nothing about whether the
+      // decision was used: where it failed does. This one failed after.
+      const ran: number[] = [];
+      const inner = memorySessions();
+      let armed = false;
+      const sessions: SessionLifecycle = {
+        hydrate: (id) => inner.hydrate(id),
+        async persist(id, envelope) {
+          if (armed) {
+            armed = false;
+            throw Object.assign(new Error('the store refused the write'), fields);
+          }
+          return inner.persist(id, envelope);
+        },
+      };
+      const host = inProcessHost();
+      const handle = await standingAgent({
+        agent: flakyRefunds(ran, { on: false }),
+        sessions,
+        host,
+      });
+      let decision: unknown;
+      try {
+        const asked = await host.deliver({ input: 'refund me', sessionId: 'stored' });
+        decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+        armed = true; // the next write is the finished run's
+        const failed = await host.deliver({ input: '', sessionId: 'stored', decision });
+        expect(failed.output).toBeUndefined();
+        expect(ran).toEqual([10]);
+        expect(readPausedRun(await inner.hydrate('stored')).answered).toEqual({
+          at: expect.any(Number),
+        });
+      } finally {
+        await handle.close();
+      }
+      // Another process — its own memory — on the same store.
+      const elsewhere = inProcessHost();
+      const other = await standingAgent({
+        agent: flakyRefunds(ran, { on: false }, [], inMemoryDecisionLedger()),
+        sessions: inner,
+        host: elsewhere,
+      });
+      try {
+        const retry = await elsewhere.deliver({ input: '', sessionId: 'stored', decision });
+        expect(retry.code).toBe('ERR_RESUME_DECISION');
+        expect(ran).toEqual([10]);
+      } finally {
+        await other.close();
+      }
+    },
+  );
 
   it('when the store cannot take the mark, the process’s ledger still refuses on a rebuilt agent', async () => {
     const ran: number[] = [];

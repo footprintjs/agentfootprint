@@ -911,10 +911,10 @@ export interface PausedRun {
    */
   readonly wire?: PausedWire;
   /**
-   * Set when a resume of this pause failed after its decision could have been
-   * used — the door fails closed, since the call may have run (only a refusal
-   * decided before use, such as a decision for another request, leaves a
-   * pause unmarked). The pause is answered: a decision for it is refused
+   * Set when a resume took this pause's decision to the ledger and then
+   * failed — in the run, or in storing its result — so the call may have run
+   * (a resume refused before its decision reached the ledger leaves the pause
+   * unmarked). The pause is answered: a decision for it is refused
    * (`ResumeDecisionError`, `'already-answered'`), whether its call ran is not
    * known to the host, and the next message continues the conversation in
    * `conversation` — what this session stored (the run's own, kept mid-run

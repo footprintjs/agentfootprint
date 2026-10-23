@@ -6199,7 +6199,7 @@ export function buildToolCallsHandler(
         const decision: CheckInDecision = consentDecision;
         // Used from here — so spent here, before any row or the tool: a second
         // resume presenting it is refused ('already-answered').
-        await spendDecision(decisionLedger, decision, 'ask');
+        await spendDecision(decisionLedger, decision, 'ask', input);
 
         let result: unknown;
         /** What the model reads. Differs from `result` only when a rule at the
@@ -6581,7 +6581,7 @@ export function buildToolCallsHandler(
         const decision: CheckInDecision = consentDecision;
         // Used from here — so spent here, before the record or the tool: a
         // second resume presenting it is refused ('already-answered').
-        await spendDecision(decisionLedger, decision, 'checkIn');
+        await spendDecision(decisionLedger, decision, 'checkIn', input);
 
         // The registered component that COLLECTED this decision (9.24.0),
         // written at pause time only when the ask carried one. The decision

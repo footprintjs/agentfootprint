@@ -279,9 +279,9 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   finish. The ONE reading of a stored session every door uses
   (`readStoredSession`: an answered pause is a conversation to continue, never a
   pause to answer) and the one marking step after a failed resume
-  (`markAnsweredAfterFailure`, failing closed), shared by `standingAgent` and
-  `streamHandler`; it settles the calls that run left open so the next message
-  can continue.
+  (`markAnsweredAfterFailure` — once the resume's decision reached the ledger,
+  whatever failed after), shared by `standingAgent` and `streamHandler`; it
+  settles the calls that run left open so the next message can continue.
 
 ## A hosted agent under `redact` — the record served, the person answered
 

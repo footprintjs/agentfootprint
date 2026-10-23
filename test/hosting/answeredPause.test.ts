@@ -18,7 +18,7 @@ import {
 } from '../../src/hosting/answeredPause.js';
 import { readPausedRun, toEnvelope, toPausedEnvelope } from '../../src/hosting/index.js';
 import type { CheckpointEnvelope, PausedRun } from '../../src/hosting/index.js';
-import { DecisionRequiredError, ResumeDecisionError } from '../../src/core/pause.js';
+import { inMemoryDecisionLedger, spendDecision } from '../../src/core/consentRequest.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
 
 /** Two refunds asked in one turn; only the first has its result. */
@@ -172,113 +172,126 @@ describe('readStoredSession — the one reading of a stored session every door u
   });
 });
 
-describe('markAnsweredAfterFailure — fails closed', () => {
-  /** A stored check-in pause, and a store that records what was written. */
-  function setup() {
+describe('markAnsweredAfterFailure — by where the failure came from, never by what it is called', () => {
+  const REQUEST = 'a'.repeat(64);
+
+  /** A stored check-in pause for REQUEST, and a store that records writes. */
+  function setup(holds?: (paused: PausedRun) => CheckpointEnvelope | undefined) {
     const paused: PausedRun = {
       ...pausedOver(halfAnswered),
-      pending: { tool: 'refund', checkIn: { id: 'a'.repeat(64) } as never },
+      pending: { tool: 'refund', checkIn: { id: REQUEST } as never },
     };
     const written: CheckpointEnvelope[] = [];
     const order: string[] = [];
     const store = {
-      hydrate: async () => undefined,
+      hydrate: async () => (holds ? holds(paused) : toPausedEnvelope(paused)),
       persist: async (_id: string, envelope: CheckpointEnvelope) => {
         order.push('persist');
         written.push(envelope);
       },
     };
-    const mark = (error: unknown, over: Partial<{ paused: PausedRun }> = {}) =>
+    const mark = (decision: unknown, over: Partial<{ paused: PausedRun }> = {}) =>
       markAnsweredAfterFailure({
         store,
         sessionId: 's',
         paused: over.paused ?? paused,
-        error,
+        decision,
         settle: async () => void order.push('settle'),
       });
-    return { paused, written, order, mark, store };
+    return { paused, written, order, mark };
   }
 
-  it.each([
-    ['a decision for another request', new ResumeDecisionError('other-request', 'checkIn')],
-    ['a decision that names no request', new ResumeDecisionError('no-request', 'checkIn')],
-    ['a changed call', new ResumeDecisionError('call-changed', 'checkIn')],
-    ['a changed chain', new ResumeDecisionError('chain-changed', 'ask')],
-    ['a pause with no request', new ResumeDecisionError('request-not-recorded', 'checkIn')],
-    ['a value that is not a decision', new DecisionRequiredError({ kind: 'checkIn' }, 'yes')],
-    ['a stale decision', { code: 'ERR_STALE_DECISION' }],
-    ['another caller', { code: 'ERR_SESSION_OWNERSHIP_CONFLICT' }],
-    ['a stored redaction it cannot read', { code: 'ERR_RESUME_REDACTION' }],
-  ])('leaves the pause answerable after a refusal decided before use: %s', async (_l, error) => {
+  /** A decision object as a door hands it to a resume — taken to a ledger for `requestId`. */
+  async function taken(requestId: string): Promise<object> {
+    const decision = { requestId, approved: true, by: 'alice', at: 1 };
+    await spendDecision(inMemoryDecisionLedger(), decision, 'checkIn', decision);
+    return decision;
+  }
+
+  it('leaves the pause answerable when the decision never reached a ledger — whatever failed', async () => {
     const { written, mark } = setup();
-    await mark(error);
+    await mark({ requestId: REQUEST, approved: true, by: 'alice', at: 1 });
+    await mark('yes');
+    await mark(undefined);
     expect(written).toEqual([]);
   });
 
-  it.each([
-    [
-      'the ledger’s own refusal (already answered)',
-      new ResumeDecisionError('already-answered', 'checkIn'),
-    ],
-    ['a model call that failed after the tool', new Error('model unavailable')],
-    ['a ledger that failed', new Error('store down')],
-    ['a value that is not even an error', undefined],
-  ])('marks the pause answered after anything else: %s', async (_l, error) => {
+  it('marks the pause answered once the decision reached a ledger for its request', async () => {
     const { written, order, mark } = setup();
-    await mark(error);
+    await mark(await taken(REQUEST));
     expect(written).toHaveLength(1);
     expect(readPausedRun(written[0]).answered).toEqual({ at: expect.any(Number) });
     // In-flight writes drained first, so none lands on top of the mark.
     expect(order).toEqual(['settle', 'persist']);
   });
 
-  it('marks only a consent gate’s pause — an askHuman answer is a value, not a decision', async () => {
-    const { written, mark, paused } = setup();
-    await mark(new Error('model unavailable'), { paused: { ...paused, pending: { tool: 'x' } } });
+  it('counts a ledger that refused or failed as reached — from there the call may have run', async () => {
+    const refused = { requestId: REQUEST, approved: true, by: 'alice', at: 1 };
+    await spendDecision({ spend: () => false }, refused, 'checkIn', refused).catch(() => undefined);
+    const lost = { requestId: REQUEST, approved: true, by: 'alice', at: 1 };
+    await spendDecision(
+      {
+        spend: () => {
+          throw new Error('ledger down');
+        },
+      },
+      lost,
+      'checkIn',
+      lost,
+    ).catch(() => undefined);
+    for (const decision of [refused, lost]) {
+      const { written, mark } = setup();
+      await mark(decision);
+      expect(written).toHaveLength(1);
+    }
+  });
+
+  it('a decision object taken to a ledger for ANOTHER request does not mark this pause', async () => {
+    // The double click: the same object answered the previous pause.
+    const { written, mark } = setup();
+    await mark(await taken('b'.repeat(64)));
     expect(written).toEqual([]);
   });
 
+  it('never overwrites a newer pause, an existing mark, or a session that is gone', async () => {
+    const newer = setup((paused) =>
+      toPausedEnvelope({ ...paused, pending: { checkIn: { id: 'c'.repeat(64) } as never } }),
+    );
+    await newer.mark(await taken(REQUEST));
+    const marked = setup((paused) => toPausedEnvelope(markAnswered(paused, undefined, 1)));
+    await marked.mark(await taken(REQUEST));
+    const gone = setup(() => undefined);
+    await gone.mark(await taken(REQUEST));
+    expect([...newer.written, ...marked.written, ...gone.written]).toEqual([]);
+  });
+
   it('goes on from the conversation as of the pause when the store still holds the pause', async () => {
-    const { paused } = setup();
-    const written: CheckpointEnvelope[] = [];
-    await markAnsweredAfterFailure({
-      store: {
-        hydrate: async () => toPausedEnvelope(paused),
-        persist: async (_id, envelope) => void written.push(envelope),
-      },
-      sessionId: 's',
-      paused,
-      error: new Error('model unavailable'),
-    });
-    const marked = readPausedRun(written[0]);
-    expect(marked.conversation.history).toEqual(settleOpenCalls(halfAnswered));
+    const { written, mark } = setup();
+    await mark(await taken(REQUEST));
+    expect(readPausedRun(written[0]).conversation.history).toEqual(settleOpenCalls(halfAnswered));
   });
 
   it('goes on from what the run kept for THIS session when it stored a conversation mid-run', async () => {
-    const { paused } = setup();
-    const keptByRun = {
-      ...paused.conversation,
-      runId: 'r-resumed',
-      history: [
-        ...halfAnswered,
-        { role: 'tool' as const, toolCallId: 'b', toolName: 'refund', content: 'refunded 2' },
-      ],
-    };
-    const written: CheckpointEnvelope[] = [];
-    await markAnsweredAfterFailure({
-      store: {
-        hydrate: async () => toEnvelope(keptByRun),
-        persist: async (_id, envelope) => void written.push(envelope),
-      },
-      sessionId: 's',
-      paused,
-      error: new Error('model unavailable'),
-    });
-    const marked = readPausedRun(written[0]);
-    expect(marked.conversation.runId).toBe('r-resumed');
-    expect(marked.conversation.history[marked.conversation.history.length - 1]?.content).toBe(
-      'refunded 2',
+    const { written, mark } = setup((paused) =>
+      toEnvelope({
+        ...paused.conversation,
+        runId: 'r-resumed',
+        history: [
+          ...halfAnswered,
+          { role: 'tool' as const, toolCallId: 'b', toolName: 'refund', content: 'refunded 2' },
+        ],
+      }),
     );
+    await mark(await taken(REQUEST));
+    const conversation = readPausedRun(written[0]).conversation;
+    expect(conversation.runId).toBe('r-resumed');
+    expect(conversation.history[conversation.history.length - 1]?.content).toBe('refunded 2');
+  });
+
+  it('marks only a consent gate’s pause — an askHuman answer is a value, not a decision', async () => {
+    const { written, mark, paused } = setup();
+    await mark(await taken(REQUEST), { paused: { ...paused, pending: { tool: 'x' } } });
+    expect(written).toEqual([]);
   });
 
   it('a store that refuses the mark is swallowed — the run’s failure is the one reported', async () => {
@@ -286,14 +299,14 @@ describe('markAnsweredAfterFailure — fails closed', () => {
     await expect(
       markAnsweredAfterFailure({
         store: {
-          hydrate: async () => undefined,
+          hydrate: async () => toPausedEnvelope(paused),
           persist: async () => {
             throw new Error('store unavailable');
           },
         },
         sessionId: 's',
         paused,
-        error: new Error('model unavailable'),
+        decision: await taken(REQUEST),
       }),
     ).resolves.toBeUndefined();
   });

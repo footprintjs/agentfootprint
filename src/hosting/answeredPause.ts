@@ -1,31 +1,28 @@
 /**
- * hosting/answeredPause — a stored pause whose resume failed after its
- * decision could have been used: answered, with the outcome not known.
+ * hosting/answeredPause — a stored pause whose decision a resume took to the
+ * ledger, and which did not finish: answered, with the outcome not known.
  *
  * Role:   the one owner of that state, for EVERY door that keeps a paused run
- *         (`standingAgent`, `streamHandler`). A resume that fails after its
- *         decision could have reached the ledger may have run the call. The
- *         door that keeps the pause must stop offering it for an answer — a
- *         retry, a rebuilt instance, a restart or another host on the same
- *         store would answer it again — and the conversation must still be
- *         able to go on.
+ *         (`standingAgent`, `streamHandler`). Once a resume's decision reached
+ *         the ledger the call may have run, so a failure after that point —
+ *         in the run, or in storing its result — must stop the pause being
+ *         offered for an answer: a retry, a rebuilt instance, a restart or
+ *         another host on the same store would answer it again. The
+ *         conversation must still be able to go on.
  *
  *           readStoredSession          the one reading of a stored session:
  *                                      an answered pause is a conversation to
  *                                      continue, never a pause to answer
  *           answeredRefusal            what an answer to it is refused with
- *           markAnsweredAfterFailure   the one marking step after a failed
- *                                      resume — fails CLOSED
+ *           markAnsweredAfterFailure   the one marking step after a failure
  *
- * ── WHY IT FAILS CLOSED ────────────────────────────────────────────────────
- * Whether a failed resume used its decision is not a fact a door can read
- * reliably from outside the run, and guessing "not used" re-opens the replay
- * this exists to close. So a door marks the pause answered after ANY failed
- * resume of a consent gate, except the refusals that are decided before a
- * decision can reach a ledger (`refusedBeforeUse`). The cost is the other way
- * round and visible: a resume that failed early for some other reason leaves
- * a pause the person cannot answer again — the conversation goes on, and the
- * question is asked afresh.
+ * ── WHERE THE FAILURE CAME FROM, NOT WHAT IT IS CALLED ─────────────────────
+ * Whether a failure came before or after the decision was used is read from
+ * the resume itself: the spend records the very decision object the door
+ * handed to the resume, for that pause's request, before the ledger answers
+ * (`core/consentRequest.ts` · `decisionTakenToLedger`). Before that point
+ * nothing of the decision was used and the pause stays answerable; after it,
+ * any failure — whatever its code, a store's included — marks the pause.
  *
  * Reads:  the stored session — never the runner's own state, which on a
  *         shared agent may be another session's run, or a run that never
@@ -41,6 +38,7 @@
  * is what goes on, its recorded results included.
  */
 
+import { decisionTakenToLedger } from '../core/consentRequest.js';
 import { ResumeDecisionError } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { LLMMessage } from '../provider-contract/types.js';
@@ -84,69 +82,53 @@ export function answeredRefusal(answered: PausedRun): ResumeDecisionError {
 }
 
 /**
- * The refusals a resume makes BEFORE a decision can reach a ledger — so the
- * pause it was asked to answer is still unanswered: the caller is not the
- * paused run's, the answer is not a decision, the decision is stale, the
- * stored redaction cannot be read, or the decision cannot answer this pause
- * (every `ResumeDecisionError` but `'already-answered'`, which is a ledger's
- * answer). Read by `code`, so a second copy of the library's classes still
- * counts.
- */
-function refusedBeforeUse(error: unknown): boolean {
-  const { code, reason } = (error ?? {}) as { code?: unknown; reason?: unknown };
-  switch (code) {
-    case 'ERR_RESUME_DECISION':
-      return reason !== 'already-answered';
-    case 'ERR_DECISION_REQUIRED':
-    case 'ERR_STALE_DECISION':
-    case 'ERR_SESSION_OWNERSHIP_CONFLICT':
-    case 'ERR_RESUME_REDACTION':
-      return true;
-    default:
-      return false;
-  }
-}
-
-/**
- * After a resume of a consent gate that FAILED with `error`, at any door that
- * keeps the pause: persist the pause marked answered — unless the failure is
- * a refusal decided before the decision could reach a ledger
- * (`refusedBeforeUse`), which leaves the pause answerable. Fails closed (see
- * the module header): whatever else failed may have come after the ledger,
- * and the call may have run.
+ * After a resume of a consent gate — or what followed it, storing its result
+ * included — FAILED, at any door that keeps the pause: when the decision the
+ * door handed to that resume was taken to a ledger for this pause's request
+ * (`decisionTakenToLedger`), persist the pause marked answered. A resume that
+ * failed before that point used nothing, and leaves the pause answerable.
  *
- * The conversation the mark goes on from is read from THIS session's store:
- * what the run kept while it ran (a durable writer replaced the pause with a
- * conversation), else the conversation as of the pause. Never the runner's own
- * state — on a shared agent a resume that failed before its run started would
- * hand back another session's last run.
+ * Only a store that still holds THIS pause, unmarked, or the conversation the
+ * run kept while it ran (a durable writer), is overwritten: a newer pause the
+ * run stored before the failure is left as it is — this pause is gone, and a
+ * decision for it is refused as another request's. The conversation the mark
+ * goes on from is read from this session's store, never from the runner's own
+ * state, which on a shared agent may be another session's run.
  *
  * A store that refuses the mark is the run's second failure: the run's is
  * the one the caller is told, and the ledger still refuses the decision in
  * this process — so it is swallowed here, and only here.
  *
- * @param error  what the resume (or what followed it) threw.
- * @param settle writes still in flight for this session (a durable writer),
+ * @param decision the decision exactly as the door handed it to the resume.
+ * @param settle   writes still in flight for this session (a durable writer),
  *   drained first so none lands on top of the mark.
  */
 export async function markAnsweredAfterFailure(input: {
   readonly store: SessionLifecycle;
   readonly sessionId: string;
   readonly paused: PausedRun;
-  readonly error: unknown;
+  readonly decision: unknown;
   readonly settle?: () => Promise<void> | undefined;
 }): Promise<void> {
   const { store, sessionId, paused } = input;
-  // Only a consent gate's pause is answered by a decision.
-  if (paused.pending.checkIn === undefined && paused.pending.ask === undefined) return;
-  if (refusedBeforeUse(input.error)) return;
+  const asked = paused.pending.checkIn?.id ?? paused.pending.ask?.id;
+  // Only a consent gate's pause is answered by a decision — and only one
+  // whose decision reached the ledger was used.
+  if (asked === undefined || !decisionTakenToLedger(input.decision, asked)) return;
   await input.settle?.()?.catch(() => undefined);
   let kept: AgentRunCheckpoint | undefined;
   try {
     const current = await store.hydrate(sessionId);
-    if (current?.format === 'conversation-v1') kept = readEnvelope(current);
+    if (current === undefined) return;
+    if (current.format === 'conversation-v1') {
+      kept = readEnvelope(current);
+    } else {
+      const stored = readPausedRun(current);
+      const storedRequest = stored.pending.checkIn?.id ?? stored.pending.ask?.id;
+      if (stored.answered !== undefined || storedRequest !== asked) return;
+    }
   } catch {
-    kept = undefined; // the conversation as of the pause
+    return; // a store that cannot be read cannot be marked safely
   }
   await store
     .persist(sessionId, toPausedEnvelope(markAnswered(paused, kept)))
