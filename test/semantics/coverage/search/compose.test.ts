@@ -55,7 +55,7 @@ const call = (args: Record<string, unknown>, over: Partial<SearchCall> = {}): Se
   origin: 'local',
   args,
   period: { argument: 'window', spelling: 'lookback' },
-  turnNow: NOW,
+  dispatchedAt: NOW,
   ...over,
 });
 
@@ -489,20 +489,20 @@ describe('contract — N4: resolved binds only the entity the call was sent for'
   });
 });
 
-describe('contract — a relative window resolves against the turn clock', () => {
+describe('contract — a relative window resolves at the dispatch instant', () => {
   const spanOf = (over: Partial<SearchCall>, args: Record<string, unknown> = { service: 'p' }) =>
     item(compose(call(args, over), NONE).checked, 'window')[0]?.span;
 
-  it('the same spelling in one turn is the same span', () => {
+  it('the same spelling at the same dispatch instant is the same span', () => {
     expect(spanOf({ toolCallId: 'c1' })).toEqual(spanOf({ toolCallId: 'c2' }));
   });
 
-  it('another turn’s clock is another span', () => {
-    expect(spanOf({ turnNow: '2026-10-22T11:00:00Z' })).not.toEqual(spanOf({}));
+  it('a later dispatch is a later span', () => {
+    expect(spanOf({ dispatchedAt: '2026-10-22T11:00:00Z' })).not.toEqual(spanOf({}));
   });
 
   it('no clock, or a spelling the tool does not read as a look-back, composes no span', () => {
-    expect(spanOf({ turnNow: undefined })).toBeUndefined();
+    expect(spanOf({ dispatchedAt: undefined })).toBeUndefined();
     expect(spanOf({ period: undefined })).toBeUndefined();
     expect(spanOf({}, { service: 'p', window: 'yesterday' })).toBeUndefined();
   });

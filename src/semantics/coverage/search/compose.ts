@@ -55,8 +55,12 @@ export interface SearchCall {
   readonly hostFilled?: HostFilledArguments;
   /** The tool's `period`, for resolving a relative window. */
   readonly period?: PeriodShapes;
-  /** The TURN's clock (an ISO instant), injected so one spelling is one span per turn. */
-  readonly turnNow?: string;
+  /**
+   * When the call was DISPATCHED (an ISO instant) — the clock the time layer
+   * hands the tool, or the dispatch moment. A relative window resolves here,
+   * so a call resumed after a pause composes the span it actually ran with.
+   */
+  readonly dispatchedAt?: string;
   /** The outcome the tool declared on its effects envelope, if any. */
   readonly status?: ToolResultStatus;
 }
@@ -114,7 +118,7 @@ export function composeSearchCoverage(
     ...(facts.resolved !== undefined && { resolved: facts.resolved }),
     ...(facts.period !== undefined && { resultPeriod: facts.period }),
     ...(call.period !== undefined && { period: call.period }),
-    ...(call.turnNow !== undefined && { turnNow: call.turnNow }),
+    ...(call.dispatchedAt !== undefined && { dispatchedAt: call.dispatchedAt }),
   });
   const { gaps, notChecked, cannotCover } = composeGaps({
     search: call.search,

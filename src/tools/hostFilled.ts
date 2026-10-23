@@ -42,6 +42,7 @@
 
 import type { Credential } from '../identity/types.js';
 import type { HostFilledArguments } from '../semantics/coverage/search/inEffect.js';
+import { inheritSearch } from './searchOf.js';
 import type { Tool, ToolExecutionContext } from './tools.js';
 
 /** Which identity field a {@link fromIdentity} fill reads. */
@@ -350,6 +351,8 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
   } as Tool;
   // The declaration a reader asks of the wrapped tool — a wrap of a wrap keeps both.
   DECLARED_FILLS.set(wrapped, { ...DECLARED_FILLS.get(tool), ...fills });
+  // The search was judged against the schema BEFORE the filled arguments left it.
+  if (tool.search !== undefined) inheritSearch(tool, wrapped);
   return wrapped;
 }
 

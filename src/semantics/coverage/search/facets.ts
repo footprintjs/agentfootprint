@@ -42,7 +42,8 @@ export interface FacetInput {
   readonly resolved?: readonly ResolvedDeclaration[];
   readonly resultPeriod?: DeclaredPeriod;
   readonly period?: PeriodShapes;
-  readonly turnNow?: string;
+  /** When the call was dispatched — what a relative window is resolved at. */
+  readonly dispatchedAt?: string;
 }
 
 /**
@@ -140,7 +141,7 @@ function argumentItems(
       arg.role === 'population' ? resolvedFor(arg.name, value, input.resolved) : undefined;
     const span: ComposedSpan | undefined =
       arg.role === 'period'
-        ? relativeSpan(arg.name, value, input.period, input.turnNow)
+        ? relativeSpan(arg.name, value, input.period, input.dispatchedAt)
         : undefined;
     return {
       what: `${arg.name}: ${valueText(value)}`,

@@ -4174,8 +4174,9 @@ export function buildToolCallsHandler(
       // the catch below — the run ended, the tool did not fail.
       ended = runEndedBy(env.signal);
       if (ended !== undefined) throw ended;
-      // `Tool.search`: reserved before the call runs, as in the batch loop.
-      const searchResultId = searchFunnel.reserve(scope, tool);
+      // `Tool.search`: reserved, with the dispatch instant, just before the
+      // call runs — as in the batch loop.
+      const searchDispatch = searchFunnel.dispatch(scope, tool, callTime);
       executed = true;
       let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
@@ -4184,7 +4185,7 @@ export function buildToolCallsHandler(
         tool,
         ...(resolved.party !== undefined && { party: resolved.party }),
         args,
-        ...(searchResultId !== undefined && { resultId: searchResultId }),
+        ...(searchDispatch !== undefined && { dispatch: searchDispatch }),
         ...(status !== undefined && { status }),
       });
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
@@ -5436,9 +5437,10 @@ export function buildToolCallsHandler(
                   env.signal,
                 ),
               };
-              // `Tool.search`: the result identity is reserved BEFORE the
-              // call runs (the row's address; never the provider's call id).
-              const searchResultId = searchFunnel.reserve(scope, tool);
+              // `Tool.search`: the result identity is reserved and the dispatch
+              // instant taken just BEFORE the call runs (the row's address,
+              // never the provider's call id; a relative window's clock).
+              const searchDispatch = searchFunnel.dispatch(scope, tool, callTime);
               executed = true;
               result = await tool.execute(callArgs, executionContext);
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by
@@ -5494,7 +5496,7 @@ export function buildToolCallsHandler(
                   tool,
                   ...(resolved.party !== undefined && { party: resolved.party }),
                   args: callArgs as Readonly<Record<string, unknown>>,
-                  ...(searchResultId !== undefined && { resultId: searchResultId }),
+                  ...(searchDispatch !== undefined && { dispatch: searchDispatch }),
                   ...(toolStatus !== undefined && { status: toolStatus }),
                 },
                 result,

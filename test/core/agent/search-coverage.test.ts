@@ -212,7 +212,7 @@ describe('integration — the committed row, the served absence, the events', ()
     expect((rest.composition as { resultId: string }).resultId).toBe(r.rows[0]?.resultId);
   });
 
-  it('two calls in one turn: two addresses, one span for one relative spelling', async () => {
+  it('two calls in one turn: two addresses, one spelling, each its own dispatch span', async () => {
     const r = await run(
       (b) => b.tool(listIncidents()),
       [
@@ -223,9 +223,13 @@ describe('integration — the committed row, the served absence, the events', ()
     const [first, second] = r.rows;
     expect(first?.resultId).not.toBe(second?.resultId);
     expect(second?.resultId).toMatch(/\/2$/);
-    const span = (row?: ComposedCoverage) => row?.checked.find((i) => i.facet === 'period')?.span;
-    expect(span(first)).toBeDefined();
-    expect(span(first)).toEqual(span(second));
+    const windowOf = (row?: ComposedCoverage) => row?.checked.find((i) => i.facet === 'period');
+    // The checker keys a relative window by its SPELLING within a run leg; the
+    // span is when each call actually ran.
+    expect(windowOf(first)?.value).toBe('2h');
+    expect(windowOf(second)?.value).toBe('2h');
+    const end = (row?: ComposedCoverage) => Date.parse(windowOf(row)?.span?.to ?? '');
+    expect(end(second)).toBeGreaterThanOrEqual(end(first));
   });
 });
 
@@ -378,5 +382,53 @@ describe('regression — a tool with no search composes nothing new', () => {
     );
     const [event] = absentEvents(r) as Record<string, unknown>[];
     expect(event !== undefined && 'composition' in event).toBe(false);
+  });
+});
+
+describe('integration — a relative window is the span at DISPATCH, not at the turn’s start', () => {
+  it('a call resumed five hours after its pause composes the span it ran with', async () => {
+    const { checkInApproved, isPaused } = await import('../../../src/index.js');
+    const { pausedRequest } = await import('../../helpers/pausedRequest.js');
+    const T0 = Date.parse('2026-10-22T08:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(T0);
+      let n = 0;
+      const agent = Agent.create({
+        provider: mock({
+          respond: () => {
+            n += 1;
+            return n === 1
+              ? {
+                  toolCalls: [
+                    { id: 'c1', name: 'list_incidents', args: { service: 'p', window: '2h' } },
+                  ],
+                }
+              : { content: 'done' };
+          },
+        }),
+        model: 'mock',
+        maxIterations: 3,
+      })
+        .tool(listIncidents({ checkIn: 'always' } as never))
+        .build();
+      const paused = await agent.run({ message: 'any incidents?' });
+      expect(isPaused(paused)).toBe(true);
+      vi.setSystemTime(T0 + 5 * 3_600_000); // the person answers five hours later
+      await agent.resume(
+        (paused as { checkpoint: never }).checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+      );
+      const rows = (
+        agent.getLastSnapshot()?.sharedState as { coverageDeclared?: ComposedCoverage[] }
+      ).coverageDeclared;
+      const window = rows?.[0]?.checked.find((i) => i.facet === 'period');
+      expect(window?.value).toBe('2h'); // the spelling stays beside the span
+      // The dispatch instant (13:00), not the turn's start (08:00).
+      expect(window?.span?.to).toBe('2026-10-22T13:00:00.001Z');
+      expect(Date.parse(window?.span?.from ?? '')).toBe(Date.parse('2026-10-22T11:00:00Z'));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

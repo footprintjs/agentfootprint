@@ -33,6 +33,7 @@ import {
 } from '../semantics/coverage/search/declaration.js';
 import { searchReviewItems } from '../semantics/coverage/search/review.js';
 import type { ToolSearch } from '../semantics/coverage/search/types.js';
+import { rememberSearch } from './searchOf.js';
 import { isDevMode } from 'footprintjs';
 import type { TimeContext } from '../time/wire.js';
 import type { CheckInDemand } from '../core/checkin.js';
@@ -1171,7 +1172,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(periodArguments !== undefined && { periodArguments }),
   });
   warnSearchReview(options.name, options.search);
-  return {
+  const tool: Tool<TArgs, TResult> = {
     schema: {
       name: options.name,
       description: options.description,
@@ -1201,4 +1202,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.search !== undefined && { search: freezeSearch(options.search) }),
     execute: options.execute,
   };
+  // Judged above — remembered so the registration funnel never judges it twice.
+  if (tool.search !== undefined) rememberSearch(tool, tool.search);
+  return tool;
 }

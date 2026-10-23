@@ -164,7 +164,7 @@ describe('property — composition never claims what the call did not send or de
             argument: used.find((u) => args.find((a) => a.name === u)?.role === 'period') ?? 'a',
             spelling: 'lookback',
           },
-          turnNow: '2026-10-22T10:00:00Z',
+          dispatchedAt: '2026-10-22T10:00:00Z',
           ...(status !== undefined && { status }),
         },
         result,

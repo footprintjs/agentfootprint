@@ -30,8 +30,8 @@ import {
 } from '../../../semantics/coverage/search/compose.js';
 import type { CoverageReading } from '../../../semantics/coverage/read.js';
 import type { ToolResultStatus } from '../../../semantics/toolOutcome.js';
-import { clockOf } from '../../../time/rows.js';
 import { hostFillsOf } from '../../../tools/hostFilled.js';
+import { searchOf } from '../../../tools/searchOf.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolParty } from '../../slots/buildToolsSlot.js';
 import type { AgentState } from '../types.js';
@@ -51,19 +51,37 @@ export interface SearchBoundary {
   readonly party?: ToolParty;
   /** The arguments the tool RAN with. */
   readonly args: Readonly<Record<string, unknown>>;
-  /** The identity `reserve` returned before dispatch. */
-  readonly resultId?: string;
+  /** What `dispatch` returned just before the call ran. */
+  readonly dispatch?: SearchDispatch;
   /** The outcome the tool declared on its effects envelope, if any. */
   readonly status?: ToolResultStatus;
+}
+
+/** What the funnel takes just before a search tool's call runs. */
+export interface SearchDispatch {
+  /** The call's result identity, reserved before it runs — the row's address. */
+  readonly resultId: string;
+  /**
+   * When the call was dispatched — the clock the time layer hands the tool
+   * (`ctx.time.dispatchedAt`), or the moment itself. A relative window resolves
+   * HERE: a call resumed hours after its pause ran with a later window than
+   * the turn's start.
+   */
+  readonly dispatchedAt: string;
 }
 
 /** The funnel's two functions. */
 export interface SearchCoverageFunnel {
   /**
-   * Reserve the call's result identity BEFORE it is dispatched — only for a
-   * tool that declares its `search`; `undefined` (and no write) otherwise.
+   * Just BEFORE the call runs: reserve its result identity and take the
+   * dispatch instant — only for a tool with an accepted `search`; `undefined`
+   * (and no write) otherwise.
    */
-  reserve(scope: TypedScope<AgentState>, tool: Tool | undefined): string | undefined;
+  dispatch(
+    scope: TypedScope<AgentState>,
+    tool: Tool | undefined,
+    callTime?: { readonly dispatchedAt?: string },
+  ): SearchDispatch | undefined;
   /**
    * Compose the call's coverage — `{ value, reading }` for the funnel to serve
    * and file, or `undefined` for today's path. THROWS a refusal for the
@@ -99,16 +117,6 @@ function warnDeclined(toolName: string): void {
 const isRemote = (tool: Tool, party: ToolParty | undefined): boolean =>
   tool.source !== undefined || party?.channel === 'provider';
 
-/** The TURN's clock: the time layer's frozen `now` when armed, else the turn's start. */
-function turnNowOf(scope: TypedScope<AgentState>): string | undefined {
-  const clock = clockOf(scope.findingsLedger as readonly unknown[] | undefined);
-  if (clock !== undefined) return clock.now;
-  const started = scope.turnStartMs as number | undefined;
-  return typeof started === 'number' && Number.isFinite(started)
-    ? new Date(started).toISOString()
-    : undefined;
-}
-
 /** A run with no id of its own (a composition member with no link) still mints one. */
 const UNIDENTIFIED_RUN = 'unidentified-run';
 
@@ -118,14 +126,13 @@ const UNIDENTIFIED_RUN = 'unidentified-run';
  * @example
  * ```ts
  * const search = buildSearchCoverage((scope) => runFactsOf(scope)?.runId);
- * const resultId = search.reserve(scope, tool);
+ * const dispatch = search.dispatch(scope, tool, ctx.time);
  * // … tool.execute …
- * const composed = search.compose(scope, { call, tool, args, resultId }, result);
+ * const composed = search.compose(scope, { call, tool, args, dispatch }, result);
  * ```
  */
 export function buildSearchCoverage(runIdOf: RunIdOf): SearchCoverageFunnel {
-  const reserve: SearchCoverageFunnel['reserve'] = (scope, tool) => {
-    if (tool?.search === undefined) return undefined;
+  const reserve = (scope: TypedScope<AgentState>): string => {
     const runId = runIdOf(scope) || UNIDENTIFIED_RUN;
     const state = scope.resultIdentities ?? createVerificationState(runId);
     const reserved = reserveResultIdentity(state, runId);
@@ -133,33 +140,45 @@ export function buildSearchCoverage(runIdOf: RunIdOf): SearchCoverageFunnel {
     return reserved.id;
   };
   return {
-    reserve,
+    dispatch(scope, tool, callTime) {
+      if (tool === undefined || searchOf(tool).search === undefined) return undefined;
+      return {
+        resultId: reserve(scope),
+        dispatchedAt: callTime?.dispatchedAt ?? new Date().toISOString(),
+      };
+    },
     compose(scope, boundary, value) {
       const { tool, call } = boundary;
-      const search = tool.search;
+      const { search, problem } = searchOf(tool);
       if (search === undefined) {
         if (readDeclaredAbsence(value) !== undefined || readDeclaredLedger(value) !== undefined) {
           throw refusal(
-            `checked: 'declared' says the tool declared its search, and tool '${call.toolName}' ` +
-              'declares no `search` — add search: { source, subject, arguments, … } to its ' +
-              'defineTool, or write the checked list by hand.',
+            problem !== undefined
+              ? `checked: 'declared' says the tool declared its search, and tool ` +
+                  `'${call.toolName}' carries a \`search\` this library refused — ${problem}`
+              : `checked: 'declared' says the tool declared its search, and tool ` +
+                  `'${call.toolName}' declares no \`search\` — add search: { source, subject, ` +
+                  'arguments, … } to its defineTool, or write the checked list by hand.',
           );
         }
         return undefined;
       }
       const hostFilled = hostFillsOf(tool);
-      const turnNow = turnNowOf(scope);
+      // A boundary that took no dispatch (a door that predates it) still
+      // addresses its row by a library-minted identity, at the moment it runs.
+      const dispatched = boundary.dispatch ?? {
+        resultId: reserve(scope),
+        dispatchedAt: new Date().toISOString(),
+      };
       const searchCall: SearchCall = {
         ...call,
-        // A boundary that reserved nothing (a door that predates the
-        // reservation) still addresses its row by a library-minted identity.
-        resultId: boundary.resultId ?? (reserve(scope, tool) as string),
+        resultId: dispatched.resultId,
         search,
         origin: isRemote(tool, boundary.party) ? 'remote' : 'local',
         args: boundary.args,
         ...(hostFilled !== undefined && { hostFilled }),
         ...(tool.period !== undefined && { period: tool.period }),
-        ...(turnNow !== undefined && { turnNow }),
+        dispatchedAt: dispatched.dispatchedAt,
         ...(boundary.status !== undefined && { status: boundary.status }),
       };
       const out = composeSearchCoverage(searchCall, value);

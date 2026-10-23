@@ -200,6 +200,7 @@ import type { Injection } from '../../injection-engine/types.js';
 import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
+import { searchOf } from '../../tools/searchOf.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
@@ -529,6 +530,10 @@ export function buildToolRegistry(
       registryByName.set(name, tool);
     }
   }
+  // `Tool.search` — every registered tool's declaration judged HERE, once, by
+  // the `defineTool` rule (`tools/searchOf.ts`): a hand-built tool that skipped
+  // `defineTool` is refused at build, named, and composes nothing.
+  for (const tool of registryByName.values()) searchOf(tool);
   // ── skip_step — the procedure-integrity tool (9.18.0) ───────────────
   // Auto-attached to the DISPATCH map when ≥1 registered skill declares
   // `steps` (the read_skill auto-attach seam) — always dispatchable, but
