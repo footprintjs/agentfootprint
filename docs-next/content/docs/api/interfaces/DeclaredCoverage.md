@@ -4,7 +4,7 @@ title: DeclaredCoverage
 
 # Interface: DeclaredCoverage
 
-Defined in: [src/semantics/coverage/types.ts:312](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L312)
+Defined in: [src/semantics/coverage/types.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L422)
 
 One coverage statement as the RUN recorded it — what the event carries and
 what accumulates in `AgentState.coverageDeclared`.
@@ -47,7 +47,7 @@ Defined in: [src/semantics/coverage/types.ts:122](https://github.com/footprintjs
 
 > `readonly` `optional` **inProgress?**: readonly [`InProgressItem`](/docs/api/interfaces/InProgressItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:332](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L332)
+Defined in: [src/semantics/coverage/types.ts:442](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L442)
 
 What the call found still running — its outcome not known yet — as the
 `coverage()` declared it (copied item by item; `short` and `count` when
@@ -60,7 +60,7 @@ well-formed, non-empty `in_progress`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/semantics/coverage/types.ts:316](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L316)
+Defined in: [src/semantics/coverage/types.ts:426](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L426)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/semantics/coverage/types.ts:316](https://github.com/footprintjs
 
 > `readonly` **kind**: `"absence"` \| `"ledger"`
 
-Defined in: [src/semantics/coverage/types.ts:313](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L313)
+Defined in: [src/semantics/coverage/types.ts:423](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L423)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/semantics/coverage/types.ts:313](https://github.com/footprintjs
 
 > `readonly` `optional` **lookedFor?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:318](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L318)
+Defined in: [src/semantics/coverage/types.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L428)
 
 Present for `'absence'` only — what the search was for.
 
@@ -98,7 +98,7 @@ Defined in: [src/semantics/coverage/types.ts:123](https://github.com/footprintjs
 
 > `readonly` `optional` **period?**: [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
 
-Defined in: [src/semantics/coverage/types.ts:325](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L325)
+Defined in: [src/semantics/coverage/types.ts:435](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L435)
 
 The period the declaration said its read covered, in the record's
 camelCase form (honesty step 7b) — present only when the envelope declared
@@ -111,7 +111,7 @@ files a `'ledger'` row whose three lists are empty.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:315](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L315)
+Defined in: [src/semantics/coverage/types.ts:425](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L425)
 
 ***
 
@@ -119,4 +119,4 @@ Defined in: [src/semantics/coverage/types.ts:315](https://github.com/footprintjs
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:314](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L314)
+Defined in: [src/semantics/coverage/types.ts:424](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L424)

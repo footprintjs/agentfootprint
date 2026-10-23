@@ -6,7 +6,7 @@ title: absent
 
 > **absent**(`decl`): [`ToolAbsence`](/docs/api/interfaces/ToolAbsence)
 
-Defined in: [src/semantics/coverage/absent.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/absent.ts#L293)
+Defined in: [src/semantics/coverage/absent.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/absent.ts#L307)
 
 Say "I looked, and there is nothing" in a way a model cannot read as a
 failure — and cannot productively retry.
@@ -29,11 +29,17 @@ uses — and what time its read covered — `period: { queried, held, readAt? }`
 ISO 8601 instants with a zone (`held` may be `'unknown'`). "Searched the 02:00
 export — nothing" becomes data; the results layer judges the period.
 
+A name looked up in a known list is a search over that list: declare the
+list as `among` (see [AbsenceAmongDeclaration](/docs/api/interfaces/AbsenceAmongDeclaration)) and the mint composes
+the names facet, the gap "names outside <source>" — which only
+`among.authoritative` removes — the `provenance`, and the model-only
+`known_names`.
+
 ## Parameters
 
 ### decl
 
-[`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration)
+[`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration) \| [`AbsenceAmongDeclaration`](/docs/api/interfaces/AbsenceAmongDeclaration)
 
 ## Returns
 
