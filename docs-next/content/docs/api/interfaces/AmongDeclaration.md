@@ -11,7 +11,7 @@ The list a missed name was looked up in — `absent({ what, among })`.
 A lookup that checks a name against a known list IS a search, and its miss
 says only that the name is not on THAT list. `among` declares the list, and
 the mint composes the rest: the names facet the tool searched, the gap the
-author cannot remove ("names outside <source>" — or, for a `partial` read,
+author cannot remove ("names outside <source>" — and, for a `partial` read,
 "not every name in <source> was read"), and the absence's `provenance` from
 `source` and `measuredAt`. The gap holds where `among` is declared; a plain
 `absent({ what })` or a thrown refusal never passes through it.
@@ -98,8 +98,8 @@ Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs
 
 `true` when the read did not see every name in the source — a truncated
 or paged inventory. The mint then composes a completeness gap, "not every
-name in <source> was read", in place of "names outside <source>", and
-`authoritative` does not remove it.
+name in <source> was read" (`bears: 'completeness'`), beside "names
+outside <source>", and `authoritative` never removes it.
 
 ***
 
