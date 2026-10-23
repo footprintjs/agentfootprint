@@ -288,8 +288,9 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   more (`unanswerablePause`) is closed rather than held: the next message
   continues `closedConversation`, every open call recorded as not run. `listedFormatOf` is the same reading for a session
   listing — `'flowchart-v1'` only for a pause still waiting — and every store
-  that lists reports it (memory and Agent Engine at list time, SQLite and
-  Firestore in the column they persist).
+  that lists reports it (memory and Agent Engine at list time; SQLite and
+  Firestore in the column they persist, a row that still says `'flowchart-v1'`
+  read again from its envelope when they list — `listedFormatOfRow`).
 
 ## A hosted agent under `redact` — the record served, the person answered
 

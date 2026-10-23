@@ -107,9 +107,11 @@ export function readStoredSession(stored: CheckpointEnvelope): StoredSession {
  *
  * The one reading for every store that lists, so a sidebar never badges a
  * pause the doors would not offer for an answer as "awaiting you". A store
- * that keeps the format in a column or a field writes this when it persists;
- * one that reads its envelopes at list time calls it there. The envelope
- * itself is unchanged: `hydrate` hands back what was stored.
+ * that keeps the format in a column or a field writes this when it persists,
+ * and reads a row that still says `'flowchart-v1'` again when it lists
+ * ({@link listedFormatOfRow}); one that reads its envelopes at list time calls
+ * it there. The envelope itself is unchanged: `hydrate` hands back what was
+ * stored.
  *
  * Lenient, as a listing must be — it never throws. A value that is not an
  * envelope lists as `'unknown'`, and a pause the readers would refuse lists
@@ -136,6 +138,34 @@ export function listedFormatOf(envelope: unknown): string {
   } catch {
     return format;
   }
+}
+
+/**
+ * The listed format of a row that KEEPS one beside its envelope (a SQLite
+ * column, a Firestore field): what the row says — except a stored
+ * `'flowchart-v1'`, which is read again from the envelope ({@link listedFormatOf}).
+ *
+ * A row written before the kept format was the listed one (an earlier
+ * release, or an older replica still writing) holds the envelope's own
+ * format, so a pause stored then says `'flowchart-v1'` whether or not anyone
+ * can still answer it. Only that value can be stale: a row that says
+ * anything else is not a pause still waiting, and nothing makes it one
+ * without a write. Never throws — text this runtime cannot read keeps what
+ * the row says (`hydrate` refuses it by name).
+ *
+ * @param stored       the format the row keeps.
+ * @param envelopeJson the envelope stored beside it, as JSON text.
+ */
+export function listedFormatOfRow(stored: string, envelopeJson: unknown): string {
+  if (stored !== 'flowchart-v1' || typeof envelopeJson !== 'string') return stored;
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(envelopeJson);
+  } catch {
+    return stored;
+  }
+  const listed = listedFormatOf(envelope);
+  return listed === 'unknown' ? stored : listed;
 }
 
 /**

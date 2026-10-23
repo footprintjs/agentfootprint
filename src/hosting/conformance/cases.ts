@@ -613,8 +613,8 @@ const listAnsweredAsConversation: SessionLifecycleCase = {
         `already used its decision and no door offers it for an answer again, so a sidebar ` +
         `that badges it "awaiting you" shows a question nobody can answer. List it as ` +
         `'conversation-v1' — \`listedFormatOf(envelope)\` from 'agentfootprint/hosting' is the ` +
-        `one reading, at persist for a store that keeps the format in a column, else at list ` +
-        `time.`,
+        `one reading, at persist for a store that keeps the format in a column (and again at ` +
+        `list time for a row that still says 'flowchart-v1'), else at list time.`,
     );
     check(
       listed.get(finished) === 'conversation-v1',

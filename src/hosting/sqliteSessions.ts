@@ -53,7 +53,7 @@
  * never gets written in the first place.
  */
 
-import { listedFormatOf } from './answeredPause.js';
+import { listedFormatOf, listedFormatOfRow } from './answeredPause.js';
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from './envelope.js';
 import { UnreadableEnvelopeError } from './errors.js';
 import { resolveSessionOwner } from './sessionOwnership.js';
@@ -254,6 +254,13 @@ const META_TABLE = 'agent_store_meta';
  * pause still waits on a person. A pause whose decision a resume already used
  * is stored as a paused run inside the JSON and reads `'conversation-v1'`
  * here, because nobody is waiting on it. `hydrate` reads only the JSON.
+ *
+ * A row written before this — by an earlier release, or an older replica —
+ * holds the envelope's own format, so it can say `'flowchart-v1'` for a pause
+ * nobody can answer any more. The listing never trusts that value: a row that
+ * says `'flowchart-v1'` is read again from its envelope (`listedFormatOfRow`),
+ * so `listByUser` is right for every row. The column itself is corrected the
+ * next time the session is written.
  */
 const SESSIONS_COLUMNS = ['session_id', 'format', 'saved_at', 'envelope'] as const;
 
@@ -370,8 +377,14 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
   // Keyset pagination, not OFFSET: a cursor that counted rows would skip a
   // conversation whenever an older one is written to between two pages, and a
   // sidebar that quietly loses a row is worse than one that pages slowly.
+  //
+  // A row that still says 'flowchart-v1' brings its envelope along, and only
+  // that row: a pause stored before the column held the listed format (an
+  // earlier release, an older replica) is read again (`listedFormatOfRow`).
   const listOwned = db.prepare(
-    `SELECT session_id, format, saved_at, message_count FROM ${SESSIONS_TABLE} ` +
+    `SELECT session_id, format, saved_at, message_count, ` +
+      `CASE WHEN format = 'flowchart-v1' THEN envelope END AS paused_envelope ` +
+      `FROM ${SESSIONS_TABLE} ` +
       `WHERE owner = ? AND (saved_at < ? OR (saved_at = ? AND session_id > ?)) ` +
       `ORDER BY saved_at DESC, session_id ASC LIMIT ?`,
   );
@@ -499,11 +512,14 @@ export function sqliteSessions(options: SqliteSessionsOptions): SqliteSessions {
         format?: unknown;
         saved_at?: unknown;
         message_count?: unknown;
+        paused_envelope?: unknown;
       }[];
       const page = rows.slice(0, limit).map((row) => ({
         sessionId: String(row.session_id),
         savedAt: Number(row.saved_at),
-        format: String(row.format),
+        // What the session IS now: a row written before the column held the
+        // listed format says 'flowchart-v1' for any pause, and is read again.
+        format: listedFormatOfRow(String(row.format), row.paused_envelope),
         // A row written before this release has no count. `0` is the honest
         // answer for "this store does not know" here only because the
         // transcript op reads the envelope itself and will say the truth —

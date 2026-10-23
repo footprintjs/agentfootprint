@@ -15,6 +15,7 @@ import {
   answeredRefusal,
   closedConversation,
   listedFormatOf,
+  listedFormatOfRow,
   markAnswered,
   openToolCalls,
   readStoredSession,
@@ -267,6 +268,25 @@ describe('listedFormatOf — what a session listing says a stored session is', (
     const badMark = { ...toPausedEnvelope(pausedOver(halfAnswered)) };
     (badMark.data as { answered?: unknown }).answered = 'yes';
     expect(listedFormatOf(badMark)).toBe('flowchart-v1');
+  });
+});
+
+describe('listedFormatOfRow — a row that keeps a format beside its envelope', () => {
+  it("only a stored 'flowchart-v1' is read again — from the envelope beside it", () => {
+    const waiting = JSON.stringify(toPausedEnvelope(pausedOver(halfAnswered)));
+    const answered = JSON.stringify(
+      toPausedEnvelope(markAnswered(pausedOver(halfAnswered), undefined, 3)),
+    );
+    expect(listedFormatOfRow('flowchart-v1', waiting)).toBe('flowchart-v1');
+    expect(listedFormatOfRow('flowchart-v1', answered)).toBe('conversation-v1');
+    // Any other stored value stands: nothing makes it a waiting pause without a write.
+    expect(listedFormatOfRow('conversation-v1', waiting)).toBe('conversation-v1');
+  });
+
+  it('never throws: an envelope it cannot read keeps what the row says', () => {
+    for (const envelope of [undefined, null, 42, '{not json', '"a string"', '{}']) {
+      expect(listedFormatOfRow('flowchart-v1', envelope)).toBe('flowchart-v1');
+    }
   });
 });
 
