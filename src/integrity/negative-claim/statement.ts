@@ -41,7 +41,7 @@ type DeclaredTool = SearchTool;
 const instantMs = (value: unknown): number | undefined => instantOf(value, 'lenient')?.ms;
 
 /** Bump with any change to a template or to how a value is rendered. */
-export const STATEMENT_VERSION = '3';
+export const STATEMENT_VERSION = '4';
 
 const VALUE_CHARS = 64;
 const GAP_CHARS = 120;
@@ -301,7 +301,9 @@ function clauseOf(
       : call.emptiness === 'declared-absent'
       ? `${toolName} returned no matching rows`
       : call.rows !== undefined || call.rowsRead !== undefined
-      ? `${toolName} read ${rowsRead} rows`
+      ? `${toolName} read ${rowsRead} ${rowsRead === 1 ? 'row' : 'rows'}`
+      : call.emptiness === 'non-empty'
+      ? `${toolName} returned matching rows whose count is undetermined`
       : `${toolName} returned a result whose row count is undetermined`
     : among
     ? `${toolName} did not find ${attributed(
@@ -361,10 +363,34 @@ export function composeRecordedStatement(
     readonly tool?: DeclaredTool;
   }[],
   clock: string,
+  explanation?: {
+    /** Authored by the delivery boundary from the check's code, never model text. */
+    readonly refusal: string;
+    /** Only caller-scoped local observations admitted by the delivery boundary. */
+    readonly contraryReads: readonly {
+      readonly call: TurnCall;
+      readonly row: ComposedSearchRow;
+      readonly tool?: DeclaredTool;
+    }[];
+  },
 ): NegativeStatement {
-  const clauses = [...reads]
-    .sort((a, b) => ordinalOf(a.call) - ordinalOf(b.call))
-    .map((read) => clauseOf('complete', read, clock, true));
-  clauses.push('The requested negative claim is not established by these recorded searches.');
+  const clauses = explanation === undefined ? [] : [explanation.refusal];
+  const contrary = explanation?.contraryReads ?? [];
+  for (const read of contrary.slice(0, LIST_ITEMS)) {
+    clauses.push(`Contrary recorded evidence: ${clauseOf('complete', read, clock, true)}`);
+  }
+  if (contrary.length > LIST_ITEMS)
+    clauses.push(
+      `The record contains ${
+        contrary.length - LIST_ITEMS
+      } additional positive reads for this subject.`,
+    );
+  clauses.push(
+    ...[...reads]
+      .sort((a, b) => ordinalOf(a.call) - ordinalOf(b.call))
+      .map((read) => clauseOf('complete', read, clock, true)),
+  );
+  if (explanation === undefined)
+    clauses.push('The requested negative claim is not established by these recorded searches.');
   return { text: clauses.join('\n'), clauses, version: STATEMENT_VERSION };
 }

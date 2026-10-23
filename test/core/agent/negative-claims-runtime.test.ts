@@ -263,7 +263,7 @@ function expectStatement(answer: DeliveredReply): void {
   const entry = answer.negatives[0];
   expect(entry).toMatchObject({
     kind: 'none',
-    about: 'payments',
+    about: '`payments`',
     restsOn: ['r1'],
     delivery: 'record-composed',
     version: expect.any(String),

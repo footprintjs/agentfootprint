@@ -329,6 +329,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   choice: true,
   chroma: true,
   claim: true,
+  'negative-prose-unverified': true,
   'claim-exceeds-search': true,
   classic: true,
   closed: true,

@@ -353,7 +353,7 @@ export interface ToolCallsHandlerDeps {
    */
   readonly resultsLayer?: true;
   /**
-   * `.negativeClaims()` is armed (a later release wires the builder): a
+   * `.negativeClaims()` is armed: a
    * composed absence's `tools.absent` carries `lookedForRef` in place of
    * `lookedFor`. Composed values ride no event in any mode; unarmed,
    * `lookedFor` is today's bytes. Absent → unarmed.

@@ -237,7 +237,7 @@ commentary + thinking templates. Same place to brand a tenant
 
 > **build**(): [`Agent`](/docs/api/classes/Agent)
 
-Defined in: [src/core/agent/AgentBuilder.ts:3387](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3387)
+Defined in: [src/core/agent/AgentBuilder.ts:3388](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3388)
 
 #### Returns
 
@@ -1139,7 +1139,7 @@ const agent = Agent.create({ provider, model })
 
 > **negativeClaims**(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3279](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3279)
+Defined in: [src/core/agent/AgentBuilder.ts:3280](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3280)
 
 Deliver typed negative claims as library-written statements of the searches
 they cite. `field` is a required top-level array in `.outputSchema()`'s JSON
@@ -1148,7 +1148,8 @@ The output adds `statement`, `delivery: 'record-composed'` and `version`.
 
 An unestablished citation withholds the answer by default. `state-searched`
 delivers what was searched while retaining its failed or unverified standing.
-Prose checking is deferred. Typed enforcement is available, not recommended
+Bounded prose observation files warnings; other answer text remains unchecked.
+The structured path is unmeasured: typed enforcement is available, not recommended
 until its benchmark gates pass. Declaration order with `.outputSchema()` does
 not matter; the complete contract is checked at build.
 

@@ -147,6 +147,7 @@ export type AssessmentReason =
   | 'derived-from-reading'
   | 'stopped-early'
   | 'steps-unfinished'
+  | 'negative-prose-unverified'
   | 'claim-exceeds-search'
   | 'declaration-overclaimed'
   | 'answer-check-failed'

@@ -4,15 +4,19 @@ title: DeliveredNegative
 
 # Interface: DeliveredNegative
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:32](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L32)
+Defined in: [src/events/payloads.ts:3667](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3667)
+
+One library-written negative statement, shared by delivery and its event.
 
 ## Properties
 
 ### about?
 
-> `readonly` `optional` **about?**: `string` \| `number`
+> `readonly` `optional` **about?**: `string`
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L34)
+Defined in: [src/events/payloads.ts:3670](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3670)
+
+Quoted, sanitized model citation text for display, never an evidence identity.
 
 ***
 
@@ -20,7 +24,7 @@ Defined in: [src/core/agent/negativeClaims/delivery.ts:34](https://github.com/fo
 
 > `readonly` **delivery**: `"record-composed"`
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L37)
+Defined in: [src/events/payloads.ts:3673](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3673)
 
 ***
 
@@ -28,7 +32,7 @@ Defined in: [src/core/agent/negativeClaims/delivery.ts:37](https://github.com/fo
 
 > `readonly` **kind**: `"none"` \| `"unknown"` \| `"not-found"` \| `"complete"`
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L33)
+Defined in: [src/events/payloads.ts:3668](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3668)
 
 ***
 
@@ -36,7 +40,7 @@ Defined in: [src/core/agent/negativeClaims/delivery.ts:33](https://github.com/fo
 
 > `readonly` **restsOn**: readonly `string`[]
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:35](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L35)
+Defined in: [src/events/payloads.ts:3671](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3671)
 
 ***
 
@@ -44,7 +48,7 @@ Defined in: [src/core/agent/negativeClaims/delivery.ts:35](https://github.com/fo
 
 > `readonly` **statement**: `string`
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:36](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L36)
+Defined in: [src/events/payloads.ts:3672](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3672)
 
 ***
 
@@ -52,4 +56,4 @@ Defined in: [src/core/agent/negativeClaims/delivery.ts:36](https://github.com/fo
 
 > `readonly` **version**: `string`
 
-Defined in: [src/core/agent/negativeClaims/delivery.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/delivery.ts#L38)
+Defined in: [src/events/payloads.ts:3674](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3674)

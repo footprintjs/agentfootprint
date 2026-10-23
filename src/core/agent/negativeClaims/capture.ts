@@ -58,6 +58,8 @@ export interface NegativeRuntimeState {
   }[];
   /** Operational carrier only, never served or emitted. */
   readonly ownerIdentity?: MemoryIdentity;
+  /** A per-run namespace synthesized with no caller/session/composition identity. */
+  readonly anonymousOwner?: true;
 }
 
 const MAX_CALLS = 1_000;
@@ -78,19 +80,78 @@ export function createNegativeRuntimeState(
   turn: number,
   identity?: MemoryIdentity,
   prior?: NegativeRuntimeState,
+  anonymousOwner = false,
 ): NegativeRuntimeState {
-  const inherited = prior !== undefined && sameIdentity(prior.ownerIdentity, identity);
+  // A scope-backed object can be a Proxy. Copy this closed tuple through its
+  // fields instead of passing a live scope proxy into structuredClone. This
+  // is ownership bookkeeping; only actual host fills can prove trusted context.
+  const ownerIdentity =
+    identity === undefined
+      ? undefined
+      : {
+          conversationId: identity.conversationId,
+          ...(identity.tenant !== undefined && { tenant: identity.tenant }),
+          ...(identity.principal !== undefined && { principal: identity.principal }),
+        };
+  const inherited = prior !== undefined && sameIdentity(prior.ownerIdentity, ownerIdentity);
+  // Only an explicitly continued anonymous conversation may carry these stale
+  // addresses between its per-run namespaces. No earlier payload or scope is
+  // transferred, and no named owner can enter this path.
+  const anonymousPast =
+    !inherited &&
+    anonymousOwner &&
+    prior?.anonymousOwner === true &&
+    ownerIdentity?.tenant === undefined &&
+    ownerIdentity?.principal === undefined &&
+    prior.ownerIdentity?.tenant === undefined &&
+    prior.ownerIdentity?.principal === undefined &&
+    turn > prior.turn &&
+    prior.calls.every((call) => !call.trustedContext);
+  const kept = inherited || anonymousPast;
   return {
     version: 1,
     turn,
-    complete: inherited ? prior.complete : true,
-    calls: inherited ? prior.calls : [],
+    complete: kept ? prior.complete : true,
+    calls: inherited ? prior.calls : anonymousPast ? prior.calls.map(staleMetadataOf) : [],
     tools: inherited ? prior.tools : {},
-    pending: inherited ? prior.pending : [],
+    pending: kept ? prior.pending : [],
     overclaims: inherited ? prior.overclaims ?? [] : [],
     ...(inherited &&
       prior.pausedResultId !== undefined && { pausedResultId: prior.pausedResultId }),
-    ...(identity !== undefined && { ownerIdentity: structuredClone(identity) }),
+    ...(ownerIdentity !== undefined && { ownerIdentity }),
+    ...(anonymousOwner && { anonymousOwner: true }),
+  };
+}
+
+/** A citation address and date, never an observation that can establish a claim. */
+function staleMetadataOf(call: NegativeRuntimeCall): NegativeRuntimeCall {
+  return {
+    resultId: call.resultId,
+    toolName: call.toolName,
+    turn: call.turn,
+    batch: call.batch,
+    dispatched: call.dispatched,
+    outcome: call.outcome,
+    effect: call.effect,
+    arguments: {},
+    trustedContext: false,
+    keptOut: true,
+    ...(call.readAt !== undefined && { readAt: call.readAt }),
+    ...(call.row !== undefined && {
+      row: {
+        kind: call.row.kind,
+        toolName: call.toolName,
+        iteration: call.batch,
+        composed: call.row.composed,
+        resultId: call.resultId,
+        handle: call.row.handle,
+        checked: [],
+        notChecked: [],
+        cannotCover: [],
+        complete: false,
+        gaps: [],
+      },
+    }),
   };
 }
 
@@ -353,7 +414,10 @@ export function captureNegativeResult(
         ...(rowsRead !== undefined && { rowsRead }),
         ...(among !== undefined && {
           row: { ...among, composed: dispatch.local ? ('local' as const) : ('remote' as const) },
-          effect: dispatch.local ? 'read' : call.effect,
+          // A returned absence says what was looked up, not whether this call
+          // also wrote. Only the app's dispatch-time declaration exempts it
+          // from write invalidation.
+          effect: call.effect,
         }),
       };
     });

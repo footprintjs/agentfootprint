@@ -834,6 +834,13 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
     }
   }
   readTimeDerived(state, g);
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  ledger.forEach((row: unknown, index) => {
+    if (!isRecord(row) || (row.kind !== 'negative-claim' && row.kind !== 'negative-claim-note'))
+      return;
+    if (typeof state.turnNumber === 'number' && row.turn !== state.turnNumber) return;
+    fire(g, 'negative-prose-unverified', statePointer('findingsLedger', index, 'kind'));
+  });
   const report = state.answerValidation;
   if (!isRecord(report) || typeof report.status !== 'string') return;
   const at = statePointer('answerValidation', 'status');

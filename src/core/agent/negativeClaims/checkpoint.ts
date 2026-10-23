@@ -29,6 +29,14 @@ export function negativeCheckpointOf(container: unknown): NegativeCheckpoint | u
     typeof raw.tools !== 'object'
   )
     throw new TypeError('Invalid negative-claims checkpoint.');
+  if (
+    raw.anonymousOwner !== undefined &&
+    (raw.anonymousOwner !== true ||
+      raw.ownerIdentity?.tenant !== undefined ||
+      raw.ownerIdentity?.principal !== undefined ||
+      raw.calls.some((call) => call.trustedContext))
+  )
+    throw new TypeError('Invalid anonymous negative-claims ownership.');
   const identities =
     data.resultIdentities === undefined
       ? undefined

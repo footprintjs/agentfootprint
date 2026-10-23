@@ -767,8 +767,9 @@ function seedFrom(
     const prior = resume?.negatives;
     scope.negativeClaimState = createNegativeRuntimeState(
       scope.turnNumber,
-      scope.runIdentity,
+      scope.$getValue('runIdentity') as AgentState['runIdentity'],
       prior?.negativeClaimState,
+      args.identity === undefined && sessionId === undefined && !mounted,
     );
     if (prior?.resultIdentities !== undefined) scope.resultIdentities = prior.resultIdentities;
     if (resume !== undefined && !resume.appendsUserTurn && prior === undefined)

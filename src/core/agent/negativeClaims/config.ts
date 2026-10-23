@@ -11,8 +11,8 @@ import type { Tool } from '../../../tools/tools.js';
  * Every cited tool must be registered locally. A search declaration or an admitted
  * `absent({ among })` result supplies its coverage at runtime.
  *
- * Available, but not recommended until the typed benchmark gates pass. Prose
- * detection and enforcement are not enabled by this option.
+ * Available, but not recommended until the typed benchmark gates pass. Model prose is observed with a bounded grammar; it remains unchecked.
+ * Prose enforcement is unavailable.
  */
 export interface NegativeClaimsOptions {
   readonly field: string;
@@ -54,7 +54,7 @@ export function resolveNegativeClaims(options: NegativeClaimsOptions): ResolvedN
   }
   if (['strictProse', 'prose', 'enforceProse'].some((key) => Object.hasOwn(source, key))) {
     return fail(
-      'prose and strictProse are not available; this release checks typed citations only.',
+      'prose and strictProse options are not available; prose is observed, never enforced.',
     );
   }
   if (Object.keys(source).some((key) => !['field', 'tools', 'unestablished'].includes(key))) {
@@ -215,6 +215,7 @@ export function negativeClaimsInstruction(
     `The required ${JSON.stringify(config.field)} field contains typed negative citations. ` +
     `Use only result handles served by these tools: ${JSON.stringify(config.tools)}. ` +
     'Each entry names kind, the entity about, and restsOn handles; do not write scope or statement text. ' +
+    'State negative claims only through this citation field; do not repeat them in summaries or other prose. ' +
     'The library writes the delivered statement. Use [] when making no typed negative claim. ' +
     `Field JSON Schema: ${JSON.stringify(fieldSchema)}`
   );

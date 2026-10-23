@@ -3663,19 +3663,23 @@ export interface IntegrityExternalGroundUsedPayload {
   readonly iteration: number;
 }
 
+/** One library-written negative statement, shared by delivery and its event. */
+export interface DeliveredNegative {
+  readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
+  /** Quoted, sanitized model citation text for display, never an evidence identity. */
+  readonly about?: string;
+  readonly restsOn: readonly string[];
+  readonly statement: string;
+  readonly delivery: 'record-composed';
+  readonly version: string;
+}
+
 /** Served negative statements. Codes and identities are diagnostics; the statement is library-written. */
 export interface AnswerNegativesPayload {
   readonly field: string;
   readonly version: string;
   readonly delivery: 'as-checked' | 'recorded' | 'fallback';
-  readonly claims: readonly {
-    readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
-    readonly about?: string | number;
-    readonly restsOn: readonly string[];
-    readonly statement: string;
-    readonly delivery: 'record-composed';
-    readonly version: string;
-  }[];
+  readonly claims: readonly DeliveredNegative[];
   readonly checks: readonly {
     readonly id: string;
     readonly path: string;

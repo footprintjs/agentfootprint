@@ -54,6 +54,7 @@
  *          DFS stage).
  */
 
+import { negativeProseRowIsWellFormed } from './agent/findings/negativeProse.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { ReplayPreparation } from '../thinking/replay.js';
 import {
@@ -682,6 +683,8 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
   // accessors and unsafe values, and never runs a checker while restoring.
   const kind = Object.getOwnPropertyDescriptor(row, 'kind');
   if (kind !== undefined && !('value' in kind)) return false;
+  if (kind?.value === 'negative-claim' || kind?.value === 'negative-claim-note')
+    return negativeProseRowIsWellFormed(row);
   if (kind?.value === 'claim-verification') return isClaimVerificationRow(row);
   if (kind?.value === 'reference-refusal') return referenceRefusalRowIsWellFormed(row);
   const r = row as Record<string, unknown>;
@@ -924,6 +927,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           'mention with quote, parses, candidates and choice, or refused) or ' +
           "'time-answer' (with turn, iteration, mention, from, to, zone, how: confirmed | edited); " +
           "or 'claim-verification' (the closed scoped-comparison protocol); " +
+          "or 'negative-claim' / 'negative-claim-note' (bounded observe-only prose findings); " +
           'a row of any kind may carry a numeric turn. ' +
           'It is written by an agent with `.findings()`, an honesty layer or `.time()` armed, and ' +
           're-seeded verbatim on continuation.',

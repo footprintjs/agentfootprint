@@ -1864,6 +1864,15 @@
   ],
   "source": "library"
  },
+ "howSure.reason.negativeProseUnverified@1": {
+  "text": "Model prose was not verified for negative claims.",
+  "parts": [
+   {
+    "text": "Model prose was not verified for negative claims."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.claimExceedsSearch@1": {
   "text": "A negative claim exceeds the recorded search.",
   "parts": [

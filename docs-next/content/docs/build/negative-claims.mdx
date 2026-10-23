@@ -13,9 +13,11 @@ library's statement and version. `agent.answerNegatives()` returns the
 `AnswerNegatives` metadata with per-source checked counts, diagnostics and
 dispatched action outcomes; an action outcome does not prove an external effect.
 
-Typed enforcement is **available, not recommended** until its benchmark gates
-pass. This feature checks typed citations. Prose observation is deferred, and
-`prose`, `strictProse` and `enforceProse` options are refused.
+The structured path is **unmeasured**. Typed enforcement is **available, not
+recommended** until its benchmark gates pass. Other fields remain unchecked model
+text. A bounded English grammar observes the model's original strings and files
+findings; it never blocks delivery or verifies prose. `prose`, `strictProse` and
+`enforceProse` options are refused: observation is automatic, enforcement unavailable.
 
 ## Declare the search and bind the caller
 
@@ -69,7 +71,11 @@ be within the admitted caller scope.
 />
 
 An established entry gains `statement`, `delivery: 'record-composed'` and `version`.
-Display that marker beside the sentence. The model-input parser describes only
+Display that marker beside the sentence. The delivered `about` is a quoted,
+sanitized model label, not an evidence identity. The answer-level delivery is
+`as-checked` only when its sole field consists of established library statements;
+any other field makes it `recorded`. That marker never verifies surrounding model
+text. The model-input parser describes only
 citations; `runTyped()` returns the enriched delivered object without running that
 parser over it again.
 
@@ -94,10 +100,26 @@ the checker. A later dispatched
 call that may write invalidates an earlier read even if the call fails; a local
 `effects: 'read'` declaration can identify a read-only tool. Remote read-only hints
 cannot. Reads retained through a pause remain eligible within the same turn;
-earlier-turn reads are stale.
+earlier-turn reads are stale and their refusal identifies the earlier turn and recorded date.
 
 This does not verify the rest of an answer. An empty citation array makes no typed
-claim, and free-written prose can still contain unchecked negatives. The checker
+claim. Every original free-form model string, including nested fields and `about`, is observed
+before the library writes its statements. Detected negatives file `negative-claim`
+findings; unread units file `negative-claim-note` findings. Both make the answer
+fold not-sure, without changing delivery. The grammar has known false positives and
+misses; prose remains unchecked even when it produces no finding.
+
+The whole answer is limited to 65,536 UTF-16 code units and 256 string values for
+observation, and 32 detected claims or unjudged units for observation. Exceeding a budget produces one
+whole-answer `input-limit` or `too-many-claims` note without checking evidence.
+The model is instructed to state negatives only through cited searches. These
+instructions do not guarantee compliance.
+
+The global answer-account `templateVersion` changes from 11 to 12, including for
+agents without `.negativeClaims()`. Consumers must tolerate the new version and
+`negative-prose-unverified` assessment reason.
+
+ The checker
 compares other observations only within its declared subject and scope rules.
 Independent host-authored answer checks continue to apply, and a library statement
 never turns an unverified answer into a verified one.

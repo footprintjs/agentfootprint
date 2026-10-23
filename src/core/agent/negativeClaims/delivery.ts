@@ -6,6 +6,7 @@ import { judgeTypedNegatives } from '../../../integrity/negative-claim/judge.js'
 import { sameValue, scopeOf, returnedReading } from '../../../integrity/negative-claim/readings.js';
 import {
   composeRecordedStatement,
+  quoteValue,
   STATEMENT_VERSION,
 } from '../../../integrity/negative-claim/statement.js';
 import type {
@@ -29,14 +30,8 @@ export interface RuntimeNegativeRow extends Omit<TypedNegativeRow, 'code' | 'dis
   readonly code: RuntimeNegativeCode;
   readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
 }
-export interface DeliveredNegative {
-  readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
-  readonly about?: string | number;
-  readonly restsOn: readonly string[];
-  readonly statement: string;
-  readonly delivery: 'record-composed';
-  readonly version: string;
-}
+import type { DeliveredNegative } from '../../../events/payloads.js';
+export type { DeliveredNegative } from '../../../events/payloads.js';
 export type AnswerNegatives = import('../../../events/payloads.js').AnswerNegativesPayload;
 const HANDLE = /^r[1-9][0-9]{0,3}$/;
 const own = (v: unknown): v is Record<string, unknown> =>
@@ -71,6 +66,64 @@ function rowsOutside(other: TurnCall, cited: TurnCall): boolean {
     ),
   );
 }
+
+/** Fixed explanations never borrow scope or instructions from the model's citation. */
+const REFUSALS: Readonly<Record<Exclude<RuntimeNegativeCode, 'established'>, string>> = {
+  'contradicted-by-rows': "I don't know that this claim holds: recorded rows contradict it.",
+  'wider-search-has-rows':
+    "I don't know. A wider search returned rows that may be within this claim's scope.",
+  'other-read-has-rows':
+    "I don't know. Another read for this subject returned rows that have not been shown to lie outside this claim's scope.",
+  'search-incomplete':
+    "I don't know. The cited result does not cover the complete search required by this claim.",
+  'superseded-by-write':
+    "I don't know. After or in the same batch as this read, a call that may change the data was dispatched; the earlier result no longer establishes this claim.",
+  'later-read-failed':
+    "I don't know. A later attempt to repeat this search failed; the earlier result does not settle the current claim.",
+  'citation-unresolved':
+    "I don't know. The citation does not identify an admitted recorded search.",
+  'cited-call-undeclared':
+    "I don't know. The cited call is not declared as an eligible source for this claim.",
+  'coverage-unverified':
+    "I don't know. The cited coverage was not composed by this runtime from a trusted local search declaration.",
+  'call-not-read':
+    "I don't know. The cited call did not establish a read that can support this claim.",
+  'kind-mismatch':
+    "I don't know. This kind of negative claim does not match what the cited search established.",
+  'about-mismatch':
+    "I don't know. The model's cited subject does not match the population the admitted search actually covered.",
+  'record-incomplete':
+    "I don't know. The available execution record is incomplete, so it cannot establish this claim.",
+  'stale-turn':
+    "I don't know. The cited result belongs to an earlier turn and was not re-read during this turn.",
+  'too-many-claims':
+    "I don't know. The claim or reference count exceeds the checking limit; no checked prefix is accepted.",
+  'outside-trusted-context':
+    "I don't know. The cited search is not bound to the caller's trusted context.",
+};
+
+function refusalFor(row: RuntimeNegativeRow): string {
+  if (row.code === 'established') return '';
+  // Retained stale identities carry runtime-produced turn/date metadata even
+  // when their scope was scrubbed. This says when the read ran, not what it read.
+  if (row.code !== 'stale-turn' || row.staleSince === undefined) return REFUSALS[row.code];
+  const readAt = row.staleSince.readAt;
+  const date = readAt === undefined ? NaN : Date.parse(readAt);
+  return (
+    `I don't know. The cited result was read on turn ${row.staleSince.turn}` +
+    (Number.isFinite(date) ? ` at ${new Date(date).toISOString()}` : '') +
+    '; not re-read during the current turn.'
+  );
+}
+
+const positivePeer = (other: TurnCall, cited: TurnCall, about: unknown): boolean =>
+  other.resultId !== cited.resultId &&
+  returnedReading(other) &&
+  other.emptiness === 'non-empty' &&
+  subject(cited) !== undefined &&
+  sameValue(subject(other), subject(cited)) &&
+  aboutFits(about, other) &&
+  !rowsOutside(other, cited);
 
 export function renderNegativeCandidate(
   candidate: unknown,
@@ -132,17 +185,7 @@ export function renderNegativeCandidate(
       else if (
         record.calls.some(
           (other) =>
-            other.turn === record.turn &&
-            returnedReading(other) &&
-            other.emptiness === 'non-empty' &&
-            reads.some(
-              (cited) =>
-                other.resultId !== cited.resultId &&
-                subject(cited) !== undefined &&
-                sameValue(subject(other), subject(cited)) &&
-                aboutFits(about, other) &&
-                !rowsOutside(other, cited),
-            ),
+            other.turn === record.turn && reads.some((cited) => positivePeer(other, cited, about)),
         )
       )
         fail('other-read-has-rows', 'checked-fail');
@@ -155,11 +198,31 @@ export function renderNegativeCandidate(
         (call) =>
           trusted(call) &&
           aboutFits(about, call) &&
-          call.turn === record.turn &&
+          call.turn <= record.turn &&
+          config.tools.includes(call.toolName) &&
           call.row?.composed === 'local' &&
           call.keptOut !== true,
       );
     const established = row.code === 'established';
+    const contrary =
+      !established && canDescribe
+        ? record.calls.filter(
+            (other) =>
+              other.turn === record.turn &&
+              trusted(other) &&
+              other.row?.composed === 'local' &&
+              other.keptOut !== true &&
+              config.tools.includes(other.toolName) &&
+              !reads.some((read) => read.resultId === other.resultId) &&
+              reads.some((cited) => positivePeer(other, cited, about)),
+          )
+        : [];
+    if (contrary.length > 0)
+      row = {
+        ...row,
+        results: [...new Set([...row.results, ...contrary.map((call) => call.resultId)])],
+      };
+    const refusal = refusalFor(row);
     const statement = established
       ? judgments[i].statement?.text
       : canDescribe
@@ -170,14 +233,23 @@ export function renderNegativeCandidate(
               : [{ call, row: call.row, tool: record.tools[call.toolName] }],
           ),
           record.clock,
+          {
+            refusal,
+            contraryReads: contrary.flatMap((call) =>
+              call.row === undefined
+                ? []
+                : [{ call, row: call.row, tool: record.tools[call.toolName] }],
+            ),
+          },
         ).text
-      : "I don't know. The recorded searches do not establish this claim in the caller's trusted context.";
+      : refusal;
     checks.push(row);
     correction ||= row.code === 'citation-unresolved' || row.code === 'stale-turn';
     claims.push({
       kind: row.kind,
-      ...(validAbout ? { about: about as string | number } : {}),
-      restsOn: canDescribe || established ? reads.map((call) => call.row!.handle) : [],
+      ...(validAbout ? { about: quoteValue(about) } : {}),
+      restsOn:
+        canDescribe || established ? [...reads, ...contrary].map((call) => call.row!.handle) : [],
       statement: statement ?? "I don't know. No admitted search supports this claim.",
       delivery: 'record-composed',
       version: STATEMENT_VERSION,
@@ -202,7 +274,11 @@ export function renderNegativeCandidate(
   const answer: AnswerNegatives = {
     field: config.field,
     version: STATEMENT_VERSION,
-    delivery: allowed ? (established && checks.length > 0 ? 'as-checked' : 'recorded') : 'fallback',
+    delivery: allowed
+      ? established && checks.length > 0 && Object.keys(source).every((key) => key === config.field)
+        ? 'as-checked'
+        : 'recorded'
+      : 'fallback',
     claims,
     checks,
     coverage,

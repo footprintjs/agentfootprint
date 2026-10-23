@@ -90,7 +90,7 @@ describe('the three worked statements (§ 5.1), rule-derived and attributed', ()
       record: turnRecord([incidentCall()]),
     });
     expect(judged[0]?.statement?.version).toBe(STATEMENT_VERSION);
-    expect(STATEMENT_VERSION).toBe('3');
+    expect(STATEMENT_VERSION).toBe('4');
   });
 });
 

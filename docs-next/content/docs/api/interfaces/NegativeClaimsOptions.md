@@ -11,8 +11,8 @@ The named field must be a required, top-level array in the output JSON Schema.
 Every cited tool must be registered locally. A search declaration or an admitted
 `absent({ among })` result supplies its coverage at runtime.
 
-Available, but not recommended until the typed benchmark gates pass. Prose
-detection and enforcement are not enabled by this option.
+Available, but not recommended until the typed benchmark gates pass. Model prose is observed with a bounded grammar; it remains unchecked.
+Prose enforcement is unavailable.
 
 ## Properties
 

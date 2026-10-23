@@ -178,6 +178,13 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "findingsLedger: a steps-unfinished witness row of this turn (the answer came before the active skill's declared steps finished — filed while the answer layer is armed)",
   },
   {
+    reason: 'negative-prose-unverified',
+    layer: 4,
+    class: 'not-sure',
+    reads:
+      'findingsLedger: a negative-claim or negative-claim-note row of this turn; model prose never establishes a negative claim',
+  },
+  {
     reason: 'claim-exceeds-search',
     layer: 4,
     class: 'not-sure',

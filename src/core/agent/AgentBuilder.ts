@@ -3267,7 +3267,8 @@ export class AgentBuilder {
    *
    * An unestablished citation withholds the answer by default. `state-searched`
    * delivers what was searched while retaining its failed or unverified standing.
-   * Prose checking is deferred. Typed enforcement is available, not recommended
+   * Bounded prose observation files warnings; other answer text remains unchecked.
+   * The structured path is unmeasured: typed enforcement is available, not recommended
    * until its benchmark gates pass. Declaration order with `.outputSchema()` does
    * not matter; the complete contract is checked at build.
    *

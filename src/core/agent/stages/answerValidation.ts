@@ -20,6 +20,8 @@ import {
   reportWithNegatives,
   type NegativeDeliveryConfig,
 } from '../negativeClaims/delivery.js';
+import { observeNegativeProse } from '../negativeClaims/prose.js';
+import { recordFindings } from '../findings/ledger.js';
 import { negativeRecordOf } from '../negativeClaims/capture.js';
 import { prepareNegativeCorrection } from '../negativeClaims/recheck.js';
 import { takeAnswerEvidence } from './answerEvidence.js';
@@ -139,6 +141,17 @@ export function withAnswerValidation(
           };
         if (prepared.correction && prepareNegativeCorrection(scope, record, negatives.config.field))
           return 'negative-recheck';
+        // Observe the model's original strings, never the statements just composed
+        // by the library. Rejected correction drafts return before this writer.
+        const prose = observeNegativeProse(candidate, record, negatives.config.field);
+        recordFindings(
+          scope,
+          prose.map((row) => ({ ...row, iteration: scope.iteration })),
+          { turn: record.turn },
+        );
+        if (prose.length > 0 && prepared.answer.delivery === 'as-checked') {
+          prepared.answer = { ...prepared.answer, delivery: 'recorded' };
+        }
         raw = JSON.stringify(prepared.candidate);
         candidateParser = { parse: (value: unknown) => value };
         scope.answerNegatives = prepared.answer;

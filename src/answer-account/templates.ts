@@ -389,6 +389,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.stepsUnfinished': t(
     "The answer came before the active skill's declared steps finished.",
   ),
+  'howSure.reason.negativeProseUnverified': t('Model prose was not verified for negative claims.'),
   'howSure.reason.claimExceedsSearch': t('A negative claim exceeds the recorded search.'),
   'howSure.reason.declarationOverclaimed': t('A tool declaration overstates what was checked.'),
   'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),

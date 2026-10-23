@@ -539,6 +539,7 @@ describe('UNIT — the reason table', () => {
       'steps-unfinished',
       'answer-check-failed',
       'check-unreachable',
+      'negative-prose-unverified',
       'claim-exceeds-search',
       'declaration-overclaimed',
     ];
