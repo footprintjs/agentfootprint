@@ -124,7 +124,7 @@ import { durableWriter, type DurableWriter } from './durability.js';
 import { describePause } from './pendingAsk.js';
 import {
   answeredRefusal,
-  markAnsweredIfUsed,
+  markAnsweredAfterFailure,
   openToolCalls,
   readStoredSession,
 } from './answeredPause.js';
@@ -1745,14 +1745,15 @@ export async function standingAgent<TH extends HostHandle>(
         try {
           resumed = await runner.resume(paused.checkpoint, request.decision, resumeOptions);
         } catch (err) {
-          // Failed after it used its decision? Then the stored pause is
-          // answered before anyone hears of the failure (`answeredPause.ts`).
+          // Unless it was refused before its decision could be used, the
+          // stored pause is answered before anyone hears of the failure —
+          // failing closed (`answeredPause.ts`).
           if (sessionId !== undefined) {
-            await markAnsweredIfUsed({
+            await markAnsweredAfterFailure({
               store,
               sessionId,
               paused,
-              progressed: () => runner.checkpoint(),
+              error: err,
               settle: () => lane.writer?.settle(),
             });
           }

@@ -1293,15 +1293,20 @@ with. The request to show the person is the pending ask the host replied with.
 `DecisionLedger`, and "once" holds per ledger. Every agent a door serves that
 names no ledger shares this process's, so an instance the pool evicted and
 rebuilt, or the runner `streamHandler` builds per request, still refuses a
-decision already used. When a resume fails *after* it used the decision — the
-approved tool ran, then the next model call failed — the door that keeps the
-pause (`standingAgent`, `streamHandler`) **marks it answered** before the
-failure is reported: a retry, a rebuilt instance, a restart or another host on
-the same store is refused (`ERR_RESUME_DECISION`, `'already-answered'`, whose
+decision already used. When a resume of a consent gate fails — the approved
+tool ran, then the next model call failed, say — the door that keeps the pause
+(`standingAgent`, `streamHandler`) **marks it answered** before the failure is
+reported, unless the resume was refused before its decision could be used (a
+decision for another request, a value that is not a decision, another caller).
+It fails closed: a resume that failed early for any other reason leaves a pause
+the person cannot answer again, and the question is asked afresh. Once marked,
+a retry, a rebuilt instance, a restart or another host on the same store is
+refused (`ERR_RESUME_DECISION`, `'already-answered'`, whose
 message says the call's outcome is not known there), the pending-question op
 reports nothing pending, and the session's next message continues the
-conversation from that run's own history, with any call it left open settled as
-unknown (`PausedRun.answered`). Both doors read a stored session one way, so an
+conversation this session stored — what the run kept while it ran under durable
+writes, else the conversation as of the pause, never the agent's own state —
+with any call left open settled as unknown (`PausedRun.answered`). Both doors read a stored session one way, so an
 answered pause is never offered for an answer at either. Two limits are stated,
 not closed: the session store has no compare-and-set, so two processes that
 receive the same decision at the same moment both read the unmarked pause; and a

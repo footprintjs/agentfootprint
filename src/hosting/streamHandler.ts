@@ -66,7 +66,7 @@ import { isPaused, type RunnerPauseOutcome } from '../core/pause.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { Runner } from '../core/runner.js';
 import { toWireJson } from '../lib/wireJson.js';
-import { answeredRefusal, markAnsweredIfUsed, readStoredSession } from './answeredPause.js';
+import { answeredRefusal, markAnsweredAfterFailure, readStoredSession } from './answeredPause.js';
 import { checkSessionId, doorGuard, type CrossSiteOptions } from './doorGuard.js';
 import { envelopeOwner, toEnvelope, toPausedEnvelope } from './envelope.js';
 import { RequestTooLargeError, WireRequestRefusal } from './errors.js';
@@ -380,6 +380,8 @@ export function streamHandler<TRequest, TEvent>(
     let runId: string | undefined;
     let off: unknown;
     let settlement: RunSettlement;
+    /** The answer was handed to the runner: from here its decision may be used. */
+    let answering = false;
     try {
       // The runner is this request's alone; the run filter still holds a fact a
       // shared resource stamped for another run or session out of the stream.
@@ -398,6 +400,7 @@ export function streamHandler<TRequest, TEvent>(
         ...(thread?.identity !== undefined && { identity: thread.identity }),
         ...(request !== undefined && { request }),
       };
+      answering = plan.turn.kind === 'answer';
       const out =
         plan.turn.kind === 'answer'
           ? await runner.resume(
@@ -412,21 +415,22 @@ export function streamHandler<TRequest, TEvent>(
               runOptions as never,
             );
       settlement = await keep(turn, out, runId);
-    } catch {
-      // An answer whose resume failed AFTER it used the decision: the stored
-      // pause is answered before the caller hears the end, so no later
-      // request answers it again (`answeredPause.ts`).
+    } catch (err) {
+      // An answer handed to the runner that then failed: unless it was refused
+      // before its decision could be used, the stored pause is answered before
+      // the caller hears the end — failing closed (`answeredPause.ts`). A
+      // caller who left before the run started handed nothing over.
       if (
-        plan.turn.kind === 'answer' &&
+        answering &&
         held.paused !== undefined &&
         thread !== undefined &&
         sessions !== undefined
       ) {
-        await markAnsweredIfUsed({
+        await markAnsweredAfterFailure({
           store: sessions,
           sessionId: thread.sessionId,
           paused: held.paused,
-          progressed: () => runner.checkpoint?.(),
+          error: err,
         }).catch(() => undefined);
       }
       settlement = { kind: signal.aborted ? 'cancelled' : 'failed' };

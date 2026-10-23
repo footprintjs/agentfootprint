@@ -61,8 +61,8 @@
  * restart and no other process sees it: where more than one process (or a
  * restart) can resume the same paused run, every agent that can resume it is
  * given one ledger in a store they all reach (`Agent.create({ decisionLedger })`).
- * A host that keeps the pause also learns when a resume used its decision and
- * then failed (`requestWasUsed`), so it can stop offering that pause.
+ * A host that keeps the pause stops offering it once a resume of it fails
+ * after the decision could have reached a ledger (`hosting/answeredPause.ts`).
  */
 
 import type { FlowchartCheckpoint } from 'footprintjs';
@@ -179,37 +179,6 @@ const PROCESS_LEDGER: DecisionLedger = inMemoryDecisionLedger();
 /** This process's ledger — where an agent that names no `decisionLedger` spends. */
 export function processDecisionLedger(): DecisionLedger {
   return PROCESS_LEDGER;
-}
-
-/**
- * The requests a resume in this process took to a ledger, newest last — what
- * a host asks after a resume fails ({@link requestWasUsed}). Bounded: the
- * question is asked as the failure is handled, so only recent ids matter;
- * "once" itself is the ledger's to keep, never this record's.
- */
-const usedRequests = new Set<string>();
-/** How many recent used requests {@link requestWasUsed} remembers. */
-const USED_REQUESTS_KEPT = 10_000;
-
-function noteRequestUsed(requestId: string): void {
-  usedRequests.delete(requestId);
-  usedRequests.add(requestId);
-  if (usedRequests.size > USED_REQUESTS_KEPT) {
-    const oldest = usedRequests.values().next();
-    if (oldest.done !== true) usedRequests.delete(oldest.value);
-  }
-}
-
-/**
- * Whether a resume in this process took `requestId` to its ledger — spent
- * it, found it already spent, or lost it to a ledger that failed. Past that
- * point the call may have run, so a host that keeps the pause stops offering
- * it for an answer once that resume fails (`hosting/answeredPause.ts`). Keyed
- * by the request, not by an agent, so it holds for a composition's nested
- * agents and for any ledger. Internal: no barrel exports it.
- */
-export function requestWasUsed(requestId: string): boolean {
-  return usedRequests.has(requestId);
 }
 
 const DOMAIN = 'agentfootprint/consent-request/v1';
@@ -363,8 +332,6 @@ export async function spendDecision(
   decision: CheckInDecision,
   gate: ConsentGateKind,
 ): Promise<void> {
-  // Noted before the ledger answers: from here the call may run.
-  noteRequestUsed(decision.requestId);
   const fresh = await ledger.spend(decision.requestId);
   if (fresh !== true) throw new ResumeDecisionError('already-answered', gate);
 }

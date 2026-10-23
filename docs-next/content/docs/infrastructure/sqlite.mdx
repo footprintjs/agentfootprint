@@ -126,8 +126,8 @@ finishes the run:
 const sessions = sqliteSessions({ file: './sessions.db' });
 const paused = readPausedRun(await sessions.hydrate(sessionId));
 
-// A pause whose decision a resume already used (it failed after the tool
-// ran) is marked `answered`: it must not be answered again — continue its
+// A pause whose resume failed after its decision could have been used is
+// marked `answered`: it must not be answered again — continue its
 // conversation with the next message instead.
 if (paused.answered !== undefined) throw new Error('already answered');
 

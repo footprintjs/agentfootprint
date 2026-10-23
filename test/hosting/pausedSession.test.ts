@@ -35,11 +35,17 @@ import {
   standingAgent,
   toEnvelope,
 } from '../../src/hosting/index.js';
-import type { CheckpointEnvelope, SessionLifecycle, WakeReason } from '../../src/hosting/index.js';
+import type {
+  CheckpointEnvelope,
+  PausedRun,
+  SessionLifecycle,
+  WakeReason,
+} from '../../src/hosting/index.js';
 import type { LLMMessage, LLMProvider } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
 import { REFUSAL_STATUS } from '../../src/hosting/refusalStatus.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
+import { OUTCOME_NOT_RECORDED } from '../../src/hosting/answeredPause.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -913,6 +919,7 @@ describe('a consent gate over the wire — a decision whose resume failed after 
     failing: { on: boolean },
     sent: (readonly LLMMessage[])[] = [],
     decisionLedger?: DecisionLedger,
+    beforeFailing?: () => Promise<void>,
   ): Agent {
     const usage = { input: 1, output: 1 };
     const provider: LLMProvider = {
@@ -921,7 +928,10 @@ describe('a consent gate over the wire — a decision whose resume failed after 
         sent.push([...request.messages]);
         const last = request.messages[request.messages.length - 1];
         if (last?.role === 'tool') {
-          if (failing.on) throw new Error('model unavailable');
+          if (failing.on) {
+            await beforeFailing?.();
+            throw new Error('model unavailable');
+          }
           return { content: 'refund issued', toolCalls: [], usage, stopReason: 'stop' };
         }
         return String(last?.content ?? '').includes('refund')
@@ -1037,8 +1047,46 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       expect(retry.code).toBe('ERR_RESUME_DECISION');
       expect(ran).toEqual([10]);
 
-      // A new message continues the conversation, from what the run recorded.
+      // A new message continues the conversation as this session stored it:
+      // the call the run left open is settled as unknown — the host kept no
+      // result for it (nothing stored mid-run under the default durability).
       const next = await second.deliver({ input: 'is it done?', sessionId: 'moved' });
+      expect(next.output).toBe('noted: is it done?');
+      const request = sent[sent.length - 1]!;
+      expect(everyCallAnswered(request)).toBe(true);
+      expect(request.find((m) => m.role === 'tool' && m.toolCallId === 't1')?.content).toBe(
+        OUTCOME_NOT_RECORDED,
+      );
+      expect(ran).toEqual([10]);
+    } finally {
+      await secondHandle.close();
+    }
+  });
+
+  it('with durable writes, the conversation goes on with the result the run kept', async () => {
+    const ran: number[] = [];
+    const failing = { on: true };
+    const sent: (readonly LLMMessage[])[] = [];
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agent: flakyRefunds(ran, failing, sent),
+      sessions,
+      host,
+      durability: 'sync',
+    });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'kept' });
+      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      await host.deliver({ input: '', sessionId: 'kept', decision });
+      expect(ran).toEqual([10]);
+      expect(readPausedRun(await sessions.hydrate('kept')).answered).toBeDefined();
+
+      failing.on = false;
+      expect((await host.deliver({ input: '', sessionId: 'kept', decision })).code).toBe(
+        'ERR_RESUME_DECISION',
+      );
+      const next = await host.deliver({ input: 'is it done?', sessionId: 'kept' });
       expect(next.output).toBe('noted: is it done?');
       const request = sent[sent.length - 1]!;
       expect(everyCallAnswered(request)).toBe(true);
@@ -1047,7 +1095,7 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       );
       expect(ran).toEqual([10]);
     } finally {
-      await secondHandle.close();
+      await handle.close();
     }
   });
 
@@ -1074,6 +1122,86 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       const retry = await host.deliver({ input: '', sessionId: 'evicted', decision });
       expect(retry.code).toBe('ERR_RESUME_DECISION');
       expect(ran).toEqual([10]);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('other decisions spent in this process meanwhile — however many — do not keep the pause from being marked', async () => {
+    // Between this resume's spend and its failure, more spends than any
+    // bounded record of "used" requests could keep. Whether this pause gets
+    // marked must not depend on that.
+    const { spendDecision } = await import('../../src/core/consentRequest.js');
+    const flood = async (): Promise<void> => {
+      const ledger = inMemoryDecisionLedger();
+      for (let i = 0; i < 10_001; i += 1) {
+        await spendDecision(ledger, { requestId: `flood-${i}` } as never, 'checkIn');
+      }
+    };
+    const ran: number[] = [];
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agent: flakyRefunds(ran, { on: true }, [], undefined, flood),
+      sessions,
+      host,
+    });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'flood' });
+      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' });
+      const failed = await host.deliver({ input: '', sessionId: 'flood', decision });
+      expect(failed.error).toContain('model unavailable');
+      expect(ran).toEqual([10]);
+      expect(readPausedRun(await sessions.hydrate('flood')).answered).toEqual({
+        at: expect.any(Number),
+      });
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a resume that fails before its run starts, on a shared agent, marks the pause with ITS session’s conversation — never another session’s', async () => {
+    // The shared agent's last run is another person's. A mark must never be
+    // written from the agent's own state: only from what this session stored.
+    const ran: number[] = [];
+    const inner = memorySessions();
+    let poison = false;
+    const sessions: SessionLifecycle = {
+      async hydrate(id) {
+        const stored = await inner.hydrate(id);
+        if (!poison || id !== 'b' || stored?.format !== 'flowchart-v1') return stored;
+        // A stored state the resume refuses before its run starts (an
+        // inherited findings ledger — not the stored data it must be).
+        const data = stored.data as PausedRun;
+        const sharedState = Object.assign(
+          Object.create({ findingsLedger: [] }) as object,
+          data.checkpoint.sharedState,
+        );
+        return {
+          ...stored,
+          data: { ...data, checkpoint: { ...data.checkpoint, sharedState } },
+        } as CheckpointEnvelope;
+      },
+      persist: (id, envelope) => inner.persist(id, envelope),
+    };
+    const host = inProcessHost();
+    const handle = await standingAgent({ agent: flakyRefunds(ran, { on: false }), sessions, host });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'b' });
+      const decision = checkInApproved({ request: pausedRequest(asked.awaiting), by: 'bob' });
+      const other = await host.deliver({ input: 'my secret is 4242', sessionId: 'a' });
+      expect(other.output).toBe('noted: my secret is 4242');
+
+      poison = true;
+      const failed = await host.deliver({ input: '', sessionId: 'b', decision });
+      poison = false;
+      expect(failed.error).toBeDefined();
+      expect(ran).toEqual([]);
+
+      const marked = readPausedRun(await inner.hydrate('b'));
+      expect(marked.answered).toEqual({ at: expect.any(Number) });
+      expect(JSON.stringify(marked.conversation)).not.toContain('4242');
+      expect(marked.conversation.history[0]).toMatchObject({ role: 'user', content: 'refund me' });
     } finally {
       await handle.close();
     }
