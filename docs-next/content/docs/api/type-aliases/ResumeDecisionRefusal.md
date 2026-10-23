@@ -4,9 +4,9 @@ title: ResumeDecisionRefusal
 
 # Type Alias: ResumeDecisionRefusal
 
-> **ResumeDecisionRefusal** = `"no-request"` \| `"request-not-recorded"` \| `"other-request"` \| `"call-changed"` \| `"chain-changed"` \| `"already-answered"`
+> **ResumeDecisionRefusal** = `"no-request"` \| `"request-not-recorded"` \| `"other-request"` \| `"call-changed"` \| `"chain-changed"` \| `"already-answered"` \| `"closed-by-host"`
 
-Defined in: [src/core/pause.ts:383](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L383)
+Defined in: [src/core/pause.ts:387](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L387)
 
 Why a decision could not answer the request a run is paused on — the
 [ResumeDecisionError](/docs/api/classes/ResumeDecisionError) `reason`:
@@ -31,3 +31,7 @@ Why a decision could not answer the request a run is paused on — the
   - `'already-answered'` — a resume already used a decision for this
     request, approved or declined. Whether that resume finished — and so
     whether the call ran — is not known to the one refused.
+  - `'closed-by-host'` — a host that kept the pause closed it, because no
+    answer could reach it any more, and proved its call never ran: it spent
+    the request in the ledger the request was minted under, so no decision
+    can run it. The call did not run, and nothing ran now.

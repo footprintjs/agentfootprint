@@ -4,7 +4,7 @@ title: ResumeDecisionError
 
 # Class: ResumeDecisionError
 
-Defined in: [src/core/pause.ts:417](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L417)
+Defined in: [src/core/pause.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L422)
 
 Raised by a resume when the decision cannot answer the request the run is
 paused on. **The tool never runs**: the refusal comes before it, and a
@@ -41,7 +41,7 @@ pause (`PendingAsk.checkIn` / `.ask`), never in an error.
 
 > **new ResumeDecisionError**(`reason`, `gate`): `ResumeDecisionError`
 
-Defined in: [src/core/pause.ts:424](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L424)
+Defined in: [src/core/pause.ts:429](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L429)
 
 #### Parameters
 
@@ -79,7 +79,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_RESUME_DECISION"`
 
-Defined in: [src/core/pause.ts:418](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L418)
+Defined in: [src/core/pause.ts:423](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L423)
 
 ***
 
@@ -87,7 +87,7 @@ Defined in: [src/core/pause.ts:418](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **gate**: [`ConsentGateKind`](/docs/api/type-aliases/ConsentGateKind)
 
-Defined in: [src/core/pause.ts:422](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L422)
+Defined in: [src/core/pause.ts:427](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L427)
 
 Which kind of consent gate the run is paused on.
 
@@ -121,7 +121,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **reason**: [`ResumeDecisionRefusal`](/docs/api/type-aliases/ResumeDecisionRefusal)
 
-Defined in: [src/core/pause.ts:420](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L420)
+Defined in: [src/core/pause.ts:425](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L425)
 
 Which rule refused the decision.
 
