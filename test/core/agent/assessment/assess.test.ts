@@ -296,6 +296,14 @@ describe('UNIT — each reason from its one row', () => {
     expect(
       reasonsOf(run({ answerValidation: { mode: 'enforce', status: 'failed', unreachable: 0 } })),
     ).toEqual(['answer-check-failed']);
+    // …and a failed report whose validator did not finish says so too.
+    const broken = run({
+      answerValidation: { mode: 'enforce', status: 'failed', reason: 'validator-error' },
+    });
+    expect(reasonsOf(broken)).toEqual(['answer-check-failed', 'check-unreachable']);
+    expect(broken.reasons[1]!.witness).toEqual([
+      { kind: 'state', key: 'answerValidation', path: '/reason' },
+    ]);
   });
 });
 

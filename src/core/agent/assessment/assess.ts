@@ -840,14 +840,15 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
   g.checked.push({ layer: 4, check: 'answer-checks', ran: 1, of: 1, witness: [at] });
   if (report.status === 'failed') fire(g, 'answer-check-failed', at);
   if (report.status === 'unverified') fire(g, 'check-unreachable', at);
-  // A failed report can also count checks that could not reach a verdict (a
-  // contradiction found beside them): both are true, so both are said.
-  else if (
-    report.status === 'failed' &&
-    typeof report.unreachable === 'number' &&
-    report.unreachable > 0
-  ) {
-    fire(g, 'check-unreachable', statePointer('answerValidation', 'unreachable'));
+  // A failed report can also hold checks that could not reach a verdict — a
+  // contradiction found beside unreachable rows, or beside a validator that
+  // did not finish (`reason`): both are true, so both are said.
+  else if (report.status === 'failed') {
+    if (typeof report.unreachable === 'number' && report.unreachable > 0) {
+      fire(g, 'check-unreachable', statePointer('answerValidation', 'unreachable'));
+    } else if (typeof report.reason === 'string') {
+      fire(g, 'check-unreachable', statePointer('answerValidation', 'reason'));
+    }
   }
   const digest = str(report.candidateDigest);
   // The ONE tie check this version can read: a passed ENFORCE report that names its bytes.

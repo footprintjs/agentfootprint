@@ -227,7 +227,9 @@ export interface AnswerValidationReport {
   /**
    * `passed`: at least one comparison ran, and none failed or was unreachable.
    * `failed`: a comparison found the answer wrong — even beside `unreachable`
-   * rows, which `reason` then still names (`unreachable-checks`).
+   * rows, which `reason` then still names (`unreachable-checks`). An agent row
+   * (`agentChecks`) that found a contradiction makes the report `failed` even
+   * when your validator did not finish; `reason` says so (`validator-error`).
    * `unverified`: no verdict could be reached (nothing compared, a check that
    * could not run or did not finish); `reason` says why.
    */
@@ -237,7 +239,7 @@ export interface AnswerValidationReport {
   readonly unreachable: number;
   readonly notApplicable: number;
   readonly checks: readonly AnswerCheck[];
-  /** Why the report is `unverified`, or that a `failed` one also has unreachable rows. */
+  /** Why the report is `unverified`, or what a `failed` one could not reach as well. */
   readonly reason?: string;
   /** SHA-256 of the exact canonical JSON content considered for delivery. */
   readonly candidateDigest?: string;

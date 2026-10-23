@@ -666,6 +666,39 @@ describe('functional: the report merges your checks and the agent rows under one
     expect(result.content).toBeUndefined();
   });
 
+  it.each([
+    [
+      'throws',
+      () => {
+        throw new Error('the host check broke');
+      },
+      'validator-error',
+    ],
+    ['returns no list', () => ({ checks: 'nope' }), 'invalid-validator-result'],
+  ] as const)(
+    "an agent row's contradiction is failed when your validator %s — it never depended on it",
+    async (_case, validate, reason) => {
+      const config = resolveAnswerValidation({
+        id: 'build-report',
+        version: '1',
+        agentChecks: ['claims'],
+        validate: validate as never,
+      });
+      const result = await executeAnswerValidation(
+        '{"durationMs":9750}',
+        parser,
+        config,
+        undefined,
+        scope,
+        undefined,
+        undefined,
+        () => [failRow],
+      );
+      expect(result.report).toMatchObject({ status: 'failed', reason, failed: 1 });
+      expect(result.content).toBeUndefined();
+    },
+  );
+
   it('unreachable rows with no failure stay unverified', async () => {
     const unreachableRow: AnswerCheck = { id: 'agent:claims:queuedMs', disposition: 'unreachable' };
     const result = await run([hostPass], () => [unreachableRow]);
@@ -690,12 +723,25 @@ describe('functional: the report merges your checks and the agent rows under one
       [{ id: `${AGENT_CHECK_PREFIX}claims:durationMs`, disposition: 'checked-pass' }],
       () => [failRow],
     );
+    // The impersonating id is refused: none of your checks counts.
+    expect(result.report).toMatchObject({ reason: 'invalid-validator-result', checked: 1 });
+    // The agent's own row still says what it found — and its contradiction
+    // does not depend on your validator, so the report is failed.
+    expect(result.report.checks).toEqual([failRow]);
+    expect(result.report.status).toBe('failed');
+  });
+
+  it('…and an impersonating PASS beside a clean agent row passes nothing', async () => {
+    const result = await run(
+      [{ id: `${AGENT_CHECK_PREFIX}claims:durationMs`, disposition: 'checked-pass' }],
+      () => [clearRow],
+    );
     expect(result.report).toMatchObject({
       status: 'unverified',
       reason: 'invalid-validator-result',
+      checked: 0,
     });
-    // The agent's own row still says what it found.
-    expect(result.report.checks).toEqual([failRow]);
+    expect(result.content).toBeUndefined();
   });
 
   it('…and allowed when no agent check is listed (no row can collide)', async () => {

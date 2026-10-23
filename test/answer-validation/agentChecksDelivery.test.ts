@@ -349,6 +349,40 @@ describe("contract: a claim is checked against THIS run's reads only", () => {
   });
 });
 
+describe('functional: a found contradiction does not depend on the host validator', () => {
+  const throwing = () => {
+    throw new Error('the host check broke');
+  };
+
+  it('enforce: the validator throws — still failed, the validator-error reason kept', async () => {
+    const { agent, seen } = buildAgent(
+      { job: 'build-job-72', durationMs: 9750 },
+      { validation: buildReport({ validate: throwing }) },
+    );
+    const outcome = await agent.run(ASK).catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'failed',
+      reason: 'validator-error',
+      failed: 1,
+    });
+    expect(seen.tokens).toEqual([]);
+  });
+
+  it('observe: the standing names the failure and the check that never finished', async () => {
+    const { agent } = buildAgent(
+      { job: 'build-job-72', durationMs: 9750 },
+      { validation: buildReport({ mode: 'observe', validate: throwing }) },
+    );
+    await agent.run(ASK);
+    expect(agent.answerValidation()).toMatchObject({ status: 'failed', reason: 'validator-error' });
+    const assessed = await agent.assessment();
+    expect(assessed?.reasons.map((r) => r.reason)).toEqual([
+      'answer-check-failed',
+      'check-unreachable',
+    ]);
+  });
+});
+
 describe('security: an unsupported claim fails closed', () => {
   it('a value for a fact no tool result settled is unverified, and withheld', async () => {
     // The tool settled a DIFFERENT job: nothing backs the answer's durationMs.
@@ -397,10 +431,15 @@ describe('security: an unsupported claim fails closed', () => {
       },
     );
     const outcome = await agent.run(ASK).catch((error: unknown) => error);
+    // Refused: the host's rows are dropped as invalid; the agent's own
+    // contradiction stands, so the answer is failed — and withheld.
     expect((outcome as AnswerValidationError).report).toMatchObject({
-      status: 'unverified',
+      status: 'failed',
       reason: 'invalid-validator-result',
     });
+    expect((outcome as AnswerValidationError).report.checks.map((c) => c.id)).toEqual([
+      'agent:claims:durationMs',
+    ]);
   });
 });
 

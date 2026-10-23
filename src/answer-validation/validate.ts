@@ -308,12 +308,16 @@ export async function executeAnswerValidation(
   if (!reason && toolCallsRead && !calls.complete) reason = 'tool-calls-incomplete';
   if (!reason && checked === 0) reason = 'no-comparable-checks';
   if (!reason && unreachable > 0) reason = 'unreachable-checks';
-  // What could not be reached never hides what was found: a completed
-  // comparison that failed makes the report `failed` beside unreachable rows,
-  // and the reason still names them. Every other reason means the check
-  // itself did not complete, so nothing it returned is a verdict.
+  // What could not be reached never hides what was found. An agent row is
+  // computed by the library on the delivered candidate, before and apart from
+  // your validator, so its contradiction makes the report `failed` whatever
+  // the validator did — the reason still says that (`validator-error`, a
+  // timeout, …). Your own failed check is a verdict beside unreachable rows;
+  // under any other reason your check did not complete, so nothing it
+  // returned is one.
+  const agentFailed = agentRows.some((row) => row.disposition === 'checked-fail');
   const status =
-    failed > 0 && (reason === undefined || reason === 'unreachable-checks')
+    agentFailed || (failed > 0 && (reason === undefined || reason === 'unreachable-checks'))
       ? 'failed'
       : reason !== undefined
       ? 'unverified'

@@ -594,7 +594,10 @@ all-unchecked results, missing evidence, callback errors and deadlines cannot
 produce a passing verdict. A `checked-fail` row makes the report `failed` even
 when other rows are `unreachable`: a contradiction that was found is never
 reported as merely unverified, and the reason, `unreachable-checks`, still says
-that some checks could not reach a verdict. Enforce mode throws `AnswerValidationError` with the
+that some checks could not reach a verdict. An agent row's contradiction
+(`agentChecks`) does not depend on your validator either: it makes the report
+`failed` even when your validator throws, times out or returns something
+invalid, and the reason (`validator-error`, …) says what else happened. Enforce mode throws `AnswerValidationError` with the
 report before final capture or memory write. A report counts checked-pass plus
 checked-fail as checked; artifact reads and framework liveness checks do not count.
 
