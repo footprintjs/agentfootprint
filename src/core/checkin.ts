@@ -11,9 +11,9 @@
  * the {@link CheckInDecision} lands as a typed record.
  *
  * This is the LEAF that owns every check-in TYPE + the pure assembly logic.
- * It has zero engine imports (one runtime import, the `lib/frozenCopy.ts` leaf;
- * the rest are type-only imports of the message shape + the influence-core
- * attribution unit), so it stays cheap to import
+ * It has one runtime import, the `lib/frozenCopy.ts` leaf (which reads only
+ * footprintjs's dev-mode flag); the rest are type-only imports of the message
+ * shape + the influence-core attribution unit — so it stays cheap to import
  * and trivial to unit-test. The pause plumbing lives in
  * `core/agent/stages/toolCalls.ts`; the events in `events/`; the store in
  * `recorders/core/CheckInRecorder.ts`.
@@ -27,7 +27,7 @@
  *          (checkpoint discipline) — no functions, no class instances.
  */
 
-import { frozenCopyOf } from '../lib/frozenCopy.js';
+import { frozenView, warnFrozenWrite } from '../lib/frozenCopy.js';
 import type { ArtifactRef } from '../artifacts/types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AskComponent } from '../tools/askComponent.js';
@@ -367,7 +367,9 @@ export interface CheckInPredicateContext {
  * that writes into its argument — after a person approved the call, or after
  * answering "no check-in needed" for it — must not change what runs. The
  * write throws in strict code (and a predicate that throws trips) or is
- * ignored in sloppy code. Arguments no copy can be made of trip the gate.
+ * ignored in sloppy code (in dev mode, one warning names the cause). A copy
+ * the caller already shares with the call's other callbacks is handed on as
+ * it is (`frozenView`). Arguments no copy can be made of trip the gate.
  */
 export function shouldCheckIn(
   demand: CheckInDemand<Readonly<Record<string, unknown>>> | undefined,
@@ -376,11 +378,12 @@ export function shouldCheckIn(
 ): boolean {
   if (demand === undefined) return false;
   if (demand === 'always') return true;
-  const own = frozenCopyOf(args);
+  const own = frozenView(args);
   if (own === undefined) return true;
   try {
     return demand(own, ctx) === true;
-  } catch {
+  } catch (err) {
+    warnFrozenWrite('checkIn predicate', err, 'the gate tripped, so the call asks a person');
     // A buggy predicate must not let a consequential action slip through
     // unreviewed — fail toward asking the human.
     return true;

@@ -89,6 +89,7 @@ describe('openToolCalls / settleOpenCalls', () => {
       role: 'tool',
       toolName: 'refund',
       toolCallId: 'b',
+      toolResultOrigin: 'outcome-unknown',
       content: OUTCOME_NOT_RECORDED,
     });
     expect(openToolCalls(settled)).toEqual([]);
@@ -102,8 +103,8 @@ describe('openToolCalls / settleOpenCalls', () => {
     ]);
   });
 
-  it('marks the notice as not a result for findings admission', () => {
-    const settled = settleOpenCalls(halfAnswered, true);
+  it('marks the notice as the library’s — not a result — whether or not the run served findings', () => {
+    const settled = settleOpenCalls(halfAnswered);
     expect(settled[settled.length - 1]).toMatchObject({
       toolCallId: 'b',
       toolResultOrigin: 'outcome-unknown',
@@ -597,16 +598,36 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
       ['never spent', false, NOT_RUN_UNANSWERABLE],
       ['spent by an earlier resume', true, OUTCOME_UNKNOWN_UNANSWERABLE],
     ] as const)(
-      'closed with a runner whose shared ledger says the request was %s',
+      'closed with a runner on the ledger the request was minted under, the request %s',
       async (_label, spentEarlier, notice) => {
-        const { paused, written } = setup();
-        const spent = new Set<string>(spentEarlier ? [REQUEST] : []);
+        const spent = new Set<string>();
+        const decisionLedger = {
+          storeId: 'refunds-ledger',
+          spend: (id: string) => (spent.has(id) ? false : (spent.add(id), true)),
+        };
+        const bound = mintConsentRequest(
+          { gate: 'checkIn', tool: 'refund', toolCallId: 'b', args: { order: 2 } },
+          decisionLedger,
+        );
+        if (bound === undefined) throw new Error('expected a request');
+        if (spentEarlier) spent.add(bound.request.id);
+        const base = setup().paused;
+        const paused: PausedRun = {
+          ...base,
+          checkpoint: {
+            ...base.checkpoint,
+            sharedState: { ...base.checkpoint.sharedState, pausedRequest: bound.request },
+          },
+          pending: { tool: 'refund', checkIn: { id: bound.request.id } as never },
+        };
+        const written: CheckpointEnvelope[] = [];
         const runner = Agent.create({
           provider: mock({ reply: 'x' }),
           model: 'm',
-          decisionLedger: { spend: () => true, isSpent: async (id) => spent.has(id) },
+          decisionLedger,
         }).build();
-        const watch = await watched(paused, 'taken-up');
+        const watch = watchAnswer(paused);
+        noteDecisionTakenUp(bound.request.id);
         expect(
           await afterFailedAnswer({
             store: {

@@ -659,7 +659,7 @@ export function streamHandler<TRequest, TEvent>(
         accepted: plan.accepted ?? {},
         ...(thread !== undefined && { thread }),
       });
-      const settled = await settleClosed(held, runner);
+      const settled = await settleClosed(held, runner, sessions);
       const translation = adapter.open(
         read,
         plan.turn.kind === 'answer' ? held.view.awaiting?.suspension : undefined,
@@ -693,13 +693,17 @@ export function streamHandler<TRequest, TEvent>(
 /**
  * A held thread whose pause no answer can reach, with the conversation it goes
  * on from (`answeredPause.ts` · `closedConversation`) — settled against this
- * request's runner, whose ledger says whether the calls the pause left open
- * provably never ran. Any other held thread is handed back as it was.
+ * request's runner and the handler's session store, which together say
+ * whether the calls the pause left open provably never ran. Any other held thread is handed back as it was.
  */
-async function settleClosed(held: Held, runner: StreamRunner): Promise<Held> {
+async function settleClosed(
+  held: Held,
+  runner: StreamRunner,
+  store: SessionLifecycle | undefined,
+): Promise<Held> {
   return held.closed === undefined
     ? held
-    : { ...held, prior: await closedConversation(held.closed.paused, runner) };
+    : { ...held, prior: await closedConversation(held.closed.paused, { runner, store }) };
 }
 
 /**

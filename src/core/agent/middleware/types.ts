@@ -71,7 +71,6 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 import type { AskComponent } from '../../../tools/askComponent.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
 import type { LoopMoment } from '../../../lib/moments.js';
-import type { KnownNames } from '../../../semantics/coverage/types.js';
 
 // ─── The outcomes ────────────────────────────────────────────────────
 
@@ -99,15 +98,6 @@ export interface AllowOutcome<T> {
    * Declared, never inferred. Present only when the middleware declared it.
    */
   readonly from?: ArgumentOrigins;
-  /**
-   * After-tool only: the names an `absent({ among })` read for the caller
-   * that this rule lets through to the model — `call.knownNames` to keep
-   * them, a narrower block to edit them, `null` to drop them. Absent: kept
-   * when the rule passed the result through (or handed the same result
-   * back), DROPPED when it replaced the result — a rule that rewrote the
-   * result decides what else the model reads.
-   */
-  readonly knownNames?: KnownNames | null;
 }
 
 /** Where a middleware says each rewritten argument's value came from. */
@@ -234,15 +224,6 @@ export interface ToolResultContext extends ToolMiddlewareContext {
    * all: a tool that failed halfway may have done half its work.
    */
   readonly error?: true;
-  /**
-   * The names an `absent({ among: { …, visible: 'caller' } })` read for the
-   * caller — handed BESIDE the result, never inside it (`result` holds no
-   * name). As an earlier rule left them. This rule decides what the model
-   * reads of them: pass through (`allow()`) keeps them; `allow(value, why)`
-   * drops them unless it says `{ knownNames }`; `deny` drops them. Absent
-   * when the result carries none.
-   */
-  readonly knownNames?: KnownNames;
 }
 
 /** The message a message middleware is deciding about. */

@@ -4,12 +4,11 @@
  * Pattern: a pure leaf module (its one import, `linearText.ts`, is a leaf
  *          too), shared by the extractor and the evidence index so the two can
  *          never disagree about what "the same value" means.
- * Role:    lib/ layer (L0): the evidence gate (`namesAndNumbersFromEvidence`),
- *          the inputs layer (`tools/declare.ts`) and the `absent({ among })`
- *          mint (`semantics/coverage/among.ts`, which ranks the names nearest
- *          a missed one) read it. It moved down from `tools/` so the coverage
- *          mint, two layers below, spells a name the way the gate does — one
- *          spelling, not a second one beside it.
+ * Role:    lib/ layer (L0): the evidence gate (`namesAndNumbersFromEvidence`)
+ *          and the inputs layer (`tools/declare.ts`) read it. It moved down
+ *          from `tools/` so a reader in a layer below the tools can spell a
+ *          value the way the gate does — one spelling, never a second one
+ *          beside it.
  * Emits:   N/A.
  *
  * ## Why this file exists at all

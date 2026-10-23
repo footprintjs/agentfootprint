@@ -4,15 +4,17 @@ title: AmongDeclaration
 
 # Interface: AmongDeclaration
 
-Defined in: [src/semantics/coverage/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L260)
+Defined in: [src/semantics/coverage/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L238)
 
 The list a missed name was looked up in — `absent({ what, among })`.
 
 A lookup that checks a name against a known list IS a search, and its miss
 says only that the name is not on THAT list. `among` declares the list, and
 the mint composes the rest: the names facet the tool searched, the gap the
-author cannot remove ("names outside <source>"), and the absence's
-`provenance` from `source` and `measuredAt`.
+author cannot remove ("names outside <source>" — and, for a `partial` read,
+"not every name in <source> was read"), and the absence's `provenance` from
+`source` and `measuredAt`. The gap holds where `among` is declared; a plain
+`absent({ what })` or a thrown refusal never passes through it.
 
 ## Example
 
@@ -21,7 +23,7 @@ a name lookup that found nothing in the inventory export
   if (!array) return absent({
     what: array_id,
     among: { argument: 'array_id', source: inventory.source, measuredAt: inventory.readAt,
-             count: inventory.names.length, names: inventory.names, visible: 'caller' },
+             count: inventory.names.length, names: inventory.names },
   });
 ```
 
@@ -31,7 +33,7 @@ a name lookup that found nothing in the inventory export
 
 > `readonly` **argument**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L262)
+Defined in: [src/semantics/coverage/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L240)
 
 The input argument whose value was looked up ('array_id').
 
@@ -41,11 +43,11 @@ The input argument whose value was looked up ('array_id').
 
 > `readonly` `optional` **authoritative?**: `object`
 
-Defined in: [src/semantics/coverage/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L288)
+Defined in: [src/semantics/coverage/types.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L270)
 
 The ONE opt-out of the "names outside <source>" gap: the author says the
-source is every name there is, and why. Every use is listed for review by
-`check:semantics` (`authoritative-names`).
+source is every name there is, and why — the tool's claim, not verified.
+Every use is listed for review by `check:semantics` (`authoritative-names`).
 
 #### why
 
@@ -57,9 +59,9 @@ source is every name there is, and why. Every use is listed for review by
 
 > `readonly` **count**: `number`
 
-Defined in: [src/semantics/coverage/types.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L268)
+Defined in: [src/semantics/coverage/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L251)
 
-How many names the list holds — a whole number. Always served.
+How many names the list holds — a whole number. The tool's claim; served on the facet.
 
 ***
 
@@ -67,9 +69,12 @@ How many names the list holds — a whole number. Always served.
 
 > `readonly` **measuredAt**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L266)
+Defined in: [src/semantics/coverage/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L249)
 
-When that list was read — the tool's own words, never parsed (the `provenance` rule).
+When that list was read — the tool's own words (the `provenance` rule).
+When it is an ISO 8601 instant this library can read, the names facet
+also carries a dated note, "names as of <measuredAt>" — no judgement of
+whether that is old.
 
 ***
 
@@ -77,12 +82,24 @@ When that list was read — the tool's own words, never parsed (the `provenance`
 
 > `readonly` `optional` **names?**: readonly `string`[]
 
-Defined in: [src/semantics/coverage/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L275)
+Defined in: [src/semantics/coverage/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L257)
 
-The names the list holds. When given, `names.length` must equal `count`
-(`names-count-mismatch`). Served only with [AmongDeclaration.visible](/docs/api/interfaces/AmongDeclaration#visible)
-`'caller'`, and then only the import('./among.js').KNOWN\_NAMES\_SHOWN
-nearest the looked-for value.
+The names the list holds, read ONLY to check `count`: when given,
+`names.length` must equal it (`names-count-mismatch`). No name is served
+to the model or written to an event or a record.
+
+***
+
+### partial?
+
+> `readonly` `optional` **partial?**: `boolean`
+
+Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L264)
+
+`true` when the read did not see every name in the source — a truncated
+or paged inventory. The mint then composes a completeness gap, "not every
+name in <source> was read" (`bears: 'completeness'`), beside "names
+outside <source>", and `authoritative` never removes it.
 
 ***
 
@@ -90,19 +107,6 @@ nearest the looked-for value.
 
 > `readonly` **source**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L264)
+Defined in: [src/semantics/coverage/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L242)
 
 The list the names were read from, in the author's words ('the PowerStore inventory export'). One line.
-
-***
-
-### visible?
-
-> `readonly` `optional` **visible?**: `"caller"`
-
-Defined in: [src/semantics/coverage/types.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L282)
-
-`'caller'` — the tool read this list under the caller's OWN identity, so
-the caller may see names from it. Required for any name to be served:
-there is no default, because a list visible by default would enumerate one
-principal's names to another.

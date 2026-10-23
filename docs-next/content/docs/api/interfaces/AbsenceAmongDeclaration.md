@@ -4,7 +4,7 @@ title: AbsenceAmongDeclaration
 
 # Interface: AbsenceAmongDeclaration
 
-Defined in: [src/semantics/coverage/types.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L296)
+Defined in: [src/semantics/coverage/types.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L278)
 
 `absent()` given an [AmongDeclaration](/docs/api/interfaces/AmongDeclaration): `checked` becomes optional (the
 mint composes the names facet first) and `provenance` is refused — `among`
@@ -20,7 +20,7 @@ composes it from its own `source` and `measuredAt`.
 
 > `readonly` **among**: [`AmongDeclaration`](/docs/api/interfaces/AmongDeclaration)
 
-Defined in: [src/semantics/coverage/types.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L299)
+Defined in: [src/semantics/coverage/types.ts:281](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L281)
 
 The list the missed name was looked up in.
 
@@ -30,7 +30,7 @@ The list the missed name was looked up in.
 
 > `readonly` `optional` **cannotCover?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/semantics/coverage/types.ts:178](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L178)
+Defined in: [src/semantics/coverage/types.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L177)
 
 Ground no search by this tool can reach. Each needs a `why`.
 
@@ -44,7 +44,7 @@ Ground no search by this tool can reach. Each needs a `why`.
 
 > `readonly` `optional` **checked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/semantics/coverage/types.ts:301](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L301)
+Defined in: [src/semantics/coverage/types.ts:283](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L283)
 
 Further ground the search covered, after the composed names facet.
 
@@ -54,7 +54,7 @@ Further ground the search covered, after the composed names facet.
 
 > `readonly` `optional` **notChecked?**: readonly [`CoverageInput`](/docs/api/type-aliases/CoverageInput)[]
 
-Defined in: [src/semantics/coverage/types.ts:176](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L176)
+Defined in: [src/semantics/coverage/types.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L175)
 
 Ground the search did not reach this time — an absence here proves
  nothing about it.
@@ -65,26 +65,11 @@ Ground the search did not reach this time — an absence here proves
 
 ***
 
-### paging?
-
-> `readonly` `optional` **paging?**: `PagingDeclaration`
-
-Defined in: [src/semantics/coverage/types.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L230)
-
-Whether there is a next page — `{ next: null }` says there is none. A tool
-with a `page` argument whose result declares no `paging` is never complete.
-
-#### Inherited from
-
-[`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration).[`paging`](/docs/api/interfaces/AbsenceDeclaration#paging)
-
-***
-
 ### period?
 
 > `readonly` `optional` **period?**: [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
 
-Defined in: [src/semantics/coverage/types.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L218)
+Defined in: [src/semantics/coverage/types.ts:217](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L217)
 
 What the search's READ covered in time — the instants it asked for, and
 what the store holds (or `'unknown'`, said out loud) — honesty step 7b.
@@ -98,28 +83,11 @@ not held · unknown), and `.limitsTravelWithTheAnswer()` prints it.
 
 ***
 
-### resolved?
-
-> `readonly` `optional` **resolved?**: readonly `ResolvedDeclaration`[]
-
-Defined in: [src/semantics/coverage/types.ts:225](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L225)
-
-The entity each population value RESOLVED to — `[{ argument, id, name?,
-aliases? }]` — the tool's own claim, said out loud. Read by a tool that
-declares its `search`: it binds the value the call was SENT for and no
-other entity. Refused here when malformed.
-
-#### Inherited from
-
-[`AbsenceDeclaration`](/docs/api/interfaces/AbsenceDeclaration).[`resolved`](/docs/api/interfaces/AbsenceDeclaration#resolved)
-
-***
-
 ### tryInstead?
 
 > `readonly` `optional` **tryInstead?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L189)
+Defined in: [src/semantics/coverage/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L188)
 
 Where to go INSTEAD, in one sentence ("widen the window with
 `window: '7d'`, or ask for a different interface"). Optional, and the
@@ -140,7 +108,7 @@ when the sentence points at another tool, name that tool in
 
 > `readonly` `optional` **tryInsteadTool?**: [`TryInsteadTool`](/docs/api/interfaces/TryInsteadTool)
 
-Defined in: [src/semantics/coverage/types.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L199)
+Defined in: [src/semantics/coverage/types.ts:198](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L198)
 
 The other TOOL the suggestion points at, as data (9.113.0) —
 `{ tool, why? }`. Beside the sentence, not instead of it: the sentence is
@@ -160,7 +128,7 @@ refused (see `absent.ts` · `readToolSuggestion` for why).
 
 > `readonly` **what**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L166)
+Defined in: [src/semantics/coverage/types.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L165)
 
 What was looked for, in the author's own words ("FLOGI entries on
 fc1/3"). Required: an absence that cannot say what it did not find is

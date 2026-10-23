@@ -779,62 +779,38 @@ What the absence then carries:
 - **`checked`** starts with the names facet the tool searched —
   `{ what: 'the 25 array_id names listed in the PowerStore inventory export',
   facet: 'names', argument, count, source, from: 'result' }`. Its words come
-  from your declaration, never from the value asked for.
+  from your declaration, never from the value asked for. When `measuredAt` is
+  an ISO 8601 instant, the facet's `why` says `names as of <measuredAt>` — a
+  date, with no judgement of whether it is old.
 - **`not_checked`** starts with a gap you cannot remove —
   `{ what: 'names outside the PowerStore inventory export', kind: 'scope',
   relevance: 'bears', bears: 'source' }`. Your own `notChecked` and
   `cannotCover` entries follow it. The only opt-out is
   `among.authoritative: { why }`, for a list that really is every name there
   is; `check:semantics` lists every use of it for review.
+- **A partial read** — a truncated or paged inventory — says
+  `partial: true`. It checked even less, so it gets BOTH gaps: the source gap
+  above and `not every name in <source> was read` (`bears: 'completeness'`),
+  which nothing removes. `authoritative` drops only the source gap.
 - **`provenance`** is composed from `source` and `measuredAt` (so `provenance`
   beside `among` is refused).
-- **`known_names`** — what the model may know of the list, only with
-  `visible: 'caller'`: the count and the 20 names nearest the value asked for
-  (in the evidence gate's spelling, nearest first). Say `'caller'` only when
-  the tool read the list under the caller's own identity; there is no
-  default, because a list shown by default would show one person's names to
-  another. Without it, the model reads the count on the names facet.
 
 The laws, each pinned by a test:
 
-- **The names are never part of the result, and they are your rules' to
-  decide.** `absent()` does not put them in the envelope it returns: it keeps
-  them on a library-owned channel keyed by that envelope. An `onToolResult`
-  rule is handed them beside the result, as `call.knownNames`, and decides
-  what the model reads: a pass-through keeps them; a rule that rewrites the
-  result drops them unless it hands them back
-  (`allow(value, why, { knownNames: call.knownNames })`), and may hand back a
-  narrower list or `null`; a denial drops them (see
-  [the names a lookup read](doc:middleware#the-names-a-lookup-read--callknownnames)).
-  What the rules let through is attached in one place — the message the model
-  reads — so `stream.tool_end` (`result` and `modelResult`), `tools.absent`,
-  the tool-call ledger, the middleware decision rows and
-  `sharedState.coverageDeclared` see a result that never held them, whatever
-  a rule does to it. The conversation itself — the history `iteration_end`
-  reports, the messages slot's `context.injected`, a narrative entry's
-  `rawValue` — is what the model read and holds them, under the same
-  redaction policy as the result: `conversationRedaction()` keeps both out of
-  every record while the model still reads them.
-- **The names count against `maxToolResultChars`.** The list is trimmed —
-  never the result — until the message fits, and `known_names.omitted` says
-  how many were left out; with no room even for the count, nothing is
-  attached.
-- **Return the envelope `absent()` gave you.** A copy (`{ ...absent(…) }`, a
-  JSON round trip) carries no channel, so its names are not served — the safe
-  direction. Text the rules let through gets the names as one
-  `known_names:` line after it; any object gets a `known_names` key.
-- **Untrusted names are filtered and capped.** The names are the tool's data
-  and may hold injection text or another person's names: a name outside one
-  plain printable line (no control, separator, invisible format, surrogate or
-  private-use character) or over 128 characters is dropped and counted
-  (`known_names.dropped`), and at most 20 are shown.
-- **The cost is bounded.** A looked-for value over 128 characters, or a list
-  over 10,000 names, ranks nothing — the count is served alone.
-- **The count must agree with the names.** When `names` is given its length
-  must equal `count`, so the names shown can never outnumber it; anything else
-  is refused (`names-count-mismatch`).
+- **The gap holds where `among` is declared.** A plain `absent({ what })`, or a
+  refusal your tool throws, never passes through it — so declare `among`
+  wherever a lookup checks a known list.
+- **`count`, `partial` and `authoritative.why` are your tool's claims.** The
+  library says them out loud; it does not verify them.
+- **The names are never served.** `names`, when given, is read for one thing:
+  its length must equal `count`, or the mint refuses (`names-count-mismatch`).
+  No name reaches the model, an event or the record. A short list of
+  "nearest" names was tried and held back: it read as an inventory listing
+  rather than a "did you mean?", and carried whatever text the inventory
+  holds. Serving names waits for a measurement of count-only against a
+  near-match suggestion.
 - **The value asked for stays off the evidence**, as `looked_for` always has:
-  the facet, the gap and the names ground an answer; the request does not.
+  the facet and the gap ground an answer; the request does not.
 - **A well-formed unknown value is an absence, never a refusal.** A value your
   `inputSchema` refuses (a number where a string belongs, a `pattern` it does
   not match) is still refused before the call runs; a value that passes the

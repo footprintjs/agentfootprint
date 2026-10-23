@@ -15,8 +15,6 @@
  * disagree, so it is the only thing required to say why.
  */
 
-import { knownNamesProblem } from '../../../semantics/coverage/among.js';
-import type { KnownNames } from '../../../semantics/coverage/types.js';
 import { assertAskComponent } from '../../../tools/askComponent.js';
 import type {
   AllowOutcome,
@@ -58,19 +56,18 @@ export function allow<T>(value: T, why: string): AllowOutcome<T>;
  *     from: { window: 'person' },
  *   });
  */
-export function allow<T>(value: T, why: string, options: AllowOptions): AllowOutcome<T>;
-export function allow<T>(value?: T, why?: string, options?: AllowOptions): AllowOutcome<T> {
+export function allow<T>(
+  value: T,
+  why: string,
+  origin: { readonly from: ArgumentOrigins },
+): AllowOutcome<T>;
+export function allow<T>(
+  value?: T,
+  why?: string,
+  origin?: { readonly from: ArgumentOrigins },
+): AllowOutcome<T> {
   if (value === undefined) {
-    // A pass-through reads `knownNames` only — `from` names rewritten
-    // arguments, and there are none (ignored, as it always was).
-    const carriesNames =
-      options !== null && typeof options === 'object' && Object.hasOwn(options, 'knownNames');
-    const extra = carriesNames ? readAllowOptions({ knownNames: options.knownNames }) : {};
-    return {
-      kind: 'allow',
-      ...(typeof why === 'string' && why.length > 0 && { why }),
-      ...('knownNames' in extra && { knownNames: extra.knownNames }),
-    };
+    return typeof why === 'string' && why.length > 0 ? { kind: 'allow', why } : { kind: 'allow' };
   }
   if (typeof why !== 'string' || why.length === 0) {
     throw new Error(
@@ -79,55 +76,8 @@ export function allow<T>(value?: T, why?: string, options?: AllowOptions): Allow
         'call allow() with no arguments.',
     );
   }
-  const extra = options === undefined ? {} : readAllowOptions(options);
-  return {
-    kind: 'allow',
-    value,
-    why,
-    ...(extra.from !== undefined && { from: extra.from }),
-    ...('knownNames' in extra && { knownNames: extra.knownNames }),
-  };
-}
-
-/**
- * The third argument of `allow`: where rewritten arguments came from
- * (`from`), and — after a tool ran — which of the names an
- * `absent({ among })` read the model may see (`knownNames`: the block, a
- * narrower one, or `null` for none). At least one; nothing else.
- */
-export interface AllowOptions {
-  readonly from?: ArgumentOrigins;
-  readonly knownNames?: KnownNames | null;
-}
-
-/** The options, judged — refused here, in the middleware author's own stack. */
-function readAllowOptions(options: unknown): {
-  readonly from?: ArgumentOrigins;
-  readonly knownNames?: KnownNames | null;
-} {
-  const rec =
-    options !== null && typeof options === 'object' && !Array.isArray(options)
-      ? (options as Record<string, unknown>)
-      : undefined;
-  const hasNames = rec !== undefined && Object.hasOwn(rec, 'knownNames');
-  const onlyKnownKeys =
-    rec !== undefined && Object.keys(rec).every((key) => key === 'from' || key === 'knownNames');
-  // `from` — and any options that are not a `knownNames`-only object — is
-  // judged exactly as it was before `knownNames` existed.
-  const judgeFrom = !hasNames || !onlyKnownKeys || Object.hasOwn(rec, 'from');
-  const from = judgeFrom ? assertOrigins(options) : undefined;
-  if (!hasNames || rec === undefined) return { ...(from !== undefined && { from }) };
-  const names = rec.knownNames;
-  if (names !== null) {
-    const problem = knownNamesProblem(names);
-    if (problem !== undefined) {
-      throw new Error(
-        `allow(…, { knownNames }): ${problem}. Hand back \`call.knownNames\` to keep them, a ` +
-          'narrower block to edit them, or null to drop them.',
-      );
-    }
-  }
-  return { ...(from !== undefined && { from }), knownNames: names as KnownNames | null };
+  if (origin === undefined) return { kind: 'allow', value, why };
+  return { kind: 'allow', value, why, from: assertOrigins(origin) };
 }
 
 const ORIGINS: readonly string[] = ['person', 'default', 'app'];

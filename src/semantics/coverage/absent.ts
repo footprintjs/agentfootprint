@@ -63,7 +63,7 @@
 
 import { mintProvenance } from '../described.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
-import { keepKnownNames, mintAmong } from './among.js';
+import { mintAmong } from './among.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
@@ -296,9 +296,9 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  * A name looked up in a known list is a search over that list: declare the
  * list as `among` (see {@link AbsenceAmongDeclaration}) and the mint composes
  * the names facet, the gap "names outside <source>" — which only
- * `among.authoritative` removes — and the `provenance`. The nearest names
- * (`visible: 'caller'` only) are kept OFF the envelope, on the library's
- * channel, and attached to the model's message alone.
+ * `among.authoritative` removes; a `partial` read also gets "not every name in
+ * <source> was read", which nothing removes — and the `provenance`. The names are read only
+ * to check `count`; none is served.
  *
  * @example a port-lookup tool that found no matching FLOGI
  *   defineTool({
@@ -353,7 +353,7 @@ export function absent(
   // and its gap leads `notChecked`, so the author can add ground, never
   // remove the gap.
   const raw = decl as { readonly among?: unknown; readonly provenance?: unknown };
-  const among = raw.among == null ? undefined : mintAmong(raw.among, what);
+  const among = raw.among == null ? undefined : mintAmong(raw.among);
   if (among !== undefined && declared) {
     throw refusal(
       "`among` and `checked: 'declared'` each compose an absence's ground — `among` for a " +
@@ -383,7 +383,7 @@ export function absent(
   }
   const notCheckedAuthored = normalizeCoverageList('notChecked', decl.notChecked, false);
   const notChecked =
-    among?.gap === undefined ? notCheckedAuthored : [among.gap, ...notCheckedAuthored];
+    among === undefined ? notCheckedAuthored : [...among.gaps, ...notCheckedAuthored];
   const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
   const sentence = readSentence(decl.tryInstead);
   if (sentence.problem !== undefined) throw refusal(`'${what}' — ${sentence.problem}`);
@@ -410,7 +410,7 @@ export function absent(
   const resolved = mintResolved(decl.resolved);
   const paging = mintPaging(decl.paging);
 
-  const envelope = {
+  return {
     af_absent: true,
     outcome: 'nothing_found',
     looked_for: what,
@@ -426,11 +426,6 @@ export function absent(
     ...(tryInsteadTool !== undefined && { try_instead_tool: tryInsteadTool }),
     note: ABSENCE_NOTE,
   } as ToolAbsence;
-  // The names a model may be served ride the library's channel, never the
-  // envelope: every rule, event and row then sees a result that never held
-  // them (`among.ts` · "why it is never in the result").
-  if (among?.knownNames !== undefined) keepKnownNames(envelope, among.knownNames);
-  return envelope;
 }
 
 /** The absence's coverage, in the normalized three-list shape everything
