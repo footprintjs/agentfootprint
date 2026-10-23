@@ -6,7 +6,7 @@ title: DescribedResultDeclaration
 
 > **DescribedResultDeclaration** = `object` & \{ `provenance`: \{ `ageSeconds?`: `number`; `measuredAt`: `string`; `source`: `string`; `sourceExportDate?`: `string`; \}; \} \| \{ `facts?`: `undefined`; `series?`: `undefined`; \}
 
-Defined in: [src/semantics/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L256)
+Defined in: [src/semantics/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L257)
 
 What a tool author passes to `describedResult()` — the
 result fields in ONE spelling, camelCase, respelled to
@@ -81,6 +81,12 @@ The collection interval the values live on ('30m', '1h', 'daily').
 Whether the values are counters — cumulative readings a reader must never
 add together. MUST be stated (true or false) whenever `aggregation` is
 counter-looking (see [COUNTER\_AGGREGATION\_WORDS](/docs/api/variables/COUNTER_AGGREGATION_WORDS)).
+
+### paging?
+
+> `readonly` `optional` **paging?**: `PagingDeclaration`
+
+Whether there is a next page — `{ next: null }` says there is none.
 
 ### period?
 
@@ -161,6 +167,14 @@ A note about what filtering already happened ('replicas excluded').
 > `readonly` `optional` **sort?**: `string`
 
 Sort hint ('avg_iops desc').
+
+### resolved?
+
+> `readonly` `optional` **resolved?**: readonly `ResolvedDeclaration`[]
+
+The entity each population value RESOLVED to — `[{ argument, id, name?,
+aliases? }]` — the tool's own claim. Read by a tool that declares its
+`search`: it binds the value the call was SENT for, and no other entity.
 
 ### series?
 

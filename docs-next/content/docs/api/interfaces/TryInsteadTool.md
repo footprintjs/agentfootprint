@@ -4,7 +4,7 @@ title: TryInsteadTool
 
 # Interface: TryInsteadTool
 
-Defined in: [src/semantics/coverage/types.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L151)
+Defined in: [src/semantics/coverage/types.ts:152](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L152)
 
 The other TOOL a suggestion points at, typed (9.113.0) — `tryInsteadTool`
 on the declaration, `try_instead_tool` on the envelope.
@@ -28,7 +28,7 @@ warns about it (dev mode), here as at `defineTool`.
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:153](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L153)
+Defined in: [src/semantics/coverage/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L154)
 
 The tool's registered name, as a call would name it.
 
@@ -38,6 +38,6 @@ The tool's registered name, as a call would name it.
 
 > `readonly` `optional` **why?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L155)
+Defined in: [src/semantics/coverage/types.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L156)
 
 Why that tool, in the author's words ("it lists the collected names").

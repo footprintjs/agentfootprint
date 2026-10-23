@@ -1169,7 +1169,7 @@ searched open incidents for two hours on one service still reads "the incident
 store". So a tool declares, once and as typed data, what one call searches, and the
 library composes each call's coverage from the arguments the call actually ran with:
 
-<CodeFile path="examples/features/107-tool-search.ts" region="tool-search" title="examples/features/107-tool-search.ts (region: tool-search)" />
+<CodeFile path="examples/features/108-tool-search.ts" region="tool-search" title="examples/features/108-tool-search.ts (region: tool-search)" />
 
 - **Every input property is classified** by `role`: `population` (which rows; a
   list gives one facet per value), `filter`, `period` (the argument the tool's
@@ -1216,7 +1216,10 @@ from a credential composes nothing.
 
 **The names.** The declaration is `ToolSearch` (`SearchArgument`, `SearchRole`); the
 row is `ComposedCoverage` (`ComposedItem`, `CoverageGap`, `GapFacet`), recognized by
-`isComposedCoverage`. `check:semantics` lists each search's `source.said` words and
+`isComposedCoverage`. What `absent({ checked: 'declared' })` returns before the funnel
+composes it is a `DeclaredToolAbsence`, and `coverage(rows, { checked: 'declared' })` a
+`DeclaredCoveredResult`; `readAbsence` and `readCoverageLedger` do not read either, so a
+reader that predates `search` sees data, never a half-read envelope. `check:semantics` lists each search's `source.said` words and
 any `said-overlap` as warnings.
 
 ## The result ceiling — refuse, never truncate (9.20.0)

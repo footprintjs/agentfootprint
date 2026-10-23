@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-365 exported from `agentfootprint`.
+371 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -94,6 +94,8 @@ title: Interfaces
 - [`CommitEvent`](/docs/api/interfaces/scope-events#interface-commitevent)
 - [`CompactionOptions`](/docs/api/interfaces/CompactionOptions)
 - [`CompactionRecord`](/docs/api/interfaces/CompactionRecord)
+- [`ComposedCoverage`](/docs/api/interfaces/ComposedCoverage)
+- [`ComposedItem`](/docs/api/interfaces/ComposedItem)
 - [`ConditionalInput`](/docs/api/interfaces/ConditionalInput)
 - [`ConditionalOptions`](/docs/api/interfaces/ConditionalOptions)
 - [`ConflictRow`](/docs/api/interfaces/ConflictRow)
@@ -105,6 +107,7 @@ title: Interfaces
 - [`ControlWindow`](/docs/api/interfaces/ControlWindow)
 - [`Coverage`](/docs/api/interfaces/Coverage)
 - [`CoverageDeclaration`](/docs/api/interfaces/CoverageDeclaration)
+- [`CoverageGap`](/docs/api/interfaces/CoverageGap)
 - [`CoverageItem`](/docs/api/interfaces/CoverageItem)
 - [`CoverageReading`](/docs/api/interfaces/CoverageReading)
 - [`CoveredResult`](/docs/api/interfaces/CoveredResult)
@@ -117,6 +120,7 @@ title: Interfaces
 - [`DecisionLedger`](/docs/api/interfaces/DecisionLedger)
 - [`DecisionValue`](/docs/api/interfaces/DecisionValue)
 - [`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage)
+- [`DeclaredCoveredResult`](/docs/api/interfaces/DeclaredCoveredResult)
 - [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)
 - [`DefineRAGOptions`](/docs/api/interfaces/DefineRAGOptions)
 - [`DefineToolOptions`](/docs/api/interfaces/DefineToolOptions)
@@ -273,6 +277,7 @@ title: Interfaces
 - [`RunTime`](/docs/api/interfaces/RunTime)
 - [`S3ArtifactsOptions`](/docs/api/interfaces/S3ArtifactsOptions)
 - [`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder)
+- [`SearchArgument`](/docs/api/interfaces/SearchArgument)
 - [`SelfConsistencyOptions`](/docs/api/interfaces/SelfConsistencyOptions)
 - [`SelfExplainInclude`](/docs/api/interfaces/SelfExplainInclude)
 - [`SelfExplainOptions`](/docs/api/interfaces/SelfExplainOptions)
@@ -346,6 +351,7 @@ title: Interfaces
 - [`ToolResultContext`](/docs/api/interfaces/ToolResultContext)
 - [`ToolResultEnvelope`](/docs/api/interfaces/ToolResultEnvelope)
 - [`ToolResultMiddleware`](/docs/api/interfaces/ToolResultMiddleware)
+- [`ToolSearch`](/docs/api/interfaces/ToolSearch)
 - [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 - [`TopKOptions`](/docs/api/interfaces/TopKOptions)
 - [`ToTOptions`](/docs/api/interfaces/ToTOptions)

@@ -4,7 +4,7 @@ title: ToolAbsence
 
 # Interface: ToolAbsence
 
-Defined in: [src/semantics/coverage/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L258)
+Defined in: [src/semantics/coverage/types.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L282)
 
 The rendered absence — the exact object a tool hands back and the model
 reads. Field names are snake_case and English on purpose: this value is
@@ -22,7 +22,7 @@ other shape as one.
 
 > `readonly` **af\_absent**: `true`
 
-Defined in: [src/semantics/coverage/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L259)
+Defined in: [src/semantics/coverage/types.ts:283](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L283)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/semantics/coverage/types.ts:259](https://github.com/footprintjs
 
 > `readonly` `optional` **cannot\_cover?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L266)
+Defined in: [src/semantics/coverage/types.ts:290](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L290)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [src/semantics/coverage/types.ts:266](https://github.com/footprintjs
 
 > `readonly` **checked**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L264)
+Defined in: [src/semantics/coverage/types.ts:288](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L288)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/semantics/coverage/types.ts:264](https://github.com/footprintjs
 
 > `readonly` **looked\_for**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L263)
+Defined in: [src/semantics/coverage/types.ts:287](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L287)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/semantics/coverage/types.ts:263](https://github.com/footprintjs
 
 > `readonly` `optional` **not\_checked?**: readonly [`CoverageItem`](/docs/api/interfaces/CoverageItem)[]
 
-Defined in: [src/semantics/coverage/types.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L265)
+Defined in: [src/semantics/coverage/types.ts:289](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L289)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/semantics/coverage/types.ts:265](https://github.com/footprintjs
 
 > `readonly` **note**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:283](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L283)
+Defined in: [src/semantics/coverage/types.ts:311](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L311)
 
 The static sentence. Never interpolated — see `absent.ts`.
 
@@ -72,10 +72,20 @@ The static sentence. Never interpolated — see `absent.ts`.
 
 > `readonly` **outcome**: `"nothing_found"`
 
-Defined in: [src/semantics/coverage/types.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L262)
+Defined in: [src/semantics/coverage/types.ts:286](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L286)
 
 The plain-English handle. Present so a model that skims one key still
  reads the outcome rather than inferring it from a missing field.
+
+***
+
+### paging?
+
+> `readonly` `optional` **paging?**: `PagingDeclaration`
+
+Defined in: [src/semantics/coverage/types.ts:309](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L309)
+
+Whether there is a next page, as declared.
 
 ***
 
@@ -83,7 +93,7 @@ The plain-English handle. Present so a model that skims one key still
 
 > `readonly` `optional` **period?**: `object`
 
-Defined in: [src/semantics/coverage/types.ts:281](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L281)
+Defined in: [src/semantics/coverage/types.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L305)
 
 What the search's read covered in time — `queried`, `held` (or
  `'unknown'`), `read_at` — honesty step 7b.
@@ -114,10 +124,20 @@ What the search's read covered in time — `queried`, `held` (or
 
 > `readonly` `optional` **provenance?**: [`SemanticProvenance`](/docs/api/interfaces/SemanticProvenance)
 
-Defined in: [src/semantics/coverage/types.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L278)
+Defined in: [src/semantics/coverage/types.ts:302](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L302)
 
 Where the search looked and when that source was measured — the wire
  `describedResult()` mints (`measured_at`, `source`, …), honesty step 7b.
+
+***
+
+### resolved?
+
+> `readonly` `optional` **resolved?**: readonly `ResolvedDeclaration`[]
+
+Defined in: [src/semantics/coverage/types.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L307)
+
+The entity each population value resolved to, as declared.
 
 ***
 
@@ -125,7 +145,7 @@ Where the search looked and when that source was measured — the wire
 
 > `readonly` **retry\_returns\_the\_same**: `true`
 
-Defined in: [src/semantics/coverage/types.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L269)
+Defined in: [src/semantics/coverage/types.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L293)
 
 Stated as data as well as prose — the note can be skimmed past, a
  `true` in a field named for the question cannot.
@@ -136,7 +156,7 @@ Stated as data as well as prose — the note can be skimmed past, a
 
 > `readonly` `optional` **try\_instead?**: `string`
 
-Defined in: [src/semantics/coverage/types.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L272)
+Defined in: [src/semantics/coverage/types.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L296)
 
 The author's sentence. A string, always — the typed tool rides its own
  key, so a reader of this one never has to narrow it.
@@ -147,7 +167,7 @@ The author's sentence. A string, always — the typed tool rides its own
 
 > `readonly` `optional` **try\_instead\_tool?**: [`TryInsteadTool`](/docs/api/interfaces/TryInsteadTool)
 
-Defined in: [src/semantics/coverage/types.ts:275](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L275)
+Defined in: [src/semantics/coverage/types.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/types.ts#L299)
 
 The typed tool the suggestion points at (9.113.0), as declared — the
  author's words, `{ tool, why? }`. The model reads it as written.

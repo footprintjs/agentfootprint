@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-142 exported from `agentfootprint`.
+145 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -45,6 +45,7 @@ title: Type Aliases
 - [`CoverageInput`](/docs/api/type-aliases/CoverageInput)
 - [`CreateProviderOptions`](/docs/api/type-aliases/CreateProviderOptions)
 - [`DatasetArtifactReceipt`](/docs/api/type-aliases/DatasetArtifactReceipt)
+- [`DeclaredToolAbsence`](/docs/api/type-aliases/DeclaredToolAbsence)
 - [`DescribedResultDeclaration`](/docs/api/type-aliases/DescribedResultDeclaration)
 - [`ElicitationProperty`](/docs/api/type-aliases/ElicitationProperty)
 - [`EmittedEvent`](/docs/api/type-aliases/EmittedEvent)
@@ -57,6 +58,7 @@ title: Type Aliases
 - [`FindingsRow`](/docs/api/type-aliases/FindingsRow)
 - [`FlowchartResultMapper`](/docs/api/type-aliases/FlowchartResultMapper)
 - [`FoldBasis`](/docs/api/type-aliases/FoldBasis)
+- [`GapFacet`](/docs/api/type-aliases/GapFacet)
 - [`GraphInput`](/docs/api/type-aliases/GraphInput)
 - [`GraphOutput`](/docs/api/type-aliases/GraphOutput)
 - [`GroupKind`](/docs/api/type-aliases/GroupKind)
@@ -103,6 +105,7 @@ title: Type Aliases
 - [`RunbookPresentation`](/docs/api/type-aliases/RunbookPresentation)
 - [`RunbookProcedure`](/docs/api/type-aliases/RunbookProcedure)
 - [`RunConfigFn`](/docs/api/type-aliases/RunConfigFn)
+- [`SearchRole`](/docs/api/type-aliases/SearchRole)
 - [`SemanticIssueCode`](/docs/api/type-aliases/SemanticIssueCode)
 - [`SequenceOutput`](/docs/api/type-aliases/SequenceOutput)
 - [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)

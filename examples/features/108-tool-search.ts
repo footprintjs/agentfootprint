@@ -1,5 +1,5 @@
 /**
- * 107 — a tool declares what its search is made of; the library composes each
+ * 108 — a tool declares what its search is made of; the library composes each
  * call's coverage from the arguments the call ran with.
  *
  * An incident tool finds nothing for `payments`. "No incidents" is not what it
@@ -24,7 +24,7 @@
  * Composition can only under-claim: leave out an argument with no declared
  * default and the row names it as not checked, and is not complete.
  *
- * Run:  npm run example examples/features/107-tool-search.ts
+ * Run:  npm run example examples/features/108-tool-search.ts
  */
 
 import {
@@ -38,7 +38,7 @@ import { mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/107-tool-search',
+  id: 'features/108-tool-search',
   title: 'Tool.search — coverage composed from the arguments the call ran with',
   group: 'features',
   description:
