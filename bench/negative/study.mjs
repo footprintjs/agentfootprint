@@ -16,6 +16,13 @@
  *
  * A reply's labels: `claimsNonExistence` (the reply states a flat negative or completeness claim,
  * true or not) and `flagged` (it states one that is false — the claim the record cannot support).
+ *
+ * WHAT COUNTS — the study's registration (its `study/analysis/CONTRACT.md`): only REGISTERED runs
+ * — never a pilot (`plan.runName` naming one), never a dry rehearsal (`dry-*`, `mode: 'dry'`) —
+ * and only their ANALYSED rows: `status: 'done'`, no `exclusion`, not void after any registered
+ * amendment (`sealed/checks-amended.jsonl` over `sealed/checks.jsonl`). A not-run slot a
+ * completion re-ran is not-run, so it never counts. A label sheet that names anything else is
+ * REFUSED, not skipped: the replay counts what the registration counts, or nothing.
  */
 
 import { createHash } from 'node:crypto';
@@ -50,6 +57,22 @@ function voidedTurns(runDir) {
   return new Set([...checks.values()].filter((r) => r.void).map((r) => r.turnId));
 }
 
+const readJson = (file) => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {});
+
+/** Whether a run folder is one the registration counts: keyed, not a pilot, not a dry rehearsal. */
+export function isCountedRun(dataDir, name) {
+  const dir = join(dataDir, 'runs', name);
+  if (!existsSync(join(dir, 'key.jsonl')) || name.startsWith('dry-')) return false;
+  const plan = readJson(join(dir, 'plan.json'));
+  const conditions = readJson(join(dir, 'conditions.json'));
+  if (conditions.mode === 'dry') return false;
+  return !/pilot/i.test(String(plan.runName ?? name));
+}
+
+/** An analysed row: done, not excluded, not void after any amendment. */
+const analysed = (turn, voided) =>
+  turn.status === 'done' && !turn.exclusion && !voided.has(turn.turnId);
+
 /** The study's sheet order over some runs — its key, rebuilt. */
 export function rebuildSheetKey(dataDir, runNames) {
   const ordered = [...runNames].sort((a, b) => stampOf(a).localeCompare(stampOf(b)));
@@ -58,7 +81,7 @@ export function rebuildSheetKey(dataDir, runNames) {
     const dir = join(dataDir, 'runs', name);
     const voided = voidedTurns(dir);
     for (const t of rows(join(dir, 'turns.jsonl'))) {
-      if (t.status === 'done' && !t.exclusion && !voided.has(t.turnId)) turnIds.push(t.turnId);
+      if (analysed(t, voided)) turnIds.push(t.turnId);
     }
   }
   const seed = `rater-sheet|${ordered.join('+')}`;
@@ -85,16 +108,20 @@ export function loadStudy(dataDir) {
     cases.set(c.id, { code: shortCode(c.id), kind: c.kind });
   }
 
+  // Only the counted runs, and only their analysed rows.
   const turns = new Map();
   const keyedRuns = [];
-  for (const name of dirsIn(join(dataDir, 'runs'))) {
+  const counted = dirsIn(join(dataDir, 'runs')).filter((name) => isCountedRun(dataDir, name));
+  for (const name of counted) {
     const dir = join(dataDir, 'runs', name);
     const key = new Map(rows(join(dir, 'key.jsonl')).map((r) => [r.turnId, r]));
-    if (key.size === 0) continue;
+    const voided = voidedTurns(dir);
     keyedRuns.push({ name, turnIds: new Set(key.keys()) });
     for (const t of rows(join(dir, 'turns.jsonl'))) {
       const k = key.get(t.turnId);
-      if (k !== undefined) turns.set(t.turnId, { ...t, arm: k.arm, caseId: k.caseId });
+      if (k !== undefined && analysed(t, voided)) {
+        turns.set(t.turnId, { ...t, arm: k.arm, caseId: k.caseId });
+      }
     }
   }
 
@@ -119,10 +146,17 @@ export function loadStudy(dataDir) {
       }
       rebuilt.push({ set, runs: runs.length, items: key.length });
     }
+    const uncounted = key.filter(({ turnId }) => !turns.has(turnId)).length;
+    if (uncounted > 0) {
+      throw new Error(
+        `labels set ${set}: ${uncounted} labelled items are not analysed rows of a counted run ` +
+          '(a pilot, a dry rehearsal, an excluded or voided turn) — refusing to count them',
+      );
+    }
     for (const { sheetId, turnId } of key) {
       const turn = turns.get(turnId);
-      const bank = turn === undefined ? undefined : cases.get(turn.caseId);
-      if (turn === undefined || bank === undefined) continue;
+      const bank = cases.get(turn.caseId);
+      if (bank === undefined) continue;
       replies.push({
         turnId,
         code: bank.code,
@@ -135,5 +169,5 @@ export function loadStudy(dataDir) {
       });
     }
   }
-  return { cases: [...cases.values()], replies, rebuilt };
+  return { cases: [...cases.values()], replies, rebuilt, runs: counted };
 }

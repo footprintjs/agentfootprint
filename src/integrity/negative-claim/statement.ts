@@ -30,7 +30,7 @@ import type { ComposedCoverage, ComposedItem } from '../../semantics/coverage/co
 import { periodVerdict } from '../../semantics/coverage/period.js';
 import { resultSpan } from '../../semantics/coverage/search/span.js';
 import { instantOf } from '../../time/instant.js';
-import type { TimeRange } from '../../time/range.js';
+import { parseRange, type TimeRange } from '../../time/range.js';
 import { unheldRanges } from './readings.js';
 import type { NegativeKind, NegativeStatement, SearchTool, TurnCall } from './types.js';
 
@@ -119,17 +119,22 @@ function clockOf(ms: number): string {
 const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 /**
- * A half-open span (`time/range.ts`) as the statement writes it: `08:00–10:00Z`, or with dates
- * across days; undefined when it is not a pair of instants.
+ * A span (`time/range.ts`) as the statement writes it — always with its date, so a historical
+ * window is never read as today's: `2026-10-01 08:00–10:00Z`, or a date on each bound across
+ * days (`2026-10-15 10:00Z–2026-10-22 10:00Z`); undefined when it is not a pair of instants.
  */
 export function formatSpan(span: TimeRange): string | undefined {
   const from = instantMs(span.from);
   const to = instantMs(span.to);
   if (from === undefined || to === undefined) return undefined;
   return dayOf(from) === dayOf(to)
-    ? `${clockOf(from)}–${clockOf(to)}Z`
+    ? `${dayOf(from)} ${clockOf(from)}–${clockOf(to)}Z`
     : `${dayOf(from)} ${clockOf(from)}Z–${dayOf(to)} ${clockOf(to)}Z`;
 }
+
+/** An absolute window as sent (`<from>..<to>` or `<from>/<to>`), read by the time layer's parser. */
+const sentRange = (value: unknown): TimeRange | undefined =>
+  parseRange(value, '..') ?? parseRange(value, '/');
 
 /** An instant, with its date unless it falls on the leg clock's day. */
 function formatInstant(ms: number, clock: string): string {
@@ -157,7 +162,12 @@ const items = (row: ComposedSearchRow, facet: SearchCheckedItem['facet']) =>
 function periodParts(row: ComposedSearchRow): { window?: string; unchecked: string[] } {
   const declared = items(row, 'period')[0];
   const period = row.period;
-  const ran = declared?.span ?? (period === undefined ? undefined : resultSpan(period));
+  // The window the call ran with: a relative one's dispatch-time span; an absolute one as sent;
+  // else the result's own `queried`.
+  const ran =
+    declared?.span ??
+    sentRange(declared?.value) ??
+    (period === undefined ? undefined : resultSpan(period));
   const shown = ran === undefined ? undefined : formatSpan(ran);
   const windowText =
     shown ?? (declared === undefined ? undefined : quoteValue(declared.value ?? declared.what));

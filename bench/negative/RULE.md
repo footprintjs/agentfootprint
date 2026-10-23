@@ -81,3 +81,13 @@ The first run's report measured the wrong things in three places. Changed, and w
    gate below its floor reads `below floor`, not pass or fail.
 
 The grammar, the split and the labels are unchanged; the first run's numbers are superseded.
+
+## Amendment 2 — 2026-10-23, the loader counts what the registration counts
+
+A review found the loader trusted the label sheets: it read turns from every keyed run, and a
+pilot run with a key would have been swept into a rebuilt sheet. Now (`study.mjs` ·
+`isCountedRun`, `loadStudy`): only registered runs count — never a pilot (`plan.runName`), never a
+dry rehearsal — and only their ANALYSED rows (`status: 'done'`, no `exclusion`, not void after any
+registered amendment), as the study's `CONTRACT.md` defines them. A sheet that names anything else
+is refused. Re-run on the study's data: every one of the 891 labelled replies was already an
+analysed row of a registered run, so no number changed.

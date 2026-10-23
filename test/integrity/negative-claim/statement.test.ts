@@ -106,7 +106,7 @@ describe('each row shape', () => {
       incidentCall({ held: { from: '2026-10-22T09:00:00Z', to: CLOCK }, gaps: [] }),
     ]);
     expect(text).toContain(
-      'window 08:00–10:00Z (held in part); not checked: 08:00–09:00Z (not held).',
+      'window 2026-10-22 08:00–10:00Z (held in part); not checked: 2026-10-22 08:00–09:00Z (not held).',
     );
   });
 
