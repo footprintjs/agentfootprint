@@ -1387,7 +1387,9 @@ known". The proof is as strong as the ledger: several processes on one store,
 each on its own default ledger, can each believe a request unspent that
 another process spent; and a closing door reads the ledger without
 compare-and-set, so an older replica still running the old rules can answer
-the pause after the door read it.
+the pause after the door read it. Both the proof and "once" hold per ledger:
+change the ledger agents spend in only once no pause stored under the old one
+can still be answered, since the new ledger never saw the old one's spends.
 
 ### A pause the wire could not describe
 
