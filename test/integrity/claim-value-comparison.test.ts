@@ -16,6 +16,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  claimShapeOf,
   claimValueKey,
   compareClaimValues,
 } from '../../src/integrity/unsupported-claim/evaluate.js';
@@ -287,6 +288,15 @@ describe('SECURITY — depth, cycles and unknowns', () => {
     expect(compareClaimValues([unknown('x')], [1])).toBe('incomparable');
   });
 
+  it('a wrapper of either kind is read only when well formed', () => {
+    // `known` needs its `evidence`, `unknown` its `reason`; neither carries more.
+    expect(compareClaimValues(5, { kind: 'known', value: 5 })).toBe('incomparable');
+    expect(compareClaimValues({ kind: 'known', value: 5 }, 5)).toBe('incomparable');
+    expect(compareClaimValues({ kind: 'unknown', reason: 'r', value: 5 }, 5)).toBe('incomparable');
+    expect(claimValueKey({ kind: 'known', value: 5 })).toBeUndefined();
+    expect(claimValueKey({ kind: 'unknown', reason: 'r', value: 5 })).toBeUndefined();
+  });
+
   it('a wrapper carrying any other key is not read, on either side', () => {
     const extra = { kind: 'known', value: 1250, evidence: 'x', note: 'y' };
     expect(compareClaimValues(1250, extra)).toBe('incomparable');
@@ -332,5 +342,39 @@ describe('SECURITY — depth, cycles and unknowns', () => {
         if (claimValueKey(a) === claimValueKey(b)) expect(compareClaimValues(a, b)).toBe('agrees');
       }
     }
+  });
+});
+
+describe('UNIT — what a value at the top of a claim is, by its shape', () => {
+  it("doubt words are read after the comparison's own normalization", () => {
+    for (const word of ['unknown', 'Unknown', ' UNKNOWN ', 'unk\u006eown']) {
+      expect(claimShapeOf(word)).toEqual({ kind: 'doubt', declared: false });
+    }
+    expect(claimShapeOf(null)).toEqual({ kind: 'doubt', declared: false });
+    expect(claimShapeOf('unknowns')).toEqual({ kind: 'value', face: 'unknowns', declared: false });
+  });
+
+  it('well-formed Claims are declared; anything Claim-shaped and not well formed is malformed', () => {
+    expect(claimShapeOf(unknown('no clock'))).toEqual({ kind: 'doubt', declared: true });
+    expect(claimShapeOf(known(5, 'src'))).toEqual({ kind: 'value', face: 5, declared: true });
+    expect(claimShapeOf(known(null, 'src'))).toEqual({ kind: 'value', face: null, declared: true });
+    for (const bad of [
+      { kind: 'known', value: 5 },
+      { kind: 'known', value: 5, evidence: 7 },
+      { kind: 'known', value: 5, evidence: 'x', note: 1 },
+      { kind: 'known', evidence: 'x' },
+      { kind: 'unknown', reason: 'r', value: 5 },
+      { kind: 'unknown' },
+      { kind: 'not-applicable', evidence: 'x', value: 5 },
+      { kind: 'not-applicable' },
+    ]) {
+      expect(claimShapeOf(bad)).toEqual({ kind: 'malformed' });
+    }
+    // An object with some other `kind` is plain data.
+    expect(claimShapeOf({ kind: 'refund', amount: 5 })).toEqual({
+      kind: 'value',
+      face: { kind: 'refund', amount: 5 },
+      declared: false,
+    });
   });
 });

@@ -119,8 +119,24 @@ function textKey(text: string): string {
   if (isFormatted(text)) return `f:${JSON.stringify(text)}`;
   return hasDigit(text) ? `t:${JSON.stringify(text)}` : `w:${JSON.stringify(foldCase(text))}`;
 }
-/** The keys a well-formed `known(…)` wrapper has (`lib/claim/claim.ts` · `known`). */
-const KNOWN_WRAPPER_KEYS: ReadonlySet<string> = new Set(['kind', 'value', 'evidence']);
+/**
+ * The own keys a well-formed Claim of each kind may have, and the ones it must
+ * (`lib/claim/claim.ts`): `known` its `value` and text `evidence`, `unknown`
+ * its text `reason` (and text `evidence`, optionally), `not-applicable` its
+ * text `evidence`. Anything else carrying one of these `kind`s is malformed.
+ */
+const CLAIM_KEYS: Readonly<
+  Record<
+    'known' | 'unknown' | 'not-applicable',
+    { readonly may: readonly string[]; readonly must: readonly string[] }
+  >
+> = {
+  known: { may: ['kind', 'value', 'evidence'], must: ['value', 'evidence'] },
+  unknown: { may: ['kind', 'reason', 'evidence'], must: ['reason'] },
+  'not-applicable': { may: ['kind', 'evidence'], must: ['evidence'] },
+};
+/** The doubt word, after the comparison's own normalization (`' Unknown '` is one). */
+const DOUBT_WORD = 'unknown';
 
 /**
  * One spelling per decimal value: `42.50` and `42.5` share `425e2`. Takes a
@@ -139,22 +155,76 @@ function decimalKey(spelling: string): string {
 }
 
 /**
- * The comparable face of a value at the TOP of a claim — the one place the
- * contract puts a Claim wrapper (a tool's `known(…)` fact, a claimed field).
- * A well-formed `known(…)` is read as its value; anything else is the value
- * itself. `undefined` — never compared — for an unknown Claim, or a wrapper
- * carrying any other key (or an `evidence` that is not text). Inside a value
- * a wrapper is never read: it is that value's data, compared as an object.
+ * The Claim a value at the TOP of a claim is, by its shape: `undefined` for
+ * plain data (no Claim `kind`), else its kind and whether it is well formed.
+ */
+function claimOf(
+  value: unknown,
+):
+  | { readonly kind: 'known' | 'unknown' | 'not-applicable'; readonly wellFormed: boolean }
+  | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const record = value as Readonly<Record<string, unknown>>;
+  const kind = record.kind;
+  if (kind !== 'known' && kind !== 'unknown' && kind !== 'not-applicable') return undefined;
+  const keys = CLAIM_KEYS[kind];
+  const text = (key: string) => record[key] === undefined || typeof record[key] === 'string';
+  const wellFormed =
+    Object.keys(record).every((key) => keys.may.includes(key)) &&
+    keys.must.every((key) => Object.hasOwn(record, key)) &&
+    text('evidence') &&
+    text('reason');
+  return { kind, wellFormed };
+}
+
+/** What a value at the TOP of a claim is (`claimShapeOf`). */
+export type ClaimShape =
+  /** A value: plain data, or a well-formed `known(…)` by its value (`declared`). */
+  | { readonly kind: 'value'; readonly face: unknown; readonly declared: boolean }
+  /**
+   * Doubt: no value (`undefined`), `null` or the doubt word (`'unknown'` in
+   * any case or spacing), or — `declared` — a well-formed `unknown(…)` /
+   * `notApplicable(…)` Claim.
+   */
+  | { readonly kind: 'doubt'; readonly declared: boolean }
+  /** Claim-shaped, but not a well-formed Claim of its kind: never read. */
+  | { readonly kind: 'malformed' };
+
+/**
+ * Read a value at the TOP of a claim — the one place the contract puts a
+ * Claim (a tool's `known(…)` fact, a claimed field) — by its shape. Doubt
+ * words are recognized after the same normalization the comparison uses, so
+ * `'Unknown'` and `' UNKNOWN '` are doubt like `'unknown'`. Inside a value
+ * nothing is read this way: a wrapper there is the value's data.
+ */
+export function claimShapeOf(value: unknown): ClaimShape {
+  const claim = claimOf(value);
+  if (claim !== undefined) {
+    if (!claim.wellFormed) return { kind: 'malformed' };
+    return claim.kind === 'known'
+      ? { kind: 'value', face: (value as { value: unknown }).value, declared: true }
+      : { kind: 'doubt', declared: true };
+  }
+  if (value === null || value === undefined) return { kind: 'doubt', declared: false };
+  if (typeof value === 'string' && foldCase(textOf(value)) === DOUBT_WORD) {
+    return { kind: 'doubt', declared: false };
+  }
+  return { kind: 'value', face: value, declared: false };
+}
+
+/**
+ * The comparable face of a value at the TOP of a claim: a well-formed
+ * `known(…)` by its value, plain data as itself. `undefined` — never
+ * compared — for an `unknown` / `notApplicable` Claim and for anything
+ * Claim-shaped that is not well formed. A raw doubt (`null`, `'unknown'`) is
+ * the caller's to classify first (`claimShapeOf`); here it is plain data.
  */
 function topFace(value: unknown): { readonly face: unknown } | undefined {
-  if (!participates(value)) return undefined;
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return { face: value };
-  const record = value as Readonly<Record<string, unknown>>;
-  if (record.kind !== 'known' || !Object.hasOwn(record, 'value')) return { face: value };
-  const wellFormed =
-    Object.keys(record).every((key) => KNOWN_WRAPPER_KEYS.has(key)) &&
-    (record.evidence === undefined || typeof record.evidence === 'string');
-  return wellFormed ? { face: record.value } : undefined;
+  const claim = claimOf(value);
+  if (claim === undefined) return { face: value };
+  return claim.wellFormed && claim.kind === 'known'
+    ? { face: (value as { value: unknown }).value }
+    : undefined;
 }
 
 type Reading =

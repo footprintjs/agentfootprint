@@ -105,19 +105,22 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   NFC, trimmed, white space collapsed, a word case-folded; a number and a
   plain decimal string by value; a unit only against the same unit, written
   exactly; a currency, separators, a date or a time only as written).
-  Contradiction → `checked-fail`. Agreement → `not-applicable`: the contract is
-  unscoped — the latest `(entity, field)` row from ANY tool, with no scope or
-  age check, and any result carrying the semantics marker settles a fact — so
-  agreement verifies nothing; that includes agreeing with an absence a tool
-  declared (`known(null)`). `unreachable` (withheld, fail closed): no settled
-  fact; one settled unknown; a value against a tool's bare `null` /
-  `'unknown'`; doubt on both sides; a fact this run's rows settled two ways
-  (which one is right cannot be told); values of kinds that cannot be
-  compared safely, such as a unit against a bare number ("could not
-  compare", never a contradiction). Omitted or declined (`null`,
-  `'unknown'`, an unknown `Claim`) where the run settled a value →
-  `not-applicable`. The detector's legacy ledger maps agreement and doubt to
-  `checked-pass`; the row maps neither to a pass.
+  The contract is unscoped — `(entity, field)` rows from ANY tool, with no
+  scope or age check, and any result carrying the semantics marker settles a
+  fact — so any reading may be forged or stale, and the row obeys ONE law: a
+  reading can only withhold. With no reading the claim is not checked
+  (`not-applicable`), and one more reading, anywhere, never makes the row
+  more permissive (a monotonicity property pins it). Contradiction with every
+  reading → `checked-fail`. Agreement → `not-applicable`: agreement verifies
+  nothing, an absence a tool declared (`known(null)`) included.
+  `unreachable` (withheld, fail closed): readings that disagree; a reading
+  that settled the fact only as unknown, `null` or `'unknown'` (doubt words
+  read after the same normalization) beside the answer's value; doubt on both
+  sides; values of kinds that cannot be compared safely ("could not
+  compare", never a contradiction); a value or reading that is not a
+  well-formed `Claim`. Omitted or declined (`null`, `'unknown'`, an unknown
+  `Claim`) → `not-applicable`. The detector's legacy ledger maps agreement
+  and doubt to `checked-pass`; the row maps neither to a pass.
 - `evidenceCheckOf` reads the gate's verdict on the SAME delivered candidate:
   the gate is handed over as an `EvidenceJudge` bound to the evidence the run
   read (`core/agent/stages/answerEvidence.ts`, a per-scope `WeakMap`, never
@@ -134,8 +137,8 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
 Two limits, stated in the user docs and pinned by `contract:` tests in
 `test/answer-validation/agentChecksDelivery.test.ts`: the claim ledger
 (`claimFacts`) is THIS run's reads, so a follow-up turn answering from an
-earlier run's read has an `unreachable` claim row and is withheld under
-enforce; and the gate's `minDigits` floor (default 4) means a short bare
+earlier run's read has a `not-applicable` claim row — not checked; the host's
+checks decide; and the gate's `minDigits` floor (default 4) means a short bare
 number is never looked up, so an invented `999` clears the evidence row.
 
 **No agent row is ever `checked-pass`.** The agent's checks can withhold an

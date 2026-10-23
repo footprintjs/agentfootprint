@@ -20,14 +20,17 @@
  * checks can make a report `passed`, which the fold reads as "known":
  *   - The gate's clean verdict is a membership pass: `not-applicable`.
  *   - A claim that agrees with the settled fact is `not-applicable` too. The
- *     contract is unscoped — the latest row for `(entity, field)` from any
- *     tool, with no scope or age check — so agreement verifies nothing. A
- *     contradiction still fails the row.
+ *     contract is unscoped — rows for `(entity, field)` from any tool, with no
+ *     scope or age check — so agreement verifies nothing. A contradiction
+ *     still fails the row.
+ *   - A reading can only withhold (`delivered.ts`): with no reading the claim
+ *     is not checked (`not-applicable`), and one more reading never makes the
+ *     row more permissive, so a forged or stale row can at most withhold.
  *   - Doubt is never support. A field the answer leaves out, or declines
- *     (`null` / `'unknown'`) where the run settled a value, is
- *     `not-applicable`. A value against a tool's bare doubt, doubt on both
- *     sides, a fact the run read two ways, and a fact no row settled are
- *     `unreachable`: enforce withholds, observe delivers "not sure".
+ *     (`null` / `'unknown'`), is `not-applicable`. A value beside a reading
+ *     that settled nothing, doubt on both sides, a fact the run read two
+ *     ways, and anything not well formed are `unreachable`: enforce
+ *     withholds, observe delivers "not sure".
  *
  * And one from the redaction law: a row carries counts and the FIELD names the
  * app declared (the answer field, the fact's field), never a value from the
@@ -156,12 +159,14 @@ function claimRowOf(claim: DeclaredClaim, verdict: DeliveredClaim): AnswerCheck 
       return row(
         'unreachable',
         `could not compare the answer's ${field} with ${fact} a tool settled: they are ` +
-          `different kinds of value (a list, an object, a number, text, or a number with a unit)`,
+          `different kinds of value (a list, an object, a number, text, or a number with a unit), ` +
+          `or one is not a well-formed value`,
       );
     case 'uncollected':
+      // Never more permissive than any reading would be: silent, not withheld.
       return row(
-        'unreachable',
-        `no tool result the run read settled ${fact}, so the answer's ${field} has nothing to agree with`,
+        'not-applicable',
+        `no tool result the run read settled ${fact}, so the answer's ${field} is not checked`,
       );
     case 'disputed':
       return row(
@@ -172,13 +177,14 @@ function claimRowOf(claim: DeclaredClaim, verdict: DeliveredClaim): AnswerCheck 
     case 'settled-unknown':
       return row(
         'unreachable',
-        `the run settled ${fact} as unknown, so the answer's ${field} cannot be compared`,
+        `a tool result the run read settled ${fact} as unknown, so the answer's ${field} ` +
+          `cannot be compared`,
       );
     case 'settled-doubt':
       return row(
         'unreachable',
-        `the run settled ${fact} only as null or 'unknown', so the answer's ${field} has ` +
-          `nothing to agree with`,
+        `a tool result the run read settled ${fact} only as null or 'unknown', so the ` +
+          `answer's ${field} has nothing to agree with`,
       );
     case 'doubt-on-both-sides':
       return row(

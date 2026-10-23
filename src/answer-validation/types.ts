@@ -148,18 +148,20 @@ export interface AnswerValidationOptions<T = unknown> {
    *   compared safely — a list or an object against a scalar, a unit against
    *   a bare number, text with a digit that differs only in case, a value
    *   written with a currency symbol, thousands separators, a date or a time
-   *   unless written the same — are `unreachable`, never `checked-fail`. Contradicts the fact a tool settled: `checked-fail`. Agrees with it:
-   *   `not-applicable` — the contract is unscoped (the latest row for the
-   *   fact from any tool, with no scope or age check), so agreement is not
-   *   verification. States a value for a fact no tool result settled, one
-   *   settled as unknown or only as `null` / `'unknown'`, or one this run's
-   *   tool results settled two ways — or gives no value where the tool
-   *   settled only `null` or `'unknown'` (agreement on doubt verifies
-   *   nothing): `unreachable`, so enforce withholds and observe delivers "not
-   *   sure". Leaves the field out, or declines it (`null`, `'unknown'`) where
-   *   the run settled a value: `not-applicable`. Facts are this run's reads
-   *   only: a follow-up turn that answers from an earlier run's read is
-   *   `unreachable`.
+   *   unless written the same — are `unreachable`, never `checked-fail`.
+   *   The row can only WITHHOLD: it reads every reading of the fact this run
+   *   made (from any tool, with no scope or age check, so any reading may be
+   *   forged or stale), and one more reading never makes it more permissive.
+   *   Contradicts every reading: `checked-fail`. Agrees with them:
+   *   `not-applicable` — agreement is not verification. No tool result
+   *   settled the fact (a follow-up turn answering from an earlier run's read
+   *   included): `not-applicable`, not checked. `unreachable`, so enforce
+   *   withholds and observe delivers "not sure": readings that disagree; a
+   *   reading that settled the fact only as unknown, `null` or `'unknown'` (in
+   *   any case) beside a stated value; doubt on both sides; or a value or
+   *   reading that is not a well-formed `Claim`. Leaves the field out, or
+   *   declines it (`null`, `'unknown'`) where the run read values:
+   *   `not-applicable`.
    * - `'names-and-numbers'`: one row, id `agent:names-and-numbers`: the gate
    *   asked of the exact candidate this validation delivers, after any output
    *   transform (its one repair turn under `posture: 'guard'` runs earlier, on

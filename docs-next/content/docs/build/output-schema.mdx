@@ -480,7 +480,7 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 
 | Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
 |---|---|---|---|---|
-| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts the fact a tool settled | the field states a value no tool result settled, one settled as unknown or only as `null` / `'unknown'`, or one this run's tool results settled two different ways; or gives no value where the tool settled only `null` or `'unknown'` | the field agrees with the fact a tool settled; or the answer leaves the field out, or declines it (`null`, `'unknown'`) where the run settled a value |
+| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts every reading of the fact this run made | this run read the fact two different ways, or only as unknown, `null` or `'unknown'` beside a stated value; doubt on both sides; values that cannot be compared safely; or a value that is not a well-formed `Claim` | the field agrees with the fact; no tool result settled the fact (the claim is not checked); or the answer leaves the field out, or declines it (`null`, `'unknown'`) |
 | `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling; or the answer is longer than the gate reads (its first 20,000 words and numbers), so the rest was never looked up | no value is unsupported, or the answer states none |
 
 - **Every row judges what is delivered.** Rows are judged on the exact JSON
@@ -500,14 +500,19 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 - **Only your checks can pass a report.** The agent's rows can withhold an
   answer and never verify one, so `validate` stays required: a report with no
   comparison of yours stays `unverified`. A claim that agrees with the fact is
-  `not-applicable`, because a `.claims()` contract is unscoped — it reads the
-  latest value any tool result settled for that entity and field, with no
-  scope or age check, and any result shaped as a typed envelope can settle
-  one. Agreement with such a fact may be agreement with another customer's
-  record or a stale read. A contradiction still withholds the answer.
-- **A fact read two ways is not compared.** When this run's tool results
-  settled one fact with different values, the row is `unreachable`: the
-  library cannot tell which one is right.
+  `not-applicable`, because a `.claims()` contract is unscoped — it reads what
+  any tool result settled for that entity and field, with no scope or age
+  check, and any result shaped as a typed envelope can settle one. Agreement
+  with such a fact may be agreement with another customer's record or a stale
+  read. A contradiction still withholds the answer.
+- **A reading can only withhold.** The claim row is never more permissive with
+  a reading than without it, so a forged or stale reading can at most withhold
+  an answer, never deliver one. When no tool result settled the fact, the row
+  is `not-applicable`: the claim is not checked, and your own checks decide.
+  Every reading counts, never the latest alone: readings that disagree, or one
+  that settled the fact only as unknown, `null` or `'unknown'` beside the
+  answer's value, make the row `unreachable` — the library cannot tell which
+  one is right.
 - **A different spelling is not a contradiction.** A claim is compared after
   one declared normalization. Text is compared in Unicode NFC, trimmed, with
   its white space collapsed, and a word is case-folded (`'Settled '` agrees
@@ -525,15 +530,18 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 - **Agreement on doubt verifies nothing.** When the tool settled a field only
   as `null` or `'unknown'` and the answer gives no value either, the row is
   `unreachable`: enforce withholds the answer, and observe delivers it with
-  the standing "not sure", never "known". The same holds for a value stated
-  against a tool's bare `null` or `'unknown'`. An absence a tool declares with
-  `known(null)` is a settled value: a value stated against it fails the row.
+  the standing "not sure", never "known". Doubt words are read after the same
+  normalization as everything else: `'Unknown'` and `' UNKNOWN '` are doubt.
+  An absence a tool declares with `known(null)` is a settled value: a value
+  stated against it fails the row. A `Claim` that is not well formed — a
+  `known(…)` without its `evidence`, an `unknown(…)` that carries a `value` —
+  is never read: the row is `unreachable`.
 - **Facts are this run's reads.** A claim is checked against the tool results
   this run read. A follow-up turn that answers from an earlier turn's read,
-  without reading again, has nothing settled to compare with: its claim rows
-  are `unreachable`, and an enforcing validation withholds the answer. The tool
-  stays on the wire, so the model can read again; or validate such turns with
-  a check of your own.
+  without reading again, has nothing to compare with: its claim rows are
+  `not-applicable` — not checked — so your own checks decide, and nothing
+  catches a field that contradicts what was read in an earlier turn. The tool
+  stays on the wire, so the model can read again.
 - **Short numbers are not looked up.** The gate reads a bare number with fewer
   than `minDigits` digits (default 4) as prose — "3 issues" — so an invented
   `999` passes it. If short numbers in your answers are data, lower `minDigits`
@@ -543,12 +551,12 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   `.claims()` contract names (you may declare one per user). Values stay on
   `agent.unsupportedValues()` and the `integrity.context_error` event, under
   your redaction policy. While `agentChecks` is set, ids starting with `agent:`
-  belong to these rows, and a check of yours using one makes the report
-  `unverified`.
+  belong to these rows: a check of yours using one is refused, your checks are
+  dropped (`invalid-validator-result`), and the report cannot pass.
 - **`mode: 'observe'`** records the same rows and still delivers. It shows what
   enforcing would withhold before you turn it on.
 - **What it does not prove.** No agent row proves an answer right. A claim
-  row catches a field that contradicts the latest value a tool settled for the
+  row catches a field that contradicts what this run's tools settled for the
   fact you declared; it cannot tell whether that fact answers the question
   that was asked. The gate catches invented values, not false claims built
   from real ones. Prose answers are outside this door: it checks typed

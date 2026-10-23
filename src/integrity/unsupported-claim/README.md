@@ -45,20 +45,28 @@ same selection — `check.ts` · `compareClaim`, which `unsupportedClaimsOf` is 
 over the canonical answer that validation delivers, and `delivered.ts` · `judgeDeliveredClaim` turns
 it into one verdict per declared claim, which `answer-validation/agentChecks.ts` files as a report
 row. A verdict that can withhold an answer reads the unscoped contract more strictly than the
-detector, because the contract takes the latest `(entity, field)` row from ANY tool, with no scope
-or age check, and any result carrying the semantics marker settles a fact:
-- **agreement is never support** — `agrees` is `not-applicable`, so only the app's own checks pass
-  a report; a contradiction still fails it and the answer is withheld;
-- **a fact read two ways is disputed** — when this run's rows for one fact disagree, the claim is
-  not compared with the latest (`unreachable`); a row that settled nothing disputes nothing;
-- **a bare doubt settles nothing** — a value against a tool's bare `null` / `'unknown'`, and doubt on
-  both sides, are `unreachable`; an absence a tool declared with `known(null)` is a settled value;
+detector, because the contract takes `(entity, field)` rows from ANY tool, with no scope or age
+check, and any result carrying the semantics marker settles a fact — so any row may be forged or
+stale. Its one law: **a reading can only withhold.** With no reading the claim is not checked
+(`not-applicable`), and one more reading — first or last, forged, stale, doubtful or malformed —
+never makes the verdict more permissive (pinned by a monotonicity property over a value matrix in
+`test/answer-validation/agentChecks.test.ts`). So:
+- **agreement is never support** — `agrees` is `not-applicable`, exactly as silent as no reading, so
+  only the app's own checks pass a report; a contradiction still fails it and the answer is withheld;
+- **every reading counts, never the latest alone** — readings that disagree are `disputed`; a
+  reading that settled nothing (an `unknown(…)` Claim, a bare `null` or doubt word) beside the
+  answer's value withholds; `contradicts` needs every reading to be a value the answer contradicts;
+- **doubt is never agreement** — doubt on both sides is `unreachable` (doubt words are read after
+  the comparison's own normalization, so `'Unknown'` is doubt); only an absence a tool declared with
+  `known(null)` agrees with the answer's doubt;
+- **only a well-formed `Claim` is read** (`evaluate.ts` · `claimShapeOf`): a `known(…)` without its
+  `evidence`, an `unknown(…)` or `notApplicable(…)` carrying a `value`, or any other key, makes the
+  verdict `incomparable`;
 - **values compare after a declared normalization** (`evaluate.ts` · `compareClaimValues`, below) —
   `'Settled '` agrees with `'settled'` and `42.5` with `'42.50'`; values that cannot be compared
   safely are `unreachable`, never a contradiction.
-A claim with no settled fact is `unreachable` too, so it is withheld. Still no re-route: the seam
-above is unchanged, and the detector's findings and dispositions are byte-identical (pinned against
-the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
+Still no re-route: the seam above is unchanged, and the detector's findings and dispositions are
+byte-identical (pinned against the ec32fad source by `test/integrity/claim-pair-evaluation.test.ts`).
 
 **Comparison ownership.** `check.ts` selects the latest `(entity, field)` row, constructs the
 asserted pair and preserves the answer-specific messages, witness order and dispositions.

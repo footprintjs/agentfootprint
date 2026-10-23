@@ -39,6 +39,39 @@ const settled = (value: unknown, over: Partial<ClaimLedgerRow> = {}): ClaimLedge
   ...over,
 });
 
+/** The matrix both properties read: values, doubts, kinds and wrappers of every shape. */
+const VALUES: readonly unknown[] = [
+  undefined,
+  null,
+  false,
+  true,
+  0,
+  30,
+  31,
+  '',
+  ' ',
+  '30',
+  ' 30 ',
+  'unknown',
+  'Unknown',
+  'other',
+  '5 MW',
+  '$1,250',
+  [],
+  [0],
+  [0, false],
+  {},
+  { a: 1, b: 2 },
+  { b: 2, a: 1 },
+  known(30, 'src'),
+  known('30', 'src'),
+  known(null, 'src'),
+  unknown('absent'),
+  notApplicable('n/a'),
+  { kind: 'known', value: 30 },
+  { kind: 'unknown', reason: 'r', value: 30 },
+];
+
 describe('unit: the names-and-numbers row', () => {
   const id = 'agent:names-and-numbers';
   it('a value no tool result carried fails the row, and says whether the repair turn ran', () => {
@@ -171,18 +204,33 @@ describe('unit: the claims rows', () => {
       [settled(1250), settled(1250, { toolName: 'read_build_again', toolCallId: 'call-2' })],
       'checked-fail',
     ],
+    // Every reading counts, never the latest alone: a reading that settled
+    // nothing beside one that settled a value is a run that could not settle it.
     [
-      'an unknown reading beside a value disputes nothing',
+      'an unknown reading beside a value',
       { durationMs: 9750 },
       [settled(unknown('clock unavailable')), settled(1250)],
-      'checked-fail',
+      'unreachable',
     ],
-    ['no tool settled the fact', { durationMs: 9750 }, [], 'unreachable'],
+    [
+      'a bare doubt, then a later reading that agrees',
+      { durationMs: 9750 },
+      [settled('unknown'), settled(9750, { toolCallId: 'call-2' })],
+      'unreachable',
+    ],
+    [
+      'a value, then a later bare doubt',
+      { durationMs: 1250 },
+      [settled(1250), settled('unknown', { toolCallId: 'call-2' })],
+      'unreachable',
+    ],
+    // No reading: the claim is not checked — no more permissive than any row.
+    ['no tool settled the fact', { durationMs: 9750 }, [], 'not-applicable'],
     [
       'only another entity settled',
       { durationMs: 9750 },
       [settled(1250, { entity: 'build-job-73' })],
-      'unreachable',
+      'not-applicable',
     ],
     [
       'settled as unknown',
@@ -204,6 +252,51 @@ describe('unit: the claims rows', () => {
       'unreachable',
     ],
     ['a value against a settled null', { durationMs: 9750 }, [settled(null)], 'unreachable'],
+    // Doubt words are read after the comparison's own normalization.
+    [
+      "a value against a settled 'Unknown'",
+      { durationMs: 9750 },
+      [settled('Unknown')],
+      'unreachable',
+    ],
+    [
+      "'UNKNOWN' against a settled 'Unknown'",
+      { durationMs: 'UNKNOWN' },
+      [settled('Unknown')],
+      'unreachable',
+    ],
+    [
+      "'unknown' against a settled ' Unknown '",
+      { durationMs: 'unknown' },
+      [settled(' Unknown ')],
+      'unreachable',
+    ],
+    ["declined with 'Unknown'", { durationMs: 'Unknown' }, [settled(1250)], 'not-applicable'],
+    // A Claim wrapper of either kind is read only when well formed.
+    [
+      'an unknown wrapper that carries a value',
+      { durationMs: { kind: 'unknown', reason: 'r', value: 9750 } },
+      [settled(1250)],
+      'unreachable',
+    ],
+    [
+      'a not-applicable wrapper that carries a value',
+      { durationMs: { kind: 'not-applicable', evidence: 'x', value: 9750 } },
+      [settled(1250)],
+      'unreachable',
+    ],
+    [
+      'a known wrapper with no evidence',
+      { durationMs: { kind: 'known', value: 1250 } },
+      [settled(1250)],
+      'unreachable',
+    ],
+    [
+      'a tool reading wrapped badly',
+      { durationMs: 1250 },
+      [settled({ kind: 'unknown', reason: 'r', value: 1250 })],
+      'unreachable',
+    ],
     // A value against an absence the tool DECLARED contradicts it.
     [
       'a value against a declared known(null)',
@@ -244,6 +337,13 @@ describe('unit: the claims rows', () => {
     expect(rowFor({ durationMs: 1250 }, [settled(1250)]).reason).toBe(
       "the answer's 'durationMs' agrees with the fact 'durationMs' a tool settled, " +
         'but agreement with a fact the contract does not scope is not verification',
+    );
+  });
+
+  it('a fact no tool result settled is not checked, and says so', () => {
+    expect(rowFor({ durationMs: 9750 }, []).reason).toBe(
+      "no tool result the run read settled the fact 'durationMs', so the answer's " +
+        "'durationMs' is not checked",
     );
   });
 
@@ -385,7 +485,7 @@ describe('oracle: a claim row compares values after the declared normalization',
       reason:
         "could not compare the answer's 'durationMs' with the fact 'durationMs' a tool " +
         'settled: they are different kinds of value (a list, an object, a number, text, or a ' +
-        'number with a unit)',
+        'number with a unit), or one is not a well-formed value',
     });
   });
 
@@ -427,37 +527,12 @@ describe('property: a claim row never says more than the claim detector', () => 
   // `compareClaim`. Over a value matrix, the row is the stricter reader: it
   // never PASSES (agreement with an unscoped fact is not verification), it
   // FAILS only where the detector files a contradiction (a row never invents
-  // one), and whatever the detector could not reach the row cannot either.
-  const values: readonly unknown[] = [
-    undefined,
-    null,
-    false,
-    true,
-    0,
-    30,
-    31,
-    '',
-    ' ',
-    '30',
-    ' 30 ',
-    'unknown',
-    'other',
-    [],
-    [0],
-    [0, false],
-    {},
-    { a: 1, b: 2 },
-    { b: 2, a: 1 },
-    known(30, 'src'),
-    known('30', 'src'),
-    known(null, 'src'),
-    unknown('absent'),
-    notApplicable('n/a'),
-  ];
+  // one), and where the detector could not compare a fact the run did read,
+  // the row withholds.
   it('holds across every evidence × claim pair', () => {
     let cases = 0;
-    for (const evidence of values) {
-      for (const claim of values) {
+    for (const evidence of VALUES) {
+      for (const claim of VALUES) {
         for (const ledger of [[], [settled(evidence)], [settled(999), settled(evidence)]]) {
           const answer = { durationMs: claim };
           const [row] = claimChecksOf([DURATION], ledger, answer, 0);
@@ -465,14 +540,52 @@ describe('property: a claim row never says more than the claim detector', () => 
           const contradiction = findings.some((f) => f.advisory !== true);
           expect(row!.disposition).not.toBe('checked-pass');
           if (row!.disposition === 'checked-fail') expect(contradiction).toBe(true);
-          if (dispositions[0]!.disposition === 'unreachable') {
-            expect(row!.disposition).toBe('unreachable');
+          if (ledger.length > 0 && dispositions[0]!.disposition === 'unreachable') {
+            expect(['unreachable', 'checked-fail']).toContain(row!.disposition);
           }
           cases++;
         }
       }
     }
-    expect(cases).toBe(values.length * values.length * 3);
+    expect(cases).toBe(VALUES.length * VALUES.length * 3);
+  });
+});
+
+describe('property: a reading can only withhold — never more permissive than its absence', () => {
+  // THE law of the claims row (review: a forged or stale row must not turn a
+  // withheld answer into a delivered one). Whatever the run read, ONE more
+  // reading — first or last, forged, stale, doubtful or malformed — can only
+  // keep or add withholding: with no reading the row is `not-applicable`, and
+  // no reading ever makes it more permissive than without that reading.
+  const withholds = (row: AnswerCheck) => row.disposition !== 'not-applicable';
+  const judge = (claim: unknown, values: readonly unknown[]): AnswerCheck =>
+    claimChecksOf(
+      [DURATION],
+      values.map((value, index) => settled(value, { toolCallId: `call-${index}` })),
+      { durationMs: claim },
+      0,
+    )[0]!;
+
+  it('adding any reading anywhere never un-withholds', () => {
+    let cases = 0;
+    const bases: readonly (readonly unknown[])[] = [[], ...VALUES.map((value) => [value])];
+    for (const claim of VALUES) {
+      for (const base of bases) {
+        const before = withholds(judge(claim, base));
+        for (const extra of VALUES) {
+          if (before) {
+            expect(withholds(judge(claim, [...base, extra]))).toBe(true);
+            expect(withholds(judge(claim, [extra, ...base]))).toBe(true);
+          }
+          cases++;
+        }
+      }
+    }
+    expect(cases).toBe(VALUES.length * (VALUES.length + 1) * VALUES.length);
+  });
+
+  it('with no reading the row is not-applicable, whatever the answer says', () => {
+    for (const claim of VALUES) expect(judge(claim, []).disposition).toBe('not-applicable');
   });
 });
 
