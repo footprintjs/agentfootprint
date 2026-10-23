@@ -16,7 +16,7 @@
  *     resumes from what came back.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   Agent,
@@ -28,6 +28,7 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { askHuman } from '../../src/core/pause.js';
+import { bearer } from '../../src/identity.js';
 import { checkInApproved, checkInDeclined } from '../../src/core/checkin.js';
 import {
   memorySessions,
@@ -1450,6 +1451,166 @@ describe('a consent gate over the wire — a decision whose resume failed after 
       const results = stored.conversation.history.filter((m) => m.role === 'tool');
       expect(results.map((m) => m.content)).toEqual(['declined by human: wrong account']);
       expect(results[0]?.content).not.toBe(OUTCOME_NOT_RECORDED);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('a decline refused because an approval already used the request is never recorded as declined — the call may have run', async () => {
+    const ran: number[] = [];
+    const inner = memorySessions();
+    // The approval's mark is refused once: its resume ran the call, failed,
+    // and the store did not take the mark.
+    let refuseMark = true;
+    const sessions: SessionLifecycle = {
+      hydrate: (id) => inner.hydrate(id),
+      async persist(id, envelope) {
+        if (refuseMark && (envelope.data as { answered?: unknown }).answered !== undefined) {
+          refuseMark = false;
+          throw new Error('store busy');
+        }
+        return inner.persist(id, envelope);
+      },
+    };
+    const host = inProcessHost();
+    const handle = await standingAgent({
+      agent: flakyRefunds(ran, { on: true }),
+      sessions,
+      host,
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'raced' });
+      const request = pausedRequest(asked.awaiting);
+      const approved = await host.deliver({
+        input: '',
+        sessionId: 'raced',
+        decision: checkInApproved({ request, by: 'alice' }),
+      });
+      expect(approved.error).toBe('model unavailable');
+      expect(ran).toEqual([10]);
+      const declined = await host.deliver({
+        input: '',
+        sessionId: 'raced',
+        decision: checkInDeclined({ request, by: 'alice', note: 'changed my mind' }),
+      });
+      expect(declined.code).toBe('ERR_RESUME_DECISION');
+      const stored = readPausedRun(await inner.hydrate('raced'));
+      expect(stored.answered).toEqual({ at: expect.any(Number) });
+      const results = stored.conversation.history.filter((m) => m.role === 'tool');
+      expect(results.map((m) => m.content)).toEqual([OUTCOME_NOT_RECORDED]);
+    } finally {
+      warn.mockRestore();
+      await handle.close();
+    }
+  });
+
+  it('two processes, one shared ledger: a decline that loses to an approval leaves the call not known, not declined', async () => {
+    const ran: number[] = [];
+    const sessions = memorySessions();
+    const shared = inMemoryDecisionLedger();
+    // A's next model call after the tool is slow, then fails.
+    const slowly = () => new Promise<void>((done) => setTimeout(done, 80));
+    const hostA = inProcessHost();
+    const a = await standingAgent({
+      agent: flakyRefunds(ran, { on: true }, [], shared, slowly),
+      sessions,
+      host: hostA,
+    });
+    const hostB = inProcessHost();
+    const b = await standingAgent({
+      agent: flakyRefunds(ran, { on: false }, [], shared),
+      sessions,
+      host: hostB,
+    });
+    try {
+      const asked = await hostA.deliver({ input: 'refund me', sessionId: 'two' });
+      const request = pausedRequest(asked.awaiting);
+      const approving = hostA.deliver({
+        input: '',
+        sessionId: 'two',
+        decision: checkInApproved({ request, by: 'alice' }),
+      });
+      await new Promise((done) => setTimeout(done, 20));
+      const declined = await hostB.deliver({
+        input: '',
+        sessionId: 'two',
+        decision: checkInDeclined({ request, by: 'alice', note: 'no' }),
+      });
+      expect(declined.code).toBe('ERR_RESUME_DECISION');
+      expect((await approving).error).toBe('model unavailable');
+      expect(ran).toEqual([10]);
+      const stored = readPausedRun(await sessions.hydrate('two'));
+      expect(stored.answered).toEqual({ at: expect.any(Number) });
+      const results = stored.conversation.history.filter((m) => m.role === 'tool');
+      expect(results.map((m) => m.content)).toEqual([OUTCOME_NOT_RECORDED]);
+    } finally {
+      await a.close();
+      await b.close();
+    }
+  });
+
+  it('an approval whose run ends while the tool’s credential resolves never runs the call — the request is spent', async () => {
+    const ran: number[] = [];
+    const sessions = memorySessions();
+    const host = inProcessHost();
+    const usage = { input: 1, output: 1 };
+    const agent = Agent.create({
+      provider: {
+        name: 'mock',
+        complete: async (request) =>
+          request.messages.some((m) => m.role === 'tool')
+            ? { content: 'refund issued', toolCalls: [], usage, stopReason: 'stop' }
+            : {
+                content: '',
+                toolCalls: [{ id: 't1', name: 'issue_refund', args: { amount: 10 } }],
+                usage,
+                stopReason: 'tool_use',
+              },
+      },
+      model: 'test-model',
+      maxIterations: 3,
+      credentials: {
+        id: 'slow-vault',
+        getCredential: async () => {
+          await new Promise((done) => setTimeout(done, 120));
+          return { status: 'issued', credential: bearer('payments-token') };
+        },
+      },
+    })
+      .system('terse')
+      .tool(
+        defineTool<{ amount: number }, string>({
+          name: 'issue_refund',
+          description: 'refund a customer',
+          inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+          needs: { credential: 'payments' },
+          checkIn: 'always',
+          execute: ({ amount }) => {
+            ran.push(amount);
+            return `refunded ${amount}`;
+          },
+        }),
+      )
+      .build();
+    const handle = await standingAgent({ agent, sessions, host });
+    try {
+      const asked = await host.deliver({ input: 'refund me', sessionId: 'left' });
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 30);
+      const gone = await host.deliver({
+        input: '',
+        sessionId: 'left',
+        decision: checkInApproved({ request: pausedRequest(asked.awaiting), by: 'alice' }),
+        signal: controller.signal,
+      });
+      expect(gone.output).toBeUndefined();
+      await new Promise((done) => setTimeout(done, 200));
+      expect(ran).toEqual([]);
+      // Spent: no answer reaches it again, and the door says what it knows.
+      expect(readPausedRun(await sessions.hydrate('left')).answered).toEqual({
+        at: expect.any(Number),
+      });
     } finally {
       await handle.close();
     }

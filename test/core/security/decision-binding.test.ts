@@ -37,6 +37,7 @@ import {
   type ToolMiddleware,
 } from '../../../src/index.js';
 import type { LLMProvider, LLMResponse } from '../../../src/provider-contract/types.js';
+import { bearer, type CredentialProvider } from '../../../src/identity.js';
 import { watchDecisionUse } from '../../../src/core/consentRequest.js';
 import { installDurabilityBarrier } from '../../../src/core/durabilityBarrier.js';
 import { ResumeDecisionError } from '../../../src/core/pause.js';
@@ -529,6 +530,105 @@ describe('decision binding — inside compositions', () => {
     expect(exec).not.toHaveBeenCalled();
     expect(await watch.mayHaveBeenUsed()).toBe(false);
     watch.release();
+  });
+
+  describe('a resume aborted AFTER the spend runs nothing it was still preparing', () => {
+    // Between the spend and the tool the dispatch still awaits — the tool's
+    // credential (`needs`), its artifacts (`wants`), the rest of an ask's
+    // chain. The engine stops waiting on an aborted run's stage, but the stage
+    // goes on: before this, the approved tool ran AFTER the caller was told
+    // the run ended.
+    const slowVault = (ms: number): CredentialProvider => ({
+      id: 'slow-vault',
+      getCredential: async () => {
+        await new Promise((done) => setTimeout(done, ms));
+        return { status: 'issued', credential: bearer('payments-token') };
+      },
+    });
+    const payingTool = (exec: () => string, checkIn: boolean) =>
+      defineTool<{ amount: number }, string>({
+        name: 'issue_refund',
+        description: 'Issue a refund to the customer',
+        inputSchema: {
+          type: 'object',
+          properties: { amount: { type: 'number' } },
+          required: ['amount'],
+        },
+        needs: { credential: 'payments' },
+        ...(checkIn && { checkIn: 'always' as const }),
+        execute: exec,
+      });
+    const settle = () => new Promise((done) => setTimeout(done, 200));
+
+    it('a check-in whose credential resolves after the caller left: spent, never run', async () => {
+      const exec = vi.fn(() => 'refunded');
+      const agent = Agent.create({
+        provider: refunds(),
+        model: 'mock',
+        credentials: slowVault(120),
+      })
+        .system('You issue refunds.')
+        .tool(payingTool(exec, true))
+        .build();
+      const paused = asCheckIn(await agent.run({ message: 'refund 40' }));
+      const watch = watchDecisionUse(paused.checkIn.id);
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 30);
+      await expect(
+        agent.resume(paused.checkpoint, checkInApproved({ request: paused.checkIn, by: 'maya' }), {
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow();
+      await settle();
+      expect(exec).not.toHaveBeenCalled();
+      // The request was spent — the pause cannot be answered again — and
+      // its call never ran.
+      expect(await watch.mayHaveBeenUsed()).toBe(true);
+      watch.release();
+    });
+
+    it('the same when the run passes its deadline (`timeoutMs`) while the credential resolves', async () => {
+      const exec = vi.fn(() => 'refunded');
+      const agent = Agent.create({
+        provider: refunds(),
+        model: 'mock',
+        credentials: slowVault(120),
+      })
+        .system('You issue refunds.')
+        .tool(payingTool(exec, true))
+        .build();
+      const paused = asCheckIn(await agent.run({ message: 'refund 40' }));
+      await expect(
+        agent.resume(paused.checkpoint, checkInApproved({ request: paused.checkIn, by: 'maya' }), {
+          timeoutMs: 30,
+        }),
+      ).rejects.toThrow('timed out');
+      await settle();
+      expect(exec).not.toHaveBeenCalled();
+    });
+
+    it('an approved ask whose tool resolves a credential after the caller left: never run', async () => {
+      const exec = vi.fn(() => 'refunded');
+      const agent = Agent.create({
+        provider: refunds(),
+        model: 'mock',
+        credentials: slowVault(120),
+      })
+        .system('You issue refunds.')
+        .tool(payingTool(exec, false))
+        .toolMiddleware({ name: 'approval', onToolCall: () => ask({ question: 'Refund?' }) })
+        .build();
+      const paused = asAsk(await agent.run({ message: 'refund 40' }));
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 30);
+      await expect(
+        agent.resume(paused.checkpoint, checkInApproved({ request: paused.ask, by: 'maya' }), {
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow();
+      await settle();
+      expect(exec).not.toHaveBeenCalled();
+    });
   });
 
   it('a nested agent refuses a decision that names no request', async () => {

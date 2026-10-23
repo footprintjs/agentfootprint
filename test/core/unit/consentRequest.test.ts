@@ -666,6 +666,48 @@ describe('whether a decision was used — what a door that keeps the pause asks'
     again.release();
   });
 
+  it('spent for a DECLINE, and no approval taken to a ledger while watched: the call cannot have run', async () => {
+    const declineOn = (request: ReturnType<typeof pending>) =>
+      checkInDeclined({ request, by: 'maya', note: 'no' });
+    // The decline won the ledger.
+    const request = pending();
+    const ledger = inMemoryDecisionLedger();
+    const watch = watchDecisionUse(request.id);
+    await spendDecision(ledger, declineOn(request), 'checkIn');
+    expect(watch.spentAsDecline()).toBe(true);
+    watch.release();
+
+    // An approval won it first: the decline is refused — the call may have run.
+    const raced = pending();
+    const shared = inMemoryDecisionLedger();
+    const lost = watchDecisionUse(raced.id);
+    await spendDecision(shared, decisionOn(raced), 'checkIn');
+    await expect(spendDecision(shared, declineOn(raced), 'checkIn')).rejects.toMatchObject({
+      reason: 'already-answered',
+    });
+    expect(lost.spentAsDecline()).toBe(false);
+    lost.release();
+
+    // Refused by a ledger another process reached first, no approval seen here.
+    const elsewhere = pending();
+    const refusedWatch = watchDecisionUse(elsewhere.id);
+    await spendDecision({ spend: () => false }, declineOn(elsewhere), 'checkIn').catch(
+      () => undefined,
+    );
+    expect(refusedWatch.spentAsDecline()).toBe(false);
+    refusedWatch.release();
+
+    // An approval spent, or nothing spent at all.
+    const approved = pending();
+    const approvedWatch = watchDecisionUse(approved.id);
+    await spendDecision(inMemoryDecisionLedger(), decisionOn(approved), 'checkIn');
+    expect(approvedWatch.spentAsDecline()).toBe(false);
+    approvedWatch.release();
+    const idle = watchDecisionUse(pending().id);
+    expect(idle.spentAsDecline()).toBe(false);
+    idle.release();
+  });
+
   it('a spend still unanswered when the door asks may have landed: used', async () => {
     const request = pending();
     const watch = watchDecisionUse(request.id);

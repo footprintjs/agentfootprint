@@ -283,10 +283,10 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   (`afterFailedAnswer` — marked when the watch says the decision reached a
   ledger; closed when nothing was used and no decision could ever answer it),
   shared by `standingAgent` and `streamHandler`; it settles the calls that run
-  left open (a declined one as declined) so the next message can continue. A
-  pause no answer can reach any more (`unanswerablePause`) is closed rather than
-  held: the next message continues `closedConversation`, every open call
-  recorded as not run. `listedFormatOf` is the same reading for a session
+  left open (a declined one as declined, when the decline is what the ledger
+  spent) so the next message can continue. A pause no answer can reach any
+  more (`unanswerablePause`) is closed rather than held: the next message
+  continues `closedConversation`, every open call recorded as not run. `listedFormatOf` is the same reading for a session
   listing — `'flowchart-v1'` only for a pause still waiting — and every store
   that lists reports it (memory and Agent Engine at list time, SQLite and
   Firestore in the column they persist).

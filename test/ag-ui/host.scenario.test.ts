@@ -33,6 +33,7 @@ import {
 import { mock } from '../../src/llm-providers.js';
 import type { LLMRequest } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
+import { bearer } from '../../src/identity.js';
 import { installDurabilityBarrier } from '../../src/core/durabilityBarrier.js';
 import { memorySessions } from '../../src/hosting/memorySessions.js';
 import { readPausedRun, toPausedEnvelope } from '../../src/hosting/envelope.js';
@@ -545,6 +546,82 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     const { result } = await client.runAgent({ resume: [answer] });
     expect(result).toBe('Refunded.');
     expect(refunded).toEqual([40]);
+  });
+
+  it('an approval whose caller left while the tool’s credential resolved never runs the call — the request is spent', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      needs: { credential: 'payments' },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Refunded.',
+    ]);
+    const sessions = memorySessions();
+    const handle = streamHandler({
+      agent: () =>
+        Agent.create({
+          provider,
+          model: 'm',
+          // The window: the credential is issued 120 ms after it is asked for.
+          credentials: {
+            id: 'slow-vault',
+            getCredential: async () => {
+              await new Promise((done) => setTimeout(done, 120));
+              return { status: 'issued', credential: bearer('payments-token') };
+            },
+          },
+        })
+          .system('s')
+          .tool(refund)
+          .build(),
+      adapter: agUi(),
+      threads: signedIn,
+      sessions,
+      heartbeatMs: 0,
+    });
+    // The answer's caller leaves 30 ms in — while the credential resolves.
+    const leave = new AbortController();
+    let answering = false;
+    const client = new HttpAgent({
+      url: 'http://localhost/api/agent',
+      threadId: 'thread-1',
+      headers: { 'x-user': 'alice' },
+      fetch: (url, init) => {
+        if (!answering) return handle(new Request(url, init));
+        setTimeout(() => leave.abort(), 30);
+        return handle(new Request(url, { ...init, signal: leave.signal }));
+      },
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    answering = true;
+    await client
+      .runAgent({
+        resume: [
+          {
+            interruptId: interrupt!.id,
+            status: 'resolved',
+            payload: { approved: true, by: 'alice', at: 1 },
+          },
+        ],
+      })
+      .catch(() => undefined);
+    await new Promise((done) => setTimeout(done, 200));
+    expect(refunded).toEqual([]);
+    // Spent before the caller left: no answer reaches it again.
+    expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toEqual({
+      at: expect.any(Number),
+    });
   });
 
   it('a pause no answer can reach any more does not hold the thread: the next message continues it, the call recorded as not run', async () => {

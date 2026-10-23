@@ -112,7 +112,7 @@ const agent = Agent.create({ provider, model, decisionLedger }).tool(issueRefund
 
 A ledger of an agent's own — even a fresh `inMemoryDecisionLedger()` — makes "once" hold for that ledger alone: agents given different ledgers spend separately. A refusal for an answered request (`'already-answered'`) says only what that resume knows: it ran nothing, and whether the earlier resume finished — so whether the call ran — is not known there.
 
-A resume whose run is aborted — its caller hung up, or a deadline passed — before the decision is spent never spends it afterwards, and one aborted while its ledger answers does not run the call: the engine stops waiting on an aborted stage, but the stage goes on, so the spend checks the run's signal on both sides.
+A resume whose run is aborted — its caller hung up, or a deadline passed — never runs the call afterwards. The engine stops waiting on an aborted stage, but the stage goes on, so the run's signal is checked before the spend, after it, and once more at the last moment before the approved tool runs, after its credential (`needs`), its artifacts (`wants`) and the rest of an ask's chain resolve. Aborted before the spend, the decision is not spent and the pause can still be answered; aborted after it, the request is spent and its call never runs.
 
 `by` is recorded as given: a claim, not proof. The binding says WHICH request and WHAT call; WHO may decide is your host's to authenticate. And the checkpoint itself is not proof either — a host that lets checkpoints leave its trust boundary signs them or keeps them server-side.
 

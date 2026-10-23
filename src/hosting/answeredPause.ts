@@ -189,8 +189,13 @@ export type FailedAnswerOutcome = 'marked' | 'closed' | 'kept';
  * conversation as of the pause — never the runner's own state, which on a
  * shared agent may be another session's run.
  *
- * A declined decision never runs its call: when the answer that failed was a
- * decline, the paused call is settled as declined, not as unknown.
+ * A declined decision never runs its call — but a decline is recorded only
+ * when it is what the ledger spent: when the answer that failed was a decline
+ * AND the watch saw the request spent for a decline, with no approval taken
+ * to a ledger (`DecisionUseWatch.spentAsDecline`), the paused call is
+ * settled as declined. A decline refused because the request was already
+ * spent — an approval, here or in another process, may have run the call —
+ * is settled as unknown, like any other.
  *
  * Unused, and refused for a reason no decision can change (`error` is a
  * `'request-not-recorded'`, `'call-changed'` or `'chain-changed'` refusal):
@@ -255,7 +260,12 @@ export async function afterFailedAnswer(input: {
     await store.persist(
       sessionId,
       toPausedEnvelope(
-        markAnswered(paused, kept, Date.now(), declinedCallOf(paused, input.answer)),
+        markAnswered(
+          paused,
+          kept,
+          Date.now(),
+          watch.spentAsDecline() ? declinedCallOf(paused, input.answer) : undefined,
+        ),
       ),
     );
     return 'marked';
@@ -373,7 +383,8 @@ export interface DeclinedCall {
 
 /**
  * The paused call, when the answer that failed declined it: `approved` is
- * `false`, read from the answer's own data — a getter is never invoked.
+ * `false`, read from the answer's own data — a getter is never invoked. Asked
+ * only once the watch says a decline is what the ledger spent.
  */
 function declinedCallOf(paused: PausedRun, answer: unknown): DeclinedCall | undefined {
   if (typeof answer !== 'object' || answer === null) return undefined;

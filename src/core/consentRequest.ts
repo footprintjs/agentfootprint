@@ -192,6 +192,8 @@ export function inMemoryDecisionLedger(): DecisionLedger {
 /** One attempt to spend a watched request, as a door learns of it. */
 interface SpendAttempt {
   readonly ledger: DecisionLedger;
+  /** The decision taken to the ledger declined the call. */
+  readonly declined: boolean;
   outcome: 'unanswered' | 'spent' | 'refused' | 'failed';
 }
 
@@ -478,7 +480,7 @@ export async function spendDecision(
   signal?: AbortSignal,
 ): Promise<void> {
   refuseIfAborted(signal);
-  const attempts = attemptsOn(decision.requestId, ledger);
+  const attempts = attemptsOn(decision.requestId, ledger, decision.approved === false);
   let fresh: unknown;
   try {
     fresh = await ledger.spend(decision.requestId);
@@ -491,18 +493,31 @@ export async function spendDecision(
   refuseIfAborted(signal);
 }
 
-/** Throw the abort an aborted run ended with — the signal's own reason, as the engine reports it. */
-function refuseIfAborted(signal: AbortSignal | undefined): void {
-  if (signal === undefined || !signal.aborted) return;
+/**
+ * What an aborted run ended with — the signal's own reason, as the engine
+ * reports it — or `undefined` while the run goes on. Asked before the spend,
+ * after it, and by the dispatch loop once more at the last moment before an
+ * approved call runs (`toolCalls.ts` · `resolveCredentialAndExecute`): the
+ * engine stops waiting on an aborted run's stage, but the stage goes on, and
+ * nothing may run for a caller who was already told the run ended.
+ */
+export function runEndedBy(signal: AbortSignal | undefined): Error | undefined {
+  if (signal === undefined || !signal.aborted) return undefined;
   const reason: unknown = signal.reason;
-  throw reason instanceof Error ? reason : new Error(String(reason ?? 'Aborted'));
+  return reason instanceof Error ? reason : new Error(String(reason ?? 'Aborted'));
+}
+
+/** Throw what an aborted run ended with ({@link runEndedBy}). */
+function refuseIfAborted(signal: AbortSignal | undefined): void {
+  const ended = runEndedBy(signal);
+  if (ended !== undefined) throw ended;
 }
 
 /** Record an attempt to spend `requestId` in `ledger` on every watch open for it. */
-function attemptsOn(requestId: string, ledger: DecisionLedger): SpendAttempt[] {
+function attemptsOn(requestId: string, ledger: DecisionLedger, declined: boolean): SpendAttempt[] {
   const attempts: SpendAttempt[] = [];
   for (const watch of processState().watches.get(requestId) ?? []) {
-    const attempt: SpendAttempt = { ledger, outcome: 'unanswered' };
+    const attempt: SpendAttempt = { ledger, declined, outcome: 'unanswered' };
     watch.attempts.push(attempt);
     attempts.push(attempt);
   }
@@ -537,6 +552,15 @@ export interface DecisionUseWatch {
    *    apart from a use.
    */
   mayHaveBeenUsed(): Promise<boolean>;
+  /**
+   * Whether a ledger SPENT the request for a decline while watched, and no
+   * approval of it was taken to a ledger meanwhile: the decline won the
+   * ledger, so no approval can have run the call there. Only then does a door
+   * record the paused call as declined. A decline the ledger refused (an
+   * earlier resume — an approval, perhaps in another process — had spent the
+   * request) is not one: that call may have run.
+   */
+  spentAsDecline(): boolean;
   /** Stop watching. A door releases its watch once it has decided. */
   release(): void;
 }
@@ -561,6 +585,13 @@ export function watchDecisionUse(requestId: string): DecisionUseWatch {
         if (!(await neverLanded(attempt.ledger, requestId))) return true;
       }
       return false;
+    },
+    spentAsDecline(): boolean {
+      const { attempts } = watched;
+      return (
+        attempts.some((attempt) => attempt.declined && attempt.outcome === 'spent') &&
+        attempts.every((attempt) => attempt.declined)
+      );
     },
     release(): void {
       open.delete(watched);

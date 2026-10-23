@@ -131,6 +131,7 @@ import {
   noteDecisionTakenUp,
   processDecisionLedger,
   recordedRequestId,
+  runEndedBy,
   runsAsAsked,
   spendDecision,
   type DecisionLedger,
@@ -3976,6 +3977,8 @@ export function buildToolCallsHandler(
       }
     }
     let executed = false;
+    /** What the run ended with, when it ended before the call could run. */
+    let ended: Error | undefined;
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
@@ -4012,6 +4015,14 @@ export function buildToolCallsHandler(
         ...sessionContext(scope, toolName, toolCallId),
         ...toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
       };
+      // The last moment before the call runs, after every await that prepared
+      // it — its artifacts (`wants`), its credential (`needs`), its clock, and
+      // on an ask the rest of the chain. The engine stops waiting on an
+      // aborted run's stage (a hang-up, a deadline), but the stage goes on:
+      // a call never runs for a caller already told the run ended. Thrown past
+      // the catch below — the run ended, the tool did not fail.
+      ended = runEndedBy(env.signal);
+      if (ended !== undefined) throw ended;
       executed = true;
       let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
@@ -4147,6 +4158,12 @@ export function buildToolCallsHandler(
       }
       return { result, executed: true };
     } catch (err) {
+      if (ended !== undefined && err === ended) {
+        // Nothing ran; the call's sessions are still released, and the run's
+        // end — not a tool failure — is what the stage ends with.
+        await endCall(toolCallId).catch(() => undefined);
+        throw err;
+      }
       // Settled by throwing is still settled — a tool that opened a session and
       // then failed must not keep it.
       await endCall(toolCallId);

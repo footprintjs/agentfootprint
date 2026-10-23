@@ -1326,8 +1326,12 @@ the ledger cannot say it never landed (`DecisionLedger.isSpent`): the door
 **marks the pause answered** before the failure is reported. A resume that never
 took the decision to a ledger — refused (a decision for another request, a value
 that is not a decision, another caller) or abandoned because the caller hung up
-first — used nothing, and the pause stays answerable; a resume abandoned while it
-waited never spends afterwards. None of this is read from what an error calls
+first — used nothing, and the pause stays answerable. A resume whose run ended
+— the caller hung up, a deadline passed — never runs the call afterwards: its
+signal is checked before the spend, after it, and at the last moment before the
+tool runs, after its credential and artifacts resolve. Ended after the spend,
+the pause is marked answered like any other (the door cannot tell the call never
+ran). None of this is read from what an error calls
 itself, or from the decision object, which a door may copy or wrap. A store that
 cannot be read while marking is marked anyway; one that holds nothing — the
 session expired or was forgotten meanwhile — is left so.
@@ -1339,7 +1343,10 @@ pending, and the session's next message continues the conversation this session
 stored — what the run kept while it ran under durable writes, else the
 conversation as of the pause, never the agent's own state — with any call left
 open settled as unknown, and a call the person declined settled as declined: a
-decline never runs its call (`PausedRun.answered`). Both doors read a stored
+decline never runs its call (`PausedRun.answered`). Only a decline the ledger
+spent counts: a decline refused because the request was already spent — an
+approval, here or in another process, may have run the call — is settled as
+unknown. Both doors read a stored
 session one way, so an answered pause is never offered for an answer at either.
 Code that reads stored pauses itself with `readPausedRun` — a dashboard, a
 custom door — must do the same: a pause with `answered` is a conversation to

@@ -313,10 +313,12 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
   async function watched(
     paused: PausedRun,
     happened: 'nothing' | 'taken-up' | 'spent' | 'refused-by-ledger' = 'spent',
+    /** The decision taken to the ledger was a decline. */
+    declined = false,
   ) {
     const watch = watchAnswer(paused);
     if (happened !== 'nothing') noteDecisionTakenUp(REQUEST);
-    const decision = { requestId: REQUEST, approved: true, by: 'maya', at: 1 };
+    const decision = { requestId: REQUEST, approved: !declined, by: 'maya', at: 1 };
     if (happened === 'spent') await spendDecision(inMemoryDecisionLedger(), decision, 'checkIn');
     if (happened === 'refused-by-ledger') {
       await spendDecision({ spend: () => false }, decision, 'checkIn').catch(() => undefined);
@@ -454,7 +456,8 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
 
   it('a declined decision never ran its call: the paused call is settled as declined, not as unknown', async () => {
     const { paused, written, after } = setup((p) => toPausedEnvelope(p), { findingsServe: 'ids' });
-    const watch = await watched(paused);
+    // The decline is what the ledger spent: no approval ran the call.
+    const watch = await watched(paused, 'spent', true);
     await after(watch, {
       answer: { requestId: REQUEST, approved: false, by: 'maya', at: 1, note: 'not this account' },
     });
@@ -467,6 +470,48 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
       content: 'declined by human: not this account',
     });
     watch?.release();
+  });
+
+  it('a decline refused because an approval already spent the request is settled as unknown — that call may have run', async () => {
+    for (const [why, spend] of [
+      // An approval in this process spent it while this decline was watched.
+      [
+        'an approval spent it while watched',
+        async () => {
+          await spendDecision(
+            inMemoryDecisionLedger(),
+            { requestId: REQUEST, approved: true, by: 'maya', at: 1 },
+            'checkIn',
+          );
+        },
+      ],
+      // The ledger had it spent already (another process's approval): this
+      // decline was refused there.
+      [
+        'the ledger refused the decline',
+        async () => {
+          await spendDecision(
+            { spend: () => false },
+            { requestId: REQUEST, approved: false, by: 'maya', at: 1 },
+            'checkIn',
+          ).catch(() => undefined);
+        },
+      ],
+    ] as const) {
+      const { paused, written, after } = setup();
+      const watch = watchAnswer(paused);
+      noteDecisionTakenUp(REQUEST);
+      await spend();
+      expect(
+        await after(watch, {
+          answer: { requestId: REQUEST, approved: false, by: 'maya', at: 1, note: 'no' },
+        }),
+        why,
+      ).toBe('marked');
+      const history = readPausedRun(written[0]).conversation.history;
+      expect(history[history.length - 1]?.content, why).toBe(OUTCOME_NOT_RECORDED);
+      watch?.release();
+    }
   });
 
   it('an approval, or a decline told only by a getter, is not read as a decline', async () => {
