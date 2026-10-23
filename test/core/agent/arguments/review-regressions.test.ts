@@ -54,6 +54,7 @@ import { unreadableRulesRefusal } from '../../../../src/core/agent/arguments/ser
 import { accountForAnswer } from '../../../../src/answer-account/account.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
 import { fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from '../../../answer-account/helpers.js';
+import { pausedRequest } from '../../../helpers/pausedRequest.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -302,7 +303,10 @@ describe('a call the inputs layer refuses is never put to a person', () => {
     expect(isPaused(paused)).toBe(true);
     ruled = true;
     if (!isPaused(paused)) return;
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
     expect(ran).toEqual([]);
     expect(lastToolMessage(m.requests).content).toBe(UNMOUNTED_REFUSAL);
     expect(warn.mock.calls.filter((c) => String(c[0]).includes('.inputsLayer()'))).toHaveLength(1);
@@ -324,7 +328,10 @@ describe('a call the inputs layer refuses is never put to a person', () => {
     const state = (paused.checkpoint as unknown as { sharedState: Record<string, unknown> })
       .sharedState;
     state.argumentResolutions = [{ toolCallId: 'c1', iteration: 1, refused }];
-    await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+    );
     expect(ran).toEqual([]);
     expect(lastToolMessage(m.requests).content).toBe(refused);
   });

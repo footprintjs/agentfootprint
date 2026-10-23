@@ -41,6 +41,7 @@ import {
 } from '../../src/index.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -494,7 +495,7 @@ describe('the clock at dispatch (§ 7.4)', () => {
     vi.setSystemTime(NOW_MS + 30 * 60_000);
     await agent.resume(
       (paused as { checkpoint: never }).checkpoint,
-      checkInApproved({ by: 'ops' }),
+      checkInApproved({ request: pausedRequest(paused), by: 'ops' }),
     );
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({ start_time: Date.parse(lastHour.from), end_time: NOW_MS });

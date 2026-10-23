@@ -35,10 +35,13 @@ export interface LLMMessage {
    * `not-entered` means the producer refused before tool.execute; an error
    * thrown inside execute remains a result. `input-cancelled` is the host's
    * notice, not a completed result, and says nothing about prior tool entry.
+   * `outcome-unknown` is the host's notice for a call left open by a run that
+   * stopped after a person's decision was used (`hosting/answeredPause.ts`):
+   * whether it entered is not known, and the notice is not its result.
    * Absent on old history: no missing origin is reconstructed from text.
    * JSON/checkpoint safe; stripFrameworkFields removes it before transport.
    */
-  readonly toolResultOrigin?: 'not-entered' | 'input-cancelled';
+  readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
   /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip

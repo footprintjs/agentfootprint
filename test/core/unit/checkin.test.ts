@@ -30,12 +30,14 @@ const HISTORY: readonly LLMMessage[] = [
 ];
 
 describe('check-in helpers — decisions', () => {
+  const request = { id: 'a'.repeat(64) };
+
   it('checkInApproved / checkInDeclined build clone+JSON-safe records', () => {
-    const a = checkInApproved({ by: 'alice', note: 'ok' });
-    expect(a).toMatchObject({ approved: true, by: 'alice', note: 'ok' });
+    const a = checkInApproved({ request, by: 'alice', note: 'ok' });
+    expect(a).toMatchObject({ approved: true, by: 'alice', note: 'ok', requestId: request.id });
     expect(typeof a.at).toBe('number');
-    const d = checkInDeclined({ by: 'bob' });
-    expect(d).toMatchObject({ approved: false, by: 'bob' });
+    const d = checkInDeclined({ request, by: 'bob' });
+    expect(d).toMatchObject({ approved: false, by: 'bob', requestId: request.id });
     expect('note' in d).toBe(false); // omitted, not undefined
     // structuredClone + JSON safe
     expect(JSON.parse(JSON.stringify(a))).toEqual(a);
@@ -43,11 +45,14 @@ describe('check-in helpers — decisions', () => {
   });
 
   it('isCheckInDecision narrows a real decision and rejects other shapes', () => {
-    expect(isCheckInDecision(checkInApproved({ by: 'x' }))).toBe(true);
+    expect(isCheckInDecision(checkInApproved({ request, by: 'x' }))).toBe(true);
     expect(isCheckInDecision('yes')).toBe(false);
     expect(isCheckInDecision(null)).toBe(false);
     expect(isCheckInDecision({ approved: true })).toBe(false); // missing `by`
     expect(isCheckInDecision({ by: 'x' })).toBe(false); // missing `approved`
+    // A decision names its request: the shape without one is not a decision.
+    expect(isCheckInDecision({ approved: true, by: 'x', at: 1 })).toBe(false);
+    expect(isCheckInDecision({ approved: true, by: 'x', at: 1, requestId: '' })).toBe(false);
   });
 });
 

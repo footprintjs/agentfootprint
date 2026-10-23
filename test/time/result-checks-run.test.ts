@@ -41,6 +41,7 @@ import {
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { validateCheckpoint } from '../../src/core/runCheckpoint.js';
 import { timeOfBatch } from '../../src/core/agent/honesty/mounts.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -277,7 +278,7 @@ describe('period-differs-from-asked — what was read against what was asked', (
     vi.setSystemTime(NOW_MS + 30 * 60_000);
     const out = await agent.resume(
       (paused as { checkpoint: never }).checkpoint,
-      checkInApproved({ by: 'ops' }),
+      checkInApproved({ request: pausedRequest(paused), by: 'ops' }),
     );
     const [row] = ofKind(agent, 'period');
     expect(row).toMatchObject({

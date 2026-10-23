@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-364 exported from `agentfootprint`.
+365 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -114,6 +114,7 @@ title: Interfaces
 - [`DatasetResultPlan`](/docs/api/interfaces/DatasetResultPlan)
 - [`DatasetTimeAxis`](/docs/api/interfaces/DatasetTimeAxis)
 - [`DebateOptions`](/docs/api/interfaces/DebateOptions)
+- [`DecisionLedger`](/docs/api/interfaces/DecisionLedger)
 - [`DecisionValue`](/docs/api/interfaces/DecisionValue)
 - [`DeclaredCoverage`](/docs/api/interfaces/DeclaredCoverage)
 - [`DeclaredPeriod`](/docs/api/interfaces/DeclaredPeriod)

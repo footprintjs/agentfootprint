@@ -107,6 +107,7 @@
  * indistinguishable, from the outside, from a brand-new user.
  */
 
+import { listedFormatOf } from '../../hosting/answeredPause.js';
 import { checkEnvelope, envelopeOwner, envelopeTranscript } from '../../hosting/envelope.js';
 import { UnreadableEnvelopeError } from '../../hosting/errors.js';
 import { resolveSessionOwner } from '../../hosting/sessionOwnership.js';
@@ -598,7 +599,9 @@ export function agentEngineSessions(options: AgentEngineSessionsOptions): AgentE
         return {
           sessionId,
           savedAt: toMillis(session.updateTime ?? session.createTime),
-          format: formatOf(readable),
+          // What the row SAYS the session is — a pause whose decision was
+          // already used lists as a conversation (`listedFormatOf`).
+          format: listedFormatOf(readable),
           messageCount: readable === undefined ? 0 : envelopeTranscript(readable).length,
         };
       });
@@ -784,10 +787,4 @@ function toMillis(value: string | null | undefined): number {
   if (typeof value !== 'string') return 0;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-/** The stored envelope's `format`, without trusting it to be one of ours. */
-function formatOf(stored: unknown): string {
-  const format = (stored as { format?: unknown } | undefined)?.format;
-  return typeof format === 'string' ? format : 'unknown';
 }

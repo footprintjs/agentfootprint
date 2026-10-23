@@ -725,6 +725,24 @@ export interface AgentOptions {
    */
   readonly credentials?: CredentialProvider;
   /**
+   * Where this agent records the consent requests that have been answered, so
+   * one decision runs one call — a check-in's or a middleware ask's, approved
+   * or declined. A resume that presents a decision for a request already in
+   * the ledger is refused (`ResumeDecisionError`, `'already-answered'`) and the
+   * tool does not run.
+   *
+   * "Once" holds per ledger. Default: one in-memory ledger per process, shared
+   * by every agent that names none — a server that builds an agent per
+   * request, or a pool that rebuilds an evicted instance, still answers each
+   * request once. It does not outlive the process or reach another one: when
+   * more than one process (or a restart) can resume the same paused run, pass
+   * every agent that can resume it one ledger backed by a store they all
+   * share, whose `spend` is atomic per id. A ledger of the agent's own — even
+   * a fresh `inMemoryDecisionLedger()` — makes "once" hold for that ledger
+   * alone.
+   */
+  readonly decisionLedger?: import('../consentRequest.js').DecisionLedger;
+  /**
    * The artifact store (9.21.0) — the claim-check seam. When set, every tool's
    * `ctx.artifacts` is this store bound to the RUN's scope (the same
    * tenant/principal/conversation tuple memory scopes on, composed by the
@@ -1580,6 +1598,15 @@ export interface AgentState {
   // structuredClone (checkpoint discipline). Absent for non-check-in pauses.
   pausedCheckIn?: boolean;
   pausedCheckInArgs?: Readonly<Record<string, unknown>>;
+  /**
+   * The request a consent-gate pause (a check-in or a middleware ask) put to
+   * a person: the id its decision must quote and the nonce that binds that id
+   * to the exact paused call (`core/consentRequest.ts`). Written at the pause,
+   * read and cleared by the resume that uses the decision. Absent for every
+   * other pause. Named with the arguments in the conversation redaction
+   * vocabulary: the nonce lets whoever holds it confirm a guess of them.
+   */
+  pausedRequest?: import('../consentRequest.js').PendingRequest;
   // Which REGISTERED screen component the outstanding ask nominated to collect
   // its decision (9.24.0) — the `componentId` of the check-in's / middleware
   // ask's `AskComponent`, written at pause time ONLY when one exists and read
@@ -1599,6 +1626,16 @@ export interface AgentState {
   pausedAskArgs?: Readonly<Record<string, unknown>>;
   pausedAskIndex?: number;
   pausedAskMiddleware?: string;
+  /**
+   * The rules an asked call still had to pass when the person was asked: the
+   * NAME of the link that asked and of every link after it, in chain order.
+   * Bound into the request (`core/consentRequest.ts`), so a checkpoint whose
+   * record of it changed is refused (`'call-changed'`), and held against the
+   * resuming agent's own chain, so a redeploy that removed, added, renamed or
+   * moved one of those rules is refused (`'chain-changed'`) rather than skip a
+   * rule the approval was given under. Names only — never a value of the run.
+   */
+  pausedAskChain?: readonly string[];
   // Credential-consent checkpoint (8.6.0) — set when a tool's DECLARED
   // credential comes back `authorization-required` under the default
   // `onAuthorizationRequired: 'pause'`. Same wire as the check-in and ask

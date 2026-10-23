@@ -40,6 +40,7 @@ import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
 import { readAskComponent } from '../tools/askComponent.js';
 import { pauseDemandsDecision } from './pause.js';
+import { noteDecisionTakenUp, pausedRequestIdOf } from './consentRequest.js';
 import { readAwaitingInput } from '../tools/inputRequest.js';
 import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
 import type { CheckInRequest } from './checkin.js';
@@ -689,6 +690,9 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     input: unknown,
     handedDown?: RedactionPolicy,
   ): RedactionPolicy | undefined {
+    // Taken up by this library: a door watching the paused request sees every
+    // use of its decision from here (`consentRequest.ts` · `watchDecisionUse`).
+    noteDecisionTakenUp(pausedRequestIdOf(checkpoint));
     // The resumed leg's own policy beside this runner's declaration: what the
     // caller hands it, joined with the names the paused leg kept out (the
     // checkpoint's marks) — returned for the runner to hand THIS leg's

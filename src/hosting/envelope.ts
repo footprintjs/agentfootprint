@@ -118,6 +118,12 @@ export function readEnvelope(envelope: unknown): AgentRunCheckpoint {
 /**
  * Unpack a stored envelope back into a paused run.
  *
+ * It hands back the record as stored, MARK INCLUDED: a pause whose resume
+ * failed and may have used its decision carries `answered`
+ * (`PausedRun.answered`), and code that continues sessions must not resume one
+ * — continue its `conversation` with the next message instead. The library's own doors read stored sessions
+ * through one reader that does exactly that (`answeredPause.ts`).
+ *
  * @throws TypeError naming the format when it is one this runtime cannot read;
  *   pointing at {@link readEnvelope} when the envelope holds a plain
  *   conversation; and naming the missing field when the paused run inside is
@@ -326,6 +332,18 @@ function validatePausedRun(value: unknown): PausedRun {
     );
   }
   validateCheckpoint(run.conversation);
+  // A mark a reader cannot read is refused, never taken as "still waiting":
+  // that would offer an answered request for an answer again.
+  const answered = run.answered as { at?: unknown } | null | undefined;
+  if (
+    answered !== undefined &&
+    (answered === null || typeof answered !== 'object' || typeof answered.at !== 'number')
+  ) {
+    throw new TypeError(
+      `[hosting] paused run's \`answered\` must be { at: <epoch ms> } when present — the ` +
+        `mark that a resume used its decision and did not finish.`,
+    );
+  }
   const wire = run.wire as { protocol?: unknown } | undefined;
   if (
     wire !== undefined &&

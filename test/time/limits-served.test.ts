@@ -35,6 +35,7 @@ import {
   timeLimitsSentence,
   timeLine,
 } from '../../src/core/agent/arguments/serve.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 type Reply = { content: string; toolCalls?: { id: string; name: string; args: object }[] };
 
@@ -259,7 +260,7 @@ describe('a shifted read — the conclusion, not two ranges to compare', () => {
     vi.setSystemTime(NOW_MS + 30 * 60_000);
     const out = await agent.resume(
       (paused as { checkpoint: never }).checkpoint,
-      checkInApproved({ by: 'ops' }),
+      checkInApproved({ request: pausedRequest(paused), by: 'ops' }),
     );
     const line = lastLine(requests[requests.length - 1]!);
     expect(line).toBe(

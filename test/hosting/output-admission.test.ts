@@ -12,7 +12,6 @@ import {
   Agent,
   allow,
   askHuman,
-  checkInApproved,
   defineTool,
   deny,
   type MessageMiddleware,
@@ -262,7 +261,7 @@ describe('public answer streams', () => {
         const reply = await host.deliver({
           input: path === 'resume' ? '' : 'Read my account.',
           sessionId: 'terminal',
-          ...(path === 'resume' && { decision: checkInApproved({ by: 'account-owner' }) }),
+          ...(path === 'resume' && { decision: { approved: true, by: 'account-owner' } }),
         });
         await drain;
         expect(reply.code).toBe('ERR_MESSAGE_DENIED');

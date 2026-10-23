@@ -56,6 +56,8 @@ export interface CheckInDecisionRecord {
   readonly toolName: string;
   readonly toolCallId: string;
   readonly iteration: number;
+  /** The request this decision answered (`CheckInRequest.id`). */
+  readonly requestId: string;
   readonly approved: boolean;
   readonly by: string;
   readonly note?: string;
@@ -83,7 +85,10 @@ export interface CheckInStats {
  *   agent.attach(checkins);
  *   await agent.run({ message });
  *   // ...human approves...
- *   await agent.resume(outcome.checkpoint, checkInApproved({ by: 'alice' }));
+ *   await agent.resume(
+ *     outcome.checkpoint,
+ *     checkInApproved({ request: outcome.checkIn, by: 'alice' }),
+ *   );
  *   checkins.getStats();     // { requested: 1, approved: 1, declined: 0, pending: 0 }
  *   checkins.getDecisions(); // [{ toolName, approved: true, by: 'alice', ... }]
  */
@@ -115,6 +120,7 @@ export class CheckInRecorder implements CombinedRecorder {
         toolName: p.toolName,
         toolCallId: p.toolCallId,
         iteration: p.iteration,
+        requestId: p.requestId,
         approved: p.approved,
         by: p.by,
         ...(p.note !== undefined && { note: p.note }),

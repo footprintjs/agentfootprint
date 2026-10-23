@@ -28,7 +28,6 @@ import { Agent } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { ask, defineTool } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
-import { checkInApproved } from '../../src/core/checkin.js';
 import {
   memorySessions,
   nodeHost,
@@ -40,6 +39,8 @@ import {
 import type { CheckpointEnvelope, SessionLifecycle } from '../../src/hosting/index.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { inProcessHost } from './testHost.js';
+import { checkInApproved } from '../../src/core/checkin.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -622,6 +623,7 @@ describe('standingAgent — a run that paused', () => {
       const reply = await host.deliver({ input: 'refund me', sessionId: 'asking' });
       expect(reply.error).toBeUndefined();
       expect(reply.awaiting?.ask).toEqual({
+        id: expect.stringMatching(/^[0-9a-f]{64}$/),
         question: 'second pair of eyes?',
         middleware: 'four-eyes',
       });
@@ -632,7 +634,7 @@ describe('standingAgent — a run that paused', () => {
       const done = await host.deliver({
         input: '',
         sessionId: 'asking',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: checkInApproved({ request: pausedRequest(reply.awaiting), by: 'alice' }),
       });
       expect(done.output).toBe('refunded $10');
     } finally {

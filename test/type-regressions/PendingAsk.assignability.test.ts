@@ -146,7 +146,10 @@ describe('the ports 7.19 widened', () => {
   });
 
   it('decision is unknown — the port never decides what an answer looks like', () => {
-    const request: HostRequest = { input: '', decision: checkInApproved({ by: 'alice' }) };
+    const request: HostRequest = {
+      input: '',
+      decision: checkInApproved({ request: { id: 'r'.repeat(64) }, by: 'alice' }),
+    };
     // Whatever a tool asked for is a valid answer, including a bare value.
     const terse: HostRequest = { input: '', decision: 'yes' };
     expect(request.decision).toBeDefined();

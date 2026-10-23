@@ -84,9 +84,12 @@ export interface HostRequest {
    * The port never interprets it. It is handed to `agent.resume(checkpoint,
    * decision)` exactly as it arrived — a {@link CheckInRequest} or a middleware
    * `ask` is answered with the shipped `checkInApproved()` / `checkInDeclined()`
-   * vocabulary; a plain `askHuman` pause is answered with whatever that tool's
-   * author documented. Typed `unknown` because the library does not get to
-   * decide what a tool asked for.
+   * vocabulary, built from the pending ask (`checkInApproved({ request:
+   * pending.checkIn, by })`) so it names the request it answers, and the resume
+   * refuses it for any other request or a second time (`ResumeDecisionError`);
+   * a plain `askHuman` pause is answered with whatever that tool's author
+   * documented. Typed `unknown` because the library does not get to decide what
+   * a tool asked for.
    */
   readonly decision?: unknown;
   /**
@@ -907,6 +910,21 @@ export interface PausedRun {
    * remember stored, and opaque to the store and to every other door.
    */
   readonly wire?: PausedWire;
+  /**
+   * Set when a resume of this pause failed — in the run, or in storing its
+   * result — after its decision may have been used: it reached a ledger, so
+   * the call may have run (a resume that never took the decision to a ledger
+   * leaves the pause unmarked). The pause is answered: a decision for it is
+   * refused (`ResumeDecisionError`, `'already-answered'`), whether its call ran
+   * is not known to the host, and the next message continues the conversation
+   * in `conversation` — what this session stored (the run's own, kept mid-run
+   * under durable writes, else as of the pause), every call left open settled
+   * as unknown, and a call the person declined settled as declined. `at` is
+   * when the host marked it. Absent on every pause still waiting — and code
+   * that reads stored pauses itself (`readPausedRun`) must honour it: an
+   * answered pause is a conversation to continue, never a question to show.
+   */
+  readonly answered?: { readonly at: number };
 }
 
 /** One wire protocol's own record of a pause it served — see {@link PausedRun.wire}. */
@@ -939,14 +957,16 @@ export interface PendingAsk {
   /**
    * Present ONLY when a tool declared `checkIn` — the typed ask plus its
    * evidence pack (what the tool will do, what context the run read, which
-   * context drove the choice, the run so far). Answer with `checkInApproved()`
-   * / `checkInDeclined()`.
+   * context drove the choice, the run so far). Answer with
+   * `checkInApproved({ request: pending.checkIn, by })` / `checkInDeclined(...)`
+   * — `checkIn.id` names the request, and the decision answers it once.
    */
   readonly checkIn?: CheckInRequest;
   /**
    * Present ONLY when a `toolMiddleware` answered `ask` — the question and the
    * middleware that put it. Answered with the same decision vocabulary a
-   * check-in uses, deliberately: a person approving is a person approving.
+   * check-in uses, deliberately: a person approving is a person approving —
+   * `checkInApproved({ request: pending.ask, by })`, naming `ask.id`.
    */
   readonly ask?: MiddlewareAsk;
   /**
