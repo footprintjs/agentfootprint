@@ -22,9 +22,45 @@ import {
 import { known, unknown } from '../../src/doors/maps.js';
 
 describe('UNIT — the declared normalization', () => {
-  it('text is trimmed and case-folded, and nothing else', () => {
+  it('text: Unicode NFC, trimmed, inner spaces collapsed, a word case-folded — and nothing else', () => {
     expect(compareClaimValues('Settled', ' settled\t')).toBe('agrees');
-    expect(compareClaimValues('in progress', 'in  progress')).toBe('contradicts');
+    expect(compareClaimValues('in progress', 'in  progress')).toBe('agrees');
+    expect(compareClaimValues('in progress', 'in_progress')).toBe('contradicts');
+    expect(compareClaimValues('caf\u00e9', 'cafe\u0301')).toBe('agrees'); // NFC and NFD
+    expect(compareClaimValues('Straße', 'STRASSE')).toBe('agrees'); // a real case fold
+    expect(compareClaimValues('settled', 'pending')).toBe('contradicts');
+  });
+
+  it("an identifier's case may matter: text with a digit that differs only in case is not compared", () => {
+    expect(compareClaimValues('aB3xZ9', 'Ab3Xz9')).toBe('incomparable');
+    expect(compareClaimValues('ORD-44710', 'ord-44710')).toBe('incomparable');
+    expect(compareClaimValues('ORD-44710', 'ORD-44711')).toBe('contradicts');
+    expect(compareClaimValues('ORD-44710', ' ORD-44710 ')).toBe('agrees');
+  });
+
+  it('formatted values — a currency symbol, thousands separators, a date or a time — agree only as written', () => {
+    for (const [a, b] of [
+      ['$1,250.00', '$1,250'],
+      ['1,250', '1,250.0'],
+      ['€42.50', '€42.5'],
+      ['2026-01-01', '2026-01-01T00:00:00Z'],
+      ['2026-01-01', '2026-01-02'],
+      ['09:14', '9:14'],
+      ['01/02/2026', '1/2/2026'],
+      ['Jan 5, 2026', 'January 5, 2026'],
+      ['1 250 000', '1250000'],
+    ]) {
+      expect(compareClaimValues(a, b)).toBe('incomparable');
+    }
+    expect(compareClaimValues('$1,250', '$1,250')).toBe('agrees');
+    expect(compareClaimValues('2026-01-01', ' 2026-01-01')).toBe('agrees');
+  });
+
+  it('a difference only in how a number inside text is spelled is not compared', () => {
+    expect(compareClaimValues('USD 42.50', 'USD 42.5')).toBe('incomparable');
+    expect(compareClaimValues('v1.20', 'v1.2')).toBe('incomparable');
+    expect(compareClaimValues('ORD-044710', 'ORD-44710')).toBe('incomparable');
+    expect(compareClaimValues('USD 42.50', 'USD 43.50')).toBe('contradicts');
   });
 
   it('a plain decimal string and a number compare by value, both ways', () => {
@@ -47,11 +83,16 @@ describe('UNIT — the declared normalization', () => {
     }
   });
 
-  it('a number with a unit compares only with the same unit', () => {
-    expect(compareClaimValues('1250 ms', '1250MS')).toBe('agrees');
+  it('a number with a unit compares only with the same unit, written exactly — case included', () => {
+    expect(compareClaimValues('1250 ms', '1250ms')).toBe('agrees');
+    expect(compareClaimValues('42.50 USD', '42.5 USD')).toBe('agrees');
     expect(compareClaimValues('1250 ms', '1300 ms')).toBe('contradicts');
     expect(compareClaimValues('1250 ms', '1.25 s')).toBe('incomparable');
     expect(compareClaimValues('1250 ms', 1250)).toBe('incomparable');
+    // A unit's case is part of the unit: megawatts are not milliwatts.
+    expect(compareClaimValues('5 MW', '5 mW')).toBe('incomparable');
+    expect(compareClaimValues('100 Mb', '100 MB')).toBe('incomparable');
+    expect(compareClaimValues('1250 ms', '1250MS')).toBe('incomparable');
   });
 
   it('kinds that cannot be compared safely are incomparable', () => {
@@ -98,6 +139,12 @@ describe('UNIT — one exact key per value, for reading several values at once',
     // A double cannot tell these apart; their keys can.
     expect(claimValueKey('9007199254740993')).not.toBe(claimValueKey(9007199254740992));
     expect(claimValueKey('1250 ms')).not.toBe(claimValueKey(1250));
+    // The text rules, exactly: a word folds, a unit and an identifier keep their case.
+    expect(claimValueKey('Straße')).toBe(claimValueKey('STRASSE'));
+    expect(claimValueKey('caf\u00e9')).toBe(claimValueKey('cafe\u0301'));
+    expect(claimValueKey('5 MW')).not.toBe(claimValueKey('5 mW'));
+    expect(claimValueKey('aB3xZ9')).not.toBe(claimValueKey('Ab3Xz9'));
+    expect(claimValueKey('$1,250.00')).not.toBe(claimValueKey('$1,250'));
   });
 
   it('injective: values that do not agree never share a key, however they are spelled', () => {
@@ -260,6 +307,19 @@ describe('SECURITY — depth, cycles and unknowns', () => {
       ' settled',
       '1250 ms',
       '1250MS',
+      '1250ms',
+      '5 MW',
+      '5 mW',
+      'Straße',
+      'STRASSE',
+      'caf\u00e9',
+      'cafe\u0301',
+      'aB3xZ9',
+      'Ab3Xz9',
+      '$1,250',
+      '$1,250.00',
+      'USD 42.50',
+      'USD 42.5',
       [1, '2'],
       ['1', 2],
       { a: 'X' },

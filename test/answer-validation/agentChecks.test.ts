@@ -285,15 +285,24 @@ describe('oracle: a claim row compares values after the declared normalization',
   const CONTRADICTS = 'checked-fail';
   const INCOMPARABLE = 'unreachable';
   const PAIRS: readonly (readonly [string, unknown, unknown, string])[] = [
-    // text: trim and case-fold
+    // text: NFC, trimmed, inner spaces collapsed, a word case-folded
     ['same text', 'settled', 'settled', AGREES],
     ['case differs', 'settled', 'Settled', AGREES],
     ['trailing space', 'settled', 'settled ', AGREES],
     ['both trimmed and folded', ' SETTLED', 'settled\n', AGREES],
     ['different text', 'settled', 'pending', CONTRADICTS],
-    ['inner spacing is not folded', 'in progress', 'in  progress', CONTRADICTS],
-    ['an id with digits', 'ORD-44710', 'ord-44710', AGREES],
+    ['inner spacing collapses', 'in progress', 'in  progress', AGREES],
+    ['NFC and NFD spellings of one word', 'caf\u00e9', 'cafe\u0301', AGREES],
+    ['a real case fold', 'Straße', 'STRASSE', AGREES],
+    ["an id's case may matter", 'ORD-44710', 'ord-44710', INCOMPARABLE],
+    ['a mixed-case token', 'aB3xZ9', 'Ab3Xz9', INCOMPARABLE],
     ['another id', 'ORD-44710', 'ORD-44711', CONTRADICTS],
+    // formatted values: a currency symbol, thousands separators, a date or a time
+    ['a currency amount spelled two ways', '$1,250.00', '$1,250', INCOMPARABLE],
+    ['thousands separators', '1,250', '1,250.0', INCOMPARABLE],
+    ['a euro amount', '€42.50', '€42.5', INCOMPARABLE],
+    ['a date and a timestamp', '2026-01-01', '2026-01-01T00:00:00Z', INCOMPARABLE],
+    ['a number spelled two ways inside text', 'USD 42.50', 'USD 42.5', INCOMPARABLE],
     // numbers and decimal strings, both ways
     ['same number', 1250, 1250, AGREES],
     ['different number', 1250, 9750, CONTRADICTS],
@@ -323,8 +332,11 @@ describe('oracle: a claim row compares values after the declared normalization',
     ['a unit against a bare number', 1250, '1250 ms', INCOMPARABLE],
     ['a bare decimal against a unit', '1250', '1250ms', INCOMPARABLE],
     ['two different units', '1250 ms', '1.25 s', INCOMPARABLE],
-    ['the same unit, spaced and cased differently', '1250 ms', '1250MS', AGREES],
-    ['the same unit, decimal spelling', '42.50 USD', '42.5 usd', AGREES],
+    ['the same unit, spaced differently', '1250 ms', '1250ms', AGREES],
+    ["a unit's case is part of it", '1250 ms', '1250MS', INCOMPARABLE],
+    ['megawatts are not milliwatts', '5 MW', '5 mW', INCOMPARABLE],
+    ['megabits are not megabytes', '100 Mb', '100 MB', INCOMPARABLE],
+    ['the same unit, decimal spelling', '42.50 USD', '42.5 USD', AGREES],
     ['the same unit, another number', '1250 ms', '1300 ms', CONTRADICTS],
     // lists and objects
     ['a list against a scalar', [1250], 1250, INCOMPARABLE],

@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:201](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L201)
+Defined in: [src/answer-validation/types.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L204)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -35,12 +35,15 @@ way. `mode: 'observe'` records the rows and delivers.
 
 - `'claims'`: one row per declared `.claims()` field, id
   `agent:claims:<field>`, judged on the candidate this validation delivers.
-  Values compare after one declared normalization: text trimmed and
-  case-folded, a number and a plain decimal string by value (`42.5` and
-  `'42.50'` agree), a number with a unit only with the same unit; values
-  of kinds that cannot be compared safely (a list or an object against a
-  scalar, a unit against a bare number) are `unreachable`, never
-  `checked-fail`. Contradicts the fact a tool settled: `checked-fail`. Agrees with it:
+  Values compare after one declared normalization: text in Unicode NFC,
+  trimmed, white space collapsed, a word case-folded (`'Settled'` and
+  `'settled '` agree); a number and a plain decimal string by value
+  (`42.5` and `'42.50'` agree); a number with a unit only with the same
+  unit, written exactly (`MW` is not `mW`). Values that cannot be
+  compared safely — a list or an object against a scalar, a unit against
+  a bare number, text with a digit that differs only in case, a value
+  written with a currency symbol, thousands separators, a date or a time
+  unless written the same — are `unreachable`, never `checked-fail`. Contradicts the fact a tool settled: `checked-fail`. Agrees with it:
   `not-applicable` — the contract is unscoped (the latest row for the
   fact from any tool, with no scope or age check), so agreement is not
   verification. States a value for a fact no tool result settled, one
@@ -134,7 +137,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L202)
+Defined in: [src/answer-validation/types.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L205)
 
 #### Parameters
 

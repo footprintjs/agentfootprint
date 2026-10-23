@@ -101,9 +101,10 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   `judgeDeliveredClaim`), so a row never accuses where the detector does not
   (a matrix property in `test/answer-validation/agentChecks.test.ts` pins it).
   Values are compared after one declared normalization
-  (`integrity/unsupported-claim/evaluate.ts` · `compareClaimValues`: text
-  trimmed and case-folded, a number and a plain decimal string by value, a
-  unit only against the same unit).
+  (`integrity/unsupported-claim/evaluate.ts` · `compareClaimValues`: text in
+  NFC, trimmed, white space collapsed, a word case-folded; a number and a
+  plain decimal string by value; a unit only against the same unit, written
+  exactly; a currency, separators, a date or a time only as written).
   Contradiction → `checked-fail`. Agreement → `not-applicable`: the contract is
   unscoped — the latest `(entity, field)` row from ANY tool, with no scope or
   age check, and any result carrying the semantics marker settles a fact — so

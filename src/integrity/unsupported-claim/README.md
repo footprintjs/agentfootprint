@@ -68,12 +68,17 @@ judge coverage or write records. The detector compares by that exact equality, a
 are pinned to it. `evaluate.ts` · `compareClaimValues` is the one other value comparison, and only
 the delivery verdict (`delivered.ts`) reads it, because a verdict that can withhold an answer must
 not accuse it over a representational difference. Its normalization is declared and closed: text
-is trimmed and case-folded; a number and a plain decimal string (`-?digits[.digits]`, no leading
-zero, sign or exponent) compare by value, both ways — two decimal strings digit for digit, a JS
-number at the double precision it has; a number with a unit only with the same unit; lists item by
-item in order, objects key by key. Kinds that cannot be compared safely — a list or an object
-against a scalar, a unit against a bare number, text against a number or `true`/`false` — are
-`incomparable` (the row says "could not compare"), never a contradiction. A Claim wrapper is read
+is Unicode NFC, trimmed, its white space collapsed, and a word is case-folded (upper- then
+lower-cased, so `Straße` meets `STRASSE`) — but text with a digit that differs only in case is not
+compared, because an identifier's case may matter; a number and a plain decimal string
+(`-?digits[.digits]`, no leading zero, sign or exponent) compare by value, both ways — two decimal
+strings digit for digit, a JS number at the double precision it has; a number with a unit only with
+the same unit, written exactly (`MW` is not `mW`); lists item by item in order, objects key by key.
+A value written in a format — a currency symbol, thousands separators, a date or a time — agrees
+only as written, and text that differs only in how a number inside it is spelled (`USD 42.50`,
+`USD 42.5`) is not compared. Kinds that cannot be compared safely — a list or an object against a
+scalar, a unit against a bare number, text against a number or `true`/`false` — are `incomparable`
+(the row says "could not compare"), never a contradiction. A Claim wrapper is read
 only where the contract puts one — at the TOP of a settled value or of a claimed field — and only a
 well-formed `known(…)` (`kind`, `value`, a text `evidence`); a wrapper carrying any other key is
 `incomparable`, and a wrapper-shaped object INSIDE a value is that value's data, compared as an
