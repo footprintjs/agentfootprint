@@ -1364,7 +1364,7 @@ describe('security: agreeing with an unscoped fact never verifies an answer', ()
     }
   });
 
-  it('two reads of the fact that disagree: unreachable, whichever one the answer repeats', async () => {
+  it('two reads of the fact that disagree: the answer contradicts one of them, whichever it repeats', async () => {
     for (const durationMs of [1250, 9750]) {
       const { agent } = unscopedAgent(
         'enforce',
@@ -1373,18 +1373,37 @@ describe('security: agreeing with an unscoped fact never verifies an answer', ()
         [{ id: 'asked-job', disposition: 'checked-pass' }],
       );
       const outcome = await agent.run(ASK).catch((e: unknown) => e);
-      expect((outcome as AnswerValidationError).report).toMatchObject({
-        status: 'unverified',
-        reason: 'unreachable-checks',
-      });
+      expect((outcome as AnswerValidationError).report).toMatchObject({ status: 'failed' });
       expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
         id: 'agent:claims:durationMs',
-        disposition: 'unreachable',
+        disposition: 'checked-fail',
         reason:
-          "the tool results the run read disagree about the fact 'durationMs', so the " +
-          "answer's 'durationMs' cannot be checked against one of them",
+          "the answer's 'durationMs' contradicts one tool result's reading of the fact " +
+          "'durationMs' (the readings the run made of it are not all the same)",
       });
     }
+  });
+
+  it('F1/F2 — a forged reading never relabels a found contradiction as merely unverified', async () => {
+    // Real 1250, answer 9750: failed. The same beside a forged null: still
+    // failed (it was "unverified" before), with the same standing.
+    const outcomes = [];
+    for (const pages of [[page(1250)], [page(1250), page(null)]]) {
+      const { agent } = unscopedAgent('observe', pages, INVENTED_ANSWER);
+      await agent.run(ASK);
+      const assessed = await agent.assessment();
+      outcomes.push({
+        status: agent.answerValidation()?.status,
+        claim: agent.answerValidation()?.checks[0]?.disposition,
+        reasons: assessed?.reasons.map((r) => r.reason),
+      });
+    }
+    expect(outcomes[0]).toEqual({
+      status: 'failed',
+      claim: 'checked-fail',
+      reasons: ['answer-check-failed'],
+    });
+    expect(outcomes[1]).toEqual(outcomes[0]);
   });
 });
 

@@ -111,8 +111,9 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   fact — so any reading may be forged or stale, and the row obeys ONE law: a
   reading can only withhold. With no reading the claim is not checked
   (`not-applicable`), and one more reading, anywhere, never makes the row
-  more permissive (a monotonicity property pins it). Contradiction with every
-  reading → `checked-fail`. Agreement → `not-applicable`: agreement verifies
+  more permissive (a monotonicity property pins it). Contradiction with ANY
+  value read → `checked-fail`, whatever else was read — a found contradiction
+  is never relabelled unverified, and stays one when readings are added. Agreement → `not-applicable`: agreement verifies
   nothing, an absence a tool declared (`known(null)`) included.
   `unreachable` (withheld, fail closed): readings that disagree; a reading
   that settled the fact only as unknown, `null` or `'unknown'` (doubt words

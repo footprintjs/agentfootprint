@@ -55,7 +55,10 @@ never makes the verdict more permissive (pinned by a monotonicity property over 
   only the app's own checks pass a report; a contradiction still fails it and the answer is withheld;
 - **every reading counts, never the latest alone** — readings that disagree are `disputed`; a
   reading that settled nothing (an `unknown(…)` Claim, a bare `null` or doubt word) beside the
-  answer's value withholds; `contradicts` needs every reading to be a value the answer contradicts;
+  answer's value withholds;
+- **a contradiction found is reported as one** — if the answer contradicts ANY value read, the
+  verdict is `contradicts` (every value) or `contradicts-a-reading` (the values read differ),
+  whatever else was read: a forged `null` beside a real reading cannot relabel it "unverified";
 - **doubt is never agreement** — doubt on both sides is `unreachable` (doubt words are read after
   the comparison's own normalization, so `'Unknown'` is doubt); only an absence a tool declared with
   `known(null)` agrees with the answer's doubt;

@@ -24,9 +24,13 @@
  * - EVERY READING COUNTS, never the latest alone. A reading that settled
  *   nothing (an `unknown(…)` Claim, a bare `null` or doubt word) beside the
  *   answer's value, readings that disagree, and a reading that is not a
- *   well-formed Claim each withhold, whatever else the run read. A
- *   contradiction is `contradicts` only when every reading is a value the
- *   answer contradicts.
+ *   well-formed Claim each withhold, whatever else the run read.
+ * - A CONTRADICTION FOUND IS REPORTED AS ONE. If the answer contradicts ANY
+ *   value the run read, the verdict is a contradiction — `contradicts` when
+ *   it contradicts every value read, `contradicts-a-reading` when the
+ *   readings themselves differ — never relabelled "could not tell" by
+ *   whatever else was read (a forged `null` beside a real reading included).
+ *   Withheld either way; only the label is at stake, and the label is honest.
  * - DOUBT IS NEVER AGREEMENT. Doubt on both sides (`null` or `'unknown'` —
  *   in any case or spacing — or an unknown Claim) withholds; only an absence
  *   a tool DECLARED (`known(null)`) agrees with the answer's doubt.
@@ -57,8 +61,10 @@ export type DeliveredClaim =
   | 'doubt-on-both-sides'
   /** The answer's value agrees with every reading — agreement, not support. */
   | 'agrees'
-  /** Every reading is a value, and the answer's value contradicts each of them. */
+  /** The answer's value contradicts every value the run read. */
   | 'contradicts'
+  /** The answer's value contradicts one value the run read, and the values read differ. */
+  | 'contradicts-a-reading'
   /** A reading or the answer is not well formed, or the values cannot be compared safely. */
   | 'incomparable';
 
@@ -86,24 +92,29 @@ export function judgeDeliveredClaim(comparison: ClaimComparison): DeliveredClaim
     value: row.value,
     shape: claimShapeOf(row.value),
   }));
-  if (answer.kind === 'malformed' || readings.some((r) => r.shape.kind === 'malformed')) {
-    return 'incomparable';
-  }
+  if (answer.kind === 'malformed') return 'incomparable';
+  const malformed = readings.some((r) => r.shape.kind === 'malformed');
   const doubts = readings.filter((r) => r.shape.kind === 'doubt');
   const values = readings.filter((r) => r.shape.kind === 'value');
 
   if (answer.kind === 'doubt') {
     // The answer claims nothing: only a reading that ALSO settled nothing
     // makes this agreement on doubt, which verifies nothing.
+    if (malformed) return 'incomparable';
     if (doubts.length > 0) return 'doubt-on-both-sides';
     return values.every((r) => declaredAbsence(r.shape)) ? 'agrees' : 'declined';
   }
 
+  // A contradiction of any value read is the verdict, whatever else was read.
+  const results = values.map((r) => compareClaimValues(r.value, comparison.claimed));
+  if (results.includes('contradicts')) {
+    return results.every((result) => result === 'contradicts')
+      ? 'contradicts'
+      : 'contradicts-a-reading';
+  }
+  if (malformed) return 'incomparable';
   if (disputed(values.map((r) => r.value))) return 'disputed';
   if (doubts.some((r) => r.shape.kind === 'doubt' && r.shape.declared)) return 'settled-unknown';
   if (doubts.length > 0) return 'settled-doubt';
-  const results = values.map((r) => compareClaimValues(r.value, comparison.claimed));
-  if (results.every((result) => result === 'contradicts')) return 'contradicts';
-  if (results.every((result) => result === 'agrees')) return 'agrees';
-  return 'incomparable';
+  return results.every((result) => result === 'agrees') ? 'agrees' : 'incomparable';
 }

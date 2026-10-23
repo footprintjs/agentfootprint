@@ -155,6 +155,12 @@ function claimRowOf(claim: DeclaredClaim, verdict: DeliveredClaim): AnswerCheck 
       );
     case 'contradicts':
       return row('checked-fail', `the answer's ${field} contradicts ${fact} a tool settled`);
+    case 'contradicts-a-reading':
+      return row(
+        'checked-fail',
+        `the answer's ${field} contradicts one tool result's reading of ${fact} (the readings ` +
+          `the run made of it are not all the same)`,
+      );
     case 'incomparable':
       return row(
         'unreachable',

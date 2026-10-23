@@ -168,12 +168,15 @@ function claimOf(
   const kind = record.kind;
   if (kind !== 'known' && kind !== 'unknown' && kind !== 'not-applicable') return undefined;
   const keys = CLAIM_KEYS[kind];
-  const text = (key: string) => record[key] === undefined || typeof record[key] === 'string';
+  // Every own key is one the kind may have, every key it must have is there,
+  // and every key but `kind` and `value` holds text — an own `undefined`
+  // included is not a well-formed Claim (no constructor writes one).
   const wellFormed =
-    Object.keys(record).every((key) => keys.may.includes(key)) &&
-    keys.must.every((key) => Object.hasOwn(record, key)) &&
-    text('evidence') &&
-    text('reason');
+    Object.keys(record).every(
+      (key) =>
+        keys.may.includes(key) &&
+        (key === 'kind' || key === 'value' || typeof record[key] === 'string'),
+    ) && keys.must.every((key) => Object.hasOwn(record, key));
   return { kind, wellFormed };
 }
 

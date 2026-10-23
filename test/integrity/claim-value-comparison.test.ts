@@ -362,6 +362,8 @@ describe('UNIT — what a value at the top of a claim is, by its shape', () => {
       { kind: 'known', value: 5 },
       { kind: 'known', value: 5, evidence: 7 },
       { kind: 'known', value: 5, evidence: 'x', note: 1 },
+      { kind: 'known', value: 5, evidence: undefined },
+      { kind: 'unknown', reason: 'r', evidence: undefined },
       { kind: 'known', evidence: 'x' },
       { kind: 'unknown', reason: 'r', value: 5 },
       { kind: 'unknown' },

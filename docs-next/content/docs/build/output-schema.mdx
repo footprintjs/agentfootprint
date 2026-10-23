@@ -481,7 +481,7 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
 
 | Row | `checked-pass` | `checked-fail` | `unreachable` | `not-applicable` |
 |---|---|---|---|---|
-| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts every reading of the fact this run made | this run read the fact two different ways, or only as unknown, `null` or `'unknown'` beside a stated value; doubt on both sides; values that cannot be compared safely; or a value that is not a well-formed `Claim` | the field agrees with the fact; no tool result settled the fact (the claim is not checked); or the answer leaves the field out, or declines it (`null`, `'unknown'`) |
+| `agent:claims:<field>`, one per `.claims()` field, judged on the JSON this validation delivers | never: agreeing with a fact is not verifying the answer | the field contradicts a value this run read for the fact — whatever else it read | this run read the fact two different ways, or only as unknown, `null` or `'unknown'` beside a stated value; doubt on both sides; values that cannot be compared safely; or a value that is not a well-formed `Claim` | the field agrees with the fact; no tool result settled the fact (the claim is not checked); or the answer leaves the field out, or declines it (`null`, `'unknown'`) |
 | `agent:names-and-numbers`, the gate asked of the JSON this validation delivers | never: finding a value clears an answer, it does not verify it | a value no tool result the run read carried | a value was not found and the evidence index had hit its ceiling; or the answer is longer than the gate reads (its first 20,000 words and numbers), so the rest was never looked up | no value is unsupported, or the answer states none |
 
 - **Every row judges what is delivered.** Rows are judged on the exact JSON
@@ -513,7 +513,8 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   Every reading counts, never the latest alone: readings that disagree, or one
   that settled the fact only as unknown, `null` or `'unknown'` beside the
   answer's value, make the row `unreachable` — the library cannot tell which
-  one is right.
+  one is right. A contradiction found is reported as one: if the field
+  contradicts any value the run read, the row fails, whatever else was read.
 - **A different spelling is not a contradiction.** A claim is compared after
   one declared normalization. Text is compared in Unicode NFC, trimmed, with
   its white space collapsed, and a word is case-folded (`'Settled '` agrees

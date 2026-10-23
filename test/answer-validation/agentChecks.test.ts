@@ -185,18 +185,31 @@ describe('unit: the claims rows', () => {
       'not-applicable',
     ],
     ['contradicts', { durationMs: 9750 }, [settled(1250)], 'checked-fail'],
-    // Two readings of one fact that disagree: which one is right cannot be told.
+    // A contradiction found against ANY reading is reported as one — whatever
+    // else the run read (withheld either way; never merely "unverified").
     [
-      'the run read the fact two ways',
+      'the run read the fact two ways; the answer contradicts the latest',
       { durationMs: 900 },
       [settled(900), settled(1250)],
-      'unreachable',
+      'checked-fail',
     ],
     [
-      'the run read it two ways, the answer agreeing with the latest',
+      'the run read it two ways; the answer contradicts the earlier one',
       { durationMs: 1250 },
       [settled(900), settled(1250)],
-      'unreachable',
+      'checked-fail',
+    ],
+    [
+      'a real contradicting reading beside a forged null',
+      { durationMs: 9750 },
+      [settled(1250), settled(null, { toolCallId: 'call-2' })],
+      'checked-fail',
+    ],
+    [
+      'a real contradicting reading beside an unknown one',
+      { durationMs: 9750 },
+      [settled(unknown('no clock')), settled(1250, { toolCallId: 'call-2' })],
+      'checked-fail',
     ],
     [
       'two readings that agree are one fact',
@@ -205,10 +218,10 @@ describe('unit: the claims rows', () => {
       'checked-fail',
     ],
     // Every reading counts, never the latest alone: a reading that settled
-    // nothing beside one that settled a value is a run that could not settle it.
+    // nothing beside one that agrees is a run that could not settle it.
     [
-      'an unknown reading beside a value',
-      { durationMs: 9750 },
+      'an unknown reading beside an agreeing value',
+      { durationMs: 1250 },
       [settled(unknown('clock unavailable')), settled(1250)],
       'unreachable',
     ],
@@ -292,6 +305,12 @@ describe('unit: the claims rows', () => {
       'unreachable',
     ],
     [
+      'a known wrapper whose evidence is an own undefined',
+      { durationMs: { kind: 'known', value: 1250, evidence: undefined } },
+      [settled(1250)],
+      'unreachable',
+    ],
+    [
       'a tool reading wrapped badly',
       { durationMs: 1250 },
       [settled({ kind: 'unknown', reason: 'r', value: 1250 })],
@@ -348,9 +367,17 @@ describe('unit: the claims rows', () => {
   });
 
   it('a disputed fact says the run read it two ways', () => {
-    expect(rowFor({ durationMs: 1250 }, [settled(900), settled(1250)]).reason).toBe(
+    // Readings that differ while the answer contradicts neither of them.
+    expect(rowFor({ durationMs: 1250 }, [settled(1250), settled('1250 ms')]).reason).toBe(
       "the tool results the run read disagree about the fact 'durationMs', so the answer's " +
         "'durationMs' cannot be checked against one of them",
+    );
+  });
+
+  it('a contradiction of one reading among several says so', () => {
+    expect(rowFor({ durationMs: 1250 }, [settled(900), settled(1250)]).reason).toBe(
+      "the answer's 'durationMs' contradicts one tool result's reading of the fact 'durationMs' " +
+        '(the readings the run made of it are not all the same)',
     );
   });
 
@@ -498,10 +525,14 @@ describe('oracle: a claim row compares values after the declared normalization',
       settled('9007199254740992', { toolCallId: 'call-2' }),
       settled('9007199254740993', { toolCallId: 'call-3' }),
     ];
-    for (const answered of [9007199254740992, '9007199254740992', '9007199254740993']) {
+    // The double agrees with every reading at double precision: a dispute.
+    const [double] = claimChecksOf([DURATION], ledger, { durationMs: 9007199254740992 }, 1);
+    expect(double!.disposition).toBe(INCOMPARABLE);
+    expect(double!.reason).toMatch(/disagree about the fact 'durationMs'/);
+    // A written number contradicts the other written one: a contradiction.
+    for (const answered of ['9007199254740992', '9007199254740993']) {
       const [row] = claimChecksOf([DURATION], ledger, { durationMs: answered }, 1);
-      expect(row!.disposition).toBe(INCOMPARABLE);
-      expect(row!.reason).toMatch(/disagree about the fact 'durationMs'/);
+      expect(row!.disposition).toBe(CONTRADICTS);
     }
   });
 
@@ -525,10 +556,10 @@ describe('oracle: a claim row compares values after the declared normalization',
 describe('property: a claim row never says more than the claim detector', () => {
   // The detector (`unsupportedClaimsOf`) and the row both start from
   // `compareClaim`. Over a value matrix, the row is the stricter reader: it
-  // never PASSES (agreement with an unscoped fact is not verification), it
-  // FAILS only where the detector files a contradiction (a row never invents
-  // one), and where the detector could not compare a fact the run did read,
-  // the row withholds.
+  // never PASSES (agreement with an unscoped fact is not verification); it
+  // FAILS only where the detector, judging some reading the run made, files a
+  // contradiction (a row never invents one); and where the detector could not
+  // compare a fact the run did read, the row withholds.
   it('holds across every evidence × claim pair', () => {
     let cases = 0;
     for (const evidence of VALUES) {
@@ -536,10 +567,16 @@ describe('property: a claim row never says more than the claim detector', () => 
         for (const ledger of [[], [settled(evidence)], [settled(999), settled(evidence)]]) {
           const answer = { durationMs: claim };
           const [row] = claimChecksOf([DURATION], ledger, answer, 0);
-          const { findings, dispositions } = unsupportedClaimsOf([DURATION], ledger, answer, 0);
-          const contradiction = findings.some((f) => f.advisory !== true);
+          const { dispositions } = unsupportedClaimsOf([DURATION], ledger, answer, 0);
           expect(row!.disposition).not.toBe('checked-pass');
-          if (row!.disposition === 'checked-fail') expect(contradiction).toBe(true);
+          if (row!.disposition === 'checked-fail') {
+            const contradicted = ledger.some((reading) =>
+              unsupportedClaimsOf([DURATION], [reading], answer, 0).findings.some(
+                (f) => f.advisory !== true,
+              ),
+            );
+            expect(contradicted).toBe(true);
+          }
           if (ledger.length > 0 && dispositions[0]!.disposition === 'unreachable') {
             expect(['unreachable', 'checked-fail']).toContain(row!.disposition);
           }
@@ -554,10 +591,10 @@ describe('property: a claim row never says more than the claim detector', () => 
 describe('property: a reading can only withhold — never more permissive than its absence', () => {
   // THE law of the claims row (review: a forged or stale row must not turn a
   // withheld answer into a delivered one). Whatever the run read, ONE more
-  // reading — first or last, forged, stale, doubtful or malformed — can only
-  // keep or add withholding: with no reading the row is `not-applicable`, and
-  // no reading ever makes it more permissive than without that reading.
-  const withholds = (row: AnswerCheck) => row.disposition !== 'not-applicable';
+  // reading — at any position, forged, stale, doubtful or malformed — keeps or
+  // adds withholding; a contradiction found stays a contradiction; and the
+  // order of the readings never matters. Starting sets: none, every single
+  // value, and seeded sets of two and three readings.
   const judge = (claim: unknown, values: readonly unknown[]): AnswerCheck =>
     claimChecksOf(
       [DURATION],
@@ -565,23 +602,45 @@ describe('property: a reading can only withhold — never more permissive than i
       { durationMs: claim },
       0,
     )[0]!;
+  let seed = 20261022;
+  const random = (n: number) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  const bases: (readonly unknown[])[] = [[], ...VALUES.map((value) => [value])];
+  for (let i = 0; i < 60; i++) {
+    const size = 2 + random(2);
+    bases.push(Array.from({ length: size }, () => VALUES[random(VALUES.length)]));
+  }
 
-  it('adding any reading anywhere never un-withholds', () => {
+  it('adding any reading at any position never un-withholds, and never un-contradicts', () => {
     let cases = 0;
-    const bases: readonly (readonly unknown[])[] = [[], ...VALUES.map((value) => [value])];
     for (const claim of VALUES) {
       for (const base of bases) {
-        const before = withholds(judge(claim, base));
+        const before = judge(claim, base).disposition;
         for (const extra of VALUES) {
-          if (before) {
-            expect(withholds(judge(claim, [...base, extra]))).toBe(true);
-            expect(withholds(judge(claim, [extra, ...base]))).toBe(true);
+          for (let at = 0; at <= base.length; at++) {
+            const after = judge(claim, [
+              ...base.slice(0, at),
+              extra,
+              ...base.slice(at),
+            ]).disposition;
+            if (before !== 'not-applicable') expect(after).not.toBe('not-applicable');
+            if (before === 'checked-fail') expect(after).toBe('checked-fail');
+            cases++;
           }
-          cases++;
         }
       }
     }
-    expect(cases).toBe(VALUES.length * (VALUES.length + 1) * VALUES.length);
+    expect(cases).toBeGreaterThan(100_000);
+  });
+
+  it('the order of the readings never changes the row', () => {
+    for (const claim of VALUES) {
+      for (const base of bases.filter((b) => b.length > 1)) {
+        expect(judge(claim, [...base].reverse())).toEqual(judge(claim, base));
+      }
+    }
   });
 
   it('with no reading the row is not-applicable, whatever the answer says', () => {
