@@ -905,6 +905,18 @@ export {
   type DeclaredCoverage,
   type ToolAbsence,
   type TryInsteadTool,
+  // `Tool.search` — what one call searches, declared once; and the coverage
+  // row the library composes from it and the arguments the call ran with.
+  isComposedCoverage,
+  type ComposedCoverage,
+  type ComposedItem,
+  type CoverageGap,
+  type DeclaredCoveredResult,
+  type DeclaredToolAbsence,
+  type GapFacet,
+  type SearchArgument,
+  type SearchRole,
+  type ToolSearch,
 } from './semantics/coverage/index.js';
 // The one period shape (honesty layer 3, step 7b): what a result's READ
 // covered in time — the instants it asked for, what the store holds (or

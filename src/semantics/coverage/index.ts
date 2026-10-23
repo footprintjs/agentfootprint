@@ -37,6 +37,14 @@ export {
   IN_PROGRESS_WIRE,
   inProgressLine,
 } from './inProgress.js';
+export {
+  isComposedCoverage,
+  type ComposedCoverage,
+  type ComposedItem,
+  type CoverageGap,
+  type GapFacet,
+} from './composedCoverage.js';
+export type { SearchArgument, SearchRole, ToolSearch } from './search/types.js';
 export type {
   AbsenceDeclaration,
   Coverage,
@@ -45,6 +53,8 @@ export type {
   CoverageItem,
   CoveredResult,
   DeclaredCoverage,
+  DeclaredCoveredResult,
+  DeclaredToolAbsence,
   InProgressInput,
   InProgressItem,
   ToolAbsence,
