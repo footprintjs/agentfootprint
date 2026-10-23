@@ -13,22 +13,15 @@
  * alias). Store data cannot bind another entity's name: an entry for
  * `billing` never rides the item for `payments`.
  *
- * Names compare under one spelling — Unicode NFC, trimmed, case-folded. Token
- * shape (plural, punctuation) decides nothing.
+ * Names compare by the ONE case rule (`lib/normalize.ts` · `sameName`, the
+ * claim comparator's own): a foldable word may differ in case; a short word,
+ * a mixed-case one or anything with a digit keeps its case. Token shape
+ * (plural, punctuation) decides nothing.
  */
 
+import { sameName } from '../../../lib/normalize.js';
 import type { ResolvedEntity } from '../composedCoverage.js';
 import type { ResolvedDeclaration } from './resultFacts.js';
-
-/** One spelling for a name: NFC, trimmed, case-folded. */
-export function nameSpelling(name: string): string {
-  return name.normalize('NFC').trim().toLowerCase();
-}
-
-/** Whether two names are one name under {@link nameSpelling}. */
-export function sameName(a: string, b: string): boolean {
-  return nameSpelling(a) === nameSpelling(b);
-}
 
 /**
  * The entity `value` (sent as `argument`) resolved to, or `undefined` when no

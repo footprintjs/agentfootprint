@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { absent, coverage, describedResult } from '../../../../src/index.js';
 import type { ComposedItem } from '../../../../src/semantics/coverage/composedCoverage.js';
 import { composeSearchCoverage } from '../../../../src/semantics/coverage/search/compose.js';
-import { sameName } from '../../../../src/semantics/coverage/search/binding.js';
+import { sameName } from '../../../../src/lib/normalize.js';
 import { isAnyValue } from '../../../../src/semantics/coverage/search/declaration.js';
 import type {
   SearchArgument,
