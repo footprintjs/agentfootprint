@@ -26,6 +26,10 @@ import {
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './declare.js';
+import { assertToolSearch, periodArgumentsOf } from '../semantics/coverage/search/declaration.js';
+import { searchReviewItems } from '../semantics/coverage/search/review.js';
+import type { ToolSearch } from '../semantics/coverage/search/types.js';
+import { isDevMode } from 'footprintjs';
 import type { TimeContext } from '../time/wire.js';
 import type { CheckInDemand } from '../core/checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
@@ -397,6 +401,23 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * `_meta.agentfootprint.period`. Omitted → byte-identical.
    */
   readonly period?: ToolPeriod;
+  /**
+   * WHAT ONE CALL OF THIS TOOL SEARCHES — declared once, as typed data, so the
+   * library composes each call's coverage from the arguments the call actually
+   * ran with (`semantics/coverage/search/`). Every `inputSchema` property is
+   * classified by role (`population`, `filter`, `period`, `source`, `cap`,
+   * `page`, `inert`), with a default where `execute` applies one
+   * (`whenOmitted`: a value, or `{ any: true }`); `fixed` names the qualifiers
+   * the tool always applies; `gaps` the ground it never reaches, each with the
+   * facet it `bears` on; `complete: 'within-arguments'` lets a call stand for
+   * the whole population, filters and period in effect. The result says
+   * `absent({ what, checked: 'declared' })` (or `coverage(rows, { checked:
+   * 'declared' })`) and the funnel composes the rest: composition can only
+   * under-claim. Refused at `defineTool` when malformed. Carried over MCP in
+   * `_meta.agentfootprint.search`, where it composes rows marked
+   * `composed: 'remote'` that establish nothing. Omitted → byte-identical.
+   */
+  readonly search?: ToolSearch;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -1028,7 +1049,30 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Which argument sets the period the answer covers (see {@link Tool.period}).
    *  Requires a rule on that argument. Omitted → byte-identical. */
   readonly period?: ToolPeriod;
+  /** What one call of this tool searches, classified (see {@link Tool.search}).
+   *  Refused here when malformed. Omitted → byte-identical. */
+  readonly search?: ToolSearch;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
+}
+
+/** Tools already told about a `said-overlap` — one dev warning per tool per process. */
+const warnedSearchReview = new Set<string>();
+
+/**
+ * Dev mode: name each `said-overlap` of a search once — a review item, never a
+ * refusal (the `check:semantics` gate lists it too, with `source-said`).
+ */
+function warnSearchReview(toolName: string, search: ToolSearch | undefined): void {
+  if (search === undefined || !isDevMode() || warnedSearchReview.has(toolName)) return;
+  const overlaps = searchReviewItems(search).filter((i) => i.code === 'said-overlap');
+  if (overlaps.length === 0) return;
+  warnedSearchReview.add(toolName);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint search: tool '${toolName}' — ` +
+      overlaps.map((i) => `${i.field}: ${i.message}`).join(' ') +
+      ' (said-overlap; this warning fires once per tool per process.)',
+  );
 }
 
 /**
@@ -1114,6 +1158,15 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     options.inputSchema ?? { type: 'object', properties: {} },
     options.wants,
   );
+  // What one call searches — every property classified, every default and
+  // qualifier declared, the statement text held to a sentence's standard.
+  // Refused HERE, naming the tool and the code, not at the first "not found".
+  const periodArguments = periodArgumentsOf(options.period);
+  assertToolSearch(options.name, options.search, {
+    inputSchema: options.inputSchema ?? { type: 'object', properties: {} },
+    ...(periodArguments !== undefined && { periodArguments }),
+  });
+  warnSearchReview(options.name, options.search);
   return {
     schema: {
       name: options.name,
@@ -1140,6 +1193,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.repeatedWhen !== undefined && { repeatedWhen: options.repeatedWhen }),
     ...(options.askOrAssume !== undefined && { askOrAssume: options.askOrAssume }),
     ...(options.period !== undefined && { period: options.period }),
+    ...(options.search !== undefined && { search: options.search }),
     execute: options.execute,
   };
 }

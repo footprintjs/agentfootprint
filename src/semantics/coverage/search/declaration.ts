@@ -22,6 +22,7 @@
 
 import { plainLineProblem } from '../../../lib/plainLine.js';
 import type { GapFacet } from '../composedCoverage.js';
+import { formArguments, sugarForms, type PeriodShapes } from '../../../time/periodForm.js';
 import { statementTextProblem } from './statementText.js';
 import type {
   SearchArgument,
@@ -111,6 +112,22 @@ export function isSearchScalar(v: unknown): v is SearchScalar {
 /** `{ any: true }` exactly — no other key, no other value. */
 export function isAnyValue(v: unknown): v is { readonly any: true } {
   return isPlain(v) && Object.keys(v).length === 1 && v.any === true;
+}
+
+/**
+ * The arguments a tool's `period` names — its single argument, its zone
+ * argument and every argument of its forms — or `undefined` when it declares
+ * no period. What a `period`-role search argument must be one of.
+ */
+export function periodArgumentsOf(period: PeriodShapes | undefined): readonly string[] | undefined {
+  if (period === undefined) return undefined;
+  const named = new Set<string>();
+  if (period.argument !== undefined) named.add(period.argument);
+  if (period.zoneArgument !== undefined) named.add(period.zoneArgument);
+  for (const form of sugarForms(period)) {
+    for (const a of formArguments(form)) named.add(a.argument);
+  }
+  return [...named];
 }
 
 /**
