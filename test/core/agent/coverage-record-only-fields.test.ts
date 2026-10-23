@@ -360,6 +360,9 @@ describe('record-only fields — every serving path goes through the one strip',
       'core/agent/stages/toolCalls.ts', // declareCoverage — records; afterMoment serves
       'core/runbook/coverage.ts', // foldInnerCoverage — folds declared lists upward
       'semantics/check.ts', // declaresCoverage — the build-time gate asks yes/no
+      // composeSearchCoverage — reads the value it composed for its facts; the
+      // funnel hands that value on, and afterMoment serves it
+      'semantics/coverage/search/compose.ts',
     ];
     const found: string[] = [];
     const walk = (dir: string): void => {
