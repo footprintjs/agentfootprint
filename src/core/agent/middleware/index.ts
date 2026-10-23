@@ -17,7 +17,7 @@
  * word coming out.
  */
 
-export { allow, ask, deny } from './outcomes.js';
+export { allow, ask, deny, type AllowOptions } from './outcomes.js';
 export { MessageDeniedError, type MessageDeniedContext } from './errors.js';
 export type {
   AllowOutcome,

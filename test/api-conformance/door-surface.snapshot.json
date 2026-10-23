@@ -291,6 +291,7 @@
       "AgentOutput",
       "AgentRecordingsOptions",
       "AgentRunCheckpoint",
+      "AllowOptions",
       "AllowOutcome",
       "AmongDeclaration",
       "AnswerCheck",

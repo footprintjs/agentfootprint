@@ -37,13 +37,19 @@
  * way to an event loses to the first rule that reshapes the result — JSON
  * text, a wrapper, a truncated head — so the mint does not put them in the
  * envelope at all: it keeps them on a library-owned channel keyed by the
- * envelope object it returns ({@link knownNamesFor}). The after-tool rules,
- * every event, the ledger and the coverage rows therefore see a result that
- * never held them, whatever a rule does to it. The dispatch door attaches
- * them in ONE place — the model-bound message, after every rule, the
- * placement and the cap (`stages/toolCalls.ts` · `messageTextOf`, through
- * {@link withKnownNames}) — and not at all when an after-tool rule denied the
- * result. The conversation is where they live: what the model read.
+ * envelope object it returns ({@link knownNamesFor}). They stay under the
+ * app's rules all the same: each after-tool rule is handed them BESIDE the
+ * result (`call.knownNames`) and decides what goes on — a pass-through keeps
+ * them, a rewrite drops them unless the rule hands them back, a denial ends
+ * them, and a block a rule hands back is held to this file's rules
+ * ({@link ruleKnownNames}). What the chain lets through is attached in ONE
+ * place, the model-bound message (`stages/toolCalls.ts` · `messageTextOf`,
+ * through {@link withKnownNames}), and it counts against
+ * `maxToolResultChars`: the list is trimmed, never the result
+ * ({@link fitKnownNames}). Every event, the ledger, the decision rows and the
+ * coverage rows see a result that never held them; the conversation — what the
+ * model read, under the run's redaction policy like the result — is where
+ * they live.
  *
  * A copy of the envelope (`{ ...absent(…) }`, a JSON round trip, a value a
  * non-JavaScript tool minted) carries no channel, so its names are not served
@@ -397,4 +403,79 @@ export function withKnownNames(value: unknown, names: KnownNames): unknown {
     return { ...covered, result: inner };
   }
   return { ...value, [KNOWN_NAMES_KEY]: names };
+}
+
+// ── A names block a rule hands back ──────────────────────────────────────
+
+const isWhole = (raw: unknown): raw is number =>
+  typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0;
+
+/**
+ * What is wrong with a names block an after-tool rule hands back
+ * (`allow(value, why, { knownNames })`), or `undefined` when it is the shape
+ * the rule was handed: `{ count, nearest?, dropped?, omitted? }`.
+ */
+export function knownNamesProblem(raw: unknown): string | undefined {
+  if (!isPlainObject(raw)) return 'a names block is { count, nearest? } — or null to drop them';
+  const unknownKey = Object.keys(raw).find(
+    (key) => !['count', 'nearest', 'dropped', 'omitted'].includes(key),
+  );
+  if (unknownKey !== undefined) return `a names block has no field '${unknownKey}'`;
+  if (!isWhole(raw.count)) return 'a names block needs `count`, a whole number';
+  if (raw.nearest !== undefined && !Array.isArray(raw.nearest)) {
+    return '`nearest` is a list of names';
+  }
+  for (const key of ['dropped', 'omitted'] as const) {
+    if (raw[key] !== undefined && !isWhole(raw[key])) return `\`${key}\` is a whole number`;
+  }
+  return undefined;
+}
+
+/**
+ * A rule's names block held to the mint's own rules, so a rule cannot widen
+ * what the model is shown past them: each name re-filtered (one plain
+ * printable line, at most {@link MAX_NAME_CHARS}), each once, at most
+ * {@link KNOWN_NAMES_SHOWN} and never more than `count`. A name the filter
+ * refuses is counted in `dropped`. `undefined` for a block
+ * {@link knownNamesProblem} refuses — no names, the safe direction.
+ */
+export function ruleKnownNames(raw: unknown): KnownNames | undefined {
+  if (knownNamesProblem(raw) !== undefined) return undefined;
+  const block = raw as KnownNames;
+  const nearest: string[] = [];
+  let dropped = block.dropped ?? 0;
+  for (const candidate of block.nearest ?? []) {
+    const name = showable(candidate);
+    if (name === undefined) dropped += 1;
+    else if (!nearest.includes(name)) nearest.push(name);
+  }
+  const shown = nearest.slice(0, Math.min(KNOWN_NAMES_SHOWN, block.count));
+  return {
+    count: block.count,
+    ...(block.nearest !== undefined && { nearest: shown }),
+    ...(dropped > 0 && { dropped }),
+  };
+}
+
+/**
+ * The names block trimmed until the message holding it `fits` — the
+ * farthest names leave first, and `omitted` says how many left. The RESULT
+ * is never cut for the names. `undefined` when not even the block with no
+ * names fits: then nothing is attached.
+ */
+export function fitKnownNames(
+  names: KnownNames,
+  fits: (block: KnownNames) => boolean,
+): KnownNames | undefined {
+  if (fits(names)) return names;
+  const nearest = names.nearest ?? [];
+  for (let keep = nearest.length - 1; keep >= 0; keep--) {
+    const block: KnownNames = {
+      ...names,
+      nearest: nearest.slice(0, keep),
+      omitted: (names.omitted ?? 0) + (nearest.length - keep),
+    };
+    if (fits(block)) return block;
+  }
+  return undefined;
 }

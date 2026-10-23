@@ -36,8 +36,12 @@ import {
   defineTool,
   deny,
   isPaused,
+  type ToolResultContext,
+  type ToolResultOutcome,
 } from '../../../src/index.js';
+import { conversationRedaction } from '../../../src/doors/security.js';
 import { mock } from '../../../src/llm-providers.js';
+import { servedToModel } from '../../../src/semantics/coverage/read.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 
@@ -49,6 +53,18 @@ const INVENTORY = Array.from(
 /** A name only the nearest-names list can put in front of the model. */
 const NEAREST = 'PS-ARRAY-09';
 
+const declarationFor = (arrayId: string) => ({
+  what: arrayId,
+  among: {
+    argument: 'array_id',
+    source: SOURCE,
+    measuredAt: '2026-10-22T09:14:00Z',
+    count: INVENTORY.length,
+    names: INVENTORY,
+    visible: 'caller' as const,
+  },
+});
+
 interface Run {
   readonly agent: Agent;
   readonly requests: LLMRequest[];
@@ -56,13 +72,17 @@ interface Run {
   readonly executed: unknown[];
   /** What each after-tool rule was handed, as JSON. */
   readonly ruleSaw: string[];
+  /** The names each after-tool rule was handed beside the result. */
+  readonly ruleNames: unknown[];
 }
 
 interface Options {
   readonly gate?: boolean;
   readonly maxToolResultChars?: number;
-  /** An after-tool rule over the result (its return is the rule's outcome). */
-  readonly onToolResult?: (result: unknown) => unknown;
+  /** An after-tool rule (its return is the rule's outcome). */
+  readonly onToolResult?: (call: ToolResultContext) => ToolResultOutcome;
+  /** The agent's redaction policy. */
+  readonly redact?: ReturnType<typeof conversationRedaction>;
 }
 
 function build(args: readonly unknown[], options: Options = {}): Run {
@@ -70,6 +90,7 @@ function build(args: readonly unknown[], options: Options = {}): Run {
   const events: { type: string; payload: Record<string, unknown> }[] = [];
   const executed: unknown[] = [];
   const ruleSaw: string[] = [];
+  const ruleNames: unknown[] = [];
   const inner = mock({
     replies: [
       {
@@ -100,17 +121,7 @@ function build(args: readonly unknown[], options: Options = {}): Run {
     execute: ({ array_id }: { array_id: string }) => {
       executed.push(array_id);
       if (INVENTORY.includes(array_id)) return { array_id, model: 'PowerStore 1200T' };
-      return absent({
-        what: array_id,
-        among: {
-          argument: 'array_id',
-          source: SOURCE,
-          measuredAt: '2026-10-22T09:14:00Z',
-          count: INVENTORY.length,
-          names: INVENTORY,
-          visible: 'caller',
-        },
-      });
+      return absent(declarationFor(array_id));
     },
   });
   let builder = Agent.create({
@@ -119,6 +130,7 @@ function build(args: readonly unknown[], options: Options = {}): Run {
     ...(options.maxToolResultChars !== undefined && {
       maxToolResultChars: options.maxToolResultChars,
     }),
+    ...(options.redact !== undefined && { redact: options.redact }),
   }).tool(tool);
   if (options.gate === true) {
     builder = builder.toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'ok?' }) });
@@ -129,7 +141,8 @@ function build(args: readonly unknown[], options: Options = {}): Run {
       name: 'rule',
       onToolResult: (call) => {
         ruleSaw.push(JSON.stringify(call.result) ?? String(call.result));
-        return rule(call.result) as ReturnType<typeof allow>;
+        ruleNames.push(call.knownNames);
+        return rule(call);
       },
     });
   }
@@ -137,7 +150,7 @@ function build(args: readonly unknown[], options: Options = {}): Run {
   agent.on('*', (e) =>
     events.push({ type: e.type, payload: e.payload as unknown as Record<string, unknown> }),
   );
-  return { agent, requests, events, executed, ruleSaw };
+  return { agent, requests, events, executed, ruleSaw, ruleNames };
 }
 
 const toolMessages = (r: Run): string[] =>
@@ -255,47 +268,167 @@ describe('integration — a well-formed unknown name is an absence, never a refu
   });
 });
 
-describe('security — no middleware can carry the names to an event', () => {
-  it('a rule that turns the result into JSON text: the names reach the model, not the event', async () => {
+/** The `known_names` block the model read, parsed from its tool message. */
+function namesBlockOf(r: Run): { count: number; nearest?: string[]; omitted?: number } | undefined {
+  const [message] = toolMessages(r);
+  if (message === undefined) return undefined;
+  const line = message.lastIndexOf('\n\nknown_names: ');
+  if (line !== -1) return JSON.parse(message.slice(line + 15)) as never;
+  const find = (v: unknown): unknown => {
+    if (typeof v !== 'object' || v === null) return undefined;
+    const rec = v as Record<string, unknown>;
+    if (rec.known_names !== undefined) return rec.known_names;
+    for (const inner of Object.values(rec)) {
+      const hit = find(inner);
+      if (hit !== undefined) return hit;
+    }
+    return undefined;
+  };
+  try {
+    return find(JSON.parse(message)) as never;
+  } catch {
+    return undefined;
+  }
+}
+
+describe("security — (1) the names are the rules' to keep, narrow or drop", () => {
+  it('a rule is handed the names beside the result, never inside it', async () => {
+    const r = build(['PS-ARRAY-99'], { onToolResult: () => allow() });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    const [names] = r.ruleNames as { nearest: string[] }[];
+    expect(names?.nearest[0]).toBe(NEAREST);
+    expectNamesOnlyInTheConversation(r, logged);
+    expect(namesBlockOf(r)?.nearest).toHaveLength(20);
+  });
+
+  it('a rule that narrows the names: the model reads only what it kept', async () => {
     const r = build(['PS-ARRAY-99'], {
-      onToolResult: (result) => allow(JSON.stringify(result), 'as text'),
+      onToolResult: (call) =>
+        allow(undefined, 'one name is enough', {
+          knownNames: { count: call.knownNames!.count, nearest: [NEAREST] },
+        }),
+    });
+    await runLogged(r, 'details of PS-ARRAY-99?');
+    expect(namesBlockOf(r)).toEqual({ count: 25, nearest: [NEAREST] });
+  });
+
+  it('a rule that drops the names: the model reads none', async () => {
+    const r = build(['PS-ARRAY-99'], {
+      onToolResult: () => allow(undefined, 'no names here', { knownNames: null }),
+    });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    expectNamesOnlyInTheConversation(r, logged);
+    expect(namesTheModelRead(r)).toBe(false);
+  });
+});
+
+describe('security — (2) a rewritten result keeps no names unless the rule says so', () => {
+  it('JSON text, not kept: no names, and no event names one', async () => {
+    const r = build(['PS-ARRAY-99'], {
+      onToolResult: (call) => allow(JSON.stringify(call.result), 'as text'),
     });
     const logged = await runLogged(r, 'details of PS-ARRAY-99?');
     const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
     expect(typeof end?.modelResult).toBe('string');
     expectNamesOnlyInTheConversation(r, logged);
-    expect(namesTheModelRead(r)).toBe(true);
+    expect(namesTheModelRead(r)).toBe(false);
   });
 
-  it('a rule that wraps the result in another object: the same', async () => {
+  it('JSON text, kept: the names follow the text on one line', async () => {
     const r = build(['PS-ARRAY-99'], {
-      onToolResult: (result) => allow({ wrapped: result, by: 'rule' }, 'wrapped'),
+      onToolResult: (call) =>
+        allow(JSON.stringify(call.result), 'as text', { knownNames: call.knownNames! }),
     });
     const logged = await runLogged(r, 'details of PS-ARRAY-99?');
-    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
-    expect(end?.modelResult).toMatchObject({ by: 'rule' });
     expectNamesOnlyInTheConversation(r, logged);
+    expect(toolMessages(r)[0]).toContain('\n\nknown_names: ');
+    expect(namesBlockOf(r)?.nearest?.[0]).toBe(NEAREST);
+  });
+
+  it('wrapped, not kept: no names; wrapped, kept: beside the wrapper', async () => {
+    const dropped = build(['PS-ARRAY-99'], {
+      onToolResult: (call) => allow({ wrapped: call.result, by: 'rule' }, 'wrapped'),
+    });
+    const loggedDropped = await runLogged(dropped, 'details of PS-ARRAY-99?');
+    expect(payloadsOf(dropped, 'agentfootprint.stream.tool_end')[0]?.modelResult).toMatchObject({
+      by: 'rule',
+    });
+    expectNamesOnlyInTheConversation(dropped, loggedDropped);
+    expect(namesTheModelRead(dropped)).toBe(false);
+
+    const kept = build(['PS-ARRAY-99'], {
+      onToolResult: (call) =>
+        allow({ wrapped: call.result, by: 'rule' }, 'wrapped', { knownNames: call.knownNames! }),
+    });
+    const loggedKept = await runLogged(kept, 'details of PS-ARRAY-99?');
+    expectNamesOnlyInTheConversation(kept, loggedKept);
+    expect(JSON.parse(toolMessages(kept)[0]!)).toMatchObject({ by: 'rule' });
+    expect(namesBlockOf(kept)?.nearest?.[0]).toBe(NEAREST);
+  });
+
+  it('the served result handed back unchanged keeps its names', async () => {
+    const r = build(['PS-ARRAY-99'], { onToolResult: (call) => allow(call.result, 'checked') });
+    await runLogged(r, 'details of PS-ARRAY-99?');
     expect(namesTheModelRead(r)).toBe(true);
   });
 
-  it('a rule that denies the result: the model is served no names either', async () => {
+  it('a rule that denies the result: no names', async () => {
     const r = build(['PS-ARRAY-99'], { onToolResult: () => deny('not for the model') });
     const logged = await runLogged(r, 'details of PS-ARRAY-99?');
     expectNamesOnlyInTheConversation(r, logged);
     expect(namesTheModelRead(r)).toBe(false);
   });
+});
 
-  it('a capped result: the event never held the names, and the model keeps them', async () => {
-    // The absence serializes to about 900 characters; a 600-character cap
-    // truncates it, and the names are attached after the cap.
+describe('security — (3) the names count against maxToolResultChars', () => {
+  /** The served envelope's own text — what the cap measures before any name. */
+  const servedLength = JSON.stringify(servedToModel(absent(declarationFor('PS-ARRAY-99')))).length;
+
+  it('the list is trimmed to fit, never the result, and says how many were left out', async () => {
+    const cap = servedLength + 120;
+    const r = build(['PS-ARRAY-99'], { maxToolResultChars: cap });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    const [message] = toolMessages(r);
+    expect(message!.length).toBeLessThanOrEqual(cap);
+    const read = JSON.parse(message!) as Record<string, unknown>;
+    expect(read.truncated).toBeUndefined(); // the result itself was not cut
+    expect(read.af_absent).toBe(true);
+    const block = namesBlockOf(r)!;
+    expect(block.nearest!.length).toBeGreaterThan(0);
+    expect(block.nearest!.length).toBeLessThan(20);
+    expect(block.omitted).toBe(20 - block.nearest!.length);
+    expect(block.nearest![0]).toBe(NEAREST);
+    expectNamesOnlyInTheConversation(r, logged);
+  });
+
+  it('no room for even the count: no names, and the result untouched', async () => {
+    const cap = servedLength + 5;
+    const r = build(['PS-ARRAY-99'], { maxToolResultChars: cap });
+    await runLogged(r, 'details of PS-ARRAY-99?');
+    const [message] = toolMessages(r);
+    expect(message).toBe(JSON.stringify(servedToModel(absent(declarationFor('PS-ARRAY-99')))));
+    expect(namesTheModelRead(r)).toBe(false);
+  });
+
+  it('a result the cap truncated: the names follow the marker, within the cap', async () => {
     const r = build(['PS-ARRAY-99'], { maxToolResultChars: 600 });
     const logged = await runLogged(r, 'details of PS-ARRAY-99?');
-    const [end] = payloadsOf(r, 'agentfootprint.stream.tool_end');
-    expect(end?.result).toMatchObject({ truncated: true });
+    const [message] = toolMessages(r);
+    expect(message!.length).toBeLessThanOrEqual(600);
+    expect(JSON.parse(message!)).toMatchObject({ truncated: true });
     expectNamesOnlyInTheConversation(r, logged);
-    const [served] = toolMessages(r);
-    expect(JSON.parse(served!)).toMatchObject({ truncated: true });
-    expect(served).toContain(NEAREST);
+  });
+});
+
+describe('security — (4) under a redact policy the names are kept out with the result', () => {
+  it('conversationRedaction(): no record names one; the model still reads them', async () => {
+    const r = build(['PS-ARRAY-99'], { redact: conversationRedaction() });
+    const logged = await runLogged(r, 'details of PS-ARRAY-99?');
+    for (const e of r.events) expect(JSON.stringify(e.payload), e.type).not.toContain(NEAREST);
+    expect(JSON.stringify(r.agent.getLastSnapshot())).not.toContain(NEAREST);
+    expect(JSON.stringify(r.agent.getLastNarrativeEntries())).not.toContain(NEAREST);
+    for (const line of logged) expect(line).not.toContain(NEAREST);
+    expect(namesTheModelRead(r)).toBe(true);
   });
 });
 
@@ -336,20 +469,25 @@ describe('property — whatever a rule does to the result, the names never reach
         { length: 1 + Math.floor(next() * 3) },
         () => TRANSFORMS[Math.floor(next() * TRANSFORMS.length)]!,
       );
-      const denies = next() < 0.15;
+      const roll = next();
+      const denies = roll < 0.15;
+      const keeps = roll > 0.6;
+      let unchanged = false;
       const r = build(['PS-ARRAY-99'], {
-        onToolResult: (result) =>
-          denies
-            ? deny('withheld by a rule')
-            : allow(
-                chain.reduce((v, t) => t.apply(v), result),
-                chain.map((t) => t.name).join(' > '),
-              ),
+        onToolResult: (call) => {
+          if (denies) return deny('withheld by a rule');
+          const value = chain.reduce((v, t) => t.apply(v), call.result);
+          unchanged = value === call.result;
+          const why = chain.map((t) => t.name).join(' > ');
+          return keeps ? allow(value, why, { knownNames: call.knownNames! }) : allow(value, why);
+        },
       });
       const logged = await runLogged(r, 'details of PS-ARRAY-99?');
       expectNamesOnlyInTheConversation(r, logged);
-      // The model still receives them — unless the rule denied the result.
-      expect(namesTheModelRead(r), chain.map((t) => t.name).join(' > ')).toBe(!denies);
+      // The model reads them only when the rule let them through: it kept
+      // them, or handed the served result back unchanged — never on a denial.
+      const label = `${chain.map((t) => t.name).join(' > ')} keeps=${keeps} denies=${denies}`;
+      expect(namesTheModelRead(r), label).toBe(!denies && (keeps || unchanged));
     }
   });
 });

@@ -17,14 +17,17 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { absent, ABSENCE_NOTE, coverage, type ToolAbsence } from '../../../src/index.js';
+import { absent, ABSENCE_NOTE, allow, coverage, type ToolAbsence } from '../../../src/index.js';
 import { absenceEvidenceProjection } from '../../../src/semantics/coverage/index.js';
 import {
   KNOWN_NAMES_SHOWN,
   MAX_NAME_CHARS,
   MAX_NAMES_RANKED,
+  fitKnownNames,
   knownNamesFor,
+  knownNamesProblem,
   namesFacetOf,
+  ruleKnownNames,
   withKnownNames,
 } from '../../../src/semantics/coverage/among.js';
 import { servedToModel } from '../../../src/semantics/coverage/read.js';
@@ -397,6 +400,56 @@ describe('functional — the channel and the one attaching rule', () => {
     for (const value of ['text', [1, 2], 3, null]) {
       expect(withKnownNames(value, names)).toBe(value);
     }
+  });
+});
+
+// ── Unit — what a rule may hand back, and the cap ───────────────────────
+
+describe("unit — a rule decides the names, held to the mint's rules", () => {
+  it('allow() carries a names decision: keep, narrow or drop', () => {
+    const names = { count: 3, nearest: ['a', 'b'] };
+    expect(allow(undefined, 'drop', { knownNames: null })).toEqual({
+      kind: 'allow',
+      why: 'drop',
+      knownNames: null,
+    });
+    expect(allow({ x: 1 }, 'rewrite', { knownNames: names })).toEqual({
+      kind: 'allow',
+      value: { x: 1 },
+      why: 'rewrite',
+      knownNames: names,
+    });
+  });
+
+  it('allow() refuses a names block of the wrong shape — and options with nothing in them', () => {
+    expect(() => allow({ x: 1 }, 'why', { knownNames: { nearest: [] } as never })).toThrow(
+      /knownNames/,
+    );
+    expect(() => allow({ x: 1 }, 'why', { knownNames: { count: 1, extra: 1 } as never })).toThrow(
+      /no field 'extra'/,
+    );
+    expect(() => allow({ x: 1 }, 'why', {} as never)).toThrow(/from/);
+    expect(knownNamesProblem({ count: 2, nearest: ['a'], dropped: 1, omitted: 0 })).toBeUndefined();
+  });
+
+  it("a rule cannot widen what the model is shown past the mint's rules", () => {
+    const many = Array.from({ length: 30 }, (_, i) => `n${i}`);
+    expect(ruleKnownNames({ count: 30, nearest: many })?.nearest).toHaveLength(KNOWN_NAMES_SHOWN);
+    expect(ruleKnownNames({ count: 2, nearest: many })?.nearest).toEqual(['n0', 'n1']);
+    expect(ruleKnownNames({ count: 5, nearest: ['ok', 'bad\nline', 'ok'] })).toEqual({
+      count: 5,
+      nearest: ['ok'],
+      dropped: 1,
+    });
+    expect(ruleKnownNames({ nearest: ['x'] })).toBeUndefined();
+  });
+
+  it('fitKnownNames trims the farthest names first and says how many, or attaches nothing', () => {
+    const names = { count: 9, nearest: ['a1', 'b2', 'c3', 'd4'] };
+    const fitted = fitKnownNames(names, (block) => (block.nearest?.length ?? 0) <= 3);
+    expect(fitted).toEqual({ count: 9, nearest: ['a1', 'b2', 'c3'], omitted: 1 });
+    expect(fitKnownNames(names, () => false)).toBeUndefined();
+    expect(fitKnownNames(names, () => true)).toBe(names);
   });
 });
 

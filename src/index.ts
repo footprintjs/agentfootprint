@@ -281,6 +281,7 @@ export {
   ask,
   deny,
   MessageDeniedError,
+  type AllowOptions,
   type AllowOutcome,
   type AskOutcome,
   type AskPayload,

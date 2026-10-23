@@ -313,9 +313,10 @@ export interface SourceGapItem extends CoverageItem {
  * `known_names` — what the model may know of the list an `among` miss
  * searched, served only when the declaration said `visible: 'caller'`. It is
  * NEVER part of the result: `absent()` keeps it on the library's channel
- * (`among.ts` · `knownNamesFor`) and the dispatch door attaches it to the
- * model-bound message alone, after every rule — so no rule, event or row ever
- * sees it.
+ * (`among.ts` · `knownNamesFor`), the after-tool rules are handed it as
+ * `call.knownNames` — theirs to keep, narrow or drop — and the dispatch door
+ * attaches what they let through to the model-bound message alone, within
+ * `maxToolResultChars`. No event, ledger or coverage row ever holds it.
  */
 export interface KnownNames {
   readonly count: number;
@@ -323,6 +324,9 @@ export interface KnownNames {
   readonly nearest?: readonly string[];
   /** How many names were left out as unprintable or over `MAX_NAME_CHARS`. */
   readonly dropped?: number;
+  /** How many of the nearest names were left out so the message fits
+   *  `maxToolResultChars` — the list is trimmed, never the result. */
+  readonly omitted?: number;
 }
 
 /**
