@@ -1297,8 +1297,31 @@ ask (`'call-changed'`), and a middleware ask made under rules the serving agent
 no longer runs — a redeploy renamed, moved or removed a link after the asking
 one (`'chain-changed'`). Held, such a pause would hold the session for good. So
 both doors close it: the next message continues the conversation, and every call
-the pause left open is recorded for the model as not run ("That call did not
-run: the question it waited on could no longer be answered."). A decision for
+the pause left open is settled for the model.
+
+A pause that still says it is waiting is no proof that its call never ran: a
+resume can spend the decision, run the refund, fail on the next model call, and
+fail again to mark the pause answered (a store error) — and a redeploy can then
+make it a pause no answer can reach. So a closed pause's calls are recorded as
+not run ("That call did not run: the question it waited on could no longer be
+answered.") **only when the serving agent's ledger proves no decision for the
+request was ever spent**; otherwise, and whenever that cannot be read, the
+outcome is recorded as not known ("That call's outcome is not known: its
+approval may have been used, and whether the call finished could not be
+confirmed."; `toolResultOrigin: 'outcome-unknown'` under findings admission). A
+false "not known" is the safe direction: a model told a refund did not run may
+issue it again. What counts as proof:
+
+- a shared `decisionLedger` with `isSpent` answering `false` for the request;
+- this process's default ledger, only for a request this process minted — a
+  pause stored before the process started (or by another process) proves
+  nothing, because the ledger that saw its spends is gone;
+- never an app's own `inMemoryDecisionLedger()` (it may be one agent's alone,
+  and a restart forgets it), a runner whose ledger the host cannot see (a
+  composition, an app's own runner), a ledger without `isSpent` or one that
+  throws, or a pause that names no request (one stored by an earlier release).
+
+A decision for
 it is refused by name (`ERR_RESUME_DECISION`, `409`, its `reason`), runs nothing
 and closes it too — except, on `standingAgent`, a pause stored by an earlier
 release, whose question names no request: the next message closes that one.
@@ -1358,7 +1381,13 @@ the unmarked pause; a process that dies mid-resume marks nothing; and a store
 that refuses the mark's write leaves only this process's ledger refusing the
 decision (the door prints a warning). More than one process therefore needs one
 shared `decisionLedger` (a store whose `spend` is atomic, and ideally an
-`isSpent`) — that is what makes "once" hold across them.
+`isSpent`) — that is what makes "once" hold across them, and what lets a door
+that closes a pause after a restart say its call did not run instead of "not
+known". The proof is as strong as the ledger: several processes on one store,
+each on its own default ledger, can each believe a request unspent that
+another process spent; and a closing door reads the ledger without
+compare-and-set, so an older replica still running the old rules can answer
+the pause after the door read it.
 
 ### A pause the wire could not describe
 
