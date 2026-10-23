@@ -32,9 +32,9 @@ export — nothing" becomes data; the results layer judges the period.
 A name looked up in a known list is a search over that list: declare the
 list as `among` (see [AbsenceAmongDeclaration](/docs/api/interfaces/AbsenceAmongDeclaration)) and the mint composes
 the names facet, the gap "names outside <source>" — which only
-`among.authoritative` removes — and the `provenance`. The nearest names
-(`visible: 'caller'` only) are kept OFF the envelope, on the library's
-channel, and attached to the model's message alone.
+`among.authoritative` removes; a `partial` read gets "not every name in
+<source> was read" instead — and the `provenance`. The names are read only
+to check `count`; none is served.
 
 ## Parameters
 

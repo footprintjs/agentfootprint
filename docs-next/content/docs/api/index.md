@@ -69,7 +69,6 @@ title: agentfootprint
 - [AgentOptions](/docs/api/interfaces/AgentOptions)
 - [AgentRecordingsOptions](/docs/api/interfaces/AgentRecordingsOptions)
 - [AgentRunCheckpoint](/docs/api/interfaces/AgentRunCheckpoint)
-- [AllowOptions](/docs/api/interfaces/AllowOptions)
 - [AllowOutcome](/docs/api/interfaces/AllowOutcome)
 - [AmongDeclaration](/docs/api/interfaces/AmongDeclaration)
 - [AnswerCheck](/docs/api/interfaces/AnswerCheck)

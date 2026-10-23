@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-368 exported from `agentfootprint`.
+367 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -15,7 +15,6 @@ title: Interfaces
 - [`AgentOptions`](/docs/api/interfaces/AgentOptions)
 - [`AgentRecordingsOptions`](/docs/api/interfaces/AgentRecordingsOptions)
 - [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
-- [`AllowOptions`](/docs/api/interfaces/AllowOptions)
 - [`AllowOutcome`](/docs/api/interfaces/AllowOutcome)
 - [`AmongDeclaration`](/docs/api/interfaces/AmongDeclaration)
 - [`AnswerCheck`](/docs/api/interfaces/AnswerCheck)
