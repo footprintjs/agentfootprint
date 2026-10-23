@@ -18,7 +18,7 @@ import {
   readingKey,
   scopeRelation,
 } from '../../../src/integrity/negative-claim/readings.js';
-import type { SearchCheckedItem } from '../../../src/integrity/negative-claim/searchRow.js';
+import type { ComposedItem as SearchCheckedItem } from '../../../src/semantics/coverage/composedCoverage.js';
 import type { TurnCall } from '../../../src/integrity/negative-claim/types.js';
 import { CLOCK, LIST_INCIDENTS, incidentCall } from './fixtures.js';
 

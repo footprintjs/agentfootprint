@@ -464,6 +464,55 @@ describe('pages, and `complete` against other reads', () => {
   });
 });
 
+describe('#199 rows: handles, ranking, dispatch-time windows', () => {
+  it('a claim may cite a read by its library-minted handle (`r` + the reservation ordinal)', () => {
+    expect(codeOf([{ kind: 'none', restsOn: ['r1'] }], [incidentCall({ id: 'c1' })])).toEqual([
+      'established',
+    ]);
+  });
+
+  it('a handle no read of this record carries is citation-unresolved', () => {
+    expect(codeOf([{ kind: 'none', restsOn: ['r99'] }], [incidentCall({ id: 'c1' })])).toEqual([
+      'citation-unresolved',
+    ]);
+  });
+
+  it('a `ranking` gap (an approximate ranking) blocks `complete`', () => {
+    const call = incidentCall({
+      emptiness: 'non-empty',
+      rows: 3,
+      gaps: [{ kind: 'ranking', what: 'ranking: approximate', bears: 'completeness' }],
+    });
+    expect(codeOf(complete('c1'), [call])).toEqual(['search-incomplete']);
+  });
+
+  it('a `credential-limited` gap never withholds a typed none — it is stated', () => {
+    const call = incidentCall({
+      gaps: [
+        {
+          kind: 'credential-limited',
+          what: 'service: as the credential sees it',
+          bears: 'population',
+        },
+      ],
+    });
+    expect(codeOf(none('c1'), [call])).toEqual(['established']);
+  });
+
+  it('one spelling in one turn is one search, whatever instant each call ran at', () => {
+    const calls = [
+      incidentCall({ id: 'c1', dispatchedAt: CLOCK }),
+      incidentCall({
+        id: 'c2',
+        dispatchedAt: '2026-10-22T10:30:00Z',
+        emptiness: 'non-empty',
+        rows: 1,
+      }),
+    ];
+    expect(codeOf(none('c1'), calls)).toEqual(['contradicted-by-rows']);
+  });
+});
+
 describe('the call sequence — what ran after the cited read', () => {
   it('a retry after a 503 does not withhold a correct none: cite the retry', () => {
     const calls = [incidentCall({ id: 'c1', outcome: 'error' }), incidentCall({ id: 'c2' })];

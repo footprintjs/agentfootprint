@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 
 import { judgeTypedNegatives } from '../../../src/integrity/negative-claim/judge.js';
 import { judgeProseNegatives } from '../../../src/integrity/negative-claim/prose.js';
-import type { SearchGap } from '../../../src/integrity/negative-claim/searchRow.js';
+import type { CoverageGap as SearchGap } from '../../../src/semantics/coverage/composedCoverage.js';
 import type { ProseClaimRow, TurnCall } from '../../../src/integrity/negative-claim/types.js';
 import { EMAIL_GAP, changesCall, incidentCall, rid, turnRecord, writeCall } from './fixtures.js';
 

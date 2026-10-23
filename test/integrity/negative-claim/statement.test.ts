@@ -29,7 +29,7 @@ import {
   clauseLimit,
   composeStatement,
 } from '../../../src/integrity/negative-claim/statement.js';
-import type { ComposedSearchRow } from '../../../src/integrity/negative-claim/searchRow.js';
+import type { ComposedCoverage as ComposedSearchRow } from '../../../src/semantics/coverage/composedCoverage.js';
 import type { TurnCall } from '../../../src/integrity/negative-claim/types.js';
 import {
   CLOCK,
@@ -198,6 +198,30 @@ describe('each row shape', () => {
     const among = statementOf(cite('not-found', 'c4'), [amongCall({ authoritative: true })]);
     expect(among).toContain('; read 09:14Z.');
     expect(among).not.toContain('not checked');
+  });
+
+  it('the window stated is the span the call ran with — a resumed call keeps its own', () => {
+    const resumed = incidentCall({ dispatchedAt: '2026-10-22T11:00:00Z', gaps: [] });
+    expect(statementOf(cite('none', 'c1'), [resumed])).toContain('window 09:00–11:00Z');
+  });
+
+  it('a credential-limited read, a match rule and an approximate ranking are said out loud', () => {
+    const text = statementOf(cite('none', 'c1'), [
+      incidentCall({
+        gaps: [
+          {
+            kind: 'credential-limited',
+            what: 'service: as the credential sees it',
+            bears: 'population',
+          },
+          { kind: 'match', what: 'q: what the tool matched', bears: 'population' },
+          { kind: 'ranking', what: 'ranking: approximate', bears: 'completeness' },
+        ],
+      }),
+    ]);
+    expect(text).toContain("what the caller's credential may not see");
+    expect(text).toContain("`q: what the tool matched` (by the tool's own match rule)");
+    expect(text).toContain('the rows an approximate ranking may have left out');
   });
 
   it('two cited reads give two lines, in ORDINAL order, not citation order', () => {

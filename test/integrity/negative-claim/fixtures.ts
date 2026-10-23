@@ -3,19 +3,25 @@
  * (`list_incidents`), its § 3.2 composed rows, a sibling tool (`list_changes`) and an
  * `among` inventory tool (`get_capacity`). Every value here is invented.
  *
- * The turn's clock is 2026-10-22T10:00:00Z, so the `2h` default window is 08:00–10:00Z.
+ * The turn's clock is 2026-10-22T10:00:00Z, so the `2h` default window is 08:00–10:00Z. The rows
+ * are #199's `ComposedCoverage`, field for field: a period item carries the span the window
+ * resolved to at DISPATCH (`time/range.ts` · `lookbackRange`, half-open), beside its spelling.
  */
 import type {
-  ComposedSearchRow,
-  DeclaredTool,
-  SearchCheckedItem,
-  SearchGap,
-} from '../../../src/integrity/negative-claim/searchRow.js';
-import type { TurnCall, TurnRecord } from '../../../src/integrity/negative-claim/types.js';
+  ComposedCoverage,
+  ComposedItem,
+  CoverageGap,
+} from '../../../src/semantics/coverage/composedCoverage.js';
+import type {
+  SearchTool,
+  TurnCall,
+  TurnRecord,
+} from '../../../src/integrity/negative-claim/types.js';
+import { lookbackRange } from '../../../src/time/range.js';
 
 export const CLOCK = '2026-10-22T10:00:00Z';
 
-export const EMAIL_GAP: SearchGap = {
+export const EMAIL_GAP: CoverageGap = {
   kind: 'scope',
   what: 'incidents filed by email',
   why: 'they never enter the store',
@@ -23,9 +29,8 @@ export const EMAIL_GAP: SearchGap = {
 };
 
 /** § 3.1, field for field (the words the checker reads). */
-export const LIST_INCIDENTS: DeclaredTool = {
+export const LIST_INCIDENTS: SearchTool = {
   name: 'list_incidents',
-  period: { argument: 'window', spelling: 'lookback' },
   search: {
     source: { what: 'the incident store', said: ['the incident store', 'the store'] },
     subject: { what: 'incidents', said: ['incident', 'incidents'] },
@@ -48,7 +53,7 @@ export const LIST_INCIDENTS: DeclaredTool = {
 };
 
 /** A sibling tool on the same population and a different subject. */
-export const LIST_CHANGES: DeclaredTool = {
+export const LIST_CHANGES: SearchTool = {
   name: 'list_changes',
   search: {
     source: { what: 'the change log', said: ['the change log'] },
@@ -59,7 +64,7 @@ export const LIST_CHANGES: DeclaredTool = {
 };
 
 /** An inventory the `among` door reads (§ 3.3). */
-export const GET_CAPACITY: DeclaredTool = {
+export const GET_CAPACITY: SearchTool = {
   name: 'get_capacity',
   search: {
     source: { what: 'the array inventory export', said: ['the inventory export'] },
@@ -69,7 +74,7 @@ export const GET_CAPACITY: DeclaredTool = {
   },
 };
 
-export const TOOLS: Readonly<Record<string, DeclaredTool>> = {
+export const TOOLS: Readonly<Record<string, SearchTool>> = {
   list_incidents: LIST_INCIDENTS,
   list_changes: LIST_CHANGES,
   get_capacity: GET_CAPACITY,
@@ -85,26 +90,36 @@ export interface IncidentRowOptions {
   readonly kind?: 'absence' | 'ledger';
   readonly composed?: 'local' | 'remote';
   readonly complete?: boolean;
-  readonly gaps?: readonly SearchGap[];
+  readonly gaps?: readonly CoverageGap[];
   readonly held?: { from: string; to: string } | 'unknown' | 'none';
   readonly overclaim?: readonly string[];
-  /** The page the call asked for — composed as a checked item. */
+  /** The page the call asked for — an argument; #199 composes no page item. */
   readonly page?: number;
+  readonly runId?: string;
+  /** When the call ran — its window's span is resolved there. */
+  readonly dispatchedAt?: string;
 }
 
-/** § 3.2's row for `list_incidents`, with the options a test varies. */
-export function incidentRow(options: IncidentRowOptions = {}): ComposedSearchRow {
+/** § 3.2's row for `list_incidents` (#199's `ComposedCoverage`), with the options a test varies. */
+export function incidentRow(options: IncidentRowOptions = {}): ComposedCoverage {
   const service = options.service ?? 'payments';
   const window = options.window ?? '2h';
-  const checked: SearchCheckedItem[] = [
-    { what: 'incidents', facet: 'subject', from: 'tool' },
-    { what: 'the incident store', facet: 'source', from: 'tool' },
+  const id = options.id ?? 'c1';
+  const checked: ComposedItem[] = [
+    { what: 'incidents', facet: 'subject', from: 'tool', said: ['incident', 'incidents'] },
+    {
+      what: 'the incident store',
+      facet: 'source',
+      from: 'tool',
+      said: ['the incident store', 'the store'],
+    },
     {
       what: 'status: open',
       facet: 'filter',
       argument: 'status',
       value: 'open',
       from: 'fixed',
+      said: ['open'],
     },
     {
       what: `service: ${service}`,
@@ -112,6 +127,7 @@ export function incidentRow(options: IncidentRowOptions = {}): ComposedSearchRow
       argument: 'service',
       value: service,
       from: 'call',
+      quote: true,
       ...(service === 'payments'
         ? { resolved: RESOLVED_PAYMENTS }
         : { resolved: { id: service, name: service } }),
@@ -124,6 +140,8 @@ export function incidentRow(options: IncidentRowOptions = {}): ComposedSearchRow
           argument: 'severity',
           value: options.severity,
           from: 'call',
+          quote: true,
+          ...(options.severity === 'critical' ? { said: ['critical', 'sev1'] } : {}),
         },
     {
       what: `window: ${window}`,
@@ -131,17 +149,9 @@ export function incidentRow(options: IncidentRowOptions = {}): ComposedSearchRow
       argument: 'window',
       value: window,
       from: options.window === undefined ? 'default' : 'call',
+      span: lookbackRange(options.dispatchedAt ?? CLOCK, window, 'mhdw'),
     },
   ];
-  if (options.page !== undefined) {
-    checked.push({
-      what: `page: ${options.page}`,
-      facet: 'page',
-      argument: 'page',
-      value: options.page,
-      from: 'call',
-    });
-  }
   const queried =
     window === '7d'
       ? { from: '2026-10-15T10:00:00Z', to: CLOCK }
@@ -151,11 +161,15 @@ export function incidentRow(options: IncidentRowOptions = {}): ComposedSearchRow
   return {
     kind: options.kind ?? 'absence',
     toolName: 'list_incidents',
-    toolCallId: options.id ?? 'c1',
+    toolCallId: id,
     iteration: 1,
     composed: options.composed ?? 'local',
+    resultId: rid(id, options.runId),
+    handle: `r${ordinalOf(id)}`,
     lookedFor: `open incidents on ${service}`,
     checked,
+    notChecked: [],
+    cannotCover: [],
     complete: options.complete ?? true,
     gaps: options.gaps ?? [EMAIL_GAP],
     ...(held === 'none' ? {} : { period: { queried, held } }),
@@ -256,15 +270,20 @@ export function changesCall(id = 'k1', turn = 1): TurnCall {
       toolCallId: id,
       iteration: 1,
       composed: 'local',
+      resultId: rid(id),
+      handle: `r${ordinalOf(id)}`,
+      notChecked: [],
+      cannotCover: [],
       checked: [
-        { what: 'changes', facet: 'subject', from: 'tool' },
-        { what: 'the change log', facet: 'source', from: 'tool' },
+        { what: 'changes', facet: 'subject', from: 'tool', said: ['change', 'changes'] },
+        { what: 'the change log', facet: 'source', from: 'tool', said: ['the change log'] },
         {
           what: 'service: payments',
           facet: 'population',
           argument: 'service',
           value: 'payments',
           from: 'call',
+          quote: true,
           resolved: RESOLVED_PAYMENTS,
         },
       ],
@@ -298,16 +317,21 @@ export function amongCall(
       toolCallId: id,
       iteration: 1,
       composed: 'local',
+      resultId: rid(id),
+      handle: `r${ordinalOf(id)}`,
+      notChecked: [],
+      cannotCover: [],
       lookedFor: name,
       checked: [
-        { what: 'arrays', facet: 'subject', from: 'tool' },
-        { what: source, facet: 'source', from: 'tool' },
+        { what: 'arrays', facet: 'subject', from: 'tool', said: ['array', 'arrays'] },
+        { what: source, facet: 'source', from: 'tool', said: ['the inventory export'] },
         {
           what: `array_id: ${name}`,
           facet: 'population',
           argument: 'array_id',
           value: name,
           from: 'call',
+          quote: true,
         },
         {
           what: 'array names',

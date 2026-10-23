@@ -368,6 +368,29 @@ describe('each remaining note code', () => {
     expect(notesOf(text, [call])).toEqual([code]);
   });
 
+  it('ranking: a completeness claim over an approximate ranking', () => {
+    const text = 'These are all the open incidents on payments in the last 2 hours.';
+    const call = incidentCall({
+      emptiness: 'non-empty',
+      rows: 3,
+      gaps: [{ kind: 'ranking', what: 'ranking: approximate', bears: 'completeness' }],
+    });
+    expect(notesOf(text, [call])).toEqual(['ranking']);
+  });
+
+  it('a credential-limited read bears on the population: coverage-gap', () => {
+    const call = incidentCall({
+      gaps: [
+        {
+          kind: 'credential-limited',
+          what: 'service: as the credential sees it',
+          bears: 'population',
+        },
+      ],
+    });
+    expect(notesOf(FLAT, [call])).toEqual(['coverage-gap']);
+  });
+
   it('a completeness claim over a finished, complete search files no note', () => {
     const text = 'These are all the open incidents on payments in the last 2 hours.';
     expect(notesOf(text, [incidentCall({ ...NO_GAPS, emptiness: 'non-empty', rows: 3 })])).toEqual(
