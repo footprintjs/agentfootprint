@@ -130,6 +130,13 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   `not-applicable`: a membership pass never supports (the standing fold's
   law), so the gate can withhold an answer and never make a report pass.
 
+Two limits, stated in the user docs and pinned by `contract:` tests in
+`test/answer-validation/agentChecksDelivery.test.ts`: the claim ledger
+(`claimFacts`) is THIS run's reads, so a follow-up turn answering from an
+earlier run's read has an `unreachable` claim row and is withheld under
+enforce; and the gate's `minDigits` floor (default 4) means a short bare
+number is never looked up, so an invented `999` clears the evidence row.
+
 **No agent row is ever `checked-pass`.** The agent's checks can withhold an
 answer and never verify one, so only the host's own checks make a report
 `passed` — which the standing fold reads as "known". `validate.ts` enforces it:

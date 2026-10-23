@@ -312,6 +312,43 @@ describe('functional: a contradiction found beside an unreachable claim is repor
   });
 });
 
+describe("contract: a claim is checked against THIS run's reads only", () => {
+  it("a follow-up turn answering from an earlier run's read is withheld: this run settled nothing", async () => {
+    const answer = JSON.stringify({ job: 'build-job-72', durationMs: 1250 });
+    const source = scripted([
+      { toolCalls: [{ id: 'call-1', name: 'read_build', args: { job: 'build-job-72' } }] },
+      { content: answer },
+      { content: answer }, // turn 2 answers again, without reading again
+    ]);
+    const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 4 })
+      .tool(readBuild())
+      .outputSchema(buildAnswer)
+      .claims({ durationMs: { entity: 'build-job-72', field: 'durationMs' } })
+      .answerValidation<BuildAnswer>(buildReport())
+      .build();
+
+    expect(await agent.run(ASK)).toBe(answer);
+    const stored = agent.checkpoint();
+    if (stored === undefined) throw new Error('turn 1 left no conversation');
+
+    const outcome = await agent
+      .run({ message: 'And how long did it take, again?', continueFrom: stored })
+      .catch((error: unknown) => error);
+
+    expect(source.requests).toHaveLength(3);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report).toMatchObject({
+      status: 'unverified',
+      reason: 'unreachable-checks',
+    });
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:claims:durationMs',
+      disposition: 'unreachable',
+      reason: expect.stringMatching(/^no tool result the run read settled the fact 'durationMs'/),
+    });
+  });
+});
+
 describe('security: an unsupported claim fails closed', () => {
   it('a value for a fact no tool result settled is unverified, and withheld', async () => {
     // The tool settled a DIFFERENT job: nothing backs the answer's durationMs.
@@ -494,6 +531,53 @@ for (const reactMode of REACT_MODES) {
     });
   });
 }
+
+describe("contract: short numbers sit below the gate's minDigits floor", () => {
+  // A bare number with fewer than `minDigits` (default 4) digits is prose to
+  // the gate — "3 issues" — so it is never looked up. An invented `999` is
+  // delivered; `minDigits: 1` makes the gate look every number up.
+  function shortAgent(minDigits?: number) {
+    const source = scripted([{ toolCalls: [FIND_ORDER] }, { content: SHORT }]);
+    return Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 4 })
+      .tool(
+        defineTool({
+          name: 'find_order',
+          description: 'Find the order that matches the question.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () => READ,
+        }),
+      )
+      .outputSchema(orderAnswer)
+      .namesAndNumbersFromEvidence(minDigits === undefined ? undefined : { minDigits })
+      .answerValidation<OrderAnswer>({
+        id: 'orders',
+        version: '1',
+        agentChecks: ['names-and-numbers'],
+        validate: () => ({ checks: [{ id: 'shape', disposition: 'checked-pass' }] }),
+      })
+      .build();
+  }
+  const SHORT = JSON.stringify({ order: 'ORD-44710', total: 999 });
+
+  it('by default an invented three-digit number is not looked up: delivered', async () => {
+    const agent = shortAgent();
+    expect(await agent.run({ message: 'Which order?' })).toBe(SHORT);
+    expect(agent.answerValidation()?.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'not-applicable',
+    });
+  });
+
+  it('with minDigits: 1 it is looked up, and withheld', async () => {
+    const outcome = await shortAgent(1)
+      .run({ message: 'Which order?' })
+      .catch((e: unknown) => e);
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:names-and-numbers',
+      disposition: 'checked-fail',
+    });
+  });
+});
 
 describe('functional: a repair that keeps the invented value is withheld', () => {
   it('the row says the repair turn ran', async () => {

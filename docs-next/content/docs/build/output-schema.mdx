@@ -523,6 +523,16 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   the standing "not sure", never "known". The same holds for a value stated
   against a tool's bare `null` or `'unknown'`. An absence a tool declares with
   `known(null)` is a settled value: a value stated against it fails the row.
+- **Facts are this run's reads.** A claim is checked against the tool results
+  this run read. A follow-up turn that answers from an earlier turn's read,
+  without reading again, has nothing settled to compare with: its claim rows
+  are `unreachable`, and an enforcing validation withholds the answer. The tool
+  stays on the wire, so the model can read again; or validate such turns with
+  a check of your own.
+- **Short numbers are not looked up.** The gate reads a bare number with fewer
+  than `minDigits` digits (default 4) as prose — "3 issues" — so an invented
+  `999` passes it. If short numbers in your answers are data, lower `minDigits`
+  (`1` looks every number up) or declare their `shapes`.
 - **Rows carry names, not values.** A reason quotes the field names you
   declared and a count, never the answer's or a tool's value, nor the entity a
   `.claims()` contract names (you may declare one per user). Values stay on
