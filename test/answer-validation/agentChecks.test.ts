@@ -661,9 +661,9 @@ describe('property: a reading can only withhold — never more permissive than i
     bases.push(Array.from({ length: size }, () => VALUES[random(VALUES.length)]));
   }
 
-  // About 200,000 insertions: 1.5 s on a laptop, 5 to 6 s on a CI runner
-  // (with or without coverage), past vitest's 5 s default. The budget is
-  // sized for CI and the matrix is not shrunk: the multi-reading starting
+  // About 200,000 insertions: 1.5 s on a laptop, but 2.5 to 9 s on a CI
+  // runner (the most under coverage), past vitest's 5 s default. The budget
+  // is sized for CI and the matrix is not shrunk: the multi-reading starting
   // sets and every insertion position are what the law is about.
   it('adding any reading at any position never un-withholds, and never un-contradicts', () => {
     let cases = 0;
