@@ -9,8 +9,10 @@
  * facet and never by reading prose:
  *
  *   • `argument-unsent` — any classified argument of any role but `inert` the
- *     call did not send, with no `whenOmitted`: its default may live inside
- *     `execute`. Bears on that argument's facet (cap and page: completeness).
+ *     call did not send, with no `whenOmitted`, or sent as an empty list: its
+ *     default may live inside `execute`, and an empty list names nothing (it is
+ *     never "every value"). Bears on that argument's facet (cap and page:
+ *     completeness).
  *   • `cap-reached` — rows at the cap in effect (an argument's, or the
  *     declared server cap), rows that cannot be counted under a cap, or a
  *     server cap of `'unknown'`. Bears on completeness.
@@ -78,10 +80,12 @@ function capOf(value: unknown): number | undefined {
 function unsentGaps(input: GapInput): CoverageGap[] {
   const out: CoverageGap[] = [];
   for (const [arg, reading] of input.readings) {
-    if (reading.kind !== 'unsent') continue;
+    if (reading.kind !== 'unsent' && reading.kind !== 'empty') continue;
     const bears = unsentFacet(arg);
     if (bears === undefined) continue;
-    out.push({ kind: 'argument-unsent', what: `${arg.name}: not sent`, argument: arg.name, bears });
+    // An empty list names no value — like an unsent argument, its effect lives in `execute`.
+    const what = reading.kind === 'empty' ? `${arg.name}: an empty list` : `${arg.name}: not sent`;
+    out.push({ kind: 'argument-unsent', what, argument: arg.name, bears });
   }
   return out;
 }

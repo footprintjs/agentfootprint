@@ -34,6 +34,8 @@ export type ArgumentReading =
   | { readonly kind: 'any' }
   /** Left out, and the declaration says nothing: its default may live in `execute`. */
   | { readonly kind: 'unsent' }
+  /** Sent as an empty list — it names nothing, so what `execute` did with it is unknown. */
+  | { readonly kind: 'empty' }
   /** Filled by the host from the run's identity. */
   | { readonly kind: 'host'; readonly identity: string }
   /** Filled by the host from the call's credential. */
@@ -61,7 +63,9 @@ export function readArgument(
     if (identity !== undefined) return { kind: 'host', identity };
   }
   if (Object.hasOwn(args, arg.name) && args[arg.name] !== undefined) {
-    return { kind: 'sent', value: args[arg.name] };
+    const value = args[arg.name];
+    if (Array.isArray(value) && value.length === 0) return { kind: 'empty' };
+    return { kind: 'sent', value };
   }
   const omitted = arg.whenOmitted;
   if (omitted === undefined) return { kind: 'unsent' };

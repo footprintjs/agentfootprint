@@ -725,3 +725,20 @@ describe('security — a sent value never indexes the declaration', () => {
     expect(item(checked, 'severity')[0]?.said).toEqual(['sev1']);
   });
 });
+
+describe('contract — S1: an empty list names nothing, and is a gap', () => {
+  it.each([
+    ['population', 'service', 'population'],
+    ['filter', 'severity', { filter: 'severity' }],
+  ] as const)('a %s sent as [] composes no item and a gap bearing on it', (_role, name, bears) => {
+    const { checked, gaps, complete } = compose(call({ service: 'p', [name]: [] }), NONE);
+    expect(item(checked, name)).toEqual([]);
+    expect(gaps).toContainEqual({
+      kind: 'argument-unsent',
+      what: `${name}: an empty list`,
+      argument: name,
+      bears,
+    });
+    expect(complete).toBe(false);
+  });
+});

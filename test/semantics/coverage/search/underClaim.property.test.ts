@@ -97,8 +97,13 @@ describe('property — composition never claims what the call did not send or de
       const sent: Record<string, unknown> = {};
       for (const a of args) {
         if (!chance(0.5)) continue;
+        const w2 = next();
         sent[a.name] =
-          a.role === 'population' && chance(0.3) ? [pick(VALUES), pick(VALUES)] : pick(VALUES);
+          w2 < 0.1
+            ? [] // an empty list names nothing
+            : a.role === 'population' && w2 < 0.4
+            ? [pick(VALUES), pick(VALUES)]
+            : pick(VALUES);
       }
       const identityArg = chance(0.3) ? pick(used.length > 0 ? used : ['a']) : undefined;
       const hostFilled =
@@ -287,6 +292,13 @@ describe('property — composition never claims what the call did not send or de
             a.whenOmitted === undefined,
         ) ||
         args.some((a) => a.role === 'page' && !isHost(a.name) && a.name in sent) ||
+        args.some(
+          (a) =>
+            a.role !== 'inert' &&
+            !isHost(a.name) &&
+            Array.isArray(sent[a.name]) &&
+            (sent[a.name] as unknown[]).length === 0,
+        ) ||
         (args.some((a) => a.role === 'page' && !isHost(a.name)) && pagingRead === undefined) ||
         (pagingRead !== undefined && pagingRead.next !== null) ||
         search.limits?.cap === 'unknown' ||
