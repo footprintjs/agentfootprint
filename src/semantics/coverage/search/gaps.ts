@@ -142,6 +142,23 @@ function pagingGaps(input: GapInput): CoverageGap[] {
   return out;
 }
 
+/**
+ * The read sees only what the caller's credential may see — declared
+ * (`limits.byCredential`) or read off an argument the host fills from a
+ * credential. One gap, whatever the count; it names no value and no credential.
+ */
+function credentialGaps(input: GapInput): CoverageGap[] {
+  const filled = input.readings.some(([, reading]) => reading.kind === 'credential');
+  if (input.search.limits?.byCredential !== true && !filled) return [];
+  return [
+    {
+      kind: 'credential-limited',
+      what: "within what the caller's credential may see",
+      bears: 'population',
+    },
+  ];
+}
+
 function statusGaps(input: GapInput): CoverageGap[] {
   if (input.status !== 'partial' && input.status !== 'pending') return [];
   return [
@@ -181,6 +198,7 @@ export function composeGaps(input: GapInput): ComposedGaps {
     ...capGaps(input),
     ...pagingGaps(input),
     ...statusGaps(input),
+    ...credentialGaps(input),
   ];
   const gaps = [
     ...composed,

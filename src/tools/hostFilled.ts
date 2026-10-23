@@ -308,16 +308,6 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
           'filled by the host or asked of a person, not both.',
       );
     }
-    // A credential names no ground and leaves no trace: a `search` that
-    // classified it as ground would compose a facet nobody can state.
-    const role = tool.search?.arguments.find((a) => a.name === field)?.role;
-    if (fills[field]?.from === 'credential' && role !== undefined && role !== 'inert') {
-      throw new TypeError(
-        `hostFilled: tool '${name}' classifies '${field}' as '${role}' in its \`search\`, and ` +
-          'the host fills it from a credential — a credential is never ground; classify it ' +
-          "'inert'.",
-      );
-    }
   }
   const needs = needsFor(tool, fills);
   const inputSchema = withoutFields(tool.schema.inputSchema, Object.keys(fills));

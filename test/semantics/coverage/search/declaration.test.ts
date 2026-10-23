@@ -434,3 +434,15 @@ describe('Tool.search — the stored declaration is frozen, its value words a nu
     expect((severity?.said as Record<string, unknown>).toString).toBeUndefined();
   });
 });
+
+describe('Tool.search — limits.byCredential', () => {
+  it('accepts byCredential: true, alone or beside a cap', () => {
+    expect(check({ ...SEARCH, limits: { byCredential: true } })).not.toThrow();
+    expect(check({ ...SEARCH, limits: { cap: 50, byCredential: true } })).not.toThrow();
+  });
+
+  it('refuses byCredential other than true, and limits that say nothing', () => {
+    expect(check({ ...SEARCH, limits: { byCredential: false } })).toThrow(/byCredential/);
+    expect(check({ ...SEARCH, limits: {} })).toThrow(/limits/);
+  });
+});

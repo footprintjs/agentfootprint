@@ -80,7 +80,12 @@ export interface SearchGap {
 /** Limits no input property carries. */
 export interface SearchLimits {
   /** A server-side cap on the rows; `'unknown'` when the tool cannot say. */
-  readonly cap: number | 'unknown';
+  readonly cap?: number | 'unknown';
+  /**
+   * The read sees only what the caller's credential may see — a
+   * `credential-limited` gap bearing on the population, every call.
+   */
+  readonly byCredential?: true;
 }
 
 /**

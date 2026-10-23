@@ -167,7 +167,12 @@ export function freezeSearch(search: ToolSearch): ToolSearch {
         search.gaps.map((g) => Object.freeze({ what: g.what, why: g.why, bears: bears(g.bears) })),
       ),
     }),
-    ...(search.limits !== undefined && { limits: Object.freeze({ cap: search.limits.cap }) }),
+    ...(search.limits !== undefined && {
+      limits: Object.freeze({
+        ...(search.limits.cap !== undefined && { cap: search.limits.cap }),
+        ...(search.limits.byCredential === true && { byCredential: true as const }),
+      }),
+    }),
   }) as ToolSearch;
 }
 
@@ -537,9 +542,19 @@ function checkGaps(
 
 function checkLimits(limits: unknown, refuse: Refuse): void {
   if (limits === undefined) return;
-  if (!isPlain(limits)) refuse('search.limits', "must be { cap: <n> | 'unknown' }.");
-  refuseUnknown(limits as Plain, ['cap'], 'search.limits', refuse);
-  const cap = (limits as Plain).cap;
+  const shape = "must be { cap?: <n> | 'unknown', byCredential?: true } — at least one.";
+  if (!isPlain(limits)) refuse('search.limits', shape);
+  refuseUnknown(limits as Plain, ['cap', 'byCredential'], 'search.limits', refuse);
+  const { cap, byCredential } = limits as Plain;
+  if (cap === undefined && byCredential === undefined) refuse('search.limits', shape);
+  if (byCredential !== undefined && byCredential !== true) {
+    refuse(
+      'search.limits.byCredential',
+      `is ${JSON.stringify(byCredential)} — say true when the read sees only what the ` +
+        "caller's credential may see, or omit it.",
+    );
+  }
+  if (cap === undefined) return;
   const ok = cap === 'unknown' || (typeof cap === 'number' && Number.isInteger(cap) && cap > 0);
   if (!ok) {
     refuse(

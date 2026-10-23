@@ -2272,6 +2272,9 @@ export interface CoverageGapPayload {
     | 'paged'
     | 'period'
     | 'partial'
+    | 'credential-limited'
+    | 'match'
+    | 'ranking'
     | 'scope'
     | 'prose';
   readonly what: string;

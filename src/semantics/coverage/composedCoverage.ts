@@ -154,6 +154,7 @@ export type CoverageGapKind =
   | 'paged'
   | 'period'
   | 'partial'
+  | 'credential-limited'
   | 'scope'
   | 'prose';
 
@@ -170,6 +171,9 @@ export type CoverageGapKind =
  *   • `period` — the declared period's verdict is not `covered`.
  *   • `partial` — the tool declared its outcome `partial` (or `pending`): the
  *     result is never held in full.
+ *   • `credential-limited` — the read sees only what the caller's credential
+ *     may see (`limits.byCredential`, or an argument `hostFilled` fills from a
+ *     credential). Bears on the population; names no value and no credential.
  *   • `scope` — a declared constant (`search.gaps`).
  *   • `prose` — a hand-written `notChecked` / `cannotCover` item. It names no
  *     facet, so it bears on every claim, and a row with one is never complete.

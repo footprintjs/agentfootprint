@@ -780,3 +780,33 @@ describe('functional — S2/S3: what the model is served stays small and claims 
     expect(String(sev?.what)).toMatch(/^severity: 40 values, first 3: /);
   });
 });
+
+describe('contract — S4: a read limited by the caller’s credential says so', () => {
+  const GAP = {
+    kind: 'credential-limited',
+    what: "within what the caller's credential may see",
+    bears: 'population',
+  };
+
+  it('limits.byCredential composes a credential-limited gap bearing on the population', () => {
+    const { gaps } = compose(
+      call({ service: 'p' }, { search: { ...INCIDENTS, limits: { byCredential: true } } }),
+      NONE,
+    );
+    expect(gaps).toContainEqual(GAP);
+  });
+
+  it('a credential-filled argument composes the same gap — never an item, never a value', () => {
+    const search: ToolSearch = {
+      ...INCIDENTS,
+      arguments: [...INCIDENTS.arguments, { name: 'apiKey', role: 'filter' }],
+    };
+    const { checked, gaps } = compose(
+      call({ service: 'p' }, { search, hostFilled: { identity: {}, credential: ['apiKey'] } }),
+      NONE,
+    );
+    expect(item(checked, 'apiKey')).toEqual([]);
+    expect(gaps.filter((g) => g.kind === 'credential-limited')).toEqual([GAP]);
+    expect(JSON.stringify(gaps)).not.toContain('apiKey');
+  });
+});

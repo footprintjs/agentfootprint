@@ -74,17 +74,17 @@ describe('hostFillsOf — unit', () => {
   });
 });
 
-describe('hostFilled × search — contract: a credential is never scope', () => {
-  it('refuses a credential fill on an argument the search classifies as ground', () => {
+describe('hostFilled × search — contract: a credential is never a value, always a limit', () => {
+  it('a credential fill on an argument the search classifies as ground is accepted — composition says the read is credential-limited', () => {
     const search: ToolSearch = {
       ...SEARCH,
       arguments: SEARCH.arguments.map((a) =>
         a.name === 'token' ? { name: 'token', role: 'filter' as const } : a,
       ),
     };
-    expect(() => hostFilled(tool(search), { token: fromCredential({ service: 'store' }) })).toThrow(
-      /'token'.*inert/,
-    );
+    expect(() =>
+      hostFilled(tool(search), { token: fromCredential({ service: 'store' }) }),
+    ).not.toThrow();
   });
 
   it('an identity fill may be any role — it composes as a filter in effect', () => {
