@@ -10,7 +10,11 @@
  *          every execute boundary, before `declareCoverage`.
  * Emits:   N/A (the funnel emits, from the reading).
  *
- * ## Composition can only under-claim
+ * ## Composition can only under-claim — relative to a TRUE declaration
+ *
+ * A declaration that misdescribes the query (an undeclared qualifier, a wrong
+ * `complete`) is the trusted base, said out loud: the law holds relative to
+ * it, never to the backend.
  *
  * A facet enters `checked` from exactly four places — a value the call sent, a
  * declared default composed as if sent, a declared fixed qualifier, the

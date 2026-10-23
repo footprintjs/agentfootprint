@@ -21,8 +21,10 @@
  *     library-minted address (`resultId`), never a provider's call id;
  *   - the `tools.absent` event carries constants and references only.
  *
- * Composition can only under-claim: leave out an argument with no declared
- * default and the row names it as not checked, and is not complete.
+ * Composition can only under-claim, relative to a TRUE declaration: leave out
+ * an argument with no declared default and the row names it as not checked,
+ * and is not complete. A declaration that misdescribes its query is the
+ * trusted base — composition cannot catch it.
  *
  * Run:  npm run example examples/features/108-tool-search.ts
  */

@@ -20,7 +20,8 @@ negative-claim checker reads.
 
 ## The one law
 
-Composition can only under-claim. A facet enters `checked` from a value the call sent, a
+Composition can only under-claim — relative to a TRUE declaration; one that misdescribes its
+query is the trusted base, said out loud. A facet enters `checked` from a value the call sent, a
 declared default, a declared fixed qualifier, the declared (or sent) source, or a host-filled
 identity key; a result fact can only narrow. Every classified argument none of those covers is
 a gap that bears on its facet, and a cap, a page or a `partial` outcome bears on completeness.

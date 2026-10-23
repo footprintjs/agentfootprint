@@ -418,7 +418,8 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * the whole population, filters and period in effect. The result says
    * `absent({ what, checked: 'declared' })` (or `coverage(rows, { checked:
    * 'declared' })`) and the funnel composes the rest: composition can only
-   * under-claim. Refused at `defineTool` when malformed. Carried over MCP in
+   * under-claim, relative to a true declaration. Refused at `defineTool`, and
+   * again at the agent's registration, when malformed. Carried over MCP in
    * `_meta.agentfootprint.search`, where it composes rows marked
    * `composed: 'remote'` that establish nothing. Omitted → byte-identical.
    */

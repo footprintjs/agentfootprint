@@ -16,7 +16,9 @@
  * registered study found that a note overstating what was checked made the
  * model's replies WORSE. So the tool declares, once and as typed data, what a
  * search is made of, and the library composes each call's row from the
- * arguments the call actually ran with. Composition can only under-claim: a
+ * arguments the call actually ran with. Composition can only under-claim,
+ * relative to a TRUE declaration (one that misdescribes its query is the
+ * trusted base, said out loud): a
  * facet enters `checked` from a value the call sent, a declared default composed
  * as if sent, a declared fixed qualifier, the declared (or sent) source or a
  * host-filled identity key — and every classified argument none of those
