@@ -275,6 +275,12 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  * ISO 8601 instants with a zone (`held` may be `'unknown'`). "Searched the 02:00
  * export — nothing" becomes data; the results layer judges the period.
  *
+ * A name looked up in a known list is a search over that list: declare the
+ * list as `among` (see {@link AbsenceAmongDeclaration}) and the mint composes
+ * the names facet, the gap "names outside <source>" — which only
+ * `among.authoritative` removes — the `provenance`, and the model-only
+ * `known_names`.
+ *
  * @example a port-lookup tool that found no matching FLOGI
  *   defineTool({
  *     name: 'flogi_for_port',
@@ -297,12 +303,6 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  *       });
  *     },
  *   });
- *
- * A name looked up in a known list is a search over that list: declare the
- * list as `among` (see {@link AbsenceAmongDeclaration}) and the mint composes
- * the names facet, the gap "names outside <source>" — which only
- * `among.authoritative` removes — the `provenance`, and the model-only
- * `known_names`.
  */
 export function absent(decl: AbsenceDeclaration | AbsenceAmongDeclaration): ToolAbsence {
   const fn = 'absent';
