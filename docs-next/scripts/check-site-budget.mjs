@@ -284,7 +284,14 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_380_000, records: 2_000 };
 // viewer's eight generated API pages. EXPORT=true measures 225.06 MB across
 // 5,689 files, duplicate RSC pairs 0. The total allowance is 226 MB; page,
 // runtime JS, search, file-count and duplicate budgets stay fixed.
-const OUTPUT_LIMITS = { bytes: 226_000_000, files: 8_270, duplicateRscBytes: 0 };
+// RAISED 2026-10-23, bytes only, PENDING THE OWNER'S APPROVAL, for `Tool.search`:
+// three generated API pages (ToolSearch, ComposedCoverage, isComposedCoverage —
+// trimmed from ten) and one tools-page section. Main measured 225.92 MB across
+// 5,674 files, 0.08 MB under the old ceiling; CI's EXPORT=true build of the branch
+// measures 226.76 MB across 5,692 files, duplicate RSC pairs 0. The total
+// allowance is 227.5 MB; page, runtime JS, search, file-count and duplicate
+// budgets stay fixed.
+const OUTPUT_LIMITS = { bytes: 227_500_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
