@@ -14,7 +14,7 @@ One captured human decision.
 
 > `readonly` **approved**: `boolean`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L59)
+Defined in: [src/recorders/core/CheckInRecorder.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L61)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:59](https://github.com/footpr
 
 > `readonly` **by**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L60)
+Defined in: [src/recorders/core/CheckInRecorder.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L62)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footpr
 
 > `readonly` `optional` **componentId?**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:64](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L64)
+Defined in: [src/recorders/core/CheckInRecorder.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L66)
 
 The registered component that collected this decision (9.24.0), when the
  ask carried one — which SURFACE the person answered through.
@@ -49,7 +49,17 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:58](https://github.com/footpr
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L61)
+Defined in: [src/recorders/core/CheckInRecorder.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L63)
+
+***
+
+### requestId
+
+> `readonly` **requestId**: `string`
+
+Defined in: [src/recorders/core/CheckInRecorder.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L60)
+
+The request this decision answered (`CheckInRequest.id`).
 
 ***
 

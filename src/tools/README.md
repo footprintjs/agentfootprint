@@ -1,7 +1,7 @@
 **Mixed** — declaring a tool: its contract, its asks, its argument law, the chain a call walks, and the seam that serves the tool list.
 Map: `tools.ts` (the `Tool` contract and `defineTool`), `declare.ts` (what an author declares about each argument, and its one assert), `inputRequest.ts` (the typed ask's fields and the one validator of an answer), `askComponent.ts` (the typed-HITL component grammar), `toolContract.ts` (the agent ↔ tool-server contract check), `toolProvider.ts` (the `ToolProvider` seam).
 Walker: `runChain.ts` (the one place a middleware chain is walked), `toolArgsValidation.ts` (arguments against the declared schema, before dispatch), `toolSessions.ts` (the end-signal a tool can be handed, and the tier that fires it).
-Fold: `normalize.ts` (one spelling per value, shared by the evidence gate and the inputs layer).
+Fold: none of its own — the one spelling per value it reads (`../lib/normalize.ts`) is a leaf, shared by the evidence gate, the inputs layer and the `absent({ among })` mint.
 Lens: `skillScopedTools.ts` (a tool subset while one skill is the most recently loaded — `list(ctx)` is what the model is offered).
 
 # `src/tools/` — what a tool is, before any agent runs it
@@ -34,7 +34,6 @@ up into `core/` and are erased by `tsc`: `tools.ts` reads `CheckInDemand`
 - `toolSessions.ts` — `onTeardown` registration and the firing matrix.
 - `toolContract.ts` — `toolContractCheckup`, a pure diff against a server's catalog.
 - `runChain.ts` — `runToolChain`, `runToolAfterChain`, `runMessageChain`.
-- `normalize.ts` — `tokenize`, `canonicalForm`.
 - `toolProvider.ts` — `ToolProvider`, `ToolDispatchContext`, `ToolGatePredicate`.
 - `skillScopedTools.ts` — the provider the agent builder recognises by its id prefix.
 

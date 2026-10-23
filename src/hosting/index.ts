@@ -131,6 +131,7 @@ export type {
   ProtocolPlan,
   ProtocolRequestFacts,
   ProtocolTurn,
+  RunRefusal,
   RunSettlement,
   RunTranslation,
   StreamRunContext,
@@ -169,6 +170,9 @@ export {
   readPausedRun,
   checkEnvelope,
 } from './envelope.js';
+// What a session listing reports for a stored envelope — every store that
+// lists calls it, in-tree and out (the conformance battery checks it).
+export { listedFormatOf } from './answeredPause.js';
 export { standingAgent } from './standingAgent.js';
 
 export {

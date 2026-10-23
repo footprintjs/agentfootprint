@@ -128,6 +128,10 @@ const NAMES = {
     'pausedAskArgs',
     'pausedCheckInArgs',
     'pausedCredentialArgs',
+    // A consent request's record: its nonce lets whoever holds it confirm a
+    // guess of the paused call's arguments against the request id
+    // (`core/consentRequest.ts`), so it is kept out with them.
+    'pausedRequest',
     'policyHaltArgs',
     'claimFacts',
     'findingsLedger',

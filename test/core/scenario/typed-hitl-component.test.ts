@@ -38,6 +38,7 @@ import {
   type RunnerPauseOutcome,
 } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── Test doubles ────────────────────────────────────────────────────────
 
@@ -169,7 +170,10 @@ describe('typed HITL — a check-in carries its declared component', () => {
     expect(exec).not.toHaveBeenCalled();
 
     // The decision RETURN path is unchanged — same structured vocabulary.
-    const final = await agent.resume(paused.checkpoint, checkInApproved({ by: 'alice@ops' }));
+    const final = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'alice@ops' }),
+    );
     expect(final).toBe('done');
     expect(exec).toHaveBeenCalledTimes(1);
 
@@ -375,7 +379,10 @@ describe('typed HITL — a middleware ask carries its component', () => {
       props: { danger: true },
     });
 
-    const final = await agent.resume(paused.checkpoint, checkInApproved({ by: 'dana@ops' }));
+    const final = await agent.resume(
+      paused.checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'dana@ops' }),
+    );
     expect(final).toBe('done');
     const answered = rows.filter((r) => r.payload.componentId !== undefined);
     expect(answered).toHaveLength(1);
@@ -415,11 +422,14 @@ describe('typed HITL — zero-cost when unused', () => {
       'toolCallId',
       'toolName',
     ]);
-    expect(Object.keys(out.checkIn as object).sort()).toEqual(['args', 'evidence', 'tool']);
+    expect(Object.keys(out.checkIn as object).sort()).toEqual(['args', 'evidence', 'id', 'tool']);
     // The checkpoint never gained the carrier key.
     expect(JSON.stringify(out.checkpoint)).not.toContain('pausedComponentId');
 
-    await agent.resume(out.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      out.checkpoint,
+      checkInApproved({ request: pausedRequest(out), by: 'alice' }),
+    );
     expect('componentId' in decisions[0].payload).toBe(false);
     expect('componentId' in resumes[0].payload).toBe(false);
   });
@@ -490,18 +500,19 @@ describe('typed HITL — a decision chosen against a moved artifact is refused a
     const { agent, paused } = await pausedPicker();
     // The options were re-minted between asking and answering: a refresh landed,
     // the list re-sorted, and "option-7" now names something else.
+    // An askHuman pause takes a VALUE — here one shaped like a decision, whose
+    // `value.from` the stale-answer guard reads.
     await expect(
-      agent.resume(
-        paused.checkpoint,
-        checkInApproved({
-          by: 'alice@ops',
-          value: {
-            kind: 'row-choice',
-            value: { id: 'option-7' },
-            from: 'art_0000000000000000000009',
-          },
-        } as never),
-      ),
+      agent.resume(paused.checkpoint, {
+        approved: true,
+        by: 'alice@ops',
+        at: 1,
+        value: {
+          kind: 'row-choice',
+          value: { id: 'option-7' },
+          from: 'art_0000000000000000000009',
+        },
+      }),
     ).rejects.toThrow(StaleDecisionError);
   });
 
@@ -509,13 +520,12 @@ describe('typed HITL — a decision chosen against a moved artifact is refused a
     // The other direction, and the one that makes the guard worth having: a
     // refusal that fires on the matching pair too is just an outage.
     const { agent, paused, askedRef } = await pausedPicker();
-    const final = await agent.resume(
-      paused.checkpoint,
-      checkInApproved({
-        by: 'alice@ops',
-        value: { kind: 'row-choice', value: { id: 'option-7' }, from: askedRef },
-      } as never),
-    );
+    const final = await agent.resume(paused.checkpoint, {
+      approved: true,
+      by: 'alice@ops',
+      at: 1,
+      value: { kind: 'row-choice', value: { id: 'option-7' }, from: askedRef },
+    });
     expect(final).toBe('done');
   });
 });

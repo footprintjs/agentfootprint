@@ -51,11 +51,20 @@ import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../lib/conventions.js';
 import {
   DecisionRequiredError,
+  ResumeDecisionError,
   assertDecisionIsNotStale,
   isPaused,
   pauseDemandsDecision,
   type RunnerPauseOutcome,
 } from './pause.js';
+import {
+  checkDecisionAgainst,
+  noteDecisionTakenUp,
+  pausedRequestIdOf,
+  registerConsentLedger,
+  registerConsentRules,
+  type DecisionLedger,
+} from './consentRequest.js';
 import type {
   LLMMessage,
   LLMProvider,
@@ -198,7 +207,6 @@ import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
 import type { AnswerAssessment, AssessmentDeclarations } from './agent/assessment/types.js';
 import {
-  isCheckInDecision,
   resolveCheckInConfig,
   type CheckInBuilderOptions,
   type ResolvedCheckInConfig,
@@ -706,6 +714,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  present — defaults to `standard` evidence + the lexical scorer, so a tool
    *  that declares `checkIn` works even without a `.checkIn()` builder call. */
   private readonly checkInConfig: ResolvedCheckInConfig;
+  /** Where answered consent requests are spent (`AgentOptions.decisionLedger`).
+   *  Undefined → this process's ledger, shared by every agent that names none. */
+  private readonly decisionLedger?: DecisionLedger;
   /** Per-run config resolver from `.configure()`. Undefined for every agent
    *  that never called it — and the chart is then built exactly as before,
    *  with no scope writes and no scope reads added. */
@@ -1169,7 +1180,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.skillGraphIsTree = skillGraphIsTree ?? false;
     this.skillGraphCascade = skillGraphCascade;
     this.skillBrains = skillBrains;
-    this.evidenceGate = evidenceGate;
+    // Under an enforcing answer validation the gate's revision calls no tools
+    // (`ResolvedEvidenceGate.toolsOffAfterRevision`): one fact on the one gate
+    // every reader is already handed.
+    this.evidenceGate =
+      evidenceGate !== undefined &&
+      evidenceGate.posture !== 'assist' &&
+      answerValidationConfig?.mode === 'enforce'
+        ? { ...evidenceGate, toolsOffAfterRevision: true }
+        : evidenceGate;
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
     this.appliedRecipes = recipes;
     this.skillGraphDeclared = skillGraphDeclared;
@@ -1266,6 +1285,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // + lexical scorer) so a `checkIn`-declaring tool works even without a
     // `.checkIn()` call; the gate only fires for tools that declared `checkIn`.
     this.checkInConfig = resolveCheckInConfig(checkInOptions);
+    // Refused HERE, not at the first resume: a ledger that cannot spend would
+    // refuse every decision, and that is a configuration mistake.
+    if (opts.decisionLedger !== undefined) {
+      if (typeof (opts.decisionLedger as { spend?: unknown } | null)?.spend !== 'function') {
+        throw new TypeError(
+          'Agent: `decisionLedger` must have a `spend(requestId)` method — see ' +
+            "`DecisionLedger`, or omit it for this process's in-memory ledger.",
+        );
+      }
+      this.decisionLedger = opts.decisionLedger;
+    }
     if (runConfigFn !== undefined) this.runConfigFn = runConfigFn;
     // `.window()` / `.compaction()`: the meter is created ONCE per agent
     // (attached per run, cleared between runs like every other recorder)
@@ -1287,6 +1317,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The two governance chains. Empty arrays (not undefined) so every read
     // site is a plain `.length > 0` test rather than an optional dance.
     this.toolMiddleware = toolMiddleware ?? [];
+    // What an ask's approval holds to, for a host that keeps this agent's
+    // pauses and must tell one no answer can reach (`consentRequest.ts`).
+    registerConsentRules(this, () => this.toolMiddleware.map((link) => link.name));
+    // …and the ledger it spends decisions in, so that host can tell a paused
+    // call that provably never ran from one whose outcome is not known.
+    registerConsentLedger(this, this.decisionLedger);
     this.messageMiddleware = messageMiddleware ?? [];
     // Default 'summary' — measurement-gated (#18): stageReads values have
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
@@ -2582,6 +2618,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *   paused run's caller identity — before anything runs.
    * @throws DecisionRequiredError when a consent gate is answered with
    *   something other than a decision.
+   * @throws ResumeDecisionError when the decision does not answer the request
+   *   this run is paused on: it names no request, another request, a call the
+   *   checkpoint no longer holds (refused before anything runs), or a request
+   *   a resume already answered (refused before the tool runs). The tool never
+   *   runs on a refusal.
    * @throws RunInFlightError when a run is already in flight.
    *
    * @example
@@ -2595,6 +2636,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     input?: unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
+    // Taken up, before anything can refuse: from here every use of a consent
+    // decision passes through the one spend a door watching this pause sees
+    // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
+    // without reaching it, refused or aborted, used nothing.
+    noteDecisionTakenUp(pausedRequestIdOf(checkpoint));
     // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
     // Refused HERE, before the engine is handed the checkpoint, so nothing
     // executes and the checkpoint is unchanged — the caller can answer the same
@@ -2627,9 +2673,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // differing value is recorded by the ToolCalls resume door.
     const passedTime = this.passedTimeFor(options?.time, 'Agent.resume');
     options = withoutTime(options);
-    const gate = pauseDemandsDecision(checkpoint.pauseData);
-    if (gate && !isCheckInDecision(input)) throw new DecisionRequiredError(gate, input);
-    // One run, one identity — refused before anything moves. The paused run's
+    // One run, one identity — refused before anything moves, and before the
+    // answer is read at all: a caller this run is not for learns nothing about
+    // what it is waiting on (its gate, its tool, its request). The paused run's
     // caller identity is read off the checkpoint (`callerIdentity.ts`); a call
     // naming a DIFFERENT one would give the run one person's memory namespace
     // and credentials (restored, never re-seeded) and another's `ctx.identity`,
@@ -2653,6 +2699,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         (restored === undefined || !sameIdentity(options.identity, restored)))
     ) {
       throw new ResumeIdentityConflictError();
+    }
+    // …and the decision must be for THIS request and this exact call
+    // (`core/consentRequest.ts`): refused here, before anything moves, when it
+    // names no request, another request, a call the checkpoint no longer
+    // holds, or — for an ask — rules this agent's chain no longer runs. The
+    // dispatch loop asks again where the decision is used — and spends it
+    // there, once.
+    const gate = pauseDemandsDecision(checkpoint.pauseData);
+    if (gate) {
+      checkDecisionAgainst(
+        checkpoint,
+        gate,
+        input,
+        this.toolMiddleware.map((link) => link.name),
+      );
     }
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
@@ -2709,6 +2770,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Settled the moment the answer is handed over, not when the resumed run
     // finishes: a resume that then FAILS must not leave the agent refusing
     // every later message on behalf of a question that has been answered.
+    // Kept to put back when the run refuses the answer itself (a replay of a
+    // request already answered): that resume answered nothing.
+    const questionBefore = this.pendingQuestion;
     this.pendingQuestion = undefined;
     // WHO this resumed run is for — set BEFORE the executor exists, because the
     // run context's principal (every event's `EventMeta.principal`), a tool's
@@ -2801,6 +2865,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       await this.fileRunRecording(recording, finalized);
       return finalized;
     } catch (cause) {
+      // An answer the run refused ran nothing and answered nothing: the
+      // question this agent was waiting on (if any) is still outstanding, and
+      // no tool session ended — a replayed decision must not tear down the
+      // sandbox a live pause is holding.
+      if (cause instanceof ResumeDecisionError || cause instanceof DecisionRequiredError) {
+        this.pendingQuestion = questionBefore;
+        throw cause;
+      }
       await this.endRunToolSessions(cause);
       throw cause;
     } finally {
@@ -2959,6 +3031,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (this.liveSnapshot() !== undefined && !this.lastInputRefused()) {
       this.hadAdmittedRun = true;
     }
+  }
+
+  /**
+   * Whether the evidence gate's revision calls no tools: a posture that can
+   * revise (`'guard'`, `'rails'`) under an ENFORCING answer validation. There
+   * the answer may yet be withheld, so a revision must not run a tool that
+   * writes or sends again — and the library cannot tell one that only reads.
+   */
+  private revisionWithholdsTools(): boolean {
+    return this.evidenceGate?.toolsOffAfterRevision === true;
   }
 
   /** Whether input middleware refused the last run's message — the one reading both doors ask. */
@@ -4782,6 +4864,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // reset here. Only a posture that can revise writes the key.
       ...(this.evidenceGate !== undefined &&
         this.evidenceGate.posture !== 'assist' && { hasEvidenceRevision: true }),
+      // Under an enforcing answer validation the tools stay off for a run
+      // resumed after its revision was asked (`toolsOffAfterRevision`).
+      ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
       getCurrentRunId: () => this.currentRunContext?.runId,
       // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
       // it for exactly one rung of the identity ladder — see `seedFrom` — and
@@ -5273,6 +5358,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.evidenceGate.posture !== 'assist' && {
           hasEvidenceRecovery: true,
         }),
+      // The revision calls no tools under an enforcing answer validation: only
+      // then does request assembly read `toolsOffAfterRevision`.
+      ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
       // The findings ledger (9.101.0): the choice seam and `postValidate`
       // read peeled args / content under `findings`; the SERVING (step 3) —
       // the ledger piece after the recovery piece, the wire-only collapse of
@@ -5519,6 +5607,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             artifactStore,
             () => this.consentOutstanding.size > 0,
             this.outputEnforcement?.outputFormat !== undefined,
+            // Read only when `agentChecks` lists 'claims' (the agent's own rows).
+            this.claimContract,
           );
     // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
     // An output schema makes the answer JSON, and the appended block would
@@ -5698,6 +5788,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // Check-in (evidence-carrying human consent). Always threaded (resolved
       // default); the gate fires only for tools that declared `checkIn`.
       checkIn: this.checkInConfig,
+      // Where a decision's request is spent, once (`core/consentRequest.ts`).
+      // Absent → this process's ledger, shared by every agent that names none.
+      ...(this.decisionLedger !== undefined && { decisionLedger: this.decisionLedger }),
       // The governance chain. Threaded only when non-empty so an agent without
       // one produces the same handler behaviour it always did.
       ...(this.toolMiddleware.length > 0 && { toolMiddleware: this.toolMiddleware }),
@@ -5832,6 +5925,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(inputsArmed && {
         inputsLayer: {
           ...(this.findingsOptions !== undefined && { findings: true as const }),
+          // Route's sixth dispatch value, read only by an agent whose revision
+          // turns the tools off (an enforcing answer validation).
+          ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
           toolOf: (toolName: string) => resolveForLayer(toolName).tool,
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
           // The time layer (step T5a): a tool whose period declares forms is filled from the

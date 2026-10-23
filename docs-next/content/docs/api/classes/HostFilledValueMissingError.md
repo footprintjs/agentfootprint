@@ -4,7 +4,7 @@ title: HostFilledValueMissingError
 
 # Class: HostFilledValueMissingError
 
-Defined in: [src/tools/hostFilled.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L108)
+Defined in: [src/tools/hostFilled.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L110)
 
 A host-filled argument had no value for this call — no credential was
 resolved, the credential has no single value to read, or the run's caller
@@ -20,7 +20,7 @@ named no such identity field. The call is refused; nothing is guessed.
 
 > **new HostFilledValueMissingError**(`toolName`, `field`, `why`): `HostFilledValueMissingError`
 
-Defined in: [src/tools/hostFilled.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L111)
+Defined in: [src/tools/hostFilled.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L113)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_HOST_FILLED_VALUE_MISSING"`
 
-Defined in: [src/tools/hostFilled.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L109)
+Defined in: [src/tools/hostFilled.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L111)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [src/tools/hostFilled.ts:109](https://github.com/footprintjs/agentfo
 
 > `readonly` **field**: `string`
 
-Defined in: [src/tools/hostFilled.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L111)
+Defined in: [src/tools/hostFilled.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L113)
 
 ***
 
@@ -136,7 +136,7 @@ not capture any frames.
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/tools/hostFilled.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L111)
+Defined in: [src/tools/hostFilled.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L113)
 
 ## Methods
 

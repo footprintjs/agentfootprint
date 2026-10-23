@@ -2,7 +2,7 @@
 the verdict back.
 Fold: `evidenceIndex.ts` (the corpus, the exempt corpus, the turn stamp, the
 carriers), `extract.ts`, `types.ts`, and the spelling they share,
-`../../../tools/normalize.ts` (in the tools layer, below the agent: the inputs layer reads it too). One fold, asked at two
+`../../../lib/normalize.ts` (a leaf, below every layer: the inputs layer and the `absent({ among })` mint read it too). One fold, asked at two
 moments and never stored: `../stages/route.ts` · `judgeEvidence` at the
 answer (handed to `gate.ts` as a parameter), and since 9.110.0
 `../stages/toolCalls.ts` · `towersFor` at dispatch, under `.findings()`
@@ -46,7 +46,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | file | one job |
 |---|---|
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
-| `../../../tools/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
+| `../../../lib/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
 | `numericRanges.ts` | pure recognition of exactly two numeric endpoints, after app-owned identifier shapes |
 | `numberPrecision.ts` | the single precision and half-unit rounding rule used by both numeric dials |
 | `figureUnits.ts` | the one measurement-unit vocabulary, shared by figures and ranges |
@@ -81,6 +81,26 @@ Every judgement lands on the emit channel as
 `agentfootprint.agent.evidence_checked`, whatever the posture — that is where
 per-attempt facts belong. Only the terminal verdict is committed
 (`unsupportedValues`), because the boundary has to read it.
+
+**Governing delivery is not a fourth posture.** A typed answer under an
+enforcing `.answerValidation({ agentChecks: ['names-and-numbers'] })` hands the
+gate itself — a judge bound to the run's evidence, in memory
+(`../stages/answerEvidence.ts`) — to that validation, which asks it of the
+exact candidate it delivers and files one report row
+(`answer-validation/agentChecks.ts` · `evidenceCheckOf`). Never the draft's
+verdict: an output schema may transform the draft. The posture still decides
+the repair turn (on the draft); a value the delivered candidate carries that no
+result did fails the row, and the answer is withheld. A clean pass is `not-applicable` there: a found value clears an
+answer, it never verifies one.
+
+**An answer longer than the gate reads.** `extract.ts` · `readAnswer` classifies
+at most `MAX_ANSWER_TOKENS` (20,000) words and numbers of one answer — a model
+that pastes a 10 MB table must not turn the gate into the run's cost — and
+COUNTS the rest instead of stopping silently. The verdict carries the count as
+`EvidenceVerdict.unread` (absent when the whole answer was read, so every
+other verdict keeps its bytes). The gate's own postures still act only on
+what it found; answer validation's `'names-and-numbers'` row reads a count
+as `unreachable`, never as a clean pass.
 
 ## Recovery guidance (9.96.0)
 
@@ -237,6 +257,15 @@ wire — the model can go and FETCH the value it guessed at. One revision per
 turn, latched, because a model that cannot ground a value on its second try
 will not ground it on its fifth.
 
+Under an ENFORCING answer validation the revision is served NO tools, and nor
+is any later call of the run (`AgentState.toolsOffAfterRevision`, written by
+`stages/evidenceRecheck.ts`): the answer may yet be withheld, so a tool that
+writes or sends must not run again first, and the library cannot tell a tool
+that only reads. One rule decides the withheld list (`composeRequest.ts` ·
+`toolsWithheld`, asked by `callLLM` and `servedView`), and Route's dispatch
+test (`willDispatch`, asked by Route and the inputs layer) refuses any call the
+model returns anyway. A run resumed after its revision keeps the tools off.
+
 ## The extractor, in one paragraph
 
 A token is data only if it contains a digit AND is distinctive: an identifier
@@ -245,6 +274,24 @@ Prose wearing a number is excluded — `32G`, `47th`, `48-port` and `$20/month`
 are judged on their number alone, and `24/7` is a ratio. Values the user
 supplied (their message, the conversation, the system prompt and skill bodies)
 are exempt without being declared. Declared `shapes` are tested first and win.
+
+A typed answer — the whole answer one JSON object or array — is read value by
+value (`extract.ts` · `answerTexts`): strings decoded, every number the literal
+the answer WROTE. Read whole as text, compact JSON glued its punctuation onto
+the values (`:1200`, `[5,100]` as `5100`); read through the parsed value, a
+number is the double it parses to (`9007199254740993` as `…992`, `5.20` as
+`5.2`, which loses the precision the rounding rule judges).
+
+Its KEYS are read only when the agent has no `.outputSchema()`. Under a schema
+(the enforcing Route decider passes `typed`, and answer validation's judge is
+the same closure) a key is the schema's field name, not a value the model
+asserts: read as a value, a digit-bearing name — `p95LatencyMs`, `sha256`,
+`ipv4`, `q3Revenue` — was an identifier no tool result carried, so `'guard'`
+spent its repair turn on it and an enforcing validation withheld a correct
+answer. The price, stated and pinned by a `contract:` test: an answer keyed BY
+data (an order id as a key) is not judged on its keys; put such ids in values.
+Only a string followed by `:` is a key — a string in a list or after `,` is
+still a value.
 
 The bias is deliberate: a missed fabrication is a miss, a false accusation
 costs a real turn and can refuse a good answer. See `extract.ts` for the

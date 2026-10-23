@@ -6,7 +6,7 @@ title: SEMANTICS_NOTE
 
 > `const` **SEMANTICS\_NOTE**: `string`
 
-Defined in: [src/semantics/types.ts:356](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L356)
+Defined in: [src/semantics/types.ts:369](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L369)
 
 The static sentence every semantic envelope carries in the model's view.
 Never interpolated (the `ABSENCE_NOTE` law): everything else the model

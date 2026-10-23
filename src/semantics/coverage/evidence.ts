@@ -99,6 +99,38 @@ import type { ToolAbsence } from './types.js';
 const CALLER_ECHO_FIELD = 'looked_for';
 
 /**
+ * The same rule, applied to one field kind (`Tool.search`): a COMPOSED item
+ * whose value the call sent (`from: 'call'`) quotes the request — its
+ * `value`, its `what` (`<argument>: <value>`) and a `span` resolved from it
+ * are withheld; its facet, argument and the result's `resolved` (the tool's
+ * own claim) still ground. Declared constants and defaults ground. The SAME
+ * reference back when no item was sent by the call, so every envelope that
+ * never carried a composed item is projected exactly as before.
+ */
+function withoutCallValues(list: unknown): unknown {
+  if (!Array.isArray(list)) return list;
+  const sent = (i: unknown): boolean =>
+    typeof i === 'object' && i !== null && (i as Record<string, unknown>).from === 'call';
+  if (!list.some(sent)) return list;
+  return list.map((i: unknown) =>
+    sent(i)
+      ? Object.fromEntries(
+          Object.entries(i as Record<string, unknown>).filter(
+            ([key]) => key !== 'what' && key !== 'value' && key !== 'span',
+          ),
+        )
+      : i,
+  );
+}
+
+/** A holder with its `checked` list's call values withheld — the same reference when none. */
+function withheldChecked<T extends object>(holder: T): T {
+  const checked = (holder as Record<string, unknown>).checked;
+  const kept = withoutCallValues(checked);
+  return kept === checked ? holder : ({ ...holder, checked: kept } as T);
+}
+
+/**
  * The record-only item keys — `short` and `kind` — are withheld too, on every
  * coverage list of an absence AND of the ledger around it.
  *
@@ -119,7 +151,7 @@ function toolAuthoredOnly(absence: ToolAbsence): unknown {
   // Entries, not fields: a tool may spread `absent(…)` and attach keys the
   // `ToolAbsence` type never named, and those are the point of this widening.
   const entries: ReadonlyArray<readonly [string, unknown]> = Object.entries(
-    listsWithoutRecordOnly(absence),
+    withheldChecked(listsWithoutRecordOnly(absence)),
   );
   return Object.fromEntries(entries.filter(([key]) => key !== CALLER_ECHO_FIELD));
 }
@@ -155,7 +187,7 @@ function frameProjection(parsed: unknown): unknown | undefined {
   if (absence !== undefined) return toolAuthoredOnly(absence);
   const covered = readCoverageLedger(parsed);
   if (covered === undefined) return undefined;
-  const marker = listsWithoutRecordOnly(covered.af_coverage);
+  const marker = withheldChecked(listsWithoutRecordOnly(covered.af_coverage));
   const inner = readAbsence(covered.result);
   if (inner === undefined) {
     // A bare ledger is indexed whole, as it always was — unless an item

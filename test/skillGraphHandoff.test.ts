@@ -34,6 +34,7 @@ import { defineSkill, skillGraph } from '../src/injection-engine.js';
 import { evaluateInjections } from '../src/injection-engine/index.js';
 import { mock } from '../src/llm-providers.js';
 import type { InjectionContext } from '../src/injection-engine/types.js';
+import { pausedRequest } from './helpers/pausedRequest.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -282,7 +283,10 @@ describe('route handoff — pause and resume', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const checkpoint = (paused as { checkpoint: unknown }).checkpoint!;
-    const resumed = await agent.resume(checkpoint as never, checkInApproved({ by: 'tester' }));
+    const resumed = await agent.resume(
+      checkpoint as never,
+      checkInApproved({ request: pausedRequest(paused), by: 'tester' }),
+    );
     expect(isPaused(resumed)).toBe(false);
     // Every iteration after the resume is still one skill's turn — the source does
     // not come back across the checkpoint boundary.

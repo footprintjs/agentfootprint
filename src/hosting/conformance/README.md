@@ -99,6 +99,7 @@ There is deliberately no way to make a case quietly disappear.
 | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `absent-session-hydrates-undefined`             | only a session that was never written hydrates as `undefined`                      |
 | `persist-hydrate-round-trip`                    | what went in comes back; the last write wins for the payload                       |
+| `answered-pause-round-trips`                    | a stored pause comes back as it went in — still waiting, or with its `answered` mark |
 | `unreadable-is-not-absent`                      | present-and-unreadable is refused by name, never answered as absent                |
 | `forget-removes-the-conversation`               | deletion deletes, index included, and is idempotent                                |
 | `ownership-is-derived-from-the-envelope`        | the owner comes from the stored conversation, never from a caller                  |
@@ -109,6 +110,7 @@ There is deliberately no way to make a case quietly disappear.
 | `owner-of-is-undefined-for-missing-and-unowned` | missing and unowned are one answer                                                 |
 | `list-by-user-pages-with-a-stable-tie-break`    | every owned row once, nobody else's ever, cursor only when more exist              |
 | `list-by-user-is-newest-first`                  | newest first comes from the conversation's timestamp, not from insertion order     |
+| `list-by-user-shows-an-answered-pause-as-a-conversation` | `'flowchart-v1'` only for a pause still waiting; an answered pause lists as `'conversation-v1'` (`listedFormatOf`) |
 | `an-id-the-store-hands-back-is-not-a-second-address` | an id a listing reports opens that conversation and is never a name for another |
 | `awkward-session-ids-round-trip`                | an id is opaque, and the mapping to a backend key is injective                     |
 | `retention-says-who-deletes-and-deletes-only-the-old` | `retention()` says WHO deletes; a sweeping store forgets exactly the old ones |

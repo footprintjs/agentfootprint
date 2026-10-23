@@ -557,8 +557,8 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/pause.ts': [
     {
       kind: 'not-model-facing',
-      count: 2,
-      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape',
+      count: 4,
+      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape, or with a decision that does not answer the paused request (ResumeDecisionError)',
     },
   ],
   'src/core/runCheckpoint.ts': [
@@ -1193,12 +1193,18 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // AgentCore pages: one constructor-time host configuration refusal,
         // not a model instruction. One new file and one host-facing literal;
         // the registry, ephemeral and unrepaired counts are unchanged.
+        // Decisions bound to their request: two host-facing literals in
+        // pause.ts — `ResumeDecisionError`'s sentences, thrown to the caller of
+        // resume() (pause.ts 2 → 4). The gate's own refusal of a call it cannot
+        // bind is model-facing and written as a past fact about that call, so
+        // it matches no persistent rule. total 197 → 199, notModelFacing
+        // 132 → 134.
         files: 101,
-        total: 197,
+        total: 199,
         registry: 8,
         ephemeral: 24,
         unrepaired: 33,
-        notModelFacing: 132,
+        notModelFacing: 134,
         unrepairedEntries: 13,
       });
       // And the ledger's own total is the number of literals the scan flagged —

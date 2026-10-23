@@ -1,11 +1,15 @@
 /**
  * normalize — one spelling for one value, on BOTH sides of the comparison.
  *
- * Pattern: a pure leaf module (its one import, `lib/linearText.ts`, is a leaf
+ * Pattern: a pure leaf module (its one import, `linearText.ts`, is a leaf
  *          too), shared by the extractor and the evidence index so the two can
  *          never disagree about what "the same value" means.
- * Role:    tools/ layer: the evidence gate (`namesAndNumbersFromEvidence`) and the
- *          inputs layer (`tools/declare.ts`) read it.
+ * Role:    lib/ layer (L0): the evidence gate (`namesAndNumbersFromEvidence`),
+ *          the inputs layer (`tools/declare.ts`) and the `absent({ among })`
+ *          mint (`semantics/coverage/among.ts`, which ranks the names nearest
+ *          a missed one) read it. It moved down from `tools/` so the coverage
+ *          mint, two layers below, spells a name the way the gate does — one
+ *          spelling, not a second one beside it.
  * Emits:   N/A.
  *
  * ## Why this file exists at all
@@ -21,7 +25,7 @@
  * on the answer side AND on the evidence side. The rules are deliberately few
  * and each is here because a real spelling difference needed it.
  */
-import { anyOf, trimTrailing } from '../lib/linearText.js';
+import { anyOf, isRegExpWhitespace, trimTrailing } from './linearText.js';
 
 /**
  * Characters that may live INSIDE one token.
@@ -61,6 +65,51 @@ const LEADING_DECORATION = /^[$#@+'"`([{<]+/;
  */
 const TRAILING_DECORATION = anyOf('.,;:!?%\'"`)]}>');
 const ANSWER_TRAILING_DECORATION = anyOf('.,;:!?\'"`)]}>');
+
+const QUOTE = 0x22;
+const COLON = 0x3a;
+const BACKSLASH = 0x5c;
+
+/**
+ * Text with each JSON key's colon made a space: `{"total":1200}` reads
+ * `{"total" 1200}`. Compact JSON writes no space after a key, so once the
+ * quotes become separators the key's colon stayed on the value, and `:1200`
+ * read as an IDENTIFIER no result carries — every number of three or more
+ * digits in a typed answer looked invented (and `rails` refused the answer
+ * that copied it).
+ *
+ * Only a KEY's colon: one right after a closing double quote (the second of a
+ * pair; an escaped `\"` is not counted), white space allowed between. Every
+ * other colon is part of the value it sits in and stays — an IPv6 address
+ * (`::1234`, `fe80::1`, `::ffff:192.0.2.1`) is never the number after its
+ * colons, and a quoted `":8080"` keeps its colon. One pass, on both sides,
+ * like every rule here.
+ */
+function withoutKeyColons(text: string): string {
+  if (!text.includes('"')) return text;
+  let out = '';
+  let from = 0;
+  let open = false;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) !== QUOTE || escaped(text, i)) continue;
+    open = !open;
+    if (open) continue;
+    let j = i + 1;
+    while (j < text.length && isRegExpWhitespace(text.charCodeAt(j))) j++;
+    if (text.charCodeAt(j) === COLON) {
+      out += `${text.slice(from, j)} `;
+      from = j + 1;
+    }
+  }
+  return from === 0 ? text : out + text.slice(from);
+}
+
+/** Whether the quote at `at` is escaped: an odd run of backslashes before it. */
+function escaped(text: string, at: number): boolean {
+  let run = 0;
+  for (let k = at - 1; k >= 0 && text.charCodeAt(k) === BACKSLASH; k--) run++;
+  return run % 2 === 1;
+}
 
 /** `1,234` / `12,345,678` / `1,234.56` — a number wearing thousands separators. */
 const THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
@@ -125,7 +174,7 @@ export function countDigits(v: string): number {
  */
 export function tokenize(text: string): string[] {
   const out: string[] = [];
-  for (const rough of text.replace(INTRA_TOKEN, ' ').split(/\s+/)) {
+  for (const rough of withoutKeyColons(text).replace(INTRA_TOKEN, ' ').split(/\s+/)) {
     if (rough === '') continue;
     // A comma inside a token is either a thousands separator (keep the token
     // whole) or a list separator that had no space after it (split).
@@ -145,7 +194,7 @@ export function tokenize(text: string): string[] {
  */
 export function answerTokenSpellings(text: string): string[] {
   const out: string[] = [];
-  for (const rough of text.replace(RANGE_TOKEN, ' ').split(/\s+/)) {
+  for (const rough of withoutKeyColons(text).replace(RANGE_TOKEN, ' ').split(/\s+/)) {
     for (const piece of rough.split(LIST_COMMA)) {
       const spelling = tokenSpelling(piece, true);
       if (spelling !== '') out.push(spelling);
@@ -186,4 +235,99 @@ export function lookupForms(normalized: string): readonly string[] {
 export function canonicalForm(normalized: string): string {
   const forms = lookupForms(normalized);
   return forms[forms.length - 1] ?? normalized;
+}
+
+// ─── Text and names: ONE case rule ──────────────────────────────────────────
+//
+// Moved here from `integrity/unsupported-claim/evaluate.ts` (the claim
+// comparator, which imports it back) so a name binding (`semantics/coverage/
+// search/binding.ts`) and a delivered claim's text compare by the same rule:
+// one spelling owner, at the bottom layer every reader can reach.
+
+/** Text as compared: Unicode NFC, trimmed, every run of white space one space. */
+export const textOf = (value: string): string => value.normalize('NFC').trim().replace(/\s+/g, ' ');
+/**
+ * A full Unicode case fold WITHOUT the Turkic mappings: each character
+ * upper- then lower-cased on its own (so `ß` and `ẞ` fold to `ss`, `ﬁ` to
+ * `fi`, a final `ς` to `σ`), except the dotless `ı`, which stays `ı`. It
+ * never decides agreement (`caseOnly` does, on the letters as written): two
+ * texts it folds alike are only texts the comparison cannot tell apart.
+ */
+export const foldCase = (text: string): string =>
+  Array.from(text, (ch) => (ch === 'ı' ? ch : ch.toUpperCase().toLowerCase()))
+    .join('')
+    .replace(/ß/g, 'ss')
+    .normalize('NFC');
+/**
+ * A text's bare letters: compatibility forms unified (NFKC: a ligature, the
+ * long s, a full-width letter, a superscript digit), case folded, every mark
+ * dropped (an accent, the Greek tonos, the dot over `İ`) and the dotless
+ * `ı` read as `i`. Only to tell texts that differ in no letter from a
+ * contradiction: two texts alike here are never compared.
+ */
+export const bareLetters = (text: string): string =>
+  foldCase(text.normalize('NFKC')).normalize('NFD').replace(/\p{M}/gu, '').replace(/ı/g, 'i');
+export const hasDigit = (text: string): boolean => /\p{Nd}/u.test(text);
+
+/** How a word is cased: all lower, all upper, a capital first letter, or mixed. */
+export function casing(word: string): 'lower' | 'upper' | 'capitalized' | 'mixed' {
+  if (word === word.toLowerCase()) return 'lower';
+  if (word === word.toUpperCase()) return 'upper';
+  const [first = '', ...rest] = Array.from(word);
+  const tail = rest.join('');
+  return first === first.toUpperCase() && tail === tail.toLowerCase() ? 'capitalized' : 'mixed';
+}
+
+/**
+ * A word the case rule compares across casings (`caseOnly`): letters only,
+ * more than three of them, cased all lower, all upper or with a capital first
+ * letter. The rule cannot tell where such a word's case carries meaning
+ * (`Polish`, `polish`). A short word (`MW`, `Co`), a mixed-case one
+ * (`aB3xZ9`, `iPhone`) and anything with a digit or another mark keeps its
+ * case as written.
+ */
+export const foldableWord = (word: string): boolean =>
+  /^\p{L}+$/u.test(word) && Array.from(word).length > 3 && casing(word) !== 'mixed';
+
+/**
+ * Two word texts that differ in case alone: as many words, and every word
+ * that differs is a foldable word with the same letters, letter for letter,
+ * in another case — its locale-free lower case (`toLowerCase`) is the
+ * other's: `Settled` and `SETTLED`, `STRAẞE` and `Straße` (`ẞ` is the capital
+ * of `ß`). Letters are compared as written, before any fold, so `ß` is never
+ * `ss`: `Masse`, `maße`, `MAẞE` and `MASSE` against `Maße` differ in letters.
+ */
+export function caseOnly(a: string, b: string): boolean {
+  const wordsA = a.split(' ');
+  const wordsB = b.split(' ');
+  return (
+    wordsA.length === wordsB.length &&
+    wordsA.every((word, index) => {
+      const other = wordsB[index] ?? '';
+      if (word === other) return true;
+      return (
+        foldableWord(word) && foldableWord(other) && word.toLowerCase() === other.toLowerCase()
+      );
+    })
+  );
+}
+
+/**
+ * Whether two names are ONE name: the same text (`textOf`), or texts with no
+ * digit that differ in the case of foldable words alone (`caseOnly`) — the
+ * claim comparator's `agrees`. `payments` / `PAYMENTS` are one name;
+ * `ARRAY-X9` / `array-x9` (a digit), `MW` / `mW` (a short word) and `iPhone` /
+ * `iphone` (mixed case) are not.
+ *
+ * @example
+ * ```ts
+ * sameName('Payments', 'payments'); // true
+ * sameName('MW', 'mW');             // false
+ * ```
+ */
+export function sameName(a: string, b: string): boolean {
+  const x = textOf(a);
+  const y = textOf(b);
+  if (x === y) return true;
+  return !hasDigit(x) && !hasDigit(y) && caseOnly(x, y);
 }

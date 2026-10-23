@@ -27,7 +27,7 @@ import { describe, expect, it } from 'vitest';
 
 import { timeFormsOf, turnFormsWindowsOf, type FormsWindow } from '../../src/time/forms.js';
 import { timeDerivedRow, timeRowIsWellFormed } from '../../src/time/rows.js';
-import { normalizeToken, tokenize } from '../../src/tools/normalize.js';
+import { normalizeToken, tokenize } from '../../src/lib/normalize.js';
 import { answeredValuesOf } from '../../src/core/agent/stages/route.js';
 import { timeLineageOf } from '../../src/core/agent/stages/timeLineage.js';
 import { assessAnswer } from '../../src/core/agent/assessment/assess.js';

@@ -35,7 +35,6 @@ import { join } from 'node:path';
 import { Agent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { askHuman, isPaused } from '../../src/core/pause.js';
-import { checkInApproved } from '../../src/core/checkin.js';
 import {
   memorySessions,
   readEnvelope,
@@ -336,10 +335,11 @@ onSqlite('sqliteSessions — a run that stopped to ask a person', () => {
     expect(paused.pending.tool).toBe('approve_refund');
 
     const answering = answeringAgent(ran); // a NEW agent, as a new process has
-    const answer = await answering.resume(
-      paused.checkpoint,
-      checkInApproved({ by: 'alice@ops', note: 'verified with customer' }),
-    );
+    const answer = await answering.resume(paused.checkpoint, {
+      approved: true,
+      by: 'alice@ops',
+      note: 'verified with customer',
+    });
 
     expect(answer).toBe('refund issued');
     // The claim that makes this a resume rather than a replay: the tool that
@@ -372,7 +372,7 @@ onSqlite('sqliteSessions — a run that stopped to ask a person', () => {
       const done = await host2.deliver({
         input: '',
         sessionId: 'r-1',
-        decision: checkInApproved({ by: 'alice' }),
+        decision: { approved: true, by: 'alice' },
       });
       expect(done.output).toBe('refund issued');
       expect(ran).toEqual(['refund:40']); // once, across two processes
@@ -630,15 +630,17 @@ onSqlite('sqliteSessions — what it buys', () => {
     // can ask "which sessions are waiting on a person?" without this library.
     const file = await tempFile();
     const store = open(file);
+    const paused = {
+      checkpoint: { pausedStageId: 's#1', subflowPath: [], sharedState: {} } as never,
+      conversation: conversation('asked'),
+      pending: { pauseData: 'approve?' },
+    };
     await store.persist('a', toEnvelope(conversation('answered')));
-    await store.persist(
-      'b',
-      toPausedEnvelope({
-        checkpoint: { pausedStageId: 's#1', subflowPath: [], sharedState: {} } as never,
-        conversation: conversation('asked'),
-        pending: { pauseData: 'approve?' },
-      }),
-    );
+    await store.persist('b', toPausedEnvelope(paused));
+    // A pause whose decision a resume already used: stored, then marked. Its
+    // envelope is still a paused run; nobody is waiting on it any more.
+    await store.persist('c', toPausedEnvelope(paused));
+    await store.persist('c', toPausedEnvelope({ ...paused, answered: { at: 3 } }));
     closeAll();
 
     const raw = await rawDatabase(file);
@@ -647,5 +649,50 @@ onSqlite('sqliteSessions — what it buys', () => {
       .all() as { session_id?: unknown }[];
     raw.close();
     expect(waiting.map((r) => String(r.session_id))).toEqual(['b']);
+    expect(readPausedRun(await open(file).hydrate('c')).answered).toEqual({ at: 3 });
+  });
+
+  it('a row written before the column held the listed format lists by what the pause is NOW — reopened after the upgrade', async () => {
+    // Before this release the column held the envelope's own format, so a
+    // pause stored then says 'flowchart-v1' whatever has happened to it since.
+    const file = await tempFile();
+    const store = open(file);
+    const signed = (text: string): AgentRunCheckpoint => ({
+      ...conversation(text),
+      identity: { principal: 'alice', conversationId: text },
+    });
+    const pause = (text: string, sharedState: Record<string, unknown>, pauseData: unknown) => ({
+      checkpoint: { pausedStageId: 's#1', subflowPath: [], sharedState, pauseData } as never,
+      conversation: signed(text),
+      pending: { pauseData },
+    });
+    await store.persist('waiting', toPausedEnvelope(pause('waiting', {}, 'approve?')));
+    await store.persist(
+      'answered',
+      toPausedEnvelope({ ...pause('answered', {}, 'approve?'), answered: { at: 3 } }),
+    );
+    // A consent pause from an earlier release: no request recorded, so no
+    // decision can answer it — the pending op reports nothing pending.
+    await store.persist(
+      'older',
+      toPausedEnvelope(
+        pause(
+          'older',
+          { pausedToolName: 'refund', pausedToolCallId: 't1', pausedCheckInArgs: { amount: 5 } },
+          { checkIn: {}, toolName: 'refund' },
+        ),
+      ),
+    );
+    closeAll();
+    const raw = await rawDatabase(file);
+    raw.prepare("UPDATE agent_sessions SET format = 'flowchart-v1'").run();
+    raw.close();
+
+    const listed = await open(file).listByUser('alice');
+    expect(Object.fromEntries(listed.sessions.map((row) => [row.sessionId, row.format]))).toEqual({
+      waiting: 'flowchart-v1',
+      answered: 'conversation-v1',
+      older: 'conversation-v1',
+    });
   });
 });

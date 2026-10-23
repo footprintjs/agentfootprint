@@ -4,7 +4,7 @@ title: AgentInput
 
 # Interface: AgentInput
 
-Defined in: [src/core/agent/types.ts:1307](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1307)
+Defined in: [src/core/agent/types.ts:1325](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1325)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/types.ts:1307](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **continueFrom?**: [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint)
 
-Defined in: [src/core/agent/types.ts:1382](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1382)
+Defined in: [src/core/agent/types.ts:1400](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1400)
 
 The conversation this turn continues — an `AgentRunCheckpoint` from
 `agent.checkpoint()`, persisted anywhere and handed back here.
@@ -49,7 +49,7 @@ await agent.run({ message: 'Make it three.', continueFrom: conversation });
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core/agent/types.ts:1351](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1351)
+Defined in: [src/core/agent/types.ts:1369](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1369)
 
 WHO this run is for — the scoping tuple, not a session handle.
 
@@ -97,7 +97,7 @@ system-prompt slot as a `<memory>` block rather than as message turns.
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core/agent/types.ts:1308](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1308)
+Defined in: [src/core/agent/types.ts:1326](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1326)
 
 ***
 
@@ -105,7 +105,7 @@ Defined in: [src/core/agent/types.ts:1308](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **messageFrom?**: `"person"` \| `"composed"`
 
-Defined in: [src/core/agent/types.ts:1398](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1398)
+Defined in: [src/core/agent/types.ts:1416](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1416)
 
 WHO WROTE `message`. Omitted (the default): a person — as every run has
 always been read. `'composed'`: another runner's output, handed on by a
@@ -126,7 +126,7 @@ it". Every other agent ignores it and records nothing.
 
 > `readonly` `optional` **time?**: [`RunTime`](/docs/api/interfaces/RunTime)
 
-Defined in: [src/core/agent/types.ts:1411](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1411)
+Defined in: [src/core/agent/types.ts:1429](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1429)
 
 THIS TURN'S CLOCK — the message's time (`now`), the person's zone
 (`zone`) and a window set in a UI (`window`), read only by an agent with

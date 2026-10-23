@@ -894,6 +894,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
           userMessage: parent.userMessage as string | undefined,
           ...(parent.toolChoices !== undefined && { priorToolChoices: parent.toolChoices }),
           ...(parent.wrapUpAsked === true && { wrapUpAsked: true }),
+          ...(parent.toolsOffAfterRevision === true && { toolsOffAfterRevision: true }),
         }),
         // The slot subflow reads these to build the per-iteration
         // ToolDispatchContext when an external `.toolProvider()` is

@@ -123,13 +123,15 @@ import { refuseUnknownWireOp } from './wireOps.js';
 import { durableWriter, type DurableWriter } from './durability.js';
 import { describePause } from './pendingAsk.js';
 import {
-  envelopeOwner,
-  envelopeTranscript,
-  readEnvelope,
-  readPausedRun,
-  toEnvelope,
-  toPausedEnvelope,
-} from './envelope.js';
+  afterFailedAnswer,
+  answeredRefusal,
+  closedConversation,
+  openToolCalls,
+  readStoredSession,
+  unanswerablePause,
+  watchAnswer,
+} from './answeredPause.js';
+import { envelopeOwner, envelopeTranscript, toEnvelope, toPausedEnvelope } from './envelope.js';
 import {
   AdmissionRefusedError,
   ArtifactNotCarriedError,
@@ -917,10 +919,17 @@ export async function standingAgent<TH extends HostHandle>(
         reply.fail(new SessionNotFoundError(op.sessionId));
         return;
       }
-      if (stored !== undefined && stored.format !== 'flowchart-v1') readEnvelope(stored);
+      // The one reading every door uses (`answeredPause.ts`): a pause whose
+      // decision a resume already used is not pending, and neither is one no
+      // answer can reach any more — the next message closes it.
+      const held = stored === undefined ? undefined : readStoredSession(stored);
+      const waiting =
+        held?.waiting !== undefined && unanswerablePause(held.waiting, sharedAgent) === undefined
+          ? held.waiting
+          : undefined;
       deliverSessions(reply, 'session-pending', {
         op: 'pending',
-        pending: stored?.format === 'flowchart-v1' ? readPausedRun(stored).pending : null,
+        pending: waiting?.pending ?? null,
       });
       return;
     }
@@ -1246,9 +1255,8 @@ export async function standingAgent<TH extends HostHandle>(
   ): MemoryIdentity | undefined {
     if (envelope === undefined) return undefined;
     try {
-      return envelope.format === 'flowchart-v1'
-        ? readPausedRun(envelope).conversation.identity
-        : readEnvelope(envelope).identity;
+      const held = readStoredSession(envelope);
+      return (held.waiting?.conversation ?? held.prior)?.identity;
     } catch (err) {
       throw err instanceof UnreadableEnvelopeError ? err.withSession(sessionId) : err;
     }
@@ -1561,6 +1569,10 @@ export async function standingAgent<TH extends HostHandle>(
     try {
       let prior: AgentRunCheckpoint | undefined;
       let paused: PausedRun | undefined;
+      // A pause whose decision a resume already used (`answeredPause.ts`): no
+      // decision answers it again, and the next message continues the
+      // conversation that resume left.
+      let answered: PausedRun | undefined;
       if (sessionId !== undefined) {
         // A request carrying a decision is waking this session to CONTINUE a
         // run, which is a different thing to ask a store to be ready for.
@@ -1583,8 +1595,12 @@ export async function standingAgent<TH extends HostHandle>(
             }
             // Both readers throw by name on a format this runtime cannot read —
             // better a loud refusal than an agent answering from half a session.
-            if (stored.format === 'flowchart-v1') paused = readPausedRun(stored);
-            else prior = readEnvelope(stored);
+            // The one reading every door uses: an answered pause is never
+            // offered for an answer (`answeredPause.ts`).
+            const held = readStoredSession(stored);
+            paused = held.waiting;
+            prior = held.prior;
+            answered = held.answered;
           }
         } catch (err) {
           // A stored conversation this runtime cannot read fails THIS REQUEST,
@@ -1680,6 +1696,11 @@ export async function standingAgent<TH extends HostHandle>(
       // approval out of prose is a guess, and a consent gate may not be built
       // on a guess.
       if (request.decision !== undefined) {
+        if (answered !== undefined) {
+          // One decision runs one call, and this request's decision was used.
+          reply.fail(answeredRefusal(answered));
+          return;
+        }
         if (!paused) {
           reply.fail(new NoPendingAskError(sessionId ?? '(anonymous)'));
           return;
@@ -1694,15 +1715,7 @@ export async function standingAgent<TH extends HostHandle>(
             // Data collection, never permission: settle unanswered calls
             // without executing their handlers or consulting the model.
             const history = [...paused.conversation.history];
-            const outstanding = new Map<string, { id: string; name: string }>();
-            for (const message of paused.conversation.history) {
-              if (message.role === 'tool' && message.toolCallId !== undefined)
-                outstanding.delete(message.toolCallId);
-              if (message.role === 'assistant') {
-                for (const call of message.toolCalls ?? []) outstanding.set(call.id, call);
-              }
-            }
-            for (const call of outstanding.values())
+            for (const call of openToolCalls(paused.conversation.history))
               history.push({
                 role: 'tool',
                 toolName: call.name,
@@ -1736,22 +1749,56 @@ export async function standingAgent<TH extends HostHandle>(
           }
         }
         const resumeOptions = await withSealedRequest();
-        await deliver(
-          lane,
-          await runner.resume(paused.checkpoint, request.decision, resumeOptions),
-          store,
-          reply,
-          sessionId,
-          offer,
-          paused,
-        );
+        // Opened before the answer is handed over: what it sees says whether a
+        // failure below may have used the decision (`answeredPause.ts`).
+        const watch = watchAnswer(paused);
+        try {
+          await deliver(
+            lane,
+            await runner.resume(paused.checkpoint, request.decision, resumeOptions),
+            store,
+            reply,
+            sessionId,
+            offer,
+            paused,
+          );
+        } catch (err) {
+          // A failure in the resume or in storing its result: when the
+          // decision may have been used, the stored pause is answered before
+          // anyone hears of it (`answeredPause.ts`).
+          if (sessionId !== undefined) {
+            await afterFailedAnswer({
+              store,
+              sessionId,
+              paused,
+              watch,
+              answer: request.decision,
+              error: err,
+              settle: () => lane.writer?.settle(),
+              runner,
+            });
+          }
+          throw err;
+        } finally {
+          watch?.release();
+        }
         return;
       }
       if (paused && sessionId !== undefined) {
-        // The message is not run and the pause is not discarded. Both of the
-        // other options lose something a person cared about.
-        reply.fail(new AwaitingDecisionError(sessionId, paused.pending));
-        return;
+        if (unanswerablePause(paused, runner) === undefined) {
+          // The message is not run and the pause is not discarded. Both of the
+          // other options lose something a person cared about.
+          reply.fail(new AwaitingDecisionError(sessionId, paused.pending));
+          return;
+        }
+        // …unless no answer can ever reach it: paused before requests were
+        // named, its call changed after the ask, or an ask made under rules
+        // this agent no longer runs. Held, it would hold the session for
+        // good — so it is closed, the message continues the conversation, and
+        // the calls it left open are recorded as not run when this agent's
+        // ledger proves it, else as not known (`answeredPause.ts`).
+        prior = await closedConversation(paused, runner);
+        paused = undefined;
       }
 
       const turnOptions = await withSealedRequest();

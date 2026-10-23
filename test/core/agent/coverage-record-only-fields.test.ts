@@ -44,6 +44,7 @@ import {
 import { mock } from '../../../src/llm-providers.js';
 import { bearer, type CredentialProvider } from '../../../src/identity.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── The harness ─────────────────────────────────────────────────────
 
@@ -186,7 +187,10 @@ async function drive(h: Harness, path: Path, shape: Shape, declare: boolean): Pr
     return h.agent.resume(first.checkpoint, undefined);
   }
   if (path === 'pause') return h.agent.resume(first.checkpoint, envelopeOf(shape, declare));
-  return h.agent.resume(first.checkpoint, checkInApproved({ by: 'alice' }));
+  return h.agent.resume(
+    first.checkpoint,
+    checkInApproved({ request: pausedRequest(first), by: 'alice' }),
+  );
 }
 
 const RECORDED = new Set([
@@ -356,6 +360,9 @@ describe('record-only fields — every serving path goes through the one strip',
       'core/agent/stages/toolCalls.ts', // declareCoverage — records; afterMoment serves
       'core/runbook/coverage.ts', // foldInnerCoverage — folds declared lists upward
       'semantics/check.ts', // declaresCoverage — the build-time gate asks yes/no
+      // composeSearchCoverage — reads the value it composed for its facts; the
+      // funnel hands that value on, and afterMoment serves it
+      'semantics/coverage/search/compose.ts',
     ];
     const found: string[] = [];
     const walk = (dir: string): void => {
@@ -439,7 +446,10 @@ async function runOne(
   const first = await agent.run({ message: 'go' });
   if (path === 'check-in') {
     if (!isPaused(first)) throw new Error('expected a pause');
-    await agent.resume(first.checkpoint, checkInApproved({ by: 'alice' }));
+    await agent.resume(
+      first.checkpoint,
+      checkInApproved({ request: pausedRequest(first), by: 'alice' }),
+    );
   }
   const end = events.find((e) => e.type === 'agentfootprint.stream.tool_end')!.payload;
   const refused = events.some((e) => e.type === 'agentfootprint.tools.result_refused');

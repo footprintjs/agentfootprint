@@ -118,13 +118,26 @@ import {
   type AskComponent,
 } from '../../../tools/askComponent.js';
 import {
+  declinedResult,
   shouldCheckIn,
-  isCheckInDecision,
-  checkInDeclined,
   type ResolvedCheckInConfig,
   type CheckInRequest,
   type CheckInDecision,
 } from '../../checkin.js';
+import {
+  gatedCallOf,
+  heldDecision,
+  mintConsentRequest,
+  noteDecisionTakenUp,
+  processDecisionLedger,
+  recordedRequestId,
+  runEndedBy,
+  runsAsAsked,
+  spendDecision,
+  type DecisionLedger,
+  type GatedCall,
+} from '../../consentRequest.js';
+import type { ConsentGateKind } from '../../pause.js';
 import type {
   ProviderToolCache,
   ServedToolParties,
@@ -133,6 +146,7 @@ import type {
 import type { ToolClaim } from '../buildToolRegistry.js';
 import { changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
+import { frozenCopyOf } from '../../../lib/frozenCopy.js';
 import { buildToolResolver, type ToolResolution } from './toolResolver.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
 import { agentToolDispatch } from '../toolDispatch.js';
@@ -144,7 +158,7 @@ import type {
   ToolSessionTier,
 } from '../../../tools/toolSessions.js';
 import type { InjectionRecord } from '../../../recorders/core/types.js';
-import type { ToolMiddleware } from '../middleware/types.js';
+import type { MiddlewareDecision, ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../../../tools/runChain.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
@@ -216,12 +230,23 @@ import {
   readAbsence,
   readCoverageResult,
   type CoverageFacts,
+  type CoverageReading,
   type DeclaredCoverage,
+  type KnownNames,
   type ToolAbsence,
 } from '../../../semantics/coverage/index.js';
+import type { ComposedCoverage } from '../../../semantics/coverage/composedCoverage.js';
+import { composedEventFields } from '../../../semantics/coverage/search/events.js';
+import { buildSearchCoverage } from './searchCoverage.js';
 import { readItemExtras, type CoverageSection } from '../../../semantics/coverage/items.js';
 import { copyInProgressItem } from '../../../semantics/coverage/inProgress.js';
 import { copyPeriod } from '../../../semantics/coverage/period.js';
+import {
+  fitKnownNames,
+  KNOWN_NAMES_LINE,
+  knownNamesFor,
+  withKnownNames,
+} from '../../../semantics/coverage/among.js';
 import { servedToModel, strippedOnly } from '../../../semantics/coverage/read.js';
 import {
   pruneLeases,
@@ -315,6 +340,15 @@ export interface ToolCallsHandlerDeps {
    * dev warning says, once per tool, that no verdict will be filed for it.
    */
   readonly resultsLayer?: true;
+  /**
+   * `.negativeClaims()` is armed (a later release wires the builder): a
+   * composed absence's `tools.absent` carries `lookedForRef` in place of
+   * `lookedFor`. Composed values ride no event in any mode; unarmed,
+   * `lookedFor` is today's bytes. Absent → unarmed.
+   *
+   * @internal
+   */
+  readonly negativeClaimsArmed?: boolean;
   /**
    * THE ANSWER LAYER IS ARMED (honesty layer 4, `.answerLayer()`) — the ONE
    * thing it changes here is the turn stamp: while any honesty layer is armed
@@ -703,6 +737,12 @@ export interface ToolCallsHandlerDeps {
    * @internal
    */
   readonly answeredAsk?: () => AnsweredAsk | undefined;
+  /**
+   * Where answered consent requests are spent (`AgentOptions.decisionLedger`),
+   * so one decision runs one call. Undefined → this process's ledger, shared by
+   * every agent that names none (`processDecisionLedger`).
+   */
+  readonly decisionLedger?: DecisionLedger;
   /**
    * THE TIME LAYER (`.time()`) — present only then. Each dispatched call files
    * one `call` row with `dispatchedAt` (the wall clock, just before the tool
@@ -1604,6 +1644,137 @@ export function buildToolCallsHandler(
     permissionChecker,
   } = deps;
   const toolArgValidation = deps.toolArgValidation ?? 'enforce';
+  /** Where answered consent requests are spent — the agent's, else this process's. */
+  const decisionLedger = deps.decisionLedger ?? processDecisionLedger();
+  /**
+   * The decision a consent-gate resume carries, held to the request this run
+   * paused on and to the exact call it was bound to (`core/consentRequest.ts`)
+   * — or a `ResumeDecisionError` / `DecisionRequiredError`, thrown before
+   * anything about the call runs. Pure: the decision is spent by the branch
+   * that USES it (`spendDecision`), so a resume stopped before that (a refused
+   * findings reference) leaves it unspent.
+   *
+   * THE door every resume of a consent gate passes through: an agent's own
+   * `resume()` asks the same pure question first, but a composition resumes a
+   * nested agent's chart directly, and only this handler sees every decision
+   * that is used. So this is where a request is held and spent, once.
+   */
+  const heldAnswer = (
+    scope: TypedScope<AgentState>,
+    input: unknown,
+    gate: ConsentGateKind,
+  ): CheckInDecision => {
+    const read = (key: string): unknown => scope.$getValue(key);
+    const toolName = read('pausedToolName');
+    const middleware = gate === 'ask' ? read('pausedAskMiddleware') : undefined;
+    return heldDecision(
+      input,
+      {
+        kind: gate,
+        ...(typeof toolName === 'string' && { toolName }),
+        ...(typeof middleware === 'string' && { middleware }),
+      },
+      read('pausedRequest'),
+      gatedCallOf(read, gate),
+      // An ask's approval holds only for the rules it was asked under — this
+      // agent's chain, by link name.
+      (deps.toolMiddleware ?? []).map((link) => link.name),
+    );
+  };
+  /**
+   * The copy of a paused call's arguments its request was bound to, detached
+   * from the run's state — what an approved call runs with, as at a fresh
+   * dispatch. A live view of the state goes on changing after the call (the
+   * resume clears it, a later pause rewrites it), so a tool or a rule that kept
+   * its arguments would read values nobody approved. `heldAnswer` already
+   * proved them faithful JSON, which is what makes the copy safe to take.
+   */
+  const boundArgsOf = (
+    scope: TypedScope<AgentState>,
+    key: 'pausedAskArgs' | 'pausedCheckInArgs',
+  ): Readonly<Record<string, unknown>> => {
+    const raw = scope.$getValue(key);
+    return typeof raw === 'object' && raw !== null
+      ? (structuredClone(raw) as Readonly<Record<string, unknown>>)
+      : {};
+  };
+  /**
+   * The permission checker's view of a call's arguments: its own frozen copy
+   * (`lib/frozenCopy.ts`), never the object the tool runs with — a checker
+   * that wrote into its `context` used to change the call. Arguments no copy
+   * can be made of are not handed over: the throw lands in the gate's
+   * fail-closed catch, so the call is denied.
+   */
+  const checkerContextOf = (args: ToolArgs): Readonly<Record<string, unknown>> => {
+    const own = frozenCopyOf(args);
+    if (own === undefined) {
+      throw new Error("the call's arguments could not be copied for the permission checker");
+    }
+    return own;
+  };
+  /**
+   * What a consent gate refuses with when the call cannot be bound to a
+   * request — its arguments are not values JSON writes down faithfully, so an
+   * approval could not be held to them. The call does not run and nobody is
+   * asked; the model reads why — as a past fact about that one call, never an
+   * order for the next one, because a tool result is re-read on every later
+   * call of the turn (`test/modelFacingScan.test.ts`).
+   */
+  const unboundCallRefusal = (toolName: string, gate: ConsentGateKind): string =>
+    `tool '${toolName}' was not run on that call: it needed a person's ${
+      gate === 'ask' ? 'answer to a middleware ask' : 'approval (checkIn)'
+    }, and an approval binds to the exact arguments it is shown — those arguments held a ` +
+    `value plain JSON cannot write down (a date object, a map, a non-finite number, …), so no ` +
+    `approval could be bound to them.`;
+  /**
+   * The chain's rows for an ask no approval could be bound to. Nobody was
+   * asked, so no row may say a person was: the asking link's `ask` row (the
+   * walk's last — it stops at the ask) becomes the refusal it turned into,
+   * naming why, the way `askPolicy: 'refuse'` files a refused ask.
+   */
+  const unboundAskRows = (
+    rows: readonly MiddlewareDecision[],
+    middleware: string,
+    question: string,
+  ): MiddlewareDecision[] =>
+    rows.map((row, at) =>
+      at === rows.length - 1 && row.outcome === 'ask'
+        ? {
+            ...row,
+            outcome: 'deny',
+            why:
+              `middleware '${middleware}' asked a person to decide, and the call could not be ` +
+              `bound to a request a decision names — its arguments held a value plain JSON ` +
+              `cannot write down — so nobody was asked: ${question}`,
+          }
+        : row,
+    );
+  /**
+   * Who changed an approved ask's arguments after the approval, in words: the
+   * links whose rows declared a rewrite — or, when none did (an edit in place
+   * declares nothing), every link that ran after the ask, without claiming
+   * which of them it was.
+   */
+  const changedAfterApproval = (rows: readonly MiddlewareDecision[]): string => {
+    const quoted = (picked: readonly MiddlewareDecision[]): string =>
+      [...new Set(picked.map((row) => `'${row.middleware}'`))].join(', ');
+    const declared = rows.filter((row) => row.changed);
+    if (declared.length > 0) {
+      return `the middleware ${quoted(declared)} changed those arguments after the approval`;
+    }
+    return rows.length > 0
+      ? `those arguments came back changed from the middleware after the ask (${quoted(rows)})`
+      : 'a middleware after the ask changed those arguments';
+  };
+  /**
+   * What the model reads when the rest of an approved ask's chain handed back
+   * other arguments than the ones the person approved: the call does not run.
+   * A past fact about that call.
+   */
+  const rewrittenAfterApproval = (toolName: string, changedBy: string): string =>
+    `tool '${toolName}' was not run on that call: a person approved it with the arguments ` +
+    `they were shown, and ${changedBy}, so the approval did not cover the call that would ` +
+    `have run.`;
   /**
    * One admission rule for initial and resumed dispatch. Judge against the
    * wire schema after middleware, before artifact resolution or credentials.
@@ -1831,11 +2002,19 @@ export function buildToolCallsHandler(
     scope: TypedScope<AgentState>,
     call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
     value: unknown,
+    /** What the search funnel composed (`./searchCoverage.ts`) — read in place of the value. */
+    composed?: CoverageReading,
   ): ToolResultStatus | undefined => {
-    const reading = readCoverageResult(value, call.toolName);
+    const reading = composed ?? readCoverageResult(value, call.toolName);
     if (reading === undefined) return undefined;
     const rows: DeclaredCoverage[] = [];
     for (const facts of reading.declared) {
+      // A statement the LIBRARY composed from the tool's `search`: the row
+      // carries the typed items and gaps, the events carry no composed value.
+      if (facts.composed !== undefined) {
+        rows.push(declareComposed(scope, call, facts));
+        continue;
+      }
       // Honesty step 7b: a declared period rides the event and the tracked row
       // (read by the ONE period rule — a malformed one never reaches here), as
       // a copy. Filed whatever the agent armed: it is the tool's declaration.
@@ -1911,6 +2090,74 @@ export function buildToolCallsHandler(
     }
     scope.coverageDeclared = [...(scope.coverageDeclared ?? []), ...rows];
     return reading.status;
+  };
+
+  /**
+   * One COMPOSED statement (`Tool.search`) — its event and its row. The row is
+   * the committed record: every value, under the run's redaction policy, at
+   * the address the funnel reserved (`resultId`). The event carries the
+   * declaration's constants, the gaps and each other facet as a reference —
+   * never a composed value, armed or not (`search/events.ts`).
+   */
+  const declareComposed = (
+    scope: TypedScope<AgentState>,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    facts: CoverageFacts,
+  ): DeclaredCoverage => {
+    const composed = facts.composed as NonNullable<CoverageFacts['composed']>;
+    const period = facts.period !== undefined ? copyPeriod(facts.period) : undefined;
+    if (period !== undefined && deps.resultsLayer !== true) warnPeriodUnjudged(call.toolName);
+    const event = composedEventFields(facts, { armed: deps.negativeClaimsArmed === true });
+    const base = {
+      toolName: call.toolName,
+      toolCallId: call.toolCallId,
+      iteration: call.iteration,
+    };
+    if (facts.kind === 'absence') {
+      typedEmit(scope, 'agentfootprint.tools.absent', {
+        ...base,
+        ...(event.lookedFor !== undefined && { lookedFor: event.lookedFor }),
+        ...(event.lookedForRef !== undefined && { lookedForRef: event.lookedForRef }),
+        checked: event.checked,
+        ...(event.notChecked.length > 0 && { notChecked: event.notChecked }),
+        ...(event.cannotCover.length > 0 && { cannotCover: event.cannotCover }),
+        ...(facts.tryInstead !== undefined && { tryInstead: facts.tryInstead }),
+        ...(facts.tryInsteadTool !== undefined && { tryInsteadTool: facts.tryInsteadTool }),
+        ...(facts.provenance !== undefined && { provenance: { ...facts.provenance } }),
+        ...(period !== undefined && { period: copyPeriod(period) }),
+        composition: event.composition,
+      });
+    } else {
+      typedEmit(scope, 'agentfootprint.tools.coverage_declared', {
+        ...base,
+        ...(event.checked.length > 0 && { checked: event.checked }),
+        ...(event.notChecked.length > 0 && { notChecked: event.notChecked }),
+        ...(event.cannotCover.length > 0 && { cannotCover: event.cannotCover }),
+        ...(facts.inProgress !== undefined && {
+          inProgress: facts.inProgress.map(copyInProgressItem),
+        }),
+        ...(period !== undefined && { period: copyPeriod(period) }),
+        composition: event.composition,
+      });
+    }
+    // Detached plain data: the row must not share a reference with a value
+    // the tool still holds (a sent argument object, the declaration's lists).
+    const row: ComposedCoverage = structuredClone({
+      kind: facts.kind,
+      ...base,
+      composed: composed.origin,
+      resultId: composed.resultId,
+      handle: composed.handle,
+      ...(facts.lookedFor !== undefined && { lookedFor: facts.lookedFor }),
+      checked: facts.coverage.checked as ComposedCoverage['checked'],
+      notChecked: facts.coverage.notChecked,
+      cannotCover: facts.coverage.cannotCover,
+      complete: composed.complete,
+      gaps: composed.gaps,
+      ...(period !== undefined && { period }),
+      ...(facts.inProgress !== undefined && { inProgress: facts.inProgress }),
+    });
+    return row;
   };
 
   /**
@@ -2612,6 +2859,13 @@ export function buildToolCallsHandler(
    * instance's own (`deps.currentRun`) describe some other run — its last
    * standalone caller, or none — and must never reach this run's tools.
    */
+  /**
+   * `Tool.search` — the call's result identity reserved before dispatch, its
+   * coverage composed after (`./searchCoverage.ts`). Inert for every tool
+   * that declares no search.
+   */
+  const searchFunnel = buildSearchCoverage((scope) => runFactsOf(scope)?.runId);
+
   const runFactsOf = (
     scope: TypedScope<AgentState>,
   ): ReturnType<NonNullable<ToolCallsHandlerDeps['currentRun']>> | undefined => {
@@ -3551,6 +3805,43 @@ export function buildToolCallsHandler(
    * returned while the history carries what the rules allowed through — and
    * the ledger row beside them says which is which.
    */
+  /**
+   * The names each call's after-tool moment let through to the model, by call
+   * id. `afterMoment` sets its own call's entry (or clears it) and
+   * `messageTextOf` takes it out, so the map holds a call only between those
+   * two lines.
+   */
+  const namesForMessage = new Map<string, KnownNames>();
+
+  /**
+   * THE ONE PLACE a call's model-bound message text is made from what the
+   * rules, the placement and the cap let through — and so the one place the
+   * names an `absent({ among })` read for the caller are attached
+   * (`coverage/among.ts`). They ride the library's channel, never the result,
+   * so no event, ledger or coverage row ever holds them; what is attached is
+   * what the after-tool rules let through (`afterMoment`), and it COUNTS
+   * against `maxToolResultChars`: the names list is trimmed to fit — never
+   * the result — and says how many it left out; with no room even for the
+   * count, nothing is attached. Every other call gets the text it always got.
+   */
+  const messageTextOf = (toolCallId: string, modelResult: unknown): string => {
+    const text = (value: unknown): string =>
+      typeof value === 'string' ? value : safeStringify(value);
+    const names = namesForMessage.get(toolCallId);
+    namesForMessage.delete(toolCallId);
+    if (names === undefined) return text(modelResult);
+    const withBlock = (block: KnownNames): string => {
+      const attached = withKnownNames(modelResult, block);
+      return attached !== modelResult
+        ? text(attached)
+        : `${text(modelResult)}${KNOWN_NAMES_LINE}${safeStringify(block)}`;
+    };
+    const max = deps.maxToolResultChars;
+    const fitted =
+      max === undefined ? names : fitKnownNames(names, (block) => withBlock(block).length <= max);
+    return fitted === undefined ? text(modelResult) : withBlock(fitted);
+  };
+
   const afterMoment = async (
     scope: TypedScope<AgentState>,
     call: {
@@ -3575,12 +3866,20 @@ export function buildToolCallsHandler(
     // declare neither serves the bytes it always did, and the callers'
     // reference-inequality stamp of `tool_end.modelResult` stays unstamped.
     const served = servedToModel(call.result);
+    // The names an among miss read for the caller: off the result, from the
+    // library's channel, keyed by what the TOOL returned (`coverage/among.ts`).
+    // The chain decides what of them the model reads.
+    namesForMessage.delete(call.toolCallId);
+    const names = knownNamesFor(call.result);
     const chain = deps.toolMiddleware ?? [];
     // No `onToolResult` hook anywhere in the chain → no walk, no rows, no await
     // beyond the ones this dispatch already made. An agent whose middleware
     // only governs calls is byte-identical to one built before this moment
     // existed.
-    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) return served;
+    if (!chain.some((mw) => typeof mw.onToolResult === 'function')) {
+      if (names !== undefined) namesForMessage.set(call.toolCallId, names);
+      return served;
+    }
     const verdict = await runToolAfterChain(chain, {
       toolName: call.toolName,
       ...(call.tool?.source !== undefined && { toolSource: call.tool.source }),
@@ -3592,8 +3891,12 @@ export function buildToolCallsHandler(
       history: call.history,
       ...(call.identity && { identity: call.identity }),
       ...(call.signal && { signal: call.signal }),
+      ...(names !== undefined && { knownNames: names }),
     });
     recordDecisions(scope, verdict.decisions);
+    if (verdict.kind === 'allow' && verdict.knownNames !== undefined) {
+      namesForMessage.set(call.toolCallId, verdict.knownNames);
+    }
     return verdict.kind === 'deny' ? verdict.reason : verdict.result;
   };
 
@@ -3723,6 +4026,13 @@ export function buildToolCallsHandler(
   // runs now. Fail-closed: a blocked/failed credential surfaces to the model
   // and the tool does NOT run. A tool that pauses again during an approved
   // resume can't re-pause (resume returns void), so that is surfaced as an error.
+  //
+  // `heldTo` names the consent gate a person approved this call through (a
+  // check-in, an ask). Its arguments are then held to the request once more
+  // at the last moment before `execute` — defence in depth behind the frozen
+  // copies every app callback is handed (`lib/frozenCopy.ts`): arguments that
+  // no longer re-derive the request's id (`runsAsAsked`, the one rule that
+  // binds a decision to its call) do not run (`callChanged`).
   const resolveCredentialAndExecute = async (
     scope: TypedScope<AgentState>,
     resolved: Resolution,
@@ -3731,6 +4041,7 @@ export function buildToolCallsHandler(
     toolCallId: string,
     iteration: number,
     env: { readonly signal?: AbortSignal },
+    heldTo?: ConsentGateKind,
   ): Promise<{
     result: unknown;
     error?: boolean;
@@ -3746,8 +4057,14 @@ export function buildToolCallsHandler(
      *  — but it must not complete a procedure step (the model was told to
      *  call again). */
     ceilingRefused?: true;
+    /** An approved call's arguments no longer matched its request at the
+     *  last moment before `execute` (`heldTo`): the call did not run. */
+    callChanged?: true;
   }> => {
     const tool = resolved.tool;
+    /** What the approval covers — the arguments as handed in, before any
+     *  `wants` resolution or clock redraw derives the ones `execute` gets. */
+    const approved = args;
     const emitSecurity = bindToolSecurityEvents(scope, { toolCallId, iteration });
     // The two refusals share one door here too (9.92.0): a name nothing holds,
     // and a name whose offered party cannot answer on this resume.
@@ -3841,6 +4158,8 @@ export function buildToolCallsHandler(
       }
     }
     let executed = false;
+    /** What the run ended with, when it ended before the call could run. */
+    let ended: Error | undefined;
     try {
       // The time layer's dispatch moment — a resumed call is dispatched NOW,
       // so its `dispatchedAt` is the resume's, not the pause's.
@@ -3877,9 +4196,46 @@ export function buildToolCallsHandler(
         ...sessionContext(scope, toolName, toolCallId),
         ...toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
       };
+      // The last moment before the call runs, after every await that prepared
+      // it — its artifacts (`wants`), its credential (`needs`), its clock, and
+      // on an ask the rest of the chain. The engine stops waiting on an
+      // aborted run's stage (a hang-up, a deadline), but the stage goes on:
+      // a call never runs for a caller already told the run ended. Thrown past
+      // the catch below — the run ended, the tool did not fail.
+      ended = runEndedBy(env.signal);
+      if (ended !== undefined) throw ended;
+      // An approved call runs with the arguments its request binds, or not
+      // at all — asked here, after every callback that saw them has returned.
+      if (heldTo !== undefined) {
+        const read = (key: string): unknown => scope.$getValue(key);
+        if (!runsAsAsked(read('pausedRequest'), gatedCallOf(read, heldTo), approved)) {
+          // Nothing ran; the call's sessions are still released, as for a
+          // run that ended here.
+          await endCall(toolCallId).catch(() => undefined);
+          return {
+            result: rewrittenAfterApproval(
+              toolName,
+              'those arguments changed before the call could run',
+            ),
+            error: true,
+            callChanged: true,
+          };
+        }
+      }
+      // `Tool.search`: reserved, with the dispatch instant, just before the
+      // call runs — as in the batch loop.
+      const searchDispatch = searchFunnel.dispatch(scope, tool, callTime);
       executed = true;
       let result = await tool.execute(args, executionContext);
       await endCall(toolCallId);
+      const searchBoundary = (status: ToolResultStatus | undefined) => ({
+        call: { toolName, toolCallId, iteration },
+        tool,
+        ...(resolved.party !== undefined && { party: resolved.party }),
+        args,
+        ...(searchDispatch !== undefined && { dispatch: searchDispatch }),
+        ...(status !== undefined && { status }),
+      });
       // The typed effects channel (9.19.0) — same unwrap as the batch loop,
       // at this path's own execute boundary, so a resumed call's envelope is
       // judged exactly as an inline one's.
@@ -3891,10 +4247,17 @@ export function buildToolCallsHandler(
         // that died with an oversized result would be the silence this
         // primitive exists to break. An absence's status is the tool's own
         // and wins over the envelope's only when the envelope declared none.
+        const searched = searchFunnel.compose(
+          scope,
+          searchBoundary(envelope.status),
+          envelope.content,
+        );
+        const declaredContent = searched !== undefined ? searched.value : envelope.content;
         const coverageStatus = declareCoverage(
           scope,
           { toolName, toolCallId, iteration },
-          envelope.content,
+          declaredContent,
+          searched?.reading,
         );
         const declaredStatus = envelope.status ?? coverageStatus;
         // The semantic envelope (9.53.0), on the unwrapped content — the
@@ -3904,9 +4267,9 @@ export function buildToolCallsHandler(
         const semanticView = declareSemantics(
           scope,
           { toolName, toolCallId, iteration },
-          envelope.content,
+          declaredContent,
         );
-        const content = semanticView ?? envelope.content;
+        const content = semanticView ?? declaredContent;
         // The tool's own ceiling (9.20.0) measures the CONTENT — the channel
         // that can overflow a context window. The DECLARED effects are small
         // validated data and are still judged by the caller: a tool that
@@ -3949,7 +4312,7 @@ export function buildToolCallsHandler(
           result: content,
           executed: true,
           envelope:
-            declaredStatus === envelope.status && semanticView === undefined
+            declaredStatus === envelope.status && content === envelope.content
               ? envelope
               : {
                   ...envelope,
@@ -3958,7 +4321,14 @@ export function buildToolCallsHandler(
                 },
         };
       }
-      const coverageStatus = declareCoverage(scope, { toolName, toolCallId, iteration }, result);
+      const searched = searchFunnel.compose(scope, searchBoundary(undefined), result);
+      if (searched !== undefined) result = searched.value;
+      const coverageStatus = declareCoverage(
+        scope,
+        { toolName, toolCallId, iteration },
+        result,
+        searched?.reading,
+      );
       // The semantic envelope (9.53.0) on this path's own execute boundary —
       // a resumed call's envelope is judged exactly as an inline one's.
       const semanticView = declareSemantics(scope, { toolName, toolCallId, iteration }, result);
@@ -4012,6 +4382,12 @@ export function buildToolCallsHandler(
       }
       return { result, executed: true };
     } catch (err) {
+      if (ended !== undefined && err === ended) {
+        // Nothing ran; the call's sessions are still released, and the run's
+        // end — not a tool failure — is what the stage ends with.
+        await endCall(toolCallId).catch(() => undefined);
+        throw err;
+      }
       // Settled by throwing is still settled — a tool that opened a session and
       // then failed must not keep it.
       await endCall(toolCallId);
@@ -4384,7 +4760,8 @@ export function buildToolCallsHandler(
               capability: 'tool_call',
               actor: 'agent',
               target: tc.name,
-              context: runArgs,
+              // Its own frozen copy, never the arguments the tool runs with.
+              context: checkerContextOf(runArgs),
               sequence,
               history: newHistory,
               iteration,
@@ -4485,7 +4862,7 @@ export function buildToolCallsHandler(
               capability,
               actor: 'agent',
               target,
-              context: callArgs,
+              context: checkerContextOf(callArgs),
               history: newHistory,
               iteration,
               ...(runIdentity && { identity: runIdentity }),
@@ -4614,15 +4991,43 @@ export function buildToolCallsHandler(
             // gets the chain's named refusal and the tool does not run.
             ...(oneQuestionAsked && { askPolicy: 'refuse' as const }),
           });
+          // The rules the asked call still has to pass once the person
+          // answers: the asking link and every link after it, by name.
+          const askChain =
+            chain.kind === 'ask'
+              ? deps.toolMiddleware.slice(chain.index).map((link) => link.name)
+              : undefined;
+          // The request the person would be asked (`core/consentRequest.ts`):
+          // an id their decision must quote, bound to a detached copy of this
+          // exact call — the args AS TRANSFORMED SO FAR, where the chain
+          // resumes and the rules from there on. Minted only for a call that
+          // is about to pause.
+          const bound =
+            chain.kind === 'ask'
+              ? mintConsentRequest({
+                  gate: 'ask',
+                  tool: tc.name,
+                  toolCallId: tc.id,
+                  party: resolved.party,
+                  args: chain.args,
+                  middleware: chain.middleware,
+                  askIndex: chain.index,
+                  chain: askChain,
+                } satisfies GatedCall)
+              : undefined;
+          // An ask no approval could be bound to asked nobody, and its row
+          // says so (`unboundAskRows`).
+          const chainRows =
+            chain.kind === 'ask' && bound === undefined
+              ? unboundAskRows(chain.decisions, chain.middleware, chain.payload.question)
+              : chain.decisions;
           // Under the inputs layer, a rewrite of a RULED tool's arguments is
           // filed with the NAMES of the keys it changed (honesty layer 2) —
           // the answer's standing reads a rewritten ruled argument with no
           // declared origin as assumed. Every other row: as it always was.
           recordDecisions(
             scope,
-            inputs !== undefined
-              ? inputs.decisionsToRecord(tool, chain.decisions)
-              : chain.decisions,
+            inputs !== undefined ? inputs.decisionsToRecord(tool, chainRows) : chainRows,
           );
           callArgs = chain.args;
           chainedArgs = chain.args;
@@ -4634,7 +5039,12 @@ export function buildToolCallsHandler(
               chain.refusedAsk === true && askedLayer !== undefined
                 ? chain.reason + askedLayer.keptNote(scope, tc.name, resolution)
                 : chain.reason;
-          } else if (chain.kind === 'ask') {
+          } else if (chain.kind === 'ask' && bound === undefined) {
+            // A call no approval could be bound to is refused, never asked.
+            denied = true;
+            error = true;
+            result = unboundCallRefusal(tc.name, 'ask');
+          } else if (chain.kind === 'ask' && bound !== undefined) {
             // The typed half of the question (9.24.0), judged BEFORE anything
             // is committed: a component the screen could not render must
             // refuse here, at the source, not pause and be discovered. The
@@ -4654,16 +5064,18 @@ export function buildToolCallsHandler(
                 : undefined;
             // Commit partial state so resume() finds history intact (the
             // pauseHere / check-in path does the same). The TRANSFORMED args
-            // ride the checkpoint: a person approves what the chain produced,
-            // not what the model originally proposed.
+            // ride the checkpoint — the bound copy: a person approves what the
+            // chain produced, not what the model originally proposed.
             scope.history = newHistory;
             scope.pausedToolCallId = tc.id;
             scope.pausedToolName = tc.name;
             scope.pausedToolStartMs = startMs;
             scope.pausedAsk = true;
-            scope.pausedAskArgs = chain.args;
+            scope.pausedAskArgs = bound.args;
             scope.pausedAskIndex = chain.index;
             scope.pausedAskMiddleware = chain.middleware;
+            scope.pausedAskChain = askChain;
+            scope.pausedRequest = bound.request;
             // The party this call was resolved against (9.92.0) — so a resume
             // in a FRESH instance dispatches to the same party, never to the
             // build-time map's first holder. Pause-path-only.
@@ -4679,7 +5091,7 @@ export function buildToolCallsHandler(
             return {
               toolCallId: tc.id,
               toolName: tc.name,
-              ask: { ...chain.payload, middleware: chain.middleware },
+              ask: { ...chain.payload, middleware: chain.middleware, id: bound.request.id },
             };
           }
         }
@@ -4782,13 +5194,31 @@ export function buildToolCallsHandler(
           // Computed ONLY for a checkIn-declaring tool → zero cost otherwise.
           // Shape shared with the ask-resume gate; see `historyForCheckIn`.
           const historyForEvidence = historyForCheckIn(scope, newHistory);
-          if (
-            !shouldCheckIn(tool.checkIn, callArgs, {
-              iteration,
-              toolCallId: tc.id,
-              history: historyForEvidence,
-            })
-          ) {
+          const trips = shouldCheckIn(tool.checkIn, callArgs, {
+            iteration,
+            toolCallId: tc.id,
+            history: historyForEvidence,
+          });
+          // The request the person would be asked (`core/consentRequest.ts`):
+          // an id their decision must quote, bound to a detached copy of this
+          // exact call — minted only for a call that is about to pause.
+          const bound =
+            trips && askedLayer === undefined
+              ? mintConsentRequest({
+                  gate: 'checkIn',
+                  tool: tc.name,
+                  toolCallId: tc.id,
+                  party: resolved.party,
+                  args: callArgs,
+                } satisfies GatedCall)
+              : undefined;
+          // What the person is shown — and the evidence assembler and every
+          // `checkin.request` listener handed: a frozen copy of their own
+          // (`lib/frozenCopy.ts`). The paused state keeps `bound.args`, the
+          // copy the request is bound to, so nothing that sees the question
+          // can change the call the answer runs.
+          const shown = bound === undefined ? undefined : frozenCopyOf(bound.args);
+          if (!trips) {
             // Predicate said no — fall through to the normal credential+execute
             // path below (this `if` block is the ONLY thing the gate adds).
           } else if (askedLayer !== undefined) {
@@ -4803,6 +5233,11 @@ export function buildToolCallsHandler(
             result =
               askedLayer.secondPauseRefusal(tc.name, 'check-in') +
               askedLayer.keptNote(scope, tc.name, resolution);
+          } else if (bound === undefined || shown === undefined) {
+            // A call no approval could be bound to is refused, never asked.
+            checkInRefused = true;
+            error = true;
+            result = unboundCallRefusal(tc.name, 'checkIn');
           } else {
             // The tool's declared decision component (9.24.0), judged BEFORE
             // the evidence pack is assembled — a gate that cannot be honored
@@ -4820,7 +5255,7 @@ export function buildToolCallsHandler(
             const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
             const evidence = await deps.checkIn.assembler({
               tool: { name: tc.name, description: tool.schema.description },
-              args: callArgs,
+              args: shown,
               ...(intent !== undefined && { intent }),
               iteration,
               history: historyForEvidence,
@@ -4828,8 +5263,9 @@ export function buildToolCallsHandler(
               ...(env.signal && { signal: env.signal }),
             });
             const request: CheckInRequest = {
+              id: bound.request.id,
               tool: tc.name,
-              args: callArgs,
+              args: shown,
               ...(intent !== undefined && { intent }),
               evidence,
               ...(gateComponent !== undefined && { component: gateComponent }),
@@ -4841,14 +5277,15 @@ export function buildToolCallsHandler(
               request: request as unknown as Readonly<Record<string, unknown>>,
             });
             // Commit partial state so resume() finds history intact (mirror the
-            // pauseHere path). The proposed args ride the checkpoint so an
-            // APPROVED tool can execute on resume.
+            // pauseHere path). The bound copy of the args rides the checkpoint,
+            // so an APPROVED tool executes exactly what was asked.
             scope.history = newHistory;
             scope.pausedToolCallId = tc.id;
             scope.pausedToolName = tc.name;
             scope.pausedToolStartMs = startMs;
             scope.pausedCheckIn = true;
-            scope.pausedCheckInArgs = callArgs;
+            scope.pausedCheckInArgs = bound.args;
+            scope.pausedRequest = bound.request;
             // Same carrier as the middleware-ask pause (9.92.0).
             if (resolved.party !== undefined) scope.pausedToolParty = resolved.party;
             // Which surface will collect the decision — read back on resume
@@ -5055,6 +5492,10 @@ export function buildToolCallsHandler(
                   env.signal,
                 ),
               };
+              // `Tool.search`: the result identity is reserved and the dispatch
+              // instant taken just BEFORE the call runs (the row's address,
+              // never the provider's call id; a relative window's clock).
+              const searchDispatch = searchFunnel.dispatch(scope, tool, callTime);
               executed = true;
               result = await tool.execute(callArgs, executionContext);
               // A code-runner tool leaves the SHAPE of what it just ran, keyed by
@@ -5100,10 +5541,27 @@ export function buildToolCallsHandler(
               // it; otherwise an absence names the delivered outcome, so an
               // `onToolStatus` edge can route "we looked and there was
               // nothing" somewhere other than "the call broke".
+              // `Tool.search` — the coverage composed from the declaration and
+              // the arguments the call ran with, BEFORE everything that reads
+              // the value: the composed absence is what the model is served.
+              const searched = searchFunnel.compose(
+                scope,
+                {
+                  call: { toolName: tc.name, toolCallId: tc.id, iteration },
+                  tool,
+                  ...(resolved.party !== undefined && { party: resolved.party }),
+                  args: callArgs as Readonly<Record<string, unknown>>,
+                  ...(searchDispatch !== undefined && { dispatch: searchDispatch }),
+                  ...(toolStatus !== undefined && { status: toolStatus }),
+                },
+                result,
+              );
+              if (searched !== undefined) result = searched.value;
               const coverageStatus = declareCoverage(
                 scope,
                 { toolName: tc.name, toolCallId: tc.id, iteration },
                 result,
+                searched?.reading,
               );
               if (toolStatus === undefined) toolStatus = coverageStatus;
               // The semantic envelope (9.53.0), on the unwrapped content and
@@ -5652,7 +6110,7 @@ export function buildToolCallsHandler(
           executed,
           toolEnvelope?.status,
         );
-        let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let resultStr = messageTextOf(tc.id, modelResult);
         // The tool's OWN answer, before any framework suffix joins it — what
         // the repeated-call ledger fingerprints. Fingerprinting the decorated
         // string instead would compare our own additions (a step that advanced
@@ -5919,11 +6377,31 @@ export function buildToolCallsHandler(
       return undefined; // explicit: no pause, flow continues to loopTo
     },
     resume: async (scope, input) => {
+      // A consent gate's answer is a DECISION for ONE request: held to the
+      // request this run paused on and to the exact call it was bound to —
+      // refused (thrown) before anything below writes or runs. The two
+      // decision paths further down spend it as their first act, once.
+      const consentGate: ConsentGateKind | undefined =
+        scope.pausedAsk === true ? 'ask' : scope.pausedCheckIn === true ? 'checkIn' : undefined;
+      // Taken up here, too: a composition resumes this chart without an
+      // agent's own `resume()`, and a door watching the paused request must
+      // still know that every use of its decision passes through the spend
+      // below (`consentRequest.ts` · `watchDecisionUse`).
+      if (consentGate !== undefined) {
+        noteDecisionTakenUp(recordedRequestId(scope.$getValue('pausedRequest')));
+      }
+      // The run's signal, read while the stage is live: the engine stops
+      // waiting on this stage when the run is aborted, but the stage goes on,
+      // and a decision must not be spent — nor its call run — by a resume
+      // nobody is waiting for any more (`spendDecision`).
+      const runSignal = scope.$getEnv().signal;
       // Same barrier as `execute`, for the same reason: an approved check-in
       // runs the REAL tool here, and that side effect must not go out ahead of
       // the state the last write is still carrying.
       const durable = deps.awaitDurable?.();
       if (durable) await durable;
+      const consentDecision =
+        consentGate === undefined ? undefined : heldAnswer(scope, input, consentGate);
       // The time layer: the paused turn's clock is KEPT — its words were
       // resolved against it. A resume that passed a different `time` is
       // recorded here, first, and never applied (TQ21).
@@ -5986,21 +6464,26 @@ export function buildToolCallsHandler(
       // this call may proceed, and on approval the REAL tool runs — the person
       // never writes the tool's answer, and neither does the middleware.
       //
-      // A malformed resume DECLINES, for the same reason the check-in path
-      // does: a governed call must never execute because a message was
-      // mis-shaped.
-      if (scope.pausedAsk === true) {
+      // A malformed resume never reaches here: `heldAnswer` refused it at the
+      // top (a governed call never executes, and nobody's decline is invented,
+      // because a message was mis-shaped).
+      if (consentGate === 'ask' && consentDecision !== undefined) {
         const iteration = scope.iteration as number;
-        const args = (scope.pausedAskArgs ?? {}) as Readonly<Record<string, unknown>>;
+        // What the rest of the chain is handed: a detached copy of the
+        // approved arguments (`boundArgsOf`). The arguments that come back are
+        // held to the REQUEST, never to this copy — a link that edits it in
+        // place edits the copy — and the tool runs on another fresh copy.
+        const args = boundArgsOf(scope, 'pausedAskArgs');
         const askIndex = (scope.pausedAskIndex ?? 0) as number;
         const askedBy = (scope.pausedAskMiddleware ?? 'middleware') as string;
         // The registered component that COLLECTED this decision (9.24.0),
         // written at pause time only when the ask carried one — the ledger
         // rows below then say which surface the person answered through.
         const answeredVia = scope.pausedComponentId as string | undefined;
-        const decision: CheckInDecision = isCheckInDecision(input)
-          ? input
-          : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
+        const decision: CheckInDecision = consentDecision;
+        // Used from here — so spent here, before any row or the tool: a second
+        // resume presenting it is refused ('already-answered').
+        await spendDecision(decisionLedger, decision, 'ask', runSignal);
 
         let result: unknown;
         /** What the model reads. Differs from `result` only when a rule at the
@@ -6015,7 +6498,7 @@ export function buildToolCallsHandler(
         /** The tool ran (any outcome) — the judge's gate (9.104.0). */
         let toolRan = false;
         if (!decision.approved) {
-          result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
+          result = declinedResult(decision.note);
           recordDecisions(scope, [
             {
               middleware: askedBy,
@@ -6094,6 +6577,22 @@ export function buildToolCallsHandler(
               askPolicy: 'refuse',
             });
             recordDecisions(scope, rest.decisions);
+            // The approval covers the arguments the person was shown. The ones
+            // the rest of the chain hands back must re-derive the paused
+            // request's id (`runsAsAsked`) — held to the request itself, never
+            // to the copy the links were handed. Any other arguments are not
+            // approved: the call does not run, and the record and the model
+            // are told why ('call-changed').
+            const read = (key: string): unknown => scope.$getValue(key);
+            const rewrittenBy =
+              rest.kind === 'deny' ||
+              runsAsAsked(read('pausedRequest'), gatedCallOf(read, 'ask'), rest.args)
+                ? undefined
+                : changedAfterApproval(rest.decisions);
+            // The arguments the call runs with: a fresh copy of the approved
+            // ones (equal, by the check above, to what the chain handed back),
+            // so nothing a link still holds can reach the tool.
+            const runArgs = boundArgsOf(scope, 'pausedAskArgs');
             // Would this tool's OWN consent gate have fired for this call? Asked by
             // EVALUATING the demand, not by noticing that one was declared (8.13.0).
             // Before that, any tool carrying a `checkIn` field was refused here even
@@ -6101,19 +6600,41 @@ export function buildToolCallsHandler(
             // the £5 refunds it was written to let through, and the refusal claimed a
             // consent gate would have run when it provably would not have.
             //
-            // Judged on `rest.args` (what the tool would actually run with) and on
+            // Judged on `runArgs` (what the tool would actually run with) and on
             // the same history shape the loop's gate uses, so the answer cannot
-            // depend on which door the call arrived through.
+            // depend on which door the call arrived through. The predicate is
+            // handed its own frozen copy of them (`shouldCheckIn`), never
+            // `runArgs` itself: a predicate that wrote into its argument used
+            // to change the call the person had approved.
             const demandTrips =
               rest.kind !== 'deny' &&
+              rewrittenBy === undefined &&
               tool?.checkIn !== undefined &&
-              shouldCheckIn(tool.checkIn, rest.args, {
+              shouldCheckIn(tool.checkIn, runArgs, {
                 iteration,
                 toolCallId,
                 history: historyForCheckIn(scope, scope.history as readonly LLMMessage[]),
               });
             if (rest.kind === 'deny') {
               result = rest.reason;
+            } else if (rewrittenBy !== undefined) {
+              error = true;
+              result = rewrittenAfterApproval(toolName, rewrittenBy);
+              recordDecisions(scope, [
+                {
+                  middleware: askedBy,
+                  moment: 'before-tool',
+                  at: 'tool',
+                  toolName,
+                  toolCallId,
+                  iteration,
+                  outcome: 'deny',
+                  changed: false,
+                  why:
+                    `the approval covers the arguments the person was shown; ${rewrittenBy}, ` +
+                    `so the call was not run (call-changed)`,
+                },
+              ]);
             } else if (demandTrips) {
               // The one-question rule, from the other direction: this tool's own
               // consent gate really does demand a person for THESE arguments, and
@@ -6148,14 +6669,34 @@ export function buildToolCallsHandler(
                 scope,
                 resolved,
                 toolName,
-                rest.args,
+                runArgs,
                 toolCallId,
                 iteration,
                 env,
+                'ask',
               );
               result = dispatched.result;
               error = dispatched.error;
               toolRan = dispatched.executed === true;
+              // Held to the request at the last moment and found changed: the
+              // record says so, as for a rewrite the chain handed back.
+              if (dispatched.callChanged === true) {
+                recordDecisions(scope, [
+                  {
+                    middleware: askedBy,
+                    moment: 'before-tool',
+                    at: 'tool',
+                    toolName,
+                    toolCallId,
+                    iteration,
+                    outcome: 'deny',
+                    changed: false,
+                    why:
+                      'the approval covers the arguments the person was shown; they changed ' +
+                      'before the call could run, so the call was not run (call-changed)',
+                  },
+                ]);
+              }
               // A ceiling-refused call RAN but must not advance a step (9.20.0);
               // its envelope — status 'invalid' plus any surviving declared
               // effects — is still picked up and judged below.
@@ -6171,7 +6712,7 @@ export function buildToolCallsHandler(
               // sentence BEFORE the chain's last word, the execute loop's
               // composition kept.
               if (frameworkSkipStepAnswered(toolName, tool) && stepToolRan) {
-                result = applySkipStep(scope, { args: rest.args, toolCallId, iteration });
+                result = applySkipStep(scope, { args: runArgs, toolCallId, iteration });
               }
               // present behind a middleware ask, approved (9.22.0): same
               // overwrite the batch loop applies — the snapshot (or refusal)
@@ -6179,7 +6720,7 @@ export function buildToolCallsHandler(
               // is an errored call here too.
               if (deps.artifactStore && toolName === PRESENT_TOOL_NAME && stepToolRan) {
                 const presented = await applyPresent(scope, {
-                  args: rest.args,
+                  args: runArgs,
                   toolCallId,
                   iteration,
                 });
@@ -6198,7 +6739,7 @@ export function buildToolCallsHandler(
                   toolName,
                   toolCallId,
                   iteration,
-                  args: rest.args,
+                  args: runArgs,
                   result,
                   ...(error === true && { error: true }),
                   history: [...(scope.history as readonly LLMMessage[])],
@@ -6224,8 +6765,7 @@ export function buildToolCallsHandler(
         );
         const askCapped = capResults(toolName, askPlaced);
         modelResult = askCapped.modelResult;
-        let askResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let askResultStr = messageTextOf(toolCallId, modelResult);
         // Step boundary (9.18.0) — a result finalized HERE is as final as one
         // from the batch loop; the answered call advances the pointer before
         // the push, exactly as it would have inline.
@@ -6314,6 +6854,9 @@ export function buildToolCallsHandler(
         scope.pausedAskArgs = undefined;
         scope.pausedAskIndex = undefined;
         scope.pausedAskMiddleware = undefined;
+        scope.pausedAskChain = undefined;
+        // The request was answered — and spent — by this resume.
+        scope.pausedRequest = undefined;
         // Cleared ONLY when it was set: a later component-less pause in this
         // run must not inherit this ask's surface, and a run that never
         // carried one must not gain the key (byte-identical).
@@ -6332,15 +6875,19 @@ export function buildToolCallsHandler(
       // comes BEFORE execute); on DECLINE a model-visible tool_result lands so
       // the agent adapts in-loop. The typed `checkin.decision` event fires
       // either way. Same iteration semantics as resume-after-askHuman.
-      if (scope.pausedCheckIn === true) {
+      if (consentGate === 'checkIn' && consentDecision !== undefined) {
         const iteration = scope.iteration as number;
-        const args = (scope.pausedCheckInArgs ?? {}) as Readonly<Record<string, unknown>>;
-        // A check-in pause MUST be resumed with a CheckInDecision. A mis-wired
-        // resume (a bare string, say) declines by default — a consequential
-        // tool can never silently EXECUTE from a malformed resume.
-        const decision: CheckInDecision = isCheckInDecision(input)
-          ? input
-          : checkInDeclined({ by: 'unknown', note: 'resume input was not a CheckInDecision' });
+        // The copy the person approved, detached (`boundArgsOf`).
+        const args = boundArgsOf(scope, 'pausedCheckInArgs');
+        // A check-in pause is resumed with a CheckInDecision for THIS request
+        // and this exact call, or not at all: `heldAnswer` refused anything else
+        // at the top — a bare string, a decision for another request, a replay.
+        // A consequential tool never EXECUTES from a malformed resume, and a
+        // decline is never invented for one.
+        const decision: CheckInDecision = consentDecision;
+        // Used from here — so spent here, before the record or the tool: a
+        // second resume presenting it is refused ('already-answered').
+        await spendDecision(decisionLedger, decision, 'checkIn', runSignal);
 
         // The registered component that COLLECTED this decision (9.24.0),
         // written at pause time only when the ask carried one. The decision
@@ -6351,6 +6898,7 @@ export function buildToolCallsHandler(
           toolName,
           toolCallId,
           iteration,
+          requestId: decision.requestId,
           approved: decision.approved,
           by: decision.by,
           ...(decision.note !== undefined && { note: decision.note }),
@@ -6380,6 +6928,7 @@ export function buildToolCallsHandler(
             toolCallId,
             iteration,
             env,
+            'checkIn',
           );
           result = dispatched.result;
           error = dispatched.error;
@@ -6407,7 +6956,7 @@ export function buildToolCallsHandler(
             });
           }
         } else {
-          result = decision.note ? `declined by human: ${decision.note}` : 'declined by human';
+          result = declinedResult(decision.note);
         }
 
         if (modelResult === undefined) modelResult = result;
@@ -6420,8 +6969,7 @@ export function buildToolCallsHandler(
         );
         const decisionCapped = capResults(toolName, decisionPlaced);
         modelResult = decisionCapped.modelResult;
-        let decisionResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let decisionResultStr = messageTextOf(toolCallId, modelResult);
         // Step boundary (9.18.0) — an approved consequential step (a checkIn
         // tool CAN be a step's tool) advances on the resumed dispatch.
         if (deps.stepPlanFor && stepToolRan) {
@@ -6506,6 +7054,8 @@ export function buildToolCallsHandler(
         scope.pausedToolStartMs = 0;
         scope.pausedCheckIn = false;
         scope.pausedCheckInArgs = undefined;
+        // The request was answered — and spent — by this resume.
+        scope.pausedRequest = undefined;
         // Cleared ONLY when it was set — see the ask path's twin note.
         if (answeredVia !== undefined) scope.pausedComponentId = undefined;
         // The served party the checkpoint carried is consumed with it (9.92.0);
@@ -6571,8 +7121,7 @@ export function buildToolCallsHandler(
         );
         const consentCapped = capResults(toolName, consentPlaced);
         modelResult = consentCapped.modelResult;
-        let consentResultStr =
-          typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+        let consentResultStr = messageTextOf(toolCallId, modelResult);
         // Step boundary (9.18.0) — a step tool that waited on 3LO consent
         // advances the moment its resumed dispatch really ran, clean. A
         // ceiling-refused result is not clean (9.20.0): the model holds no
@@ -6732,7 +7281,7 @@ export function buildToolCallsHandler(
       );
       const pauseCapped = capResults(toolName, pausePlaced);
       const modelResult = pauseCapped.modelResult;
-      let resultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
+      let resultStr = messageTextOf(toolCallId, modelResult);
       // Step boundary (9.18.0) — THE HITL step ("ask a human, then export"):
       // the tool paused mid-step, the person's answer IS its result, and the
       // completed step advances here at the same boundary it would have

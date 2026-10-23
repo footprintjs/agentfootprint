@@ -134,6 +134,12 @@ describe('narrowServed', () => {
     ).toBe('wrap-up');
   });
 
+  it('evidence-revision: a call after the revision under an enforcing validation never narrows', () => {
+    expect(decide(ranked('ship', 'charge', 'lookup'), 2, { toolsOff: true }).narrowedSkipped).toBe(
+      'evidence-revision',
+    );
+  });
+
   it('the app’s own doors are served whatever the ranking says', () => {
     const r = narrowServed({
       wire: WIRE,

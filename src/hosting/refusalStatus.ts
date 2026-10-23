@@ -19,6 +19,12 @@
  * gate with a value instead of a decision. Nothing ran and the pause is still
  * there, so the same caller can send the right shape and continue.
  *
+ * `ERR_RESUME_DECISION` is a 409: a decision that does not answer the request
+ * this session is paused on — a duplicate that arrived after the first one
+ * resumed the run and it paused again, a decision already used, one for a call
+ * the stored pause no longer holds. The decision conflicts with the session's
+ * state; nothing ran, and the pending ask (if any) is still there to answer.
+ *
  * The artifact rows (9.23.0) follow the same reading. The two 400s are
  * requests the same caller can fix (a malformed wire op; an op with no
  * session). `ERR_ARTIFACT_NOT_FOUND` is 404 — the honest HTTP word for "no
@@ -35,6 +41,7 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   ERR_AWAITING_DECISION: 409,
   ERR_NO_PENDING_ASK: 409,
   ERR_DECISION_REQUIRED: 400,
+  ERR_RESUME_DECISION: 409,
   ERR_INPUT_REQUEST_INVALID: 400,
   ERR_INVALID_WIRE_OP: 400,
   ERR_ARTIFACT_SESSION_REQUIRED: 400,
@@ -82,4 +89,10 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   // (a header missing or unreadable) — the request is what is wrong, and the
   // same caller can send it again with the credential.
   ERR_REQUEST_NOT_SEALED: 400,
+  // An enforcing `.answerValidation()` withheld the answer
+  // (`AnswerValidationError`). 422: the request was understood and the agent
+  // ran, but the ANSWER it produced did not pass the app's checks, so there is
+  // nothing to deliver. Nothing broke, so never a 5xx. The refusal withholds
+  // the answer only: tools the turn already called have run, and are not undone.
+  ERR_ANSWER_VALIDATION: 422,
 });

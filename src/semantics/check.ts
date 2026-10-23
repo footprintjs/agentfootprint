@@ -26,10 +26,37 @@
  * Everything else warns: a classed tool with NO samples (the gate cannot
  * check what it cannot see — but silence must not read as a pass), and an
  * inventory whose facts carry no render hint (useful, not provably harmful).
+ *
+ * ## The overclaim rules (`overclaim.ts`) — warnings until a later major
+ *
+ * A declaration is a claim, so it is checked like one: a refusal that says
+ * what does not exist (`refusal-asserts-absence`), an absence that calls the
+ * input wrong (`absence-asserts-wrongness`), and every `among.authoritative`
+ * listed for review (`authoritative-names`). So no consumer's CI breaks on
+ * upgrade they WARN, and only for samples that use the new fields — a
+ * catalog's `refusals`, an absence minted with `among` — so an app using
+ * none of them sees no new finding. `strict: true` (the CLI's `--strict`)
+ * makes the first two errors; `rules: ['overclaim']` makes them errors AND
+ * judges every sample (any absence, any result whose status says it read
+ * nothing). `authoritative-names` is a review item and stays a warning.
  */
 
+import { namesFacetOf } from './coverage/among.js';
 import { readCoverageResult } from './coverage/read.js';
+import { readDeclaredAbsence, readDeclaredLedger } from './coverage/recognize.js';
+import { searchReviewItems } from './coverage/search/review.js';
+import type { ToolSearch } from './coverage/search/types.js';
 import { explainSemantics, readSemantics } from './envelope.js';
+import {
+  absenceIssues,
+  absencesIn,
+  isNotReadResult,
+  refusalIssues,
+  SEMANTICS_RULE_SETS,
+  type OverclaimCode,
+  type OverclaimIssue,
+  type SemanticsRuleSet,
+} from './overclaim.js';
 import { RESULT_CLASSES, type ToolResultClass } from './types.js';
 import {
   projectionSemanticsIssues,
@@ -47,8 +74,34 @@ export interface SemanticsCatalogEntry {
   readonly name: string;
   readonly resultClass?: ToolResultClass;
   readonly results: readonly unknown[];
+  /**
+   * The tool's `search` declaration (`defineTool({ search })`), when it has
+   * one — dumped with the catalog. The gate lists its review items
+   * (`source-said`, `said-overlap`) as warnings, and reads a sample
+   * `checked: 'declared'` as declared coverage. Structure was judged at
+   * `defineTool`; the gate does not re-judge it.
+   */
+  readonly search?: ToolSearch;
   /** Optional paired adapter fixtures. Exact preservation, not inference or factual validation. */
   readonly projections?: readonly { readonly before: unknown; readonly after: unknown }[];
+  /**
+   * Optional samples of what the tool says when it REFUSES a call — the
+   * message it throws, or the value it returns. A refused call read nothing,
+   * so each is judged by `refusal-asserts-absence`.
+   */
+  readonly refusals?: readonly unknown[];
+}
+
+/** How the gate runs — both optional; omitted, the overclaim rules warn. */
+export interface CheckSemanticsOptions {
+  /**
+   * Opt-in rule sets. `'overclaim'` makes `refusal-asserts-absence` and
+   * `absence-asserts-wrongness` errors and judges EVERY sample with them, not
+   * only the samples that use the new fields.
+   */
+  readonly rules?: readonly SemanticsRuleSet[];
+  /** The CLI's `--strict`: the same two rules are errors, over the same samples. */
+  readonly strict?: boolean;
 }
 
 /** Every code one finding can carry. The four envelope codes are the
@@ -62,6 +115,10 @@ export type SemanticsFindingCode =
   | 'inventory-without-coverage'
   | 'inventory-without-render'
   | 'unsampled-tool-class'
+  | 'source-said'
+  | 'said-overlap'
+  | 'declared-without-search'
+  | OverclaimCode
   | ProjectionIssue['code'];
 
 /** One finding — names the TOOL and the FIELD, so the build log points at
@@ -94,7 +151,11 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
  *  boundary in time, the same answer a `coverage()` carrying only a period
  *  gets), a `coverage()` ledger, or an `absent()` (whose `checked` IS its
  *  coverage). */
-function declaresCoverage(result: unknown): boolean {
+function declaresCoverage(result: unknown, search: ToolSearch | undefined): boolean {
+  // `checked: 'declared'` — the tool's search IS its coverage, when it has one.
+  if (readDeclaredAbsence(result) !== undefined || readDeclaredLedger(result) !== undefined) {
+    return search !== undefined;
+  }
   const sem = readSemantics(result);
   if (sem !== undefined) return sem.coverage !== undefined || sem.period !== undefined;
   return readCoverageResult(result) !== undefined;
@@ -126,10 +187,15 @@ function classCoverageFinding(entry: SemanticsCatalogEntry, resultIndex: number)
  * definition-side mistake — the CLI maps it to exit code 2), never on a
  * malformed RESULT (that is a finding, the thing this gate exists to report).
  */
-export function checkSemantics(entries: readonly SemanticsCatalogEntry[]): SemanticsReport {
+export function checkSemantics(
+  entries: readonly SemanticsCatalogEntry[],
+  options: CheckSemanticsOptions = {},
+): SemanticsReport {
   if (!Array.isArray(entries)) {
     throw new Error('checkSemantics: takes an array of { name, resultClass?, results } entries.');
   }
+  const optedIn = ruleSetsOf(options.rules).includes('overclaim');
+  const overclaimSeverity = optedIn || options.strict === true ? 'error' : 'warning';
   const findings: SemanticsFinding[] = [];
   let checkedResults = 0;
 
@@ -155,6 +221,19 @@ export function checkSemantics(entries: readonly SemanticsCatalogEntry[]): Seman
         `checkSemantics: tool '${entry.name}' has no \`results\` array — the gate judges ` +
           `sample results; give it at least one (your mock tool's return is the natural sample).`,
       );
+    }
+
+    // A search's review items — warnings for a person, never a refusal.
+    if (entry.search !== undefined) {
+      for (const item of searchReviewItems(entry.search)) {
+        findings.push({
+          tool: entry.name,
+          code: item.code,
+          severity: 'warning',
+          field: item.field,
+          message: `tool '${entry.name}': ${item.field} — ${item.message}`,
+        });
+      }
     }
 
     if (cls !== undefined && results.length === 0) {
@@ -195,8 +274,51 @@ export function checkSemantics(entries: readonly SemanticsCatalogEntry[]): Seman
       });
     }
 
+    if (entry.refusals !== undefined) {
+      if (!Array.isArray(entry.refusals)) {
+        throw new Error(
+          `checkSemantics: tool '${entry.name}' refusals must be an array of refusal samples ` +
+            '(the message the tool throws, or the value it returns, when it refuses a call).',
+        );
+      }
+      entry.refusals.forEach((refusal, index) => {
+        for (const issue of refusalIssues(refusal, `refusals[${index}]`)) {
+          findings.push(
+            overclaimFinding(entry.name, issue, overclaimSeverity, `refusal sample ${index + 1}`),
+          );
+        }
+      });
+    }
+
     results.forEach((result, resultIndex) => {
       checkedResults += 1;
+      const sample = `sample result ${resultIndex + 1}`;
+
+      // ── The overclaim rules — before the envelope rules, which return early ──
+      for (const absence of absencesIn(result)) {
+        const usesAmong = namesFacetOf(absence) !== undefined;
+        for (const issue of absenceIssues(absence)) {
+          if (issue.code === 'authoritative-names') {
+            findings.push({
+              ...overclaimFinding(entry.name, issue, 'warning', sample),
+              resultIndex,
+            });
+          } else if (usesAmong || optedIn) {
+            findings.push({
+              ...overclaimFinding(entry.name, issue, overclaimSeverity, sample),
+              resultIndex,
+            });
+          }
+        }
+      }
+      if (optedIn && isNotReadResult(result)) {
+        for (const issue of refusalIssues(result, 'content')) {
+          findings.push({
+            ...overclaimFinding(entry.name, issue, overclaimSeverity, sample),
+            resultIndex,
+          });
+        }
+      }
 
       // A marker-bearing value with faults: every fault becomes a finding
       // under the recognizer's own code, naming the field.
@@ -220,8 +342,27 @@ export function checkSemantics(entries: readonly SemanticsCatalogEntry[]): Seman
 
       const sem = readSemantics(result);
 
+      // The literal claims a declaration: without a search, the call is refused at run time.
+      if (
+        entry.search === undefined &&
+        (readDeclaredAbsence(result) !== undefined || readDeclaredLedger(result) !== undefined)
+      ) {
+        findings.push({
+          tool: entry.name,
+          code: 'declared-without-search',
+          severity: 'error',
+          field: 'checked',
+          resultIndex,
+          message:
+            `tool '${entry.name}', sample result ${resultIndex + 1}: checked: 'declared' says ` +
+            'the tool declared its search, and this tool declares no `search` — at run time the ' +
+            'call is refused. Add search: { source, subject, arguments, … } to its defineTool, ' +
+            'or write the checked list by hand.',
+        });
+      }
+
       // ── The class rules ──
-      if ((cls === 'triage' || cls === 'inventory') && !declaresCoverage(result)) {
+      if ((cls === 'triage' || cls === 'inventory') && !declaresCoverage(result, entry.search)) {
         findings.push(classCoverageFinding(entry, resultIndex));
       }
       if (
@@ -252,4 +393,33 @@ export function checkSemantics(entries: readonly SemanticsCatalogEntry[]): Seman
     checkedTools: entries.length,
     checkedResults,
   };
+}
+
+/** One overclaim issue as a finding — names the tool, and which sample. */
+function overclaimFinding(
+  tool: string,
+  issue: OverclaimIssue,
+  severity: 'error' | 'warning',
+  sample: string,
+): SemanticsFinding {
+  return {
+    tool,
+    code: issue.code,
+    severity,
+    field: issue.field,
+    message: `tool '${tool}', ${sample}: ${issue.message}`,
+  };
+}
+
+/** The opt-in rule sets, refused by name when one is not a set this gate has. */
+function ruleSetsOf(rules: unknown): readonly SemanticsRuleSet[] {
+  if (rules === undefined) return [];
+  const known: readonly string[] = SEMANTICS_RULE_SETS;
+  if (!Array.isArray(rules) || rules.some((r) => typeof r !== 'string' || !known.includes(r))) {
+    throw new Error(
+      `checkSemantics: rules ${JSON.stringify(rules)} — the opt-in rule sets are: ` +
+        `${SEMANTICS_RULE_SETS.join(', ')}.`,
+    );
+  }
+  return rules as readonly SemanticsRuleSet[];
 }

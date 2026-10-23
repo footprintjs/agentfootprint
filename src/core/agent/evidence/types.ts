@@ -234,6 +234,15 @@ export interface ResolvedEvidenceGate {
   /** Present only when true: an absent dial preserves resolved default bytes. */
   readonly decimalRounding?: true;
   readonly recoveryInstruction?: EvidenceRecoveryInstruction;
+  /**
+   * Set by the agent, never by `resolveEvidenceGate`: a posture that can
+   * revise under an ENFORCING answer validation. The revision and every later
+   * call of the run are then served no tools and dispatch none
+   * (`AgentState.toolsOffAfterRevision`). One fact, read by the recheck
+   * stage, request assembly, Route, the inputs layer and seed — each reads the
+   * state key only under it, so an unarmed agent reads nothing new.
+   */
+  readonly toolsOffAfterRevision?: true;
 }
 
 /** The gate's verdict on one answer. */
@@ -290,6 +299,14 @@ export interface EvidenceVerdict {
    * accusation.
    */
   readonly evidenceTruncated: boolean;
+  /**
+   * The answer's words and numbers past the reading ceiling
+   * (`extract.ts` · `MAX_ANSWER_TOKENS`, 20,000): never classified, never
+   * looked up. ABSENT when the whole answer was read. A clean verdict that
+   * carries it cleared only the part it read — answer validation's
+   * `'names-and-numbers'` row is `unreachable` on it.
+   */
+  readonly unread?: number;
   /**
    * WHEN the answer's grounded values were read (9.83.0) — the same pass,
    * one time axis.

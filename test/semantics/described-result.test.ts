@@ -80,6 +80,9 @@ const inWireWords = (message: string): string =>
     ...SPELLED,
     ['notCovered', 'not_covered'] as const,
     ['describedResult()', 'semantic()'] as const,
+    // `resolved` and `paging` (a search tool's result facts) joined the list
+    // after the capture, as `period` did: the field list is the door's own.
+    ['provenance, period, resolved, paging, coverage', 'provenance, coverage'] as const,
     ['provenance, period, coverage', 'provenance, coverage'] as const,
   ].reduce((text, [camel, snake]) => text.split(camel).join(snake), message);
 
@@ -497,8 +500,8 @@ describe('functional: a refusal names the field as the author spelled it', () =>
   it('not a declaration at all: the canonical door names all its fields', () => {
     expect(refusalOf(() => describedResult(null as never))).toBe(
       'refused: describedResult() takes a declaration — { series?, facts?, edges?, grain?, ' +
-        'provenance?, period?, coverage?, clarify?, render? } with at least one of ' +
-        'series/facts/edges/clarify.',
+        'provenance?, period?, resolved?, paging?, coverage?, clarify?, render? } with at ' +
+        'least one of series/facts/edges/clarify.',
     );
   });
 

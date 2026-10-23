@@ -4,7 +4,7 @@ title: HostFilledArgumentError
 
 # Class: HostFilledArgumentError
 
-Defined in: [src/tools/hostFilled.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L90)
+Defined in: [src/tools/hostFilled.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L92)
 
 A model sent a value for an argument the host fills. The call is refused
 and the tool does not run. Names the arguments, never a value.
@@ -19,7 +19,7 @@ and the tool does not run. Names the arguments, never a value.
 
 > **new HostFilledArgumentError**(`toolName`, `fields`): `HostFilledArgumentError`
 
-Defined in: [src/tools/hostFilled.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L93)
+Defined in: [src/tools/hostFilled.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L95)
 
 #### Parameters
 
@@ -57,7 +57,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_HOST_FILLED_ARGUMENT"`
 
-Defined in: [src/tools/hostFilled.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L91)
+Defined in: [src/tools/hostFilled.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L93)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [src/tools/hostFilled.ts:91](https://github.com/footprintjs/agentfoo
 
 > `readonly` **fields**: readonly `string`[]
 
-Defined in: [src/tools/hostFilled.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L93)
+Defined in: [src/tools/hostFilled.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L95)
 
 ***
 
@@ -131,7 +131,7 @@ not capture any frames.
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/tools/hostFilled.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L93)
+Defined in: [src/tools/hostFilled.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/hostFilled.ts#L95)
 
 ## Methods
 

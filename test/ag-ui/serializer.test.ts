@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentfootprintEvent } from '../../src/index.js';
 import {
   AG_UI_CUSTOM_EVENTS,
+  AG_UI_ANSWER_WITHHELD,
   AG_UI_RUN_FAILED,
   AG_UI_SUBAGENT_CANCELLED,
   AG_UI_SUBAGENT_UNFINISHED,
@@ -701,6 +702,23 @@ describe('agUiSerializer — terminals', () => {
     expect(s.settle({ kind: 'failed' }).at(-1)).toEqual({
       type: 'RUN_ERROR',
       message: AG_UI_RUN_FAILED,
+    });
+  });
+
+  it('a withheld answer is RUN_ERROR with its refusal code, in fixed words', () => {
+    // The refusal outranks the record's own failure words: the run did not
+    // break, the app's answer checks withheld its answer.
+    const { s } = feed([
+      ev(
+        t('error.fatal'),
+        { error: LLM_ERROR_SENTENCES.rateLimited, stage: '__root__', scope: 'run' },
+        { rsid: '__root__#0' },
+      ),
+    ]);
+    expect(s.settle({ kind: 'failed', refusal: 'ERR_ANSWER_VALIDATION' }).at(-1)).toEqual({
+      type: 'RUN_ERROR',
+      message: AG_UI_ANSWER_WITHHELD,
+      code: 'ERR_ANSWER_VALIDATION',
     });
   });
 

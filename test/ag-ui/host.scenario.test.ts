@@ -21,11 +21,26 @@
 import { HttpAgent } from '@ag-ui/client';
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, Parallel, Sequence } from '../../src/index.js';
+import {
+  Agent,
+  allow,
+  ask,
+  defineTool,
+  inMemoryDecisionLedger,
+  Parallel,
+  Sequence,
+} from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMRequest } from '../../src/index.js';
 import { askHuman } from '../../src/core/pause.js';
+import { bearer } from '../../src/identity.js';
+import { installDurabilityBarrier } from '../../src/core/durabilityBarrier.js';
 import { memorySessions } from '../../src/hosting/memorySessions.js';
+import { readPausedRun, toPausedEnvelope } from '../../src/hosting/envelope.js';
+import {
+  NOT_RUN_UNANSWERABLE,
+  OUTCOME_UNKNOWN_UNANSWERABLE,
+} from '../../src/hosting/answeredPause.js';
 import { streamHandler, type StreamHandlerOptions } from '../../src/hosting/streamHandler.js';
 import type { ThreadBinder } from '../../src/hosting/protocolAdapter.js';
 import { agUi, type AgUiOptions } from '../../src/ag-ui/adapter.js';
@@ -219,6 +234,629 @@ describe('scenario — an AG-UI frontend runs an agentfootprint agent', () => {
     expect(client.messages.filter((m) => m.role === 'tool')).toEqual([
       expect.objectContaining({ content: 'yes' }),
     ]);
+  });
+
+  it('a check-in: the page answers its interrupt with a decision, once — the server names the request', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Refunded.',
+    ]);
+    const client = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions: memorySessions(),
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    expect(interrupt?.message).toContain('Refund a customer');
+    expect(refunded).toEqual([]);
+
+    // The page's decision names no request — it never saw one. The interrupt
+    // it answers is matched to the kept pause, and the adapter names its request.
+    const answer = { interruptId: interrupt!.id, status: 'resolved' as const };
+    const decision = { approved: true, by: 'alice', at: 1 };
+    const { result } = await client.runAgent({ resume: [{ ...answer, payload: decision }] });
+    expect(result).toBe('Refunded.');
+    expect(refunded).toEqual([40]);
+
+    // The same answer again finds no pause to answer: one decision, one call.
+    await expect(client.runAgent({ resume: [{ ...answer, payload: decision }] })).rejects.toThrow(
+      'ERR_NO_PENDING_ASK',
+    );
+    expect(refunded).toEqual([40]);
+  });
+
+  it('a check-in whose resume failed after the refund ran: the same answer again — on a server that never saw it spent — is refused, and the refund ran once', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const usage = { input: 1, output: 1 };
+    const failing = { on: true };
+    const provider = {
+      name: 'flaky',
+      // The model call AFTER the refund ran fails while `failing.on` is set.
+      complete: async (req: LLMRequest) => {
+        const last = req.messages[req.messages.length - 1];
+        if (last?.role === 'tool') {
+          if (failing.on) throw new Error('model unavailable');
+          return { content: 'Refunded.', toolCalls: [], usage, stopReason: 'stop' };
+        }
+        return String(last?.content ?? '').includes('Refund')
+          ? {
+              content: '',
+              toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }],
+              usage,
+              stopReason: 'tool_use',
+            }
+          : {
+              content: `noted: ${String(last?.content)}`,
+              toolCalls: [],
+              usage,
+              stopReason: 'stop',
+            };
+      },
+    } as never;
+    const sessions = memorySessions();
+    const first = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions,
+    });
+    first.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await first.runAgent();
+    const [interrupt] = first.pendingInterrupts;
+    const answer = {
+      interruptId: interrupt!.id,
+      status: 'resolved' as const,
+      payload: { approved: true, by: 'alice', at: 1 },
+    };
+    const errors: string[] = [];
+    first.subscribe({ onRunErrorEvent: ({ event }) => void errors.push(event.message) });
+    await first.runAgent({ resume: [answer] });
+    expect(errors).toEqual([AG_UI_RUN_FAILED]);
+    expect(refunded).toEqual([40]);
+
+    // A restart: the same store, and agents whose memory never saw the spend
+    // (a ledger of their own). Only what the store says can refuse the answer.
+    failing.on = false;
+    const restarted = frontend({
+      agent: () =>
+        Agent.create({ provider, model: 'm', decisionLedger: inMemoryDecisionLedger() })
+          .system('s')
+          .tool(refund)
+          .build(),
+      threads: signedIn,
+      sessions,
+    });
+    await expect(restarted.runAgent({ resume: [answer] })).rejects.toThrow('ERR_RESUME_DECISION');
+    expect(refunded).toEqual([40]);
+
+    // The conversation goes on from what that run recorded.
+    restarted.addMessage({ id: 'u2', role: 'user', content: 'is it done?' });
+    const { result } = await restarted.runAgent();
+    expect(result).toBe('noted: is it done?');
+    expect(refunded).toEqual([40]);
+  });
+
+  it('a check-in whose run finished but whose result could not be stored is answered — whatever the store’s error calls itself', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const usage = { input: 1, output: 1 };
+    const provider = {
+      name: 'scripted',
+      complete: async (req: LLMRequest) => {
+        const last = req.messages[req.messages.length - 1];
+        return last?.role === 'tool'
+          ? { content: 'Refunded.', toolCalls: [], usage, stopReason: 'stop' }
+          : {
+              content: '',
+              toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }],
+              usage,
+              stopReason: 'tool_use',
+            };
+      },
+    } as never;
+    const inner = memorySessions();
+    let armed = false;
+    const sessions = {
+      hydrate: (id: string) => inner.hydrate(id),
+      async persist(id: string, envelope: Parameters<typeof inner.persist>[1]) {
+        if (armed) {
+          armed = false;
+          // Named like a refusal decided before use — it is not one.
+          throw Object.assign(new Error('the store refused the write'), {
+            code: 'ERR_DECISION_REQUIRED',
+          });
+        }
+        return inner.persist(id, envelope);
+      },
+    };
+    const first = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions,
+    });
+    first.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await first.runAgent();
+    const [interrupt] = first.pendingInterrupts;
+    const answer = {
+      interruptId: interrupt!.id,
+      status: 'resolved' as const,
+      payload: { approved: true, by: 'alice', at: 1 },
+    };
+    armed = true; // the finished run's write
+    await first.runAgent({ resume: [answer] }).catch(() => undefined);
+    expect(refunded).toEqual([40]);
+
+    const restarted = frontend({
+      agent: () =>
+        Agent.create({ provider, model: 'm', decisionLedger: inMemoryDecisionLedger() })
+          .system('s')
+          .tool(refund)
+          .build(),
+      threads: signedIn,
+      sessions: inner,
+    });
+    await expect(restarted.runAgent({ resume: [answer] })).rejects.toThrow('ERR_RESUME_DECISION');
+    expect(refunded).toEqual([40]);
+  });
+
+  it('an answer whose caller left before its run started handed nothing over: the pause still waits', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Refunded.',
+    ]);
+    const sessions = memorySessions();
+    const handle = streamHandler({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      adapter: agUi(),
+      threads: signedIn,
+      sessions,
+      heartbeatMs: 0,
+    });
+    let hangUp = false;
+    const client = new HttpAgent({
+      url: 'http://localhost/api/agent',
+      threadId: 'thread-1',
+      headers: { 'x-user': 'alice' },
+      fetch: (url, init) => {
+        if (!hangUp) return handle(new Request(url, init));
+        const gone = new AbortController();
+        gone.abort();
+        return handle(new Request(url, { ...init, signal: gone.signal }));
+      },
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    const answer = {
+      interruptId: interrupt!.id,
+      status: 'resolved' as const,
+      payload: { approved: true, by: 'alice', at: 1 },
+    };
+    hangUp = true;
+    await client.runAgent({ resume: [answer] }).catch(() => undefined);
+    expect(refunded).toEqual([]);
+    expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toBeUndefined();
+
+    hangUp = false;
+    const { result } = await client.runAgent({ resume: [answer] });
+    expect(result).toBe('Refunded.');
+    expect(refunded).toEqual([40]);
+  });
+
+  it('an answer whose caller left while its run waited — before the decision reached a ledger — leaves the pause waiting, and nothing runs', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Refunded.',
+    ]);
+    const sessions = memorySessions();
+    // A write still landing when the answer arrives: the resume waits on it.
+    let slowWrites = false;
+    const handle = streamHandler({
+      agent: () => {
+        const agent = Agent.create({ provider, model: 'm' }).system('s').tool(refund).build();
+        installDurabilityBarrier(agent, () =>
+          slowWrites ? new Promise<void>((done) => setTimeout(done, 40)) : undefined,
+        );
+        return agent;
+      },
+      adapter: agUi(),
+      threads: signedIn,
+      sessions,
+      heartbeatMs: 0,
+    });
+    let leave: AbortController | undefined;
+    const client = new HttpAgent({
+      url: 'http://localhost/api/agent',
+      threadId: 'thread-1',
+      headers: { 'x-user': 'alice' },
+      fetch: (url, init) => {
+        if (leave === undefined) return handle(new Request(url, init));
+        const gone = leave;
+        setTimeout(() => gone.abort(), 10);
+        return handle(new Request(url, { ...init, signal: gone.signal }));
+      },
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    const answer = {
+      interruptId: interrupt!.id,
+      status: 'resolved' as const,
+      payload: { approved: true, by: 'alice', at: 1 },
+    };
+    slowWrites = true;
+    leave = new AbortController();
+    await client.runAgent({ resume: [answer] }).catch(() => undefined);
+    await new Promise((done) => setTimeout(done, 80));
+    expect(refunded).toEqual([]);
+    expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toBeUndefined();
+
+    slowWrites = false;
+    leave = undefined;
+    const { result } = await client.runAgent({ resume: [answer] });
+    expect(result).toBe('Refunded.');
+    expect(refunded).toEqual([40]);
+  });
+
+  it('an approval whose caller left while the tool’s credential resolved never runs the call — the request is spent', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      needs: { credential: 'payments' },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Refunded.',
+    ]);
+    const sessions = memorySessions();
+    const handle = streamHandler({
+      agent: () =>
+        Agent.create({
+          provider,
+          model: 'm',
+          // The window: the credential is issued 120 ms after it is asked for.
+          credentials: {
+            id: 'slow-vault',
+            getCredential: async () => {
+              await new Promise((done) => setTimeout(done, 120));
+              return { status: 'issued', credential: bearer('payments-token') };
+            },
+          },
+        })
+          .system('s')
+          .tool(refund)
+          .build(),
+      adapter: agUi(),
+      threads: signedIn,
+      sessions,
+      heartbeatMs: 0,
+    });
+    // The answer's caller leaves 30 ms in — while the credential resolves.
+    const leave = new AbortController();
+    let answering = false;
+    const client = new HttpAgent({
+      url: 'http://localhost/api/agent',
+      threadId: 'thread-1',
+      headers: { 'x-user': 'alice' },
+      fetch: (url, init) => {
+        if (!answering) return handle(new Request(url, init));
+        setTimeout(() => leave.abort(), 30);
+        return handle(new Request(url, { ...init, signal: leave.signal }));
+      },
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    answering = true;
+    await client
+      .runAgent({
+        resume: [
+          {
+            interruptId: interrupt!.id,
+            status: 'resolved',
+            payload: { approved: true, by: 'alice', at: 1 },
+          },
+        ],
+      })
+      .catch(() => undefined);
+    await new Promise((done) => setTimeout(done, 200));
+    expect(refunded).toEqual([]);
+    // Spent before the caller left: no answer reaches it again.
+    expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toEqual({
+      at: expect.any(Number),
+    });
+  });
+
+  it('a pause no answer can reach any more does not hold the thread: the next message continues it, the call recorded as not run', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      checkIn: 'always',
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider, seen } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Noted.',
+    ]);
+    const sessions = memorySessions();
+    // A request's credential is sealed only for a request that RUNS.
+    let sealed = 0;
+    const client = frontend({
+      agent: () => Agent.create({ provider, model: 'm' }).system('s').tool(refund).build(),
+      threads: signedIn,
+      sessions,
+      sealRequest: () => {
+        sealed += 1;
+        return undefined;
+      },
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    expect(client.pendingInterrupts).toHaveLength(1);
+    expect(sealed).toBe(1);
+    // What an earlier release stored: no record of the request it asked.
+    const stored = readPausedRun(await sessions.hydrate('alice:thread-1'));
+    const { pausedRequest: _record, ...state } = stored.checkpoint.sharedState as Record<
+      string,
+      unknown
+    >;
+    void _record;
+    await sessions.persist(
+      'alice:thread-1',
+      toPausedEnvelope({ ...stored, checkpoint: { ...stored.checkpoint, sharedState: state } }),
+    );
+
+    // The page answers the question it holds: nothing runs, the run ends
+    // cancelled, and the client lets the question go.
+    const [interrupt] = client.pendingInterrupts;
+    await client.runAgent({
+      resume: [
+        {
+          interruptId: interrupt!.id,
+          status: 'resolved',
+          payload: { approved: true, by: 'alice', at: 1 },
+        },
+      ],
+    });
+    expect(client.pendingInterrupts).toEqual([]);
+    expect(refunded).toEqual([]);
+    // Nothing ran, so nothing was sealed for it.
+    expect(sealed).toBe(1);
+
+    client.addMessage({ id: 'u2', role: 'user', content: 'never mind' });
+    const { result } = await client.runAgent();
+    expect(result).toBe('Noted.');
+    expect(sealed).toBe(2);
+    const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
+    expect(told.map((m) => m.content)).toEqual([NOT_RUN_UNANSWERABLE]);
+    expect(refunded).toEqual([]);
+    expect((await sessions.hydrate('alice:thread-1'))?.format).toBe('conversation-v1');
+  });
+
+  it('an ask whose rules a redeploy changed is refused when answered — and closed, so the next message continues', async () => {
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const { provider, seen } = watched([
+      { content: '', toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }] },
+      'Noted.',
+    ]);
+    let later = 'limit';
+    const sessions = memorySessions();
+    const client = frontend({
+      agent: () =>
+        Agent.create({ provider, model: 'm' })
+          .system('s')
+          .tool(refund)
+          .toolMiddleware(
+            { name: 'approval', onToolCall: () => ask({ question: 'Refund?' }) },
+            { name: later, onToolCall: () => allow() },
+          )
+          .build(),
+      threads: signedIn,
+      sessions,
+    });
+    client.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+    await client.runAgent();
+    const [interrupt] = client.pendingInterrupts;
+    later = 'limit-v2'; // the redeploy
+    await client
+      .runAgent({
+        resume: [
+          {
+            interruptId: interrupt!.id,
+            status: 'resolved',
+            payload: { approved: true, by: 'alice', at: 1 },
+          },
+        ],
+      })
+      .catch(() => undefined);
+    expect(refunded).toEqual([]);
+    expect((await sessions.hydrate('alice:thread-1'))?.format).toBe('conversation-v1');
+    // Refused, closed — and the run ended cancelled, so the client let it go.
+    expect(client.pendingInterrupts).toEqual([]);
+
+    client.addMessage({ id: 'u2', role: 'user', content: 'never mind' });
+    const { result } = await client.runAgent();
+    expect(result).toBe('Noted.');
+    const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
+    expect(told.map((m) => m.content)).toEqual([NOT_RUN_UNANSWERABLE]);
+    expect(refunded).toEqual([]);
+  });
+
+  it('an approved refund that ran, then failed and could not be marked, is never told "did not run" after a redeploy closes its pause', async () => {
+    // approve → the refund runs (spent) → the model call fails → marking the
+    // pause answered fails → a redeploy renames the rule after the ask → the
+    // page answers again (refused: the rules changed) → closed → next message.
+    const refunded: number[] = [];
+    const refund = defineTool<{ amount: number }, string>({
+      name: 'issue_refund',
+      description: 'Refund a customer.',
+      inputSchema: { type: 'object', properties: { amount: { type: 'number' } } },
+      execute: async ({ amount }) => {
+        refunded.push(amount);
+        return `refunded ${amount}`;
+      },
+    });
+    const usage = { input: 1, output: 1 };
+    const failing = { model: true, persist: false };
+    const seen: LLMRequest[] = [];
+    const provider = {
+      name: 'flaky',
+      complete: async (req: LLMRequest) => {
+        seen.push(req);
+        const last = req.messages[req.messages.length - 1];
+        if (last?.role === 'tool') {
+          if (failing.model) throw new Error('model unavailable');
+          return { content: 'Refunded.', toolCalls: [], usage, stopReason: 'stop' };
+        }
+        return String(last?.content ?? '').includes('Refund')
+          ? {
+              content: '',
+              toolCalls: [{ id: 'r1', name: 'issue_refund', args: { amount: 40 } }],
+              usage,
+              stopReason: 'tool_use',
+            }
+          : {
+              content: `noted: ${String(last?.content)}`,
+              toolCalls: [],
+              usage,
+              stopReason: 'stop',
+            };
+      },
+    } as never;
+    const inner = memorySessions();
+    const sessions = new Proxy(inner, {
+      get(target, key) {
+        if (key === 'persist') {
+          return async (...args: Parameters<typeof inner.persist>) => {
+            if (failing.persist) throw new Error('store unavailable');
+            return target.persist(...args);
+          };
+        }
+        const value = Reflect.get(target, key, target) as unknown;
+        return typeof value === 'function'
+          ? (value as (...args: unknown[]) => unknown).bind(target)
+          : value;
+      },
+    });
+    const agentWith = (later: string) => () =>
+      Agent.create({ provider, model: 'm' })
+        .system('s')
+        .tool(refund)
+        .toolMiddleware(
+          { name: 'approval', onToolCall: () => ask({ question: 'Refund?' }) },
+          { name: later, onToolCall: () => allow() },
+        )
+        .build();
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      const first = frontend({ agent: agentWith('limit'), threads: signedIn, sessions });
+      first.addMessage({ id: 'u1', role: 'user', content: 'Refund 40' });
+      await first.runAgent();
+      const [interrupt] = first.pendingInterrupts;
+      const answer = {
+        interruptId: interrupt!.id,
+        status: 'resolved' as const,
+        payload: { approved: true, by: 'alice', at: 1 },
+      };
+      failing.persist = true;
+      await first.runAgent({ resume: [answer] }).catch(() => undefined);
+      expect(refunded).toEqual([40]);
+      failing.model = false;
+      failing.persist = false;
+      // The mark could not be written: the store still says the pause waits.
+      expect(readPausedRun(await sessions.hydrate('alice:thread-1')).answered).toBeUndefined();
+
+      // The redeploy: the rule after the ask renamed.
+      const redeployed = frontend({ agent: agentWith('limit-v2'), threads: signedIn, sessions });
+      await redeployed.runAgent({ resume: [answer] }).catch(() => undefined);
+      expect(refunded).toEqual([40]);
+      expect((await sessions.hydrate('alice:thread-1'))?.format).toBe('conversation-v1');
+
+      redeployed.addMessage({ id: 'u2', role: 'user', content: 'is it done?' });
+      const { result } = await redeployed.runAgent();
+      expect(result).toBe('noted: is it done?');
+      const told = seen[seen.length - 1]!.messages.filter((m) => m.role === 'tool');
+      expect(told.map((m) => m.content)).not.toContain(NOT_RUN_UNANSWERABLE);
+      expect(told.map((m) => m.content)).toEqual([OUTCOME_UNKNOWN_UNANSWERABLE]);
+      expect(refunded).toEqual([40]);
+    } finally {
+      console.warn = warn;
+    }
   });
 
   it('what a page may not decide is refused by name, and the client surfaces it', async () => {

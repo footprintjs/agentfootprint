@@ -11,6 +11,7 @@ import type { LLMProvider } from '../../../src/provider-contract/types.js';
 import { allow } from '../../../src/core/agent/middleware/outcomes.js';
 import type { AgentState } from '../../../src/core/agent/types.js';
 import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 const claim = {
   subject: { kind: 'fixture', id: 'x' },
@@ -353,12 +354,18 @@ describe('findings admission boundary and lifetime controls', () => {
       if (removeWitness) {
         delete (checkpoint.sharedState as Partial<AgentState>).findingsRequest;
         await expect(
-          agent.resume(checkpoint, checkInApproved({ by: 'fixture' })),
+          agent.resume(
+            checkpoint,
+            checkInApproved({ request: pausedRequest(pause), by: 'fixture' }),
+          ),
         ).rejects.toMatchObject({ name: 'MessageDeniedError' });
         expect(remaining).not.toHaveBeenCalled();
         expect(executed).toHaveBeenCalledTimes(1);
       } else {
-        await agent.resume(checkpoint, checkInApproved({ by: 'fixture' }));
+        await agent.resume(
+          checkpoint,
+          checkInApproved({ request: pausedRequest(pause), by: 'fixture' }),
+        );
         expect(executed).toHaveBeenCalledTimes(2);
       }
     }

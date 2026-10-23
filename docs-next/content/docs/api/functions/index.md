@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-152 exported from `agentfootprint`.
+154 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -69,12 +69,14 @@ title: Functions
 - [`indexDocuments`](/docs/api/functions/indexDocuments)
 - [`injectionKeyForSlot`](/docs/api/functions/injectionKeyForSlot)
 - [`inMemoryArtifacts`](/docs/api/functions/inMemoryArtifacts)
+- [`inMemoryDecisionLedger`](/docs/api/functions/inMemoryDecisionLedger)
 - [`isArtifactRef`](/docs/api/functions/isArtifactRef)
 - [`isAskPause`](/docs/api/functions/isAskPause)
 - [`isBaselineSource`](/docs/api/functions/isBaselineSource)
 - [`isCheckInDecision`](/docs/api/functions/isCheckInDecision)
 - [`isCheckInPause`](/docs/api/functions/isCheckInPause)
 - [`isCompactedSummary`](/docs/api/functions/isCompactedSummary)
+- [`isComposedCoverage`](/docs/api/functions/isComposedCoverage)
 - [`isContextWindowExceeded`](/docs/api/functions/isContextWindowExceeded)
 - [`isCounterLookingAggregation`](/docs/api/functions/isCounterLookingAggregation)
 - [`isDropNotice`](/docs/api/functions/isDropNotice)

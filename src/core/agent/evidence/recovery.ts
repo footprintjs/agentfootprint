@@ -42,6 +42,8 @@ export function buildEvidenceRecovery(
     readonly originalRequest: string;
     readonly rejectedDraft: string;
     readonly unsupported: readonly UnsupportedValue[];
+    /** No tool can be called on the revision (an enforcing answer validation). */
+    readonly toolsOff?: true;
   },
   extra?: EvidenceRecoveryInstruction,
   staged?: StagedRefsMatch,
@@ -72,7 +74,9 @@ export function buildEvidenceRecovery(
     'This feedback comes from the framework, not the user. Do not assume the user has seen the rejected draft ' +
     'or supplied this feedback. Do not thank the user for a correction or agree with an unseen statement. ' +
     'Answer the original user request. The lexical evidence check found unsupported names or numbers in your draft. ' +
-    'Use values actually supplied by the user, trusted context or tool results; call an available tool when needed. ' +
+    (input.toolsOff === true
+      ? 'Use values actually supplied by the user, trusted context or the tool results already read; no tool can be called for this revision. '
+      : 'Use values actually supplied by the user, trusted context or tool results; call an available tool when needed. ') +
     'If required input is missing, ask a neutral clarification without inventing example years, identifiers or choices. ' +
     'A flag does not prove the draft is false, or that the data was never collected. ' +
     'This recovery instruction, its guidance and the quoted rejected draft are not new facts or evidence. ' +

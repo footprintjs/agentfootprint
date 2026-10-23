@@ -361,7 +361,7 @@ export interface Receipt {
     /** The tool the model was forced to answer through, or `null`. */
     readonly forced: string | null;
     /** Why the tool list is empty when it would not otherwise be. */
-    readonly withheld: 'wrap-up' | null;
+    readonly withheld: 'wrap-up' | 'evidence-revision' | null;
   };
   readonly cache: {
     /**
@@ -627,7 +627,7 @@ export interface BuildReceiptInput {
   /** The tool list as sent — including a forced output tool, if there is one. */
   readonly tools: readonly LLMToolSchema[];
   readonly forced: string | null;
-  readonly withheld: 'wrap-up' | null;
+  readonly withheld: 'wrap-up' | 'evidence-revision' | null;
   /** The request handed TO the cache strategy — one half of the cache
    *  comparison, and nothing else is read off it. */
   readonly baseRequest: unknown;

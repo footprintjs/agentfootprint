@@ -44,7 +44,7 @@
  */
 
 import type { EvidenceCorpus } from './evidenceIndex.js';
-import { canonicalForm } from '../../../tools/normalize.js';
+import { canonicalForm } from '../../../lib/normalize.js';
 import type { GroundedValue } from './types.js';
 
 /** One result of this turn that carried at least one of the answer's values. */

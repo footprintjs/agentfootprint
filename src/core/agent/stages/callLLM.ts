@@ -54,7 +54,7 @@ import {
 } from '../../../integrity/unsupported-argument/check.js';
 import { toolNameOfMessage } from '../window/toolNames.js';
 import { evidenceConclusionLine, evidenceRecoveryPiece } from '../evidence/recovery.js';
-import { joinSystemPrompt, stripFrameworkFields } from '../composeRequest.js';
+import { joinSystemPrompt, stripFrameworkFields, toolsWithheld } from '../composeRequest.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
@@ -155,6 +155,12 @@ export interface CallLLMStageDeps {
   readonly withholdDraftContent?: true;
   /** Read recovery state only on an agent whose evidence gate can revise. */
   readonly hasEvidenceRecovery?: boolean;
+  /**
+   * The evidence gate's revision turns the tools off (an enforcing answer
+   * validation, `AgentState.toolsOffAfterRevision`). Present only then: an
+   * unarmed agent never reads the key.
+   */
+  readonly toolsOffAfterRevision?: true;
   /**
    * THE FINDINGS LEDGER IS ARMED (9.101.0, `.findings()`) — present only
    * then, only ever `true`. Three reads change and nothing else: the choice
@@ -682,8 +688,18 @@ export function buildCallLLMStage(
     //
     // `llm_start` reports the truth (`toolsCount: 0`, no catalog), because its
     // whole claim is what the model actually saw this call.
+    //
+    // The same seam withholds them once the evidence gate asked for its
+    // revision under an ENFORCING answer validation
+    // (`AgentState.toolsOffAfterRevision`): the answer may yet be withheld, so
+    // no tool that writes or sends may run again, and the library cannot tell
+    // one that only reads. Route refuses any call the model returns anyway.
+    const withheld = toolsWithheld(
+      scope.wrapUpAsked,
+      deps.toolsOffAfterRevision === true ? scope.toolsOffAfterRevision : undefined,
+    );
     const registeredToolSchemas =
-      scope.wrapUpAsked === true
+      withheld !== null
         ? EMPTY_TOOL_SCHEMAS
         : (scope.dynamicToolSchemas as readonly LLMToolSchema[] | undefined) ?? deps.toolSchemas;
     // Under `'tool-forced'` the schema rides along as one more tool ON THE
@@ -735,7 +751,10 @@ export function buildCallLLMStage(
       timeLine !== undefined &&
       timeLine.iteration === iteration &&
       timeLine.text.length > 0 &&
-      scope.wrapUpAsked !== true
+      // `wrapUpAsked` is read here as it always was (an unarmed agent's reads
+      // are unchanged); `withheld` adds the revision's rule.
+      scope.wrapUpAsked !== true &&
+      withheld === null
     ) {
       const line: LLMMessage = { role: 'user', content: timeLine.text };
       requestOnly.push({ message: line, reason: 'time-window-line' });
@@ -866,7 +885,8 @@ export function buildCallLLMStage(
           requestOnly,
           tools: activeToolSchemas,
           forced: deps.schemaTool?.name ?? null,
-          withheld: scope.wrapUpAsked === true ? 'wrap-up' : null,
+          // Read as it always was; the revision's rule rides `withheld`.
+          withheld: scope.wrapUpAsked === true ? 'wrap-up' : withheld,
           baseRequest,
           preparedRequest: llmRequest,
           // The breakpoints the strategy really APPLIED, not the candidates it

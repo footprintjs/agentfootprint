@@ -63,14 +63,24 @@
 
 import { mintProvenance } from '../described.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
+import { keepKnownNames, mintAmong } from './among.js';
 import { normalizeCoverageList } from './items.js';
 import { mintPeriod } from './period.js';
 import { refusal, refuseUnknownKeys } from './refusal.js';
-import type { AbsenceDeclaration, Coverage, ToolAbsence, TryInsteadTool } from './types.js';
+import { mintPaging, mintResolved } from './search/resultFacts.js';
+import type {
+  AbsenceAmongDeclaration,
+  AbsenceDeclaration,
+  Coverage,
+  DeclaredAbsenceDeclaration,
+  DeclaredToolAbsence,
+  ToolAbsence,
+  TryInsteadTool,
+} from './types.js';
 
 // The recognizer lives in the leaf `recognize.ts` (a post-hoc reader asks it
 // without loading this mint); re-exported here so every import keeps working.
-import { ABSENCE_MARKER, readAbsence } from './recognize.js';
+import { ABSENCE_MARKER, DECLARED_CHECKED, readAbsence } from './recognize.js';
 export { ABSENCE_MARKER, readAbsence };
 
 /**
@@ -83,6 +93,19 @@ export { ABSENCE_MARKER, readAbsence };
 // it as the library's own words (`redaction/knownStrings.ts`).
 export const ABSENCE_NOTE =
   'The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.';
+
+/**
+ * The note a COMPOSED absence is served (`Tool.search`): `checked` there is
+ * what the library composed from the call's arguments and the tool's declared
+ * defaults, so the note cannot say "nothing was substituted for what was
+ * asked" — a declared default, or an argument the call left out, may have
+ * narrowed the search. It keeps what stays true (the call ran, a retry
+ * returns the same) and points at the gaps. Static, never interpolated.
+ */
+// One literal on purpose, as `ABSENCE_NOTE`: its TYPE is the sentence, so a
+// redacted record keeps it as the library's own words.
+export const ABSENCE_NOTE_COMPOSED =
+  "The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers, as the call's arguments and the tool's declared defaults set it: where an argument was not sent, a default the tool applies may have narrowed the search. Anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.";
 
 /**
  * The note the MODEL is served in place of {@link ABSENCE_NOTE} when the
@@ -127,7 +150,10 @@ const ABSENCE_DECLARATION_KEYS: readonly string[] = Object.keys({
   tryInsteadTool: true,
   provenance: true,
   period: true,
-} satisfies Record<keyof AbsenceDeclaration, true>);
+  resolved: true,
+  paging: true,
+  among: true,
+} satisfies Record<keyof AbsenceDeclaration | keyof AbsenceAmongDeclaration, true>);
 
 /**
  * What one suggestion field reads as. `value: undefined` with no `problem`
@@ -267,6 +293,13 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  * ISO 8601 instants with a zone (`held` may be `'unknown'`). "Searched the 02:00
  * export — nothing" becomes data; the results layer judges the period.
  *
+ * A name looked up in a known list is a search over that list: declare the
+ * list as `among` (see {@link AbsenceAmongDeclaration}) and the mint composes
+ * the names facet, the gap "names outside <source>" — which only
+ * `among.authoritative` removes — and the `provenance`. The nearest names
+ * (`visible: 'caller'` only) are kept OFF the envelope, on the library's
+ * channel, and attached to the model's message alone.
+ *
  * @example a port-lookup tool that found no matching FLOGI
  *   defineTool({
  *     name: 'flogi_for_port',
@@ -290,12 +323,16 @@ function readToolSuggestion(raw: unknown): Reading<TryInsteadTool> {
  *     },
  *   });
  */
-export function absent(decl: AbsenceDeclaration): ToolAbsence {
+export function absent(decl: DeclaredAbsenceDeclaration): DeclaredToolAbsence;
+export function absent(decl: AbsenceDeclaration | AbsenceAmongDeclaration): ToolAbsence;
+export function absent(
+  decl: AbsenceDeclaration | AbsenceAmongDeclaration | DeclaredAbsenceDeclaration,
+): ToolAbsence | DeclaredToolAbsence {
   const fn = 'absent';
   if (typeof decl !== 'object' || decl === null) {
     throw refusal(
       `${fn}() takes a declaration — { what, checked, notChecked?, cannotCover?, tryInstead?, ` +
-        `tryInsteadTool?, provenance?, period? }.`,
+        `tryInsteadTool?, provenance?, period? }, or { what, among, … }.`,
     );
   }
   refuseUnknownKeys(decl, ABSENCE_DECLARATION_KEYS);
@@ -307,8 +344,35 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
         `returned nothing by accident.`,
     );
   }
-  const checked = normalizeCoverageList('checked', decl.checked, false);
-  if (checked.length === 0) {
+  // `checked: 'declared'` — the tool's `search` declares the ground, and the
+  // dispatch funnel composes it from the arguments the call ran with. The
+  // envelope carries the literal until then; `readAbsence` does not read it.
+  const declared = decl.checked === DECLARED_CHECKED;
+  // `among` (the c6 fix): the list a missed name was looked up in. `null`
+  // reads as omitted, as for every optional field. Its facet leads `checked`
+  // and its gap leads `notChecked`, so the author can add ground, never
+  // remove the gap.
+  const raw = decl as { readonly among?: unknown; readonly provenance?: unknown };
+  const among = raw.among == null ? undefined : mintAmong(raw.among, what);
+  if (among !== undefined && declared) {
+    throw refusal(
+      "`among` and `checked: 'declared'` each compose an absence's ground — `among` for a " +
+        "name looked up in a known list, `'declared'` for a tool whose `search` declares it. " +
+        'Give one.',
+    );
+  }
+  if (among !== undefined && raw.provenance != null) {
+    throw refusal(
+      '`provenance` and `among` both name a source and a time — `among` composes the ' +
+        "absence's `provenance` from its own `source` and `measuredAt`, so give `provenance` " +
+        'only without `among`.',
+    );
+  }
+  const authored = declared
+    ? []
+    : normalizeCoverageList('checked', decl.checked as AbsenceDeclaration['checked'], false);
+  const checked = among === undefined ? authored : [among.facet, ...authored];
+  if (!declared && checked.length === 0) {
     throw refusal(
       `'${what}' — \`checked\` must name at least one source, window or population ` +
         `that WAS searched. An absence with no coverage is a null with extra steps: the reader ` +
@@ -317,7 +381,9 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
         `is an error — throw, or return a failure the model can retry.`,
     );
   }
-  const notChecked = normalizeCoverageList('notChecked', decl.notChecked, false);
+  const notCheckedAuthored = normalizeCoverageList('notChecked', decl.notChecked, false);
+  const notChecked =
+    among?.gap === undefined ? notCheckedAuthored : [among.gap, ...notCheckedAuthored];
   const cannotCover = normalizeCoverageList('cannotCover', decl.cannotCover, true);
   const sentence = readSentence(decl.tryInstead);
   if (sentence.problem !== undefined) throw refusal(`'${what}' — ${sentence.problem}`);
@@ -333,23 +399,38 @@ export function absent(decl: AbsenceDeclaration): ToolAbsence {
   // `mintProvenance`), and the period its read covered, by the ONE period rule
   // (`period.ts` · `mintPeriod`). Each refuses at this line, in camelCase.
   // `null` reads as omitted for either — a JSON producer's missing value.
-  const provenance = decl.provenance == null ? undefined : mintProvenance(decl.provenance);
+  const provenance =
+    among !== undefined
+      ? mintProvenance(among.provenance)
+      : raw.provenance == null
+      ? undefined
+      : mintProvenance(raw.provenance);
   const period = mintPeriod(decl.period);
+  // The two facts a search tool's result states (`search/resultFacts.ts`).
+  const resolved = mintResolved(decl.resolved);
+  const paging = mintPaging(decl.paging);
 
-  return {
+  const envelope = {
     af_absent: true,
     outcome: 'nothing_found',
     looked_for: what,
-    checked,
+    checked: declared ? DECLARED_CHECKED : checked,
     ...(notChecked.length > 0 && { not_checked: notChecked }),
     ...(cannotCover.length > 0 && { cannot_cover: cannotCover }),
     ...(provenance !== undefined && { provenance }),
     ...(period !== undefined && { period }),
+    ...(resolved !== undefined && { resolved }),
+    ...(paging !== undefined && { paging }),
     retry_returns_the_same: true,
     ...(tryInstead !== undefined && { try_instead: tryInstead }),
     ...(tryInsteadTool !== undefined && { try_instead_tool: tryInsteadTool }),
     note: ABSENCE_NOTE,
-  };
+  } as ToolAbsence;
+  // The names a model may be served ride the library's channel, never the
+  // envelope: every rule, event and row then sees a result that never held
+  // them (`among.ts` · "why it is never in the result").
+  if (among?.knownNames !== undefined) keepKnownNames(envelope, among.knownNames);
+  return envelope;
 }
 
 /** The absence's coverage, in the normalized three-list shape everything

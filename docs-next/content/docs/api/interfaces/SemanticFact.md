@@ -4,7 +4,7 @@ title: SemanticFact
 
 # Interface: SemanticFact
 
-Defined in: [src/semantics/types.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L67)
+Defined in: [src/semantics/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L68)
 
 One row of typed facts about one entity. The columns are the tool's own —
 this library requires only that every row says WHAT it is about.
@@ -19,4 +19,4 @@ this library requires only that every row says WHAT it is about.
 
 > `readonly` **entity**: `string`
 
-Defined in: [src/semantics/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L68)
+Defined in: [src/semantics/types.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L69)

@@ -10,6 +10,7 @@
  */
 
 export { ABSENCE_MARKER, ABSENCE_NOTE, absent, coverageOfAbsence, readAbsence } from './absent.js';
+export { KNOWN_NAMES_SHOWN, MAX_NAME_CHARS, MAX_NAMES_RANKED, namesFacetOf } from './among.js';
 export {
   answerCoverageOf,
   composeAnswerWithCoverage,
@@ -37,16 +38,31 @@ export {
   IN_PROGRESS_WIRE,
   inProgressLine,
 } from './inProgress.js';
+export {
+  isComposedCoverage,
+  type ComposedCoverage,
+  type ComposedItem,
+  type CoverageGap,
+  type GapFacet,
+} from './composedCoverage.js';
+export type { SearchArgument, SearchRole, ToolSearch } from './search/types.js';
 export type {
+  AbsenceAmongDeclaration,
   AbsenceDeclaration,
+  AmongDeclaration,
   Coverage,
   CoverageDeclaration,
   CoverageInput,
   CoverageItem,
   CoveredResult,
   DeclaredCoverage,
+  DeclaredCoveredResult,
+  DeclaredToolAbsence,
   InProgressInput,
   InProgressItem,
+  KnownNames,
+  NamesFacetItem,
+  SourceGapItem,
   ToolAbsence,
   TryInsteadTool,
 } from './types.js';

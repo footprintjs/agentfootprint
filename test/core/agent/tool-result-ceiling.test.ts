@@ -22,6 +22,7 @@ import {
 } from '../../../src/index.js';
 import { defineSkill, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
+import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ── Toolkit (the tool-effects harness, ceiling-flavored) ─────────────────
 
@@ -354,7 +355,10 @@ describe('integration: the refusal routes, composes with effects, holds a step',
     // The resumed side runs the APPROVED tool inline, then the loop asks the
     // LLM once more — its script is just the wrap-up.
     const second = build([final('done')]);
-    await second.agent.resume(out.checkpoint, checkInApproved({ by: 'ops' }));
+    await second.agent.resume(
+      out.checkpoint,
+      checkInApproved({ request: pausedRequest(out), by: 'ops' }),
+    );
     // The approved tool RAN on the resume side — and its result was refused
     // there, with the same record truth and routing status.
     expect(second.refused).toHaveLength(1);

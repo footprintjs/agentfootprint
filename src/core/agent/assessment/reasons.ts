@@ -186,7 +186,8 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
   {
     reason: 'check-unreachable',
     class: 'not-sure',
-    reads: "answerValidation: status 'unverified' (an armed check that could not reach a verdict)",
+    reads:
+      "answerValidation: status 'unverified' (an armed check that could not reach a verdict), or a failed report that also counts unreachable checks or names a reason (a validator that did not finish)",
   },
 ]);
 

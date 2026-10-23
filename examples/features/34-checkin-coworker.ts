@@ -57,8 +57,7 @@ export const meta: ExampleMeta = {
 };
 
 /** The one job the coworker is given. */
-export const WORK_REQUEST =
-  'Draft the weekly status update and post it to the team channel.';
+export const WORK_REQUEST = 'Draft the weekly status update and post it to the team channel.';
 
 // ─── The raw material: context "files" the coworker was handed ──────────
 // In a real app these are docs, a wiki, prior tool output. Here they're
@@ -232,7 +231,11 @@ export function coworkerScript(): LLMProvider {
       // 2) Assemble the deliverable and save a draft — no check-in (reversible).
       if (saveCount === 0) {
         return turn('Notes in hand. Assembling the weekly status doc and saving a draft.', [
-          { id: 'c2', name: 'save_draft', args: { title: STATUS_TITLE, body: assembleStatusDoc() } },
+          {
+            id: 'c2',
+            name: 'save_draft',
+            args: { title: STATUS_TITLE, body: assembleStatusDoc() },
+          },
         ]);
       }
       // 3) Post it to the team channel — consequential, so THIS trips the check-in.
@@ -277,21 +280,23 @@ export function coworkerScript(): LLMProvider {
  */
 export function buildCoworker(ws: Workspace, provider?: LLMProvider) {
   const { readContext, saveDraft, postToChannel } = buildTools(ws);
-  return Agent.create({ provider: provider ?? coworkerScript(), model: 'mock' })
-    .system(
-      'You are a diligent teammate who ships the weekly status update. ' +
-        'First gather the source notes, then assemble a clear markdown status doc. ' +
-        'Save a draft before you post anything. ' +
-        'Never post to a public channel without a human sign-off.',
-    )
-    .tool(readContext)
-    .tool(saveDraft)
-    .tool(postToChannel)
-    // Configure the evidence pack. 'standard' (the default) fills all four
-    // fields; 'minimal' ships only `willDo`; or pass your own assembler/scorer.
-    .checkIn({ evidence: 'standard' })
-    .maxIterations(8)
-    .build();
+  return (
+    Agent.create({ provider: provider ?? coworkerScript(), model: 'mock' })
+      .system(
+        'You are a diligent teammate who ships the weekly status update. ' +
+          'First gather the source notes, then assemble a clear markdown status doc. ' +
+          'Save a draft before you post anything. ' +
+          'Never post to a public channel without a human sign-off.',
+      )
+      .tool(readContext)
+      .tool(saveDraft)
+      .tool(postToChannel)
+      // Configure the evidence pack. 'standard' (the default) fills all four
+      // fields; 'minimal' ships only `willDo`; or pass your own assembler/scorer.
+      .checkIn({ evidence: 'standard' })
+      .maxIterations(8)
+      .build()
+  );
 }
 
 // ─── The receipts renderer: THIS is the product ─────────────────────────
@@ -301,7 +306,7 @@ export function buildCoworker(ws: Workspace, provider?: LLMProvider) {
 const CONTENT_W = 68;
 
 function ansi(on: boolean) {
-  const wrap = (code: string) => (s: string) => (on ? `\x1b[${code}m${s}\x1b[0m` : s);
+  const wrap = (code: string) => (s: string) => on ? `\x1b[${code}m${s}\x1b[0m` : s;
   return {
     dim: wrap('2'),
     bold: wrap('1'),
@@ -375,7 +380,8 @@ export function renderReceipts(req: CheckInRequest, opts: { color?: boolean } = 
     out.push('');
     out.push(c.dim('WHAT DROVE THIS  ') + c.dim('(ranked; zero-LLM lexical scorer)'));
     ev.drivers.slice(0, 3).forEach((d, i) => {
-      const head = `  ${i + 1}. ` + c.cyan(d.channel.padEnd(8)) + ' ' + c.yellow(d.score.toFixed(2)) + '  ';
+      const head =
+        `  ${i + 1}. ` + c.cyan(d.channel.padEnd(8)) + ' ' + c.yellow(d.score.toFixed(2)) + '  ';
       const [first, ...rest] = wrapUnder(d.text, head.replace(/\x1b\[[0-9;]*m/g, '').length);
       out.push(head + first);
       for (const r of rest) out.push(r);
@@ -410,7 +416,10 @@ export function renderOutcome(o: DemoOutcome, opts: { color?: boolean } = {}): s
   out.push(field('COWORKER', o.finalText, c));
   out.push('');
   out.push(c.dim('drafts saved: ') + o.workspace.drafts.map((x) => `"${x.title}"`).join(', '));
-  out.push(c.dim('posts made:   ') + (o.workspace.posts.length ? o.workspace.posts.map((x) => x.channel).join(', ') : '(none)'));
+  out.push(
+    c.dim('posts made:   ') +
+      (o.workspace.posts.length ? o.workspace.posts.map((x) => x.channel).join(', ') : '(none)'),
+  );
   return out.join('\n');
 }
 
@@ -515,7 +524,7 @@ function parseFlags(argv: string[]): Flags {
 }
 
 /** Ask a person on stdin. Returns approve/decline; blank line = approve. */
-async function promptHuman(flags: Flags): Promise<CheckInDecision> {
+async function promptHuman(flags: Flags, request: CheckInRequest): Promise<CheckInDecision> {
   const { createInterface } = await import('node:readline/promises');
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -523,9 +532,9 @@ async function promptHuman(flags: Flags): Promise<CheckInDecision> {
     const decline = /^n/i.test(ans);
     if (decline) {
       const reason = ans.replace(/^n(o)?\b[\s:,-]*/i, '').trim() || undefined;
-      return checkInDeclined({ by: flags.by, note: reason ?? 'declined at the console' });
+      return checkInDeclined({ request, by: flags.by, note: reason ?? 'declined at the console' });
     }
-    return checkInApproved({ by: flags.by, ...(flags.note && { note: flags.note }) });
+    return checkInApproved({ request, by: flags.by, ...(flags.note && { note: flags.note }) });
   } finally {
     rl.close();
   }
@@ -558,11 +567,23 @@ if (isCliEntry(import.meta.url)) {
     // runnable headless with zero setup.
     const decide = async (req: CheckInRequest): Promise<CheckInDecision> => {
       console.log(renderReceipts(req, { color: flags.color }));
-      if (flags.decline) return checkInDeclined({ by: flags.by, note: flags.note ?? 'not this week' });
-      if (flags.approve) return checkInApproved({ by: flags.by, ...(flags.note && { note: flags.note }) });
-      if (process.stdin.isTTY) return promptHuman(flags);
+      // The decision names the request it answers (`request: req`): it can
+      // answer this check-in once, and no other.
+      if (flags.decline)
+        return checkInDeclined({ request: req, by: flags.by, note: flags.note ?? 'not this week' });
+      if (flags.approve)
+        return checkInApproved({
+          request: req,
+          by: flags.by,
+          ...(flags.note && { note: flags.note }),
+        });
+      if (process.stdin.isTTY) return promptHuman(flags, req);
       console.log(c.dim('\n(no TTY and no --approve/--decline flag → auto-approving)'));
-      return checkInApproved({ by: flags.by, note: 'auto-approved (non-interactive)' });
+      return checkInApproved({
+        request: req,
+        by: flags.by,
+        note: 'auto-approved (non-interactive)',
+      });
     };
 
     const outcome = await runDemo({ decide, provider });

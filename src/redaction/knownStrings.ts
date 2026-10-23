@@ -35,8 +35,13 @@
  * rule decides those, by name.
  */
 
-import type { ABSENCE_NOTE } from '../semantics/coverage/absent.js';
-import type { CoveredResult, ToolAbsence } from '../semantics/coverage/types.js';
+import type { ABSENCE_NOTE, ABSENCE_NOTE_COMPOSED } from '../semantics/coverage/absent.js';
+import type {
+  CoveredResult,
+  NamesFacetItem,
+  SourceGapItem,
+  ToolAbsence,
+} from '../semantics/coverage/types.js';
 import type { FigureDerivation } from '../core/agent/evidence/types.js';
 import type { AgentfootprintEventMap, AgentfootprintEventType } from '../events/registry.js';
 import type { CursorMoveCause, SkillEdgeKind } from '../injection-engine/skillGraph.js';
@@ -50,10 +55,12 @@ type Payloads = AgentfootprintEventMap[AgentfootprintEventType]['payload'];
 
 /**
  * The library's own envelopes a payload carries inside a field typed loosely
- * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s.
- * Their field names and words are the library's as much as a payload's.
+ * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s,
+ * and the two items an `among` miss composes into an absence's lists (typed
+ * apart from `CoverageItem`, which they extend). Their field names and words
+ * are the library's as much as a payload's.
  */
-type Envelopes = ToolAbsence | CoveredResult;
+type Envelopes = ToolAbsence | CoveredResult | NamesFacetItem | SourceGapItem;
 
 /** A depth counter for the type walks below (payload types nest a few levels). */
 type Next = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, never];
@@ -114,6 +121,7 @@ export type LibraryWord =
   | StringLiterals<Payloads>
   | StringLiterals<Envelopes>
   | typeof ABSENCE_NOTE
+  | typeof ABSENCE_NOTE_COMPOSED
   | CursorMoveCause
   | SkillEdgeKind
   | GuardOperator
@@ -136,6 +144,8 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   Loop: true,
   Parallel: true,
   Sequence: true,
+  "The search ran and matched nothing — the call did not fail, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers, as the call's arguments and the tool's declared defaults set it: where an argument was not sent, a default the tool applies may have narrowed the search. Anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.":
+    true,
   'The search ran and matched nothing. This is an ANSWER, not an error: nothing failed, nothing was substituted for what was asked, and calling this tool again with the same arguments returns this same result. `checked` is the ground this answer covers; anything under `not_checked` or `cannot_cover` is ground it does NOT cover, and reaching that needs a different question, not a retry.':
     true,
   abort: true,
@@ -283,6 +293,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'argument-read': true,
   'argument-rules': true,
   'argument-sources': true,
+  'argument-unsent': true,
   'argument-unverified': true,
   arguments: true,
   ask: true,
@@ -297,6 +308,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   autoActivate: true,
   avg: true,
   base: true,
+  bears: true,
   'before-tool': true,
   below: true,
   'below-threshold': true,
@@ -306,6 +318,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   budget_exhausted: true,
   call: true,
   'call-end': true,
+  'cap-reached': true,
   causal: true,
   cerbos: true,
   chars: true,
@@ -321,6 +334,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'column-sum': true,
   'column-type-mismatch': true,
   complement: true,
+  completeness: true,
   compose: true,
   'composed-message': true,
   configure: true,
@@ -334,6 +348,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   count: true,
   'coverage-gap': true,
   covered: true,
+  'credential-limited': true,
   custom: true,
   'cut-short': true,
   'dangling-reference': true,
@@ -370,6 +385,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'evidence-rails': true,
   'evidence-recheck': true,
   'evidence-recovery': true,
+  'evidence-revision': true,
   existence: true,
   expired: true,
   explicit: true,
@@ -380,6 +396,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'fact-extraction': true,
   failure: true,
   fallback: true,
+  filter: true,
   final: true,
   findings: true,
   flagged: true,
@@ -403,6 +420,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'history-order': true,
   hold: true,
   hook: true,
+  host: true,
   http: true,
   hybrid: true,
   identifier: true,
@@ -432,12 +450,14 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   llm: true,
   'llm-activated': true,
   local: true,
+  lookedFor: true,
   low: true,
   low_score: true,
   lt: true,
   lte: true,
   machine: true,
   manual: true,
+  match: true,
   max: true,
   'max-bytes': true,
   'max-count': true,
@@ -464,6 +484,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   mock: true,
   model: true,
   'model-pick': true,
+  names: true,
   'names-and-numbers': true,
   narrative: true,
   native: true,
@@ -495,17 +516,20 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   open: true,
   openai: true,
   operation: true,
+  'outcome-unknown': true,
   'outcomes-fn': true,
   output: true,
   'output-retry': true,
   'over-budget': true,
   'over-char-budget': true,
   'over-max-entries': true,
+  paged: true,
   parked: true,
   partial: true,
   'partly-beyond-retention': true,
   'partly-held': true,
   pending: true,
+  period: true,
   'period-beyond-retention': true,
   'period-differs-from-asked': true,
   'period-not-held': true,
@@ -522,6 +546,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   pinecone: true,
   'placed-result': true,
   policy: true,
+  population: true,
   'post-decide': true,
   posture: true,
   'pre-check': true,
@@ -532,6 +557,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'prior-turn-evidence': true,
   'propose-transition': true,
   proposition: true,
+  prose: true,
   provider: true,
   put: true,
   'python-fn': true,
@@ -543,6 +569,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   quoted: true,
   rag: true,
   rails: true,
+  ranking: true,
   raw: true,
   read_skill_result: true,
   redacted_thinking: true,
@@ -550,6 +577,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   registry: true,
   'registry+injections': true,
   'registry+provider+injections': true,
+  remote: true,
   'require-instruction': true,
   result: true,
   'result-period': true,
@@ -580,6 +608,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   skill_inactive: true,
   skill_read: true,
   'sliding-window': true,
+  source: true,
   'sources-conflict': true,
   spelling: true,
   'stage requested pause': true,
@@ -592,6 +621,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'stopped-early': true,
   store: true,
   structural: true,
+  subject: true,
   success: true,
   sum: true,
   summarize: true,
@@ -615,6 +645,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   tool_call: true,
   tool_use: true,
   tools: true,
+  'tools are off after the evidence revision (answer validation enforces) — forcing final': true,
   topK: true,
   tree: true,
   ttl: true,
@@ -679,12 +710,14 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   aggregate: true,
   aggregation: true,
   agrees: true,
+  aliases: true,
   allowed: true,
   anchor: true,
   answerAssessment: true,
   answerCoverage: true,
   answeredBy: true,
   answeredById: true,
+  any: true,
   approved: true,
   args: true,
   argsFingerprint: true,
@@ -703,10 +736,12 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   at: true,
   attempt: true,
   attempts: true,
+  authoritative: true,
   availableIds: true,
   backoffMs: true,
   base: true,
   basis: true,
+  bears: true,
   big: true,
   binding: true,
   blink: true,
@@ -759,8 +794,10 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   collapsed: true,
   column: true,
   columns: true,
+  complete: true,
   completed: true,
   componentId: true,
+  composition: true,
   computed: true,
   concat: true,
   conditionalId: true,
@@ -833,12 +870,16 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   expiresAfter: true,
   expiresAt: true,
   explanation: true,
+  facet: true,
+  facets: true,
   fact: true,
   facts: true,
   failed: true,
   fallback: true,
   fallbackConfigured: true,
   fallbackErrorMessage: true,
+  field: true,
+  filter: true,
   filter_note: true,
   finalContent: true,
   findings: true,
@@ -857,6 +898,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   fromProvider: true,
   fromSkillId: true,
   gap: true,
+  gaps: true,
   gateId: true,
   got: true,
   grain: true,
@@ -913,6 +955,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   llm: true,
   localeCompare: true,
   lookedFor: true,
+  lookedForRef: true,
   lookedUp: true,
   looked_for: true,
   loopId: true,
@@ -954,6 +997,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   narrowed: true,
   narrowedSkipped: true,
   nearTieMargin: true,
+  next: true,
   nodes: true,
   normalize: true,
   notApplicable: true,
@@ -982,6 +1026,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   padEnd: true,
   padStart: true,
   page: true,
+  paging: true,
   parallelCount: true,
   parentId: true,
   parentRefs: true,
@@ -1056,10 +1101,13 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   replaceAll: true,
   replay: true,
   request: true,
+  requestId: true,
   requested: true,
   requestedId: true,
+  resolved: true,
   result: true,
   resultFingerprint: true,
+  resultId: true,
   resultSummary: true,
   resumeInput: true,
   retriesRemaining: true,

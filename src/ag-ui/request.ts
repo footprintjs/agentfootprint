@@ -33,7 +33,10 @@
  *   - an ANSWER is taken only for the pause the server is keeping, matched to
  *     the ids that pause handed out (`AgUiSuspension`): a resume entry naming
  *     its interrupt, or the tool message answering the frontend tool call it is
- *     waiting on. Any other tool result is refused — never folded in;
+ *     waiting on. Any other tool result is refused — never folded in. A
+ *     decision answering a consent gate's interrupt is named for the request
+ *     that interrupt stands for (`answeringRequest`) — the page never sees the
+ *     request id, and the matched interrupt is what binds its answer;
  *   - a frontend tool runs only when the app allow-listed its NAME — with the
  *     app's own description and schema, never the page's (a description the
  *     model reads is an instruction) — and only on a host that keeps the paused
@@ -45,6 +48,7 @@
  * `forwardedProps` is never read.
  */
 
+import { looksLikeDecision } from '../core/checkin.js';
 import { WireRequestRefusal } from '../hosting/errors.js';
 import type {
   HeldConversation,
@@ -487,8 +491,31 @@ function turnOf(input: AgUiRunInput, held: HeldConversation, facts: PlanFacts): 
       'the request cancels the interrupt, and this agent continues a paused run only with an ' +
         'answer. Answer it — a decline is an answer.',
     );
-  return { kind: 'answer', answer: entry.payload };
+  return { kind: 'answer', answer: answeringRequest(entry.payload, awaiting.pending) };
 }
+
+/**
+ * A page's decision, named for the consent request its interrupt stands for.
+ *
+ * A consent gate's decision must name the request it answers
+ * (`core/consentRequest.ts`). An AG-UI page never receives that id — its
+ * interrupt carries the question, not the evidence or the request — and it
+ * needs none: the interrupt it answered was matched above to the pause this
+ * server keeps, and one pause asks one request. So a decision WITHOUT a
+ * `requestId` is named here, for that pause's request. A decision that names
+ * one keeps it, and the resume holds it to the paused request like any other.
+ * Anything that is not a decision passes through unchanged and is refused by
+ * the resume as not being one.
+ */
+function answeringRequest(payload: unknown, pending: HeldPending): unknown {
+  const requestId = pending.checkIn?.id ?? pending.ask?.id;
+  if (typeof requestId !== 'string' || !looksLikeDecision(payload)) return payload;
+  if ((payload as { requestId?: unknown }).requestId !== undefined) return payload;
+  return { ...(payload as Readonly<Record<string, unknown>>), requestId };
+}
+
+/** What the held pause asked, as {@link answeringRequest} reads it. */
+type HeldPending = NonNullable<HeldConversation['awaiting']>['pending'];
 
 /** The page's result for the frontend tool call the run is paused on — the newest message. */
 function clientResult(input: AgUiRunInput, call: AgUiSuspendedCall): string {

@@ -39,7 +39,11 @@ across a thread, and the same with or without a policy.
   with `RUN_FINISHED { outcome: success, pendingToolCallIds }`; a failed one with
   `RUN_ERROR` in fixed words — the served `error.fatal` only when it is one of
   the library's fixed sentences (`LLM_ERROR_SENTENCES`), else "The run failed."
-  The settlement never hands an adapter the thrown value.
+  An answer an enforcing `.answerValidation()` withheld is a refusal, not a
+  crash: `RUN_ERROR { code: 'ERR_ANSWER_VALIDATION' }` with its own fixed
+  sentence (`AG_UI_ANSWER_WITHHELD`) — the host names the refusal by the
+  error's class (`RunSettlement.refusal`). The settlement never hands an
+  adapter the thrown value.
 - A continuation is the SAME invocation: the paused translation's `suspension()`
   (ids and step names only — every scope's open calls among them, so parallel
   branches that paused together are each answered in turn) passed as `resume` re-opens the suspended sub-agents

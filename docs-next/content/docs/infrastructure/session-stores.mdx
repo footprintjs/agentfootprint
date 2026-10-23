@@ -1,6 +1,6 @@
 ---
 title: Writing a session store
-description: The ownership rule every SessionLifecycle store must hold, and the shared battery that checks it — runSessionLifecycleConformance, 14 cases, three deliberately distinct non-pass outcomes, and no way to make a case quietly disappear. For anyone implementing the port over Postgres, DynamoDB, SQL Server or anything else.
+description: The ownership rule every SessionLifecycle store must hold, and the shared battery that checks it — runSessionLifecycleConformance, 18 cases, three deliberately distinct non-pass outcomes, and no way to make a case quietly disappear. For anyone implementing the port over Postgres, DynamoDB, SQL Server or anything else.
 ---
 
 > **A defect that lives in a PORT is invisible to every adapter's own tests at
@@ -195,17 +195,18 @@ is itself a test: the in-tree suite asserts that a harness with no `corrupt`
 hook and no declaration comes back `'failed'`, so the property cannot be
 regressed without a red build.
 
-`SessionLifecycleCaseName` is a **closed** union of the 14 names, which is what
+`SessionLifecycleCaseName` is a **closed** union of the 18 names, which is what
 makes `declared` safe. A declaration keyed by a free-form string would keep
 suppressing nothing at all after a rename — the same shape as the bug this suite
 exists to catch.
 
-## The 14 cases
+## The 18 cases
 
 | case | what it proves |
 |---|---|
 | `absent-session-hydrates-undefined` | only a session that was never written hydrates as `undefined`. Anything else and the composer starts a conversation on top of a value it did not understand |
 | `persist-hydrate-round-trip` | `format`, `savedAt`, what was said and who signed it all survive; and a **second** `persist` replaces the first, because every turn after the first is a second `persist` |
+| `answered-pause-round-trips` | a stored pause comes back as it went in: still waiting, with no `answered` mark, and — once a door marks it — with the mark. A door marks a pause answered when a resume may have used its decision, so a store that dropped the mark would offer that request for an answer again. A store that refuses the mark's write leaves the pause waiting, so the pause is no proof its call never ran: a door that later closes it (a redeploy made it one no answer can reach) records its calls as not run only when the serving agent's ledger proves no decision was spent — else as not known |
 | `unreadable-is-not-absent` | bytes that are present and unreadable are refused or handed back — never answered as `undefined`, which would be a fresh start over a conversation that exists. Needs `corrupt` |
 | `forget-removes-the-conversation` | deletion deletes, the owner index included, and forgetting twice is not an error. Needs a `forget` member |
 | `ownership-is-derived-from-the-envelope` | the owner comes from the stored conversation's own `principal`, never from a field on the request. Plants a decoy `owner` / `userId` on the envelope and checks the store ignores both |
@@ -215,15 +216,18 @@ exists to catch.
 | `contested-write-leaves-no-split-brain` | two concurrent writers on one fresh session: at least one succeeds, the index and the stored conversation never name different people, and the conversation that survived is one writer's whole conversation rather than a document nobody wrote |
 | `owner-of-is-undefined-for-missing-and-unowned` | "no such session" and "nobody signed for it" are one answer, or a caller has an oracle for which session ids are real |
 | `list-by-user-pages-with-a-stable-tie-break` | every owned row exactly once, nobody else's ever, a cursor only when more rows exist, newest first — with five sessions sharing one `savedAt`, so the tie-break carries the paging rather than the timestamp |
+| `list-by-user-is-newest-first` | newest first comes from the conversation's own timestamp, not from the order rows were written — checked twice, with the write order and the id order inverted between the rounds, so a store that sorts by either gets one round wrong |
+| `list-by-user-shows-an-answered-pause-as-a-conversation` | a row says `'flowchart-v1'` only for a pause still waiting on an answer. An answered pause — stored as a pause, then marked — lists as `'conversation-v1'`, like a finished turn: no door offers it for an answer, so a sidebar must not badge it "awaiting you". A store reports `listedFormatOf(envelope)` — when it persists, if it keeps the format in a column, else when it lists. A store that keeps it reads a row that still says `'flowchart-v1'` again when it lists, so a row written before it kept the listed format (an earlier version, an older replica) is right too — `sqliteSessions` and `firestoreSessions` do |
+| `an-id-the-store-hands-back-is-not-a-second-address` | an id a listing reports opens that conversation, and is never a second name for a different one |
 | `awkward-session-ids-round-trip` | an id is an opaque string — slashes, spaces, `..`, unicode, quotes, 1000 characters — and whatever mapping a store uses to make one legal for its backend is injective, so `a/b` and `a%2Fb` stay two conversations |
 | `retention-says-who-deletes-and-deletes-only-the-old` | `retention()` answers with a `deletedBy` a caller can branch on. Where the store itself deletes, a sweep forgets everything **strictly** older than the cutoff, keeps the session written exactly on it, takes the owner index and the listing with it, is idempotent, and honours a `limit` with `more`. Where the **backend** deletes, the answer names the field it acts on and the one step that turns it on. Needs a `retention` member |
 | `optional-members-are-feature-detected` | `onWake`, `listByUser`, `ownerOf` and `retention` are present as functions or absent, never something a caller has to guess about; a store that can `listByUser` can also `ownerOf`, or a door hands somebody a list and then refuses to open any of it; and a store that says it does its own deleting really hands back a sweep |
 
-Nine of the fourteen are about an **optional** member and report
-`'not-applicable'` when the store does not have it: one needs `forget`, one needs
+Twelve of the eighteen are about an **optional** member and report
+`'not-applicable'` when the store does not have it: one needs `forget`, four need
 `listByUser`, one needs `retention`, and the six ownership cases need `ownerOf`.
 `SessionStoreMember` is that set — `'listByUser' | 'ownerOf' | 'forget' |
-'retention'`. The remaining five hold for every store, because they are about
+'retention'`. The remaining six hold for every store, because they are about
 the two members the port actually requires.
 
 ### The one declaration that exists today
@@ -493,14 +497,15 @@ artifacts is a separate encoding with its own injectivity requirement — see
 |---|---|---|
 | `runSessionLifecycleConformance(harness)` | `agentfootprint/hosting` | Run the whole battery against one store → `Promise<SessionLifecycleReport>` |
 | `runSessionLifecycleCase(testCase, harness)` | `agentfootprint/hosting` | Run **one** case, building and disposing the store around it → `Promise<SessionLifecycleOutcome>` |
-| `sessionLifecycleConformance` | `agentfootprint/hosting` | The battery: `readonly SessionLifecycleCase[]`, 14 of them, ordered so a store fails it most usefully (reading before writing, writing before ownership, ownership before the listing built on it) |
+| `sessionLifecycleConformance` | `agentfootprint/hosting` | The battery: `readonly SessionLifecycleCase[]`, 18 of them, ordered so a store fails it most usefully (reading before writing, writing before ownership, ownership before the listing built on it) |
 | `formatConformanceReport(report)` | `agentfootprint/hosting` | The report as a string — one line per case, with the reason a case did not simply pass |
 | `SessionStoreHarness` | `agentfootprint/hosting` | How the battery reaches your store: `{ name, createStore, disposeStore?, corrupt?, declared? }` |
 | `SessionLifecycleReport` | `agentfootprint/hosting` | `{ store, outcomes, passed, notApplicable, declared, failed, ok }` |
 | `SessionLifecycleOutcome` | `agentfootprint/hosting` | One case's result — a union on `status`, carrying `missing`, `reason` + `stillFails`, or `error` |
 | `SessionLifecycleCase` | `agentfootprint/hosting` | One case: `name`, `law`, optional `members` / `harnessNeeds`, and `run(store, kit)` |
-| `SessionLifecycleCaseName` | `agentfootprint/hosting` | The closed union of the 14 case names — what `declared` is keyed by |
+| `SessionLifecycleCaseName` | `agentfootprint/hosting` | The closed union of the 18 case names — what `declared` is keyed by |
 | `SessionStoreMember` | `agentfootprint/hosting` | `'listByUser' \| 'ownerOf' \| 'forget' \| 'retention'` — the members a case can be not-applicable for |
+| `listedFormatOf(envelope)` | `agentfootprint/hosting` | What a listing row's `format` says: `'flowchart-v1'` only for a pause still waiting on an answer, `'conversation-v1'` for a conversation, an answered pause, or a pause no answer can reach any more. Never throws; a value that is not an envelope is `'unknown'`. It says whether a pause waits, never whether its call ran: a closed pause's calls are settled in the conversation, as not run only on a ledger's proof |
 | `ConformanceKit` | `agentfootprint/hosting` | What a case is handed beside the store: `id()`, `envelope()`, `harness` |
 | `sessionRetention(sessions, purpose?)` | `agentfootprint/hosting` | The one feature detection for `retention()` → `SessionRetention`, or refuses by name |
 | `SessionRetention` | `agentfootprint/hosting` | `SessionSweep \| SessionExpiryPolicy`, discriminated on `deletedBy` |
@@ -518,7 +523,7 @@ artifacts is a separate encoding with its own injectivity requirement — see
 | Piece | Door | Status |
 |---|---|---|
 | `resolveSessionOwner` + `SessionOwnershipConflictError` | `agentfootprint/hosting` | Shipped (9.37.0). Called by every in-tree store that keeps an owner index; the split-brain state it prevents was reproduced live before the fix |
-| `sessionLifecycleConformance` — the 14 cases | `agentfootprint/hosting` | Shipped (9.37.0; the retention case 9.42.0). Run against **six** in-tree harnesses every build — the fifth store, `agentCoreSessions`, was enrolled in 9.42.0 in both its modes after an audit found it had appeared zero times and its absence was not declared anywhere — one `it()` per case per store, entirely offline |
+| `sessionLifecycleConformance` — the 18 cases | `agentfootprint/hosting` | Shipped (9.37.0; the retention case 9.42.0). Run against **six** in-tree harnesses every build — the fifth store, `agentCoreSessions`, was enrolled in 9.42.0 in both its modes after an audit found it had appeared zero times and its absence was not declared anywhere — one `it()` per case per store, entirely offline |
 | `runSessionLifecycleConformance` / `runSessionLifecycleCase` / `formatConformanceReport` | `agentfootprint/hosting` | Shipped (9.37.0) — the out-of-tree entry points |
 | `retention()` + `sessionRetention` + `SessionRetentionUnavailableError` | `agentfootprint/hosting` | Shipped (9.42.0). Optional and feature-detected; five of the six in-tree stores implement it, the sixth refuses by name. Tested, not field-validated — no store's retention has been watched deleting anything in production by this repository |
 | The no-silent-skip rule | — | Shipped and **executable**: a harness missing a needed hook with no declaration is asserted to come back `'failed'` |

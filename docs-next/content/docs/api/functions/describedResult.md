@@ -6,7 +6,7 @@ title: describedResult
 
 > **describedResult**(`decl`): [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 
-Defined in: [src/semantics/described.ts:274](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/described.ts#L274)
+Defined in: [src/semantics/described.ts:276](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/described.ts#L276)
 
 Return rows, a series or relationships from a system of record — WITH the
 caveats that make them honest — in a shape the framework recognizes, the

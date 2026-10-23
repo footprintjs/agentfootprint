@@ -41,6 +41,8 @@
  */
 
 import type { Credential } from '../identity/types.js';
+import type { HostFilledArguments } from '../semantics/coverage/search/inEffect.js';
+import { inheritSearch } from './searchOf.js';
 import type { Tool, ToolExecutionContext } from './tools.js';
 
 /** Which identity field a {@link fromIdentity} fill reads. */
@@ -112,6 +114,41 @@ export class HostFilledValueMissingError extends Error {
     super(`tool '${toolName}': argument '${field}' is filled by the host, and ${why}.`);
     this.name = 'HostFilledValueMissingError';
   }
+}
+
+/**
+ * The wrapper's own declaration, keyed by the tool `hostFilled` returned —
+ * read through {@link hostFillsOf}, never by probing a tool's fields.
+ */
+const DECLARED_FILLS = new WeakMap<Tool, Readonly<Record<string, HostFill>>>();
+
+/**
+ * Which arguments `hostFilled` fills on `tool`, by where their value comes
+ * from — the names only, never a value. `undefined` for a tool no
+ * `hostFilled` returned.
+ *
+ * The filled values exist only inside `execute`, so the arguments every door
+ * records never hold them; a reader that composes ground from a call's
+ * arguments (`Tool.search` composition) learns the filled set here: an
+ * identity-filled argument is a filter in effect, a credential-filled one
+ * names no ground.
+ *
+ * @example
+ * ```ts
+ * hostFillsOf(hostFilled(tool, { tenantId: fromIdentity('tenant') }));
+ * // { identity: { tenantId: 'tenant' }, credential: [] }
+ * ```
+ */
+export function hostFillsOf(tool: Tool): HostFilledArguments | undefined {
+  const fills = DECLARED_FILLS.get(tool);
+  if (fills === undefined) return undefined;
+  const identity: Record<string, string> = {};
+  const credential: string[] = [];
+  for (const [field, fill] of Object.entries(fills)) {
+    if (fill.from === 'identity') identity[field] = fill.field;
+    else credential.push(field);
+  }
+  return { identity, credential };
 }
 
 /** Below this length a credential's OTHER values (header values) are not scrubbed. */
@@ -276,7 +313,7 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
   const inputSchema = withoutFields(tool.schema.inputSchema, Object.keys(fills));
   const fieldNames = Object.keys(fills);
   const inner = tool.execute.bind(tool);
-  return {
+  const wrapped = {
     ...tool,
     schema: { ...tool.schema, inputSchema },
     ...(needs !== undefined && { needs }),
@@ -302,6 +339,11 @@ function wrapTool(tool: Tool, fills: Readonly<Record<string, HostFill>>, strict:
       }
     },
   } as Tool;
+  // The declaration a reader asks of the wrapped tool — a wrap of a wrap keeps both.
+  DECLARED_FILLS.set(wrapped, { ...DECLARED_FILLS.get(tool), ...fills });
+  // The search was judged against the schema BEFORE the filled arguments left it.
+  if (tool.search !== undefined) inheritSearch(tool, wrapped);
+  return wrapped;
 }
 
 /**

@@ -337,7 +337,7 @@ export interface ContingentCarrier {
  * call whose arguments used it), never per carrier.
  *
  * `value` is the token as the extractor normalized it (`evidence/extract.ts`
- * decides which tokens are data; `tools/normalize.ts` the spelling), cut
+ * decides which tokens are data; `lib/normalize.ts` the spelling), cut
  * at `CONTINGENT_VALUE_CHARS` with the cut stated. `carriers` names EVERY
  * result that carried it, in wire order, each with its standing — the whole
  * list, because the rule is "every carrier non-fact": a value with one

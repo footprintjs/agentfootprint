@@ -15,6 +15,7 @@ import { Agent, checkInApproved, defineTool, isPaused } from '../../src/index.js
 import { mock } from '../../src/doors/providers.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { locationsOf } from './fixture.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 const PRINCIPAL = 'alice@example.com';
 const TENANT = 'acme-corp';
@@ -80,7 +81,10 @@ async function approvedRun(redact: RedactionPolicy | undefined) {
   agent.on('*', (e) => events.push(e));
   const outcome = await agent.run({ message: 'close it' });
   if (!isPaused(outcome)) throw new Error('the case must pause for the check-in');
-  await agent.resume(outcome.checkpoint, checkInApproved({ by: APPROVER }));
+  await agent.resume(
+    outcome.checkpoint,
+    checkInApproved({ request: pausedRequest(outcome), by: APPROVER }),
+  );
   return events;
 }
 

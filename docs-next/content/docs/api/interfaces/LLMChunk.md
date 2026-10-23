@@ -4,7 +4,7 @@ title: LLMChunk
 
 # Interface: LLMChunk
 
-Defined in: [src/provider-contract/types.ts:469](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L469)
+Defined in: [src/provider-contract/types.ts:472](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L472)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:469](https://github.com/footprintjs/
 
 > `readonly` **content**: `string`
 
-Defined in: [src/provider-contract/types.ts:472](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L472)
+Defined in: [src/provider-contract/types.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L475)
 
 Token text. Empty for the terminal chunk (`done: true`).
 
@@ -22,7 +22,7 @@ Token text. Empty for the terminal chunk (`done: true`).
 
 > `readonly` **done**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:474](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L474)
+Defined in: [src/provider-contract/types.ts:477](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L477)
 
 True only for the final chunk in a stream.
 
@@ -32,7 +32,7 @@ True only for the final chunk in a stream.
 
 > `readonly` `optional` **response?**: [`LLMResponse`](/docs/api/interfaces/LLMResponse)
 
-Defined in: [src/provider-contract/types.ts:487](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L487)
+Defined in: [src/provider-contract/types.ts:490](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L490)
 
 Authoritative response payload, populated ONLY on the final chunk
 (`done: true`). Carries `toolCalls`, `usage`, `stopReason` — the
@@ -51,7 +51,7 @@ authoritative payload in that case.
 
 > `readonly` `optional` **thinkingDelta?**: `string`
 
-Defined in: [src/provider-contract/types.ts:504](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L504)
+Defined in: [src/provider-contract/types.ts:507](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L507)
 
 v2.14 — streaming thinking-content tokens. Parallel to `content`
 but for the model's reasoning chain rather than visible output.
@@ -74,4 +74,4 @@ live-status strategy).
 
 > `readonly` **tokenIndex**: `number`
 
-Defined in: [src/provider-contract/types.ts:470](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L470)
+Defined in: [src/provider-contract/types.ts:473](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L473)

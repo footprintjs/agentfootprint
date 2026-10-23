@@ -46,6 +46,8 @@
 
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
+import { ruleKnownNames } from '../semantics/coverage/among.js';
+import type { KnownNames } from '../semantics/coverage/types.js';
 import type {
   AskPayload,
   MessageMiddleware,
@@ -215,7 +217,13 @@ export async function runToolChain(
 // ─── The after-tool moment ───────────────────────────────────────────
 
 export type ToolAfterChainResult =
-  | { readonly kind: 'allow'; readonly result: unknown; readonly decisions: MiddlewareDecision[] }
+  | {
+      readonly kind: 'allow';
+      readonly result: unknown;
+      /** The names the chain let through to the model — absent when none. */
+      readonly knownNames?: KnownNames;
+      readonly decisions: MiddlewareDecision[];
+    }
   | {
       readonly kind: 'deny';
       readonly reason: string;
@@ -238,6 +246,11 @@ export interface ToolAfterChainInput {
   readonly history: readonly LLMMessage[];
   readonly identity?: MemoryIdentity;
   readonly signal?: AbortSignal;
+  /**
+   * The names an `absent({ among })` read for the caller, from the library's
+   * channel — handed to each rule BESIDE the result, never inside it.
+   */
+  readonly knownNames?: KnownNames;
 }
 
 /**
@@ -257,6 +270,11 @@ export async function runToolAfterChain(
   const decisions: MiddlewareDecision[] = [];
   const real = input.result;
   let result = real;
+  // The names travel BESIDE the result, and each rule decides what of them
+  // goes on: a pass-through (or the same result handed back) keeps them, a
+  // rewrite drops them unless the rule says `{ knownNames }`, a deny ends
+  // them. A block a rule hands back is held to the mint's own rules.
+  let names = input.knownNames;
 
   // Reverse: first-declared saw the call first, so it sees the result last.
   for (let i = chain.length - 1; i >= 0; i--) {
@@ -288,6 +306,7 @@ export async function runToolAfterChain(
         history: input.history,
         ...(input.identity && { identity: input.identity }),
         ...(input.signal && { signal: input.signal }),
+        ...(names !== undefined && { knownNames: names }),
       });
     } catch (err) {
       const reason = `middleware '${mw.name}' threw: ${
@@ -315,6 +334,12 @@ export async function runToolAfterChain(
       return { kind: 'deny', reason: outcome.reason, middleware: mw.name, result: real, decisions };
     }
 
+    const rewrote = outcome.value !== undefined && outcome.value !== result;
+    if (Object.hasOwn(outcome, 'knownNames')) {
+      names = outcome.knownNames === null ? undefined : ruleKnownNames(outcome.knownNames);
+    } else if (rewrote) {
+      names = undefined;
+    }
     if (outcome.value !== undefined) {
       const before = result;
       result = outcome.value;
@@ -326,7 +351,7 @@ export async function runToolAfterChain(
     }
   }
 
-  return { kind: 'allow', result, decisions };
+  return { kind: 'allow', result, ...(names !== undefined && { knownNames: names }), decisions };
 }
 
 // ─── Message chain ───────────────────────────────────────────────────

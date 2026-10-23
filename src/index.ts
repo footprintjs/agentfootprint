@@ -219,6 +219,10 @@ export {
   pauseDemandsDecision,
   DecisionRequiredError,
   StaleDecisionError,
+  // A decision for another request, for a call that changed after the ask, or
+  // for a request already answered — refused by name, the tool never runs.
+  ResumeDecisionError,
+  type ResumeDecisionRefusal,
   // 8.18.0 — an askHuman/pauseHere pause resumed with NO value. The answer
   // becomes the tool's result, so "no answer" and "carry on" are two different
   // conversations and the caller picks; the library used to pick silently and
@@ -277,6 +281,7 @@ export {
   ask,
   deny,
   MessageDeniedError,
+  type AllowOptions,
   type AllowOutcome,
   type AskOutcome,
   type AskPayload,
@@ -344,6 +349,12 @@ export {
   type EvidencePreset,
   type CheckInBuilderOptions,
 } from './core/checkin.js';
+// A decision answers ONE request, once: every consent pause mints a request id
+// bound to the exact paused call, a decision names it, and a resume holds it
+// to it (`ResumeDecisionError`). The ledger is where answered requests are
+// spent — per agent by default, shared across agents via
+// `Agent.create({ decisionLedger })`.
+export { inMemoryDecisionLedger, type DecisionLedger } from './core/consentRequest.js';
 // The context-unit shape a `CheckInScorer` ranks — also exported from
 // `agentfootprint/observe` (alongside `explainChoice`), surfaced here because it
 // is part of the `CheckInScoreInput` contract.
@@ -870,6 +881,12 @@ export type { InstructionLease, PendingToolTransition } from './injection-engine
 // Both are RECOGNIZED by the framework (status, events, evidence corpus), not
 // conventions: a shape the framework does not understand cannot stop a retry
 // loop or keep a value out of the evidence index.
+//
+// `absent({ what, among })` — a name looked up in a known list that resolves
+// to nothing is a named miss over the names the tool read: the mint composes
+// the names facet and an irremovable "names outside <source>" gap; the
+// nearest names (only with `visible: 'caller'`) never enter the result — the
+// library attaches them to the model's message alone.
 export {
   ABSENCE_MARKER,
   ABSENCE_NOTE,
@@ -881,7 +898,9 @@ export {
   readAbsence,
   readCoverageLedger,
   readCoverageResult,
+  type AbsenceAmongDeclaration,
   type AbsenceDeclaration,
+  type AmongDeclaration,
   // A typed answer's limits as data (`agent.answerCoverage()`): the three
   // lists, and the values a tool's rule assumed (the inputs layer).
   type AnswerCoverage,
@@ -895,6 +914,13 @@ export {
   type DeclaredCoverage,
   type ToolAbsence,
   type TryInsteadTool,
+  // `Tool.search` — what one call searches, declared once; and the coverage
+  // row the library composes from it and the arguments the call ran with.
+  // Three names on purpose: an item, a gap or a role is reached through these
+  // (`ComposedCoverage['checked'][number]`), so the public surface stays small.
+  isComposedCoverage,
+  type ComposedCoverage,
+  type ToolSearch,
 } from './semantics/coverage/index.js';
 // The one period shape (honesty layer 3, step 7b): what a result's READ
 // covered in time — the instants it asked for, what the store holds (or
@@ -1353,6 +1379,7 @@ export {
   type AnswerValidationOptions,
   type AnswerValidationReport,
   type AnswerCheck,
+  type AgentCheckName,
   type AnswerEvidenceResolver,
   type AnswerToolCall,
   type AnswerToolCallsView,

@@ -65,6 +65,7 @@ import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { SHOWN_ARGS } from '../../../../src/core/toolShownArgs.js';
 import { inProcessHost } from '../../../hosting/testHost.js';
 import { memorySessions, standingAgent } from '../../../../src/hosting/index.js';
+import { pausedRequest } from '../../../helpers/pausedRequest.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 
@@ -215,7 +216,10 @@ describe('the SAME call needs the ask and a second human step — asked once, th
       expect(second.checkIn.args).toEqual({ service: 'checkout', window: '24h' });
       expect(ran).toEqual([]);
 
-      const done = await agent.resume(stored(second), checkInApproved({ by: 'ops' }));
+      const done = await agent.resume(
+        stored(second),
+        checkInApproved({ request: pausedRequest(second), by: 'ops' }),
+      );
       expect(done).toBe('Purged.');
       expect(ran).toEqual([{ service: 'checkout', window: '24h' }]);
       // Asked ONCE; three model calls, none for the resume of either pause.
@@ -252,7 +256,10 @@ describe('the SAME call needs the ask and a second human step — asked once, th
     expect(refusal).toContain("middleware 'gate' asked a person to decide");
     expect(refusal).toContain(keptWindow('search_logs'));
     expect(isAskPause(second)).toBe(true);
-    const done = await agent.resume(stored(second), checkInApproved({ by: 'ops' }));
+    const done = await agent.resume(
+      stored(second),
+      checkInApproved({ request: pausedRequest(second), by: 'ops' }),
+    );
     expect(done).toBe('No errors.');
     expect(ran).toEqual([{ service: 'checkout', window: '7d' }]);
     expect(libraryAsks(seen)).toHaveLength(1);
@@ -383,7 +390,10 @@ describe('a kept answer — used once, kept again only by the same law', () => {
       .build();
     const asked = await agent.run({ message: 'purge checkout, then payments' });
     const checkIn = await agent.resume(stored(asked), replyTo(asked, { f1: '24h' }));
-    const third = await agent.resume(stored(checkIn), checkInApproved({ by: 'ops' }));
+    const third = await agent.resume(
+      stored(checkIn),
+      checkInApproved({ request: pausedRequest(checkIn), by: 'ops' }),
+    );
     // c3 is a new call the person was never asked about: the library asks.
     if (!isInputPause(third)) throw new Error('expected the library’s ask for c3');
     expect(third.awaitingInput.context).toMatchObject({
@@ -425,7 +435,10 @@ describe('a kept answer — used once, kept again only by the same law', () => {
     // …and the third proposal pauses for the check-in, on the answer given once.
     if (!isCheckInPause(third)) throw new Error('expected the purge’s check-in');
     expect(third.checkIn.args).toEqual({ service: 'checkout', window: '24h' });
-    await agent.resume(stored(third), checkInApproved({ by: 'ops' }));
+    await agent.resume(
+      stored(third),
+      checkInApproved({ request: pausedRequest(third), by: 'ops' }),
+    );
     expect(purged).toEqual([{ service: 'checkout', window: '24h' }]);
     expect(searched).toEqual([{ service: 'checkout', window: '1h' }]);
     expect(libraryAsks(seen)).toHaveLength(2);

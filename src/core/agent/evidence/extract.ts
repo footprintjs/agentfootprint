@@ -51,7 +51,7 @@ import {
   lookupForms,
   normalizeToken,
   tokenize,
-} from '../../../tools/normalize.js';
+} from '../../../lib/normalize.js';
 import { splitNumericRange } from './numericRanges.js';
 import { decimalsOf } from './numberPrecision.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
@@ -92,7 +92,10 @@ const BARE_NUMBER = /^[-+]?\d+(?:\.\d+)?$/;
 const PROSE_RATIO = /^\d{1,2}\/\d{1,2}$/;
 
 /** Ceiling on how many tokens one answer contributes. A model that pastes a
- *  10 MB table into its answer must not turn the gate into the run's cost. */
+ *  10 MB table into its answer must not turn the gate into the run's cost.
+ *  Past it nothing is classified or looked up — only COUNTED
+ *  (`AnswerReading.unread`), so a reader never mistakes a partial reading for
+ *  a clean one. */
 const MAX_ANSWER_TOKENS = 20_000;
 
 /** True when the caller declared this token exempt. */
@@ -161,12 +164,86 @@ export function classifyToken(
   return { value: token, shape: 'identifier' };
 }
 
+/** A JSON number literal, read where it stands (sticky). */
+const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+
 /**
- * Every distinct value the answer asserts, in first-appearance order.
+ * The texts an answer states, each read on its own. Prose is one text. A
+ * typed answer — the whole answer one JSON object or array, which is what
+ * `.outputSchema()` accepts (`JSON.parse` of the answer) — is read value by
+ * value: every string as text (and every key, unless `valuesOnly`), every
+ * number as the literal the answer WROTE. Read whole as text, compact JSON
+ * glues its punctuation onto the values (`[5,100]` read as the
+ * thousands-separated `5100`, `[0.45,0.12]` as one identifier, `[1200,9750]`
+ * as no value at all); read through the parsed value, a number is the double
+ * it parses to (`9007199254740993` is `9007199254740992`, `5.20` is `5.2` and
+ * loses the precision the rounding rule judges). So the text is checked with
+ * `JSON.parse` and then read ONCE, left to right: string literals decoded,
+ * number literals kept as written.
  *
- * De-duplicated by value: a port named six times is one claim to ground, and
- * a correction that lists it six times reads like noise.
+ * One pass, no recursion (an answer is model output: its nesting is not a
+ * call depth), yielded lazily: the reader decides how far it classifies and
+ * counts the rest (`MAX_ANSWER_TOKENS`).
  */
+function* answerTexts(answer: string, valuesOnly: boolean): Generator<string> {
+  const opening = answer.trimStart()[0];
+  if (opening !== '{' && opening !== '[') {
+    yield answer;
+    return;
+  }
+  try {
+    JSON.parse(answer); // the grammar check — the values are read from the text below
+  } catch {
+    yield answer; // not one JSON value: prose, as it always was
+    return;
+  }
+  yield* jsonLiterals(answer, valuesOnly);
+}
+
+/**
+ * The keys (unless `valuesOnly`), strings (decoded) and number literals (as
+ * written) of a text `JSON.parse` accepted, left to right. Total on any input
+ * — bounded by the text's length — though only ever handed valid JSON.
+ */
+function* jsonLiterals(json: string, valuesOnly: boolean): Generator<string> {
+  let at = 0;
+  while (at < json.length) {
+    const ch = json.charCodeAt(at);
+    if (ch === 0x22 /* " */) {
+      // The literal ends at the first quote no backslash escapes.
+      let end = at + 1;
+      while (end < json.length && json.charCodeAt(end) !== 0x22) {
+        end += json.charCodeAt(end) === 0x5c /* \ */ ? 2 : 1;
+      }
+      const literal = json.slice(at, end + 1);
+      at = end + 1;
+      // In JSON a string followed by `:` is a key, and only a key is.
+      if (valuesOnly && isKeyEnd(json, at)) continue;
+      yield JSON.parse(literal) as string;
+    } else if (ch === 0x2d /* - */ || (ch >= 0x30 && ch <= 0x39)) {
+      // Outside a string, a digit or a minus only ever starts a number.
+      JSON_NUMBER.lastIndex = at;
+      const literal = JSON_NUMBER.exec(json)?.[0] ?? json.charAt(at);
+      at += literal.length;
+      yield literal;
+    } else {
+      at += 1; // structure, whitespace, true / false / null
+    }
+  }
+}
+
+/** The next character after `at` that is not JSON whitespace is `:`. */
+function isKeyEnd(json: string, at: number): boolean {
+  let next = at;
+  while (next < json.length) {
+    const ch = json.charCodeAt(next);
+    // JSON whitespace: space, tab, line feed, carriage return.
+    if (ch !== 0x20 && ch !== 0x09 && ch !== 0x0a && ch !== 0x0d) break;
+    next += 1;
+  }
+  return json.charCodeAt(next) === 0x3a /* : */;
+}
+
 /**
  * The spellings a candidate is looked up under: its value's forms
  * (`lookupForms` — the `0x` rule), plus the glued-unit token's when the
@@ -186,6 +263,45 @@ export function candidateForms(candidate: Candidate): readonly string[] {
   return forms;
 }
 
+/** How one answer is read. */
+export interface AnswerReadOptions {
+  /** Under the figures dial: the numbers the answer writes wearing a unit
+   *  (`figures.ts` · `figureNumbersOf`, computed by the caller that loaded
+   *  it — the module stays off a plain agent's graph). */
+  readonly figures?: ReadonlySet<string>;
+  /** A read-only exact-token view supplied by the caller's corpus. Whole
+   *  carried values win before a numeric range is interpreted as endpoints. */
+  readonly exactTokens?: { readonly has: (value: string) => boolean };
+  /**
+   * The answer is TYPED (`.outputSchema()`): one JSON object or array is read
+   * by its VALUES only. Its object keys are the schema's field names
+   * (`p95LatencyMs`, `sha256`, `ipv4`), not values the answer asserts — read
+   * as values, a digit-bearing name was an identifier no tool result
+   * carried. The price, stated: an answer keyed BY data (an id as a key) is
+   * not judged on its keys. Absent, keys are read too.
+   */
+  readonly typed?: boolean;
+}
+
+/** One reading of an answer: the values it asserts, and how much of it was never read. */
+export interface AnswerReading {
+  /** Every distinct value the answer asserts, in first-appearance order. */
+  readonly candidates: readonly Candidate[];
+  /**
+   * Words and numbers past `MAX_ANSWER_TOKENS` that were never classified or
+   * looked up — 0 when the whole answer was read. A value among them could be
+   * invented and would go unfound, so a reading with any is not a clean one.
+   */
+  readonly unread: number;
+}
+
+/**
+ * Every distinct value the answer asserts, in first-appearance order.
+ *
+ * De-duplicated by value: a port named six times is one claim to ground, and
+ * a correction that lists it six times reads like noise. A typed answer is
+ * read value by value (`answerTexts`).
+ */
 export function extractCandidates(
   answer: string,
   gate: ResolvedEvidenceGate,
@@ -197,10 +313,24 @@ export function extractCandidates(
    *  carried values win before a numeric range is interpreted as endpoints. */
   exactTokens?: { readonly has: (value: string) => boolean },
 ): readonly Candidate[] {
+  return readAnswer(answer, gate, { figures, exactTokens }).candidates;
+}
+
+/**
+ * Read one answer: the values it asserts (`extractCandidates`), and how many
+ * of its words and numbers lay past the ceiling, never read. The reading
+ * stops CLASSIFYING at `MAX_ANSWER_TOKENS`; it never stops counting.
+ */
+export function readAnswer(
+  answer: string,
+  gate: ResolvedEvidenceGate,
+  options: AnswerReadOptions = {},
+): AnswerReading {
+  const { figures, exactTokens, typed = false } = options;
   const seen = new Map<string, number>();
   const out: Candidate[] = [];
   let budget = MAX_ANSWER_TOKENS;
-  const spellings = answerTokenSpellings(answer);
+  let unread = 0;
   const record = (candidate: Candidate | undefined): void => {
     if (candidate === undefined) return;
     const prior = seen.get(candidate.value);
@@ -219,7 +349,11 @@ export function extractCandidates(
     out.push(candidate);
   };
   const add = (spelling: string, rangeToken?: string): void => {
-    if (budget-- <= 0) return;
+    if (budget <= 0) {
+      unread += 1; // a range's second endpoint, past the line
+      return;
+    }
+    budget -= 1;
     const token = normalizeToken(spelling);
     let candidate = classifyToken(token, gate, figures);
     // Declared shapes and exemptions win, including over precision promotion.
@@ -237,29 +371,39 @@ export function extractCandidates(
         : candidate,
     );
   };
-  for (let index = 0; index < spellings.length; index += 1) {
-    if (budget <= 0) break;
-    const spelling = spellings[index] ?? '';
-    const token = normalizeToken(spelling);
-    // Test app-owned ID declarations on the intact token before heuristics.
-    if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
-      add(spelling);
+  for (const text of answerTexts(answer, typed)) {
+    const spellings = answerTokenSpellings(text);
+    if (budget <= 0) {
+      unread += spellings.length; // past the line: counted, never classified
       continue;
     }
-    const range = splitNumericRange(spelling, spellings[index + 1]);
-    if (range !== undefined && exactTokens?.has(token) === true) {
-      budget -= 1;
-      record({ value: token, shape: 'identifier' });
-      continue;
+    for (let index = 0; index < spellings.length; index += 1) {
+      if (budget <= 0) {
+        unread += spellings.length - index;
+        break;
+      }
+      const spelling = spellings[index] ?? '';
+      const token = normalizeToken(spelling);
+      // Test app-owned ID declarations on the intact token before heuristics.
+      if (isDeclaredExempt(token, gate) || gate.shapes.some((shape) => shape.match.test(token))) {
+        add(spelling);
+        continue;
+      }
+      const range = splitNumericRange(spelling, spellings[index + 1]);
+      if (range !== undefined && exactTokens?.has(token) === true) {
+        budget -= 1;
+        record({ value: token, shape: 'identifier' });
+        continue;
+      }
+      if (range !== undefined) {
+        const suffix = range.unit ?? '';
+        add(`${range.first}${suffix}`, token);
+        add(`${range.last}${suffix}`, token);
+        continue;
+      }
+      // An en dash outside our narrow grammar retains the tokenizer's old meaning.
+      for (const piece of spelling.includes('–') ? tokenize(spelling) : [spelling]) add(piece);
     }
-    if (range !== undefined) {
-      const suffix = range.unit ?? '';
-      add(`${range.first}${suffix}`, token);
-      add(`${range.last}${suffix}`, token);
-      continue;
-    }
-    // An en dash outside our narrow grammar retains the tokenizer's old meaning.
-    for (const piece of spelling.includes('–') ? tokenize(spelling) : [spelling]) add(piece);
   }
-  return out;
+  return { candidates: out, unread };
 }

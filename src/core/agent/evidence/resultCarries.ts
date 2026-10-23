@@ -7,7 +7,7 @@
  *          `looked_for` projected away, walked leaf by leaf, keys included —
  *          the leading JSON of a result a framework note follows, and the
  *          note as text; the text when it is not JSON) and the one normaliser
- *          (`tools/normalize.ts`) — never a second haystack.
+ *          (`lib/normalize.ts`) — never a second haystack.
  * Role:    core/ layer, `evidence/`. Asked by the inputs layer's declared-
  *          sources check (`core/agent/arguments/checks.ts` · `checkSource`),
  *          which loads with the layer — so this module is never on a plain
@@ -16,7 +16,7 @@
  */
 
 import { MAX_INDEX_TOKENS, readResult } from './evidenceIndex.js';
-import { canonicalForm, normalizeToken, tokenize } from '../../../tools/normalize.js';
+import { canonicalForm, normalizeToken, tokenize } from '../../../lib/normalize.js';
 
 /**
  * What `resultCarries` answers: the value is in the result (`found`), it is
@@ -157,7 +157,7 @@ export function resultReader(
  * MCP text result) and in a capped result's `head`. A one-token value is found when it equals a
  * leaf or one of a leaf's tokens; a longer value must occur contiguously
  * inside one string leaf (or in the text). Whole tokens only, never
- * substrings; one normaliser (`tools/normalize.ts`), so `41,200` is `41200` here as
+ * substrings; one normaliser (`lib/normalize.ts`), so `41,200` is `41200` here as
  * at the gate.
  *
  * `content` is the TOOL's own bytes — the caller cuts a library note off first

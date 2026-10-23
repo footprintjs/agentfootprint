@@ -4,7 +4,7 @@ title: CodeResult
 
 # Interface: CodeResult
 
-Defined in: [src/provider-contract/types.ts:1224](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1224)
+Defined in: [src/provider-contract/types.ts:1227](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1227)
 
 What one execution produced.
 
@@ -14,7 +14,7 @@ What one execution produced.
 
 > `readonly` `optional` **artifacts?**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:1259](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1259)
+Defined in: [src/provider-contract/types.ts:1262](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1262)
 
 Files the run produced, described rather than inlined — the whole point is
  that big data does not enter the window. All fields beyond the original
@@ -52,7 +52,7 @@ Files the run produced, described rather than inlined — the whole point is
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1229](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1229)
+Defined in: [src/provider-contract/types.ts:1232](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1232)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/provider-contract/types.ts:1229](https://github.com/footprintjs
 
 > `readonly` **ok**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1226](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1226)
+Defined in: [src/provider-contract/types.ts:1229](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1229)
 
 Did the code run to completion without an error exit?
 
@@ -70,7 +70,7 @@ Did the code run to completion without an error exit?
 
 > `readonly` **stderr**: `string`
 
-Defined in: [src/provider-contract/types.ts:1228](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1228)
+Defined in: [src/provider-contract/types.ts:1231](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1231)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [src/provider-contract/types.ts:1228](https://github.com/footprintjs
 
 > `readonly` **stdout**: `string`
 
-Defined in: [src/provider-contract/types.ts:1227](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1227)
+Defined in: [src/provider-contract/types.ts:1230](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1230)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [src/provider-contract/types.ts:1227](https://github.com/footprintjs
 
 > `readonly` `optional` **truncated?**: `object`
 
-Defined in: [src/provider-contract/types.ts:1276](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1276)
+Defined in: [src/provider-contract/types.ts:1279](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1279)
 
 Present IFF output was cut, and then it says by how much.
 

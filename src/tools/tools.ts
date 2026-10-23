@@ -26,6 +26,15 @@ import {
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './declare.js';
+import {
+  assertToolSearch,
+  freezeSearch,
+  periodArgumentsOf,
+} from '../semantics/coverage/search/declaration.js';
+import { searchReviewItems } from '../semantics/coverage/search/review.js';
+import type { ToolSearch } from '../semantics/coverage/search/types.js';
+import { rememberSearch } from './searchOf.js';
+import { isDevMode } from 'footprintjs';
 import type { TimeContext } from '../time/wire.js';
 import type { CheckInDemand } from '../core/checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
@@ -397,7 +406,69 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * `_meta.agentfootprint.period`. Omitted → byte-identical.
    */
   readonly period?: ToolPeriod;
+  /**
+   * WHAT ONE CALL OF THIS TOOL SEARCHES — declared once, as typed data, so the
+   * library composes each call's coverage from the arguments the call actually
+   * ran with (`semantics/coverage/search/`). Every `inputSchema` property is
+   * classified by role (`population`, `filter`, `period`, `source`, `cap`,
+   * `page`, `inert`), with a default where `execute` applies one
+   * (`whenOmitted`: a value, or `{ any: true }`); `fixed` names the qualifiers
+   * the tool always applies; `gaps` the ground it never reaches, each with the
+   * facet it `bears` on; `complete: 'within-arguments'` lets a call stand for
+   * the whole population, filters and period in effect. The result says
+   * `absent({ what, checked: 'declared' })` (or `coverage(rows, { checked:
+   * 'declared' })`) and the funnel composes the rest: composition can only
+   * under-claim, relative to a true declaration. Refused at `defineTool`, and
+   * again at the agent's registration, when malformed. Carried over MCP in
+   * `_meta.agentfootprint.search`, where it composes rows marked
+   * `composed: 'remote'` that establish nothing. Omitted → byte-identical.
+   */
+  readonly search?: ToolSearch;
+  /**
+   * `'read'` — this tool changes nothing (design R6). A declaration a later
+   * check reads, never one that governs execution: only an `effects: 'read'`
+   * written in `defineTool`, on a LOCAL tool, counts
+   * (`readOnlyByDeclaration`); a hand-set field, an MCP annotation or a remote
+   * `readOnlyHint` never does, and a remote tool carrying it is refused at
+   * registration (`effects-on-remote`). It never crosses MCP. Omitted →
+   * byte-identical.
+   */
+  readonly effects?: 'read';
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
+}
+
+/** The tools whose `effects: 'read'` was written in `defineTool` — the app's own word. */
+const DECLARED_READ_ONLY = new WeakSet<object>();
+
+/**
+ * Whether the APP declared this tool read-only: `effects: 'read'` written in
+ * `defineTool`, on a local tool (no `source`). Tool metadata, an MCP
+ * annotation or a remote `readOnlyHint` never answer yes.
+ */
+export function readOnlyByDeclaration(tool: Tool): boolean {
+  return tool.effects === 'read' && tool.source === undefined && DECLARED_READ_ONLY.has(tool);
+}
+
+/**
+ * Refuse an `effects` this library cannot honour — any value but `'read'` at
+ * `defineTool`, and any `effects` on a remote tool at registration
+ * (`effects-on-remote`: a remote tool's word never relaxes a check).
+ */
+export function assertToolEffects(toolName: string, effects: unknown, remote = false): void {
+  if (effects === undefined) return;
+  if (effects !== 'read') {
+    throw new Error(
+      `defineTool('${toolName}'): \`effects\` is ${JSON.stringify(effects)} — the one ` +
+        "declaration is 'read' (this tool changes nothing). Omit it for a tool that may write.",
+    );
+  }
+  if (remote) {
+    throw new Error(
+      `tool '${toolName}': \`effects\` on a tool that arrived over MCP or from a ToolProvider — ` +
+        'only the app may declare a tool read-only, in defineTool on a local tool ' +
+        '(effects-on-remote).',
+    );
+  }
 }
 
 /**
@@ -1028,7 +1099,33 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** Which argument sets the period the answer covers (see {@link Tool.period}).
    *  Requires a rule on that argument. Omitted → byte-identical. */
   readonly period?: ToolPeriod;
+  /** What one call of this tool searches, classified (see {@link Tool.search}).
+   *  Refused here when malformed. Omitted → byte-identical. */
+  readonly search?: ToolSearch;
+  /** `'read'` — this tool changes nothing (see {@link Tool.effects}). Omitted →
+   *  byte-identical. */
+  readonly effects?: 'read';
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
+}
+
+/** Tools already told about a `said-overlap` — one dev warning per tool per process. */
+const warnedSearchReview = new Set<string>();
+
+/**
+ * Dev mode: name each `said-overlap` of a search once — a review item, never a
+ * refusal (the `check:semantics` gate lists it too, with `source-said`).
+ */
+function warnSearchReview(toolName: string, search: ToolSearch | undefined): void {
+  if (search === undefined || !isDevMode() || warnedSearchReview.has(toolName)) return;
+  const overlaps = searchReviewItems(search).filter((i) => i.code === 'said-overlap');
+  if (overlaps.length === 0) return;
+  warnedSearchReview.add(toolName);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `agentfootprint search: tool '${toolName}' — ` +
+      overlaps.map((i) => `${i.field}: ${i.message}`).join(' ') +
+      ' (said-overlap; this warning fires once per tool per process.)',
+  );
 }
 
 /**
@@ -1114,7 +1211,17 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     options.inputSchema ?? { type: 'object', properties: {} },
     options.wants,
   );
-  return {
+  // What one call searches — every property classified, every default and
+  // qualifier declared, the statement text held to a sentence's standard.
+  // Refused HERE, naming the tool and the code, not at the first "not found".
+  const periodArguments = periodArgumentsOf(options.period);
+  assertToolSearch(options.name, options.search, {
+    inputSchema: options.inputSchema ?? { type: 'object', properties: {} },
+    ...(periodArguments !== undefined && { periodArguments }),
+  });
+  warnSearchReview(options.name, options.search);
+  assertToolEffects(options.name, options.effects);
+  const tool: Tool<TArgs, TResult> = {
     schema: {
       name: options.name,
       description: options.description,
@@ -1140,6 +1247,14 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.repeatedWhen !== undefined && { repeatedWhen: options.repeatedWhen }),
     ...(options.askOrAssume !== undefined && { askOrAssume: options.askOrAssume }),
     ...(options.period !== undefined && { period: options.period }),
+    // Stored frozen, its value words a null-prototype map (`freezeSearch`).
+    ...(options.search !== undefined && { search: freezeSearch(options.search) }),
+    ...(options.effects !== undefined && { effects: options.effects }),
     execute: options.execute,
   };
+  // The app's own word — the one `effects: 'read'` a later check may honour.
+  if (tool.effects === 'read') DECLARED_READ_ONLY.add(tool);
+  // Judged above — remembered so the registration funnel never judges it twice.
+  if (tool.search !== undefined) rememberSearch(tool, tool.search);
+  return tool;
 }
