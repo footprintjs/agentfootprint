@@ -1795,9 +1795,10 @@ export async function standingAgent<TH extends HostHandle>(
         // named, its call changed after the ask, or an ask made under rules
         // this agent no longer runs. Held, it would hold the session for
         // good — so it is closed, the message continues the conversation, and
-        // the calls it left open are recorded as not run when this agent's
-        // ledger proves it, else as not known (`answeredPause.ts`).
-        prior = await closedConversation(paused, runner);
+        // the calls it left open are recorded as not run only when the ledger
+        // the request was minted under proves it, else as possibly run
+        // (`answeredPause.ts`).
+        prior = await closedConversation(paused, { runner, store });
         paused = undefined;
       }
 

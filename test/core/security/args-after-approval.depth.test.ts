@@ -14,9 +14,11 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../../src/lib/frozenCopy.js', () => ({
-  // The boundary removed: the callback is handed the object itself.
+vi.mock('../../../src/lib/frozenCopy.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/lib/frozenCopy.js')>()),
+  // The boundary removed: every callback is handed the object itself.
   frozenCopyOf: <T>(value: T): T => value,
+  frozenView: <T>(value: T): T => value,
 }));
 
 import {
