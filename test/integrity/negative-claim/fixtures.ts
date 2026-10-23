@@ -40,6 +40,7 @@ export const LIST_INCIDENTS: DeclaredTool = {
       },
       { name: 'window', role: 'period', whenOmitted: '2h' },
       { name: 'limit', role: 'cap', whenOmitted: 200 },
+      { name: 'page', role: 'page' },
       { name: 'format', role: 'inert' },
     ],
     complete: 'within-arguments',
@@ -87,6 +88,8 @@ export interface IncidentRowOptions {
   readonly gaps?: readonly SearchGap[];
   readonly held?: { from: string; to: string } | 'unknown' | 'none';
   readonly overclaim?: readonly string[];
+  /** The page the call asked for — composed as a checked item. */
+  readonly page?: number;
 }
 
 /** § 3.2's row for `list_incidents`, with the options a test varies. */
@@ -130,6 +133,15 @@ export function incidentRow(options: IncidentRowOptions = {}): ComposedSearchRow
       from: options.window === undefined ? 'default' : 'call',
     },
   ];
+  if (options.page !== undefined) {
+    checked.push({
+      what: `page: ${options.page}`,
+      facet: 'page',
+      argument: 'page',
+      value: options.page,
+      from: 'call',
+    });
+  }
   const queried =
     window === '7d'
       ? { from: '2026-10-15T10:00:00Z', to: CLOCK }
@@ -181,6 +193,8 @@ export interface CallOptions extends IncidentRowOptions {
   readonly noScope?: boolean;
   readonly keptOut?: boolean;
   readonly readAt?: string;
+  /** The caller's effect class for the call; `null` leaves it undeclared. */
+  readonly effect?: 'read' | 'not-read' | null;
 }
 
 /** One `list_incidents` call as the record holds it. */
@@ -189,6 +203,7 @@ export function incidentCall(options: CallOptions = {}): TurnCall {
   const args: Record<string, unknown> = { service: options.service ?? 'payments' };
   if (options.severity !== undefined) args.severity = options.severity;
   if (options.window !== undefined) args.window = options.window;
+  if (options.page !== undefined) args.page = options.page;
   const outcome = options.outcome ?? 'ok';
   const emptiness = outcome === 'ok' ? options.emptiness ?? 'declared-absent' : undefined;
   const read = outcome === 'ok' && options.noRow !== true;
@@ -198,6 +213,7 @@ export function incidentCall(options: CallOptions = {}): TurnCall {
     toolCallId: id,
     toolName: 'list_incidents',
     turn: options.turn ?? 1,
+    ...(options.effect === null ? {} : { effect: options.effect ?? 'read' }),
     batch: options.batch ?? ordinalOf(id),
     dispatched: options.dispatched ?? outcome !== 'not-run',
     outcome,
@@ -227,6 +243,7 @@ export function changesCall(id = 'k1', turn = 1): TurnCall {
     toolCallId: id,
     toolName: 'list_changes',
     turn,
+    effect: 'read',
     batch: ordinalOf(id),
     dispatched: true,
     outcome: 'ok',
@@ -269,6 +286,7 @@ export function amongCall(
     toolCallId: id,
     toolName: 'get_capacity',
     turn: 1,
+    effect: 'read',
     batch: ordinalOf(id),
     dispatched: true,
     outcome: 'ok',
@@ -310,8 +328,9 @@ export function amongCall(
 }
 
 /**
- * A call of a tool with no `search` declaration — the agent filed an incident. Not a read.
- * `dispatched` says whether it was handed to `execute` (a schema refusal never was).
+ * A call the caller does not classify as a read — the agent filed an incident. Its effect class
+ * is left undeclared, which counts as `not-read`. `dispatched` says whether it was handed to
+ * `execute` (a schema refusal never was).
  */
 export function writeCall(
   id = 'w1',

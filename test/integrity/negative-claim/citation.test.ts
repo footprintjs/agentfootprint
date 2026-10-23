@@ -14,7 +14,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { judgeTypedNegatives } from '../../../src/integrity/negative-claim/judge.js';
+import {
+  MAX_CITED_READS,
+  MAX_NEGATIVE_CLAIMS,
+  judgeTypedNegatives,
+} from '../../../src/integrity/negative-claim/judge.js';
 import type { TurnCall } from '../../../src/integrity/negative-claim/types.js';
 import {
   CLOCK,
@@ -340,10 +344,121 @@ describe('unreachable — the claim cannot be judged, so it is withheld with a r
     });
   });
 
-  it('stale-turn: the cited read and the answer are in different run legs (a pause between)', () => {
+  it('a read made before a pause in the SAME turn is not stale: another leg, same turn', () => {
     const call = incidentCall({ id: 'c1', runId: 'run-0' });
     const citation = [{ kind: 'none', restsOn: [rid('c1', 'run-0')] }];
-    expect(codeOf(citation, [call], { runId: 'run-1' })).toEqual(['stale-turn']);
+    expect(codeOf(citation, [call], { runId: 'run-1' })).toEqual(['established']);
+  });
+
+  it('an unknown run id is citation-unresolved, never stale-turn', () => {
+    const citation = [{ kind: 'none', restsOn: [rid('c1', 'run-9')] }];
+    expect(codeOf(citation, [incidentCall({ id: 'c1' })])).toEqual(['citation-unresolved']);
+  });
+
+  it('a malformed identity is citation-unresolved, never stale-turn', () => {
+    const citation = [{ kind: 'none', restsOn: ['claim-result/bench-ns/run-0/zero'] }];
+    expect(codeOf(citation, [incidentCall({ id: 'c1' })])).toEqual(['citation-unresolved']);
+  });
+});
+
+describe('caps and `about`', () => {
+  it('`about: null` and `about: ""` are absent', () => {
+    expect(codeOf([{ ...none('c1')[0], about: null }], [incidentCall()])).toEqual(['established']);
+    expect(codeOf([{ ...none('c1')[0], about: '' }], [incidentCall()])).toEqual(['established']);
+  });
+
+  it('`about` matches through the resolved name and aliases', () => {
+    expect(codeOf([{ ...none('c1')[0], about: 'pay-svc' }], [incidentCall()])).toEqual([
+      'established',
+    ]);
+    expect(codeOf([{ ...none('c1')[0], about: 'Payments' }], [incidentCall()])).toEqual([
+      'established',
+    ]);
+  });
+
+  it(`more than ${MAX_CITED_READS} distinct reads in one claim is too-many-claims`, () => {
+    const ids = Array.from({ length: MAX_CITED_READS + 1 }, (_, i) => rid(`c${i + 1}`));
+    const [j] = judge([{ kind: 'none', restsOn: ids }], [incidentCall()]);
+    expect(j?.row).toMatchObject({ code: 'too-many-claims', disposition: 'unreachable' });
+  });
+
+  it(`more than ${MAX_NEGATIVE_CLAIMS} claims in one field withholds every one`, () => {
+    const claims = Array.from({ length: MAX_NEGATIVE_CLAIMS + 1 }, () => none('c1')[0]);
+    const codes = codeOf(claims, [incidentCall()]);
+    expect(codes).toHaveLength(MAX_NEGATIVE_CLAIMS + 1);
+    expect(new Set(codes)).toEqual(new Set(['too-many-claims']));
+  });
+
+  it('a claim repeated in the field is judged alike, each on its own row', () => {
+    expect(codeOf([none('c1')[0], none('c1')[0]], [incidentCall()])).toEqual([
+      'established',
+      'established',
+    ]);
+  });
+});
+
+describe('pages, and `complete` against other reads', () => {
+  const PAGED = {
+    kind: 'paged' as const,
+    what: 'page: 2 was asked for',
+    bears: 'completeness' as const,
+  };
+
+  it('a `none` citing a read with a `paged` gap is search-incomplete: one page proves nothing', () => {
+    const page2 = incidentCall({ id: 'c2', page: 2, gaps: [PAGED] });
+    const [j] = judge(none('c2'), [
+      incidentCall({ id: 'c1', page: 1, emptiness: 'non-empty', rows: 3, gaps: [PAGED] }),
+      page2,
+    ]);
+    expect(j?.row).toMatchObject({ code: 'search-incomplete', disposition: 'checked-fail' });
+  });
+
+  it('`complete`: a same-key read with MORE rows contradicts it', () => {
+    const calls = [
+      incidentCall({ id: 'c1', emptiness: 'non-empty', rows: 3 }),
+      incidentCall({ id: 'c2', emptiness: 'non-empty', rows: 5 }),
+    ];
+    expect(codeOf(complete('c1'), calls)).toEqual(['contradicted-by-rows']);
+  });
+
+  it('`complete`: a wider read whose rows are provably inside the cited scope and not listed contradicts it', () => {
+    const cited = incidentCall({
+      id: 'c1',
+      severity: 'critical',
+      emptiness: 'non-empty',
+      rows: 1,
+      rowsRead: [{ entity: 'A', severity: 'critical' }],
+    });
+    const wider = incidentCall({
+      id: 'c2',
+      emptiness: 'non-empty',
+      rows: 2,
+      rowsRead: [
+        { entity: 'A', severity: 'critical' },
+        { entity: 'B', severity: 'critical' },
+      ],
+    });
+    expect(codeOf(complete('c1'), [cited, wider])).toEqual(['contradicted-by-rows']);
+  });
+
+  it('`complete`: a wider read whose inside rows are all listed, or whose rows are outside, leaves it', () => {
+    const cited = incidentCall({
+      id: 'c1',
+      severity: 'critical',
+      emptiness: 'non-empty',
+      rows: 1,
+      rowsRead: [{ entity: 'A', severity: 'critical' }],
+    });
+    const wider = incidentCall({
+      id: 'c2',
+      emptiness: 'non-empty',
+      rows: 2,
+      rowsRead: [
+        { entity: 'A', severity: 'critical' },
+        { entity: 'B', severity: 'minor' },
+      ],
+    });
+    expect(codeOf(complete('c1'), [cited, wider])).toEqual(['established']);
   });
 });
 
@@ -388,7 +503,19 @@ describe('the call sequence — what ran after the cited read', () => {
     expect(codeOf(none('c1'), calls)).toEqual(['established']);
   });
 
-  it('superseded-by-write: a call of a tool with no `search` ran after the cited read', () => {
+  it('superseded-by-write: a call the caller left unclassified counts as not-read', () => {
+    const unclassified = incidentCall({ id: 'c2', service: 'checkout', effect: null });
+    expect(codeOf(none('c1'), [incidentCall({ id: 'c1' }), unclassified])).toEqual([
+      'superseded-by-write',
+    ]);
+  });
+
+  it('a call the caller classifies as a read is never a write, whatever its tool', () => {
+    const read: TurnCall = { ...writeCall('w1'), effect: 'read' };
+    expect(codeOf(none('c1'), [incidentCall({ id: 'c1' }), read])).toEqual(['established']);
+  });
+
+  it('superseded-by-write: a call not classified as a read ran after the cited read', () => {
     const [j] = judge(none('c1'), [incidentCall({ id: 'c1' }), writeCall('w1')]);
     expect(j?.row).toMatchObject({ code: 'superseded-by-write', disposition: 'checked-fail' });
     expect(j?.statement).toBeUndefined();
@@ -415,7 +542,7 @@ describe('the call sequence — what ran after the cited read', () => {
     expect(codeOf(none('c1'), calls)).toEqual(['superseded-by-write']);
   });
 
-  it('a read of a `search` tool after the cited read is not a write', () => {
+  it('a classified read after the cited read is not a write', () => {
     expect(codeOf(none('c1'), [incidentCall({ id: 'c1' }), changesCall('k1')])).toEqual([
       'established',
     ]);

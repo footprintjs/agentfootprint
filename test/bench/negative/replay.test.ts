@@ -1,10 +1,11 @@
 /**
  * The negative-claim replay (`bench/negative/`), on a SYNTHETIC study folder written here — no
- * study data enters this repository. Reads the built package, like every bench (`npm run build`).
+ * study data enters this repository. No build is needed: the replay takes the checker as an
+ * argument, and this suite hands it the SOURCES; only the command line loads the built package.
  *
  * Test types:
- *   - UNIT — the split (flagships held out, the per-kind quota, deterministic), the clustered
- *     ratio (point, bounds inside [0, 1], an empty denominator), the label resolutions;
+ *   - UNIT — the split (flagships held out, the per-kind quota, deterministic), the exact
+ *     case-level bound (Clopper-Pearson over cases), the floors;
  *   - FUNCTIONAL — a whole folder read and replayed: the detector's hits against the labels, the
  *     baseline equal to detector + record while no call carries a composed row, the gates, a
  *     label set without a key rebuilt by the sheet rule;
@@ -16,10 +17,18 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { detectNegativeClaims } from '../../../src/integrity/negative-claim/detect.js';
+import {
+  NEGATIVE_CLAIM_PHRASES_HASH,
+  NEGATIVE_CLAIM_PHRASES_VERSION,
+} from '../../../src/integrity/negative-claim/phrases.js';
+import { judgeProseNegatives } from '../../../src/integrity/negative-claim/prose.js';
+import { STATEMENT_VERSION } from '../../../src/integrity/negative-claim/statement.js';
 // @ts-expect-error — a plain .mjs bench module, no types
 import {
   FLAGSHIPS,
-  clusteredRatio,
+  casesRatio,
+  clopperPearson,
   splitCases,
   TUNE_QUOTA,
 } from '../../../bench/negative/measure.mjs';
@@ -27,6 +36,14 @@ import {
 import { print, replay } from '../../../bench/negative/replay.mjs';
 // @ts-expect-error — a plain .mjs bench module, no types
 import { loadStudy, rebuildSheetKey } from '../../../bench/negative/study.mjs';
+
+/** The checker, from the sources. */
+const LIB = { detectNegativeClaims, judgeProseNegatives };
+const VERSIONS = {
+  phrases: NEGATIVE_CLAIM_PHRASES_VERSION,
+  phrasesHash: NEGATIVE_CLAIM_PHRASES_HASH,
+  statement: STATEMENT_VERSION,
+};
 
 const KINDS: Record<string, string> = {
   a1: 'A',
@@ -173,24 +190,31 @@ describe('UNIT — the split', () => {
   });
 });
 
-describe('UNIT — the case-clustered ratio', () => {
-  it('a point and a 95% interval inside [0, 1]', () => {
+describe('UNIT — the exact case-level bound', () => {
+  it('Clopper-Pearson: known values', () => {
+    const [low, high] = clopperPearson(3, 8) as [number, number];
+    expect(low).toBeCloseTo(0.0852, 3);
+    expect(high).toBeCloseTo(0.7551, 3);
+    expect(clopperPearson(0, 5)[0]).toBe(0);
+    expect(clopperPearson(5, 5)[1]).toBe(1);
+  });
+
+  it('a ratio over replies, bounded over its CASES', () => {
     const items = Array.from({ length: 40 }, (_, i) => ({
       code: `k${i % 8}`,
       num: i % 3 === 0 ? 1 : 0,
       den: 1,
     }));
-    const r = clusteredRatio(items);
+    const r = casesRatio(items);
     expect(r.point).toBeCloseTo(14 / 40);
-    expect(r.low).toBeGreaterThanOrEqual(0);
-    expect(r.high).toBeLessThanOrEqual(1);
-    expect(r.low).toBeLessThanOrEqual(r.point);
-    expect(r.high).toBeGreaterThanOrEqual(r.point);
-    expect(clusteredRatio(items)).toEqual(r);
+    expect(r.cases).toBe(8);
+    expect(r.low).toBeCloseTo(0.0852, 3);
+    expect(r.high).toBeCloseTo(0.7551, 3);
+    expect(casesRatio(items)).toEqual(r);
   });
 
   it('an empty denominator has no estimate', () => {
-    expect(clusteredRatio([{ code: 'k', num: 0, den: 0 }]).point).toBeUndefined();
+    expect(casesRatio([{ code: 'k', num: 0, den: 0 }]).point).toBeUndefined();
   });
 });
 
@@ -205,35 +229,37 @@ describe('FUNCTIONAL — a synthetic folder, read and replayed', () => {
   });
 
   it('the detector finds the flat claims the labels mark, and only those', () => {
-    const result = replay(loadStudy(dir));
+    const result = replay(loadStudy(dir), LIB);
     const cell = result.cells.find(
       (c: { cell: string; resolution: string }) =>
         c.cell === 'held-out · haiku · test-arm' && c.resolution === 'A',
     );
     expect(cell.detector.sensitivity.point).toBe(1);
-    expect(cell.detector.specificity.point).toBe(1);
+    expect(cell.detector.firesOnNotFlat.point).toBe(0);
+    expect(cell.baseline.missedOverclaims.point).toBe(0);
     expect(cell.record.sameAsBaseline).toBe(true);
   });
 
   it('with no composed row, detector + record IS the baseline; every claim notes entity-unresolved', () => {
-    const result = replay(loadStudy(dir));
+    const result = replay(loadStudy(dir), LIB);
     for (const cell of result.cells) expect(cell.record.sameAsBaseline).toBe(true);
     expect(Object.keys(result.notes)).toEqual(['entity-unresolved']);
   });
 
-  it('reads the gates on held-out test-arm replies, per model and resolution', () => {
-    const result = replay(loadStudy(dir));
+  it('reads the gates on held-out test-arm replies, per model and resolution; floors enforced', () => {
+    const result = replay(loadStudy(dir), LIB);
     expect(
       result.gates.map((g: { model: string; resolution: string }) => `${g.model}/${g.resolution}`),
     ).toEqual(['haiku/A', 'haiku/B', 'haiku/agreed', 'sonnet/A', 'sonnet/B', 'sonnet/agreed']);
-    const lift = result.gates[0].verdicts.find((v: { name: string }) =>
-      v.name.startsWith('specificity above'),
-    );
-    expect(lift.verdict).toBe('fail');
+    const verdict = (name: string) =>
+      result.gates[0].verdicts.find((v: { name: string }) => v.name.startsWith(name)).verdict;
+    expect(verdict('detector sensitivity')).toBe('below floor');
+    expect(verdict('missed overclaims')).toBe('below floor');
+    expect(verdict('specificity above')).toBe('not measurable');
   });
 
   it('the printed report carries no reply text', () => {
-    const report = print(replay(loadStudy(dir))) as string;
+    const report = print(replay(loadStudy(dir), LIB), VERSIONS) as string;
     expect(report).toContain('PRELIMINARY');
     expect(report).not.toContain(FLAT);
     expect(report).not.toContain('synthetic service');

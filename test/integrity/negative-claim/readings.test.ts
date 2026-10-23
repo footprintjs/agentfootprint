@@ -4,7 +4,8 @@
  *
  * The key is the COMPOSED executed scope of each row — the tool, every filter in effect
  * (`whenOmitted` defaults composed as if sent), the `fixed` qualifiers, host-filled identity
- * filters by reference, the window resolved on the LEG's clock, and the page asked for — never
+ * filters by reference, a relative window by its spelling within the turn, and the page asked
+ * for — never
  * the tool name or the model-visible arguments alone.
  *
  * Test types: unit (the key's inputs, one by one; the scope relation; the merge rule) ·
@@ -60,17 +61,17 @@ describe('the key — the composed executed scope', () => {
     expect(key(incidentCall({ id: 'c1' }))).toBe(key(incidentCall({ id: 'c2', window: '2h' })));
   });
 
-  it('a relative window keys by its span on the leg clock: 2h and 120m are one search', () => {
+  it('a relative window keys by its SPELLING within the turn: 2h and 120m are two searches', () => {
     const twoHours = incidentCall({ id: 'c1', window: '2h' });
     const minutes = withScope(incidentCall({ id: 'c2', window: '2h' }), (items) =>
       items.map((item) => (item.facet === 'period' ? { ...item, value: '120m' } : item)),
     );
-    expect(key(twoHours)).toBe(key(minutes));
+    expect(key(twoHours)).not.toBe(key(minutes));
   });
 
-  it('the same relative window on two legs’ clocks is two searches', () => {
+  it('the same spelling on two legs of one turn is one search, whatever the clock', () => {
     const call = incidentCall({ id: 'c1' });
-    expect(key(call, CLOCK)).not.toBe(key(call, '2026-10-22T11:00:00Z'));
+    expect(key(call, CLOCK)).toBe(key(call, '2026-10-22T11:00:00Z'));
   });
 
   it('a different filter in effect is another search', () => {

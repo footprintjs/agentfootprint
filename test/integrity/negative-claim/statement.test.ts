@@ -2,11 +2,12 @@
  * negative-claim — the library's statement (design § 5.1, `statement.ts`): written from the
  * cited reads' rows alone, every gap said out loud as "not checked: …".
  *
- * Every text taken from a row — a sent value AND the declaration's own words (tool, subject,
- * source, qualifiers, a gap's text) — is QUOTED data attributed to the tool ("as the tool names
- * them"): NFKC, control and format characters (bidi overrides included) removed, line breaks
- * flattened, each value capped at 64 characters + "…". Only numbers and instants the library
- * re-spells from parsed values stand outside quotes. One clause per cited read, one line each,
+ * The library's own voice states only what the record shows; every text taken from a row is
+ * QUOTED and ATTRIBUTED: "(declared by the tool)", "(fixed by the tool)", "(the tool's declared
+ * default)", "(as sent by the model)", "(as the tool's result says)". Quoting means NFKC, control
+ * and format characters (bidi overrides included) removed, line breaks flattened; a value is
+ * capped at 64 characters + "…", a gap's text at the declared 120. Every gap is listed. Only
+ * numbers and instants the library re-spells from parsed values stand outside quotes. One clause per cited read, one line each,
  * in ordinal order. `complete` states the rows READ (their count and identities, capped), never a
  * list the model wrote.
  *
@@ -25,11 +26,20 @@ import { judgeTypedNegatives } from '../../../src/integrity/negative-claim/judge
 import {
   STATEMENT_LIMITS,
   STATEMENT_VERSION,
+  clauseLimit,
   composeStatement,
 } from '../../../src/integrity/negative-claim/statement.js';
 import type { ComposedSearchRow } from '../../../src/integrity/negative-claim/searchRow.js';
 import type { TurnCall } from '../../../src/integrity/negative-claim/types.js';
-import { CLOCK, amongCall, incidentCall, incidentRow, rid, turnRecord } from './fixtures.js';
+import {
+  CLOCK,
+  LIST_INCIDENTS,
+  amongCall,
+  incidentCall,
+  incidentRow,
+  rid,
+  turnRecord,
+} from './fixtures.js';
 
 const statementOf = (negatives: unknown, calls: readonly TurnCall[]) =>
   judgeTypedNegatives({ field: 'negatives', negatives, record: turnRecord(calls) })[0]?.statement
@@ -37,35 +47,39 @@ const statementOf = (negatives: unknown, calls: readonly TurnCall[]) =>
 
 const cite = (kind: string, ...ids: string[]) => [{ kind, restsOn: ids.map((id) => rid(id)) }];
 
-describe('the three worked statements (§ 5.1), rule-derived', () => {
+describe('the three worked statements (§ 5.1), rule-derived and attributed', () => {
+  const SCOPE =
+    'subject `incidents` (declared by the tool); `service` `payments` (as sent by the model); ' +
+    "`status` `open` (fixed by the tool); any `severity` (the tool's declared default); source " +
+    '`the incident store` (declared by the tool); window 08:00–10:00Z (held in full)';
+
   it('none: the scope of the read and the email gap, said out loud', () => {
     expect(statementOf(cite('none', 'c1'), [incidentCall()])).toBe(
-      '`list_incidents` found none — as the tool names them: subject `incidents`; for ' +
-        '`service: payments`; scope `status: open`, any `severity`; source `the incident ' +
-        'store`; window 08:00–10:00Z (held in full); not checked: `incidents filed by email`.',
+      `\`list_incidents\` found none — ${SCOPE}; not checked: \`incidents filed by email\` ` +
+        '(declared by the tool).',
     );
   });
 
-  it('not-found: the name among the export, its read time and its irremovable gap', () => {
+  it('not-found: the name as sent, among the names the result counts, and the irremovable gap', () => {
     expect(statementOf(cite('not-found', 'c4'), [amongCall()])).toBe(
-      '`get_capacity` did not find `ARRAY-X9` among 14 names — as the tool names them: ' +
-        'subject `arrays`; for `array_id: ARRAY-X9`; names `array names`; source `the ' +
-        'array inventory export`; read 09:14Z; not checked: `names outside the array ' +
-        'inventory export`.',
+      '`get_capacity` did not find `ARRAY-X9` (as sent by the model) among 14 names — subject ' +
+        "`arrays` (declared by the tool); names `array names` (as the tool's result says); " +
+        'source `the array inventory export` (declared by the tool); read 09:14Z; not checked: ' +
+        '`names outside the array inventory export` (declared by the tool).',
     );
   });
 
-  it('complete: the rows READ, by count and identity — and the gap still stated', () => {
+  it('complete: the rows READ, and what the tool declares about caps and pages', () => {
     const call = incidentCall({
       emptiness: 'non-empty',
       rows: 3,
       rowsRead: [{ entity: 'INC-7302' }, { entity: 'INC-7295' }, { entity: 'INC-7288' }],
     });
     expect(statementOf(cite('complete', 'c1'), [call])).toBe(
-      '`list_incidents` read 3 rows — as the tool names them: subject `incidents`; for ' +
-        '`service: payments`; scope `status: open`, any `severity`; source `the incident ' +
-        'store`; window 08:00–10:00Z (held in full); rows `INC-7302`, `INC-7295`, `INC-7288`; ' +
-        'no cap reached, one page; not checked: `incidents filed by email`.',
+      `\`list_incidents\` read 3 rows — ${SCOPE}; rows \`INC-7302\`, \`INC-7295\`, ` +
+        "`INC-7288` (as the tool's result says); no cap reached; the tool declares no server " +
+        'cap; the tool declares one page; not checked: `incidents filed by email` (declared by ' +
+        'the tool).',
     );
   });
 
@@ -76,19 +90,15 @@ describe('the three worked statements (§ 5.1), rule-derived', () => {
       record: turnRecord([incidentCall()]),
     });
     expect(judged[0]?.statement?.version).toBe(STATEMENT_VERSION);
-    expect(STATEMENT_VERSION).toBe('1');
+    expect(STATEMENT_VERSION).toBe('2');
   });
 });
 
 describe('each row shape', () => {
-  it('a sent filter is stated as sent', () => {
+  it('a sent filter is labelled as sent by the model', () => {
     expect(
       statementOf(cite('none', 'c1'), [incidentCall({ severity: 'critical', gaps: [] })]),
-    ).toBe(
-      '`list_incidents` found none — as the tool names them: subject `incidents`; for ' +
-        '`service: payments`; scope `status: open`, `severity: critical`; source `the incident ' +
-        'store`; window 08:00–10:00Z (held in full).',
-    );
+    ).toContain('`severity` `critical` (as sent by the model)');
   });
 
   it('a partly-held period names the time not held as not checked', () => {
@@ -120,7 +130,7 @@ describe('each row shape', () => {
     expect(text).toContain('; window `window: 2h` (held: undeclared).');
   });
 
-  it('a sent source replaces the declared one', () => {
+  it('a sent source replaces the declared one, labelled as sent', () => {
     const row = incidentRow({ gaps: [] });
     const sent: ComposedSearchRow = {
       ...row,
@@ -131,17 +141,17 @@ describe('each row shape', () => {
       ),
     };
     const statement = composeStatement('none', [{ call: incidentCall(), row: sent }], CLOCK);
-    expect(statement.text).toContain('source `db: replica`');
+    expect(statement.text).toContain('source `replica` (as sent by the model)');
     expect(statement.text).not.toContain('the incident store');
   });
 
-  it('every gap kind is stated by its own words: an unsent argument and a hand-written gap', () => {
+  it('an unsent argument is stated with calibrated words; a hand-written gap as the tool wrote it', () => {
     const text = statementOf(cite('none', 'c1'), [
       incidentCall({
         gaps: [
           {
             kind: 'argument-unsent',
-            what: 'region: not sent, its default undeclared',
+            what: 'region: not sent',
             argument: 'region',
             bears: 'population',
           },
@@ -150,14 +160,44 @@ describe('each row shape', () => {
       }),
     ]);
     expect(text).toContain(
-      'not checked: `region: not sent, its default undeclared`, `the archive tier`.',
+      'not checked: `region` was not sent, so the tool may have applied its own default and ' +
+        'this may cover only part; `the archive tier` (as the tool wrote it).',
     );
   });
 
-  it('an authoritative `among` names no gap', () => {
-    const text = statementOf(cite('not-found', 'c4'), [amongCall({ authoritative: true })]);
-    expect(text).toContain('; read 09:14Z.');
-    expect(text).not.toContain('not checked');
+  it('every gap is listed — none is dropped, however many', () => {
+    const gaps = Array.from({ length: 30 }, (_, i) => ({
+      kind: 'scope' as const,
+      what: `gap number ${i}`,
+      bears: 'source' as const,
+    }));
+    const text = statementOf(cite('none', 'c1'), [incidentCall({ gaps })]) ?? '';
+    for (let i = 0; i < 30; i += 1) expect(text).toContain(`\`gap number ${i}\``);
+  });
+
+  it('a gap keeps its declared 120 characters; a sent value is capped at 64', () => {
+    const long = 'g'.repeat(130);
+    const text = statementOf(cite('none', 'c1'), [
+      incidentCall({
+        service: 's'.repeat(100),
+        gaps: [{ kind: 'scope', what: long, bears: 'source' }],
+      }),
+    ]);
+    expect(text).toContain(`\`${'g'.repeat(120)}…\``);
+    expect(text).toContain(`\`${'s'.repeat(64)}…\` (as sent by the model)`);
+  });
+
+  it('a server cap the tool declares is said; an authoritative `among` names no gap', () => {
+    const capped = {
+      ...LIST_INCIDENTS,
+      search: { ...LIST_INCIDENTS.search!, limits: { cap: 500 } },
+    };
+    const call = incidentCall({ emptiness: 'non-empty', rows: 3, gaps: [] });
+    const statement = composeStatement('complete', [{ call, row: call.row!, tool: capped }], CLOCK);
+    expect(statement.text).toContain('no cap reached; the tool declares a server cap of 500;');
+    const among = statementOf(cite('not-found', 'c4'), [amongCall({ authoritative: true })]);
+    expect(among).toContain('; read 09:14Z.');
+    expect(among).not.toContain('not checked');
   });
 
   it('two cited reads give two lines, in ORDINAL order, not citation order', () => {
@@ -168,15 +208,15 @@ describe('each row shape', () => {
     const text = statementOf(cite('none', 'c2', 'c1'), calls) ?? '';
     const lines = text.split('\n');
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain('`service: payments`');
-    expect(lines[1]).toContain('`service: checkout`');
+    expect(lines[0]).toContain('`payments`');
+    expect(lines[1]).toContain('`checkout`');
   });
 
-  it('a hostile value is quoted, stripped of line breaks and backticks, and capped', () => {
+  it('a hostile value is quoted, stripped of line breaks and backticks', () => {
     const row = incidentRow({ gaps: [{ kind: 'prose', what: `x\`\n${'y'.repeat(200)}\u0007z` }] });
     const { text } = composeStatement('none', [{ call: incidentCall(), row }], CLOCK);
     expect(text).not.toMatch(/[\n\r\p{Cc}]/u);
-    expect(text).toContain(`\`x' ${'y'.repeat(61)}…\``);
+    expect(text).toContain(`\`x' ${'y'.repeat(117)}…\``);
   });
 
   it('format characters and bidi overrides are removed, and text is NFKC', () => {
@@ -192,7 +232,7 @@ describe('each row shape', () => {
     const rowsRead = Array.from({ length: 30 }, (_, i) => ({ entity: `INC-${i}` }));
     const call = incidentCall({ emptiness: 'non-empty', rows: 30, rowsRead, gaps: [] });
     const text = statementOf(cite('complete', 'c1'), [call]) ?? '';
-    expect(text).toContain('`INC-11`, and 18 more; no cap reached, one page.');
+    expect(text).toContain("`INC-11`, and 18 more (as the tool's result says); no cap reached;");
     expect(text).not.toContain('INC-12');
   });
 
@@ -206,7 +246,9 @@ describe('each row shape', () => {
       }),
       idColumn: 'incident_id',
     };
-    expect(statementOf(cite('complete', 'c1'), [call])).toContain('rows `A-1`, `A-2`;');
+    expect(statementOf(cite('complete', 'c1'), [call])).toContain(
+      "rows `A-1`, `A-2` (as the tool's result says);",
+    );
   });
 });
 
@@ -227,8 +269,10 @@ function mulberry32(seed: number): () => number {
 /** The template's own words — written here, independently of `statement.ts`. */
 const TEMPLATE_WORDS = new Set(
   (
-    'found none as the tool names them subject for scope any source window held in full part ' +
-    'not undeclared unknown checked did find among read rows no cap reached one page and more z'
+    'found none subject declared by the tool as sent model fixed any s default source window ' +
+    'held in full part not unknown undeclared checked did find among names result says read ' +
+    'rows no cap reached declares server one page was so may have applied its own and this ' +
+    'cover only what partial left out wrote it caller identity more of z'
   ).split(' '),
 );
 
@@ -311,7 +355,7 @@ describe('PROPERTY — the statement is one line per clause, quotes every row va
     expect(text).toBe(clauses.join('\n'));
     for (const clause of clauses) {
       expect(clause).not.toMatch(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u);
-      expect(clause.length).toBeLessThanOrEqual(STATEMENT_LIMITS.clauseChars);
+      expect(clause.length).toBeLessThanOrEqual(clauseLimit(cited.row?.gaps.length ?? 0));
       // Outside the quotes, only the template's words, numbers and time punctuation remain.
       const parts = clause.split('`');
       expect(parts.length % 2, clause).toBe(1);
@@ -319,9 +363,9 @@ describe('PROPERTY — the statement is one line per clause, quotes every row va
       for (const word of unquoted.toLowerCase().match(/[\p{L}]+/gu) ?? []) {
         expect(TEMPLATE_WORDS.has(word), `"${word}" unquoted in: ${clause}`).toBe(true);
       }
-      // Inside the quotes, every value is capped.
+      // Inside the quotes, every value is capped (a gap's text at its declared maximum).
       for (const quoted of parts.filter((_, i) => i % 2 === 1)) {
-        expect(quoted.length).toBeLessThanOrEqual(STATEMENT_LIMITS.valueChars + 1);
+        expect(quoted.length).toBeLessThanOrEqual(STATEMENT_LIMITS.gapChars + 1);
       }
     }
     // Never a word of a read it does not cite.

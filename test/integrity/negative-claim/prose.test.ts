@@ -118,7 +118,7 @@ describe('containment — the claim must not be wider than the search', () => {
     ]);
   });
 
-  it('a `{ filter, values }` gap bears exactly when the claim names one of its values', () => {
+  it('a `{ filter, values }` gap bears when the claim names one of its values, or leaves the filter open', () => {
     const gap = {
       kind: 'scope' as const,
       what: 'sev1 incidents paged by phone',
@@ -126,7 +126,36 @@ describe('containment — the claim must not be wider than the search', () => {
     };
     const named = 'There are no sev1 open incidents on payments in the last 2 hours.';
     expect(notesOf(named, [incidentCall({ gaps: [gap] })])).toEqual(['coverage-gap']);
-    expect(notesOf(FLAT, [incidentCall({ gaps: [gap] })])).toEqual([]);
+    expect(notesOf(FLAT, [incidentCall({ gaps: [gap] })])).toEqual(['coverage-gap']);
+  });
+
+  it('…and not when the claim names only values the gap does not concern', () => {
+    const gap = {
+      kind: 'scope' as const,
+      what: 'minor incidents kept elsewhere',
+      bears: { filter: 'severity', values: ['minor'] },
+    };
+    const named = 'There are no critical open incidents on payments in the last 2 hours.';
+    expect(notesOf(named, [incidentCall({ ...NO_GAPS, gaps: [gap] })])).toEqual([]);
+  });
+
+  it('a filter gap with no `values` concerns every value: it bears, and nothing throws', () => {
+    const unsent = {
+      kind: 'argument-unsent' as const,
+      what: 'severity: not sent',
+      argument: 'severity',
+      bears: { filter: 'severity' },
+    };
+    expect(
+      notesOf('Payments has no critical open incidents in the last 2 hours.', [
+        incidentCall({ gaps: [unsent] }),
+      ]),
+    ).toEqual(['coverage-gap']);
+    expect(
+      notesOf('Payments has no open incidents in the last 2 hours.', [
+        incidentCall({ gaps: [unsent] }),
+      ]),
+    ).toEqual(['coverage-gap']);
   });
 });
 
