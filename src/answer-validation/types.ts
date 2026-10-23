@@ -168,7 +168,12 @@ export interface AnswerValidationOptions<T = unknown> {
    *   any case) beside a stated value the answer does not contradict; doubt
    *   on both sides; or a value or reading that is not a well-formed `Claim`. Leaves the field out, or
    *   declines it (`null`, `'unknown'`) where the run read values:
-   *   `not-applicable`.
+   *   `not-applicable`. So a fact whose value changes during the run (a
+   *   status polled from `'queued'` to `'done'`, a balance read before and
+   *   after a write) is withheld: settle it once (leave it out of the result
+   *   until final, or poll inside one tool call), model before and after as
+   *   separate fields, or leave it out of `.claims()` and check it in
+   *   `validate`.
    * - `'names-and-numbers'`: one row, id `agent:names-and-numbers`: the gate
    *   asked of the exact candidate this validation delivers, after any output
    *   transform (its one repair turn under `posture: 'guard'` runs earlier, on

@@ -139,8 +139,11 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   `not-applicable`: a membership pass never supports (the standing fold's
   law), so the gate can withhold an answer and never make a report pass.
 
-Two limits, stated in the user docs and pinned by `contract:` tests in
-`test/answer-validation/agentChecksDelivery.test.ts`: the claim ledger
+Three limits, stated in the user docs and pinned by `contract:` tests in
+`test/answer-validation/agentChecksDelivery.test.ts`: a fact whose value
+changes during the run (a polled status, a balance before and after a write)
+is withheld, because every reading counts — settle it once, split before and
+after into separate fields, or keep it out of `.claims()`; the claim ledger
 (`claimFacts`) is THIS run's reads, so a follow-up turn answering from an
 earlier run's read has a `not-applicable` claim row — not checked; the host's
 checks decide; and the gate's `minDigits` floor (default 4) means a short bare

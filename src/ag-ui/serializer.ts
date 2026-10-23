@@ -320,8 +320,16 @@ const resultText = (value: unknown): string =>
  * try {
  *   const out = await agent.run({ message });
  *   send(ag.settle({ kind: isPaused(out) ? 'paused' : 'finished' }));
- * } catch {
- *   send(ag.settle({ kind: 'failed' })); // described by the record, never by the thrown value
+ * } catch (error) {
+ *   // A withheld answer is a refusal, named by its code (`RUN_ERROR.code`);
+ *   // anything else is described by the record, never by the thrown value.
+ *   send(
+ *     ag.settle(
+ *       error instanceof AnswerValidationError
+ *         ? { kind: 'failed', refusal: 'ERR_ANSWER_VALIDATION' }
+ *         : { kind: 'failed' },
+ *     ),
+ *   );
  * } finally {
  *   off();
  * }

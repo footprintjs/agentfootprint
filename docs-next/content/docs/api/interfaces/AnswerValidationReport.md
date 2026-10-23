@@ -4,7 +4,7 @@ title: AnswerValidationReport
 
 # Interface: AnswerValidationReport
 
-Defined in: [src/answer-validation/types.ts:235](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L235)
+Defined in: [src/answer-validation/types.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L240)
 
 Cloneable decision record. It contains no candidate or artifact payload.
 
@@ -14,7 +14,7 @@ Cloneable decision record. It contains no candidate or artifact payload.
 
 > `readonly` `optional` **candidateDigest?**: `string`
 
-Defined in: [src/answer-validation/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L257)
+Defined in: [src/answer-validation/types.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L262)
 
 SHA-256 of the exact canonical JSON content considered for delivery.
 
@@ -24,7 +24,7 @@ SHA-256 of the exact canonical JSON content considered for delivery.
 
 > `readonly` **checked**: `number`
 
-Defined in: [src/answer-validation/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L249)
+Defined in: [src/answer-validation/types.ts:254](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L254)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/answer-validation/types.ts:249](https://github.com/footprintjs/
 
 > `readonly` **checks**: readonly [`AnswerCheck`](/docs/api/interfaces/AnswerCheck)[]
 
-Defined in: [src/answer-validation/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L253)
+Defined in: [src/answer-validation/types.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L258)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/answer-validation/types.ts:253](https://github.com/footprintjs/
 
 > `readonly` **failed**: `number`
 
-Defined in: [src/answer-validation/types.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L250)
+Defined in: [src/answer-validation/types.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L255)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/answer-validation/types.ts:250](https://github.com/footprintjs/
 
 > `readonly` **mode**: `"enforce"` \| `"observe"`
 
-Defined in: [src/answer-validation/types.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L238)
+Defined in: [src/answer-validation/types.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L243)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [src/answer-validation/types.ts:238](https://github.com/footprintjs/
 
 > `readonly` **notApplicable**: `number`
 
-Defined in: [src/answer-validation/types.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L252)
+Defined in: [src/answer-validation/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L257)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/answer-validation/types.ts:252](https://github.com/footprintjs/
 
 > `readonly` `optional` **reason?**: `string`
 
-Defined in: [src/answer-validation/types.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L255)
+Defined in: [src/answer-validation/types.ts:260](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L260)
 
 Why the report is `unverified`, or what a `failed` one could not reach as well.
 
@@ -74,7 +74,7 @@ Why the report is `unverified`, or what a `failed` one could not reach as well.
 
 > `readonly` **resolvedRefs**: readonly `string`[]
 
-Defined in: [src/answer-validation/types.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L259)
+Defined in: [src/answer-validation/types.ts:264](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L264)
 
 Successfully resolved refs, distinct, not a count of semantic comparisons.
 
@@ -84,7 +84,7 @@ Successfully resolved refs, distinct, not a count of semantic comparisons.
 
 > `readonly` **schemaAccepted**: `boolean`
 
-Defined in: [src/answer-validation/types.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L261)
+Defined in: [src/answer-validation/types.ts:266](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L266)
 
 The schema parser accepted and its output is a lossless canonical JSON value.
 
@@ -94,7 +94,7 @@ The schema parser accepted and its output is a lossless canonical JSON value.
 
 > `readonly` **status**: `"unverified"` \| `"passed"` \| `"failed"`
 
-Defined in: [src/answer-validation/types.ts:248](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L248)
+Defined in: [src/answer-validation/types.ts:253](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L253)
 
 `passed`: at least one comparison ran, and none failed or was unreachable.
 `failed`: a comparison found the answer wrong — even beside `unreachable`
@@ -110,7 +110,7 @@ could not run or did not finish); `reason` says why.
 
 > `readonly` **unreachable**: `number`
 
-Defined in: [src/answer-validation/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L251)
+Defined in: [src/answer-validation/types.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L256)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [src/answer-validation/types.ts:251](https://github.com/footprintjs/
 
 > `readonly` **validatorId**: `string`
 
-Defined in: [src/answer-validation/types.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L236)
+Defined in: [src/answer-validation/types.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L241)
 
 ***
 
@@ -126,4 +126,4 @@ Defined in: [src/answer-validation/types.ts:236](https://github.com/footprintjs/
 
 > `readonly` **validatorVersion**: `string`
 
-Defined in: [src/answer-validation/types.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L237)
+Defined in: [src/answer-validation/types.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L242)

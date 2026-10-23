@@ -506,6 +506,17 @@ needs its builder call, or `build()` refuses. Their rows come after yours in
   check, and any result shaped as a typed envelope can settle one. Agreement
   with such a fact may be agreement with another customer's record or a stale
   read. A contradiction still withholds the answer.
+- **A fact whose value changes during the run is withheld.** Every reading
+  counts, so a status polled from `'unknown'` or `'queued'` to `'done'`, or a
+  balance read before and after a write tool (100, then 150), is a fact the
+  run read two ways: the answer is withheld whichever value it states. Choose
+  one of these for such a fact:
+  - settle it once — leave the field (or the whole typed envelope) out of the
+    tool's result until the value is final, or poll inside one tool call and
+    return only the last reading;
+  - model before and after as separate fields or entities (`balanceBefore`,
+    `balanceAfter`), each declared in `.claims()` on its own;
+  - leave that fact out of `.claims()` and check it in your own `validate`.
 - **A reading can only withhold.** The claim row is never more permissive with
   a reading than without it, so a forged or stale reading can at most withhold
   an answer, never deliver one. When no tool result settled the fact, the row

@@ -20,7 +20,7 @@ Opt-in contract. The callback cannot replace the accepted answer.
 
 > `readonly` `optional` **agentChecks?**: readonly [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)[]
 
-Defined in: [src/answer-validation/types.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L213)
+Defined in: [src/answer-validation/types.ts:218](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L218)
 
 The agent's own answer checks that take part in this validation. Opt-in:
 omitted, the report holds your checks alone, exactly as before.
@@ -63,7 +63,12 @@ way. `mode: 'observe'` records the rows and delivers.
   any case) beside a stated value the answer does not contradict; doubt
   on both sides; or a value or reading that is not a well-formed `Claim`. Leaves the field out, or
   declines it (`null`, `'unknown'`) where the run read values:
-  `not-applicable`.
+  `not-applicable`. So a fact whose value changes during the run (a
+  status polled from `'queued'` to `'done'`, a balance read before and
+  after a write) is withheld: settle it once (leave it out of the result
+  until final, or poll inside one tool call), model before and after as
+  separate fields, or leave it out of `.claims()` and check it in
+  `validate`.
 - `'names-and-numbers'`: one row, id `agent:names-and-numbers`: the gate
   asked of the exact candidate this validation delivers, after any output
   transform (its one repair turn under `posture: 'guard'` runs earlier, on
@@ -146,7 +151,7 @@ Defined in: [src/answer-validation/types.ts:125](https://github.com/footprintjs/
 
 > **validate**(`candidate`, `context`): `AnswerValidationResult` \| `Promise`\<`AnswerValidationResult`\>
 
-Defined in: [src/answer-validation/types.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L214)
+Defined in: [src/answer-validation/types.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L219)
 
 #### Parameters
 

@@ -577,6 +577,62 @@ for (const reactMode of REACT_MODES) {
   });
 }
 
+describe('contract: a fact whose value changes during the run is withheld — settle it once', () => {
+  // Every reading counts (a forged or stale one must never unlock delivery),
+  // so a status polled from 'queued' to 'done' is two readings that differ.
+  // The documented remedies: settle the fact once, model before and after as
+  // separate fields, or leave it out of `.claims()` and check it in `validate`.
+  function polledAgent(statuses: readonly string[]) {
+    let polled = 0;
+    const source = scripted([
+      ...statuses.map((_status, index) => ({
+        toolCalls: [{ id: `poll-${index + 1}`, name: 'read_status', args: {} }],
+      })),
+      { content: JSON.stringify({ job: 'build-job-72', status: 'done' }) },
+    ]);
+    const agent = Agent.create({ provider: source.provider, model: 'synthetic', maxIterations: 8 })
+      .tool(
+        defineTool({
+          name: 'read_status',
+          description: 'Read the build status.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: () =>
+            describedResult({
+              facts: [{ entity: 'build-job-72', status: statuses[polled++] as never }],
+              provenance: { source: 'synthetic-ci', measuredAt: '2026-01-01T00:00:00Z' },
+            }),
+        }),
+      )
+      .outputSchema(statusAnswer)
+      .claims({ status: { entity: 'build-job-72', field: 'status' } })
+      .answerValidation<StatusAnswer>({
+        id: 'status-report',
+        version: '1',
+        agentChecks: ['claims'],
+        validate: () => ({ checks: [{ id: 'asked-job', disposition: 'checked-pass' }] }),
+      })
+      .build();
+    return agent;
+  }
+
+  it("polled 'queued' then 'done': the answer 'done' contradicts a reading — withheld", async () => {
+    const outcome = await polledAgent(['queued', 'done'])
+      .run({ message: 'Is build-job-72 done?' })
+      .catch((e: unknown) => e);
+    expect(outcome).toBeInstanceOf(AnswerValidationError);
+    expect((outcome as AnswerValidationError).report.checks[1]).toMatchObject({
+      id: 'agent:claims:status',
+      disposition: 'checked-fail',
+    });
+  });
+
+  it('the remedy: one reading of the fact — delivered', async () => {
+    expect(await polledAgent(['done']).run({ message: 'Is build-job-72 done?' })).toBe(
+      JSON.stringify({ job: 'build-job-72', status: 'done' }),
+    );
+  });
+});
+
 describe("contract: short numbers sit below the gate's minDigits floor", () => {
   // A bare number with fewer than `minDigits` (default 4) digits is prose to
   // the gate — "3 issues" — so it is never looked up. An invented `999` is
