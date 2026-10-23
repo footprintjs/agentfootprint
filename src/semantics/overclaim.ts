@@ -124,6 +124,137 @@ export function wrongnessPhrase(text: string): string | undefined {
   return firstHit(text, WRONGNESS);
 }
 
+// ── Whether a sentence is about the lookup ──────────────────────────────
+
+/**
+ * What a refusal or an absence is ABOUT: the looked-up argument's name and
+ * the value asked for. A rule fires only on a sentence that names one of them
+ * — "PS-ARRAY-99 is the wrong identifier" is a claim about the thing looked
+ * up; "start_date is not a valid ISO-8601 date" is about another argument.
+ */
+export interface LookupSubject {
+  readonly argument?: string;
+  readonly value?: string;
+}
+
+/**
+ * Messages of a kind that says why a call was refused, never what exists:
+ * a FORMAT the value broke, a RANGE it left, a PERMISSION it lacked, or a
+ * TRANSPORT failure upstream. A sentence of any of these kinds is exempt even
+ * when it names the lookup ("PS-ARRAY-99 is out of the allowed range").
+ */
+const EXEMPT_KINDS: readonly RegExp[] = [
+  // format
+  /\bformat\b/,
+  /\biso[- ]?8601\b/,
+  /\b(?:date|timestamp|time ?zone|regex|pattern|json|schema|type)\b/,
+  /\bmust (?:match|be an? )/,
+  /\bexpected\b/,
+  /\binvalid value for\b/,
+  // range
+  /\brange\b/,
+  /\bbetween\b/,
+  /\bat (?:least|most)\b/,
+  /\b(?:minimum|maximum)\b/,
+  /\btoo (?:long|short|large|small|many|few)\b/,
+  /\bexceeds?\b/,
+  /\bout of bounds\b/,
+  /\ballowed values?\b/,
+  /\bone of\b/,
+  // permission
+  /\bpermissions?\b/,
+  /\baccess\b/,
+  /\b(?:un)?authori[sz](?:ed|ation)\b/,
+  /\bforbidden\b/,
+  /\bdenied\b/,
+  /\bapi key\b/,
+  /\btokens?\b/,
+  /\bcredentials?\b/,
+  /\bnot allowed\b/,
+  /\b40[13]\b/,
+  // transport
+  /\bupstream\b/,
+  /\bhttp\b/,
+  /\b404\b/,
+  /\b5\d\d\b/,
+  /\bstatus code\b/,
+  /\btimed? ?out\b/,
+  /\bunavailable\b/,
+];
+
+/** True when a sentence is a format, range, permission or transport message. */
+export function isExemptMessage(sentence: string): boolean {
+  const plain = folded(sentence);
+  return EXEMPT_KINDS.some((pattern) => pattern.test(plain));
+}
+
+/** `needle` as a whole word of `haystack` (both folded), not a piece of a longer token. */
+function namesWord(haystack: string, needle: string): boolean {
+  const word = folded(needle).trim();
+  if (word === '') return false;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}\\p{N}_-])${escaped}(?![\\p{L}\\p{N}_-])`, 'u').test(
+    folded(haystack),
+  );
+}
+
+/** A span in quotes — how a message usually echoes the value it was given. */
+const QUOTED = /'[^']+'|"[^"]+"|`[^`]+`|\u2018[^\u2019]+\u2019|\u201C[^\u201D]+\u201D/;
+
+/**
+ * True when `sentence` names what was looked up: the declared argument or
+ * value; with neither declared, a quoted span stands for the value.
+ */
+function namesTheLookup(sentence: string, subject: LookupSubject): boolean {
+  const declared = [subject.argument, subject.value].filter(
+    (part): part is string => typeof part === 'string' && part.trim() !== '',
+  );
+  if (declared.length === 0) return QUOTED.test(sentence);
+  return declared.some((part) => namesWord(sentence, part));
+}
+
+/** The sentences of a text — split at a sentence end or a line break. */
+const sentencesOf = (text: string): string[] =>
+  text.split(/(?<=[.!?])\s+|\n+/).filter((part) => part.trim() !== '');
+
+/**
+ * The first phrase of `pack` in a sentence of `text` that names the lookup
+ * and is not an exempt kind of message, or `undefined`.
+ */
+function claimAboutTheLookup(
+  text: string,
+  subject: LookupSubject,
+  pack: (sentence: string) => string | undefined,
+): string | undefined {
+  for (const sentence of sentencesOf(text)) {
+    if (isExemptMessage(sentence) || !namesTheLookup(sentence, subject)) continue;
+    const phrase = pack(sentence);
+    if (phrase !== undefined) return phrase;
+  }
+  return undefined;
+}
+
+/** Either pack: a sentence that says a thing is not there, or that the input is wrong. */
+const absenceOrWrongness = (sentence: string): string | undefined =>
+  nonExistencePhrase(sentence) ?? wrongnessPhrase(sentence);
+
+/**
+ * A refusal sample a catalog describes: the text, and what the refused call
+ * looked up (`{ text, argument?, value? }`) — read when the object has those
+ * keys only, so a refusal VALUE a tool returns is judged as the value it is.
+ */
+function describedSample(raw: unknown): ({ readonly text: string } & LookupSubject) | undefined {
+  if (!isRecord(raw) || typeof raw.text !== 'string') return undefined;
+  if (!Object.keys(raw).every((key) => key === 'text' || key === 'argument' || key === 'value')) {
+    return undefined;
+  }
+  return {
+    text: raw.text,
+    ...(typeof raw.argument === 'string' && { argument: raw.argument }),
+    ...(typeof raw.value === 'string' && { value: raw.value }),
+  };
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -154,15 +285,20 @@ export function isNotReadResult(value: unknown): boolean {
 }
 
 /**
- * `refusal-asserts-absence` over one refusal — the text a tool throws, or the
- * value it returns when it refuses. A refused call read nothing, so it may
- * carry no absence, no `known_names`, and no sentence that says what does not
- * exist or that the input is wrong.
+ * `refusal-asserts-absence` over one refusal — the text a tool throws, the
+ * value it returns when it refuses, or a described sample
+ * `{ text, argument?, value? }`. A refused call read nothing, so it may carry
+ * no absence, and no sentence ABOUT what was looked up that says it does not
+ * exist or that the input is wrong. A sentence about another argument, or a
+ * format, range, permission or transport message, is not that claim.
  */
 export function refusalIssues(value: unknown, field: string): OverclaimIssue[] {
   const code = 'refusal-asserts-absence';
-  const text = typeof value === 'string' ? value : JSON.stringify(value) ?? '';
-  if (readAbsence(value) !== undefined || /"?af_absent"?\s*:/.test(text)) {
+  const described = describedSample(value);
+  const subject: LookupSubject = described ?? {};
+  const judged = described === undefined ? value : described.text;
+  const text = typeof judged === 'string' ? judged : JSON.stringify(judged) ?? '';
+  if (readAbsence(judged) !== undefined || /"?af_absent"?\s*:/.test(text)) {
     return [
       {
         code,
@@ -173,31 +309,20 @@ export function refusalIssues(value: unknown, field: string): OverclaimIssue[] {
       },
     ];
   }
-  if (/"?known_names"?\s*:/.test(text)) {
-    return [
-      {
-        code,
-        field,
-        message:
-          'a refusal carries `known_names` — names belong to an absence over the list the ' +
-          'tool read (absent({ what, among })), never to a refusal.',
-      },
-    ];
-  }
   const leaves: [string, string][] = [];
-  stringLeaves(value, '', leaves, new Set());
+  stringLeaves(judged, '', leaves, new Set());
   for (const [, leaf] of leaves) {
-    const phrase = nonExistencePhrase(leaf) ?? wrongnessPhrase(leaf);
+    const phrase = claimAboutTheLookup(leaf, subject, absenceOrWrongness);
     if (phrase === undefined) continue;
     return [
       {
         code,
         field,
         message:
-          `a refusal says "${phrase}" — a refused call read nothing, so it cannot say what ` +
-          'does not exist or that the input is wrong. Say what was refused and why ("array_id ' +
-          'must start with PS-"); when a lookup ran and found nothing, return ' +
-          'absent({ what, among }) instead.',
+          `a refusal says "${phrase}" about what was looked up — a refused call read nothing, ` +
+          'so it cannot say what does not exist or that the input is wrong. Say what was ' +
+          'refused and why ("array_id must start with PS-"); when a lookup ran and found ' +
+          'nothing, return absent({ what, among }) instead.',
       },
     ];
   }
@@ -209,9 +334,9 @@ function absenceTexts(absence: ToolAbsence): [string, string][] {
   const out: [string, string][] = [];
   const own = absence as unknown as Record<string, unknown>;
   for (const [key, value] of Object.entries(own)) {
-    // The library's own sentence, and the model-only names (the tool's data,
-    // not its words), are not the author's claim.
-    if (key === 'note' || key === 'known_names' || key === 'af_absent') continue;
+    // The library's own sentence is not the author's claim, and `looked_for`
+    // IS the value asked for.
+    if (key === 'note' || key === 'af_absent' || key === 'looked_for') continue;
     if (key === 'checked' || key === 'not_checked' || key === 'cannot_cover') {
       if (!Array.isArray(value)) continue;
       value.forEach((item: unknown, i) => {
@@ -235,8 +360,13 @@ function absenceTexts(absence: ToolAbsence): [string, string][] {
  */
 export function absenceIssues(absence: ToolAbsence): OverclaimIssue[] {
   const issues: OverclaimIssue[] = [];
+  const facet = namesFacetOf(absence);
+  const subject: LookupSubject = {
+    value: absence.looked_for,
+    ...(facet !== undefined && { argument: facet.argument }),
+  };
   for (const [field, text] of absenceTexts(absence)) {
-    const phrase = wrongnessPhrase(text);
+    const phrase = claimAboutTheLookup(text, subject, wrongnessPhrase);
     if (phrase === undefined) continue;
     issues.push({
       code: 'absence-asserts-wrongness',
@@ -248,7 +378,6 @@ export function absenceIssues(absence: ToolAbsence): OverclaimIssue[] {
         '<source>" stand.',
     });
   }
-  const facet = namesFacetOf(absence);
   if (facet?.authoritative !== undefined) {
     const at = absence.checked.indexOf(facet);
     issues.push({

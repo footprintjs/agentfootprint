@@ -44,6 +44,9 @@ const AMONG = {
   names: ['PS-ARRAY-01', 'PS-ARRAY-02'],
 };
 
+/** A refusal sample that names what was looked up — the argument and the value. */
+const sample = (text: string, value = 'PS-ARRAY-99') => ({ text, argument: 'array_id', value });
+
 const overclaims = (findings: readonly SemanticsFinding[]) =>
   findings.filter((f) =>
     ['refusal-asserts-absence', 'absence-asserts-wrongness', 'authoritative-names'].includes(
@@ -114,14 +117,14 @@ describe('functional — default: warnings, and only for samples that use the ne
     expect(report.ok).toBe(true);
   });
 
-  it('a refusal that carries an absence or known_names warns, whatever its words', () => {
+  it('a refusal that carries an absence warns, whatever its words', () => {
     const report = checkSemantics([
       {
         name: 'array_detail',
         results: [],
         refusals: [
           absent({ what: 'x', checked: ['y'] }),
-          { error: 'refused', known_names: ['PS-ARRAY-01'] },
+          JSON.stringify(absent({ what: 'x', checked: ['y'] })),
         ],
       },
     ]);
@@ -135,7 +138,7 @@ describe('functional — default: warnings, and only for samples that use the ne
     const sample = absent({
       what: 'PS-ARRAY-99',
       among: AMONG,
-      tryInstead: 'That is a wrong identifier — pick one of the known names.',
+      tryInstead: 'PS-ARRAY-99 is a wrong identifier — check the spelling.',
     });
     const report = checkSemantics([{ name: 'array_detail', results: [sample] }]);
     expect(overclaims(report.findings)).toEqual([
@@ -188,13 +191,87 @@ describe('functional — default: warnings, and only for samples that use the ne
   });
 });
 
+describe('functional — the rules fire only on a sentence about what was looked up', () => {
+  const NOT_ABOUT_THE_LOOKUP = [
+    'start_date is not a valid ISO-8601 date',
+    'invalid value for severity',
+    'You have no permission to read arrays in this tenant.',
+    'The caller has no access to this inventory.',
+    'API key not found — set INVENTORY_KEY.',
+    'Upstream returned 404 Not Found',
+    'window is not in the allowed range',
+  ];
+
+  it.each(NOT_ABOUT_THE_LOOKUP)('does not fire: %s', (text) => {
+    for (const refusal of [text, sample(text)]) {
+      const report = checkSemantics([{ name: 'array_detail', results: [], refusals: [refusal] }], {
+        rules: ['overclaim'],
+      });
+      expect(overclaims(report.findings)).toEqual([]);
+    }
+  });
+
+  it('a format, range or permission message is exempt even when it names the lookup', () => {
+    const report = checkSemantics(
+      [
+        {
+          name: 'array_detail',
+          results: [],
+          refusals: [
+            sample("array_id 'PS-ARRAY-99' is not a valid identifier format"),
+            sample('PS-ARRAY-99 is out of the allowed range'),
+            sample('You have no permission to read PS-ARRAY-99.'),
+          ],
+        },
+      ],
+      { rules: ['overclaim'] },
+    );
+    expect(overclaims(report.findings)).toEqual([]);
+  });
+
+  it('fires: "array X is the wrong identifier, not missing data"', () => {
+    const report = checkSemantics([
+      {
+        name: 'array_detail',
+        results: [],
+        refusals: [sample('array X is the wrong identifier, not missing data', 'X')],
+      },
+    ]);
+    expect(overclaims(report.findings).map((f) => f.code)).toEqual(['refusal-asserts-absence']);
+  });
+
+  it('fires on a bare refusal that quotes the value it looked up', () => {
+    const report = checkSemantics([{ name: 'array_detail', results: [], refusals: [C6_REFUSAL] }]);
+    expect(overclaims(report.findings).map((f) => f.code)).toEqual(['refusal-asserts-absence']);
+  });
+
+  it('an absence that calls the input wrong without naming it does not fire', () => {
+    const quiet = absent({
+      what: 'PS-ARRAY-99',
+      among: AMONG,
+      tryInstead: 'Check the spelling: a typo is the usual cause.',
+    });
+    expect(
+      overclaims(checkSemantics([{ name: 'array_detail', results: [quiet] }]).findings),
+    ).toEqual([]);
+  });
+});
+
 describe('functional — strict and the opt-in rule set make them errors', () => {
   const catalog = () => [
     {
       name: 'array_detail',
       results: [
-        absent({ what: 'PS-ARRAY-99', among: AMONG, tryInstead: 'A typo, probably.' }),
-        absent({ what: 'PS-ARRAY-98', checked: ['the inventory'], tryInstead: 'A typo?' }),
+        absent({
+          what: 'PS-ARRAY-99',
+          among: AMONG,
+          tryInstead: 'PS-ARRAY-99 is probably a typo.',
+        }),
+        absent({
+          what: 'PS-ARRAY-98',
+          checked: ['the inventory'],
+          tryInstead: 'PS-ARRAY-98 looks like a typo.',
+        }),
         { content: C6_REFUSAL, effects: [], status: 'invalid' },
       ],
       refusals: [C6_REFUSAL],
@@ -282,8 +359,10 @@ describe('integration — the CLI', () => {
   });
 
   it('the catalog carries refusals through coercion', () => {
-    expect(coerceSemanticsCatalog([{ name: 'x', result: 1, refusals: ['r'] }])).toEqual([
-      { name: 'x', results: [1], refusals: ['r'] },
-    ]);
+    expect(
+      coerceSemanticsCatalog([
+        { name: 'x', result: 1, refusals: ['r', { text: 'r', value: 'v' }] },
+      ]),
+    ).toEqual([{ name: 'x', results: [1], refusals: ['r', { text: 'r', value: 'v' }] }]);
   });
 });

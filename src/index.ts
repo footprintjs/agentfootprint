@@ -281,7 +281,6 @@ export {
   ask,
   deny,
   MessageDeniedError,
-  type AllowOptions,
   type AllowOutcome,
   type AskOutcome,
   type AskPayload,
@@ -884,9 +883,9 @@ export type { InstructionLease, PendingToolTransition } from './injection-engine
 //
 // `absent({ what, among })` — a name looked up in a known list that resolves
 // to nothing is a named miss over the names the tool read: the mint composes
-// the names facet and an irremovable "names outside <source>" gap; the
-// nearest names (only with `visible: 'caller'`) never enter the result — the
-// library attaches them to the model's message alone.
+// the names facet and an irremovable "names outside <source>" gap (for a
+// partial read, "not every name in <source> was read"). The names are read
+// only to check the count; none is served.
 export {
   ABSENCE_MARKER,
   ABSENCE_NOTE,
