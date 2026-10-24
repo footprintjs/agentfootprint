@@ -172,7 +172,9 @@ negative wording or whether the answer addresses the user's question.
 Existing app schemas and parsers may still require `kind` and `about`. They continue
 to validate those fields as authored, but the checker ignores their values when
 interpreting the evidence. A wrong type label cannot change what the read supports,
-and text such as "not payments" cannot redirect a payments read. To stop asking
+and text such as "not payments" cannot redirect a payments read. A legacy kind that
+differs from the derived kind adds an audit-only `model-kind-ignored` check note;
+the note cannot confirm or block anything. To stop asking
 models for these fields, update **both** the JSON Schema and your parser to accept
 only `restsOn`, as in the example. The library cannot rewrite an opaque parser or
 invent placeholder values to satisfy it. Surrounding prose remains unchecked.

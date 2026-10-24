@@ -116,6 +116,7 @@ for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
       expect(result.negatives[0].statement).not.toContain(identity.tenant);
       expect(agent.answerNegatives()?.delivery).toBe('as-checked');
       expect(agent.answerNegatives()?.checks[0].code).toBe('established');
+      expect(agent.answerNegatives()?.checks[0].notes).toBeUndefined();
     });
 
     it('retains legacy parser requirements but ignores wrong kind and negated subject text', async () => {
@@ -148,6 +149,7 @@ for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
       expect(result.negatives[0].statement).toContain('`payments`');
       expect(result.negatives[0].statement).not.toContain('not payments');
       expect(agent.answerNegatives()?.checks[0].code).toBe('established');
+      expect(agent.answerNegatives()?.checks[0].notes).toEqual(['model-kind-ignored']);
       expect(agent.answerNegatives()?.delivery).toBe('recorded');
     });
 

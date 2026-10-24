@@ -3728,6 +3728,8 @@ export interface AnswerNegativesPayload {
     readonly path: string;
     readonly index: number;
     readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
+    /** Audit-only: a legacy model kind differed from the evidence-derived kind. */
+    readonly notes?: readonly 'model-kind-ignored'[];
     readonly code: string;
     readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
     readonly tools: readonly string[];

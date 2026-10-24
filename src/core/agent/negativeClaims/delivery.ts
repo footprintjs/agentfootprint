@@ -33,6 +33,8 @@ export type RuntimeNegativeCode =
 export interface RuntimeNegativeRow extends Omit<TypedNegativeRow, 'code' | 'disposition'> {
   readonly code: RuntimeNegativeCode;
   readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
+  /** Audit-only notice; it cannot confirm, block or select evidence. */
+  readonly notes?: readonly 'model-kind-ignored'[];
 }
 import type { DeliveredNegative } from '../../../events/payloads.js';
 export type { DeliveredNegative } from '../../../events/payloads.js';
@@ -237,6 +239,13 @@ export function renderNegativeCandidate(
           },
         ).text
       : refusal;
+    if (
+      row.kind !== 'unknown' &&
+      typeof entry.kind === 'string' &&
+      ['none', 'not-found', 'complete'].includes(entry.kind) &&
+      entry.kind !== row.kind
+    )
+      row = { ...row, notes: ['model-kind-ignored'] };
     checks.push(row);
     correction ||= row.code === 'citation-unresolved' || row.code === 'stale-turn';
     claims.push({
