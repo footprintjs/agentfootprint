@@ -523,6 +523,9 @@ describe('shared-budget rating and resumability', () => {
       );
     };
     const packets = [fixture().truth];
+    const legacyPurpose = `rate/truth/A/${digest(packets)}`;
+    ledger.reserve('rejected-legacy-request', 'claude-haiku-5-5', 3000, legacyPurpose);
+    ledger.uncertain('rejected-legacy-request');
     const a = await rateBatch({ packets, kind: 'truth', session: 'A', dir, ledger, fetchImpl });
     expect(a.ratings[0].ok).toBe(false);
     const saved = readdirSync(dir).find((name) => name.startsWith('truth-A-'))!;
@@ -540,14 +543,21 @@ describe('shared-budget rating and resumability', () => {
     expect(resumed.reused).toBe(true);
     await rateBatch({ packets, kind: 'truth', session: 'B', dir, ledger, fetchImpl });
     expect(generations).toBe(2);
-    expect(ledger.entries.size).toBe(3);
-    expect(ledger.summary().chargedUsd).toBeCloseTo(0.00064);
+    expect(ledger.entries.size).toBe(4);
+    expect(ledger.entries.get('rejected-legacy-request').status).toBe('uncertain');
+    expect(a.purpose).not.toBe(legacyPurpose);
+    expect(ledger.summary().chargedUsd).toBeCloseTo(0.00364);
     expect(requests[0]).toEqual(requests[1]);
     expect(requests[0]).toMatchObject({
       model: 'claude-haiku-5-5',
       max_tokens: 4096,
       stream: false,
+      thinking: { type: 'disabled' },
     });
+    expect(requests[0]).not.toHaveProperty('temperature');
+    expect(requests[0]).not.toHaveProperty('top_p');
+    expect(requests[0]).not.toHaveProperty('top_k');
+    expect(a.purpose).toMatch(/\/haiku55-compatible-1$/);
   });
 
   it('never automatically retries an uncertain call when no response was saved', async () => {

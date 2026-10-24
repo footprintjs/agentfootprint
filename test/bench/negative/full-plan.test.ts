@@ -159,4 +159,22 @@ describe('disclosed processing amendment', () => {
       validateFrozen(manifest, bankBytes, current, { ...amendment, agentReserveMicro: 0 }),
     ).toThrow();
   });
+  it('binds the compatibility amendment to its unchanged parent and refuses execution changes', () => {
+    const { manifest, bankBytes, current, amendment } = fixture();
+    const compatible = { ...current, 'bench/negative/full/rate.mjs': 'compatible' };
+    const next = {
+      ...amendment,
+      previousAmendmentSha256: digest(amendment),
+      codeHashes: compatible,
+    };
+    expect(validateFrozen(manifest, bankBytes, compatible, next, amendment)).toBe(750_000);
+    expect(() => validateFrozen(manifest, bankBytes, compatible, next)).toThrow('parent');
+    expect(() =>
+      validateFrozen(manifest, bankBytes, compatible, next, { ...amendment, reason: 'edited' }),
+    ).toThrow('parent');
+    const altered = { ...compatible, 'bench/negative/full/run.mjs': 'changed' };
+    expect(() =>
+      validateFrozen(manifest, bankBytes, altered, { ...next, codeHashes: altered }, amendment),
+    ).toThrow('execution');
+  });
 });

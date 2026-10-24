@@ -80,7 +80,7 @@ export function codeHashes() {
 }
 
 /** A disclosed processing amendment cannot change evidence, prompts, models or scoring. */
-export function validateFrozen(manifest, bankBytes, currentHashes, amendment) {
+export function validateFrozen(manifest, bankBytes, currentHashes, amendment, parent) {
   if (manifest.bankSha256 !== digest(bankBytes)) throw new Error('Frozen bank changed.');
   if (!amendment && digest(manifest.codeHashes) === digest(currentHashes)) return 1_000_000;
   const permitted = new Set([
@@ -102,13 +102,35 @@ export function validateFrozen(manifest, bankBytes, currentHashes, amendment) {
     changed.some((path) => !permitted.has(path))
   )
     throw new Error('Frozen implementation changed without the exact processing amendment.');
+  if (amendment.previousAmendmentSha256 !== undefined) {
+    if (
+      !parent ||
+      parent.previousAmendmentSha256 !== undefined ||
+      digest(parent) !== amendment.previousAmendmentSha256
+    )
+      throw new Error('Missing or changed parent processing amendment.');
+    validateFrozen(manifest, bankBytes, parent.codeHashes, parent);
+    const updated = new Set([...Object.keys(parent.codeHashes), ...Object.keys(currentHashes)]);
+    if (
+      [...updated].some(
+        (path) =>
+          parent.codeHashes[path] !== currentHashes[path] &&
+          !['bench/negative/full/plan.mjs', 'bench/negative/full/rate.mjs'].includes(path),
+      )
+    )
+      throw new Error('Rater compatibility amendment changed execution.');
+  }
   return amendment.agentReserveMicro;
 }
 
 export function registeredReserve(manifest, bankBytes, out) {
   const path = privatePath(join(out, 'processing-amendment.json'));
   const amendment = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
-  return validateFrozen(manifest, bankBytes, codeHashes(), amendment);
+  const parent =
+    amendment?.previousAmendmentSha256 === undefined
+      ? undefined
+      : JSON.parse(readFileSync(privatePath(join(out, 'processing-amendment-v1.json')), 'utf8'));
+  return validateFrozen(manifest, bankBytes, codeHashes(), amendment, parent);
 }
 
 export function makeManifest(cases, provenance, bankBytes) {

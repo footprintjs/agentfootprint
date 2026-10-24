@@ -18,6 +18,8 @@ The original registration and raw records remain unchanged. A separate private a
 
 ## Interpretation limits
 
+Before any labels were produced, the first rater request returned HTTP 400. Haiku 5.5 rejects the old `temperature` parameter and enables adaptive thinking by default, as documented in its [migration guide](https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide). A second pre-rating compatibility amendment removes the unsupported sampling parameter and explicitly selects supported disabled thinking for the classification passes. The new attempt has a distinct ledger identity; the original $0.002908 reservation remains charged conservatively. Both raters use the same corrected settings. Amendment 1 is retained byte-for-byte, and amendment 2 records its parent digest and exact code hashes. No label was used to choose these settings.
+
 The long-context cell uses a scripted long first answer and a real follow-up. Paid calls use ordinary completions; chunked runtime delivery tests do not measure network streaming latency. Instrumented latency includes free token counting. Both isolated raters use the same model and family; their agreement is not independent human truth. Truth packets hide library statements, treatment labels and checker findings; separate usefulness ratings necessarily see delivered wording. The owner must adjudicate every disagreement.
 
 Repeated replies are not independent cases. Several registered case-level confidence bounds cannot pass at the fixed case counts even with perfect answers. They remain insufficient-independent-cases; thresholds are not relaxed. Missing trials, invalid labels, unresolved disagreements or zero eligible checks cannot establish a pass.

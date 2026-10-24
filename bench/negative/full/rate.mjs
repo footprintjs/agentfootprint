@@ -298,7 +298,7 @@ export async function rateBatch({ packets, kind, session, dir, ledger, fetchImpl
   )
     throw new Error('Registered rating batch requires kind, independent session, and1–4 packets.');
   const packetHash = digest(packets),
-    purpose = `rate/${kind}/${session}/${packetHash}`;
+    purpose = `rate/${kind}/${session}/${packetHash}/haiku55-compatible-1`;
   const path = privatePath(join(privatePath(dir), `${kind}-${session}-${packetHash}.json`));
   if (privateExists(path)) {
     const saved = readJson(path);
@@ -314,7 +314,9 @@ export async function rateBatch({ packets, kind, session, dir, ledger, fetchImpl
   const response = await client.messages.create({
     model: RATER_MODEL,
     max_tokens: 4096,
-    temperature: 0,
+    // Haiku 5.5 rejects sampling controls and otherwise enables adaptive thinking.
+    // This classification pass explicitly uses the supported non-thinking mode.
+    thinking: { type: 'disabled' },
     stream: false,
     system: `${
       kind === 'truth' ? LABEL_PROMPT : USEFULNESS_PROMPT
