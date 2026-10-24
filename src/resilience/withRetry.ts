@@ -140,6 +140,9 @@ export function withRetry(provider: LLMProvider, options: WithRetryOptions = {})
     ...(provider.supportsNativeOutputSchema !== undefined && {
       supportsNativeOutputSchema: provider.supportsNativeOutputSchema,
     }),
+    ...(provider.supportsAutoNativeOutputSchema !== undefined && {
+      supportsAutoNativeOutputSchema: provider.supportsAutoNativeOutputSchema,
+    }),
     // Same wire, same cache. The agent chooses its cache strategy from this
     // declaration — it used to look the strategy up by `name`, and the
     // `+retry` suffix above sent every retried Anthropic call out with no
