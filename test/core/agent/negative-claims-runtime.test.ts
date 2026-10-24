@@ -569,7 +569,7 @@ describe('negative-claim policy and evidence boundaries', () => {
   });
 
   for (const swapped of [false, true]) {
-    it(`two populations require each citation’s own matching read (${
+    it(`two populations follow cited reads while model labels stay advisory (${
       swapped ? 'swapped' : 'matched'
     })`, async () => {
       const answer = JSON.stringify({
@@ -591,21 +591,14 @@ describe('negative-claim policy and evidence boundaries', () => {
       ]);
       const agent = f.builder.build();
       const seen = observe(agent);
-      if (swapped) {
-        await expect(agent.run(ASK)).rejects.toBeInstanceOf(AnswerValidationError);
-        expect(agent.answerNegatives()?.checks.every((row) => row.code === 'about-mismatch')).toBe(
-          true,
-        );
-        expect(seen.tokens).toEqual([]);
-      } else {
-        const delivered = await agent.runTyped<DeliveredReply>(ASK);
-        expect(delivered.negatives).toHaveLength(2);
-        expect(delivered.negatives[0]?.statement).toContain('`payments`');
-        expect(delivered.negatives[1]?.statement).toContain('`billing`');
-        expect(agent.answerNegatives()?.checks.every((row) => row.code === 'established')).toBe(
-          true,
-        );
-      }
+      const delivered = await agent.runTyped<DeliveredReply>(ASK);
+      expect(delivered.negatives).toHaveLength(2);
+      expect(delivered.negatives[0]?.statement).toContain(swapped ? '`billing`' : '`payments`');
+      expect(delivered.negatives[1]?.statement).toContain(swapped ? '`payments`' : '`billing`');
+      expect(delivered.negatives.map((claim) => claim.about)).toEqual(['payments', 'billing']);
+      expect(agent.answerNegatives()?.checks.every((row) => row.code === 'established')).toBe(true);
+      expect(agent.answerNegatives()?.delivery).toBe('recorded');
+      expect(seen.tokens).toEqual([JSON.stringify(delivered)]);
       expect(f.read.execute).toHaveBeenCalledTimes(2);
     });
   }
@@ -812,10 +805,14 @@ describe('negative-claim policy and evidence boundaries', () => {
       })
       .build();
     const seen = observe(agent);
-    await expect(agent.run(ASK)).rejects.toBeInstanceOf(AnswerValidationError);
+    const delivered = await agent.runTyped<DeliveredReply>(ASK);
     expect(f.read.execute.mock.calls[0]?.[0].service).toBe('billing');
-    expect(agent.answerNegatives()?.checks.some((row) => row.code === 'about-mismatch')).toBe(true);
-    expect(seen.tokens).toEqual([]);
+    expect(delivered.negatives[0]?.about).toBe('payments');
+    expect(delivered.negatives[0]?.statement).toContain('`billing`');
+    expect(delivered.negatives[0]?.statement).not.toContain('`payments`');
+    expect(agent.answerNegatives()?.checks[0]?.code).toBe('established');
+    expect(agent.answerNegatives()?.delivery).toBe('recorded');
+    expect(seen.tokens).toEqual([JSON.stringify(delivered)]);
   });
 
   it('after-tool text cannot turn a non-empty native result into an absence', async () => {

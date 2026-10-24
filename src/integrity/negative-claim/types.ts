@@ -108,6 +108,7 @@ export type TypedVerdict =
   | 'coverage-unverified'
   | 'call-not-read'
   | 'kind-mismatch'
+  | 'evidence-kind-undetermined'
   | 'about-mismatch'
   | 'record-incomplete'
   | 'stale-turn'

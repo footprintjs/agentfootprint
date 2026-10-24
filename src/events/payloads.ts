@@ -3708,7 +3708,8 @@ export interface IntegrityExternalGroundUsedPayload {
 /** One library-written negative statement, shared by delivery and its event. */
 export interface DeliveredNegative {
   readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
-  /** Original model citation value. Quote only when rendering it as text; not an evidence identity. */
+  /** Unchecked model display text. It never selects a subject or evidence. Quote and label it
+   * as model wording when rendered; the library statement names the actual searched scope. */
   readonly about?: string | number;
   readonly restsOn: readonly string[];
   readonly statement: string;

@@ -4,6 +4,10 @@
 import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
 import { MAX_NEGATIVE_CLAIMS } from '../../../integrity/negative-claim/limits.js';
 import { judgeTypedNegatives } from '../../../integrity/negative-claim/judge.js';
+import {
+  populationsMayOverlap,
+  sameRecordedSubject,
+} from '../../../integrity/negative-claim/derive.js';
 import { sameValue, scopeOf, returnedReading } from '../../../integrity/negative-claim/readings.js';
 import {
   composeRecordedStatement,
@@ -36,17 +40,6 @@ export type AnswerNegatives = import('../../../events/payloads.js').AnswerNegati
 const HANDLE = /^r[1-9][0-9]{0,3}$/;
 const own = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
-const aboutFits = (about: unknown, call: TurnCall): boolean =>
-  (scopeOf(call) ?? []).some(
-    (item) =>
-      item.facet === 'population' &&
-      [item.value, item.resolved?.id, item.resolved?.name, ...(item.resolved?.aliases ?? [])].some(
-        (value) => value !== undefined && sameValue(value, about),
-      ),
-  );
-const subject = (call: TurnCall): unknown =>
-  (scopeOf(call) ?? []).find((item) => item.facet === 'subject')?.what;
-
 /** Only an explicit field on every observed row proves a peer outside scope.
  * An unknown row shape, missing field or unscoped reading is conservative. */
 function rowsOutside(other: TurnCall, cited: TurnCall): boolean {
@@ -88,6 +81,8 @@ const REFUSALS: Readonly<Record<Exclude<RuntimeNegativeCode, 'established'>, str
     "I don't know. The cited coverage was not composed by this runtime from a trusted local search declaration.",
   'call-not-read':
     "I don't know. The cited call did not establish a read that can support this claim.",
+  'evidence-kind-undetermined':
+    "I don't know. The cited reads do not establish one supported kind of scoped fact.",
   'kind-mismatch':
     "I don't know. This kind of negative claim does not match what the cited search established.",
   'about-mismatch':
@@ -116,13 +111,12 @@ function refusalFor(row: RuntimeNegativeRow): string {
   );
 }
 
-const positivePeer = (other: TurnCall, cited: TurnCall, about: unknown): boolean =>
+const positivePeer = (other: TurnCall, cited: TurnCall): boolean =>
   other.resultId !== cited.resultId &&
   returnedReading(other) &&
   other.emptiness === 'non-empty' &&
-  subject(cited) !== undefined &&
-  sameValue(subject(other), subject(cited)) &&
-  aboutFits(about, other) &&
+  sameRecordedSubject(other, cited) &&
+  populationsMayOverlap(other, cited) &&
   !rowsOutside(other, cited);
 
 export function renderNegativeCandidate(
@@ -143,6 +137,7 @@ export function renderNegativeCandidate(
     negatives: rawEntries,
     record,
     citable: config.tools,
+    interpretation: 'evidence-owned',
   });
   const checks: RuntimeNegativeRow[] = [];
   const claims: DeliveredNegative[] = [];
@@ -158,7 +153,7 @@ export function renderNegativeCandidate(
     const validShape =
       validList &&
       own(raw) &&
-      validAbout &&
+      (entry.about === undefined || validAbout) &&
       refs.length > 0 &&
       refs.length <= 16 &&
       refs.every((ref) => typeof ref === 'string' && HANDLE.test(ref)) &&
@@ -179,13 +174,11 @@ export function renderNegativeCandidate(
       );
     else if (!validShape) fail('citation-unresolved');
     else if (row.code === 'established') {
-      if (reads.length === 0 || !reads.every((call) => aboutFits(about, call)))
-        fail('about-mismatch');
-      else if (!reads.every(trusted)) fail('outside-trusted-context');
+      if (reads.length === 0 || !reads.every(trusted)) fail('outside-trusted-context');
       else if (
         record.calls.some(
           (other) =>
-            other.turn === record.turn && reads.some((cited) => positivePeer(other, cited, about)),
+            other.turn === record.turn && reads.some((cited) => positivePeer(other, cited)),
         )
       )
         fail('other-read-has-rows', 'checked-fail');
@@ -197,7 +190,6 @@ export function renderNegativeCandidate(
       reads.every(
         (call) =>
           trusted(call) &&
-          aboutFits(about, call) &&
           call.turn <= record.turn &&
           config.tools.includes(call.toolName) &&
           call.row?.composed === 'local' &&
@@ -216,7 +208,7 @@ export function renderNegativeCandidate(
               other.keptOut !== true &&
               config.tools.includes(other.toolName) &&
               !reads.some((read) => read.resultId === other.resultId) &&
-              reads.some((cited) => positivePeer(other, cited, about)),
+              reads.some((cited) => positivePeer(other, cited)),
           )
         : [];
     if (contrary.length > 0)
@@ -282,7 +274,10 @@ export function renderNegativeCandidate(
     field: config.field,
     version: STATEMENT_VERSION,
     delivery: allowed
-      ? established && checks.length > 0 && Object.keys(source).every((key) => key === config.field)
+      ? established &&
+        checks.length > 0 &&
+        rawEntries.every((entry) => !own(entry) || entry.about === undefined) &&
+        Object.keys(source).every((key) => key === config.field)
         ? 'as-checked'
         : 'recorded'
       : 'fallback',

@@ -19,6 +19,7 @@
  *          claim, and nothing here binds by a provider call id or by an entity's name.
  */
 
+import { deriveCitationKind } from './derive.js';
 import { readResultIdentity } from '../claim-binding/capture.js';
 import type { ResultIdentity } from '../claim-binding/types.js';
 import {
@@ -52,6 +53,7 @@ const PRECEDENCE: readonly TypedVerdict[] = [
   'call-not-read',
   'coverage-unverified',
   'kind-mismatch',
+  'evidence-kind-undetermined',
   'contradicted-by-rows',
   'wider-search-has-rows',
   'search-incomplete',
@@ -252,10 +254,11 @@ function citedCall(raw: string, record: TurnRecord): TurnCall | undefined {
 /** One cited read: resolve it, then its row, its kind and what ran around it. */
 function readVerdict(
   raw: string,
-  kind: NegativeKind,
+  kind: NegativeKind | undefined,
   record: TurnRecord,
   peers: readonly TurnCall[],
   citable: readonly string[] | undefined,
+  evidenceOwned = false,
 ): { code?: TypedVerdict; call?: TurnCall; staleSince?: StaleSince } {
   const call = citedCall(raw, record);
   if (call === undefined || call.turn > record.turn) return { code: 'citation-unresolved' };
@@ -270,10 +273,14 @@ function readVerdict(
   if (citable !== undefined && !citable.includes(call.toolName)) {
     return { code: 'cited-call-undeclared', call };
   }
-  if (!returnedReading(call)) return { code: 'call-not-read', call };
+  if ((evidenceOwned && (!call.dispatched || !isRead(call))) || !returnedReading(call))
+    return { code: 'call-not-read', call };
   if (call.row === undefined) return { code: 'cited-call-undeclared', call };
   if (call.row.composed !== 'local') return { code: 'coverage-unverified', call };
-  const code = kindVerdict(kind, call) ?? sequenceVerdict(kind, call, record, peers);
+  const code =
+    kind === undefined
+      ? undefined
+      : kindVerdict(kind, call) ?? sequenceVerdict(kind, call, record, peers);
   return code === undefined ? { call } : { code, call };
 }
 
@@ -306,6 +313,7 @@ export function judgeCitation(
   entry: unknown,
   record: TurnRecord,
   citable?: readonly string[],
+  interpretation?: 'evidence-owned',
 ): CitationVerdict {
   const unresolved = (kind: NegativeKind | 'unknown'): CitationVerdict => ({
     kind,
@@ -315,7 +323,7 @@ export function judgeCitation(
     reads: [],
   });
   if (!isRecord(entry)) return unresolved('unknown');
-  const kind = KINDS.find((k) => k === entry.kind);
+  let kind = interpretation === 'evidence-owned' ? undefined : KINDS.find((k) => k === entry.kind);
   const cited = Array.isArray(entry.restsOn) ? entry.restsOn : [];
   const raws = [...new Set(cited.filter((v): v is string => typeof v === 'string'))];
   // The rows name the reads by the library's own identities — never by model text.
@@ -333,21 +341,36 @@ export function judgeCitation(
   if (raws.length > MAX_CITED_READS) {
     return { kind: kind ?? 'unknown', code: 'too-many-claims', results: [], tools: [], reads: [] };
   }
-  if (kind === undefined) {
+  if (kind === undefined && interpretation !== 'evidence-owned') {
     return { kind: 'unknown', code: 'kind-mismatch', results, tools: [], reads: [] };
   }
   if (!record.ledgerComplete) {
-    return { kind, code: 'record-incomplete', results, tools: [], reads: [] };
+    return { kind: kind ?? 'unknown', code: 'record-incomplete', results, tools: [], reads: [] };
   }
   const peers = turnCallsOf(record);
-  const verdicts = raws.map((raw) => readVerdict(raw, kind, record, peers, citable));
+  let verdicts = raws.map((raw) =>
+    readVerdict(raw, kind, record, peers, citable, interpretation === 'evidence-owned'),
+  );
   const reads = verdicts.flatMap((v) => (v.call === undefined ? [] : [v.call]));
   const tools = [...new Set(reads.map((call) => call.toolName))].sort();
+  if (
+    interpretation === 'evidence-owned' &&
+    verdicts.every((verdict) => verdict.code === undefined)
+  ) {
+    const derivedKind = deriveCitationKind(reads);
+    if (derivedKind === undefined)
+      return { kind: 'unknown', code: 'evidence-kind-undetermined', results, tools, reads: [] };
+    kind = derivedKind;
+    verdicts = reads.map((call) => ({
+      call,
+      code: kindVerdict(derivedKind, call) ?? sequenceVerdict(derivedKind, call, record, peers),
+    }));
+  }
   const failed = PRECEDENCE.find((code) => verdicts.some((v) => v.code === code));
   if (failed !== undefined) {
     const staleSince = verdicts.find((v) => v.code === failed)?.staleSince;
     return {
-      kind,
+      kind: kind ?? 'unknown',
       code: failed,
       results,
       tools,
@@ -356,8 +379,13 @@ export function judgeCitation(
     };
   }
   const about = aboutOf(entry.about);
-  if (about === 'invalid' || (about !== undefined && !aboutFits(about, reads))) {
-    return { kind, code: 'about-mismatch', results, tools, reads: [] };
+  if (
+    interpretation !== 'evidence-owned' &&
+    (about === 'invalid' || (about !== undefined && !aboutFits(about, reads)))
+  ) {
+    return { kind: kind ?? 'unknown', code: 'about-mismatch', results, tools, reads: [] };
   }
+  if (kind === undefined)
+    return { kind: 'unknown', code: 'evidence-kind-undetermined', results, tools, reads: [] };
   return { kind, code: 'established', results, tools, reads };
 }

@@ -77,13 +77,11 @@ const parser: OutputSchemaParser<ModelAnswer> = {
       throw new Error('summary and negatives are required');
     const negatives = value.negatives.map((claim) => {
       if (
-        !['none', 'not-found', 'complete'].includes(claim.kind) ||
-        typeof claim.about !== 'string' ||
         !Array.isArray(claim.restsOn) ||
         claim.restsOn.some((handle) => typeof handle !== 'string')
       )
         throw new Error('Invalid citation');
-      return { kind: claim.kind, about: claim.about, restsOn: [...claim.restsOn] };
+      return { restsOn: [...claim.restsOn] };
     });
     return { summary: value.summary, negatives };
   },
@@ -99,11 +97,9 @@ const jsonSchema = {
       items: {
         type: 'object',
         properties: {
-          kind: { type: 'string', enum: ['none', 'not-found', 'complete'] },
-          about: { type: 'string' },
           restsOn: { type: 'array', items: { type: 'string' } },
         },
-        required: ['kind', 'about', 'restsOn'],
+        required: ['restsOn'],
         additionalProperties: false,
       },
     },
@@ -114,7 +110,8 @@ const jsonSchema = {
 // #endregion schema
 
 export async function run(input: string): Promise<string> {
-  // The fixture cites the first library handle. Real models receive this
+  // The fixture sends only a handle: kind and searched subject are runtime-owned.
+  // Real models receive this
   // handle beside the tool result; a provider call id is never a citation.
   const provider = mock({
     replies: [
@@ -125,7 +122,7 @@ export async function run(input: string): Promise<string> {
       {
         content: JSON.stringify({
           summary: 'The recorded search result follows.',
-          negatives: [{ kind: 'none', about: 'payments', restsOn: ['r1'] }],
+          negatives: [{ restsOn: ['r1'] }],
         }),
       },
     ],

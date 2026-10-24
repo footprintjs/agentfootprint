@@ -10,8 +10,8 @@ the host must authenticate checkpoint storage. Structural validation does not
 authenticate arbitrary caller-supplied JSON.
 
 `delivery.ts` joins those observations with the pure checker in
-`integrity/negative-claim/`, requires every citation to name its population,
-checks other reads of that subject, and composes the delivered field. A negative
+`integrity/negative-claim/`, derives each citation's kind and subject from native read coverage,
+checks other reads using those recorded populations, and composes the delivered field. A negative
 check never produces `checked-pass`. App answer checks keep their independent
 veto, and `state-searched` changes delivery without upgrading verification.
 
@@ -62,3 +62,9 @@ and `strictProse` / `enforceProse` remain refused.
 Remote tool admission and model-generated evidence rules remain deferred. Unarmed
 agents retain their execution. PR 4 (#203) already changed the global answer-account
 template version from 11 to 12, including unarmed records; PR 5 retains version 12.
+
+New typed input schemas require only `restsOn`. Legacy `kind` and `about` remain
+optional compatibility/display fields and never steer evidence interpretation.
+An app parser runs before the checker and is not rewritten; apps remove those
+requirements from their own parser and schema together. Retained model `about`
+keeps answer delivery `recorded`, even for an otherwise citations-only answer.

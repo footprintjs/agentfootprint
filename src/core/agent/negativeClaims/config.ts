@@ -43,10 +43,15 @@ export type NegativeClaimsOptions = (
   readonly phrases?: NegativeClaimPhraseExtensions;
 };
 
-/** What the model may put in one entry. The runtime owns every delivered statement. */
+/** A model pointer to recorded evidence. The runtime derives the claim kind and
+ * searched subject from the cited reads, then writes the delivered statement.
+ * New app schemas need only restsOn. Legacy kind/about fields may remain in an
+ * app's schema/parser, but never select the evidence interpretation. */
 export interface NegativeClaimCitation {
-  readonly kind: 'none' | 'not-found' | 'complete';
-  readonly about: string | number;
+  /** Legacy format hint only; ignored when interpreting evidence. */
+  readonly kind?: 'none' | 'not-found' | 'complete';
+  /** Optional model-written display text, never an evidence identity or checked subject. */
+  readonly about?: string | number;
   readonly restsOn: readonly string[];
 }
 
@@ -200,26 +205,35 @@ export function negativeClaimsSchema(
     );
   }
   const required = item.required;
-  if (!Array.isArray(required) || FIELDS.some((key) => !required.includes(key))) {
-    return fail(`'${config.field}' entries must require kind, about and restsOn.`);
-  }
-  const kind = schemaObject(fields.kind, 'kind');
   if (
-    kind.type !== 'string' ||
-    (kind.enum !== undefined &&
-      (!Array.isArray(kind.enum) ||
-        kind.enum.length === 0 ||
-        kind.enum.some((value) => !KINDS.includes(value))))
+    !Array.isArray(required) ||
+    !required.includes('restsOn') ||
+    required.some((key) => typeof key !== 'string' || !Object.hasOwn(fields, key))
+  ) {
+    return fail(
+      `'${config.field}' entries must require restsOn and declare each required property.`,
+    );
+  }
+  const kind = fields.kind === undefined ? undefined : schemaObject(fields.kind, 'kind');
+  if (
+    kind !== undefined &&
+    (kind.type !== 'string' ||
+      (kind.enum !== undefined &&
+        (!Array.isArray(kind.enum) ||
+          kind.enum.length === 0 ||
+          kind.enum.some((value) => !KINDS.includes(value)))))
   ) {
     return fail("kind must be a string restricted to 'none', 'not-found' or 'complete'.");
   }
-  const about = schemaObject(fields.about, 'about');
-  const aboutTypes = Array.isArray(about.type) ? about.type : [about.type];
+  const about = fields.about === undefined ? undefined : schemaObject(fields.about, 'about');
+  const aboutTypes =
+    about === undefined ? [] : Array.isArray(about.type) ? about.type : [about.type];
   if (
-    aboutTypes.length === 0 ||
-    aboutTypes.some((type) => !['string', 'number', 'integer'].includes(type))
+    about !== undefined &&
+    (aboutTypes.length === 0 ||
+      aboutTypes.some((type) => !['string', 'number', 'integer'].includes(type)))
   ) {
-    return fail('about must declare a string or number, never null or an optional value.');
+    return fail('about must declare a string or number, never null.');
   }
   const restsOn = schemaObject(fields.restsOn, 'restsOn');
   const handle = schemaObject(restsOn.items, 'restsOn.items');
@@ -251,8 +265,8 @@ export function negativeClaimsSchema(
   if ((restsOn.maxItems as number) < (restsOn.minItems as number))
     return fail('restsOn must permit at least one handle.');
   handle.pattern = NEGATIVE_HANDLE_PATTERN;
-  kind.enum ??= [...KINDS];
-  if (aboutTypes.includes('string')) {
+  if (kind !== undefined) kind.enum ??= [...KINDS];
+  if (about !== undefined && aboutTypes.includes('string')) {
     about.minLength = Math.max(typeof about.minLength === 'number' ? about.minLength : 0, 1);
     about.maxLength = Math.min(typeof about.maxLength === 'number' ? about.maxLength : 256, 256);
   }
@@ -269,7 +283,9 @@ export function negativeClaimsInstruction(
   return (
     `The required ${JSON.stringify(config.field)} field contains typed negative citations. ` +
     `Use only result handles served by these tools: ${JSON.stringify(config.tools)}. ` +
-    'Each entry names kind, the entity about, and restsOn handles; do not write scope or statement text. ' +
+    'Each entry points to restsOn handles; do not write scope or statement text. ' +
+    'The library derives the claim type and searched subject from those recorded reads. ' +
+    'If the app schema includes kind or about, those are compatibility/display fields only, not evidence. ' +
     'State negative claims only through this citation field; do not repeat them in summaries or other prose. ' +
     'The library writes the delivered statement. Use [] when making no typed negative claim. ' +
     `Field JSON Schema: ${JSON.stringify(fieldSchema)}`
