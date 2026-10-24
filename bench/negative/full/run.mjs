@@ -17,7 +17,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { BudgetLedger, PRICES } from './budget.mjs';
 import { budgetClient } from './transport.mjs';
 import { runQueue } from './queue.mjs';
-import { ROOT, codeHashes, digest, makeManifest, privatePath } from './plan.mjs';
+import { ROOT, digest, makeManifest, privatePath, registeredReserve } from './plan.mjs';
 
 export function argsOf(args) {
   const flags = {};
@@ -70,16 +70,6 @@ export function completedArtifact(path, row, paid) {
     );
   return artifact;
 }
-function assertFrozen(manifest, bankBytes) {
-  if (
-    manifest.bankSha256 !== digest(bankBytes) ||
-    digest(manifest.codeHashes) !== digest(codeHashes())
-  )
-    throw new Error(
-      'The registered bank or implementation changed. Do not mix it with the frozen run.',
-    );
-}
-
 export async function main(argv) {
   const flags = argsOf(argv);
   const bankPath = privatePath(flags.bank);
@@ -121,7 +111,7 @@ export async function main(argv) {
       return;
     }
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    assertFrozen(manifest, bankBytes);
+    const holdbackMicro = registeredReserve(manifest, bankBytes, out);
     if (flags.mode === 'run' && !manifest.aiBankAccepted)
       throw new Error('Paid execution needs owner acceptance of the disclosed AI-authored bank.');
     const doors = await loadDoors();
@@ -164,7 +154,7 @@ export async function main(argv) {
         ledger,
         purpose: row.id,
         preflight: flags.mode === 'preflight',
-        holdbackMicro: 1_000_000,
+        holdbackMicro,
         onCall: (c) => wire.push(c),
       });
       const c = byId.get(row.caseId);

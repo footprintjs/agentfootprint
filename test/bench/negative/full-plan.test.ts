@@ -3,7 +3,14 @@ import { join } from 'node:path';
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 // @ts-expect-error Standalone benchmark module.
-import { buildPlan, privatePath, ROOT, rowId } from '../../../bench/negative/full/plan.mjs';
+import {
+  buildPlan,
+  digest,
+  privatePath,
+  ROOT,
+  rowId,
+  validateFrozen,
+} from '../../../bench/negative/full/plan.mjs';
 // @ts-expect-error Standalone benchmark module.
 import { argsOf, atomicWrite, completedArtifact } from '../../../bench/negative/full/run.mjs';
 
@@ -82,5 +89,74 @@ describe('registered full-path schedule', () => {
     } finally {
       rmSync(dir, { recursive: true });
     }
+  });
+});
+
+describe('disclosed processing amendment', () => {
+  function fixture() {
+    const bankBytes = 'private synthetic bank';
+    const manifest = {
+      bankSha256: digest(bankBytes),
+      codeHashes: { 'bench/negative/full/rate.mjs': 'before', 'src/core/Agent.ts': 'runtime' },
+      schedule: ['fixed'],
+    };
+    const current = { ...manifest.codeHashes, 'bench/negative/full/rate.mjs': 'reviewed' };
+    const amendment = {
+      kind: 'unsent-attempts-and-reserve/1',
+      originalRegistrationSha256: digest(manifest),
+      codeHashes: current,
+      agentReserveMicro: 750_000,
+      budgetUsd: 4.3,
+      reason: 'Keep unsent attempts as failures and retain the total budget.',
+    };
+    return { bankBytes, manifest, current, amendment };
+  }
+  it('keeps the original reserve for unchanged registrations', () => {
+    const { manifest, bankBytes } = fixture();
+    expect(validateFrozen(manifest, bankBytes, manifest.codeHashes)).toBe(1_000_000);
+  });
+  it('accepts the exact disclosed processing revision without changing the manifest', () => {
+    const { manifest, bankBytes, current, amendment } = fixture();
+    const before = JSON.stringify(manifest);
+    expect(validateFrozen(manifest, bankBytes, current, amendment)).toBe(750_000);
+    expect(JSON.stringify(manifest)).toBe(before);
+  });
+  it.each([
+    'src/core/Agent.ts',
+    'bench/negative/full/harness.mjs',
+    'bench/negative/full/labels.mjs',
+    'bench/negative/full/score.mjs',
+    'bench/negative/full/budget.mjs',
+  ])('refuses changing %s even if an amendment claims its new hash', (path) => {
+    const { manifest, bankBytes, current, amendment } = fixture();
+    const tampered = { ...current, [path]: 'changed' };
+    expect(() =>
+      validateFrozen(manifest, bankBytes, tampered, { ...amendment, codeHashes: tampered }),
+    ).toThrow('Frozen implementation');
+  });
+  it('refuses later edits to an allowed filename and unrelated registrations or banks', () => {
+    const { manifest, bankBytes, current, amendment } = fixture();
+    expect(() =>
+      validateFrozen(
+        manifest,
+        bankBytes,
+        { ...current, 'bench/negative/full/rate.mjs': 'later' },
+        amendment,
+      ),
+    ).toThrow();
+    expect(() =>
+      validateFrozen({ ...manifest, schedule: ['different'] }, bankBytes, current, amendment),
+    ).toThrow();
+    expect(() => validateFrozen(manifest, 'different bank', current, amendment)).toThrow('bank');
+    expect(() => validateFrozen(manifest, bankBytes, current)).toThrow();
+  });
+  it('cannot raise the total spending cap or discard the rating reserve', () => {
+    const { manifest, bankBytes, current, amendment } = fixture();
+    expect(() =>
+      validateFrozen(manifest, bankBytes, current, { ...amendment, budgetUsd: 5 }),
+    ).toThrow();
+    expect(() =>
+      validateFrozen(manifest, bankBytes, current, { ...amendment, agentReserveMicro: 0 }),
+    ).toThrow();
   });
 });

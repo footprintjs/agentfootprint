@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { BudgetLedger } from './budget.mjs';
 import { budgetClient } from './transport.mjs';
-import { ROOT, RATER_MODEL, codeHashes, digest, privatePath } from './plan.mjs';
+import { ROOT, RATER_MODEL, registeredReserve, digest, privatePath } from './plan.mjs';
 import { loadDoors, readRaw } from './run.mjs';
 import { loadBank } from './bank.mjs';
 import {
@@ -42,6 +42,83 @@ function save(path, value) {
 }
 const copy = (v) => JSON.parse(JSON.stringify(v));
 const asText = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
+const UNSENT_CAP = 'benchmark permits one answer and one genuine tools-off citation correction';
+
+/** A postprocessing exception for the frozen harness's pre-dispatch cap only.
+ * A missing vendor response is never repaired or assigned zero usage. */
+function providerStages(artifact) {
+  const all = artifact.raw.calls.filter((c) => c.source === 'provider');
+  const terminal = all.filter((c) => typeof c.response?.content === 'string');
+  if (!terminal.length)
+    throw new Error('Every provider stage needs its original terminal response.');
+  if (terminal.length === all.length) return { calls: all };
+  const guard = all.at(-1),
+    prior = all.at(-2),
+    final = artifact.raw.turns.at(-1);
+  const wire = artifact.wire;
+  if (
+    all.length !== terminal.length + 1 ||
+    guard.response !== undefined ||
+    guard.error?.name !== 'Error' ||
+    guard.error.message !== UNSENT_CAP ||
+    !Array.isArray(guard.chunks) ||
+    guard.chunks.length !== 0 ||
+    guard.turn !== final.turn ||
+    !(guard.request?.tools?.length > 0) ||
+    prior?.response?.stopReason !== 'tool_use' ||
+    !prior.response.toolCalls?.length ||
+    final.output !== null ||
+    final.error?.name !== 'RunCheckpointError' ||
+    !final.error.message?.includes(UNSENT_CAP) ||
+    !Array.isArray(wire) ||
+    wire.length !== terminal.length ||
+    new Set(wire.map((w) => w.id)).size !== wire.length ||
+    wire.some((w, i) => !sameTerminalResponse(w, terminal[i].response))
+  )
+    throw new Error('Missing terminal response is not a proven unsent harness-cap stage.');
+  return {
+    calls: terminal,
+    trialFailure: { code: 'harness-call-cap', unsentStages: 1, finalError: 'RunCheckpointError' },
+  };
+}
+
+/** Compare the wire's response-bearing fields under the frozen Anthropic mapping.
+ * Replay metadata and request manifests are not model response content. */
+function sameTerminalResponse(wire, port) {
+  const response = wire.response,
+    usage = response?.usage;
+  if (
+    wire.error !== undefined ||
+    wire.preflight ||
+    typeof wire.id !== 'string' ||
+    !wire.id ||
+    typeof response?.id !== 'string' ||
+    !response.id ||
+    response.id !== port.providerRef ||
+    !Array.isArray(response.content) ||
+    !usage
+  )
+    return false;
+  const tools = response.content
+    .filter((b) => b.type === 'tool_use')
+    .map((b) => ({ id: b.id, name: b.name, args: b.input }));
+  const normalizedUsage = {
+    input: usage.input_tokens,
+    output: usage.output_tokens,
+    ...(usage.cache_read_input_tokens !== undefined && {
+      cacheRead: usage.cache_read_input_tokens,
+    }),
+    ...(usage.cache_creation_input_tokens !== undefined && {
+      cacheWrite: usage.cache_creation_input_tokens,
+    }),
+  };
+  return (
+    responseText(response) === port.content &&
+    isDeepStrictEqual(tools, port.toolCalls) &&
+    isDeepStrictEqual(normalizedUsage, port.usage) &&
+    (response.stop_reason === 'end_turn' ? 'stop' : response.stop_reason) === port.stopReason
+  );
+}
 
 function argumentsMatch(call, attempt, identity) {
   if (isDeepStrictEqual(call.arguments, attempt.args)) return true;
@@ -67,9 +144,7 @@ export function normalizeArtifact(artifact, caseDef, blindId) {
     throw new Error(
       'Incomplete native artifact; it cannot be silently labelled as an empty answer.',
     );
-  const paid = raw.calls.filter((c) => c.source === 'provider');
-  if (!paid.length || paid.some((c) => typeof c.response?.content !== 'string'))
-    throw new Error('Every provider stage needs its original terminal response.');
+  const { calls: paid, trialFailure } = providerStages(artifact);
   const stages = paid.map((call) => {
     let value;
     try {
@@ -146,9 +221,14 @@ export function normalizeArtifact(artifact, caseDef, blindId) {
     question: final.message ?? caseDef.prompt,
     toolTruth,
     stages,
+    ...(trialFailure && { trialFailure }),
     delivered:
       final.output == null
-        ? '[No final answer was delivered; the run withheld or failed.]'
+        ? final.delivered?.tokens?.join('')
+          ? `[Partial streamed text before the run ended without a final answer:]\n${final.delivered.tokens.join(
+              '',
+            )}\n[No final answer was delivered; the run withheld or failed.]`
+          : '[No final answer was delivered; the run withheld or failed.]'
         : asText(final.output),
   };
 }
@@ -350,7 +430,7 @@ export function normalizedScoreRow(record, labels, lib) {
   const { artifact, caseDef } = record,
     { row, raw } = artifact;
   const final = raw.turns.at(-1),
-    calls = raw.calls.filter((c) => c.source === 'provider');
+    { calls, trialFailure } = providerStages(artifact);
   const packet = record.truth,
     last = packet.stages.at(-1),
     truth = labels?.truth;
@@ -480,6 +560,7 @@ export function normalizedScoreRow(record, labels, lib) {
     model: row.model,
     cell: row.cell,
     arm: row.arm,
+    ...(trialFailure && { trialFailure }),
     pairId: digest([row.model, row.caseId, row.cell, row.rep]),
     labelsComplete: Boolean(
       truth &&
@@ -558,11 +639,7 @@ export async function main(argv) {
   try {
     const manifest = readJson(join(out, 'manifest.json')),
       bytes = readFileSync(privatePath(bankPath), 'utf8');
-    if (
-      manifest.bankSha256 !== digest(bytes) ||
-      digest(manifest.codeHashes) !== digest(codeHashes())
-    )
-      throw new Error('Frozen bank or implementation changed; do not mix rating runs.');
+    registeredReserve(manifest, bytes, out);
     if (flags.mode === 'rate' && !manifest.aiBankAccepted)
       throw new Error('Owner acceptance of the disclosed AI-authored bank is required.');
     if (

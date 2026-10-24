@@ -155,6 +155,218 @@ function ratings(record = fixture()) {
   ]);
 }
 
+function cappedFixture() {
+  const base = fixture();
+  const message = 'benchmark permits one answer and one genuine tools-off citation correction';
+  const args = { service: 'synthetic' };
+  const response = {
+    content: 'I will inspect the source.',
+    toolCalls: [{ id: 'extra-call', name: 'search', args }],
+    usage: { input: 20, output: 30, cacheRead: 5, cacheWrite: 7 },
+    stopReason: 'tool_use',
+    providerRef: 'vendor-response-1',
+  };
+  const artifact = {
+    ...base.artifact,
+    raw: {
+      ...base.artifact.raw,
+      calls: [
+        base.artifact.raw.calls[0],
+        { source: 'provider', turn: 2, response, candidate: { valid: false } },
+        {
+          source: 'provider',
+          turn: 2,
+          chunks: [],
+          request: { tools: [{}] },
+          error: { name: 'Error', message },
+        },
+      ],
+      turns: [
+        base.artifact.raw.turns[0],
+        {
+          ...base.artifact.raw.turns[1],
+          output: null,
+          error: { name: 'RunCheckpointError', message: `Underlying error: ${message}` },
+          delivered: { tokens: ['I will inspect ', 'the source.'], turnEnds: [] },
+        },
+      ],
+    },
+    wire: [
+      {
+        id: 'ledger-reservation-1',
+        response: {
+          id: response.providerRef,
+          content: [
+            { type: 'text', text: response.content },
+            { type: 'tool_use', id: 'extra-call', name: 'search', input: { ...args } },
+          ],
+          usage: {
+            input_tokens: 20,
+            output_tokens: 30,
+            cache_read_input_tokens: 5,
+            cache_creation_input_tokens: 7,
+          },
+          stop_reason: 'tool_use',
+        },
+      },
+    ],
+  };
+  return { artifact, caseDef: base.caseDef, blindId: base.blindId };
+}
+
+describe('audited unsent-stage processing amendment', () => {
+  it('retains the failed trial and its streamed preamble while labelling only actual model text', () => {
+    const f = cappedFixture(),
+      before = JSON.stringify(f.artifact);
+    const normalized = normalizeArtifact(f.artifact, f.caseDef, f.blindId);
+    expect(normalized.stages).toEqual([{ text: 'I will inspect the source.', citations: [] }]);
+    expect(normalized.trialFailure).toEqual({
+      code: 'harness-call-cap',
+      unsentStages: 1,
+      finalError: 'RunCheckpointError',
+    });
+    expect(normalized.delivered).toContain('Partial streamed text');
+    expect(normalized.delivered).toContain('I will inspect the source.');
+    expect(normalized.delivered).toContain('No final answer was delivered');
+    const truth = makeLabelPacket(normalized);
+    expect(truth.stages).toHaveLength(1);
+    expect(JSON.stringify(truth)).not.toContain('harness-call-cap');
+    expect(makeUsefulnessPacket(normalized).answer).toBe(normalized.delivered);
+    expect(JSON.stringify(f.artifact)).toBe(before);
+  });
+
+  it('counts only the paid response tokens, including cache traffic; the unsent stage adds zero', () => {
+    const f = cappedFixture();
+    const normalized = normalizeArtifact(f.artifact, f.caseDef, f.blindId);
+    const record = { ...f, normalized, truth: makeLabelPacket(normalized) };
+    const lib = { observeNegativeProse: () => [], detectNegativeClaims: () => ({ claims: [] }) };
+    const scored = normalizedScoreRow(
+      record,
+      { truth: truthLabels(record), usefulness: { score: 1, reason: 'No final answer.' } },
+      lib,
+    );
+    expect(scored.tokens).toBe(62);
+    expect(scored.id).toBe(f.artifact.row.id);
+    expect(scored.trialFailure).toEqual(normalized.trialFailure);
+    expect(scored.fieldPresent).toBe(false);
+    expect(scored.citations).toEqual([]);
+    expect(scored.rewordingEligible).toBe(false);
+  });
+
+  it.each([
+    [
+      'another error',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.raw.calls[2].error!, { message: 'network failed' }),
+    ],
+    [
+      'different error type',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.raw.calls[2].error!, { name: 'AbortError' }),
+    ],
+    [
+      'a received chunk',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.raw.calls[2], { chunks: [{ content: 'partial' }] }),
+    ],
+    [
+      'a nonfailure final',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.raw.turns[1], { error: null }),
+    ],
+    [
+      'a final answer',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.raw.turns[1], { output: 'delivered' }),
+    ],
+    [
+      'a correction-shaped request',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.raw.calls[2], { request: { tools: [] } }),
+    ],
+    [
+      'no preceding tool proposal',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.raw.calls[1].response!, { toolCalls: [] }),
+    ],
+    [
+      'missing wire',
+      (f: ReturnType<typeof cappedFixture>) => {
+        f.artifact.wire.length = 0;
+      },
+    ],
+    [
+      'an extra wire call',
+      (f: ReturnType<typeof cappedFixture>) => {
+        f.artifact.wire.push(structuredClone(f.artifact.wire[0]));
+      },
+    ],
+    [
+      'wire response id differs',
+      (f: ReturnType<typeof cappedFixture>) => {
+        f.artifact.wire[0].response.id = 'other';
+      },
+    ],
+    [
+      'wire text differs',
+      (f: ReturnType<typeof cappedFixture>) => {
+        f.artifact.wire[0].response.content[0].text = 'Other text.';
+      },
+    ],
+    [
+      'wire tool arguments differ',
+      (f: ReturnType<typeof cappedFixture>) => {
+        f.artifact.wire[0].response.content[1].input = { service: 'other' };
+      },
+    ],
+    [
+      'wire usage differs',
+      (f: ReturnType<typeof cappedFixture>) => {
+        f.artifact.wire[0].response.usage.input_tokens++;
+      },
+    ],
+    [
+      'wire stop differs',
+      (f: ReturnType<typeof cappedFixture>) => {
+        f.artifact.wire[0].response.stop_reason = 'end_turn';
+      },
+    ],
+    [
+      'wire failure',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.wire[0], { error: 'unknown transmission' }),
+    ],
+    [
+      'free preflight only',
+      (f: ReturnType<typeof cappedFixture>) =>
+        Object.assign(f.artifact.wire[0], { preflight: true }),
+    ],
+  ])('still rejects a missing response with %s', (_name, alter) => {
+    const f = cappedFixture();
+    (alter as (value: ReturnType<typeof cappedFixture>) => void)(f);
+    expect(() => normalizeArtifact(f.artifact, f.caseDef, f.blindId)).toThrow('terminal response');
+  });
+
+  it('never counts a zero-response cap record as a completed trial', () => {
+    const f = cappedFixture();
+    f.artifact.raw.calls.splice(1, 1);
+    f.artifact.wire.length = 0;
+    expect(() => normalizeArtifact(f.artifact, f.caseDef, f.blindId)).toThrow('terminal response');
+  });
+
+  it('preserves fenced JSON byte-for-byte without recovering citations or upgrading validity', () => {
+    const record = fixture();
+    const text =
+      '```json\n{"summary":"No incidents.","negatives":[{"kind":"none","about":"synthetic","restsOn":["r1"]}]}\n```';
+    record.artifact.raw.calls[1].response.content = text;
+    Object.assign(record.artifact.raw.calls[1], { candidate: { valid: false } });
+    const before = JSON.stringify(record.artifact);
+    const normalized = normalizeArtifact(record.artifact, record.caseDef, record.blindId);
+    expect(normalized.stages[0]).toEqual({ text, citations: [] });
+    expect(JSON.stringify(record.artifact)).toBe(before);
+  });
+});
+
 describe('native artifacts cross a narrow blinding boundary', () => {
   it('binds real native handles despite the intentionally hidden host-filled tenant argument', async () => {
     const caseDef = {

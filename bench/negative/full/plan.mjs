@@ -1,6 +1,6 @@
 /** Fixed PR 6 cells. No case texts or paid replies belong in the repository. */
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,7 +22,7 @@ export function privatePath(path) {
   const target = resolve(path);
   let parent = target;
   // Resolve existing ancestors too, so a symlink cannot send a private output into Git.
-  while (true) {
+  for (;;) {
     try {
       parent = realpathSync(parent);
       break;
@@ -77,6 +77,38 @@ export function codeHashes() {
   return Object.fromEntries(
     files.sort().map((path) => [path, digest(readFileSync(join(ROOT, path), 'utf8'))]),
   );
+}
+
+/** A disclosed processing amendment cannot change evidence, prompts, models or scoring. */
+export function validateFrozen(manifest, bankBytes, currentHashes, amendment) {
+  if (manifest.bankSha256 !== digest(bankBytes)) throw new Error('Frozen bank changed.');
+  if (!amendment && digest(manifest.codeHashes) === digest(currentHashes)) return 1_000_000;
+  const permitted = new Set([
+    'bench/negative/full/plan.mjs',
+    'bench/negative/full/run.mjs',
+    'bench/negative/full/rate.mjs',
+  ]);
+  const paths = new Set([...Object.keys(manifest.codeHashes), ...Object.keys(currentHashes)]);
+  const changed = [...paths].filter((path) => manifest.codeHashes[path] !== currentHashes[path]);
+  if (
+    amendment?.kind !== 'unsent-attempts-and-reserve/1' ||
+    amendment.originalRegistrationSha256 !== digest(manifest) ||
+    digest(amendment.codeHashes) !== digest(currentHashes) ||
+    amendment.agentReserveMicro !== 750_000 ||
+    amendment.budgetUsd !== 4.3 ||
+    typeof amendment.reason !== 'string' ||
+    !amendment.reason.trim() ||
+    !changed.length ||
+    changed.some((path) => !permitted.has(path))
+  )
+    throw new Error('Frozen implementation changed without the exact processing amendment.');
+  return amendment.agentReserveMicro;
+}
+
+export function registeredReserve(manifest, bankBytes, out) {
+  const path = privatePath(join(out, 'processing-amendment.json'));
+  const amendment = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+  return validateFrozen(manifest, bankBytes, codeHashes(), amendment);
 }
 
 export function makeManifest(cases, provenance, bankBytes) {
