@@ -398,9 +398,9 @@ export function normalizedScoreRow(record, labels, lib) {
           (o.code === 'no-read' && lib.detectNegativeClaims(sentence.text).claims.length > 0)),
     );
     return {
-      positive:
-        ['non-existence', 'completeness', 'scoped-negative'].includes(label?.kind) &&
-        label?.truth === 'unsupported',
+      // R3 observes negative claim forms, including supported scoped reports.
+      // Whether a claim overstates its evidence is a separate truth measure.
+      positive: ['non-existence', 'completeness', 'scoped-negative'].includes(label?.kind),
       detected: overlap,
     };
   });
@@ -462,9 +462,18 @@ export function normalizedScoreRow(record, labels, lib) {
       JSON.stringify(call.request ?? {}).includes('internal citation correction'),
   );
   const totals = calls.map((c) => c.response?.usage);
+  const count = (value) => Number.isSafeInteger(value) && value >= 0;
   const tokensKnown = totals.every(
-    (u) => Number.isSafeInteger(u?.input) && Number.isSafeInteger(u?.output),
+    (u) =>
+      count(u?.input) &&
+      count(u?.output) &&
+      ['cacheRead', 'cacheWrite'].every((key) => u[key] === undefined || count(u[key])),
   );
+  // Anthropic input excludes cache traffic. Include both cache channels across
+  // every paid stage; malformed counts remain unknown rather than disappearing.
+  const tokenTotal = tokensKnown
+    ? totals.reduce((n, u) => n + u.input + u.output + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0), 0)
+    : undefined;
   return {
     id: row.id,
     caseId: row.caseId,
@@ -492,7 +501,7 @@ export function normalizedScoreRow(record, labels, lib) {
     reworded: hadCorrection && negativeOverclaim,
     detector,
     usefulness: labels?.usefulness?.score,
-    tokens: tokensKnown ? totals.reduce((n, u) => n + u.input + u.output, 0) : undefined,
+    tokens: count(tokenTotal) ? tokenTotal : undefined,
     latencyMs: final.latencyMs,
     ...(row.cell === 'near' && {
       nearMatch: {

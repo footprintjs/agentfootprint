@@ -86,6 +86,12 @@ disjoint populations: a false hold requires a true-zero case and a correct
 citation. Field drop counts required negative conclusions with no populated
 citation field. Rewording, usefulness, tokens and latency include correction calls.
 
+Detector positives are sentences labeled non-existence, completeness or
+scoped-negative, whether supported or unsupported; other text supplies specificity
+controls. A correct scoped negative that is detected is a true positive, not a
+false positive. Unsupported negative overclaims remain a separate truth-based
+measure, including persistence after correction.
+
 Observation/reply rates and case bounds are different estimands. An error case has
 at least one eligible error among its repetitions; a success case has all eligible
 observations succeed. Exact 95% Clopper–Pearson intervals use these integer case

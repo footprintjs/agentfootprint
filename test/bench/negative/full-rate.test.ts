@@ -428,6 +428,30 @@ describe('strict packet labels and owner decisions', () => {
 describe('normalization and public result boundaries', () => {
   const lib = { observeNegativeProse: () => [], detectNegativeClaims: () => ({ claims: [] }) };
 
+  it('counts a detected supported scoped negative as a true positive, separate from an overclaim', () => {
+    const record = fixture(),
+      resolved = resolveRatings([record], ratings(record));
+    Object.assign(record.artifact.raw.calls[2], {
+      request: { tools: [], system: 'internal citation correction' },
+    });
+    const detecting = {
+      ...lib,
+      observeNegativeProse: () => [
+        {
+          kind: 'negative-claim',
+          span: { start: 0, end: record.normalized.stages.at(-1).text.length },
+        },
+      ],
+    };
+    const value = normalizedScoreRow(record, resolved.resolved.get(record.blindId), detecting);
+    expect(value.detector).toEqual([{ positive: true, detected: true }]);
+    expect(value.rewordingEligible).toBe(true);
+    expect(value.reworded).toBe(false);
+    const scored = scoreRows([value], { expectedReplyIds: [value.id], scriptedPassed: true });
+    expect(scored.groups[0].metrics.sensitivity.observations).toEqual({ num: 1, den: 1, point: 1 });
+    expect(scored.groups[0].metrics.specificity.observations.den).toBe(0);
+  });
+
   it.each([false, true])(
     'long-cell negative requirement follows the fresh-turn oracle: %s',
     (required) => {
@@ -466,6 +490,33 @@ describe('normalization and public result boundaries', () => {
         { valid: true, correct: false, trueZero: false, held: true },
       ],
     });
+  });
+
+  it('includes a large cache hit and both stages cache writes, excluding scripted usage', () => {
+    const record = fixture(),
+      resolved = resolveRatings([record], ratings(record));
+    Object.assign(record.artifact.raw.calls[0].response.usage, { cacheRead: 900_000 });
+    Object.assign(record.artifact.raw.calls[1].response.usage, {
+      cacheRead: 250_000,
+      cacheWrite: 4_000,
+    });
+    Object.assign(record.artifact.raw.calls[2].response.usage, { cacheRead: 0, cacheWrite: 64 });
+    expect(normalizedScoreRow(record, resolved.resolved.get(record.blindId), lib).tokens).toBe(
+      254_164,
+    );
+  });
+
+  it.each(['cacheRead', 'cacheWrite'])('invalid %s remains unknown and blocks scoring', (field) => {
+    for (const invalid of [-1, 1.5, NaN, Infinity, '20', null, Number.MAX_SAFE_INTEGER + 1]) {
+      const record = fixture(),
+        resolved = resolveRatings([record], ratings(record));
+      Object.assign(record.artifact.raw.calls[1].response.usage, { [field]: invalid });
+      const value = normalizedScoreRow(record, resolved.resolved.get(record.blindId), lib);
+      expect(value.tokens).toBeUndefined();
+      const score = scoreRows([value], { expectedReplyIds: [value.id], scriptedPassed: true });
+      expect(score.complete).toBe(false);
+      expect(score.problems[0].errors).toContain('tokens missing');
+    }
   });
 
   it('missing labels never normalize to a complete all-clear', () => {
