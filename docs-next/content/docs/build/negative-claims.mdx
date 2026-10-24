@@ -165,6 +165,10 @@ complete search uses its specific absence kind; every coverage limit is retained
 Citations with incompatible evidence kinds remain undetermined. Multiple reads
 retain their individual scopes; the library does not invent a combined population.
 
+A complete nonempty read can replace a legacy `none` pointer with a `complete`
+statement. This describes the recorded read; it does not verify the model's original
+negative wording or whether the answer addresses the user's question.
+
 Existing app schemas and parsers may still require `kind` and `about`. They continue
 to validate those fields as authored, but the checker ignores their values when
 interpreting the evidence. A wrong type label cannot change what the read supports,
@@ -208,6 +212,11 @@ A contrary read is named by its result handle and shows bounded, quoted native
 row values when they survived middleware, placement and truncation unchanged.
 Otherwise its count is reported without re-exposing hidden values. A positive
 result without a coverage declaration is explicitly labelled that way.
+
+Complete statements count every admitted fact, series point and edge. They show
+row identities only when all native rows survived the final tool-result boundary
+unchanged; removing or replacing a collection suppresses those identities. These
+statements use template version 6.
 
 A bad citation gets one correction request naming valid handles, with no tools
 available. If `.outputSchema()` enables retries, schema correction shares that

@@ -1,0 +1,332 @@
+{
+  "kind": "counterfactual-fixed-candidate-comparison",
+  "denominators": {
+    "trials": 784,
+    "schemaPass": 621,
+    "schemaFail": 120,
+    "noAnswer": 43,
+    "zeroClaims": 84,
+    "claims": 540,
+    "established": 20
+  },
+  "totals": {
+    "trials": 784,
+    "admittedAnswers": 621,
+    "claims": 540,
+    "zeroClaimAnswers": 84,
+    "baselineEstablished": 20,
+    "currentEstablished": 381,
+    "currentUnestablished": 159,
+    "currentNonemptyAllEstablished": 378,
+    "currentCorrectionNeeded": 57,
+    "baselineCodes": {
+      "kind-mismatch": 331,
+      "search-incomplete": 53,
+      "citation-unresolved": 30,
+      "stale-turn": 27,
+      "about-mismatch": 67,
+      "established": 20,
+      "superseded-by-write": 12
+    },
+    "currentCodes": {
+      "established": 381,
+      "search-incomplete": 50,
+      "citation-unresolved": 30,
+      "stale-turn": 27,
+      "contradicted-by-rows": 20,
+      "superseded-by-write": 32
+    },
+    "transitions": {
+      "kind-mismatch -> established": 291,
+      "search-incomplete -> search-incomplete": 50,
+      "citation-unresolved -> citation-unresolved": 30,
+      "stale-turn -> stale-turn": 27,
+      "about-mismatch -> established": 67,
+      "established -> established": 20,
+      "kind-mismatch -> contradicted-by-rows": 20,
+      "kind-mismatch -> superseded-by-write": 20,
+      "superseded-by-write -> superseded-by-write": 12,
+      "search-incomplete -> established": 3
+    }
+  },
+  "groups": [
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "main",
+      "arm": "observe",
+      "counts": {
+        "trials": 240,
+        "admittedAnswers": 180,
+        "claims": 150,
+        "zeroClaimAnswers": 30,
+        "baselineEstablished": 0,
+        "currentEstablished": 110,
+        "currentUnestablished": 40,
+        "currentNonemptyAllEstablished": 110,
+        "currentCorrectionNeeded": 0,
+        "baselineCodes": {
+          "kind-mismatch": 120,
+          "search-incomplete": 20,
+          "about-mismatch": 10
+        },
+        "currentCodes": {
+          "established": 110,
+          "contradicted-by-rows": 10,
+          "search-incomplete": 20,
+          "superseded-by-write": 10
+        },
+        "transitions": {
+          "kind-mismatch -> established": 100,
+          "kind-mismatch -> contradicted-by-rows": 10,
+          "search-incomplete -> search-incomplete": 20,
+          "about-mismatch -> established": 10,
+          "kind-mismatch -> superseded-by-write": 10
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "main",
+      "arm": "enforce",
+      "counts": {
+        "trials": 240,
+        "admittedAnswers": 220,
+        "claims": 190,
+        "zeroClaimAnswers": 30,
+        "baselineEstablished": 0,
+        "currentEstablished": 120,
+        "currentUnestablished": 70,
+        "currentNonemptyAllEstablished": 120,
+        "currentCorrectionNeeded": 20,
+        "baselineCodes": {
+          "search-incomplete": 30,
+          "kind-mismatch": 120,
+          "citation-unresolved": 20,
+          "about-mismatch": 20
+        },
+        "currentCodes": {
+          "search-incomplete": 30,
+          "established": 120,
+          "citation-unresolved": 20,
+          "superseded-by-write": 10,
+          "contradicted-by-rows": 10
+        },
+        "transitions": {
+          "search-incomplete -> search-incomplete": 30,
+          "kind-mismatch -> established": 100,
+          "citation-unresolved -> citation-unresolved": 20,
+          "kind-mismatch -> superseded-by-write": 10,
+          "kind-mismatch -> contradicted-by-rows": 10,
+          "about-mismatch -> established": 20
+        }
+      }
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "cell": "main",
+      "arm": "observe",
+      "counts": {
+        "trials": 72,
+        "admittedAnswers": 63,
+        "claims": 53,
+        "zeroClaimAnswers": 12,
+        "baselineEstablished": 7,
+        "currentEstablished": 47,
+        "currentUnestablished": 6,
+        "currentNonemptyAllEstablished": 45,
+        "currentCorrectionNeeded": 0,
+        "baselineCodes": {
+          "kind-mismatch": 33,
+          "superseded-by-write": 6,
+          "established": 7,
+          "about-mismatch": 5,
+          "search-incomplete": 2
+        },
+        "currentCodes": {
+          "established": 47,
+          "superseded-by-write": 6
+        },
+        "transitions": {
+          "kind-mismatch -> established": 33,
+          "superseded-by-write -> superseded-by-write": 6,
+          "established -> established": 7,
+          "about-mismatch -> established": 5,
+          "search-incomplete -> established": 2
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "near",
+      "arm": "near-list",
+      "counts": {
+        "trials": 60,
+        "admittedAnswers": 20,
+        "claims": 20,
+        "zeroClaimAnswers": 0,
+        "baselineEstablished": 10,
+        "currentEstablished": 20,
+        "currentUnestablished": 0,
+        "currentNonemptyAllEstablished": 20,
+        "currentCorrectionNeeded": 0,
+        "baselineCodes": {
+          "kind-mismatch": 10,
+          "established": 10
+        },
+        "currentCodes": {
+          "established": 20
+        },
+        "transitions": {
+          "kind-mismatch -> established": 10,
+          "established -> established": 10
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "long",
+      "arm": "enforce",
+      "counts": {
+        "trials": 40,
+        "admittedAnswers": 36,
+        "claims": 36,
+        "zeroClaimAnswers": 0,
+        "baselineEstablished": 0,
+        "currentEstablished": 5,
+        "currentUnestablished": 31,
+        "currentNonemptyAllEstablished": 5,
+        "currentCorrectionNeeded": 31,
+        "baselineCodes": {
+          "stale-turn": 27,
+          "about-mismatch": 5,
+          "citation-unresolved": 4
+        },
+        "currentCodes": {
+          "stale-turn": 27,
+          "established": 5,
+          "citation-unresolved": 4
+        },
+        "transitions": {
+          "stale-turn -> stale-turn": 27,
+          "about-mismatch -> established": 5,
+          "citation-unresolved -> citation-unresolved": 4
+        }
+      }
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "cell": "main",
+      "arm": "enforce",
+      "counts": {
+        "trials": 72,
+        "admittedAnswers": 72,
+        "claims": 61,
+        "zeroClaimAnswers": 12,
+        "baselineEstablished": 3,
+        "currentEstablished": 49,
+        "currentUnestablished": 12,
+        "currentNonemptyAllEstablished": 48,
+        "currentCorrectionNeeded": 6,
+        "baselineCodes": {
+          "about-mismatch": 17,
+          "kind-mismatch": 28,
+          "citation-unresolved": 6,
+          "superseded-by-write": 6,
+          "established": 3,
+          "search-incomplete": 1
+        },
+        "currentCodes": {
+          "established": 49,
+          "citation-unresolved": 6,
+          "superseded-by-write": 6
+        },
+        "transitions": {
+          "about-mismatch -> established": 17,
+          "kind-mismatch -> established": 28,
+          "citation-unresolved -> citation-unresolved": 6,
+          "superseded-by-write -> superseded-by-write": 6,
+          "established -> established": 3,
+          "search-incomplete -> established": 1
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "near",
+      "arm": "near-count",
+      "counts": {
+        "trials": 60,
+        "admittedAnswers": 30,
+        "claims": 30,
+        "zeroClaimAnswers": 0,
+        "baselineEstablished": 0,
+        "currentEstablished": 30,
+        "currentUnestablished": 0,
+        "currentNonemptyAllEstablished": 30,
+        "currentCorrectionNeeded": 0,
+        "baselineCodes": {
+          "kind-mismatch": 20,
+          "about-mismatch": 10
+        },
+        "currentCodes": {
+          "established": 30
+        },
+        "transitions": {
+          "kind-mismatch -> established": 20,
+          "about-mismatch -> established": 10
+        }
+      }
+    }
+  ],
+  "baselineSchemaReasons": {
+    "schema-issue:invalid-references": 14,
+    "schema-issue:extra-citation-fields": 13,
+    "schema-issue:invalid-kind": 28,
+    "schema-issue:malformed-handle": 76,
+    "schema-issue:empty-references": 10
+  },
+  "limitations": [
+    "The original 784 trials and 540 historically admitted claims are fixed. No original response or record was changed.",
+    "The original application parser decides admission for both sides: 120 schema failures and 43 no-answer trials are retained but not re-admitted under a new schema.",
+    "Eighty-four zero-claim answers are not successful established negative answers.",
+    "Baseline uses the old runtime renderer. Current uses the new default kind/subject derivation over the exact same saved native record and original candidate.",
+    "No fuzzy about matching, kind rewriting, subject rewriting, evidence injection, tool execution, model generation, or correction call occurs in this comparison runner.",
+    "New library statements and correction needs are counterfactual only, not original delivery, factual accuracy, usefulness, or semantic repetition measurements.",
+    "Newly established claims may expose later blockers. No establishment count from an exploratory reviewer run is assumed."
+  ],
+  "originalFiles": {
+    "count": 785,
+    "allUnchanged": true
+  },
+  "provenance": {
+    "baseline": {
+      "node": "v24.21.0",
+      "builtJsFiles": 1017,
+      "builtJsTreeSha256": "3a4c1e740e28ff9d74a9939e928f80cae341e17b0349df44ee19ef389d1593cf",
+      "replayScripts": {
+        "reparse.mjs": "a6d0fcc0015d285c2b3be7f20fa21e60f4f39e10c848d91cfa2a77930da6807d",
+        "reparse-core.mjs": "5a88190bc03b7f51c41874e13c09aa308f3932f67f47ba64a36e1af47f898dc3",
+        "reparse-files.mjs": "7269db4738d131989c5621a7066ad3171fab93a5d2d8d48f3b8f071cb48b8509",
+        "reparse-contract.mjs": "026ca1c63954235a5655635dae1fe19167590048c9d3d083cd4b11c870024a91"
+      },
+      "dependencyLockSha256": "a0fbfb51aeb2d884520f1955de08817c0c817de340b62ba5e4a5ab7f29ae83eb"
+    },
+    "current": {
+      "node": "v24.21.0",
+      "builtJsFiles": 1018,
+      "builtJsTreeSha256": "3ab8ffdb03885d5646b653e55fbc9ed036e5fba3fcd444380fc1defdd24044ac",
+      "replayScripts": {
+        "reparse.mjs": "a6d0fcc0015d285c2b3be7f20fa21e60f4f39e10c848d91cfa2a77930da6807d",
+        "reparse-core.mjs": "5a88190bc03b7f51c41874e13c09aa308f3932f67f47ba64a36e1af47f898dc3",
+        "reparse-files.mjs": "7269db4738d131989c5621a7066ad3171fab93a5d2d8d48f3b8f071cb48b8509",
+        "reparse-contract.mjs": "026ca1c63954235a5655635dae1fe19167590048c9d3d083cd4b11c870024a91"
+      },
+      "dependencyLockSha256": "a0fbfb51aeb2d884520f1955de08817c0c817de340b62ba5e4a5ab7f29ae83eb"
+    }
+  },
+  "comparisonScripts": {
+    "compare-evidence-owned.mjs": "c12379e3328458aa3d67a00cb92fa2c41d03b7f6474067cb555baa3f9d8c7291",
+    "compare-evidence-owned-core.mjs": "9d1c549d1522aca9025d17d7d484646cd2ad97b1b0f5bb210c33425e0ea647dc",
+    "compare-evidence-owned-files.mjs": "6f9d3ce1147b7be6dae885e2b4258e9de4f07a90c0fa9c0de240c6c628d174e4"
+  }
+}
