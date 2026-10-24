@@ -228,3 +228,5 @@ invokeModelGateway({ baseUrl, apiKeyHeader: 'api-key', apiKey, model, timeoutMs:
 ## Bedrock cache-table maintenance
 
 `bedrockModels.ts` was verified on 2026-10-19 against [AWS’s caching guide](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html) and model-card Programmatic access lists. To add a model, verify its exact ID, checkpoint fields, maximum points, minimum prefix, TTLs and each allowed geography profile in those official sources; update the one table and its tests together. Unlisted IDs and unverified profiles fail closed. Do not infer support from a family prefix or suppress checkpoints using a token estimate.
+
+For `outputSchema`'s default `strategy: 'auto'`, Anthropic and browser Anthropic expose `supportsAutoNativeOutputSchema(model)` using the existing strict model-family lookup. Unknown or opaque aliases return false, and supported default-model shorthands are resolved before lookup. Explicit `strategy: 'native'` keeps the existing unknown-model policy; use `strategy: 'instruct'` to retain the previous generation strategy. No HTTP error retries a request without its format.

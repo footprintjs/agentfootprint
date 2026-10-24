@@ -142,6 +142,8 @@ export class MockProvider implements LLMProvider {
    * format whenever the request carried one.
    */
   readonly carriesNativeOutputSchema = true;
+  /** Every mock model is a known synthetic transport, never an opaque endpoint. */
+  readonly supportsAutoNativeOutputSchema = (): boolean => true;
   /** Normalizes the scripted `rawThinking` a reply carries. */
   readonly thinkingHandler = mockThinkingHandler;
   private readonly reply?: string;

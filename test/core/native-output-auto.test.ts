@@ -39,6 +39,7 @@ function fixture(
     name: 'auto-fixture',
     ...(options.native !== false && { carriesNativeOutputSchema: true }),
     supportsNativeOutputSchema: (model) => model === 'supported',
+    supportsAutoNativeOutputSchema: (model) => model === 'supported',
     complete: async (request) => respond(request),
     ...(options.stream && {
       async *stream(request: LLMRequest) {

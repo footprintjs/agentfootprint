@@ -29,7 +29,7 @@ typed.status; // narrowed: 'ok' | 'err'
 
 At runtime:
 
-1. **Format selection** — the default `strategy: 'auto'` sends native structured output when the effective provider/model declares support and a usable JSON Schema is available through `jsonSchema` or `parser.toJsonSchema()`. Otherwise it uses instructions and local validation. A parse-only validator, including Zod versions without that method, needs an explicit `jsonSchema` to use native output.
+1. **Format selection** — the default `strategy: 'auto'` sends native structured output when the effective provider positively declares support for that known model and a usable JSON Schema is available through `jsonSchema` or `parser.toJsonSchema()`. Otherwise it uses instructions and local validation. A parse-only validator, including Zod versions without that method, needs an explicit `jsonSchema` to use native output.
 2. **System-prompt instruction** — auto-injected by `outputSchema` as a `defineInstruction` (always-on, system slot). Default text: *"Respond ONLY with valid JSON matching the output schema. Do NOT include prose, markdown fences, or explanatory text. The output shape: \<schema description\>."* The `<schema description>` segment uses Zod's `.describe()` (or whatever you set on the parser's `description` field).
 3. **JSON parse + validation** — when you call `agent.runTyped({...})`, the framework accepts raw JSON or one whole-answer triple-backtick fence labelled `json` (or unlabelled), then runs the same strict JSON parser and `parser.parse(value)`. Surrounding prose, multiple fences and malformed JSON still fail. Only the wrapper is removed; values are never repaired. If either step fails, throws `OutputSchemaError` with the `rawOutput` preserved for triage.
 4. **Type narrowing** — `agent.runTyped<T>()` returns `Promise<T>`. The TS-side type flows from the parser's `parse(unknown): T` signature.
@@ -229,7 +229,7 @@ A denied answer is never judged and never re-asked. It was withheld by a rule yo
 
 ## Constraining the shape at the source: `strategy: 'tool-forced'`
 
-`'instruct'` — the default — asks for the shape in prose. It works on every provider because it is only words, and like all words it can be ignored.
+`'instruct'` explicitly asks for the shape in prose. It works on every provider because it is only words, and like all words it can be ignored.
 
 `'tool-forced'` presents the schema as a synthetic tool and forces the provider's tool choice, so generation is constrained at the source:
 
@@ -256,7 +256,11 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-sonnet-4-5' }
 
 ## Automatic native output and explicit strategies
 
-`strategy: 'auto'` is the default. Selection happens for each actual provider/model request, including configured models and reliability fallbacks. Native-capable requests retain ordinary tools; unsupported providers/models, missing JSON Schema and schemas outside the native subset use instructions with the same local parser. A failed API request is not silently retried without its schema.
+`strategy: 'auto'` is the default, a behavior change from the previous `'instruct'` default. To retain instruction-based generation, set `.outputSchema(parser, { strategy: 'instruct' })`.
+
+Selection happens for each actual provider/model request, including configured models and reliability fallbacks. Anthropic and browser Anthropic enable auto-native only for supported names recognized by the library's model table, after resolving the adapter's default-model shorthand. Unknown names, opaque proxy/deployment aliases and recognized older models stay on instructions with the same local parser. Missing JSON Schema or a schema outside the native subset also keeps that path. Native-capable requests retain ordinary tools. An API 400 is not automatically retried without its schema.
+
+Custom providers and wrappers must preserve `LLMProvider.supportsAutoNativeOutputSchema(model)`, which returns `true` only for positively known supported models, as well as the existing native wire capability. A provider that declares only generic native support stays on the instruction path under auto. `withRetry` and `withCircuitBreaker` forward this declaration; `withFallback` requires both sides to know and support the model.
 
 `answerGuarantee` describes the accepted answer's **format**: `native` when its request used the native format, or `checked` when only local parsing enforced it. Neither label proves factual correctness. Use explicit `strategy: 'instruct'` to keep instruction-only generation, or `strategy: 'native'` to require support and refuse an incompatible configuration.
 
@@ -281,7 +285,7 @@ const agent = Agent.create({ provider: anthropic(), model: 'claude-haiku-4-5' })
   .build();
 ```
 
-- **Which providers and models.** `anthropic()` and `browserAnthropic()` declare `LLMProvider.carriesNativeOutputSchema`, per model: Claude Haiku 4.5, Sonnet 4.5, Opus 4.5 and every later model take it; Opus 4.1 and earlier do not. An id the model table does not know is read as the newest generation and allowed (the thinking table's rule); the API's own error names `output_config` if it is wrong. The Bedrock and gateway adapters do not declare it yet. Anything that does not is **refused by name at run start** — never a quiet `'instruct'`: a provider without the declaration with an error naming it, a model that does not take the format with `UnsupportedNativeOutputError` (from `agentfootprint/providers`, carrying `provider` and `model`). Ask ahead of time with `nativeOutputSchemaFor(provider, model)`.
+- **Which providers and models.** `anthropic()` and `browserAnthropic()` declare `LLMProvider.carriesNativeOutputSchema`, per model: Claude Haiku 4.5, Sonnet 4.5, Opus 4.5 and every later model take it; Opus 4.1 and earlier do not. For explicit `strategy: 'native'`, an id the model table does not know retains the forward-compatible policy and is allowed; auto does not make that assumption. In explicit native mode, the API's own error names `output_config` if it is wrong. The Bedrock and gateway adapters do not declare it yet. Anything that does not is **refused by name at run start** — never a quiet `'instruct'`: a provider without the declaration with an error naming it, a model that does not take the format with `UnsupportedNativeOutputError` (from `agentfootprint/providers`, carrying `provider` and `model`). Ask ahead of time with `nativeOutputSchemaFor(provider, model)`.
 - **The schema sent is a wire copy.** The API takes a subset of JSON Schema, so the copy closes every object (`additionalProperties: false`) and moves what it cannot take — `minimum`, `maxLength`, `minItems` above 1, a lookaround `pattern`, … — into the description. Your parser still judges the full contract, so nothing is weakened. A schema the API cannot express at all (a recursive one, an external `$ref`, an object inside an `enum`, an untyped value, a record with open keys, an object `allOf` intersection that closing would change) is refused at build, naming the node.
 - **A stop is not an answer.** On a `stop_reason` of `'refusal'`, `'max_tokens'` or `'model_context_window_exceeded'` the format does not hold, so the attempt fails by name even when the text parses: the `outputAttempts` row and `agent.outputContractUnmet()` carry `stopReason`, `.answerValidation()` does not accept it, and `runTyped()` throws. A truncation is re-asked under `retries` (raise `maxTokens` if it keeps happening); a refusal is not — the model declined, and no corrected shape changes that.
 - **On the record.** Each call's receipt carries `params.outputFormat` — the format's `type` and a run-salted hash of its schema — so a recording shows which answers were decoded under a schema, and which one.

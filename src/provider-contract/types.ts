@@ -758,6 +758,14 @@ export interface LLMProvider {
    */
   readonly supportsNativeOutputSchema?: (model: string) => boolean;
   /**
+   * Positive model knowledge for automatic native output. Unlike explicit
+   * native support, this must return false for unknown or opaque aliases.
+   * Auto requires both native wire support and this predicate to return true;
+   * absence keeps instruction-based generation. It must not depend on `this`.
+   * Wrappers forward it; fallback pairs require both sides to know the model.
+   */
+  readonly supportsAutoNativeOutputSchema?: (model: string) => boolean;
+  /**
    * `hooks` (v7.8) is optional and additive — implementations may declare
    * `complete(req)` with no second parameter and stay assignable. A LEAF
    * provider (one that talks to a vendor) may ignore it. A WRAPPER must

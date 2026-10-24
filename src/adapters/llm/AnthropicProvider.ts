@@ -32,6 +32,7 @@ import { retryAfterMsFromError } from './retryAfter.js';
 import { ANTHROPIC_PROMPT_CACHING } from './anthropicCacheWire.js';
 import { thinkingModeWith } from './anthropicThinkingWire.js';
 import {
+  anthropicModelFacts,
   anthropicTakesForcedToolChoice,
   anthropicTakesNativeOutputSchema,
 } from './anthropicModels.js';
@@ -216,6 +217,8 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
     // the structured-outputs page lists (anthropicModels.ts).
     carriesNativeOutputSchema: true,
     supportsNativeOutputSchema: (model) => anthropicTakesNativeOutputSchema(modelOf(model)),
+    supportsAutoNativeOutputSchema: (model) =>
+      anthropicModelFacts(modelOf(model))?.nativeOutputSchema === true,
     // Explicit `cache_control` breakpoints, four per request, usage reported —
     // the agent's cache strategy is chosen from this, never from `name`.
     promptCaching: ANTHROPIC_PROMPT_CACHING,
@@ -331,6 +334,7 @@ export class AnthropicProvider implements LLMProvider {
   readonly carriesNativeOutputSchema = true;
   /** The inner declaration resolves this adapter's shorthand before looking up the model. */
   readonly supportsNativeOutputSchema: (model: string) => boolean;
+  readonly supportsAutoNativeOutputSchema: (model: string) => boolean;
   readonly promptCaching = ANTHROPIC_PROMPT_CACHING;
   readonly thinkingHandler = anthropicThinkingHandler;
   /** The inner provider's own function — a closure, safe to forward unbound. */
@@ -342,6 +346,8 @@ export class AnthropicProvider implements LLMProvider {
     this.thinkingMode = this.inner.thinkingMode!;
     this.supportsForcedToolChoice = this.inner.supportsForcedToolChoice!;
     this.supportsNativeOutputSchema = this.inner.supportsNativeOutputSchema!;
+    this.supportsAutoNativeOutputSchema =
+      this.inner.supportsAutoNativeOutputSchema ?? (() => false);
   }
 
   // `hooks` is FORWARDED, not dropped — see LLMCallHooks in provider-contract/types.ts.

@@ -6,17 +6,20 @@ title: OutputSchemaStrategy
 
 > **OutputSchemaStrategy** = `"auto"` \| `"instruct"` \| `"tool-forced"` \| `"native"`
 
-Defined in: [src/answer-validation/outputSchema.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L111)
+Defined in: [src/answer-validation/outputSchema.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L114)
 
 How the schema reaches the model.
 
   • `'auto'` (default) — use native structured output when the effective
-    provider/model supports it and an explicit or parser-derived JSON Schema
+    provider positively declares that known model supports it and an explicit
+    or parser-derived JSON Schema
     can be lowered safely. Otherwise use instruction plus local validation.
     Selection is repeated for configured models and reliability fallbacks;
     `answerGuarantee` records the strategy actually used. No extra retry is
     introduced. An unavailable schema or known native-schema refusal falls
-    back; unexpected wire-lowering errors still throw.
+    back; unexpected wire-lowering errors still throw. Unknown/opaque model
+    names stay on instructions. Set `'instruct'` to retain the previous
+    generation strategy explicitly. API errors never trigger a downgrade.
   • `'instruct'` — the shape is described in the system prompt
     and the model is asked for JSON. Works on every provider, because it
     is only words.

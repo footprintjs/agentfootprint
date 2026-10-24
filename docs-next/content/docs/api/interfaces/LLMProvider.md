@@ -110,6 +110,30 @@ must consult the same rule before putting cache markers on the wire.
 
 ***
 
+### supportsAutoNativeOutputSchema?
+
+> `readonly` `optional` **supportsAutoNativeOutputSchema?**: (`model`) => `boolean`
+
+Defined in: [src/provider-contract/types.ts:767](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L767)
+
+Positive model knowledge for automatic native output. Unlike explicit
+native support, this must return false for unknown or opaque aliases.
+Auto requires both native wire support and this predicate to return true;
+absence keeps instruction-based generation. It must not depend on `this`.
+Wrappers forward it; fallback pairs require both sides to know the model.
+
+#### Parameters
+
+##### model
+
+`string`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### supportsForcedToolChoice?
 
 > `readonly` `optional` **supportsForcedToolChoice?**: (`model`) => `boolean`
@@ -205,7 +229,7 @@ adapter decides. A plain function of the model id — it must not use
 
 > **complete**(`req`, `hooks?`): `Promise`\<[`LLMResponse`](/docs/api/interfaces/LLMResponse)\>
 
-Defined in: [src/provider-contract/types.ts:767](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L767)
+Defined in: [src/provider-contract/types.ts:775](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L775)
 
 `hooks` (v7.8) is optional and additive — implementations may declare
 `complete(req)` with no second parameter and stay assignable. A LEAF
@@ -233,7 +257,7 @@ forward it, or everything it wraps goes silently dark — see the
 
 > `optional` **stream**(`req`, `hooks?`): `AsyncIterable`\<[`LLMChunk`](/docs/api/interfaces/LLMChunk)\>
 
-Defined in: [src/provider-contract/types.ts:768](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L768)
+Defined in: [src/provider-contract/types.ts:776](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L776)
 
 #### Parameters
 
