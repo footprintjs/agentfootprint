@@ -30,13 +30,28 @@ An independent `.outputSchema()` or `.answerValidation()` retains its own behavi
 including retries, buffering and refusal. `.outputFallback()` is refused with
 the prose-only arm because a fallback can replace an answer after observation.
 
-The English grammar is a **heuristic**, and the revised detector is **unmeasured**.
-It can miss negatives and flag correct statements. A claim must have an anchor in
+The English grammar is a **heuristic**. The prior detector **failed every free-replay
+benchmark gate**; the revised, data-anchored path remains **unmeasured**.
+It can miss negatives and flag correct statements. Comparing a claim with read evidence requires an anchor in
 the same clause: a dispatched read's declared `said` words, actual sent value or
 resolved name or alias. Host-only and kept-out values cannot supply that anchor;
 another clause or a user message cannot supply evidence. Anchoring permits an
 observation, not a binding or proof. Entity resolution and coverage checks remain
 separate, so a sent name can still produce `entity-unresolved`.
+
+If the grammar detects an eligible negative and no dispatched native read is
+recorded for the current turn, the observer files one `negative-claim-note` with
+code `no-read` per answer, within the observation budgets below. For example,
+answering "Payments has no incidents. There are no incidents anywhere." without a
+recorded read produces one warning. A read from an earlier turn does not suppress
+it. A recorded dispatched read does suppress this note even if it failed or its
+result was kept out; that presence check does not establish usable evidence.
+Because the ledger can be incomplete, `no-read` does not prove that no read occurred.
+
+The observer filters the exact normalized ordinary clauses "None.", "No action
+is needed." and "Tests: 0 failed."; they produce no `no-read` warning. Added words or a
+separate negative clause remain eligible. The note records missing read evidence;
+it never verifies, blocks or rewrites the answer.
 
 `agent.findings()` retains `negative-claim` and `negative-claim-note` rows. A
 current-turn row makes the assessment not-sure with reason

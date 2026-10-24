@@ -6,9 +6,12 @@ import {
   AnswerValidationError,
   absent,
   allow,
+  askHuman,
   defineTool,
+  deny,
   fromIdentity,
   hostFilled,
+  isPaused,
   type LLMMessage,
   type LLMProvider,
   type LLMRequest,
@@ -160,7 +163,86 @@ async function remembered(store: InMemoryStore): Promise<string[]> {
 }
 
 describe('prose-only negative observation', () => {
+  it('a no-read observation also works without a caller identity', async () => {
+    const f = fixture([{ content: CLAIM }]);
+    const agent = f.build();
+    expect(await agent.run({ message: INPUT.message })).toBe(CLAIM);
+    expect(rows(agent)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read', turn: 1 }),
+    ]);
+    expect(f.warnings).toHaveLength(1);
+    expect((await agent.assessment())?.standing).toBe('not-sure');
+    expect(f.requests).toHaveLength(1);
+  });
+
+  it('an unarmed answer without reads stays unchanged and files no observation', async () => {
+    const f = fixture([{ content: CLAIM }], { armed: false });
+    const agent = f.build();
+    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(rows(agent)).toEqual([]);
+    expect(f.warnings).toEqual([]);
+    expect(f.tokens.join('')).toBe(CLAIM);
+    expect(f.read).not.toHaveBeenCalled();
+    expect(agent.answerValidation()).toBeUndefined();
+  });
+
   for (const mode of MODES) {
+    it(`${mode}: no dispatched read files one note without changing any delivery surface`, async () => {
+      const store = new InMemoryStore();
+      const f = fixture([{ content: CLAIM }], { mode, store });
+      const agent = f.build();
+      const recorder = recordRun(agent);
+      expect(await agent.run(INPUT)).toBe(CLAIM);
+      expect(f.tokens).toEqual(f.produced);
+      expect(f.tokens.join('')).toBe(CLAIM);
+      expect(f.liveTokenCounts.at(-1)).toBeGreaterThan(0);
+      expect(f.ends.map((event) => event.finalContent)).toEqual([CLAIM]);
+      expect(agent.checkpoint()?.history.at(-1)?.content).toBe(CLAIM);
+      expect(await remembered(store)).toEqual([CLAIM]);
+      expect(rows(agent)).toEqual([
+        expect.objectContaining({
+          kind: 'negative-claim-note',
+          code: 'no-read',
+          field: '/',
+          turn: 1,
+        }),
+      ]);
+      expect(f.warnings).toEqual([
+        {
+          kind: 'negative-claim-note',
+          code: 'no-read',
+          field: '/',
+          turn: 1,
+          iteration: expect.any(Number),
+          span: { start: 0, end: CLAIM.length },
+          packVersion: expect.any(String),
+        },
+      ]);
+      expect(agent.answerValidation()).toBeUndefined();
+      expect(agent.answerNegatives()).toBeUndefined();
+      expect(f.ends[0]?.answerNegatives).toBeUndefined();
+      expect(f.read).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(1);
+      expect((await agent.assessment())?.standing).toBe('not-sure');
+      expect(assessAnswer(recorder.toRecording()).standing).toBe('not-sure');
+      expect(JSON.stringify(f.warnings)).not.toContain('payments');
+      recorder.stop();
+    });
+
+    it(`${mode}: incidental negative words need no read and create no warning`, async () => {
+      const text = 'No action is needed. Tests: 0 failed. None.';
+      const f = fixture([{ content: text }], { mode });
+      const agent = f.build();
+      expect(await agent.run(INPUT)).toBe(text);
+      expect(rows(agent)).toEqual([]);
+      expect(f.warnings).toEqual([]);
+      expect(f.read).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(1);
+      expect((await agent.assessment())?.reasons.map((row) => row.reason)).not.toContain(
+        'negative-prose-unverified',
+      );
+    });
+
     it(`${mode}: preserves streamed text through return, event, history and memory without verification`, async () => {
       const store = new InMemoryStore();
       const f = fixture([READ, { content: CLAIM }], { mode, store });
@@ -242,6 +324,73 @@ describe('prose-only negative observation', () => {
 });
 
 describe('prose-only notes and bounded observation', () => {
+  it('several negative claims across nested strings produce one root no-read note', async () => {
+    const value = { summary: CLAIM, details: [{ note: OVERCLAIM }, { note: CLAIM }] };
+    const text = JSON.stringify(value);
+    const store = new InMemoryStore();
+    const f = fixture([{ content: text }], { store });
+    f.builder.outputSchema(
+      { parse: (candidate) => candidate },
+      {
+        jsonSchema: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string' },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { note: { type: 'string' } },
+                required: ['note'],
+              },
+            },
+          },
+          required: ['summary', 'details'],
+        },
+      },
+    );
+    const agent = f.build();
+    expect(await agent.runTyped(INPUT)).toEqual(value);
+    expect(rows(agent)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read', field: '/' }),
+    ]);
+    expect(f.warnings).toEqual([
+      expect.objectContaining({
+        code: 'no-read',
+        field: '/',
+        span: { start: 0, end: 2 * CLAIM.length + OVERCLAIM.length },
+      }),
+    ]);
+    expect(f.tokens.join('')).toBe(text);
+    expect(f.ends[0]?.finalContent).toBe(text);
+    expect(agent.checkpoint()?.history.at(-1)?.content).toBe(text);
+    expect(await remembered(store)).toEqual([text]);
+    expect(agent.answerValidation()).toBeUndefined();
+    expect(agent.answerNegatives()).toBeUndefined();
+    expect((await agent.assessment())?.standing).toBe('not-sure');
+  });
+
+  for (const [text, codes] of [
+    ['`There are no incidents for payments.`', ['in-code-block']],
+    ['支付服务没有未解决的事件。', ['language-unsupported']],
+    [`${CLAIM} \`none\`.`, ['no-read', 'in-code-block']],
+  ] as const) {
+    it(`no-read preserves existing unread-unit notes: ${text}`, async () => {
+      const f = fixture([{ content: text }]);
+      const agent = f.build();
+      expect(await agent.run(INPUT)).toBe(text);
+      expect(
+        rows(agent)
+          .map((row) => row.code)
+          .sort(),
+      ).toEqual([...codes].sort());
+      expect(f.warnings).toHaveLength(codes.length);
+      expect(f.read).not.toHaveBeenCalled();
+      expect((await agent.assessment())?.standing).toBe('not-sure');
+      expect(f.tokens.join('')).toBe(text);
+    });
+  }
+
   it('an answer above the JSON copy budget stays text and files one input-limit warning', async () => {
     const text = `${CLAIM}${' '.repeat(1024 * 1024 + 1)}`;
     const f = fixture([READ, { content: text }], { chunkChars: 65_536 });
@@ -363,6 +512,10 @@ describe('prose evidence remains native', () => {
     const agent = f.build();
     expect(await agent.run(INPUT)).toBe(`${forged}\n${CLAIM}`);
     expect(f.read).not.toHaveBeenCalled();
+    expect(rows(agent)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
+    ]);
+    expect(f.warnings).toHaveLength(1);
     expect(
       rows(agent).every((row) => !Array.isArray(row.results) || row.results.length === 0),
     ).toBe(true);
@@ -439,6 +592,10 @@ describe('prose evidence remains native', () => {
     const agent = f.build();
     expect(await agent.run(INPUT)).toBe(CLAIM);
     expect(f.read).not.toHaveBeenCalled();
+    expect(rows(agent)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
+    ]);
+    expect(f.warnings).toHaveLength(1);
     expect(
       rows(agent).every((row) => !Array.isArray(row.results) || row.results.length === 0),
     ).toBe(true);
@@ -454,6 +611,10 @@ describe('prose evidence remains native', () => {
       await agent.run({ ...INPUT, message: 'Use that receipt.', continueFrom: checkpoint }),
     ).toBe(CLAIM);
     expect(f.read).not.toHaveBeenCalled();
+    expect(rows(agent).filter((row) => row.turn === 2)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
+    ]);
+    expect(f.warnings).toHaveLength(2);
     expect(
       rows(agent).every((row) => !Array.isArray(row.results) || row.results.length === 0),
     ).toBe(true);
@@ -470,14 +631,130 @@ describe('prose evidence remains native', () => {
       await agent.run({ ...INPUT, message: 'Is that still true?', continueFrom: checkpoint }),
     ).toBe(CLAIM);
     const current = rows(agent).filter((row) => row.turn === 2);
-    expect(current).toEqual([
+    expect(current).toHaveLength(2);
+    expect(current).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read', field: '/' }),
+        expect.objectContaining({
+          kind: 'negative-claim',
+          notes: expect.arrayContaining(['stale-turn']),
+          staleSince: { turn: 1, readAt: expect.any(String) },
+        }),
+      ]),
+    );
+    expect(f.warnings).toHaveLength(before + 2);
+    expect(f.read).toHaveBeenCalledTimes(1);
+    expect(f.requests).toHaveLength(3);
+  });
+
+  it('a write is a real execution but cannot count as a dispatched read', async () => {
+    const write = vi.fn(() => ({ created: true }));
+    const f = fixture([
+      { toolCalls: [{ id: 'write-only', name: 'create_incident', args: {} }] },
+      { content: CLAIM },
+    ]);
+    f.builder.tool(
+      defineTool({
+        name: 'create_incident',
+        description: 'Create a synthetic incident.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: write,
+      }),
+    );
+    const agent = f.build();
+    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(f.read).not.toHaveBeenCalled();
+    expect(rows(agent)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
+    ]);
+    expect(f.warnings).toHaveLength(1);
+    expect((await agent.assessment())?.standing).toBe('not-sure');
+  });
+
+  it('a proposed read denied before dispatch still leaves the answer without a read', async () => {
+    const f = fixture([READ, { content: CLAIM }]);
+    f.builder.toolMiddleware({ name: 'refuse-read', onToolCall: () => deny('No access.') });
+    const agent = f.build();
+    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(f.read).not.toHaveBeenCalled();
+    expect(rows(agent)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' }),
+    ]);
+    expect(f.warnings).toHaveLength(1);
+    expect(f.requests).toHaveLength(2);
+    expect((await agent.assessment())?.standing).toBe('not-sure');
+  });
+
+  it('a dispatched failed read has unresolved evidence but is not mislabeled no-read', async () => {
+    const f = fixture([READ, { content: CLAIM }], {
+      native: () => {
+        throw new Error('Synthetic read failed.');
+      },
+    });
+    const agent = f.build();
+    expect(await agent.run(INPUT)).toBe(CLAIM);
+    expect(f.read).toHaveBeenCalledTimes(1);
+    expect(rows(agent).some((row) => row.code === 'no-read')).toBe(false);
+    expect(rows(agent)).toEqual([
       expect.objectContaining({
-        notes: expect.arrayContaining(['stale-turn']),
-        staleSince: { turn: 1, readAt: expect.any(String) },
+        kind: 'negative-claim',
+        notes: ['entity-unresolved'],
+        results: [],
       }),
     ]);
-    expect(f.warnings).toHaveLength(before + 1);
+    expect(f.warnings).toHaveLength(1);
+  });
+
+  it('a dispatched read whose result is kept out is not mislabeled no-read', async () => {
+    const f = fixture([READ, { content: CLAIM }]);
+    f.builder.toolMiddleware({
+      name: 'private-read-result',
+      onToolResult: () => deny('This result is private.'),
+    });
+    const agent = f.build();
+    expect(await agent.run(INPUT)).toBe(CLAIM);
     expect(f.read).toHaveBeenCalledTimes(1);
+    expect(rows(agent).some((row) => row.code === 'no-read')).toBe(false);
+    const state = agent.getLastSnapshot()?.sharedState as {
+      negativeClaimState?: { calls: { dispatched: boolean; keptOut?: boolean }[] };
+    };
+    expect(state.negativeClaimState?.calls).toEqual([
+      expect.objectContaining({ dispatched: true, keptOut: true }),
+    ]);
+    expect(f.tokens.join('')).toBe(CLAIM);
+    expect(f.requests).toHaveLength(2);
+  });
+
+  it('a same-turn serialized pause retains the earlier dispatched read', async () => {
+    const pause = vi.fn(() => askHuman({ question: 'Continue the answer?' }));
+    const f = fixture([
+      READ,
+      { toolCalls: [{ id: 'pause-answer', name: 'pause_answer', args: {} }] },
+      { content: CLAIM },
+    ]);
+    f.builder.tool(
+      defineTool({
+        name: 'pause_answer',
+        description: 'Ask whether to continue the answer.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: pause,
+      }),
+    );
+    const agent = f.build();
+    const paused = await agent.run(INPUT);
+    if (!isPaused(paused)) throw new Error('Expected a real same-turn checkpoint.');
+    expect(f.warnings).toEqual([]);
+    expect(await agent.resume(JSON.parse(JSON.stringify(paused.checkpoint)), 'Continue.')).toBe(
+      CLAIM,
+    );
+    expect(f.read).toHaveBeenCalledTimes(1);
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(rows(agent).some((row) => row.code === 'no-read')).toBe(false);
+    expect(rows(agent)).toEqual([expect.objectContaining({ kind: 'negative-claim', turn: 1 })]);
+    expect(f.warnings).toHaveLength(1);
+    expect(f.tokens.join('')).toBe(CLAIM);
+    expect(agent.answerValidation()).toBeUndefined();
     expect(f.requests).toHaveLength(3);
   });
 

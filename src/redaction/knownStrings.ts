@@ -112,6 +112,7 @@ type PlainStringWords =
   | 'predicate'
   | 'identifier'
   | 'number'
+  | 'no-read'
   | 'stop'
   | 'tool_use'
   | 'max_tokens';
@@ -503,6 +504,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'negative-recheck': true,
   'next-call': true,
   'no-earlier-turn': true,
+  'no-read': true,
   'no-store': true,
   noise: true,
   none: true,

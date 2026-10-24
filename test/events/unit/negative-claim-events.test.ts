@@ -1,5 +1,6 @@
 /** The prose warning is a bounded projection of filed findings, never answer content. */
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { RedactionRule } from 'footprintjs/advanced';
 import {
   ALL_EVENT_TYPES,
   EVENT_NAMES,
@@ -9,6 +10,7 @@ import {
 import { recordFindings, type FindingsScope } from '../../../src/core/agent/findings/ledger.js';
 import type { NegativeProseFinding } from '../../../src/core/agent/findings/types.js';
 import { noPolicyScope } from '../../helpers/noPolicy.js';
+import { eventServing, SERVED_PLACEHOLDER } from '../../../src/redaction/served.js';
 
 const EVENT = 'agentfootprint.findings.negative_claim';
 
@@ -40,6 +42,47 @@ function claim(overrides: Partial<ClaimFinding> = {}): ClaimFinding {
 }
 
 describe('negative prose warning event', () => {
+  it('keeps the no-read code under selected redaction without exposing private content', () => {
+    const { scope, events } = fixture();
+    recordFindings(
+      scope,
+      [
+        Object.assign(
+          {
+            kind: 'negative-claim-note' as const,
+            iteration: 1,
+            field: '/private-customer-field',
+            span: { start: 0, end: 27 },
+            code: 'no-read' as const,
+            packVersion: 'private-custom-pack',
+          },
+          { candidate: 'private candidate answer', toolValue: 'private tool content' },
+        ),
+      ],
+      { turn: 1 },
+    );
+    const raw = events[0].payload;
+    const serving = eventServing(() => new RedactionRule({ keys: ['history'] }), true);
+    const served = serving.payload(EVENT, raw);
+    expect(served).toMatchObject({
+      kind: 'negative-claim-note',
+      code: 'no-read',
+      iteration: 1,
+      turn: 1,
+      span: { start: 0, end: 27 },
+      field: SERVED_PLACEHOLDER,
+      packVersion: SERVED_PLACEHOLDER,
+    });
+    expect(JSON.stringify(served)).not.toContain('private');
+    expect(raw).toMatchObject({ field: '/private-customer-field' });
+    expect(raw).not.toHaveProperty('candidate');
+    expect(raw).not.toHaveProperty('toolValue');
+
+    // A known library word still obeys an explicit selection of its own key.
+    const selected = eventServing(() => new RedactionRule({ keys: ['code'] }), true);
+    expect(selected.payload(EVENT, raw)).toMatchObject({ code: SERVED_PLACEHOLDER });
+  });
+
   it('is registered and exported through the public events door', () => {
     expect(EVENT_NAMES.findings.negative_claim).toBe(EVENT);
     expect(ALL_EVENT_TYPES.filter((type) => type === EVENT)).toHaveLength(1);

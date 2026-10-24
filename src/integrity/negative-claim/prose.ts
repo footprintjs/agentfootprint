@@ -19,6 +19,8 @@
 
 import { claimWordsOf, entityNotes } from './containment.js';
 import { proseAnchorOf } from './anchor.js';
+import { eligibleNoReadClaim } from './noRead.js';
+import { isRead } from './readings.js';
 import { detectNegativeClaims, type DetectedClaim } from './detect.js';
 import { PROSE_NOTES } from './types.js';
 import { MAX_NEGATIVE_CLAIMS } from './limits.js';
@@ -129,7 +131,24 @@ export function judgeProseNegatives(input: ProseCheckInput): ProseRow[] {
     work.charge(0);
     const anchored = detection.claims.length === 0 ? undefined : proseAnchorOf(record, work);
     const peers = record.calls.filter((call) => isCurrent(call, record));
+    // This describes the native record, never an assertion about external work.
+    // A failed or hidden dispatched read is still a read attempt; an earlier
+    // turn, a proposal or a write cannot stand in for one on this turn.
+    const noRead =
+      detection.claims.some(eligibleNoReadClaim) &&
+      !peers.some((call) => call.dispatched && isRead(call));
     const rows: ProseRow[] = [
+      ...(noRead
+        ? [
+            {
+              kind: 'negative-claim-note' as const,
+              field,
+              code: 'no-read' as const,
+              span: { start: 0, end: text.length },
+              packVersion: input.phrases?.version ?? NEGATIVE_CLAIM_PHRASES_VERSION,
+            },
+          ]
+        : []),
       ...detection.notes.map((note) => ({
         kind: 'negative-claim-note' as const,
         field,

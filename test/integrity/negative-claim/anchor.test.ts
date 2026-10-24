@@ -93,7 +93,7 @@ describe('only native data anchors a negative phrase', () => {
         personMessage: 'Please look up invoices.',
         record: turnRecord([]),
       }),
-    ).toEqual([]);
+    ).toEqual([expect.objectContaining({ kind: 'negative-claim-note', code: 'no-read' })]);
   });
 
   it.each([{ effect: 'not-read' as const }, { dispatched: false }])(

@@ -37,7 +37,7 @@ by the tool)", "(the tool's declared default)", "(as sent by the model)", "(as t
 says)". Every gap is listed; an unsent argument is worded with care ("was not sent, so the tool may
 have applied its own default and this may cover only part").
 
-**The prose notes** (`anchor.ts`, `resolve.ts`, `containment.ts`). A clause first needs an anchor:
+**The prose notes** (`anchor.ts`, `resolve.ts`, `containment.ts`). Comparing a clause with read evidence first needs an anchor:
 a dispatched read's declared `said` words, actual sent value or resolved name/alias. Host-only
 and kept-out values cannot anchor it; another clause, a user message and model prose cannot
 supply evidence. Anchoring never binds an entity. Resolve separately by a population's native
@@ -46,6 +46,17 @@ supply evidence. Anchoring never binds an entity. Resolve separately by a popula
 `paged`, `partial` and the rest. A hedge is not scope. A search with no note leaves the claim with
 no note; the others then note only what they BEAR on it. Nothing here throws on model text
 (`test/integrity/negative-claim/fuzz.test.ts`).
+
+When the grammar detects an eligible negative and no dispatched native read is
+recorded for the current turn, the runtime files one `no-read` note per answer
+instead of dropping the claim for lack of an anchor. Earlier-turn reads do not
+suppress it; a recorded dispatched read does, even if failed or kept out. This is
+a presence check, not evidence eligibility or proof that no read occurred in an
+incomplete ledger. `noRead.ts` filters exact normalized ordinary clauses "None.",
+"No action is needed." and "Tests: 0 failed."; they produce no `no-read` warning. Added
+words or separate negative clauses remain eligible. A no-read note never verifies,
+withholds or rewrites the answer. The prior detector failed every free-replay
+benchmark gate; the revised, data-anchored path remains unmeasured.
 
 The prose door shares the typed door's 32-claim field limit (`limits.ts`). Above it, one
 `too-many-claims` note covers the entire text; no record is read and no claim is judged. It

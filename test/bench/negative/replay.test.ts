@@ -349,15 +349,15 @@ describe('FUNCTIONAL — a synthetic folder, read and replayed', () => {
     expect(cell.record.missedOverclaims.point).toBe(1);
   });
 
-  it('keeps raw detection but files no anchored claim when the replay has no native calls', () => {
-    // PR5 requires a dispatched native read to supply data anchors. The frozen
-    // replay supplies an empty record; its historical baseline is still the raw
-    // detector, but it cannot measure the current runtime observer's recall.
-    // PR6 needs a separate replay with native call evidence, not relabelled data.
+  it('keeps no-read warnings separate from anchored claims in the legacy replay', () => {
+    // PR5 files a no-read note when native evidence is absent. The frozen replay
+    // counts only claim diagnostics and overflow in its noted metric; that
+    // historical metric does not count this new warning. Its empty record
+    // cannot measure evidence comparisons. PR6 needs the full native path.
     expect(readReply({ reply: FLAT }, LIB)).toMatchObject({
       detected: true,
       noted: false,
-      notes: {},
+      notes: { 'no-read': 1 },
     });
     const result = replay(loadStudy(dir), LIB);
     expect(
@@ -365,7 +365,7 @@ describe('FUNCTIONAL — a synthetic folder, read and replayed', () => {
         (cell: { record: { sameAsBaseline: boolean } }) => !cell.record.sameAsBaseline,
       ),
     ).toBe(true);
-    expect(result.notes).toEqual({});
+    expect(result.notes).toEqual({ 'no-read': 32 });
   });
 
   it('reads the gates on held-out test-arm replies, per model and resolution; floors enforced', () => {

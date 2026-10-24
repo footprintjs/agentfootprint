@@ -47,8 +47,15 @@ const expectInputLimit = (value: unknown): void => {
 };
 
 describe('runtime negative prose — whole-answer preflight', () => {
-  it('a claim phrase without any dispatched read has no data anchor', () => {
-    expect(observe({ summary: TEXT }, EMPTY)).toEqual([]);
+  it('a claim without any dispatched read records one no-read note', () => {
+    expect(observe({ summary: TEXT, detail: TEXT }, EMPTY)).toEqual([
+      expect.objectContaining({
+        kind: 'negative-claim-note',
+        code: 'no-read',
+        field: '/',
+        span: { start: 0, end: TEXT.length * 2 },
+      }),
+    ]);
   });
 
   for (const [label, value, code] of [
@@ -107,6 +114,18 @@ describe('runtime negative prose — whole-answer preflight', () => {
     expect(rows).toHaveLength(32);
     expect(rows.every((row) => row.kind === 'negative-claim')).toBe(true);
     expect(rows[31]?.field).toBe('/values/31');
+  });
+
+  it('the no-read note shares the whole-answer observation cap with earlier-turn claims', () => {
+    const earlier = { ...READ, turn: 2 };
+    const admitted = observe({ fields: Array.from({ length: 31 }, () => TEXT) }, earlier);
+    expect(admitted).toHaveLength(32);
+    expect(
+      admitted.filter((row) => row.kind === 'negative-claim-note' && row.code === 'no-read'),
+    ).toHaveLength(1);
+    expect(observe({ fields: Array.from({ length: 32 }, () => TEXT) }, earlier)).toEqual([
+      expect.objectContaining({ kind: 'negative-claim-note', code: 'too-many-claims', field: '/' }),
+    ]);
   });
 
   it('32 code notes fit the same whole-answer detection budget as 32 claims', () => {
@@ -310,6 +329,7 @@ describe('negative prose checkpoint row admission', () => {
 
   it('accepts a bounded global note and optional dated stale evidence', () => {
     expect(negativeProseRowIsWellFormed(NOTE)).toBe(true);
+    expect(negativeProseRowIsWellFormed({ ...NOTE, code: 'no-read' })).toBe(true);
     expect(
       negativeProseRowIsWellFormed({
         ...CLAIM,

@@ -34,10 +34,19 @@ claims plus unjudged units). JSON copying is capped at 1 MiB and field paths at
 4,096 code units. One shared 8,000,000-unit work budget bounds pattern preparation
 and evidence/name matching across fields. Over a budget, one note records skipped
 work and replaces all partial findings.
-The English heuristic requires a same-clause anchor in a dispatched read's public
+To compare a claim with evidence, the English heuristic requires a same-clause anchor in a dispatched read's public
 declaration, sent value or resolved name; host-only and kept-out values cannot
 anchor it. Anchoring does not establish an entity or a fact. Code and recognized
 unsupported-language units receive notes; language detection itself can miss text.
+If the grammar detects an eligible negative and no dispatched native read is
+recorded for the current turn, the runtime files one `negative-claim-note` with
+code `no-read` per answer, within the same budgets. Earlier-turn reads do not
+suppress it; a recorded dispatched read does, even if failed or kept out. This
+presence check does not establish usable evidence, and an incomplete ledger means
+`no-read` is not proof that no read occurred. The observer filters the exact
+normalized clauses "None.", "No action is needed." and "Tests: 0 failed."; they
+produce no warning. Added words or separate negative clauses remain eligible.
+The note never verifies, blocks or rewrites the answer.
 App extensions add at most 32 literal phrases of 128 code units, under the same
 rules and a version derived from their effective pack hash.
 
@@ -45,8 +54,9 @@ The writer files `negative-claim` / `negative-claim-note` findings and emits one
 `agentfootprint.findings.negative_claim` warning per row: bounded locations, codes,
 pack identity and native references, never answer text or tool values. Current-turn
 rows make the answer fold not-sure with `negative-prose-unverified`; no finding
-does not verify the answer. The heuristic can miss phrases and over-flag others;
-its revised behavior is unmeasured. Prose never blocks, verifies or buffers delivery,
+does not verify the answer. The prior detector failed every free-replay benchmark
+gate. The revised, data-anchored path remains unmeasured and can miss phrases or
+over-flag others. Prose never blocks, verifies or buffers delivery,
 and `strictProse` / `enforceProse` remain refused.
 
 Remote tool admission and model-generated evidence rules remain deferred. Unarmed

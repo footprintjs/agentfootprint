@@ -26,7 +26,7 @@ export function observeNegativeProse(
   phrases?: ResolvedNegativeClaimPhrases,
 ): ProseRow[] {
   let chars = 0;
-  const note = (code: 'input-limit' | 'too-many-claims'): ProseRow[] => [
+  const note = (code: 'input-limit' | 'too-many-claims' | 'no-read'): ProseRow[] => [
     {
       kind: 'negative-claim-note',
       field: '/',
@@ -91,12 +91,22 @@ export function observeNegativeProse(
   }
   const work = createProseWorkBudget();
   const rows: ProseRow[] = [];
+  let notedNoRead = false;
   for (const { field, text } of fields) {
     const found = judgeProseNegatives({ field, text, record, phrases, work });
     if (found.some((row) => row.kind === 'negative-claim-note' && row.code === 'input-limit')) {
       return note('input-limit');
     }
-    rows.push(...found);
+    for (const row of found) {
+      if (row.kind === 'negative-claim-note' && row.code === 'no-read') {
+        if (notedNoRead) continue;
+        notedNoRead = true;
+        rows.push(...note('no-read'));
+      } else rows.push(row);
+    }
+    // The extra answer-level note shares the observation cap. No partial
+    // findings survive any limit, including a stale claim plus this note.
+    if (rows.length > MAX_NEGATIVE_CLAIMS) return note('too-many-claims');
   }
   return rows;
 }

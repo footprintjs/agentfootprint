@@ -10,11 +10,12 @@ and memory. It adds no correction, withholding or verification. Independent sche
 and app validation behavior remains in force; the prose-only arm refuses
 `outputFallback`, which could replace the answer after observation.
 
-Prose requires a same-clause data anchor from a dispatched read's public declared
+Comparing prose with read evidence requires a same-clause data anchor from a dispatched read's public declared
 words, actual sent value or resolved name. Host-only and kept-out values cannot
 anchor a claim, and an anchor is never an entity binding or proof. The grammar and
-its closed language heuristic can miss claims and flag correct ones; revised
-behavior is unmeasured. Code and recognized unsupported-language units receive
+its closed language heuristic can miss claims and flag correct ones. The prior
+detector failed every free-replay benchmark gate; the revised, data-anchored path
+remains unmeasured. Code and recognized unsupported-language units receive
 notes. App extensions add at most 32 literal `none`/`complete` phrases of 128
 UTF-16 code units each, with the effective pack hash reflected in its version;
 they cannot enable enforcement. One bounded `agentfootprint.findings.negative_claim`
@@ -22,6 +23,16 @@ event accompanies each claim or unread-unit row: locations, codes, phrase versio
 and native references only, never answer text or tool values. Current-turn rows
 make assessment not-sure with `negative-prose-unverified`; absence of a finding
 does not mean verified.
+
+The #204 review adds the no-read case: within the observation budgets, when the
+grammar detects an eligible negative and no dispatched native read is recorded
+for the current turn, one `negative-claim-note` with code `no-read` is filed per
+answer. Earlier-turn reads do not suppress it; a recorded dispatched read does,
+even if failed or kept out. This presence check does not establish usable evidence;
+an incomplete ledger means `no-read` cannot prove that no read occurred. The observer
+filters the exact normalized clauses "None.", "No action is needed." and "Tests: 0
+failed." so they produce no `no-read` warning. Added words or separate negative clauses stay
+eligible. The note never verifies, blocks or rewrites the answer.
 
 Prose enforcement remains deferred; the paid benchmark remains PR 6. No paid calls
 are part of PR 5 and publishing remains on hold. The handoff's approved budget
