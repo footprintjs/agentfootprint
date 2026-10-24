@@ -3260,7 +3260,12 @@ export class AgentBuilder {
   }
 
   /**
-   * Deliver typed negative claims as library-written statements of the searches
+   * Observe ordinary prose with `{ prose: true }`, preserving the answer and live
+   * streaming. Warnings never confirm or block a claim. No schema or tool list is
+   * required; optional `phrases` extends the grammar with bounded literal data.
+   * `.outputFallback()` is unsupported because it substitutes text after observation.
+   *
+   * Or deliver typed negative claims as library-written statements of the searches
    * they cite. `field` is a required top-level array in `.outputSchema()`'s JSON
    * Schema; entries contain only `kind`, required `about`, and `restsOn` handles.
    * The output adds `statement`, `delivery: 'record-composed'` and `version`.
@@ -3371,15 +3376,15 @@ export class AgentBuilder {
     return {
       parser,
       retries:
-        this.negativeClaimsConfig === undefined
+        this.negativeClaimsConfig?.mode !== 'typed'
           ? this.outputSchemaRetries
           : Math.min(this.outputSchemaRetries, 1),
       ...(schemaTool !== undefined && { schemaTool }),
       ...(outputFormat !== undefined && { outputFormat }),
       hasFallback: this.outputFallbackCfg !== undefined,
-      ...(this.negativeClaimsConfig !== undefined && { negativeClaimsEnforced: true as const }),
+      ...(this.negativeClaimsConfig?.mode === 'typed' && { negativeClaimsEnforced: true as const }),
       ...((this.answerValidationConfig?.mode === 'enforce' ||
-        this.negativeClaimsConfig !== undefined) && {
+        this.negativeClaimsConfig?.mode === 'typed') && {
         answerValidationEnforced: true,
       }),
     };
@@ -3390,7 +3395,12 @@ export class AgentBuilder {
     this.assertOutputFallbackCoherent();
     const negativeClaims = this.negativeClaimsConfig;
     let negativeSchema: Readonly<Record<string, unknown>> | undefined;
-    if (negativeClaims !== undefined) {
+    if (negativeClaims?.mode === 'prose' && this.outputFallbackCfg !== undefined) {
+      throw new Error(
+        'Agent.negativeClaims({ prose: true }) does not support .outputFallback(): a fallback runs after the observed answer.',
+      );
+    }
+    if (negativeClaims?.mode === 'typed') {
       if (this.outputSchemaParser === undefined) {
         throw new Error('Agent.negativeClaims requires .outputSchema(parser, { jsonSchema }).');
       }
@@ -3415,9 +3425,9 @@ export class AgentBuilder {
       }
       // A listed check with nothing to judge is refused, never left to pass.
       const listed = this.answerValidationConfig.agentChecks;
-      if (listed.includes('negative-claims') && negativeClaims === undefined) {
+      if (listed.includes('negative-claims') && negativeClaims?.mode !== 'typed') {
         throw new Error(
-          "AgentBuilder.answerValidation({ agentChecks: ['negative-claims'] }) requires .negativeClaims().",
+          "AgentBuilder.answerValidation({ agentChecks: ['negative-claims'] }) requires typed .negativeClaims({ field, tools }).",
         );
       }
       if (listed.includes('claims') && this.claimsContract === undefined) {
@@ -3576,7 +3586,7 @@ export class AgentBuilder {
       selfExplain && selfExplainBinding
         ? [...this.injectionList, selfExplain.skill(this.selfExplainConfig!)]
         : this.injectionList;
-    if (negativeClaims !== undefined && negativeSchema !== undefined) {
+    if (negativeClaims?.mode === 'typed' && negativeSchema !== undefined) {
       injections = [
         ...injections,
         defineInstruction({
@@ -3943,7 +3953,7 @@ export class AgentBuilder {
             entity: fact.entity,
             field: fact.field,
           }));
-    if (negativeClaims !== undefined) {
+    if (negativeClaims?.mode === 'typed') {
       assertNegativeClaimsTools(negativeClaims, [
         ...this.registry.map((entry) => entry.tool),
         ...injections.flatMap((injection) => injection.inject?.tools ?? []),

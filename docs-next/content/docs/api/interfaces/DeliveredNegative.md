@@ -4,7 +4,7 @@ title: DeliveredNegative
 
 # Interface: DeliveredNegative
 
-Defined in: [src/events/payloads.ts:3667](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3667)
+Defined in: [src/events/payloads.ts:3709](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3709)
 
 One library-written negative statement, shared by delivery and its event.
 
@@ -14,7 +14,7 @@ One library-written negative statement, shared by delivery and its event.
 
 > `readonly` `optional` **about?**: `string` \| `number`
 
-Defined in: [src/events/payloads.ts:3670](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3670)
+Defined in: [src/events/payloads.ts:3712](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3712)
 
 Original model citation value. Quote only when rendering it as text; not an evidence identity.
 
@@ -24,7 +24,7 @@ Original model citation value. Quote only when rendering it as text; not an evid
 
 > `readonly` **delivery**: `"record-composed"`
 
-Defined in: [src/events/payloads.ts:3673](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3673)
+Defined in: [src/events/payloads.ts:3715](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3715)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/events/payloads.ts:3673](https://github.com/footprintjs/agentfo
 
 > `readonly` **kind**: `"none"` \| `"unknown"` \| `"not-found"` \| `"complete"`
 
-Defined in: [src/events/payloads.ts:3668](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3668)
+Defined in: [src/events/payloads.ts:3710](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3710)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/events/payloads.ts:3668](https://github.com/footprintjs/agentfo
 
 > `readonly` **restsOn**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:3671](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3671)
+Defined in: [src/events/payloads.ts:3713](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3713)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [src/events/payloads.ts:3671](https://github.com/footprintjs/agentfo
 
 > `readonly` **statement**: `string`
 
-Defined in: [src/events/payloads.ts:3672](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3672)
+Defined in: [src/events/payloads.ts:3714](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3714)
 
 ***
 
@@ -56,4 +56,4 @@ Defined in: [src/events/payloads.ts:3672](https://github.com/footprintjs/agentfo
 
 > `readonly` **version**: `string`
 
-Defined in: [src/events/payloads.ts:3674](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3674)
+Defined in: [src/events/payloads.ts:3716](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3716)

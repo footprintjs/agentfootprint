@@ -35,10 +35,7 @@ describe('tool-choice events — registered at every site', () => {
 
   it('all three are in ALL_EVENT_TYPES, directly after the findings domain', () => {
     const list = [...ALL_EVENT_TYPES];
-    // The findings domain's last entry is `period` since the results layer
-    // (honesty layer 3, step 7b); `argument` before it since the inputs layer,
-    // `contingent` before that since 9.110.0.
-    const at = list.indexOf('agentfootprint.findings.period');
+    const at = list.indexOf('agentfootprint.findings.negative_claim');
     expect(at).toBeGreaterThan(-1);
     expect(list[at + 1]).toBe('agentfootprint.tool_choice.picked');
     expect(list[at + 2]).toBe('agentfootprint.tool_choice.outcome');

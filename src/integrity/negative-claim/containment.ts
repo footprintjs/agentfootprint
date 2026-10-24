@@ -42,6 +42,7 @@ import {
   unheldRanges,
 } from './readings.js';
 import type { ProseNote, SearchTool, TurnCall, TurnRecord } from './types.js';
+import type { ProseWorkBudget } from './work.js';
 
 type SearchCheckedItem = ComposedItem;
 type DeclaredTool = SearchTool;
@@ -62,15 +63,22 @@ interface ClaimWords {
   readonly window: TimeRange | undefined;
   readonly unbounded: boolean;
   readonly sourceMarker: boolean;
+  readonly work?: ProseWorkBudget;
 }
 
-export function claimWordsOf(claim: DetectedClaim, text: string, clock: string): ClaimWords {
+export function claimWordsOf(
+  claim: DetectedClaim,
+  text: string,
+  clock: string,
+  work?: ProseWorkBudget,
+): ClaimWords {
   return {
     claim,
     text,
     window: claimWindowOf(text, claim.tokens, clock),
     unbounded: firstHit(text, claim.tokens, NEGATIVE_CLAIM_PHRASES.unbounded) !== undefined,
     sourceMarker: firstHit(text, claim.tokens, NEGATIVE_CLAIM_PHRASES.source) !== undefined,
+    work,
   };
 }
 
@@ -117,13 +125,17 @@ function namedValue(
 ): string | undefined {
   const said = tool?.search?.arguments.find((a) => a.name === argument)?.said;
   for (const value of said === undefined ? [] : Object.keys(said)) {
-    if (holdsAnySaid(words.claim.tokens, valueWords(said, value))) return value;
+    if (holdsAnySaid(words.claim.tokens, valueWords(said, value), words.work)) return value;
   }
   return undefined;
 }
 
 const namesFixed = (words: ClaimWords, tool: DeclaredTool | undefined, name: string): boolean =>
-  holdsAnySaid(words.claim.tokens, tool?.search?.fixed?.find((f) => f.name === name)?.said);
+  holdsAnySaid(
+    words.claim.tokens,
+    tool?.search?.fixed?.find((f) => f.name === name)?.said,
+    words.work,
+  );
 
 /** Whether the source is the declared one the claim names, or a marker puts it on the lookup. */
 function sourceScoped(
@@ -133,7 +145,7 @@ function sourceScoped(
 ): boolean {
   if (words.sourceMarker) return true;
   const sent = items.some((item) => item.facet === 'source' && item.from === 'call');
-  return !sent && holdsAnySaid(words.claim.tokens, tool?.search?.source.said);
+  return !sent && holdsAnySaid(words.claim.tokens, tool?.search?.source.said, words.work);
 }
 
 /** Whether a gap bears on the claim: on a facet it leaves open, or on a value it names. */

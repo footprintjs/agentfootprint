@@ -14,6 +14,7 @@
 
 import { foldCase, sameName } from '../../lib/normalize.js';
 import type { ClaimPhrase } from './phrases.js';
+import type { ProseWorkBudget } from './work.js';
 
 /** One token: its normalized text and where it sits in the text as given. */
 export interface Token {
@@ -42,20 +43,31 @@ export function tokensOf(text: string, from = 0, to = text.length): Token[] {
 }
 
 /** A phrase's or a said word's tokens, as text. */
-export function spell(phrase: string): string[] {
+export function spell(phrase: string, work?: ProseWorkBudget): string[] {
+  work?.charge(phrase.length + 1);
   return tokensOf(phrase).map((t) => t.text);
 }
 
 /** Whether `tokens` hold `words` as consecutive tokens, anywhere. */
-export function holdsWords(tokens: readonly Token[], words: readonly string[]): boolean {
-  return findWords(tokens, words) !== -1;
+export function holdsWords(
+  tokens: readonly Token[],
+  words: readonly string[],
+  work?: ProseWorkBudget,
+): boolean {
+  return findWords(tokens, words, 0, work) !== -1;
 }
 
 /** The first index at which `tokens` hold `words` consecutively, or -1. */
-export function findWords(tokens: readonly Token[], words: readonly string[], from = 0): number {
+export function findWords(
+  tokens: readonly Token[],
+  words: readonly string[],
+  from = 0,
+  work?: ProseWorkBudget,
+): number {
   if (words.length === 0) return -1;
   outer: for (let i = from; i + words.length <= tokens.length; i += 1) {
     for (let j = 0; j < words.length; j += 1) {
+      work?.charge(1);
       if (tokens[i + j]?.text !== words[j]) continue outer;
     }
     return i;
@@ -67,21 +79,38 @@ export function findWords(tokens: readonly Token[], words: readonly string[], fr
 export function holdsAnySaid(
   tokens: readonly Token[],
   said: readonly string[] | undefined,
+  work?: ProseWorkBudget,
 ): boolean {
-  return (said ?? []).some((phrase) => holdsWords(tokens, spell(phrase)));
+  return (said ?? []).some((phrase) => holdsWords(tokens, spell(phrase, work), work));
 }
 
 /** Whether the unit holds `name` as one of its token runs, by the leaf's name rule (`sameName`). */
-export function holdsName(text: string, tokens: readonly Token[], name: string): boolean {
-  return nameAt(text, tokens, name, 0) !== -1;
+export function holdsName(
+  text: string,
+  tokens: readonly Token[],
+  name: string,
+  work?: ProseWorkBudget,
+): boolean {
+  return nameAt(text, tokens, name, 0, work) !== -1;
 }
 
 /** The first token index at which the unit holds `name` (by `sameName`), from `from`; or -1. */
-export function nameAt(text: string, tokens: readonly Token[], name: string, from: number): number {
-  const words = spell(name);
-  for (let at = findWords(tokens, words, from); at !== -1; at = findWords(tokens, words, at + 1)) {
+export function nameAt(
+  text: string,
+  tokens: readonly Token[],
+  name: string,
+  from: number,
+  work?: ProseWorkBudget,
+): number {
+  const words = spell(name, work);
+  for (
+    let at = findWords(tokens, words, from, work);
+    at !== -1;
+    at = findWords(tokens, words, at + 1, work)
+  ) {
     const first = tokens[at] as Token;
     const last = tokens[at + words.length - 1] as Token;
+    work?.charge(last.end - first.start + name.length + 1);
     if (sameName(text.slice(first.start, last.end), name)) return at;
   }
   return -1;
@@ -134,9 +163,16 @@ const COMPILED = new WeakMap<ClaimPhrase, CompiledPhrase>();
 function compiled(phrase: ClaimPhrase): CompiledPhrase {
   const known = COMPILED.get(phrase);
   if (known !== undefined) return known;
-  const anchored = phrase.words[0] === '^';
+  const anchored = phrase.literal !== true && phrase.words[0] === '^';
   const words = anchored ? phrase.words.slice(1) : phrase.words;
-  const made = { anchored, slots: words.map(compileSlot) };
+  const made = {
+    anchored,
+    slots: words.map((word) =>
+      phrase.literal === true
+        ? { optional: false, test: (token: string) => token === word }
+        : compileSlot(word),
+    ),
+  };
   COMPILED.set(phrase, made);
   return made;
 }

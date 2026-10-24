@@ -197,7 +197,12 @@ export interface ProseClaimRow {
 export interface ProseNoteRow {
   readonly kind: 'negative-claim-note';
   readonly field: string;
-  readonly code: 'in-code-block' | 'language-unsupported' | 'too-many-claims' | 'input-limit';
+  readonly code:
+    | 'in-code-block'
+    | 'language-unsupported'
+    | 'too-many-claims'
+    | 'input-limit'
+    | 'no-read';
   readonly span: TextSpan;
   readonly packVersion: string;
   readonly phraseId?: string;

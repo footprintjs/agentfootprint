@@ -20,6 +20,7 @@ import type { DetectedClaim } from './detect.js';
 import { holdsAnySaid, nameAt, spell, tokensOf, type Token } from './matcher.js';
 import { isRead, scopeOf, spellValue } from './readings.js';
 import type { StaleSince, TurnCall, TurnRecord } from './types.js';
+import type { ProseWorkBudget } from './work.js';
 
 /** The reads of one entity a claim names. */
 export interface EntityGroup {
@@ -45,14 +46,17 @@ export function isCurrent(call: TurnCall, record: TurnRecord): boolean {
 }
 
 /** The names a read was sent for: each population value's resolved id, name and aliases. */
-function namesOf(call: TurnCall): { entity: string; name: string; words: string[] }[] {
+function namesOf(
+  call: TurnCall,
+  work?: ProseWorkBudget,
+): { entity: string; name: string; words: string[] }[] {
   const out: { entity: string; name: string; words: string[] }[] = [];
   for (const item of scopeOf(call) ?? []) {
     if (item.facet !== 'population' || item.resolved === undefined) continue;
     const entity = spellValue(item.resolved.id);
     for (const name of [item.resolved.id, item.resolved.name, ...(item.resolved.aliases ?? [])]) {
       if (typeof name !== 'string') continue;
-      const words = spell(name);
+      const words = spell(name, work);
       if (words.length > 0) out.push({ entity, name, words });
     }
   }
@@ -76,10 +80,10 @@ const GRAMMAR = new Set(
 );
 
 /** Every word a declaration uses for a subject, source, qualifier or filter value. */
-function declaredWords(record: TurnRecord): Set<string> {
+function declaredWords(record: TurnRecord, work?: ProseWorkBudget): Set<string> {
   const out = new Set<string>();
   const add = (phrases: readonly string[] | undefined) => {
-    for (const phrase of phrases ?? []) for (const word of spell(phrase)) out.add(word);
+    for (const phrase of phrases ?? []) for (const word of spell(phrase, work)) out.add(word);
   };
   for (const tool of Object.values(record.tools)) {
     const search = tool.search;
@@ -132,18 +136,20 @@ export function resolveProseClaim(
   text: string,
   record: TurnRecord,
   personMessage?: string,
+  work?: ProseWorkBudget,
 ): ProseResolution {
   const tokens = claim.tokens;
   const reads = record.calls.filter((call) => isRead(call));
   const mentions: { entity: string; first: number; last: number }[] = [];
   for (const call of reads) {
     // A name is mentioned only where the text holds it by the one name rule (`sameName`).
-    for (const { entity, name, words } of namesOf(call)) {
+    for (const { entity, name, words } of namesOf(call, work)) {
       for (
-        let at = nameAt(text, tokens, name, 0);
+        let at = nameAt(text, tokens, name, 0, work);
         at !== -1;
-        at = nameAt(text, tokens, name, at + 1)
+        at = nameAt(text, tokens, name, at + 1, work)
       ) {
+        work?.charge(words.length + 1);
         mentions.push({ entity, first: at, last: at + words.length - 1 });
       }
     }
@@ -151,19 +157,19 @@ export function resolveProseClaim(
   const covered = new Set(
     mentions.flatMap((m) => Array.from({ length: m.last - m.first + 1 }, (_, i) => m.first + i)),
   );
-  const declared = declaredWords(record);
+  const declared = declaredWords(record, work);
   if (mentions.some((m) => joinedToUnknown(text, tokens, m, covered, declared))) {
     return { status: 'entity-unresolved', candidates: [] };
   }
   const subjectFits = (call: TurnCall) =>
-    holdsAnySaid(tokens, record.tools[call.toolName]?.search?.subject.said);
+    holdsAnySaid(tokens, record.tools[call.toolName]?.search?.subject.said, work);
 
   if (mentions.length === 0) {
     const bySource = reads.filter(
       (call) =>
         isCurrent(call, record) &&
         !hasPopulation(call) &&
-        holdsAnySaid(tokens, record.tools[call.toolName]?.search?.source.said),
+        holdsAnySaid(tokens, record.tools[call.toolName]?.search?.source.said, work),
     );
     if (bySource.length > 0) {
       const restsOn = bySource.filter(subjectFits);
@@ -176,12 +182,15 @@ export function resolveProseClaim(
         ],
       };
     }
-    return { status: 'entity-unresolved', candidates: candidatesOf(record, reads, personMessage) };
+    return {
+      status: 'entity-unresolved',
+      candidates: candidatesOf(record, reads, personMessage, work),
+    };
   }
 
   const entities = [...new Set(mentions.map((m) => m.entity))];
   const groups = entities.map((entity): EntityGroup => {
-    const named = reads.filter((call) => namesOf(call).some((n) => n.entity === entity));
+    const named = reads.filter((call) => namesOf(call, work).some((n) => n.entity === entity));
     const current = named.filter((call) => isCurrent(call, record));
     if (current.length === 0) {
       const last = named[named.length - 1] as TurnCall;
@@ -207,12 +216,14 @@ function candidatesOf(
   record: TurnRecord,
   reads: readonly TurnCall[],
   personMessage: string | undefined,
+  work?: ProseWorkBudget,
 ): string[] {
   const current = reads.filter((call) => isCurrent(call, record));
   if (personMessage !== undefined) {
+    work?.charge(personMessage.length + 1);
     const said = tokensOf(personMessage);
     const named = current.filter((call) =>
-      namesOf(call).some((n) => nameAt(personMessage, said, n.name, 0) !== -1),
+      namesOf(call, work).some((n) => nameAt(personMessage, said, n.name, 0, work) !== -1),
     );
     if (named.length > 0) return named.map((call) => call.resultId);
   }

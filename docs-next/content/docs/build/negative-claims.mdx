@@ -1,11 +1,102 @@
 ---
-title: Typed negative claims
-description: Deliver library-written statements for none, not-found and complete claims, with the search scope and gaps preserved.
+title: Negative claims
+description: Observe prose claims or deliver library-written typed statements, with the search scope and gaps preserved.
 ---
 
-`.negativeClaims()` makes the library write a typed negative statement from the
-searches the answer cites. The model chooses `kind`, `about` and `restsOn`; it does
-not write the scope, gaps or delivered statement.
+`.negativeClaims()` has two forms. `{ prose: true }` observes ordinary answers and
+files warnings. `{ field, tools, unestablished }` makes the library write typed
+negative statements from cited searches. Prose observation never verifies or
+withholds an answer. Typed enforcement is **available, not recommended** until its
+benchmark gates pass; the structured path remains **unmeasured**.
+
+## Observe an ordinary answer
+
+No output schema, citation field, tool-name list or answer validator is required.
+Native tool dispatch records supply the observations; assistant messages and
+summaries never become evidence. The example's local search declares a source gap,
+then the mock model makes a broader claim.
+
+<CodeFile
+  path="examples/features/111-negative-prose-observe.ts"
+  region="observe"
+  title="Observe a warning and deliver the unchanged answer"
+/>
+
+The prose-only arm adds no correction request or delivery buffer. It preserves
+normal streaming, and the returned answer, final event, history and memory use
+the same delivered text. It observes the terminal answer after output middleware;
+it does not rewrite the answer, call a tool again or turn a warning into a veto.
+An independent `.outputSchema()` or `.answerValidation()` retains its own behavior,
+including retries, buffering and refusal. `.outputFallback()` is refused with
+the prose-only arm because a fallback can replace an answer after observation.
+
+The English grammar is a **heuristic**. The prior detector **failed every free-replay
+benchmark gate**; the revised, data-anchored path remains **unmeasured**.
+It can miss negatives and flag correct statements. Comparing a claim with read evidence requires an anchor in
+the same clause: a dispatched read's declared `said` words, actual sent value or
+resolved name or alias. Host-only and kept-out values cannot supply that anchor;
+another clause or a user message cannot supply evidence. Anchoring permits an
+observation, not a binding or proof. Entity resolution and coverage checks remain
+separate, so a sent name can still produce `entity-unresolved`.
+
+If the grammar detects an eligible negative and no dispatched native read is
+recorded for the current turn, the observer files one `negative-claim-note` with
+code `no-read` per answer, within the observation budgets below. For example,
+answering "Payments has no incidents. There are no incidents anywhere." without a
+recorded read produces one warning. A read from an earlier turn does not suppress
+it. A recorded dispatched read does suppress this note even if it failed or its
+result was kept out; that presence check does not establish usable evidence.
+Because the ledger can be incomplete, `no-read` does not prove that no read occurred.
+
+The observer filters the exact normalized ordinary clauses "None.", "No action
+is needed." and "Tests: 0 failed."; they produce no `no-read` warning. Added words or a
+separate negative clause remain eligible. The note records missing read evidence;
+it never verifies, blocks or rewrites the answer.
+
+`agent.findings()` retains `negative-claim` and `negative-claim-note` rows. A
+current-turn row makes the assessment not-sure with reason
+`negative-prose-unverified`, including a detected claim with no coverage note.
+**No finding does not mean verified.** The observer is not an exhaustive proof
+that the answer is true.
+
+Subscribe to `agentfootprint.findings.negative_claim` before running the agent.
+It emits once per claim or unread-unit row, with `kind`, field and span,
+phrase-pack version, iteration and turn, and either claim/note codes with native
+result references or an unread-unit `code`. Answer text, candidate labels and tool
+values are excluded. Metadata is bounded; `truncated: true` means that metadata
+was shortened or references omitted. The typed arm emits the same warnings.
+
+Observation examines at most 65,536 UTF-16 code units across 256 string values,
+with at most 32 detected claims and unjudged units combined. One shared work
+budget also bounds pattern preparation and evidence/name matching across all
+fields; exhausting it produces one `input-limit` note and discards partial findings.
+An oversized or
+unreadable structured input, or a field path over 4,096 code units, produces an
+`input-limit` note; too many units produce `too-many-claims`. Each replaces partial
+findings with one whole-answer note. Recognized code and unsupported-language
+units produce `in-code-block` or `language-unsupported` notes. Language detection
+uses a closed heuristic and can miss non-English text; it is not multilingual
+verification. `strictProse` and `enforceProse` remain unavailable.
+
+### Add literal phrases
+
+<CodeFile
+  path="examples/features/111-negative-prose-observe.ts"
+  region="custom-phrases"
+  title="Optional app phrases for the same observer"
+/>
+
+`NegativeClaimPhraseExtensions` describes the optional `phrases` object.
+Pass this configuration to `.negativeClaims(customObservation)`. At most 32 phrases total
+may extend `none` and `complete`, with at most 128 UTF-16 code units each. They are
+literal words, not regexes, slot patterns or executable predicates. Extensions use
+the same language, code, anchoring and budget rules. Their frozen effective pack
+has its own hash in the reported version; adding phrases never enables enforcement.
+
+## Deliver typed negative statements
+
+The model chooses `kind`, `about` and `restsOn`; it does not write the scope,
+gaps or delivered statement.
 
 `NegativeClaimsOptions` configures the field, eligible tools and failure behavior.
 `NegativeClaimCitation` is the model-input shape; `DeliveredNegative` adds the
@@ -13,11 +104,9 @@ library's statement and version. `agent.answerNegatives()` returns the
 `AnswerNegatives` metadata with per-source checked counts, diagnostics and
 dispatched action outcomes; an action outcome does not prove an external effect.
 
-The structured path is **unmeasured**. Typed enforcement is **available, not
-recommended** until its benchmark gates pass. Other fields remain unchecked model
-text. A bounded English grammar observes the model's original strings and files
-findings; it never blocks delivery or verifies prose. `prose`, `strictProse` and
-`enforceProse` options are refused: observation is automatic, enforcement unavailable.
+Other fields remain unchecked model text. Prose observation is automatic beside
+the typed arm; do not combine `prose: true` with `field`, `tools` or `unestablished`.
+Either form accepts the optional literal `phrases` extension.
 
 ## Declare the search and bind the caller
 
@@ -115,23 +204,21 @@ findings; unread units file `negative-claim-note` findings. Both make the answer
 fold not-sure, without changing delivery. The grammar has known false positives and
 misses; prose remains unchecked even when it produces no finding.
 
-The whole answer is limited to 65,536 UTF-16 code units and 256 string values for
-observation, and 32 detected claims or unjudged units for observation. Exceeding a budget produces one
-whole-answer `input-limit` or `too-many-claims` note without checking evidence.
+The same whole-answer observation budgets described above apply.
 The model is instructed to state negatives only through cited searches. These
 instructions do not guarantee compliance.
 
-The global answer-account `templateVersion` changes from 11 to 12, including for
-agents without `.negativeClaims()`. Consumers must tolerate the new version and
-`negative-prose-unverified` assessment reason.
+Typed delivery introduced the global answer-account `templateVersion` 12,
+including for agents without `.negativeClaims()`. The standalone prose arm retains
+that version and the `negative-prose-unverified` assessment reason.
 
- The checker
-compares other observations only within its declared subject and scope rules.
+The checker compares other observations only within its declared subject and scope rules.
 Independent host-authored answer checks continue to apply, and a library statement
 never turns an unverified answer into a verified one.
 
-The mock example runs without credentials or network access:
+Both mock examples run without credentials or network access:
 
 ```sh
 npm run example -- examples/features/110-negative-claims.ts
+npm run example -- examples/features/111-negative-prose-observe.ts
 ```

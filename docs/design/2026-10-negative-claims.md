@@ -1,14 +1,46 @@
 # Negative claims, honest by construction — "not found", "none" and "the list is complete"
 
-**PR 4 implementation note (2026-10-23).** The handoff supersedes the sequencing
-below: #198–#200 are merged. The latest #203 review brings bounded automatic prose
-observation into PR 4 alongside typed delivery. Prose enforcement remains deferred;
-the paid benchmark remains PR 6. No paid calls are
-part of PR 4 and publishing remains on hold. The handoff's approved budget
-remains reserved for the later benchmark.
+**PR 5 implementation note (2026-10-23).** The handoff supersedes the sequencing
+below: #198–#200 and #203 (PR 4) are merged. PR 4 includes bounded automatic prose
+observation beside typed delivery. PR 5 adds the standalone
+`.negativeClaims({ prose: true })` arm, requiring no output schema, citation field,
+tool-name list or answer validator. It observes the terminal delivered model
+answer after output middleware, preserving normal streaming, answer text, history
+and memory. It adds no correction, withholding or verification. Independent schema
+and app validation behavior remains in force; the prose-only arm refuses
+`outputFallback`, which could replace the answer after observation.
+
+Comparing prose with read evidence requires a same-clause data anchor from a dispatched read's public declared
+words, actual sent value or resolved name. Host-only and kept-out values cannot
+anchor a claim, and an anchor is never an entity binding or proof. The grammar and
+its closed language heuristic can miss claims and flag correct ones. The prior
+detector failed every free-replay benchmark gate; the revised, data-anchored path
+remains unmeasured. Code and recognized unsupported-language units receive
+notes. App extensions add at most 32 literal `none`/`complete` phrases of 128
+UTF-16 code units each, with the effective pack hash reflected in its version;
+they cannot enable enforcement. One bounded `agentfootprint.findings.negative_claim`
+event accompanies each claim or unread-unit row: locations, codes, phrase version
+and native references only, never answer text or tool values. Current-turn rows
+make assessment not-sure with `negative-prose-unverified`; absence of a finding
+does not mean verified.
+
+The #204 review adds the no-read case: within the observation budgets, when the
+grammar detects an eligible negative and no dispatched native read is recorded
+for the current turn, one `negative-claim-note` with code `no-read` is filed per
+answer. Earlier-turn reads do not suppress it; a recorded dispatched read does,
+even if failed or kept out. This presence check does not establish usable evidence;
+an incomplete ledger means `no-read` cannot prove that no read occurred. The observer
+filters the exact normalized clauses "None.", "No action is needed." and "Tests: 0
+failed." so they produce no `no-read` warning. Added words or separate negative clauses stay
+eligible. The note never verifies, blocks or rewrites the answer.
+
+Prose enforcement remains deferred; the paid benchmark remains PR 6. No paid calls
+are part of PR 5 and publishing remains on hold. The handoff's approved budget
+remains reserved for the later benchmark. Proposed `strictProse` behavior below
+describes future gated work, not an available option.
 
 The typed arm automatically governs its field even without an app validator;
-an explicit app validator keeps its own veto. `strictProse`, `prose` and
+an explicit app validator keeps its own veto. `strictProse` and
 `enforceProse` options are refused; automatic observation does not enable enforcement. An established typed
 row is `not-applicable`, never `checked-pass`; zero typed entries report zero
 examined reads and cannot verify an answer. Failed delivery can state the
@@ -26,8 +58,8 @@ observations (bounded native values, only when admitted for display), and dates 
 original free-form string is observed within global 65,536-code-unit / 256-string / 32-claim
 budgets; skipped work files a note. Other fields remain unchecked model prose and
 make delivery `recorded`; prose findings make the fold not-sure without blocking.
-The structured path remains unmeasured. The global answer-account template version
-moves from 11 to 12 for all agents, including unarmed agents.
+The structured path remains unmeasured. PR 4 moved the global answer-account
+template version from 11 to 12 for all agents, including unarmed agents; PR 5 retains it.
 
 **Status: design, revision 6.2 (2026-10-23). Direction, the full bench plan (≈ $4.30, cap $4.50)
 and the raters' plan approved by the owner; § 9 records the decisions.** Revision 2 followed four lens reviews; revisions 3–5 closed verifiers' walks;
@@ -397,8 +429,9 @@ however / except / although"; each hit records `span`, `phraseId`, `packVersion`
 text. **A negative counts only when it is DATA-ANCHORED (R3):** an existence or absence predicate
 about a noun that is one of the run's searched subjects (`subject.said`), a sent value, a
 `resolved` name or alias, or a declared `said` word — never bare "no", "none", "No action is
-needed." or "Tests: 0 failed". **A non-English answer gets no repeat check**, a
-`language-unsupported` note, and never a withhold by itself.
+needed." or "Tests: 0 failed". **A unit recognized as non-English gets no repeat check**,
+a `language-unsupported` note, and never a withhold by itself. The closed language
+heuristic can miss non-English text; no language-recognition completeness is claimed.
 
 **Hedges are not scope**; a marker scopes only the dimension it names, through a resolved call's
 declared words. **Resolve and containment, as notes** (unchanged from revision 4): a prose claim
@@ -448,8 +481,9 @@ Two conditions the codes share, stated once:
   not count. A non-read call in the same parallel batch as the cited read counts as after it.
 
 `validate.ts` makes a `checked-fail` row a `failed` report and an `unreachable` row an
-`unverified` one. The fold reads a failed typed row, or a prose finding, as
-`claim-exceeds-search` (layer 4, not sure) and an unreachable typed row as `check-unreachable`.
+`unverified` one. The shipped fold reads current-turn prose findings as
+`negative-prose-unverified` (not sure), never as checked support. Typed failure and
+unreachable rows retain their independent validation standing.
 
 ### 5.5 What the person sees
 
@@ -477,7 +511,7 @@ The delivery row is #195 § 3.5's: `as-checked`, `recorded`, `fallback`.
   the full check with citations re-validated, and withholds (`prose-repeats-claim`) if a negative
   persists. The reviewers' numbers say why it is opt-in: a grammar with 39% / 15% specificity
   would withhold correct answers and teach rewording.
-- **Streaming (R4):** under the arm the final answer is buffered — no draft token is streamed
+- **Streaming (R4):** under the typed arm the final answer is buffered — no draft token is streamed
   (`answerValidation`'s existing suppression) — and a rejected draft never enters history or
   memory (`prepareFinal.ts · withheldByValidation` stops conversation capture and memory writes;
   the correction turn quotes the draft as request-only data).
@@ -496,9 +530,10 @@ Agent.create({ provider, model })
   .build();
 ```
 
-`build()` refuses `'negative-claims'` without `.negativeClaims()`, a `field` the schema does not
-declare, a tool it does not register or that is not local, and `strictProse` without the
-`enforceProse` flag. The library serves the field's schema with the handle pattern. An agent that
+`build()` refuses the typed `'negative-claims'` check without the typed arm, a `field`
+the schema does not declare, a tool it does not register or that is not local, and
+both `strictProse` and `enforceProse` options. The library serves the field's schema
+with the handle pattern. An agent that
 lists nothing is byte-identical; a prose-only agent (`.negativeClaims({ prose: true })` with no
 `.outputSchema()`) files findings from the Route decider, keeps its own ledger, and needs no
 validation door. Until § 7's typed gates pass, the docs present typed enforce as available but not

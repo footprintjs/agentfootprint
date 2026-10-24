@@ -112,6 +112,7 @@ type PlainStringWords =
   | 'predicate'
   | 'identifier'
   | 'number'
+  | 'no-read'
   | 'stop'
   | 'tool_use'
   | 'max_tokens';
@@ -212,6 +213,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'agentfootprint.findings.declared': true,
   'agentfootprint.findings.judge_failed': true,
   'agentfootprint.findings.judged': true,
+  'agentfootprint.findings.negative_claim': true,
   'agentfootprint.findings.period': true,
   'agentfootprint.findings.standing': true,
   'agentfootprint.integrity.context_error': true,
@@ -329,7 +331,6 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   choice: true,
   chroma: true,
   claim: true,
-  'negative-prose-unverified': true,
   'claim-exceeds-search': true,
   classic: true,
   closed: true,
@@ -497,9 +498,13 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   narrative: true,
   native: true,
   ne: true,
+  'negative-claim': true,
+  'negative-claim-note': true,
+  'negative-prose-unverified': true,
   'negative-recheck': true,
   'next-call': true,
   'no-earlier-turn': true,
+  'no-read': true,
   'no-store': true,
   noise: true,
   none: true,
@@ -804,6 +809,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   childCount: true,
   chosen: true,
   citations: true,
+  claim: true,
   claimed: true,
   claims: true,
   clarify: true,
@@ -867,6 +873,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   earlier: true,
   edges: true,
   embedderId: true,
+  end: true,
   endsWith: true,
   enforced: true,
   entity: true,
@@ -1028,6 +1035,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   not_checked: true,
   not_covered: true,
   note: true,
+  notes: true,
   occurrences: true,
   of: true,
   offered: true,
@@ -1044,6 +1052,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   outputMemoryCount: true,
   outputTokens: true,
   overflowBy: true,
+  packVersion: true,
   padEnd: true,
   padStart: true,
   page: true,
@@ -1060,6 +1069,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   period: true,
   periods: true,
   phase: true,
+  phraseId: true,
   picked: true,
   placement: true,
   planAction: true,
@@ -1187,6 +1197,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   sourceId: true,
   source_export_date: true,
   sources: true,
+  span: true,
   spenderTools: true,
   split: true,
   stage: true,
@@ -1194,6 +1205,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   stagedRefs: true,
   standing: true,
   standings: true,
+  start: true,
   startsWith: true,
   state: true,
   statedWaitMs: true,

@@ -24,6 +24,7 @@ import { observeNegativeProse } from '../negativeClaims/prose.js';
 import { recordFindings } from '../findings/ledger.js';
 import { negativeRecordOf } from '../negativeClaims/capture.js';
 import { prepareNegativeCorrection } from '../negativeClaims/recheck.js';
+import type { ResolvedNegativeClaimPhrases } from '../../../integrity/negative-claim/phrases.js';
 import { takeAnswerEvidence } from './answerEvidence.js';
 import type { RouteBranch } from './route.js';
 
@@ -51,6 +52,7 @@ export function withAnswerValidation(
     readonly config: NegativeDeliveryConfig;
     readonly applicationValidation: boolean;
     readonly runId: () => string;
+    readonly phrases?: ResolvedNegativeClaimPhrases;
   },
 ): (scope: TypedScope<AgentState>) => Promise<RouteBranch> {
   if (parser === undefined) {
@@ -143,7 +145,12 @@ export function withAnswerValidation(
           return 'negative-recheck';
         // Observe the model's original strings, never the statements just composed
         // by the library. Rejected correction drafts return before this writer.
-        const prose = observeNegativeProse(candidate, record, negatives.config.field);
+        const prose = observeNegativeProse(
+          candidate,
+          record,
+          negatives.config.field,
+          negatives.phrases,
+        );
         recordFindings(
           scope,
           prose.map((row) => ({ ...row, iteration: scope.iteration })),

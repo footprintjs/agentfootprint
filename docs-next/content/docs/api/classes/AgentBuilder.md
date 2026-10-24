@@ -237,7 +237,7 @@ commentary + thinking templates. Same place to brand a tenant
 
 > **build**(): [`Agent`](/docs/api/classes/Agent)
 
-Defined in: [src/core/agent/AgentBuilder.ts:3388](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3388)
+Defined in: [src/core/agent/AgentBuilder.ts:3393](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3393)
 
 #### Returns
 
@@ -1139,9 +1139,14 @@ const agent = Agent.create({ provider, model })
 
 > **negativeClaims**(`options`): `this`
 
-Defined in: [src/core/agent/AgentBuilder.ts:3280](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3280)
+Defined in: [src/core/agent/AgentBuilder.ts:3285](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/AgentBuilder.ts#L3285)
 
-Deliver typed negative claims as library-written statements of the searches
+Observe ordinary prose with `{ prose: true }`, preserving the answer and live
+streaming. Warnings never confirm or block a claim. No schema or tool list is
+required; optional `phrases` extends the grammar with bounded literal data.
+`.outputFallback()` is unsupported because it substitutes text after observation.
+
+Or deliver typed negative claims as library-written statements of the searches
 they cite. `field` is a required top-level array in `.outputSchema()`'s JSON
 Schema; entries contain only `kind`, required `about`, and `restsOn` handles.
 The output adds `statement`, `delivery: 'record-composed'` and `version`.
@@ -1157,7 +1162,7 @@ not matter; the complete contract is checked at build.
 
 ##### options
 
-[`NegativeClaimsOptions`](/docs/api/interfaces/NegativeClaimsOptions)
+[`NegativeClaimsOptions`](/docs/api/type-aliases/NegativeClaimsOptions)
 
 #### Returns
 

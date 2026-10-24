@@ -1377,6 +1377,7 @@ export type {
   NegativeClaimsOptions,
   NegativeClaimCitation,
 } from './core/agent/negativeClaims/config.js';
+export type { NegativeClaimPhraseExtensions } from './integrity/negative-claim/phrases.js';
 export type { DeliveredNegative, AnswerNegatives } from './core/agent/negativeClaims/delivery.js';
 export {
   AnswerValidationError,

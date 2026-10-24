@@ -25,9 +25,13 @@ export function negativeProseRowIsWellFormed(value: unknown): boolean {
       return false;
     if (row.kind === 'negative-claim-note')
       return (
-        ['in-code-block', 'language-unsupported', 'too-many-claims', 'input-limit'].includes(
-          row.code as string,
-        ) &&
+        [
+          'in-code-block',
+          'language-unsupported',
+          'too-many-claims',
+          'input-limit',
+          'no-read',
+        ].includes(row.code as string) &&
         (row.phraseId === undefined || typeof row.phraseId === 'string')
       );
     if (

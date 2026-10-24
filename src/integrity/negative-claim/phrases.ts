@@ -32,11 +32,15 @@
 
 import { sha256Hex } from '../../lib/sha256.js';
 import { stableJson } from '../../lib/stableJson.js';
+import { copyJson, ownData } from '../../lib/boundedJson.js';
+import { tokensOf } from './matcher.js';
 
 /** One phrase: an id (`<pack>.<name>`) and its slots. */
 export interface ClaimPhrase {
   readonly id: string;
   readonly words: readonly string[];
+  /** App extensions are literal tokens, never the built-in slot language. */
+  readonly literal?: true;
 }
 
 /** The six packs, by name. */
@@ -220,7 +224,7 @@ const HEDGE: readonly ClaimPhrase[] = [
   'based on',
 ].map((text) => literal('hedge', text));
 
-/** The packs — closed and frozen. An app's own phrases are a later door (PR 5). */
+/** The built-in packs — closed and frozen, independent of app extensions. */
 export const NEGATIVE_CLAIM_PHRASES: NegativeClaimPhrasePacks = Object.freeze({
   none: Object.freeze([...NONE]),
   complete: Object.freeze([...COMPLETE]),
@@ -234,3 +238,65 @@ export const NEGATIVE_CLAIM_PHRASES: NegativeClaimPhrasePacks = Object.freeze({
 export const NEGATIVE_CLAIM_PHRASES_HASH: string = sha256Hex(
   stableJson(NEGATIVE_CLAIM_PHRASES) ?? '',
 );
+
+/** Additional literal negative phrases. These extend observation only, never enforcement. */
+export interface NegativeClaimPhraseExtensions {
+  readonly none?: readonly string[];
+  readonly complete?: readonly string[];
+}
+
+/** @internal Validated, detached and frozen effective phrase packs. */
+export interface ResolvedNegativeClaimPhrases {
+  readonly packs: NegativeClaimPhrasePacks;
+  readonly version: string;
+  readonly hash: string;
+}
+
+const DEFAULT_PHRASES: ResolvedNegativeClaimPhrases = Object.freeze({
+  packs: NEGATIVE_CLAIM_PHRASES,
+  version: NEGATIVE_CLAIM_PHRASES_VERSION,
+  hash: NEGATIVE_CLAIM_PHRASES_HASH,
+});
+
+/** Resolve at configuration time. At most 32 literal phrases of 128 UTF-16
+ * units each; regexes and the built-in slot DSL are rejected as patterns.
+ * The full effective-pack hash names any extension without changing the
+ * built-in version/hash or introducing executable predicates. */
+export function resolveNegativeClaimPhrases(
+  extensions?: NegativeClaimPhraseExtensions,
+): ResolvedNegativeClaimPhrases {
+  if (extensions === undefined) return DEFAULT_PHRASES;
+  const source = ownData(copyJson(extensions, 32 * 128 * 6 + 1024, true), ['none', 'complete']);
+  const extra: Record<'none' | 'complete', ClaimPhrase[]> = { none: [], complete: [] };
+  let count = 0;
+  for (const kind of ['none', 'complete'] as const) {
+    const values = source[kind];
+    if (values === undefined) continue;
+    if (!Array.isArray(values)) throw new Error(`Negative prose phrases.${kind} must be an array.`);
+    count += values.length;
+    if (count > 32) throw new Error('Negative prose phrases accept at most 32 extensions.');
+    for (const [index, value] of values.entries()) {
+      if (typeof value !== 'string' || value.trim().length === 0 || value.length > 128)
+        throw new Error('A negative prose phrase must contain 1–128 characters.');
+      if (
+        /[\p{Cc}\p{Cf}]/u.test(value) ||
+        [...'\\|^$*+?()[]{}<>!'].some((token) => value.includes(token)) ||
+        /^\/.*\/[a-z]*$/iu.test(value)
+      )
+        throw new Error('Negative prose phrases are literal text, not regexes or slot patterns.');
+      const words = tokensOf(value).map((token) => token.text);
+      if (words.length === 0) throw new Error('A negative prose phrase must contain words.');
+      extra[kind].push(
+        Object.freeze({ id: `${kind}.app.${index}`, words: Object.freeze(words), literal: true }),
+      );
+    }
+  }
+  if (count === 0) return DEFAULT_PHRASES;
+  const packs: NegativeClaimPhrasePacks = Object.freeze({
+    ...NEGATIVE_CLAIM_PHRASES,
+    none: Object.freeze([...NEGATIVE_CLAIM_PHRASES.none, ...extra.none]),
+    complete: Object.freeze([...NEGATIVE_CLAIM_PHRASES.complete, ...extra.complete]),
+  });
+  const hash = sha256Hex(stableJson(packs) ?? '');
+  return Object.freeze({ packs, hash, version: `${NEGATIVE_CLAIM_PHRASES_VERSION}+${hash}` });
+}
