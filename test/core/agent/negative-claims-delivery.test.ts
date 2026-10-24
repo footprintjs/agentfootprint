@@ -149,7 +149,9 @@ describe('delivered negative statements explain the actual failure', () => {
 
 describe('delivery markers describe the whole candidate', () => {
   it('reserves as-checked for a candidate containing only established negative fields', () => {
-    expect(render([incidentCall()]).answer.delivery).toBe('as-checked');
+    const value = { negatives: [{ restsOn: ['r1'] }] };
+    expect(render([incidentCall()], { value }).answer.delivery).toBe('as-checked');
+    expect(render([incidentCall()]).answer.delivery).toBe('recorded');
   });
   for (const extra of [
     { summary: 'Everything is fine.' },
@@ -188,10 +190,13 @@ describe('about stays model data, never a new evidence binding', () => {
     expect(result.answer.claims[0]?.statement).toContain(quoteValue(raw));
     expect(result.answer.claims[0]?.statement).not.toMatch(/[\p{Cc}\p{Cf}]/u);
   });
-  it('binds the original about before display normalization', () => {
+  it('ignores model display text and composes the recorded subject', () => {
     const result = render([incidentCall()], { value: candidate('pay\u202ements') });
-    expect(result.answer.checks[0]?.code).toBe('about-mismatch');
+    expect(result.answer.checks[0]?.code).toBe('established');
     expect(result.answer.claims[0]?.about).toBe('pay\u202ements');
-    expect(result.answer.claims[0]?.statement).not.toContain('found none');
+    expect(result.answer.claims[0]?.statement).toContain('found none');
+    expect(result.answer.claims[0]?.statement).toContain('`payments`');
+    expect(result.answer.claims[0]?.statement).not.toContain('pay\u202ements');
+    expect(result.answer.delivery).toBe('recorded');
   });
 });

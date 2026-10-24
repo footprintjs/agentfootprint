@@ -228,9 +228,8 @@ describe('negative claims review — optional identity and unchecked prose', () 
       const output = await f.agent.runTyped<Reply>(INPUT);
       expect(output.negatives[0]?.statement).toContain('found none');
       expect(negativeRows(f.agent)).toEqual([]);
-      expect(f.agent.answerNegatives()?.delivery).toBe(
-        extra === undefined ? 'as-checked' : 'recorded',
-      );
+      // Legacy about remains unchecked display text, even without a summary.
+      expect(f.agent.answerNegatives()?.delivery).toBe('recorded');
     });
   }
 

@@ -14,9 +14,10 @@ One library-written negative statement, shared by delivery and its event.
 
 > `readonly` `optional` **about?**: `string` \| `number`
 
-Defined in: [src/events/payloads.ts:3712](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3712)
+Defined in: [src/events/payloads.ts:3713](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3713)
 
-Original model citation value. Quote only when rendering it as text; not an evidence identity.
+Unchecked model display text. It never selects a subject or evidence. Quote and label it
+as model wording when rendered; the library statement names the actual searched scope.
 
 ***
 
@@ -24,7 +25,7 @@ Original model citation value. Quote only when rendering it as text; not an evid
 
 > `readonly` **delivery**: `"record-composed"`
 
-Defined in: [src/events/payloads.ts:3715](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3715)
+Defined in: [src/events/payloads.ts:3716](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3716)
 
 ***
 
@@ -40,7 +41,7 @@ Defined in: [src/events/payloads.ts:3710](https://github.com/footprintjs/agentfo
 
 > `readonly` **restsOn**: readonly `string`[]
 
-Defined in: [src/events/payloads.ts:3713](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3713)
+Defined in: [src/events/payloads.ts:3714](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3714)
 
 ***
 
@@ -48,7 +49,7 @@ Defined in: [src/events/payloads.ts:3713](https://github.com/footprintjs/agentfo
 
 > `readonly` **statement**: `string`
 
-Defined in: [src/events/payloads.ts:3714](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3714)
+Defined in: [src/events/payloads.ts:3715](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3715)
 
 ***
 
@@ -56,4 +57,4 @@ Defined in: [src/events/payloads.ts:3714](https://github.com/footprintjs/agentfo
 
 > `readonly` **version**: `string`
 
-Defined in: [src/events/payloads.ts:3716](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3716)
+Defined in: [src/events/payloads.ts:3717](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3717)

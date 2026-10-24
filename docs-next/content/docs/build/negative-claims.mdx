@@ -150,10 +150,10 @@ checker compares other reads using the cited searches' recorded subjects and
 populations, so an unrelated model label cannot hide contradicting results.
 
 | Derived kind | What the cited reads must establish                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`      | A declared absence within the composed search scope.                                                                                      |
-| `not-found` | A named miss from `absent({ among })`, with the inventory's limits.                                                                       |
-| `complete`  | Completeness for the executed arguments, without an open page, reached cap or partial result. The statement describes rows actually read. |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`       | A declared absence within the composed search scope.                                                                                      |
+| `not-found`  | A named miss from `absent({ among })`, with the inventory's limits.                                                                       |
+| `complete`   | Completeness for the executed arguments, without an open page, reached cap or partial result. The statement describes rows actually read. |
 
 ### Evidence interpretation and existing parsers
 
@@ -199,9 +199,9 @@ history and memory receive the same statements and gaps.
 
 `unestablished` chooses the failure behavior:
 
-| Setting              | Delivery                                                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `withhold` (default) | Withhold the whole answer; the caller receives `AnswerValidationError`, HTTP hosts return 422 and AG-UI reports `RUN_ERROR`.     |
+| Setting              | Delivery                                                                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `withhold` (default) | Withhold the whole answer; the caller receives `AnswerValidationError`, HTTP hosts return 422 and AG-UI reports `RUN_ERROR`.                                      |
 | `state-searched`     | Replace the entry with what the admitted record says was searched and any admitted contrary result. The failed or unverified standing stays failed or unverified. |
 
 A contrary read is named by its result handle and shows bounded, quoted native
