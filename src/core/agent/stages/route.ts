@@ -17,6 +17,7 @@ import { assertAnswerReferences, withFindingsAdmission } from '../findings/answe
  */
 
 import type { TypedScope } from 'footprintjs';
+import { applyOutputSchema } from '../../../answer-validation/outputSchema.js';
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import type { AgentState } from '../types.js';
 import type { LLMMessage } from '../../../provider-contract/types.js';
@@ -536,7 +537,7 @@ function recordAnswerGuarantee(
   scope.answerGuarantee =
     enforcement === undefined
       ? 'none'
-      : enforcement.outputFormat !== undefined
+      : enforcement.outputFormat !== undefined && scope.llmLatestNativeOutput === true
       ? 'native'
       : enforcement.schemaTool !== undefined
       ? 'tool-forced'
@@ -1424,7 +1425,9 @@ function readValidatedAnswer(scope: TypedScope<AgentState>): unknown | undefined
   const raw = scope.llmLatestContent as string | undefined;
   if (typeof raw !== 'string' || raw.length === 0) return undefined;
   try {
-    const parsed: unknown = JSON.parse(raw);
+    // Called only after output-schema acceptance. Decode the same permitted
+    // wrapper without invoking the application's potentially stateful parser.
+    const parsed = applyOutputSchema(raw, { parse: (value: unknown) => value });
     return parsed !== null && typeof parsed === 'object' ? parsed : undefined;
   } catch {
     return undefined;
@@ -1628,7 +1631,7 @@ function buildEnforcingDecider(
     // stop key is READ only under `'native'`: a tracked get of an absent key
     // is still a read on the record, and every other agent keeps its bytes.
     const failure =
-      (enforcement.outputFormat !== undefined
+      (enforcement.outputFormat !== undefined && scope.llmLatestNativeOutput === true
         ? nativeStopFailure(enforcement, scope.llmLatestStopReason)
         : undefined) ?? judgeAnswer(scope.llmLatestContent as string, enforcement.parser);
 

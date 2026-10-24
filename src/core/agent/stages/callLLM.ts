@@ -362,13 +362,15 @@ export interface CallLLMStageDeps {
    */
   readonly schemaTool?: LLMToolSchema;
   /**
-   * The structured-output format the `'native'` output strategy sends
-   * (`nativeOutputFormat.ts`). Present ONLY under that strategy: the request
+   * The format that `'native'` requires and `'auto'` selects when supported
+   * (`nativeOutputFormat.ts`). When selected, the request
    * carries it as `outputFormat`, this stage refuses a provider manifest that
    * says it did not cross, and it records `llmLatestStopReason` for the Route
    * decider. Absent, not one line of that runs.
    */
   readonly outputFormat?: NonNullable<LLMRequest['outputFormat']>;
+  /** Select native per effective request, otherwise retain instruction + parsing. */
+  readonly nativeOutputAuto?: true;
   /** v2.14+ — request-side thinking budget. When set, every LLMRequest
    *  carries `thinking: { budget }` so the provider activates extended
    *  thinking. Undefined = no activation (default). */
@@ -815,21 +817,35 @@ export function buildCallLLMStage(
     });
 
     const startMs = Date.now();
-    const baseRequest = {
-      ...(systemPrompt.length > 0 && { systemPrompt }),
-      messages: wireMessages,
-      ...(activeToolSchemas.length > 0 && { tools: activeToolSchemas }),
-      model,
-      ...(deps.temperature !== undefined && { temperature: deps.temperature }),
-      ...(deps.maxTokens !== undefined && { maxTokens: deps.maxTokens }),
-      ...(deps.thinkingBudget !== undefined && {
-        thinking: { budget: deps.thinkingBudget },
-      }),
-      ...(deps.schemaTool !== undefined && {
-        toolChoice: { type: 'tool' as const, name: deps.schemaTool.name },
-      }),
-      ...(deps.outputFormat !== undefined && { outputFormat: deps.outputFormat }),
+    // Auto follows the actual provider/model, including cache-selected models
+    // and each reliability fallback. Explicit strategies retain their refusals.
+    const selectOutputFormat = (request: LLMRequest, selected: LLMProvider): LLMRequest => {
+      if (deps.nativeOutputAuto !== true || deps.outputFormat === undefined) return request;
+      if (nativeOutputSchemaFor(selected, request.model)) {
+        return { ...request, outputFormat: deps.outputFormat };
+      }
+      const { outputFormat: _unused, ...ordinary } = request;
+      void _unused;
+      return ordinary;
     };
+    const baseRequest = selectOutputFormat(
+      {
+        ...(systemPrompt.length > 0 && { systemPrompt }),
+        messages: wireMessages,
+        ...(activeToolSchemas.length > 0 && { tools: activeToolSchemas }),
+        model,
+        ...(deps.temperature !== undefined && { temperature: deps.temperature }),
+        ...(deps.maxTokens !== undefined && { maxTokens: deps.maxTokens }),
+        ...(deps.thinkingBudget !== undefined && {
+          thinking: { budget: deps.thinkingBudget },
+        }),
+        ...(deps.schemaTool !== undefined && {
+          toolChoice: { type: 'tool' as const, name: deps.schemaTool.name },
+        }),
+        ...(deps.outputFormat !== undefined && { outputFormat: deps.outputFormat }),
+      },
+      provider,
+    );
     // v2.6+ — call cache strategy to attach provider-specific cache
     // hints. CacheGate has already routed (apply-markers / no-markers)
     // and populated scope.cacheMarkers accordingly. Strategy.prepareRequest
@@ -844,7 +860,7 @@ export function buildCallLLMStage(
       recentHitRate: scope.recentHitRate,
       cachingDisabled: scope.cachingDisabled ?? false,
     });
-    const llmRequest = cachePrepared.request;
+    const llmRequest = selectOutputFormat(cachePrepared.request, provider);
     // Judge the final request on the effective brain/configured model, not
     // the agent's build-time default. This is before provider I/O and outside
     // the reliability loop: retrying cannot repair an unsupported contract.
@@ -1002,7 +1018,8 @@ export function buildCallLLMStage(
       deps.recordReceipt !== false,
       deps.onReplayPrepared,
     );
-    let answeredBy = { provider: provider.name, model };
+    let answeredBy = { provider: provider.name, model, native: false };
+    let localFallback = false;
     let acceptedFindingsRequest: FindingsRequest | undefined;
     // THE RUN'S SIGNAL REACHES THE WIRE. Every attempt carries it on its
     // request (`LLMRequest.signal`), so an aborted or timed-out run cancels the
@@ -1017,6 +1034,7 @@ export function buildCallLLMStage(
     const runSignal = scope.$getEnv?.()?.signal;
     const singleProviderCall: LLMCallFn = async (req, hooks): Promise<LLMResponse> => {
       const selectedProvider = hooks.provider ?? provider;
+      req = selectOutputFormat(req, selectedProvider);
       assertForcedRequestSupported(selectedProvider, req);
       throwIfAborted(runSignal);
       const attempts = replayAttempts(
@@ -1154,7 +1172,11 @@ export function buildCallLLMStage(
         hooks.providerIndex === undefined
           ? resp
           : tagThinkingResponse(resp, String(hooks.providerIndex));
-      answeredBy = { provider: selectedProvider.name, model: req.model };
+      answeredBy = {
+        provider: selectedProvider.name,
+        model: req.model,
+        native: req.outputFormat !== undefined,
+      };
       acceptedFindingsRequest = candidate;
       return attempts.response(answered);
     };
@@ -1228,13 +1250,23 @@ export function buildCallLLMStage(
         {
           ...(deps.withholdDraftContent === true && { withholdDraftContent: true }),
           providerHooks,
-          ...(deps.findings === true && {
+          ...((deps.findings === true || deps.outputFormat !== undefined) && {
             prepareFallback: (request: LLMRequest) => {
-              const witness = captureFindingsRequest(request, committed, iteration);
+              const witness =
+                deps.findings === true
+                  ? captureFindingsRequest(request, committed, iteration)
+                  : undefined;
               return () => {
+                // A callback may return arbitrary text; it did not inherit
+                // native generation from the provider response it replaces.
+                localFallback = true;
                 acceptedFindingsRequest = witness;
               };
             },
+          }),
+          ...(deps.outputFormat !== undefined && {
+            isTerminalRefusal: (response: LLMResponse) =>
+              answeredBy.native && response.stopReason === 'refusal',
           }),
         },
       );
@@ -1260,16 +1292,20 @@ export function buildCallLLMStage(
     if (typeof response.usage.cacheRead === 'number') {
       scope.totalCacheReadTokens = (scope.totalCacheReadTokens ?? 0) + response.usage.cacheRead;
     }
-    // `'native'` only. A provider that states its manifest (wireManifest.ts)
+    const nativeOutput =
+      deps.outputFormat !== undefined &&
+      !localFallback &&
+      (deps.nativeOutputAuto !== true || answeredBy.native);
+    // A provider that states its manifest (wireManifest.ts)
     // and says no format crossed sent the request unconstrained while it
     // declared the capability — refused, never delivered as constrained.
     if (
-      deps.outputFormat !== undefined &&
+      nativeOutput &&
       response.wireManifest !== undefined &&
       response.wireManifest.outputFormat === undefined
     ) {
       throw new Error(
-        `Agent: .outputSchema(parser, { strategy: 'native' }) — '${answeredBy.provider}' ` +
+        `Agent: native structured output — '${answeredBy.provider}' ` +
           `declares a native structured-output format, but its wire manifest says the request ` +
           `it sent carried none. The answer was not constrained, so it is not delivered as if ` +
           `it were.`,
@@ -1280,11 +1316,14 @@ export function buildCallLLMStage(
         acceptedFindingsRequest === undefined ? undefined : [acceptedFindingsRequest];
     scope.llmLatestContent = response.content;
     scope.llmLatestToolCalls = response.toolCalls;
-    // `'native'` only, every call (so it is never stale): the stop reason the
+    // Native candidates only, every call (so it is never stale): the stop reason the
     // Route decider judges a constrained answer by — a 'refusal' or
     // 'max_tokens' stop does not hold the format (outputEnforcement.ts ·
     // nativeStopFailure). Absent on every other agent, so their bytes are unchanged.
-    if (deps.outputFormat !== undefined) scope.llmLatestStopReason = response.stopReason;
+    if (deps.outputFormat !== undefined) {
+      scope.llmLatestStopReason = nativeOutput ? response.stopReason : undefined;
+      scope.llmLatestNativeOutput = nativeOutput;
+    }
     // A response owns its replay evidence, never the previous response's.
     // The presence trap does not record a read on never-replay providers.
     if (response.replay !== undefined || 'llmLatestReplay' in scope) {

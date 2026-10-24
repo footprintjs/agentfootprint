@@ -354,8 +354,10 @@ export interface ResolvedOutputEnforcement {
   /** The synthetic tool, pre-built. Present only under `'tool-forced'`. */
   readonly schemaTool?: LLMToolSchema;
   /** The structured-output format, pre-built by `nativeOutputFormat`.
-   *  Present only under `'native'`. */
+   *  Present under `'native'` and schema-capable `'auto'`. */
   readonly outputFormat?: NonNullable<LLMRequest['outputFormat']>;
+  /** Auto selects this format only for a capable effective provider/model. */
+  readonly nativeOutputAuto?: true;
   /** True when `.outputFallback()` is configured. The decider carries it so
    *  the unmet-contract signal can say that a tier exists which `run()` does
    *  not reach — the fallback itself lives at the caller's boundary. */

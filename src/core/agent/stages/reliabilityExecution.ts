@@ -168,6 +168,9 @@ export async function executeWithReliability(
     readonly providerHooks?: LLMCallHooks;
     /** Observe a callback transport boundary before it runs; accept only after success. */
     readonly prepareFallback?: (request: LLMRequest) => () => void;
+    /** A provider refusal must reach the caller's terminal judge unchanged,
+     * before a parser or retry rule can turn it into a corrective call. */
+    readonly isTerminalRefusal?: (response: LLMResponse) => boolean;
   },
 ): Promise<LLMResponse | undefined> {
   // v2.13 — mutable so feedbackForLLM can append ephemeral messages
@@ -378,6 +381,9 @@ export async function executeWithReliability(
           },
         });
         if (aborted()) throw signal?.reason;
+        if (options?.isTerminalRefusal?.(response) === true) {
+          return attempts.response(response);
+        }
         // v2.13 — output-schema validation. MUST-FIX #1: only validate
         // on terminal turns (no toolCalls). Tool-call turns aren't
         // final answers; validating them would be premature.

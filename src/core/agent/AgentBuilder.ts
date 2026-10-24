@@ -28,7 +28,7 @@ import {
   SCHEMA_TOOL_NAME,
   type ResolvedOutputEnforcement,
 } from './outputEnforcement.js';
-import { nativeOutputFormat } from './nativeOutputFormat.js';
+import { nativeOutputFormat, NativeOutputSchemaError } from './nativeOutputFormat.js';
 import {
   resolveNegativeClaims,
   assertNegativeClaimsTools,
@@ -364,7 +364,7 @@ export class AgentBuilder {
   private timeValue?: TimeOptions;
 
   private outputSchemaRetries = 0;
-  private outputSchemaStrategy: OutputSchemaStrategy = 'instruct';
+  private outputSchemaStrategy: OutputSchemaStrategy = 'auto';
   private outputSchemaJson?: Readonly<Record<string, unknown>>;
 
   /** 3-tier output fallback chain — set via `.outputFallback({...})`.
@@ -1723,7 +1723,10 @@ export class AgentBuilder {
    * ## What the DEFAULT buys you, and what it does not
    *
    * `.outputSchema(parser)` on its own means **judge, do not re-ask**: the
-   * prompt gets the instruction, the answer is validated in the loop, and a
+   * prompt gets the instruction, native structured output is used when the
+   * effective provider/model and available JSON Schema support it, and the
+   * answer is validated locally in the loop. Unsupported native schemas or
+   * providers fall back to instruction plus validation. A
    * failure is recorded (`outputAttempts`), announced
    * (`agentfootprint.agent.output_contract_unmet`), warned about once, and
    * readable afterwards through `agent.outputContractUnmet()`. What it does
@@ -2253,7 +2256,7 @@ export class AgentBuilder {
     }
     this.outputSchemaParser = parser as OutputSchemaParser<unknown>;
     this.outputSchemaRetries = resolveRetries(opts?.retries);
-    this.outputSchemaStrategy = opts?.strategy ?? 'instruct';
+    this.outputSchemaStrategy = opts?.strategy ?? 'auto';
     if (opts?.jsonSchema !== undefined) this.outputSchemaJson = opts.jsonSchema;
     const instructionText = opts?.instruction ?? buildDefaultInstruction(parser);
     const id = opts?.name ?? 'output-schema';
@@ -3344,9 +3347,9 @@ export class AgentBuilder {
     // place, and is refused the same way when there is none; what the API
     // cannot express is refused by `nativeOutputFormat`, naming the node.
     let outputFormat;
-    if (this.outputSchemaStrategy === 'native') {
+    if (this.outputSchemaStrategy === 'native' || this.outputSchemaStrategy === 'auto') {
       const jsonSchema = resolveJsonSchema(parser, servedSchema ?? this.outputSchemaJson);
-      if (jsonSchema === undefined) {
+      if (jsonSchema === undefined && this.outputSchemaStrategy === 'native') {
         throw new Error(
           `AgentBuilder.outputSchema: strategy 'native' sends the schema to the provider as ` +
             `JSON Schema (Anthropic's output_config.format). This parser does not offer one (no ` +
@@ -3360,7 +3363,17 @@ export class AgentBuilder {
       const findingsArmed =
         this.findingsValue !== undefined ||
         (this.opts as { readonly findings?: unknown }).findings !== undefined;
-      outputFormat = nativeOutputFormat(jsonSchema, { findings: findingsArmed });
+      if (jsonSchema !== undefined) {
+        try {
+          outputFormat = nativeOutputFormat(jsonSchema, { findings: findingsArmed });
+        } catch (error) {
+          // Auto is best available transport, not a stricter schema contract.
+          // Known wire-subset refusals retain instruction + local parsing.
+          // Explicit native and unexpected lowering failures still fail.
+          if (this.outputSchemaStrategy !== 'auto' || !(error instanceof NativeOutputSchemaError))
+            throw error;
+        }
+      }
     }
 
     // Mounted whenever a parser exists (8.18.0). Until then, `retries: 0` —
@@ -3380,7 +3393,10 @@ export class AgentBuilder {
           ? this.outputSchemaRetries
           : Math.min(this.outputSchemaRetries, 1),
       ...(schemaTool !== undefined && { schemaTool }),
-      ...(outputFormat !== undefined && { outputFormat }),
+      ...(outputFormat !== undefined && {
+        outputFormat,
+        ...(this.outputSchemaStrategy === 'auto' && { nativeOutputAuto: true as const }),
+      }),
       hasFallback: this.outputFallbackCfg !== undefined,
       ...(this.negativeClaimsConfig?.mode === 'typed' && { negativeClaimsEnforced: true as const }),
       ...((this.answerValidationConfig?.mode === 'enforce' ||

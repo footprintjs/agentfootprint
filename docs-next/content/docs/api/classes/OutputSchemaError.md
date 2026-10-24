@@ -4,7 +4,7 @@ title: OutputSchemaError
 
 # Class: OutputSchemaError
 
-Defined in: [src/answer-validation/outputSchema.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L183)
+Defined in: [src/answer-validation/outputSchema.ts:191](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L191)
 
 Thrown by `agent.parseOutput(...)` / `agent.runTyped(...)` when the
 agent's final answer fails JSON parsing OR schema validation.
@@ -23,7 +23,7 @@ can log / persist the failed response for triage.
 
 > **new OutputSchemaError**(`message`, `opts`): `OutputSchemaError`
 
-Defined in: [src/answer-validation/outputSchema.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L188)
+Defined in: [src/answer-validation/outputSchema.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L196)
 
 #### Parameters
 
@@ -59,7 +59,7 @@ Defined in: [src/answer-validation/outputSchema.ts:188](https://github.com/footp
 
 > `readonly` `optional` **cause?**: `unknown`
 
-Defined in: [src/answer-validation/outputSchema.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L186)
+Defined in: [src/answer-validation/outputSchema.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L194)
 
 #### Overrides
 
@@ -95,7 +95,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **rawOutput**: `string`
 
-Defined in: [src/answer-validation/outputSchema.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L184)
+Defined in: [src/answer-validation/outputSchema.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L192)
 
 ***
 
@@ -137,7 +137,7 @@ not capture any frames.
 
 > `readonly` **stage**: `"json-parse"` \| `"schema-validate"`
 
-Defined in: [src/answer-validation/outputSchema.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L185)
+Defined in: [src/answer-validation/outputSchema.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L193)
 
 ## Methods
 

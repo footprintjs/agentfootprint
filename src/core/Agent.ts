@@ -2024,7 +2024,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           stage: 'schema-validate',
         });
       }
-      return JSON.parse(out) as T;
+      return applyOutputSchema(out, { parse: (value: unknown) => value as T });
     }
     return this.parseOutputAsync<T>(out);
   }
@@ -3720,7 +3720,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * lies.
    */
   private assertNativeOutputSchemaSupported(): void {
-    if (this.outputEnforcement?.outputFormat === undefined) return;
+    if (
+      this.outputEnforcement?.outputFormat === undefined ||
+      this.outputEnforcement.nativeOutputAuto === true
+    )
+      return;
     const first = this.reliabilityConfig?.providers?.[0];
     const provider = first?.provider ?? this.provider;
     const model = first?.model ?? this.model;
@@ -5525,9 +5529,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.outputEnforcement?.schemaTool !== undefined && {
         schemaTool: this.outputEnforcement.schemaTool,
       }),
-      // The structured-output format, under `strategy: 'native'` only.
+      // The native format candidate; auto selects it for the effective request.
       ...(this.outputEnforcement?.outputFormat !== undefined && {
         outputFormat: this.outputEnforcement.outputFormat,
+        ...(this.outputEnforcement.nativeOutputAuto === true && {
+          nativeOutputAuto: true as const,
+        }),
       }),
       ...(this.thinkingBudget !== undefined && { thinkingBudget: this.thinkingBudget }),
       // Only a configured agent reads `scope.resolvedModel` — see the dep's

@@ -38,7 +38,8 @@
  *     with open keys (`additionalProperties` given a schema, `true` or `{}`
  *     on an object naming no properties, a bare `{ type: 'object' }`, or
  *     `patternProperties`: closing it would make every map empty while the
- *     parser accepted it).
+ *     parser accepted it), and object intersections through `allOf` (closing
+ *     each branch can make the intersection impossible).
  *   - DROPPED: the meta keys `$schema`, `$id`, `$comment`, `$anchor`.
  *
  * THE RESERVED `_findings` KEY. With `.findings()` armed, the instruction tells
@@ -115,6 +116,20 @@ function isObjectNode(node: Json): boolean {
     type === 'object' ||
     (Array.isArray(type) && type.includes('object')) ||
     isObject(node.properties)
+  );
+}
+
+/** Object alternatives participate in the same intersection as their parent.
+ * Do not infer a merged property set: closing its branches independently can
+ * exclude keys another branch requires. Scalar intersections remain expressible. */
+function hasObjectAlternative(node: unknown): boolean {
+  if (!isObject(node)) return false;
+  return (
+    isObjectNode(node) ||
+    ['allOf', 'anyOf', 'oneOf'].some((key) => {
+      const alternatives = node[key];
+      return Array.isArray(alternatives) && alternatives.some(hasObjectAlternative);
+    })
   );
 }
 
@@ -273,6 +288,14 @@ function transformNode(node: unknown, path: string): Json {
     node.allOf.some((s) => isObject(s) && has$ref(s))
   ) {
     throw new NativeOutputSchemaError(path, 'allOf with a $ref inside it is not supported.');
+  }
+  if (Array.isArray(node.allOf) && node.allOf.length > 0 && hasObjectAlternative(node)) {
+    throw new NativeOutputSchemaError(
+      path,
+      'allOf with object schemas cannot be safely closed: additionalProperties: false on ' +
+        'one branch can exclude properties required by another. Declare the object properties ' +
+        'in a single schema instead of intersecting object shapes.',
+    );
   }
   // Open keys: a map whose entries the API could never produce once closed.
   // A value schema for the extra keys, a pattern for them, or an object that

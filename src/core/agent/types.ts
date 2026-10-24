@@ -1676,12 +1676,12 @@ export interface AgentState {
    * Route decider on the turn it picks `final`, absent before:
    *   - `'native'` — the provider decoded the answer under the output
    *     schema's structured-output format (`output_config.format`), and the
-   *     parser then judged it (`.outputSchema(s, { strategy: 'native' })`);
+   *     parser then judged it (`'native'`, or `'auto'` when supported);
    *   - `'tool-forced'` — the provider was forced BY NAME to answer through
    *     the output schema's synthetic tool, so the shape held on the wire
    *     (`.outputSchema(s, { strategy: 'tool-forced' })`);
    *   - `'checked'` — the answer was generated as text and the output schema
-   *     parsed it afterwards (`'instruct'`, the default);
+   *     parsed it afterwards (`'instruct'`, or `'auto'` when native is unavailable);
    *   - `'none'` — no output schema: free text, no shape claimed.
    * A guarantee is a fact about how the answer was obtained, distinct from
    * `answerValidation` (host checks over its content).
@@ -1747,7 +1747,7 @@ export interface AgentState {
     /** Set when an `act({ output })` middleware's own rewrite broke an answer
      *  that HAD satisfied the schema — the name of that middleware. */
     readonly brokenBy?: string;
-    /** `strategy: 'native'` only: the provider's stop that failed the last
+    /** Native output (explicit or auto): the provider's stop that failed the last
      *  attempt (`'refusal'`, `'max_tokens'`, `'model_context_window_exceeded'`).
      *  `runTyped()` throws on such an answer even where its text parses. */
     readonly stopReason?: import('./outputEnforcement.js').NativeStopReason;
@@ -2468,12 +2468,16 @@ export interface AgentState {
   llmLatestReplay?: readonly [NonNullable<LLMMessage['replay']>];
   /**
    * The latest response's stop reason — written ONLY by an agent with
-   * `.outputSchema(s, { strategy: 'native' })`, on every call, and read by
+   * native output or an auto native candidate, on every call, and read by
    * the Route decider: a refusal or truncation stop does not hold the
    * structured-output format, so that answer fails its attempt by name
-   * (`outputEnforcement.ts · nativeStopFailure`). Absent on every other agent.
+   * (`outputEnforcement.ts · nativeStopFailure`). Cleared on auto's instruction
+   * fallback; absent when no native format candidate was built.
    */
   llmLatestStopReason?: string;
+  /** For a native format candidate: whether this answer used native structured
+   * output. Replaced each call, including provider and local callback fallbacks. */
+  llmLatestNativeOutput?: boolean;
 
   // ── Reliability fail-fast state (v2.11.5) ──────────────────
   /** Set when the rules-based reliability loop takes the fail-fast path.
