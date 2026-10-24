@@ -7,7 +7,8 @@ description: Observe prose claims or deliver library-written typed statements, w
 files warnings. `{ field, tools, unestablished }` makes the library write typed
 negative statements from cited searches. Prose observation never verifies or
 withholds an answer. Typed enforcement is **available, not recommended** until its
-benchmark gates pass; the structured path remains **unmeasured**.
+benchmark gates pass. Offline replays are diagnostic; structured-path accuracy and
+usefulness remain **unmeasured**.
 
 ## Observe an ordinary answer
 
@@ -95,8 +96,9 @@ has its own hash in the reported version; adding phrases never enables enforceme
 
 ## Deliver typed negative statements
 
-The model chooses `kind`, `about` and `restsOn`; it does not write the scope,
-gaps or delivered statement.
+The model supplies `restsOn` result handles. The library derives the claim type and
+searched subject from the admitted result records, then writes the scope, gaps and
+delivered statement. Model wording never selects the subject or supplies evidence.
 
 `NegativeClaimsOptions` configures the field, eligible tools and failure behavior.
 `NegativeClaimCitation` is the model-input shape; `DeliveredNegative` adds the
@@ -129,8 +131,9 @@ guarantee; declarations and the host's identity are the trusted inputs.
 
 ## Give the model a citation field
 
-The field must be a required top-level array. Each entry requires `kind`, `about`
-and `restsOn`. Supply `jsonSchema` explicitly or use a parser that provides
+The field must be a required top-level array. Each entry requires `restsOn`;
+legacy `kind` and `about` fields are optional hints, never evidence. Supply
+`jsonSchema` explicitly or use a parser that provides
 `toJsonSchema()`; the library does not infer a shape by executing a parser.
 
 <CodeFile
@@ -142,14 +145,39 @@ and `restsOn`. Supply `jsonSchema` explicitly or use a parser that provides
 The library serves the short-handle pattern `^r[1-9][0-9]{0,3}$`, limits the field
 to 32 claims and each citation to 16 reads, and closes each entry to extra fields.
 The model receives handles such as `r1` beside admitted results. Provider call IDs
-never select evidence. `about` must match every cited population and each read must
-be within the admitted caller scope.
+never select evidence. Each read must be within the admitted caller scope. The
+checker compares other reads using the cited searches' recorded subjects and
+populations, so an unrelated model label cannot hide contradicting results.
 
-| Kind        | What the cited reads must establish                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`      | A declared absence within the composed search scope.                                                                                      |
-| `not-found` | A named miss from `absent({ among })`, with the inventory's limits.                                                                       |
-| `complete`  | Completeness for the executed arguments, without an open page, reached cap or partial result. The statement describes rows actually read. |
+| Derived kind | What the cited reads must establish                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`       | A declared absence within the composed search scope.                                                                                      |
+| `not-found`  | A named miss from `absent({ among })`, with the inventory's limits.                                                                       |
+| `complete`   | Completeness for the executed arguments, without an open page, reached cap or partial result. The statement describes rows actually read. |
+
+### Evidence interpretation and existing parsers
+
+A successful declared absence becomes `not-found` for an admitted name-list miss,
+or `none` for an ordinary search. A nonempty result can support `complete` only
+when the recorded declaration and gaps establish completeness. A raw empty list,
+failed read, missing coverage or hidden evidence never becomes an absence. An empty
+complete search uses its specific absence kind; every coverage limit is retained.
+Citations with incompatible evidence kinds remain undetermined. Multiple reads
+retain their individual scopes; the library does not invent a combined population.
+
+A complete nonempty read can replace a legacy `none` pointer with a `complete`
+statement. This describes the recorded read; it does not verify the model's original
+negative wording or whether the answer addresses the user's question.
+
+Existing app schemas and parsers may still require `kind` and `about`. They continue
+to validate those fields as authored, but the checker ignores their values when
+interpreting the evidence. A wrong type label cannot change what the read supports,
+and text such as "not payments" cannot redirect a payments read. A legacy kind that
+differs from the derived kind adds an audit-only `model-kind-ignored` check note;
+the note cannot confirm or block anything. To stop asking
+models for these fields, update **both** the JSON Schema and your parser to accept
+only `restsOn`, as in the example. The library cannot rewrite an opaque parser or
+invent placeholder values to satisfy it. Surrounding prose remains unchecked.
 
 ## Deliver the statement and its marker together
 
@@ -159,12 +187,13 @@ be within the admitted caller scope.
   title="Deliver the library statement"
 />
 
-An established entry gains `statement`, `delivery: 'record-composed'` and `version`.
-Display that marker beside the sentence. The delivered `about` keeps the original
-model string or number, so app comparisons still work. Only the library sentence
-quotes and sanitizes values; `about` is not an evidence identity. The answer-level delivery is
-`as-checked` only when its sole field consists of established library statements;
-any other field makes it `recorded`. That marker never verifies surrounding model
+An established entry gains its derived `kind`, `statement`, `delivery: 'record-composed'` and `version`.
+Display that marker beside the sentence. Optional `about` is preserved as unchecked
+model display text only; label and quote it if displayed. It never names the checked
+subject or affects which other reads are examined. The library sentence names the
+actual searched scope. The answer-level delivery is `as-checked` only when its sole
+field consists of established library statements without model display text. A
+retained `about` or another model field makes delivery `recorded`. That marker never verifies surrounding model
 text. The model-input parser describes only
 citations; `runTyped()` returns the enriched delivered object without running that
 parser over it again.
@@ -176,15 +205,20 @@ history and memory receive the same statements and gaps.
 
 `unestablished` chooses the failure behavior:
 
-| Setting              | Delivery                                                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `withhold` (default) | Withhold the whole answer; the caller receives `AnswerValidationError`, HTTP hosts return 422 and AG-UI reports `RUN_ERROR`.     |
+| Setting              | Delivery                                                                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `withhold` (default) | Withhold the whole answer; the caller receives `AnswerValidationError`, HTTP hosts return 422 and AG-UI reports `RUN_ERROR`.                                      |
 | `state-searched`     | Replace the entry with what the admitted record says was searched and any admitted contrary result. The failed or unverified standing stays failed or unverified. |
 
 A contrary read is named by its result handle and shows bounded, quoted native
 row values when they survived middleware, placement and truncation unchanged.
 Otherwise its count is reported without re-exposing hidden values. A positive
 result without a coverage declaration is explicitly labelled that way.
+
+Complete statements count every admitted fact, series point and edge. They show
+row identities only when all native rows survived the final tool-result boundary
+unchanged; removing or replacing a collection suppresses those identities. These
+statements use template version 6.
 
 A bad citation gets one correction request naming valid handles, with no tools
 available. If `.outputSchema()` enables retries, schema correction shares that

@@ -358,6 +358,20 @@ function amongRow(
   };
 }
 
+/** All described data slots, in a stable order shared by capture and display admission. */
+function describedRowsOf(value: unknown): readonly Readonly<Record<string, unknown>>[] | undefined {
+  if (!record(value)) return undefined;
+  const collections = ['facts', 'series', 'edges'].flatMap((key) =>
+    value[key] === undefined ? [] : [value[key]],
+  );
+  if (
+    collections.length === 0 ||
+    !collections.every((rows) => Array.isArray(rows) && rows.every(record))
+  )
+    return undefined;
+  return collections.flat() as Readonly<Record<string, unknown>>[];
+}
+
 /** The same recognized row shapes at native capture and final display admission.
  * Final model text is used only to check that native rows survived; never as evidence. */
 function rowsOf(value: unknown): readonly Readonly<Record<string, unknown>>[] | undefined {
@@ -365,7 +379,8 @@ function rowsOf(value: unknown): readonly Readonly<Record<string, unknown>>[] | 
   const raw = envelope === undefined ? value : envelope.content;
   const sem = readSemantics(raw);
   const ledger = readCoverageLedger(raw) ?? readDeclaredLedger(raw);
-  let rows: unknown = sem?.facts ?? sem?.series ?? sem?.edges ?? ledger?.result ?? raw;
+  if (sem !== undefined) return describedRowsOf(sem);
+  let rows: unknown = ledger?.result ?? raw;
   if (!Array.isArray(rows) && record(rows) && Array.isArray(rows.rows)) rows = rows.rows;
   return Array.isArray(rows) && rows.every(record) ? rows : undefined;
 }
@@ -409,6 +424,7 @@ export function captureNegativeResult(
       },
     });
     const rowsRead = rowsOf(raw);
+    const countedRows = read.rows ?? (sem !== undefined ? rowsRead?.length : undefined);
     const notRead =
       envelope?.status !== undefined &&
       ['invalid', 'denied', 'failure', 'pending'].includes(envelope.status);
@@ -420,7 +436,7 @@ export function captureNegativeResult(
         ...call,
         outcome: notRead ? 'error' : 'ok',
         emptiness: notRead ? 'unknown' : read.emptiness,
-        ...(read.rows !== undefined && { rows: read.rows }),
+        ...(countedRows !== undefined && { rows: countedRows }),
         ...(rowsRead !== undefined && { rowsRead }),
         ...(among !== undefined && {
           row: { ...among, composed: dispatch.local ? ('local' as const) : ('remote' as const) },
@@ -553,10 +569,7 @@ export function serveNegativeHandle(
         const delivered: unknown = JSON.parse(text);
         // semanticsForModel removes the private marker but retains these data
         // slots. A slot can only permit display by matching the native rowset.
-        const candidates = [
-          rowsOf(delivered),
-          ...(record(delivered) ? [delivered.facts, delivered.series, delivered.edges] : []),
-        ];
+        const candidates = [rowsOf(delivered), describedRowsOf(delivered)];
         const native = stableJson(call.rowsRead);
         rowsMayDisplay =
           native !== undefined &&

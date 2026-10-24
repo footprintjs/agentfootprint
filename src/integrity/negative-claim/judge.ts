@@ -54,6 +54,8 @@ export interface TypedCheckInput {
   readonly record: TurnRecord;
   /** The tools the app lets a claim cite (`.negativeClaims({ tools })`). */
   readonly citable?: readonly string[];
+  /** Runtime interpretation derives facts from native reads; legacy pure comparisons remain explicit. */
+  readonly interpretation?: 'evidence-owned';
 }
 
 /** A repeated claim is judged once (its stable JSON is the key); a key that cannot be made, every time. */
@@ -82,7 +84,7 @@ function judgeOnce(
  * claims withholds every one of them (`too-many-claims`).
  */
 export function judgeTypedNegatives(input: TypedCheckInput): TypedJudgement[] {
-  const { field, negatives, record, citable } = input;
+  const { field, negatives, record, citable, interpretation } = input;
   if (negatives === undefined || negatives === null) return [];
   const entries = Array.isArray(negatives) ? negatives : [negatives];
   const tooMany = entries.length > MAX_NEGATIVE_CLAIMS;
@@ -91,8 +93,8 @@ export function judgeTypedNegatives(input: TypedCheckInput): TypedJudgement[] {
     const verdict = tooMany
       ? TOO_MANY
       : Array.isArray(negatives)
-      ? judgeOnce(cache, entry, (e) => judgeCitation(e, record, citable))
-      : judgeCitation(undefined, record, citable);
+      ? judgeOnce(cache, entry, (e) => judgeCitation(e, record, citable, interpretation))
+      : judgeCitation(undefined, record, citable, interpretation);
     const row = {
       id: `agent:negative-claims:${field}#${index}`,
       path: `${field}[${index}]`,

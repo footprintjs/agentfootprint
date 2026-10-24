@@ -178,11 +178,11 @@ describe('offline binding and native evidence', () => {
     expect(result.bindings[0].references[0].status).toBe('earlier-turn');
   });
 
-  it('does not promote a model about label or a missing trusted context', () => {
+  it('ignores model display wording while retaining trusted-context and record guards', () => {
     expect(
       run(fixture(candidate([{ ...citation, about: 'different-entity' }]))).counterfactual.checks[0]
         .code,
-    ).toBe('about-mismatch');
+    ).toBe('established');
     expect(run(fixture(undefined, { trusted: false })).counterfactual.checks[0].code).toBe(
       'outside-trusted-context',
     );

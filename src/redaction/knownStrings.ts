@@ -492,6 +492,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'missing-signature': true,
   mock: true,
   model: true,
+  'model-kind-ignored': true,
   'model-pick': true,
   names: true,
   'names-and-numbers': true,
