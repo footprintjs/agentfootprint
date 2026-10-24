@@ -39,6 +39,7 @@ import {
   UnsupportedToolChoiceError,
 } from '../../../provider-contract/forcedToolChoice.js';
 import {
+  autoNativeOutputSchemaFor,
   nativeOutputSchemaFor,
   UnsupportedNativeOutputError,
 } from '../../../provider-contract/nativeOutputSchema.js';
@@ -821,7 +822,7 @@ export function buildCallLLMStage(
     // and each reliability fallback. Explicit strategies retain their refusals.
     const selectOutputFormat = (request: LLMRequest, selected: LLMProvider): LLMRequest => {
       if (deps.nativeOutputAuto !== true || deps.outputFormat === undefined) return request;
-      if (nativeOutputSchemaFor(selected, request.model)) {
+      if (autoNativeOutputSchemaFor(selected, request.model)) {
         return { ...request, outputFormat: deps.outputFormat };
       }
       const { outputFormat: _unused, ...ordinary } = request;

@@ -4,7 +4,7 @@ title: PermissionRequest
 
 # Interface: PermissionRequest
 
-Defined in: [src/provider-contract/types.ts:839](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L839)
+Defined in: [src/provider-contract/types.ts:847](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L847)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/provider-contract/types.ts:839](https://github.com/footprintjs/
 
 > `readonly` **actor**: `string`
 
-Defined in: [src/provider-contract/types.ts:846](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L846)
+Defined in: [src/provider-contract/types.ts:854](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L854)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/provider-contract/types.ts:846](https://github.com/footprintjs/
 
 > `readonly` **capability**: [`PermissionCapability`](/docs/api/type-aliases/PermissionCapability)
 
-Defined in: [src/provider-contract/types.ts:845](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L845)
+Defined in: [src/provider-contract/types.ts:853](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L853)
 
 What kind of operation is being asked about. See
 [PermissionCapability](/docs/api/type-aliases/PermissionCapability) for which values the framework actually sends
@@ -32,7 +32,7 @@ and when.
 
 > `readonly` `optional` **context?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/provider-contract/types.ts:855](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L855)
+Defined in: [src/provider-contract/types.ts:863](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L863)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/provider-contract/types.ts:855](https://github.com/footprintjs/
 
 > `readonly` `optional` **history?**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/provider-contract/types.ts:868](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L868)
+Defined in: [src/provider-contract/types.ts:876](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L876)
 
 v2.12 — Full conversation history at check time. Lets policies
 inspect prior assistant content / tool results without maintaining
@@ -52,7 +52,7 @@ parallel state via event subscription.
 
 > `readonly` `optional` **identity?**: `object`
 
-Defined in: [src/provider-contract/types.ts:878](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L878)
+Defined in: [src/provider-contract/types.ts:886](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L886)
 
 v2.12 — Caller identity from `agent.run({ identity })`. Permission
 predicates can role-check on `identity.principal` / `identity.tenant`.
@@ -75,7 +75,7 @@ predicates can role-check on `identity.principal` / `identity.tenant`.
 
 > `readonly` `optional` **iteration?**: `number`
 
-Defined in: [src/provider-contract/types.ts:873](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L873)
+Defined in: [src/provider-contract/types.ts:881](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L881)
 
 v2.12 — Current ReAct iteration (1-based). Lets policies fire
 different rules per iteration without external counters.
@@ -86,7 +86,7 @@ different rules per iteration without external counters.
 
 > `readonly` `optional` **sequence?**: readonly [`ToolCallEntry`](/docs/api/interfaces/ToolCallEntry)[]
 
-Defined in: [src/provider-contract/types.ts:862](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L862)
+Defined in: [src/provider-contract/types.ts:870](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L870)
 
 v2.12 — Sequence of tool calls already dispatched this run, in
 call order. EMPTY for non-`tool_call` capabilities. Sequence-aware
@@ -99,7 +99,7 @@ decisions that single-call governance cannot.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/provider-contract/types.ts:888](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L888)
+Defined in: [src/provider-contract/types.ts:896](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L896)
 
 v2.12 — Optional abort signal propagated from `agent.run({ env: { signal } })`.
 Async checkers (Redis lookups, hub-backed allowlists) MUST honor this
@@ -111,7 +111,7 @@ Async checkers (Redis lookups, hub-backed allowlists) MUST honor this
 
 > `readonly` `optional` **target?**: `string`
 
-Defined in: [src/provider-contract/types.ts:854](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L854)
+Defined in: [src/provider-contract/types.ts:862](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L862)
 
 What is being asked about, in the vocabulary of the capability:
 

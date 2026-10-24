@@ -18,7 +18,12 @@ export const meta: ExampleMeta = {
 // #region auto-output
 const parser = {
   parse(value: unknown): { status: string } {
-    if (!value || typeof value !== 'object' || !('status' in value) || typeof value.status !== 'string')
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      !('status' in value) ||
+      typeof value.status !== 'string'
+    )
       throw new Error('status must be a string');
     return { status: value.status };
   },
@@ -34,6 +39,7 @@ async function demonstrate(native: boolean, message: string) {
   const provider: LLMProvider = {
     name: 'local-format-fixture',
     carriesNativeOutputSchema: native,
+    supportsAutoNativeOutputSchema: (model) => native && model === 'local-fixture',
     async complete(request) {
       if (Boolean(request.outputFormat) !== native) throw new Error('Wrong format selection');
       return {
@@ -63,8 +69,10 @@ export async function run(input: string): Promise<string> {
 }
 
 if (isCliEntry(import.meta.url)) {
-  run(meta.defaultInput ?? '').then(printResult).catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  run(meta.defaultInput ?? '')
+    .then(printResult)
+    .catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
 }

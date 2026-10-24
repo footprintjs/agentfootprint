@@ -318,6 +318,9 @@ export function withCircuitBreaker(
     ...(inner.supportsNativeOutputSchema !== undefined && {
       supportsNativeOutputSchema: inner.supportsNativeOutputSchema,
     }),
+    ...(inner.supportsAutoNativeOutputSchema !== undefined && {
+      supportsAutoNativeOutputSchema: inner.supportsAutoNativeOutputSchema,
+    }),
     // And for prompt caching: a breaker never changes what reaches the wire.
     ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
     ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),

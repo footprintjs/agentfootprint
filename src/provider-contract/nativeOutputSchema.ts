@@ -3,12 +3,13 @@
  * (`LLMRequest.outputFormat`) on its wire FOR A MODEL, and the one error for
  * a model or adapter that does not.
  *
- * Pattern: capability declaration + its one reader (the `forcedToolChoice.ts`
+ * Pattern: capability declaration + readers (the `forcedToolChoice.ts`
  *          twin). The adapter declares `LLMProvider.carriesNativeOutputSchema`
  *          plus `supportsNativeOutputSchema(model)`, and everything that sends
  *          `LLMRequest.outputFormat` asks HERE with the model it will call:
  *          the agent's `'native'` output strategy at run start and again at
- *          request assembly.
+ *          request assembly. Auto additionally requires the positive model
+ *          knowledge declared by `supportsAutoNativeOutputSchema`.
  * Role:    Port-level, beside `types.ts`.
  *
  * Why per model: Anthropic's structured outputs are available on the models
@@ -42,6 +43,21 @@ export function nativeOutputSchemaFor(
     provider.carriesNativeOutputSchema === true &&
     (provider.supportsNativeOutputSchema === undefined ||
       provider.supportsNativeOutputSchema(model) === true)
+  );
+}
+
+/** Auto requires positive model knowledge; explicit native keeps its existing
+ * forward-compatible capability policy. Never infer knowledge from a name. */
+export function autoNativeOutputSchemaFor(
+  provider: Pick<
+    LLMProvider,
+    'carriesNativeOutputSchema' | 'supportsNativeOutputSchema' | 'supportsAutoNativeOutputSchema'
+  >,
+  model: string,
+): boolean {
+  return (
+    nativeOutputSchemaFor(provider, model) &&
+    provider.supportsAutoNativeOutputSchema?.(model) === true
   );
 }
 
