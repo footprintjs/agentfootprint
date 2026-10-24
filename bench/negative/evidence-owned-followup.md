@@ -56,13 +56,13 @@ The exact saved models are `claude-haiku-4-5-20251001` and `claude-sonnet-4-6`. 
 
 ## Evidence integrity and reproduction
 
-The baseline is PR 207 at `eee555c0`; the compared runtime source is `d01ced9e`. The final comparison uses statement version 6. All **785 manifest/raw files** have identical hashes before and after, and the first private comparison remains separately preserved. Historical admission verifies the saved reply, run/turn identity, dispatched execution, host binding and evidence chronology. The trust callback is exactly saved `call.trustedContext === true && record.ledgerComplete`. No end-of-turn evidence from after the selected answer is admitted.
+The baseline is PR 207 at `eee555c0`; the compared runtime source is `2e86a415`. The final comparison uses statement version 6. All **785 manifest/raw files** have identical hashes before and after, and the earlier private comparisons remain separately preserved. Historical admission verifies the saved reply, run/turn identity, dispatched execution, host binding and evidence chronology. The trust callback is exactly saved `call.trustedContext === true && record.ledgerComplete`. No end-of-turn evidence from after the selected answer is admitted.
 
 | Provenance                                   | SHA-256                                                            |
 | -------------------------------------------- | ------------------------------------------------------------------ |
 | Original manifest                            | `2726bc57609d7e2e1189247730b13db2487b2f880ef1e1f90752957e0165631d` |
 | Baseline built JavaScript tree (1,017 files) | `3a4c1e740e28ff9d74a9939e928f80cae341e17b0349df44ee19ef389d1593cf` |
-| Compared built JavaScript tree (1,018 files) | `3ab8ffdb03885d5646b653e55fbc9ed036e5fba3fcd444380fc1defdd24044ac` |
+| Compared built JavaScript tree (1,018 files) | `83de3ec0d4ecadfbf87f68acfafa58c14185fa507dd9e19358ba29ccdb6e0434` |
 
 Dependency-lock and analysis-script hashes are in the aggregate JSON. Detailed candidate-level results stay private. Follow [COMPARE-EVIDENCE-OWNED.md](COMPARE-EVIDENCE-OWNED.md) with both built checkouts and a new private output directory to reproduce the comparison.
 
