@@ -4,7 +4,9 @@
  * FootPrint. This also checks examples, benchmarks and executable docs demos.
  */
 import { spawnSync } from 'node:child_process';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a plain .mjs module, no types; it is also the child process below
 import { misplaced as misplacedIn, recordNamesOf } from './recordOwnershipScan.mjs';
@@ -20,8 +22,18 @@ const misplaced = (text: string, fileName = 'input.ts'): string[] =>
 
 describe('canonical record ownership', () => {
   it('derives both values and types from every published Foottrace door', () => {
-    // The dual-format cause door joins root/read/write; ownership still comes from the manifest.
-    expect(entries).toHaveLength(4);
+    // Foottrace can add doors without changing who owns existing record names.
+    // Check every installed declaration, rather than pinning a release's count.
+    const manifestPath = createRequire(import.meta.url).resolve('foottrace/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      exports: Record<string, string | { require?: { types?: string } }>;
+    };
+    const publishedDeclarations = Object.values(manifest.exports).flatMap((door) =>
+      typeof door !== 'string' && door.require?.types
+        ? [resolve(dirname(manifestPath), door.require.types)]
+        : [],
+    );
+    expect(entries).toEqual(publishedDeclarations);
     for (const name of [
       'CommitValuesMode',
       'ControlDepLookup',
