@@ -19,7 +19,7 @@
  *          claim, and nothing here binds by a provider call id or by an entity's name.
  */
 
-import { deriveCitationKind } from './derive.js';
+import { aboutContainsSubjects, deriveCitationKind } from './derive.js';
 import { readResultIdentity } from '../claim-binding/capture.js';
 import type { ResultIdentity } from '../claim-binding/types.js';
 import {
@@ -30,7 +30,14 @@ import {
   scopeRelation,
   type ScopeRelation,
 } from './readings.js';
-import type { NegativeKind, StaleSince, TurnCall, TurnRecord, TypedVerdict } from './types.js';
+import type {
+  CitationInterpretation,
+  NegativeKind,
+  StaleSince,
+  TurnCall,
+  TurnRecord,
+  TypedVerdict,
+} from './types.js';
 import { sameValue } from './readings.js';
 
 /** The verdict on one citation, with the reads it rests on when established. */
@@ -52,6 +59,7 @@ const PRECEDENCE: readonly TypedVerdict[] = [
   'cited-call-undeclared',
   'call-not-read',
   'coverage-unverified',
+  'undeclared-empty',
   'kind-mismatch',
   'evidence-kind-undetermined',
   'contradicted-by-rows',
@@ -180,13 +188,18 @@ function completeVerdict(
 }
 
 /** The kind's own rule over one cited read's row. */
-function kindVerdict(kind: NegativeKind, call: TurnCall): TypedVerdict | undefined {
+function kindVerdict(
+  kind: NegativeKind,
+  call: TurnCall,
+  corrected = false,
+): TypedVerdict | undefined {
   const row = call.row;
   if (row === undefined) return 'cited-call-undeclared';
   if (kind === 'complete') {
     const incomplete = !row.complete || row.gaps.some((gap) => COMPLETENESS_GAPS.has(gap.kind));
     return incomplete ? 'search-incomplete' : undefined;
   }
+  if (corrected && call.emptiness === 'non-empty') return 'contradicted-by-rows';
   const among = isAmongRow(call);
   if (kind === 'none' && among) return 'kind-mismatch';
   if (kind === 'not-found' && !among) return 'kind-mismatch';
@@ -251,6 +264,28 @@ function citedCall(raw: string, record: TurnRecord): TurnCall | undefined {
   return record.calls.find((c) => c.resultId === raw);
 }
 
+/** A raw empty result receives no served handle. Recognize its native ordinal
+ * only to report why that attempted citation cannot establish anything. */
+function diagnosticEmptyCall(raw: string, record: TurnRecord): TurnCall | undefined {
+  if (!HANDLE.test(raw)) return undefined;
+  const named = record.calls.filter((call) => {
+    const identity = identityOf(call.resultId);
+    return (
+      identity?.namespace === record.leg.namespace &&
+      identity.ordinal === Number(raw.slice(1)) &&
+      call.turn === record.turn &&
+      call.row === undefined &&
+      call.dispatched &&
+      call.outcome === 'ok' &&
+      call.emptiness === 'undeclared-empty'
+    );
+  });
+  return named.length === 1 ? named[0] : undefined;
+}
+
+const resolvedCall = (raw: string, record: TurnRecord, corrected: boolean): TurnCall | undefined =>
+  citedCall(raw, record) ?? (corrected ? diagnosticEmptyCall(raw, record) : undefined);
+
 /** One cited read: resolve it, then its row, its kind and what ran around it. */
 function readVerdict(
   raw: string,
@@ -260,7 +295,7 @@ function readVerdict(
   citable: readonly string[] | undefined,
   evidenceOwned = false,
 ): { code?: TypedVerdict; call?: TurnCall; staleSince?: StaleSince } {
-  const call = citedCall(raw, record);
+  const call = resolvedCall(raw, record, evidenceOwned);
   if (call === undefined || call.turn > record.turn) return { code: 'citation-unresolved' };
   if (call.turn < record.turn) {
     const staleSince = {
@@ -273,6 +308,13 @@ function readVerdict(
   if (citable !== undefined && !citable.includes(call.toolName)) {
     return { code: 'cited-call-undeclared', call };
   }
+  if (
+    evidenceOwned &&
+    call.dispatched &&
+    call.outcome === 'ok' &&
+    call.emptiness === 'undeclared-empty'
+  )
+    return { code: 'undeclared-empty', call };
   if ((evidenceOwned && (!call.dispatched || !isRead(call))) || !returnedReading(call))
     return { code: 'call-not-read', call };
   if (call.row === undefined) return { code: 'cited-call-undeclared', call };
@@ -280,7 +322,7 @@ function readVerdict(
   const code =
     kind === undefined
       ? undefined
-      : kindVerdict(kind, call) ?? sequenceVerdict(kind, call, record, peers);
+      : kindVerdict(kind, call, evidenceOwned) ?? sequenceVerdict(kind, call, record, peers);
   return code === undefined ? { call } : { code, call };
 }
 
@@ -313,7 +355,7 @@ export function judgeCitation(
   entry: unknown,
   record: TurnRecord,
   citable?: readonly string[],
-  interpretation?: 'evidence-owned',
+  interpretation?: CitationInterpretation,
 ): CitationVerdict {
   const unresolved = (kind: NegativeKind | 'unknown'): CitationVerdict => ({
     kind,
@@ -323,14 +365,15 @@ export function judgeCitation(
     reads: [],
   });
   if (!isRecord(entry)) return unresolved('unknown');
-  let kind = interpretation === 'evidence-owned' ? undefined : KINDS.find((k) => k === entry.kind);
+  let kind = KINDS.find((k) => k === entry.kind);
+  const corrected = interpretation !== undefined;
   const cited = Array.isArray(entry.restsOn) ? entry.restsOn : [];
   const raws = [...new Set(cited.filter((v): v is string => typeof v === 'string'))];
   // The rows name the reads by the library's own identities — never by model text.
   const results = [
     ...new Set(
       raws.flatMap((raw) => {
-        const call = citedCall(raw, record);
+        const call = resolvedCall(raw, record, corrected);
         return call === undefined ? [] : [call.resultId];
       }),
     ),
@@ -341,7 +384,7 @@ export function judgeCitation(
   if (raws.length > MAX_CITED_READS) {
     return { kind: kind ?? 'unknown', code: 'too-many-claims', results: [], tools: [], reads: [] };
   }
-  if (kind === undefined && interpretation !== 'evidence-owned') {
+  if (kind === undefined) {
     return { kind: 'unknown', code: 'kind-mismatch', results, tools: [], reads: [] };
   }
   if (!record.ledgerComplete) {
@@ -349,21 +392,21 @@ export function judgeCitation(
   }
   const peers = turnCallsOf(record);
   let verdicts = raws.map((raw) =>
-    readVerdict(raw, kind, record, peers, citable, interpretation === 'evidence-owned'),
+    readVerdict(raw, corrected ? undefined : kind, record, peers, citable, corrected),
   );
   const reads = verdicts.flatMap((v) => (v.call === undefined ? [] : [v.call]));
   const tools = [...new Set(reads.map((call) => call.toolName))].sort();
-  if (
-    interpretation === 'evidence-owned' &&
-    verdicts.every((verdict) => verdict.code === undefined)
-  ) {
-    const derivedKind = deriveCitationKind(reads);
+  if (corrected && verdicts.every((verdict) => verdict.code === undefined)) {
+    if (kind !== 'complete' && reads.some((call) => call.emptiness === 'non-empty'))
+      return { kind, code: 'contradicted-by-rows', results, tools, reads: [] };
+    const derivedKind = deriveCitationKind(kind, reads);
     if (derivedKind === undefined)
       return { kind: 'unknown', code: 'evidence-kind-undetermined', results, tools, reads: [] };
     kind = derivedKind;
     verdicts = reads.map((call) => ({
       call,
-      code: kindVerdict(derivedKind, call) ?? sequenceVerdict(derivedKind, call, record, peers),
+      code:
+        kindVerdict(derivedKind, call, true) ?? sequenceVerdict(derivedKind, call, record, peers),
     }));
   }
   const failed = PRECEDENCE.find((code) => verdicts.some((v) => v.code === code));
@@ -378,10 +421,14 @@ export function judgeCitation(
       ...(staleSince === undefined ? {} : { staleSince }),
     };
   }
-  const about = aboutOf(entry.about);
+  const about =
+    corrected && (entry.about === null || entry.about === '') ? 'invalid' : aboutOf(entry.about);
   if (
-    interpretation !== 'evidence-owned' &&
-    (about === 'invalid' || (about !== undefined && !aboutFits(about, reads)))
+    about === 'invalid' ||
+    (about !== undefined &&
+      !(interpretation === 'evidence-owned'
+        ? aboutContainsSubjects(about, reads)
+        : aboutFits(about, reads)))
   ) {
     return { kind: kind ?? 'unknown', code: 'about-mismatch', results, tools, reads: [] };
   }

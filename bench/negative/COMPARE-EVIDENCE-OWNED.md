@@ -1,5 +1,7 @@
 # Free comparison on fixed admitted claims
 
+> **Historical, superseded runner.** The #208 review found that its compared renderer over-established. Preserve the old results; use [STAGED-COMPARISON.md](STAGED-COMPARISON.md) for the corrected kind-only, then kind-and-subject comparison.
+
 This comparison leaves the historical `reparse*` files and results intact. It uses the
 old application parser and baseline admission, then compares the old runtime renderer
 with the new default renderer on the **same original candidate and native record**.

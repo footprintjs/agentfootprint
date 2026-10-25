@@ -77,11 +77,17 @@ const parser: OutputSchemaParser<ModelAnswer> = {
       throw new Error('summary and negatives are required');
     const negatives = value.negatives.map((claim) => {
       if (
+        !['none', 'not-found', 'complete'].includes(claim.kind) ||
+        (claim.about !== undefined && typeof claim.about !== 'string') ||
         !Array.isArray(claim.restsOn) ||
         claim.restsOn.some((handle) => typeof handle !== 'string')
       )
         throw new Error('Invalid citation');
-      return { restsOn: [...claim.restsOn] };
+      return {
+        kind: claim.kind,
+        ...(claim.about !== undefined && { about: claim.about }),
+        restsOn: [...claim.restsOn],
+      };
     });
     return { summary: value.summary, negatives };
   },
@@ -97,9 +103,11 @@ const jsonSchema = {
       items: {
         type: 'object',
         properties: {
+          kind: { type: 'string', enum: ['none', 'not-found', 'complete'] },
+          about: { type: 'string' },
           restsOn: { type: 'array', items: { type: 'string' } },
         },
-        required: ['restsOn'],
+        required: ['kind', 'restsOn'],
         additionalProperties: false,
       },
     },
@@ -110,7 +118,8 @@ const jsonSchema = {
 // #endregion schema
 
 export async function run(input: string): Promise<string> {
-  // The fixture sends only a handle: kind and searched subject are runtime-owned.
+  // The model selects the claim kind and cites a handle. The library verifies
+  // it and supplies the actual searched subject, replacing the model phrase.
   // Real models receive this
   // handle beside the tool result; a provider call id is never a citation.
   const provider = mock({
@@ -122,7 +131,7 @@ export async function run(input: string): Promise<string> {
       {
         content: JSON.stringify({
           summary: 'The recorded search result follows.',
-          negatives: [{ restsOn: ['r1'] }],
+          negatives: [{ kind: 'none', about: 'open incidents for payments', restsOn: ['r1'] }],
         }),
       },
     ],

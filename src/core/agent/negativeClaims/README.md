@@ -10,8 +10,9 @@ the host must authenticate checkpoint storage. Structural validation does not
 authenticate arbitrary caller-supplied JSON.
 
 `delivery.ts` joins those observations with the pure checker in
-`integrity/negative-claim/`, derives each citation's kind and subject from native read coverage,
-checks other reads using those recorded populations, and composes the delivered field. A negative
+`integrity/negative-claim/`, verifies the model-selected kind, normalizes only the
+absence family and supplies the recorded subject. It checks other reads using
+those recorded populations and composes the delivered field. A negative
 check never produces `checked-pass`. App answer checks keep their independent
 veto, and `state-searched` changes delivery without upgrading verification.
 
@@ -63,8 +64,10 @@ Remote tool admission and model-generated evidence rules remain deferred. Unarme
 agents retain their execution. PR 4 (#203) already changed the global answer-account
 template version from 11 to 12, including unarmed records; PR 5 retains version 12.
 
-New typed input schemas require only `restsOn`. Legacy `kind` and `about` remain
-optional compatibility/display fields and never steer evidence interpretation.
-An app parser runs before the checker and is not rewritten; apps remove those
-requirements from their own parser and schema together. Retained model `about`
-keeps answer delivery `recorded`, even for an otherwise citations-only answer.
+Typed input schemas require `kind` and `restsOn`. Optional model `about` must
+contain all public recorded population values; delivery replaces it with the
+single canonical population when available, otherwise omits it. Multiple scopes
+remain separate in the statement. An app parser runs before the checker and is
+not rewritten. Complete-list requests are never inferred from negative claims.
+An absence-only fallback cannot establish requested completeness and says so
+visibly, only after the narrower absence independently passes every runtime guard.

@@ -131,8 +131,8 @@ guarantee; declarations and the host's identity are the trusted inputs.
 
 ## Give the model a citation field
 
-The field must be a required top-level array. Each entry requires `restsOn`;
-legacy `kind` and `about` fields are optional hints, never evidence. Supply
+The field must be a required top-level array. Each entry requires `kind` and
+`restsOn`. The kind selects the claim to verify; optional `about` names its subject. Supply
 `jsonSchema` explicitly or use a parser that provides
 `toJsonSchema()`; the library does not infer a shape by executing a parser.
 
@@ -149,35 +149,44 @@ never select evidence. Each read must be within the admitted caller scope. The
 checker compares other reads using the cited searches' recorded subjects and
 populations, so an unrelated model label cannot hide contradicting results.
 
-| Derived kind | What the cited reads must establish                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`       | A declared absence within the composed search scope.                                                                                      |
-| `not-found`  | A named miss from `absent({ among })`, with the inventory's limits.                                                                       |
-| `complete`   | Completeness for the executed arguments, without an open page, reached cap or partial result. The statement describes rows actually read. |
+| Requested kind | What the cited reads must establish                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`         | A declared absence within the composed search scope.                                                                                      |
+| `not-found`    | A named miss from `absent({ among })`, with the inventory's limits.                                                                       |
+| `complete`     | Completeness for the executed arguments, without an open page, reached cap or partial result. The statement describes rows actually read. |
 
 ### Evidence interpretation and existing parsers
 
-A successful declared absence becomes `not-found` for an admitted name-list miss,
-or `none` for an ordinary search. A nonempty result can support `complete` only
-when the recorded declaration and gaps establish completeness. A raw empty list,
-failed read, missing coverage or hidden evidence never becomes an absence. An empty
-complete search uses its specific absence kind; every coverage limit is retained.
-Citations with incompatible evidence kinds remain undetermined. Multiple reads
-retain their individual scopes; the library does not invent a combined population.
+The model's kind selects the proposition. `none` and `not-found` can be normalized
+to the appropriate absence spelling only when every cited read explicitly declares
+absence. A negative against returned rows is blocked, even if that read is complete.
+The library never turns a negative into a complete-list claim. A changed absence
+spelling gets an audit-only `absence-kind-normalized` note.
 
-A complete nonempty read can replace a legacy `none` pointer with a `complete`
-statement. This describes the recorded read; it does not verify the model's original
-negative wording or whether the answer addresses the user's question.
+`complete` must be requested explicitly and satisfy the recorded completeness
+declaration and every completeness guard. Proving an absence alone does not establish
+completeness. Explicit completeness evidence can cover a zero-row search; a bare
+empty list cannot supply it. For a failed complete-list claim whose narrower absence independently
+passes all checks, the fallback says: "The requested complete-list claim is not
+established; only this absence is." It retains every gap and the failed complete-list
+verdict. Default `withhold` still withholds the answer; `state-searched` may deliver
+this explicit fallback. It never gets `as-checked`.
 
-Existing app schemas and parsers may still require `kind` and `about`. They continue
-to validate those fields as authored, but the checker ignores their values when
-interpreting the evidence. A wrong type label cannot change what the read supports,
-and text such as "not payments" cannot redirect a payments read. A legacy kind that
-differs from the derived kind adds an audit-only `model-kind-ignored` check note;
-the note cannot confirm or block anything. To stop asking
-models for these fields, update **both** the JSON Schema and your parser to accept
-only `restsOn`, as in the example. The library cannot rewrite an opaque parser or
-invent placeholder values to satisfy it. Surrounding prose remains unchecked.
+A raw empty list, failed read or missing coverage never becomes declared absence.
+A known native empty read without an absence declaration is reported as
+`undeclared-empty`, without minting evidence or treating it as a citation typo.
+Multiple reads retain their individual scopes; the library does not invent a union.
+
+When `about` is supplied, it must contain every cited read's public population value
+as a complete name or identifier after the library's normalization. "Open incidents
+for payments" matches a payments search; "payments" cannot label a billing search,
+and `pay` does not match `payments`. Unknown or all-population values cannot be
+validated against a supplied phrase. This checks name inclusion, not the meaning of
+surrounding prose. The original phrase is never delivered as the subject.
+
+Keep `kind` and `restsOn` required in both your parser and JSON Schema. `about` may
+remain required by your app or be omitted. The library does not rewrite an opaque
+parser or invent values to satisfy it. Surrounding answer prose remains unchecked.
 
 ## Deliver the statement and its marker together
 
@@ -187,14 +196,14 @@ invent placeholder values to satisfy it. Surrounding prose remains unchecked.
   title="Deliver the library statement"
 />
 
-An established entry gains its derived `kind`, `statement`, `delivery: 'record-composed'` and `version`.
-Display that marker beside the sentence. Optional `about` is preserved as unchecked
-model display text only; label and quote it if displayed. It never names the checked
-subject or affects which other reads are examined. The library sentence names the
-actual searched scope. The answer-level delivery is `as-checked` only when its sole
-field consists of established library statements without model display text. A
-retained `about` or another model field makes delivery `recorded`. That marker never verifies surrounding model
-text. The model-input parser describes only
+An established entry gains its checked `kind`, `statement`, `delivery: 'record-composed'`
+and `version`. Display that marker beside the sentence. Delivered `about` is the single
+public population value from the admitted search, never the model's phrase. It is
+omitted for multiple or unavailable subjects; the statement keeps each read's scope.
+Host-only identity values never become subject labels. The answer-level delivery is
+`as-checked` only when its sole field consists of established library statements.
+Other model fields make delivery `recorded`; this never verifies surrounding prose.
+The model-input parser describes only
 citations; `runTyped()` returns the enriched delivered object without running that
 parser over it again.
 
@@ -218,7 +227,7 @@ result without a coverage declaration is explicitly labelled that way.
 Complete statements count every admitted fact, series point and edge. They show
 row identities only when all native rows survived the final tool-result boundary
 unchanged; removing or replacing a collection suppresses those identities. These
-statements use template version 6.
+statements use template version 7.
 
 A bad citation gets one correction request naming valid handles, with no tools
 available. If `.outputSchema()` enables retries, schema correction shares that

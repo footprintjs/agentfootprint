@@ -41,7 +41,7 @@ type DeclaredTool = SearchTool;
 const instantMs = (value: unknown): number | undefined => instantOf(value, 'lenient')?.ms;
 
 /** Bump with any change to a template or to how a value is rendered. */
-export const STATEMENT_VERSION = '6';
+export const STATEMENT_VERSION = '7';
 
 const VALUE_CHARS = 64;
 const GAP_CHARS = 120;

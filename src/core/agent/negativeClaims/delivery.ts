@@ -5,6 +5,7 @@ import { readResultIdentity } from '../../../integrity/claim-binding/capture.js'
 import { MAX_NEGATIVE_CLAIMS } from '../../../integrity/negative-claim/limits.js';
 import { judgeTypedNegatives } from '../../../integrity/negative-claim/judge.js';
 import {
+  derivedSubjects,
   populationsMayOverlap,
   sameRecordedSubject,
 } from '../../../integrity/negative-claim/derive.js';
@@ -34,7 +35,7 @@ export interface RuntimeNegativeRow extends Omit<TypedNegativeRow, 'code' | 'dis
   readonly code: RuntimeNegativeCode;
   readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
   /** Audit-only notice; it cannot confirm, block or select evidence. */
-  readonly notes?: readonly 'model-kind-ignored'[];
+  readonly notes?: readonly 'absence-kind-normalized'[];
 }
 import type { DeliveredNegative } from '../../../events/payloads.js';
 export type { DeliveredNegative } from '../../../events/payloads.js';
@@ -83,12 +84,14 @@ const REFUSALS: Readonly<Record<Exclude<RuntimeNegativeCode, 'established'>, str
     "I don't know. The cited coverage was not composed by this runtime from a trusted local search declaration.",
   'call-not-read':
     "I don't know. The cited call did not establish a read that can support this claim.",
+  'undeclared-empty':
+    "I don't know. The recorded result was an empty list without a declaration of absence or coverage.",
   'evidence-kind-undetermined':
     "I don't know. The cited reads do not establish one supported kind of scoped fact.",
   'kind-mismatch':
     "I don't know. This kind of negative claim does not match what the cited search established.",
   'about-mismatch':
-    "I don't know. The model's cited subject does not match the population the admitted search actually covered.",
+    "I don't know. The claim's subject does not include the population the admitted search actually covered.",
   'record-incomplete':
     "I don't know. The available execution record is incomplete, so it cannot establish this claim.",
   'stale-turn':
@@ -126,6 +129,7 @@ export function renderNegativeCandidate(
   config: NegativeDeliveryConfig,
   record: TurnRecord,
   trusted: (call: TurnCall) => boolean,
+  interpretation: 'kind-only' | 'evidence-owned' = 'evidence-owned',
 ): { candidate: unknown; answer: AnswerNegatives; correction: boolean; allowed: boolean } {
   const source = copyJson(candidate, 1024 * 1024, false);
   if (!own(source)) throw new Error('A negative-claims answer must be a JSON object.');
@@ -139,7 +143,7 @@ export function renderNegativeCandidate(
     negatives: rawEntries,
     record,
     citable: config.tools,
-    interpretation: 'evidence-owned',
+    interpretation,
   });
   const checks: RuntimeNegativeRow[] = [];
   const claims: DeliveredNegative[] = [];
@@ -160,6 +164,8 @@ export function renderNegativeCandidate(
       refs.length <= 16 &&
       refs.every((ref) => typeof ref === 'string' && HANDLE.test(ref)) &&
       Object.keys(entry).every((key) => ['kind', 'about', 'restsOn'].includes(key));
+    const validKind =
+      typeof entry.kind === 'string' && ['none', 'not-found', 'complete'].includes(entry.kind);
     const reads = refs.flatMap((ref) => record.calls.filter((call) => call.row?.handle === ref));
     let row = judgments[i].row as RuntimeNegativeRow;
     const fail = (
@@ -175,6 +181,7 @@ export function renderNegativeCandidate(
           : 'citation-unresolved',
       );
     else if (!validShape) fail('citation-unresolved');
+    else if (!validKind) fail('kind-mismatch');
     else if (row.code === 'established') {
       if (reads.length === 0 || !reads.every(trusted)) fail('outside-trusted-context');
       else if (
@@ -219,7 +226,7 @@ export function renderNegativeCandidate(
         results: [...new Set([...row.results, ...contrary.map((call) => call.resultId)])],
       };
     const refusal = refusalFor(row);
-    const statement = established
+    let statement = established
       ? judgments[i].statement?.text
       : canDescribe
       ? composeRecordedStatement(
@@ -239,18 +246,40 @@ export function renderNegativeCandidate(
           },
         ).text
       : refusal;
+    // A partial absence cannot satisfy a complete-list request. Only describe
+    // that narrower fact as established if it independently passes every guard.
+    if (
+      entry.kind === 'complete' &&
+      row.code === 'search-incomplete' &&
+      canDescribe &&
+      reads.every((call) => call.emptiness === 'declared-absent')
+    ) {
+      const absence = renderNegativeCandidate(
+        { [config.field]: [{ ...entry, kind: 'none' }] },
+        config,
+        record,
+        trusted,
+        interpretation,
+      );
+      if (absence.answer.checks[0]?.code === 'established') {
+        statement =
+          'The requested complete-list claim is not established; only this absence is. ' +
+          absence.answer.claims[0].statement;
+      }
+    }
     if (
       row.kind !== 'unknown' &&
-      typeof entry.kind === 'string' &&
-      ['none', 'not-found', 'complete'].includes(entry.kind) &&
+      (entry.kind === 'none' || entry.kind === 'not-found') &&
+      (row.kind === 'none' || row.kind === 'not-found') &&
       entry.kind !== row.kind
     )
-      row = { ...row, notes: ['model-kind-ignored'] };
+      row = { ...row, notes: ['absence-kind-normalized'] };
     checks.push(row);
     correction ||= row.code === 'citation-unresolved' || row.code === 'stale-turn';
+    const subjects = canDescribe || established ? derivedSubjects(reads) : [];
     claims.push({
       kind: row.kind,
-      ...(validAbout ? { about: about as string | number } : {}),
+      ...(subjects.length === 1 ? { about: subjects[0] } : {}),
       restsOn:
         canDescribe || established
           ? [...reads, ...contrary].map(
@@ -283,10 +312,7 @@ export function renderNegativeCandidate(
     field: config.field,
     version: STATEMENT_VERSION,
     delivery: allowed
-      ? established &&
-        checks.length > 0 &&
-        rawEntries.every((entry) => !own(entry) || entry.about === undefined) &&
-        Object.keys(source).every((key) => key === config.field)
+      ? established && checks.length > 0 && Object.keys(source).every((key) => key === config.field)
         ? 'as-checked'
         : 'recorded'
       : 'fallback',

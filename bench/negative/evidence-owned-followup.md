@@ -1,5 +1,7 @@
 # Evidence-owned negative statements: free comparison
 
+> **Superseded after the #208 review correction.** This historical comparison used an over-establishing renderer: it could change an absence request into a complete-list statement and ignore a conflicting model subject. Its counts are not the current result. The original aggregate and private v1/v2/v3 analyses remain intact. See the [sequential corrected comparison](STAGED-COMPARISON.md).
+
 The new runtime establishes a scoped statement for **381 of the same 540 admitted claim slots**, compared with 20 under the PR 207 renderer. **159 remain unestablished.** These are counterfactual checker outcomes, not accuracy scores or proof of the model's original propositions. No model, tool, correction or live agent ran during this comparison; ratings remain stopped.
 
 The [comparison runner](COMPARE-EVIDENCE-OWNED.md) feeds each renderer the same original candidate and saved native record. The new renderer derives the statement's kind and subject from that evidence. Model `kind` and `about` values are advisory; the runner neither rewrites them nor uses fuzzy subject matching. The [aggregate JSON](evidence-owned-results.json) records every code transition by model, cell and arm. Historical reports and all original bank, registration and recording files remain unchanged.

@@ -50,8 +50,11 @@ async function run(display?: unknown) {
         type: 'array',
         items: {
           type: 'object',
-          properties: { restsOn: { type: 'array', items: { type: 'string' } } },
-          required: ['restsOn'],
+          properties: {
+            kind: { type: 'string' },
+            restsOn: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['kind', 'restsOn'],
         },
       },
     },
@@ -62,7 +65,7 @@ async function run(display?: unknown) {
     provider: mock({
       replies: [
         { content: '', toolCalls: [{ id: 'read', name: 'read_incidents', args: {} }] },
-        { content: JSON.stringify({ negatives: [{ restsOn: ['r1'] }] }) },
+        { content: JSON.stringify({ negatives: [{ kind: 'complete', restsOn: ['r1'] }] }) },
       ],
     }),
   }).tool(tool);

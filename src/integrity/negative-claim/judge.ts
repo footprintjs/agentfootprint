@@ -19,7 +19,7 @@ import type { Disposition } from '../disposition/types.js';
 import { judgeCitation, MAX_CITED_READS, type CitationVerdict } from './citation.js';
 import { MAX_NEGATIVE_CLAIMS } from './limits.js';
 import { composeStatement } from './statement.js';
-import type { TurnRecord, TypedJudgement, TypedVerdict } from './types.js';
+import type { CitationInterpretation, TurnRecord, TypedJudgement, TypedVerdict } from './types.js';
 
 export { MAX_CITED_READS };
 export { MAX_NEGATIVE_CLAIMS };
@@ -54,8 +54,9 @@ export interface TypedCheckInput {
   readonly record: TurnRecord;
   /** The tools the app lets a claim cite (`.negativeClaims({ tools })`). */
   readonly citable?: readonly string[];
-  /** Runtime interpretation derives facts from native reads; legacy pure comparisons remain explicit. */
-  readonly interpretation?: 'evidence-owned';
+  /** Internal staged comparison: corrected kind only, then the recorded-subject label check.
+   * Omitted retains the historical explicit-kind/exact-about pure interpretation. */
+  readonly interpretation?: CitationInterpretation;
 }
 
 /** A repeated claim is judged once (its stable JSON is the key); a key that cannot be made, every time. */

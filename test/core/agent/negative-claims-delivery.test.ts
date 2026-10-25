@@ -147,11 +147,51 @@ describe('delivered negative statements explain the actual failure', () => {
   }
 });
 
+describe('complete-list fallback must independently establish the narrower absence', () => {
+  const partial = () =>
+    incidentCall({
+      complete: false,
+      gaps: [{ kind: 'scope', what: 'the secondary partition', bears: 'completeness' }],
+    });
+  const completeClaim = { negatives: [{ kind: 'complete', about: 'payments', restsOn: ['r1'] }] };
+  const notice = 'The requested complete-list claim is not established; only this absence is.';
+
+  it('keeps the complete verdict failed and includes the remaining gap', () => {
+    const result = render([partial()], { value: completeClaim });
+    expect(result.answer.checks[0]).toMatchObject({ kind: 'complete', code: 'search-incomplete' });
+    expect(result.answer.claims[0]?.statement).toContain(notice);
+    expect(result.answer.claims[0]?.statement).toContain('the secondary partition');
+    expect(result.answer.delivery).toBe('recorded');
+    const withheld = renderNegativeCandidate(
+      completeClaim,
+      { ...config, unestablished: 'withhold' },
+      turnRecord([partial()]),
+      () => true,
+    );
+    expect(withheld.allowed).toBe(false);
+    expect(withheld.answer.delivery).toBe('fallback');
+  });
+
+  for (const [name, later] of [
+    ['write', incidentCall({ id: 'c2', effect: 'not-read', outcome: 'error' })],
+    ['failed reread', incidentCall({ id: 'c2', outcome: 'error' })],
+    ['contrary rows', incidentCall({ id: 'c2', emptiness: 'non-empty', rows: 1 })],
+  ] as const) {
+    it(`does not establish the narrower absence after a later ${name}`, () => {
+      const result = render([partial(), later], { value: completeClaim });
+      expect(result.answer.checks[0]?.code).not.toBe('established');
+      expect(result.answer.claims[0]?.statement).not.toContain(notice);
+      expect(result.answer.claims[0]?.statement).not.toContain('found none');
+      expect(result.answer.delivery).toBe('recorded');
+    });
+  }
+});
+
 describe('delivery markers describe the whole candidate', () => {
   it('reserves as-checked for a candidate containing only established negative fields', () => {
-    const value = { negatives: [{ restsOn: ['r1'] }] };
+    const value = { negatives: [{ kind: 'none', restsOn: ['r1'] }] };
     expect(render([incidentCall()], { value }).answer.delivery).toBe('as-checked');
-    expect(render([incidentCall()]).answer.delivery).toBe('recorded');
+    expect(render([incidentCall()]).answer.delivery).toBe('as-checked');
   });
   for (const extra of [
     { summary: 'Everything is fine.' },
@@ -181,20 +221,22 @@ describe('delivery markers describe the whole candidate', () => {
   }
 });
 
-describe('about stays model data, never a new evidence binding', () => {
-  it('keeps the original about data and quotes only the statement', () => {
+describe('about is checked against the read and replaced by its recorded subject', () => {
+  it('keeps the recorded subject plain in data and quotes only the statement', () => {
     const raw = 'pay\u202ements\n`admin`';
-    const result = render([incidentCall({ service: raw })], { value: candidate(raw) });
+    const result = render([incidentCall({ service: raw })], {
+      value: { negatives: [{ kind: 'none', restsOn: ['r1'] }] },
+    });
     expect(result.answer.checks[0]?.code).toBe('established');
     expect(result.answer.claims[0]?.about).toBe(raw);
     expect(result.answer.claims[0]?.statement).toContain(quoteValue(raw));
     expect(result.answer.claims[0]?.statement).not.toMatch(/[\p{Cc}\p{Cf}]/u);
   });
-  it('ignores model display text and composes the recorded subject', () => {
+  it('rejects a hidden-character mismatch and composes only the recorded subject', () => {
     const result = render([incidentCall()], { value: candidate('pay\u202ements') });
-    expect(result.answer.checks[0]?.code).toBe('established');
-    expect(result.answer.claims[0]?.about).toBe('pay\u202ements');
-    expect(result.answer.claims[0]?.statement).toContain('found none');
+    expect(result.answer.checks[0]?.code).toBe('about-mismatch');
+    expect(result.answer.claims[0]?.about).toBe('payments');
+    expect(result.answer.claims[0]?.statement).not.toContain('found none');
     expect(result.answer.claims[0]?.statement).toContain('`payments`');
     expect(result.answer.claims[0]?.statement).not.toContain('pay\u202ements');
     expect(result.answer.delivery).toBe('recorded');

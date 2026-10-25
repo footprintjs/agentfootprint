@@ -38,8 +38,11 @@ const SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { restsOn: { type: 'array', items: { type: 'string' } } },
-        required: ['restsOn'],
+        properties: {
+          kind: { type: 'string' },
+          restsOn: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['kind', 'restsOn'],
         additionalProperties: false,
       },
     },
@@ -50,7 +53,12 @@ const SCHEMA = {
 const PARSER = {
   parse(value: unknown): { negatives: NegativeClaimCitation[] } {
     const data = value as { negatives?: NegativeClaimCitation[] } | null;
-    if (!Array.isArray(data?.negatives) || data.negatives.some((c) => !Array.isArray(c.restsOn)))
+    if (
+      !Array.isArray(data?.negatives) ||
+      data.negatives.some(
+        (c) => !['none', 'not-found', 'complete'].includes(c.kind) || !Array.isArray(c.restsOn),
+      )
+    )
       throw new Error('Expected evidence pointers.');
     return { negatives: data.negatives };
   },
@@ -105,10 +113,9 @@ async function runFixture(
             },
           ],
         },
-        { content: JSON.stringify({ negatives: [{ restsOn: ['r1'] }] }) },
-        // A guessed handle on the raw-empty control remains unresolved after
-        // the one real tools-off correction; it must not cause another read.
-        { content: JSON.stringify({ negatives: [{ restsOn: ['r1'] }] }) },
+        { content: JSON.stringify({ negatives: [{ kind: 'none', restsOn: ['r1'] }] }) },
+        // The native ordinal diagnoses raw emptiness without minting a served handle
+        // or needing another model/tool call.
       ],
     }),
   })
@@ -181,16 +188,16 @@ describe('separately authored declared-absence counterpart', () => {
       trustedContext: true,
     });
     expect(result.native?.row).toBeUndefined();
-    expect(result.checks?.[0].code).toBe('citation-unresolved');
+    expect(result.checks?.[0].code).toBe('undeclared-empty');
   });
 
   it('does not upgrade the raw-empty control when its recorded search is stated', async () => {
     const result = await runFixture('profiled-raw-empty-control', 'state-searched');
     expect(result.error).toBeUndefined();
     expect(result.executions).toBe(1);
-    expect(result.answer?.negatives[0].kind).toBe('unknown');
+    expect(result.answer?.negatives[0].kind).toBe('none');
     expect(result.native?.row).toBeUndefined();
-    expect(result.checks?.[0].code).toBe('citation-unresolved');
+    expect(result.checks?.[0].code).toBe('undeclared-empty');
     expect(result.checks?.some((c) => c.code === 'established')).toBe(false);
   });
 });
