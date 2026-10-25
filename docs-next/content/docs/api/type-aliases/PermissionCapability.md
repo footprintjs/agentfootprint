@@ -6,7 +6,7 @@ title: PermissionCapability
 
 > **PermissionCapability** = [`ToolCapability`](/docs/api/type-aliases/ToolCapability) \| `"tool_call"` \| `"skill_read"`
 
-Defined in: [src/provider-contract/types.ts:837](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L837)
+Defined in: [src/provider-contract/types.ts:845](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L845)
 
 The full vocabulary a [PermissionRequest](/docs/api/interfaces/PermissionRequest) can carry.
 

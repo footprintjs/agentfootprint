@@ -43,7 +43,10 @@ import type { ThinkingHandler, ThinkingMode } from '../thinking/types.js';
 import { dispatchThinkingHandler, tagThinkingResponse } from '../thinking/dispatch.js';
 import { DEFAULT_CARRIES_IN_MESSAGES } from '../provider-contract/types.js';
 import { forcedToolChoiceFor } from '../provider-contract/forcedToolChoice.js';
-import { nativeOutputSchemaFor } from '../provider-contract/nativeOutputSchema.js';
+import {
+  autoNativeOutputSchemaFor,
+  nativeOutputSchemaFor,
+} from '../provider-contract/nativeOutputSchema.js';
 import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { replayAttempts } from './replayAttempt.js';
 import { requestAttempt } from '../provider-contract/requestObserver.js';
@@ -281,6 +284,14 @@ export function withFallback(
       ? {
           supportsNativeOutputSchema: (model: string) =>
             nativeOutputSchemaFor(primary, model) && nativeOutputSchemaFor(fallback, model),
+        }
+      : {}),
+    // Unknown on either side stays unknown to automatic selection.
+    ...(primary.supportsAutoNativeOutputSchema !== undefined ||
+    fallback.supportsAutoNativeOutputSchema !== undefined
+      ? {
+          supportsAutoNativeOutputSchema: (model: string) =>
+            autoNativeOutputSchemaFor(primary, model) && autoNativeOutputSchemaFor(fallback, model),
         }
       : {}),
     // The combination, not the intersection — see `cachingOfPair`.

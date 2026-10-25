@@ -74,7 +74,17 @@ export interface OutputSchemaParser<T> {
 /**
  * How the schema reaches the model.
  *
- *   • `'instruct'` (default) — the shape is described in the system prompt
+ *   • `'auto'` (default) — use native structured output when the effective
+ *     provider positively declares that known model supports it and an explicit
+ *     or parser-derived JSON Schema
+ *     can be lowered safely. Otherwise use instruction plus local validation.
+ *     Selection is repeated for configured models and reliability fallbacks;
+ *     `answerGuarantee` records the strategy actually used. No extra retry is
+ *     introduced. An unavailable schema or known native-schema refusal falls
+ *     back; unexpected wire-lowering errors still throw. Unknown/opaque model
+ *     names stay on instructions. Set `'instruct'` to retain the previous
+ *     generation strategy explicitly. API errors never trigger a downgrade.
+ *   • `'instruct'` — the shape is described in the system prompt
  *     and the model is asked for JSON. Works on every provider, because it
  *     is only words.
  *   • `'tool-forced'` — the shape is presented as a synthetic tool and the
@@ -101,7 +111,7 @@ export interface OutputSchemaParser<T> {
  *     `'max_tokens'` or `'model_context_window_exceeded'` fails the attempt by
  *     name even when the text parses (a refusal is not re-asked).
  */
-export type OutputSchemaStrategy = 'instruct' | 'tool-forced' | 'native';
+export type OutputSchemaStrategy = 'auto' | 'instruct' | 'tool-forced' | 'native';
 
 /**
  * Optional configuration for `outputSchema`.
@@ -139,17 +149,18 @@ export interface OutputSchemaOptions {
    */
   readonly retries?: number;
   /**
-   * How the schema reaches the model. Default `'instruct'`.
+   * How the schema reaches the model. Default `'auto'`.
    * See {@link OutputSchemaStrategy}.
    */
   readonly strategy?: OutputSchemaStrategy;
   /**
    * The JSON Schema for the synthetic tool (`strategy: 'tool-forced'`) or
-   * for the provider's structured output (`strategy: 'native'`), required by
-   * both unless the parser can produce one itself
-   * (a `toJsonSchema()` method, which ArkType has). The library will not
+   * for the provider's structured output (`strategy: 'native'` or `'auto'`).
+   * Required by explicit native and tool-forced unless the parser can produce
+   * one itself (a `toJsonSchema()` method, which ArkType has). The library will not
    * infer a shape from a `parse()` function — guessing what your schema
-   * means is not a thing it gets to do.
+   * means is not a thing it gets to do. Under `'auto'`, absence keeps instruction
+   * plus local validation without a native guarantee.
    *
    * @example  `'native'` on Anthropic
    *   .outputSchema(Verdict, {
@@ -211,6 +222,15 @@ export function buildDefaultInstruction(parser: OutputSchemaParser<unknown>): st
   );
 }
 
+/** Remove one whole-answer JSON/unlabelled fence, never prose or JSON content.
+ * A fence has its own opening and closing lines. Any nested or additional
+ * wrapper remains in the body and is rejected by the strict JSON parser. */
+function jsonAnswerText(raw: string): string {
+  const fenced =
+    /^[ \t\r\n]*```[ \t]*(?:json[ \t]*)?\r?\n([\s\S]*?)\r?\n[ \t]*```[ \t\r\n]*$/i.exec(raw);
+  return fenced?.[1] ?? raw;
+}
+
 /**
  * Parse + validate a raw string answer against a parser. Used by
  * `agent.parseOutput()` / `agent.runTyped()`. Centralized here so
@@ -225,7 +245,7 @@ export function buildDefaultInstruction(parser: OutputSchemaParser<unknown>): st
 export function applyOutputSchema<T>(raw: string, parser: OutputSchemaParser<T>): T {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(jsonAnswerText(raw));
   } catch (cause) {
     throw new OutputSchemaError(
       'Agent final answer is not valid JSON. The LLM emitted prose or malformed JSON.',

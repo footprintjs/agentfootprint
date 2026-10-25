@@ -27,3 +27,5 @@ read it without importing any implementation. It imports only the
 vocabularies below it (`events/`, `thinking/`, `cache/`); `adapters/`
 implements it and nothing below `adapters/` imports `adapters/`
 (`npm run check:layering`).
+
+Automatic native output additionally requires `LLMProvider.supportsAutoNativeOutputSchema(model)` to return true. This positive knowledge declaration is separate from the existing forward-compatible `supportsNativeOutputSchema` contract: an unknown model or a missing auto declaration stays on instructions. Retry/circuit wrappers forward it; fallback pairs intersect it.

@@ -4,7 +4,7 @@ title: OutputSchemaOptions
 
 # Interface: OutputSchemaOptions
 
-Defined in: [src/answer-validation/outputSchema.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L109)
+Defined in: [src/answer-validation/outputSchema.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L119)
 
 Optional configuration for `outputSchema`.
 
@@ -14,7 +14,7 @@ Optional configuration for `outputSchema`.
 
 > `readonly` `optional` **instruction?**: `string`
 
-Defined in: [src/answer-validation/outputSchema.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L124)
+Defined in: [src/answer-validation/outputSchema.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L134)
 
 Custom system-prompt instruction text. Defaults to a generic
 "Respond with valid JSON matching the output schema. Do not
@@ -28,14 +28,15 @@ domain-specific framing.
 
 > `readonly` `optional` **jsonSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/answer-validation/outputSchema.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L172)
+Defined in: [src/answer-validation/outputSchema.ts:183](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L183)
 
 The JSON Schema for the synthetic tool (`strategy: 'tool-forced'`) or
-for the provider's structured output (`strategy: 'native'`), required by
-both unless the parser can produce one itself
-(a `toJsonSchema()` method, which ArkType has). The library will not
+for the provider's structured output (`strategy: 'native'` or `'auto'`).
+Required by explicit native and tool-forced unless the parser can produce
+one itself (a `toJsonSchema()` method, which ArkType has). The library will not
 infer a shape from a `parse()` function — guessing what your schema
-means is not a thing it gets to do.
+means is not a thing it gets to do. Under `'auto'`, absence keeps instruction
+plus local validation without a native guarantee.
 
 #### Example
 
@@ -65,7 +66,7 @@ judge.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/answer-validation/outputSchema.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L116)
+Defined in: [src/answer-validation/outputSchema.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L126)
 
 Injection id for the auto-generated "respond with this shape"
 instruction. Defaults to `'output-schema'`. Override when you
@@ -78,7 +79,7 @@ want the diagnostic events to disambiguate.
 
 > `readonly` `optional` **retries?**: `number`
 
-Defined in: [src/answer-validation/outputSchema.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L140)
+Defined in: [src/answer-validation/outputSchema.ts:150](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L150)
 
 How many corrective re-asks the run may spend when the final answer
 fails the schema. Default `0` — the historical behaviour, where the
@@ -100,7 +101,7 @@ composes on top, unchanged.
 
 > `readonly` `optional` **strategy?**: [`OutputSchemaStrategy`](/docs/api/type-aliases/OutputSchemaStrategy)
 
-Defined in: [src/answer-validation/outputSchema.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L145)
+Defined in: [src/answer-validation/outputSchema.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L155)
 
-How the schema reaches the model. Default `'instruct'`.
+How the schema reaches the model. Default `'auto'`.
 See [OutputSchemaStrategy](/docs/api/type-aliases/OutputSchemaStrategy).

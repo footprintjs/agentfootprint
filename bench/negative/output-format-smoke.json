@@ -1,0 +1,32 @@
+{
+  "calls": 6,
+  "modelCounts": {
+    "claude-haiku-4-5-20251001": 3,
+    "claude-sonnet-4-6": 3
+  },
+  "nativeWire": 6,
+  "validJsonAndSchema": 6,
+  "formatOnlyAnswers": 2,
+  "libraryWrittenClaimAnswers": 2,
+  "withheldKindMismatch": 2,
+  "actualToolsOffCorrections": 2,
+  "repeatedToolExecutions": 0,
+  "settledUsd": 0.014708,
+  "uncertainUsd": 0,
+  "priorUsedOrReservedUsd": 3.485721,
+  "totalUsedOrReservedUsd": 3.500429,
+  "remainingUnder4_30Usd": 0.799571,
+  "files": {
+    "live-results.json": "5339b51d856c1f8b00c1b4b50e5e2238b9676c6f388192f0ae3124ff7c6acae1",
+    "live-remaining-results.json": "03854086740991f081394a23fb8b1300e2c44732f01ce0a15054735caccf546a",
+    "budget.jsonl": "d77b5905c6c853e461b2426aa9e356118506d689f1ea11c3aae35f7a6388e16b",
+    "smoke.mjs": "e392142515e30e7479192013221d22d7852df18caf32e5fb226c8d2022eb6d85",
+    "smoke-remaining.mjs": "35f4a56c8c7ef233b8a8a0e840ed36ca1c887b0e92c21904c86a4016ad659d5e"
+  },
+  "limitations": [
+    "Tool selection and bad initial citations were scripted; only terminal/correction responses were live.",
+    "No failed case was retried or excluded. The first invocation stopped after the fifth case failed its delivery assertion; the last originally planned case ran separately unchanged, against the same ledger.",
+    "Successful format enforcement does not establish factual accuracy or semantic citation validity.",
+    "Rejected Sonnet replies returned no final streamed tokens and no conversation-memory entries; their raw drafts were absent from conversation history."
+  ]
+}

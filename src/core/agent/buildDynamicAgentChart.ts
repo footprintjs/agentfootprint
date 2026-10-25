@@ -846,10 +846,13 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // Atomic tuple + Replace below: never merge a former layout or
           // binding into a new provider proof. Present undefined clears it.
           ...(Object.hasOwn(s, 'llmLatestReplay') && { llmLatestReplay: s.llmLatestReplay }),
-          // `'native'` output strategy only — absent otherwise, so the mapper
+          // Native output candidates only — absent otherwise, so the mapper
           // is byte-identical for every other agent (see AgentState).
           ...(Object.hasOwn(s, 'llmLatestStopReason') && {
             llmLatestStopReason: s.llmLatestStopReason,
+          }),
+          ...(Object.hasOwn(s, 'llmLatestNativeOutput') && {
+            llmLatestNativeOutput: s.llmLatestNativeOutput,
           }),
           // The window this turn actually sent, back to the outer scope — so
           // the next iteration's window stage and the ToolCalls stage extend
