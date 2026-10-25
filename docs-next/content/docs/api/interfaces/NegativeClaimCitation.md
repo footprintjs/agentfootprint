@@ -4,12 +4,11 @@ title: NegativeClaimCitation
 
 # Interface: NegativeClaimCitation
 
-Defined in: [src/core/agent/negativeClaims/config.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L50)
+Defined in: [src/core/agent/negativeClaims/config.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L49)
 
-A model pointer to recorded evidence. The runtime derives the claim kind and
-searched subject from the cited reads, then writes the delivered statement.
-New app schemas need only restsOn. Legacy kind/about fields may remain in an
-app's schema/parser, but never select the evidence interpretation.
+A model-selected claim checked against recorded evidence. Only the absence
+family may be normalized from the read; a negative never becomes completeness.
+The delivered subject and statement come from the admitted search.
 
 ## Properties
 
@@ -17,19 +16,19 @@ app's schema/parser, but never select the evidence interpretation.
 
 > `readonly` `optional` **about?**: `string` \| `number`
 
-Defined in: [src/core/agent/negativeClaims/config.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L54)
+Defined in: [src/core/agent/negativeClaims/config.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L53)
 
-Optional model-written display text, never an evidence identity or checked subject.
+Optional subject phrase. It must include the recorded subject; never delivered as a label.
 
 ***
 
-### kind?
+### kind
 
-> `readonly` `optional` **kind?**: `"none"` \| `"not-found"` \| `"complete"`
+> `readonly` **kind**: `"none"` \| `"not-found"` \| `"complete"`
 
-Defined in: [src/core/agent/negativeClaims/config.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L52)
+Defined in: [src/core/agent/negativeClaims/config.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L51)
 
-Legacy format hint only; ignored when interpreting evidence.
+Selects the proposition to check; complete must be requested explicitly.
 
 ***
 
@@ -37,4 +36,4 @@ Legacy format hint only; ignored when interpreting evidence.
 
 > `readonly` **restsOn**: readonly `string`[]
 
-Defined in: [src/core/agent/negativeClaims/config.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L55)
+Defined in: [src/core/agent/negativeClaims/config.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L54)

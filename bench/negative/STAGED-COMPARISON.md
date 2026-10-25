@@ -1,5 +1,7 @@
 # Sequential free comparison after the #208 review correction
 
+The completed [results report](kind-subject-followup.md) and [aggregate JSON](staged-kind-subject-results.json) record the staged outcomes and build provenance.
+
 The earlier [evidence-owned report](evidence-owned-followup.md) and its aggregate are
 superseded. They used a renderer that could turn a requested absence into a positive
 complete-list statement and could ignore a conflicting model subject. Their original

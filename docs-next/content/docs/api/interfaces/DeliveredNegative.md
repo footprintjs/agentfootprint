@@ -16,8 +16,8 @@ One library-written negative statement, shared by delivery and its event.
 
 Defined in: [src/events/payloads.ts:3713](https://github.com/footprintjs/agentfootprint/blob/main/src/events/payloads.ts#L3713)
 
-Unchecked model display text. It never selects a subject or evidence. Quote and label it
-as model wording when rendered; the library statement names the actual searched scope.
+The single public population value derived from admitted searches, never model wording.
+Omitted for multiple or unknown subjects; their individual scopes remain in the statement.
 
 ***
 
