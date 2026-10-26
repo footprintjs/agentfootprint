@@ -3708,7 +3708,8 @@ export interface IntegrityExternalGroundUsedPayload {
 /** One library-written negative statement, shared by delivery and its event. */
 export interface DeliveredNegative {
   readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
-  /** Original model citation value. Quote only when rendering it as text; not an evidence identity. */
+  /** The single public population value derived from admitted searches, never model wording.
+   * Omitted for multiple or unknown subjects; their individual scopes remain in the statement. */
   readonly about?: string | number;
   readonly restsOn: readonly string[];
   readonly statement: string;
@@ -3727,6 +3728,8 @@ export interface AnswerNegativesPayload {
     readonly path: string;
     readonly index: number;
     readonly kind: 'none' | 'not-found' | 'complete' | 'unknown';
+    /** Audit-only: none/not-found was normalized over an explicitly declared absence. */
+    readonly notes?: readonly 'absence-kind-normalized'[];
     readonly code: string;
     readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
     readonly tools: readonly string[];

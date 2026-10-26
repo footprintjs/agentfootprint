@@ -4,6 +4,11 @@
 import { readResultIdentity } from '../../../integrity/claim-binding/capture.js';
 import { MAX_NEGATIVE_CLAIMS } from '../../../integrity/negative-claim/limits.js';
 import { judgeTypedNegatives } from '../../../integrity/negative-claim/judge.js';
+import {
+  derivedSubjects,
+  populationsMayOverlap,
+  sameRecordedSubject,
+} from '../../../integrity/negative-claim/derive.js';
 import { sameValue, scopeOf, returnedReading } from '../../../integrity/negative-claim/readings.js';
 import {
   composeRecordedStatement,
@@ -29,6 +34,8 @@ export type RuntimeNegativeCode =
 export interface RuntimeNegativeRow extends Omit<TypedNegativeRow, 'code' | 'disposition'> {
   readonly code: RuntimeNegativeCode;
   readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
+  /** Audit-only notice; it cannot confirm, block or select evidence. */
+  readonly notes?: readonly 'absence-kind-normalized'[];
 }
 import type { DeliveredNegative } from '../../../events/payloads.js';
 export type { DeliveredNegative } from '../../../events/payloads.js';
@@ -36,17 +43,6 @@ export type AnswerNegatives = import('../../../events/payloads.js').AnswerNegati
 const HANDLE = /^r[1-9][0-9]{0,3}$/;
 const own = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
-const aboutFits = (about: unknown, call: TurnCall): boolean =>
-  (scopeOf(call) ?? []).some(
-    (item) =>
-      item.facet === 'population' &&
-      [item.value, item.resolved?.id, item.resolved?.name, ...(item.resolved?.aliases ?? [])].some(
-        (value) => value !== undefined && sameValue(value, about),
-      ),
-  );
-const subject = (call: TurnCall): unknown =>
-  (scopeOf(call) ?? []).find((item) => item.facet === 'subject')?.what;
-
 /** Only an explicit field on every observed row proves a peer outside scope.
  * An unknown row shape, missing field or unscoped reading is conservative. */
 function rowsOutside(other: TurnCall, cited: TurnCall): boolean {
@@ -88,10 +84,14 @@ const REFUSALS: Readonly<Record<Exclude<RuntimeNegativeCode, 'established'>, str
     "I don't know. The cited coverage was not composed by this runtime from a trusted local search declaration.",
   'call-not-read':
     "I don't know. The cited call did not establish a read that can support this claim.",
+  'undeclared-empty':
+    "I don't know. The recorded result was an empty list without a declaration of absence or coverage.",
+  'evidence-kind-undetermined':
+    "I don't know. The cited reads do not establish one supported kind of scoped fact.",
   'kind-mismatch':
     "I don't know. This kind of negative claim does not match what the cited search established.",
   'about-mismatch':
-    "I don't know. The model's cited subject does not match the population the admitted search actually covered.",
+    "I don't know. The claim's subject does not include the population the admitted search actually covered.",
   'record-incomplete':
     "I don't know. The available execution record is incomplete, so it cannot establish this claim.",
   'stale-turn':
@@ -116,13 +116,12 @@ function refusalFor(row: RuntimeNegativeRow): string {
   );
 }
 
-const positivePeer = (other: TurnCall, cited: TurnCall, about: unknown): boolean =>
+const positivePeer = (other: TurnCall, cited: TurnCall): boolean =>
   other.resultId !== cited.resultId &&
   returnedReading(other) &&
   other.emptiness === 'non-empty' &&
-  subject(cited) !== undefined &&
-  sameValue(subject(other), subject(cited)) &&
-  aboutFits(about, other) &&
+  sameRecordedSubject(other, cited) &&
+  populationsMayOverlap(other, cited) &&
   !rowsOutside(other, cited);
 
 export function renderNegativeCandidate(
@@ -130,6 +129,7 @@ export function renderNegativeCandidate(
   config: NegativeDeliveryConfig,
   record: TurnRecord,
   trusted: (call: TurnCall) => boolean,
+  interpretation: 'kind-only' | 'evidence-owned' = 'evidence-owned',
 ): { candidate: unknown; answer: AnswerNegatives; correction: boolean; allowed: boolean } {
   const source = copyJson(candidate, 1024 * 1024, false);
   if (!own(source)) throw new Error('A negative-claims answer must be a JSON object.');
@@ -143,6 +143,7 @@ export function renderNegativeCandidate(
     negatives: rawEntries,
     record,
     citable: config.tools,
+    interpretation,
   });
   const checks: RuntimeNegativeRow[] = [];
   const claims: DeliveredNegative[] = [];
@@ -158,11 +159,13 @@ export function renderNegativeCandidate(
     const validShape =
       validList &&
       own(raw) &&
-      validAbout &&
+      (entry.about === undefined || validAbout) &&
       refs.length > 0 &&
       refs.length <= 16 &&
       refs.every((ref) => typeof ref === 'string' && HANDLE.test(ref)) &&
       Object.keys(entry).every((key) => ['kind', 'about', 'restsOn'].includes(key));
+    const validKind =
+      typeof entry.kind === 'string' && ['none', 'not-found', 'complete'].includes(entry.kind);
     const reads = refs.flatMap((ref) => record.calls.filter((call) => call.row?.handle === ref));
     let row = judgments[i].row as RuntimeNegativeRow;
     const fail = (
@@ -178,14 +181,13 @@ export function renderNegativeCandidate(
           : 'citation-unresolved',
       );
     else if (!validShape) fail('citation-unresolved');
+    else if (!validKind) fail('kind-mismatch');
     else if (row.code === 'established') {
-      if (reads.length === 0 || !reads.every((call) => aboutFits(about, call)))
-        fail('about-mismatch');
-      else if (!reads.every(trusted)) fail('outside-trusted-context');
+      if (reads.length === 0 || !reads.every(trusted)) fail('outside-trusted-context');
       else if (
         record.calls.some(
           (other) =>
-            other.turn === record.turn && reads.some((cited) => positivePeer(other, cited, about)),
+            other.turn === record.turn && reads.some((cited) => positivePeer(other, cited)),
         )
       )
         fail('other-read-has-rows', 'checked-fail');
@@ -197,7 +199,6 @@ export function renderNegativeCandidate(
       reads.every(
         (call) =>
           trusted(call) &&
-          aboutFits(about, call) &&
           call.turn <= record.turn &&
           config.tools.includes(call.toolName) &&
           call.row?.composed === 'local' &&
@@ -216,7 +217,7 @@ export function renderNegativeCandidate(
               other.keptOut !== true &&
               config.tools.includes(other.toolName) &&
               !reads.some((read) => read.resultId === other.resultId) &&
-              reads.some((cited) => positivePeer(other, cited, about)),
+              reads.some((cited) => positivePeer(other, cited)),
           )
         : [];
     if (contrary.length > 0)
@@ -225,7 +226,7 @@ export function renderNegativeCandidate(
         results: [...new Set([...row.results, ...contrary.map((call) => call.resultId)])],
       };
     const refusal = refusalFor(row);
-    const statement = established
+    let statement = established
       ? judgments[i].statement?.text
       : canDescribe
       ? composeRecordedStatement(
@@ -245,11 +246,40 @@ export function renderNegativeCandidate(
           },
         ).text
       : refusal;
+    // A partial absence cannot satisfy a complete-list request. Only describe
+    // that narrower fact as established if it independently passes every guard.
+    if (
+      entry.kind === 'complete' &&
+      row.code === 'search-incomplete' &&
+      canDescribe &&
+      reads.every((call) => call.emptiness === 'declared-absent')
+    ) {
+      const absence = renderNegativeCandidate(
+        { [config.field]: [{ ...entry, kind: 'none' }] },
+        config,
+        record,
+        trusted,
+        interpretation,
+      );
+      if (absence.answer.checks[0]?.code === 'established') {
+        statement =
+          'The requested complete-list claim is not established; only this absence is. ' +
+          absence.answer.claims[0].statement;
+      }
+    }
+    if (
+      row.kind !== 'unknown' &&
+      (entry.kind === 'none' || entry.kind === 'not-found') &&
+      (row.kind === 'none' || row.kind === 'not-found') &&
+      entry.kind !== row.kind
+    )
+      row = { ...row, notes: ['absence-kind-normalized'] };
     checks.push(row);
     correction ||= row.code === 'citation-unresolved' || row.code === 'stale-turn';
+    const subjects = canDescribe || established ? derivedSubjects(reads) : [];
     claims.push({
       kind: row.kind,
-      ...(validAbout ? { about: about as string | number } : {}),
+      ...(subjects.length === 1 ? { about: subjects[0] } : {}),
       restsOn:
         canDescribe || established
           ? [...reads, ...contrary].map(

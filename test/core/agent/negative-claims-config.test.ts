@@ -81,7 +81,7 @@ describe('negativeClaims configuration', () => {
 });
 
 describe('negativeClaims model citation schema', () => {
-  it('serves bounded handles and required about while preserving unrelated fields and the authored schema', () => {
+  it('serves bounded handles while preserving claim fields and the authored schema', () => {
     const input = schema();
     const before = structuredClone(input);
     const output = negativeClaimsSchema(config, input);
@@ -118,15 +118,40 @@ describe('negativeClaims model citation schema', () => {
     expect(() => negativeClaimsSchema(config, input)).toThrow(/must be required/);
   });
 
-  it('requires about and refuses delivered fields in the model contract', () => {
+  it('requires kind and pointers and refuses delivered fields in the model contract', () => {
     const input = schema();
-    input.properties.negatives.items.required = ['kind', 'restsOn'];
-    expect(() => negativeClaimsSchema(config, input)).toThrow(/require kind, about and restsOn/);
+    input.properties.negatives.items.required = ['kind', 'about'];
+    expect(() => negativeClaimsSchema(config, input)).toThrow(/require kind and restsOn/);
     const delivered = schema();
     Object.assign(delivered.properties.negatives.items.properties, {
       statement: { type: 'string' },
     });
     expect(() => negativeClaimsSchema(config, delivered)).toThrow(/library-owned/);
+  });
+
+  it('rejects a pointer-only schema instead of choosing a claim for the model', () => {
+    const input = schema();
+    const item = input.properties.negatives.items;
+    Reflect.deleteProperty(item.properties, 'kind');
+    Reflect.deleteProperty(item.properties, 'about');
+    item.required = ['restsOn'];
+    expect(() => negativeClaimsSchema(config, input)).toThrow(/require kind and restsOn/);
+  });
+
+  it('allows kind and handles without a model subject phrase', () => {
+    const input = schema();
+    const item = input.properties.negatives.items;
+    Reflect.deleteProperty(item.properties, 'about');
+    item.required = ['kind', 'restsOn'];
+    const output = negativeClaimsSchema(config, input);
+    expect(output).toMatchObject({
+      properties: { negatives: { items: { required: ['kind', 'restsOn'] } } },
+    });
+    const fields = (
+      output.properties as Record<string, { items: { properties: Record<string, unknown> } }>
+    ).negatives.items.properties;
+    expect(Object.keys(fields)).toEqual(['kind', 'restsOn']);
+    expect(negativeClaimsInstruction(config, output)).toContain('The library verifies that claim');
   });
 
   it('does not silently reinterpret nullable about, references, or another citation grammar', () => {

@@ -43,10 +43,14 @@ export type NegativeClaimsOptions = (
   readonly phrases?: NegativeClaimPhraseExtensions;
 };
 
-/** What the model may put in one entry. The runtime owns every delivered statement. */
+/** A model-selected claim checked against recorded evidence. Only the absence
+ * family may be normalized from the read; a negative never becomes completeness.
+ * The delivered subject and statement come from the admitted search. */
 export interface NegativeClaimCitation {
+  /** Selects the proposition to check; complete must be requested explicitly. */
   readonly kind: 'none' | 'not-found' | 'complete';
-  readonly about: string | number;
+  /** Optional subject phrase. It must include the recorded subject; never delivered as a label. */
+  readonly about?: string | number;
   readonly restsOn: readonly string[];
 }
 
@@ -200,8 +204,15 @@ export function negativeClaimsSchema(
     );
   }
   const required = item.required;
-  if (!Array.isArray(required) || FIELDS.some((key) => !required.includes(key))) {
-    return fail(`'${config.field}' entries must require kind, about and restsOn.`);
+  if (
+    !Array.isArray(required) ||
+    !required.includes('kind') ||
+    !required.includes('restsOn') ||
+    required.some((key) => typeof key !== 'string' || !Object.hasOwn(fields, key))
+  ) {
+    return fail(
+      `'${config.field}' entries must require kind and restsOn and declare each required property.`,
+    );
   }
   const kind = schemaObject(fields.kind, 'kind');
   if (
@@ -213,13 +224,15 @@ export function negativeClaimsSchema(
   ) {
     return fail("kind must be a string restricted to 'none', 'not-found' or 'complete'.");
   }
-  const about = schemaObject(fields.about, 'about');
-  const aboutTypes = Array.isArray(about.type) ? about.type : [about.type];
+  const about = fields.about === undefined ? undefined : schemaObject(fields.about, 'about');
+  const aboutTypes =
+    about === undefined ? [] : Array.isArray(about.type) ? about.type : [about.type];
   if (
-    aboutTypes.length === 0 ||
-    aboutTypes.some((type) => !['string', 'number', 'integer'].includes(type))
+    about !== undefined &&
+    (aboutTypes.length === 0 ||
+      aboutTypes.some((type) => !['string', 'number', 'integer'].includes(type)))
   ) {
-    return fail('about must declare a string or number, never null or an optional value.');
+    return fail('about must declare a string or number, never null.');
   }
   const restsOn = schemaObject(fields.restsOn, 'restsOn');
   const handle = schemaObject(restsOn.items, 'restsOn.items');
@@ -252,7 +265,7 @@ export function negativeClaimsSchema(
     return fail('restsOn must permit at least one handle.');
   handle.pattern = NEGATIVE_HANDLE_PATTERN;
   kind.enum ??= [...KINDS];
-  if (aboutTypes.includes('string')) {
+  if (about !== undefined && aboutTypes.includes('string')) {
     about.minLength = Math.max(typeof about.minLength === 'number' ? about.minLength : 0, 1);
     about.maxLength = Math.min(typeof about.maxLength === 'number' ? about.maxLength : 256, 256);
   }
@@ -269,7 +282,11 @@ export function negativeClaimsInstruction(
   return (
     `The required ${JSON.stringify(config.field)} field contains typed negative citations. ` +
     `Use only result handles served by these tools: ${JSON.stringify(config.tools)}. ` +
-    'Each entry names kind, the entity about, and restsOn handles; do not write scope or statement text. ' +
+    'Each entry requires kind and restsOn handles. Choose none or not-found only for an absence; ' +
+    'choose complete only to claim the returned list covers the whole declared search. ' +
+    'The library verifies that claim and only normalizes none versus not-found over declared absence. ' +
+    'If about is present, it must include every recorded population value for the cited reads. ' +
+    'Do not write statement text: the library supplies the actual searched subject and scope. ' +
     'State negative claims only through this citation field; do not repeat them in summaries or other prose. ' +
     'The library writes the delivered statement. Use [] when making no typed negative claim. ' +
     `Field JSON Schema: ${JSON.stringify(fieldSchema)}`

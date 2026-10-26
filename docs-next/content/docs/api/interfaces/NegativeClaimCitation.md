@@ -4,17 +4,21 @@ title: NegativeClaimCitation
 
 # Interface: NegativeClaimCitation
 
-Defined in: [src/core/agent/negativeClaims/config.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L47)
+Defined in: [src/core/agent/negativeClaims/config.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L49)
 
-What the model may put in one entry. The runtime owns every delivered statement.
+A model-selected claim checked against recorded evidence. Only the absence
+family may be normalized from the read; a negative never becomes completeness.
+The delivered subject and statement come from the admitted search.
 
 ## Properties
 
-### about
+### about?
 
-> `readonly` **about**: `string` \| `number`
+> `readonly` `optional` **about?**: `string` \| `number`
 
-Defined in: [src/core/agent/negativeClaims/config.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L49)
+Defined in: [src/core/agent/negativeClaims/config.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L53)
+
+Optional subject phrase. It must include the recorded subject; never delivered as a label.
 
 ***
 
@@ -22,7 +26,9 @@ Defined in: [src/core/agent/negativeClaims/config.ts:49](https://github.com/foot
 
 > `readonly` **kind**: `"none"` \| `"not-found"` \| `"complete"`
 
-Defined in: [src/core/agent/negativeClaims/config.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L48)
+Defined in: [src/core/agent/negativeClaims/config.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L51)
+
+Selects the proposition to check; complete must be requested explicitly.
 
 ***
 
@@ -30,4 +36,4 @@ Defined in: [src/core/agent/negativeClaims/config.ts:48](https://github.com/foot
 
 > `readonly` **restsOn**: readonly `string`[]
 
-Defined in: [src/core/agent/negativeClaims/config.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L50)
+Defined in: [src/core/agent/negativeClaims/config.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L54)

@@ -228,6 +228,7 @@ describe('negative claims review — optional identity and unchecked prose', () 
       const output = await f.agent.runTyped<Reply>(INPUT);
       expect(output.negatives[0]?.statement).toContain('found none');
       expect(negativeRows(f.agent)).toEqual([]);
+      // The delivered subject comes from the read; a summary still remains unchecked.
       expect(f.agent.answerNegatives()?.delivery).toBe(
         extra === undefined ? 'as-checked' : 'recorded',
       );

@@ -78,12 +78,16 @@ const parser: OutputSchemaParser<ModelAnswer> = {
     const negatives = value.negatives.map((claim) => {
       if (
         !['none', 'not-found', 'complete'].includes(claim.kind) ||
-        typeof claim.about !== 'string' ||
+        (claim.about !== undefined && typeof claim.about !== 'string') ||
         !Array.isArray(claim.restsOn) ||
         claim.restsOn.some((handle) => typeof handle !== 'string')
       )
         throw new Error('Invalid citation');
-      return { kind: claim.kind, about: claim.about, restsOn: [...claim.restsOn] };
+      return {
+        kind: claim.kind,
+        ...(claim.about !== undefined && { about: claim.about }),
+        restsOn: [...claim.restsOn],
+      };
     });
     return { summary: value.summary, negatives };
   },
@@ -103,7 +107,7 @@ const jsonSchema = {
           about: { type: 'string' },
           restsOn: { type: 'array', items: { type: 'string' } },
         },
-        required: ['kind', 'about', 'restsOn'],
+        required: ['kind', 'restsOn'],
         additionalProperties: false,
       },
     },
@@ -114,7 +118,9 @@ const jsonSchema = {
 // #endregion schema
 
 export async function run(input: string): Promise<string> {
-  // The fixture cites the first library handle. Real models receive this
+  // The model selects the claim kind and cites a handle. The library verifies
+  // it and supplies the actual searched subject, replacing the model phrase.
+  // Real models receive this
   // handle beside the tool result; a provider call id is never a citation.
   const provider = mock({
     replies: [
@@ -125,7 +131,7 @@ export async function run(input: string): Promise<string> {
       {
         content: JSON.stringify({
           summary: 'The recorded search result follows.',
-          negatives: [{ kind: 'none', about: 'payments', restsOn: ['r1'] }],
+          negatives: [{ kind: 'none', about: 'open incidents for payments', restsOn: ['r1'] }],
         }),
       },
     ],

@@ -1,0 +1,694 @@
+{
+  "kind": "counterfactual-sequential-kind-subject-comparison",
+  "denominators": {
+    "trials": 784,
+    "schemaPass": 621,
+    "schemaFail": 120,
+    "noAnswer": 43,
+    "zeroClaims": 84,
+    "claims": 540,
+    "established": 20
+  },
+  "totals": {
+    "trials": 784,
+    "admittedAnswers": 621,
+    "claims": 540,
+    "zeroClaimAnswers": 84,
+    "stages": {
+      "baseline": {
+        "established": 20,
+        "unestablished": 520,
+        "nonemptyAllEstablishedAnswers": 20,
+        "correctionNeededAnswers": 57,
+        "requestedCompleteSlots": 59,
+        "completeRequestedRenderedAbsence": 0,
+        "completeRequestsWithAbsenceFallback": 0,
+        "codes": {
+          "kind-mismatch": 331,
+          "search-incomplete": 53,
+          "citation-unresolved": 30,
+          "stale-turn": 27,
+          "about-mismatch": 67,
+          "established": 20,
+          "superseded-by-write": 12
+        },
+        "notes": {}
+      },
+      "kindOnly": {
+        "established": 170,
+        "unestablished": 370,
+        "nonemptyAllEstablishedAnswers": 169,
+        "correctionNeededAnswers": 41,
+        "requestedCompleteSlots": 59,
+        "completeRequestedRenderedAbsence": 0,
+        "completeRequestsWithAbsenceFallback": 0,
+        "codes": {
+          "about-mismatch": 208,
+          "established": 170,
+          "search-incomplete": 53,
+          "undeclared-empty": 16,
+          "stale-turn": 27,
+          "contradicted-by-rows": 20,
+          "superseded-by-write": 32,
+          "citation-unresolved": 14
+        },
+        "notes": {
+          "absence-kind-normalized": 331
+        }
+      },
+      "kindAndSubject": {
+        "established": 378,
+        "unestablished": 162,
+        "nonemptyAllEstablishedAnswers": 375,
+        "correctionNeededAnswers": 41,
+        "requestedCompleteSlots": 59,
+        "completeRequestedRenderedAbsence": 0,
+        "completeRequestsWithAbsenceFallback": 3,
+        "codes": {
+          "established": 378,
+          "search-incomplete": 53,
+          "undeclared-empty": 16,
+          "stale-turn": 27,
+          "contradicted-by-rows": 20,
+          "superseded-by-write": 32,
+          "citation-unresolved": 14
+        },
+        "notes": {
+          "absence-kind-normalized": 331
+        }
+      }
+    },
+    "baselineToKind": {
+      "kind-mismatch -> about-mismatch": 141,
+      "kind-mismatch -> established": 150,
+      "search-incomplete -> search-incomplete": 53,
+      "citation-unresolved -> undeclared-empty": 16,
+      "stale-turn -> stale-turn": 27,
+      "about-mismatch -> about-mismatch": 67,
+      "established -> established": 20,
+      "kind-mismatch -> contradicted-by-rows": 20,
+      "kind-mismatch -> superseded-by-write": 20,
+      "superseded-by-write -> superseded-by-write": 12,
+      "citation-unresolved -> citation-unresolved": 14
+    },
+    "kindToSubject": {
+      "about-mismatch -> established": 208,
+      "established -> established": 170,
+      "search-incomplete -> search-incomplete": 53,
+      "undeclared-empty -> undeclared-empty": 16,
+      "stale-turn -> stale-turn": 27,
+      "contradicted-by-rows -> contradicted-by-rows": 20,
+      "superseded-by-write -> superseded-by-write": 32,
+      "citation-unresolved -> citation-unresolved": 14
+    }
+  },
+  "groups": [
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "main",
+      "arm": "observe",
+      "counts": {
+        "trials": 240,
+        "admittedAnswers": 180,
+        "claims": 150,
+        "zeroClaimAnswers": 30,
+        "stages": {
+          "baseline": {
+            "established": 0,
+            "unestablished": 150,
+            "nonemptyAllEstablishedAnswers": 0,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 20,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "kind-mismatch": 120,
+              "search-incomplete": 20,
+              "about-mismatch": 10
+            },
+            "notes": {}
+          },
+          "kindOnly": {
+            "established": 30,
+            "unestablished": 120,
+            "nonemptyAllEstablishedAnswers": 30,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 20,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "about-mismatch": 80,
+              "established": 30,
+              "contradicted-by-rows": 10,
+              "search-incomplete": 20,
+              "superseded-by-write": 10
+            },
+            "notes": {
+              "absence-kind-normalized": 120
+            }
+          },
+          "kindAndSubject": {
+            "established": 110,
+            "unestablished": 40,
+            "nonemptyAllEstablishedAnswers": 110,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 20,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "established": 110,
+              "contradicted-by-rows": 10,
+              "search-incomplete": 20,
+              "superseded-by-write": 10
+            },
+            "notes": {
+              "absence-kind-normalized": 120
+            }
+          }
+        },
+        "baselineToKind": {
+          "kind-mismatch -> about-mismatch": 70,
+          "kind-mismatch -> established": 30,
+          "kind-mismatch -> contradicted-by-rows": 10,
+          "search-incomplete -> search-incomplete": 20,
+          "about-mismatch -> about-mismatch": 10,
+          "kind-mismatch -> superseded-by-write": 10
+        },
+        "kindToSubject": {
+          "about-mismatch -> established": 80,
+          "established -> established": 30,
+          "contradicted-by-rows -> contradicted-by-rows": 10,
+          "search-incomplete -> search-incomplete": 20,
+          "superseded-by-write -> superseded-by-write": 10
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "main",
+      "arm": "enforce",
+      "counts": {
+        "trials": 240,
+        "admittedAnswers": 220,
+        "claims": 190,
+        "zeroClaimAnswers": 30,
+        "stages": {
+          "baseline": {
+            "established": 0,
+            "unestablished": 190,
+            "nonemptyAllEstablishedAnswers": 0,
+            "correctionNeededAnswers": 20,
+            "requestedCompleteSlots": 30,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "search-incomplete": 30,
+              "kind-mismatch": 120,
+              "citation-unresolved": 20,
+              "about-mismatch": 20
+            },
+            "notes": {}
+          },
+          "kindOnly": {
+            "established": 50,
+            "unestablished": 140,
+            "nonemptyAllEstablishedAnswers": 50,
+            "correctionNeededAnswers": 10,
+            "requestedCompleteSlots": 30,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "search-incomplete": 30,
+              "about-mismatch": 70,
+              "undeclared-empty": 10,
+              "established": 50,
+              "superseded-by-write": 10,
+              "contradicted-by-rows": 10,
+              "citation-unresolved": 10
+            },
+            "notes": {
+              "absence-kind-normalized": 120
+            }
+          },
+          "kindAndSubject": {
+            "established": 120,
+            "unestablished": 70,
+            "nonemptyAllEstablishedAnswers": 120,
+            "correctionNeededAnswers": 10,
+            "requestedCompleteSlots": 30,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "search-incomplete": 30,
+              "established": 120,
+              "undeclared-empty": 10,
+              "superseded-by-write": 10,
+              "contradicted-by-rows": 10,
+              "citation-unresolved": 10
+            },
+            "notes": {
+              "absence-kind-normalized": 120
+            }
+          }
+        },
+        "baselineToKind": {
+          "search-incomplete -> search-incomplete": 30,
+          "kind-mismatch -> about-mismatch": 50,
+          "citation-unresolved -> undeclared-empty": 10,
+          "kind-mismatch -> established": 50,
+          "kind-mismatch -> superseded-by-write": 10,
+          "kind-mismatch -> contradicted-by-rows": 10,
+          "about-mismatch -> about-mismatch": 20,
+          "citation-unresolved -> citation-unresolved": 10
+        },
+        "kindToSubject": {
+          "search-incomplete -> search-incomplete": 30,
+          "about-mismatch -> established": 70,
+          "undeclared-empty -> undeclared-empty": 10,
+          "established -> established": 50,
+          "superseded-by-write -> superseded-by-write": 10,
+          "contradicted-by-rows -> contradicted-by-rows": 10,
+          "citation-unresolved -> citation-unresolved": 10
+        }
+      }
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "cell": "main",
+      "arm": "observe",
+      "counts": {
+        "trials": 72,
+        "admittedAnswers": 63,
+        "claims": 53,
+        "zeroClaimAnswers": 12,
+        "stages": {
+          "baseline": {
+            "established": 7,
+            "unestablished": 46,
+            "nonemptyAllEstablishedAnswers": 7,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 2,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "kind-mismatch": 33,
+              "superseded-by-write": 6,
+              "established": 7,
+              "about-mismatch": 5,
+              "search-incomplete": 2
+            },
+            "notes": {}
+          },
+          "kindOnly": {
+            "established": 35,
+            "unestablished": 18,
+            "nonemptyAllEstablishedAnswers": 34,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 2,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "established": 35,
+              "about-mismatch": 10,
+              "superseded-by-write": 6,
+              "search-incomplete": 2
+            },
+            "notes": {
+              "absence-kind-normalized": 33
+            }
+          },
+          "kindAndSubject": {
+            "established": 45,
+            "unestablished": 8,
+            "nonemptyAllEstablishedAnswers": 43,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 2,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 2,
+            "codes": {
+              "established": 45,
+              "superseded-by-write": 6,
+              "search-incomplete": 2
+            },
+            "notes": {
+              "absence-kind-normalized": 33
+            }
+          }
+        },
+        "baselineToKind": {
+          "kind-mismatch -> established": 28,
+          "kind-mismatch -> about-mismatch": 5,
+          "superseded-by-write -> superseded-by-write": 6,
+          "established -> established": 7,
+          "about-mismatch -> about-mismatch": 5,
+          "search-incomplete -> search-incomplete": 2
+        },
+        "kindToSubject": {
+          "established -> established": 35,
+          "about-mismatch -> established": 10,
+          "superseded-by-write -> superseded-by-write": 6,
+          "search-incomplete -> search-incomplete": 2
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "near",
+      "arm": "near-list",
+      "counts": {
+        "trials": 60,
+        "admittedAnswers": 20,
+        "claims": 20,
+        "zeroClaimAnswers": 0,
+        "stages": {
+          "baseline": {
+            "established": 10,
+            "unestablished": 10,
+            "nonemptyAllEstablishedAnswers": 10,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 0,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "kind-mismatch": 10,
+              "established": 10
+            },
+            "notes": {}
+          },
+          "kindOnly": {
+            "established": 20,
+            "unestablished": 0,
+            "nonemptyAllEstablishedAnswers": 20,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 0,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "established": 20
+            },
+            "notes": {
+              "absence-kind-normalized": 10
+            }
+          },
+          "kindAndSubject": {
+            "established": 20,
+            "unestablished": 0,
+            "nonemptyAllEstablishedAnswers": 20,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 0,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "established": 20
+            },
+            "notes": {
+              "absence-kind-normalized": 10
+            }
+          }
+        },
+        "baselineToKind": {
+          "kind-mismatch -> established": 10,
+          "established -> established": 10
+        },
+        "kindToSubject": {
+          "established -> established": 20
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "long",
+      "arm": "enforce",
+      "counts": {
+        "trials": 40,
+        "admittedAnswers": 36,
+        "claims": 36,
+        "zeroClaimAnswers": 0,
+        "stages": {
+          "baseline": {
+            "established": 0,
+            "unestablished": 36,
+            "nonemptyAllEstablishedAnswers": 0,
+            "correctionNeededAnswers": 31,
+            "requestedCompleteSlots": 6,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "stale-turn": 27,
+              "about-mismatch": 5,
+              "citation-unresolved": 4
+            },
+            "notes": {}
+          },
+          "kindOnly": {
+            "established": 0,
+            "unestablished": 36,
+            "nonemptyAllEstablishedAnswers": 0,
+            "correctionNeededAnswers": 31,
+            "requestedCompleteSlots": 6,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "stale-turn": 27,
+              "about-mismatch": 5,
+              "citation-unresolved": 4
+            },
+            "notes": {}
+          },
+          "kindAndSubject": {
+            "established": 5,
+            "unestablished": 31,
+            "nonemptyAllEstablishedAnswers": 5,
+            "correctionNeededAnswers": 31,
+            "requestedCompleteSlots": 6,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "stale-turn": 27,
+              "established": 5,
+              "citation-unresolved": 4
+            },
+            "notes": {}
+          }
+        },
+        "baselineToKind": {
+          "stale-turn -> stale-turn": 27,
+          "about-mismatch -> about-mismatch": 5,
+          "citation-unresolved -> citation-unresolved": 4
+        },
+        "kindToSubject": {
+          "stale-turn -> stale-turn": 27,
+          "about-mismatch -> established": 5,
+          "citation-unresolved -> citation-unresolved": 4
+        }
+      }
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "cell": "main",
+      "arm": "enforce",
+      "counts": {
+        "trials": 72,
+        "admittedAnswers": 72,
+        "claims": 61,
+        "zeroClaimAnswers": 12,
+        "stages": {
+          "baseline": {
+            "established": 3,
+            "unestablished": 58,
+            "nonemptyAllEstablishedAnswers": 3,
+            "correctionNeededAnswers": 6,
+            "requestedCompleteSlots": 1,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "about-mismatch": 17,
+              "kind-mismatch": 28,
+              "citation-unresolved": 6,
+              "superseded-by-write": 6,
+              "established": 3,
+              "search-incomplete": 1
+            },
+            "notes": {}
+          },
+          "kindOnly": {
+            "established": 15,
+            "unestablished": 46,
+            "nonemptyAllEstablishedAnswers": 15,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 1,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "about-mismatch": 33,
+              "established": 15,
+              "undeclared-empty": 6,
+              "superseded-by-write": 6,
+              "search-incomplete": 1
+            },
+            "notes": {
+              "absence-kind-normalized": 28
+            }
+          },
+          "kindAndSubject": {
+            "established": 48,
+            "unestablished": 13,
+            "nonemptyAllEstablishedAnswers": 47,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 1,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 1,
+            "codes": {
+              "established": 48,
+              "undeclared-empty": 6,
+              "superseded-by-write": 6,
+              "search-incomplete": 1
+            },
+            "notes": {
+              "absence-kind-normalized": 28
+            }
+          }
+        },
+        "baselineToKind": {
+          "about-mismatch -> about-mismatch": 17,
+          "kind-mismatch -> about-mismatch": 16,
+          "kind-mismatch -> established": 12,
+          "citation-unresolved -> undeclared-empty": 6,
+          "superseded-by-write -> superseded-by-write": 6,
+          "established -> established": 3,
+          "search-incomplete -> search-incomplete": 1
+        },
+        "kindToSubject": {
+          "about-mismatch -> established": 33,
+          "established -> established": 15,
+          "undeclared-empty -> undeclared-empty": 6,
+          "superseded-by-write -> superseded-by-write": 6,
+          "search-incomplete -> search-incomplete": 1
+        }
+      }
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "cell": "near",
+      "arm": "near-count",
+      "counts": {
+        "trials": 60,
+        "admittedAnswers": 30,
+        "claims": 30,
+        "zeroClaimAnswers": 0,
+        "stages": {
+          "baseline": {
+            "established": 0,
+            "unestablished": 30,
+            "nonemptyAllEstablishedAnswers": 0,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 0,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "kind-mismatch": 20,
+              "about-mismatch": 10
+            },
+            "notes": {}
+          },
+          "kindOnly": {
+            "established": 20,
+            "unestablished": 10,
+            "nonemptyAllEstablishedAnswers": 20,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 0,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "established": 20,
+              "about-mismatch": 10
+            },
+            "notes": {
+              "absence-kind-normalized": 20
+            }
+          },
+          "kindAndSubject": {
+            "established": 30,
+            "unestablished": 0,
+            "nonemptyAllEstablishedAnswers": 30,
+            "correctionNeededAnswers": 0,
+            "requestedCompleteSlots": 0,
+            "completeRequestedRenderedAbsence": 0,
+            "completeRequestsWithAbsenceFallback": 0,
+            "codes": {
+              "established": 30
+            },
+            "notes": {
+              "absence-kind-normalized": 20
+            }
+          }
+        },
+        "baselineToKind": {
+          "kind-mismatch -> established": 20,
+          "about-mismatch -> about-mismatch": 10
+        },
+        "kindToSubject": {
+          "established -> established": 20,
+          "about-mismatch -> established": 10
+        }
+      }
+    }
+  ],
+  "baselineSchemaReasons": {
+    "schema-issue:invalid-references": 14,
+    "schema-issue:extra-citation-fields": 13,
+    "schema-issue:invalid-kind": 28,
+    "schema-issue:malformed-handle": 76,
+    "schema-issue:empty-references": 10
+  },
+  "stages": {
+    "baseline": "Unchanged PR 207 renderer and application admission.",
+    "kindOnly": "Corrected requested-kind verification, retaining the old exact-subject rule.",
+    "kindAndSubject": "Same corrected kind verification, then bounded normalized subject containment."
+  },
+  "limitations": [
+    "All 784 trials and 540 admitted claim slots are fixed. No response, native record or bank fixture is rewritten.",
+    "The original parser retains 120 schema failures and 43 no-answer trials; 84 zero-claim answers are not established negatives.",
+    "Each stage reports its first blocked reason. Resolving a prior reason may expose another; counts are not additive estimates of false holds.",
+    "The two corrected stages share runtime admission, trust and evidence guards. Their only mode difference is exact versus normalized containment subject matching.",
+    "A complete-request rendering an absence is counted separately and never proves the requested completeness proposition.",
+    "No model, tool, correction or live delivery runs. These are counterfactual checker outcomes, not factual accuracy, usefulness or semantic repetition measurements.",
+    "Superseded evidence-owned v1/v2/v3 analyses remain historical artifacts; their over-establishment is not the baseline of this comparison."
+  ],
+  "originalFiles": {
+    "count": 785,
+    "allUnchanged": true,
+    "manifestSha256": "2726bc57609d7e2e1189247730b13db2487b2f880ef1e1f90752957e0165631d"
+  },
+  "provenance": {
+    "baseline": {
+      "node": "v24.21.0",
+      "builtJsFiles": 1017,
+      "builtJsTreeSha256": "3a4c1e740e28ff9d74a9939e928f80cae341e17b0349df44ee19ef389d1593cf",
+      "replayScripts": {
+        "reparse.mjs": "a6d0fcc0015d285c2b3be7f20fa21e60f4f39e10c848d91cfa2a77930da6807d",
+        "reparse-core.mjs": "5a88190bc03b7f51c41874e13c09aa308f3932f67f47ba64a36e1af47f898dc3",
+        "reparse-files.mjs": "7269db4738d131989c5621a7066ad3171fab93a5d2d8d48f3b8f071cb48b8509",
+        "reparse-contract.mjs": "026ca1c63954235a5655635dae1fe19167590048c9d3d083cd4b11c870024a91"
+      },
+      "dependencyLockSha256": "a0fbfb51aeb2d884520f1955de08817c0c817de340b62ba5e4a5ab7f29ae83eb"
+    },
+    "corrected": {
+      "node": "v24.21.0",
+      "builtJsFiles": 1018,
+      "builtJsTreeSha256": "ad844c9efbe11f49c9036cd3d528e0258bbf0e5dcb8b446be6f16bb67d9e255e",
+      "replayScripts": {
+        "reparse.mjs": "a6d0fcc0015d285c2b3be7f20fa21e60f4f39e10c848d91cfa2a77930da6807d",
+        "reparse-core.mjs": "5a88190bc03b7f51c41874e13c09aa308f3932f67f47ba64a36e1af47f898dc3",
+        "reparse-files.mjs": "7269db4738d131989c5621a7066ad3171fab93a5d2d8d48f3b8f071cb48b8509",
+        "reparse-contract.mjs": "026ca1c63954235a5655635dae1fe19167590048c9d3d083cd4b11c870024a91"
+      },
+      "dependencyLockSha256": "a0fbfb51aeb2d884520f1955de08817c0c817de340b62ba5e4a5ab7f29ae83eb"
+    }
+  },
+  "comparisonScripts": {
+    "staged-comparison.mjs": "48fb49c125737fb06a49201914a296d318910269fb60dc1f7d37a7ecbfa1c1cb",
+    "staged-comparison-core.mjs": "bf586009229ac87e4217998c239db90029986cb7df444a96f3134220acbae02f",
+    "staged-comparison-files.mjs": "de2886308381088dff9d9d4b16b4f6fb4e867d82fe7588cab05f43f9caa1ee02"
+  }
+}

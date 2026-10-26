@@ -19,7 +19,7 @@ import type { Disposition } from '../disposition/types.js';
 import { judgeCitation, MAX_CITED_READS, type CitationVerdict } from './citation.js';
 import { MAX_NEGATIVE_CLAIMS } from './limits.js';
 import { composeStatement } from './statement.js';
-import type { TurnRecord, TypedJudgement, TypedVerdict } from './types.js';
+import type { CitationInterpretation, TurnRecord, TypedJudgement, TypedVerdict } from './types.js';
 
 export { MAX_CITED_READS };
 export { MAX_NEGATIVE_CLAIMS };
@@ -54,6 +54,9 @@ export interface TypedCheckInput {
   readonly record: TurnRecord;
   /** The tools the app lets a claim cite (`.negativeClaims({ tools })`). */
   readonly citable?: readonly string[];
+  /** Internal staged comparison: corrected kind only, then the recorded-subject label check.
+   * Omitted retains the historical explicit-kind/exact-about pure interpretation. */
+  readonly interpretation?: CitationInterpretation;
 }
 
 /** A repeated claim is judged once (its stable JSON is the key); a key that cannot be made, every time. */
@@ -82,7 +85,7 @@ function judgeOnce(
  * claims withholds every one of them (`too-many-claims`).
  */
 export function judgeTypedNegatives(input: TypedCheckInput): TypedJudgement[] {
-  const { field, negatives, record, citable } = input;
+  const { field, negatives, record, citable, interpretation } = input;
   if (negatives === undefined || negatives === null) return [];
   const entries = Array.isArray(negatives) ? negatives : [negatives];
   const tooMany = entries.length > MAX_NEGATIVE_CLAIMS;
@@ -91,8 +94,8 @@ export function judgeTypedNegatives(input: TypedCheckInput): TypedJudgement[] {
     const verdict = tooMany
       ? TOO_MANY
       : Array.isArray(negatives)
-      ? judgeOnce(cache, entry, (e) => judgeCitation(e, record, citable))
-      : judgeCitation(undefined, record, citable);
+      ? judgeOnce(cache, entry, (e) => judgeCitation(e, record, citable, interpretation))
+      : judgeCitation(undefined, record, citable, interpretation);
     const row = {
       id: `agent:negative-claims:${field}#${index}`,
       path: `${field}[${index}]`,

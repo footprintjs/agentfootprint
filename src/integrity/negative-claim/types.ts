@@ -108,10 +108,15 @@ export type TypedVerdict =
   | 'coverage-unverified'
   | 'call-not-read'
   | 'kind-mismatch'
+  | 'undeclared-empty'
+  | 'evidence-kind-undetermined'
   | 'about-mismatch'
   | 'record-incomplete'
   | 'stale-turn'
   | 'too-many-claims';
+
+/** Internal comparison stages; omitted keeps the historical explicit checker. */
+export type CitationInterpretation = 'kind-only' | 'evidence-owned';
 
 /** When a stale read was made. */
 export interface StaleSince {

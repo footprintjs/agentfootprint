@@ -70,11 +70,14 @@ describe('the three worked statements (§ 5.1), rule-derived and attributed', ()
   });
 
   it('complete: the rows READ, and what the tool declares about caps and pages', () => {
-    const call = incidentCall({
-      emptiness: 'non-empty',
-      rows: 3,
-      rowsRead: [{ entity: 'INC-7302' }, { entity: 'INC-7295' }, { entity: 'INC-7288' }],
-    });
+    const call = {
+      ...incidentCall({
+        emptiness: 'non-empty',
+        rows: 3,
+        rowsRead: [{ entity: 'INC-7302' }, { entity: 'INC-7295' }, { entity: 'INC-7288' }],
+      }),
+      rowsMayDisplay: true as const,
+    };
     expect(statementOf(cite('complete', 'c1'), [call])).toBe(
       `\`list_incidents\` read 3 rows — ${SCOPE}; rows \`INC-7302\`, \`INC-7295\`, ` +
         "`INC-7288` (as the tool's result says); no cap reached; the tool declares no server " +
@@ -90,7 +93,7 @@ describe('the three worked statements (§ 5.1), rule-derived and attributed', ()
       record: turnRecord([incidentCall()]),
     });
     expect(judged[0]?.statement?.version).toBe(STATEMENT_VERSION);
-    expect(STATEMENT_VERSION).toBe('5');
+    expect(STATEMENT_VERSION).toBe('7');
   });
 });
 
@@ -282,7 +285,10 @@ describe('each row shape', () => {
 
   it('identities of the rows read are capped, the rest counted', () => {
     const rowsRead = Array.from({ length: 30 }, (_, i) => ({ entity: `INC-${i}` }));
-    const call = incidentCall({ emptiness: 'non-empty', rows: 30, rowsRead, gaps: [] });
+    const call = {
+      ...incidentCall({ emptiness: 'non-empty', rows: 30, rowsRead, gaps: [] }),
+      rowsMayDisplay: true as const,
+    };
     const text = statementOf(cite('complete', 'c1'), [call]) ?? '';
     expect(text).toContain("`INC-11`, and 18 more (as the tool's result says); no cap reached;");
     expect(text).not.toContain('INC-12');
@@ -297,10 +303,22 @@ describe('each row shape', () => {
         gaps: [],
       }),
       idColumn: 'incident_id',
+      rowsMayDisplay: true,
     };
     expect(statementOf(cite('complete', 'c1'), [call])).toContain(
       "rows `A-1`, `A-2` (as the tool's result says);",
     );
+  });
+
+  it('keeps the native count but never displays row identities without final display admission', () => {
+    const call = incidentCall({
+      emptiness: 'non-empty',
+      rows: 1,
+      rowsRead: [{ entity: 'HIDDEN-INCIDENT' }],
+    });
+    const text = statementOf(cite('complete', 'c1'), [call]);
+    expect(text).toContain('read 1 rows');
+    expect(text).not.toContain('HIDDEN-INCIDENT');
   });
 });
 

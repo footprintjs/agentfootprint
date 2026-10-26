@@ -152,6 +152,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
     true,
   abort: true,
   above: true,
+  'absence-kind-normalized': true,
   absent: true,
   accepted: true,
   advance: true,

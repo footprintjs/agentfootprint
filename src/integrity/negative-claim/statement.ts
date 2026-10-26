@@ -41,7 +41,7 @@ type DeclaredTool = SearchTool;
 const instantMs = (value: unknown): number | undefined => instantOf(value, 'lenient')?.ms;
 
 /** Bump with any change to a template or to how a value is rendered. */
-export const STATEMENT_VERSION = '5';
+export const STATEMENT_VERSION = '7';
 
 const VALUE_CHARS = 64;
 const GAP_CHARS = 120;
@@ -262,6 +262,7 @@ function gapParts(row: ComposedSearchRow): string[] {
 
 /** The identities of the rows read, as quoted data. */
 function identities(call: TurnCall): string[] {
+  if (call.rowsMayDisplay !== true) return [];
   const column = call.idColumn ?? 'entity';
   return (call.rowsRead ?? []).flatMap((row) => {
     const id = Object.prototype.hasOwnProperty.call(row, column) ? row[column] : undefined;
