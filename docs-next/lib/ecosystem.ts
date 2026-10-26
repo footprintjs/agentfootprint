@@ -14,7 +14,7 @@ export const ECOSYSTEM_PROJECTS = [
     name: 'AgentFootprint',
     aliases: ['agentfootprint', 'Agent Footprint'],
     description:
-      'Context provenance and causal debugging for AI agents, including influence ranking, ablation, and counterfactual replay.',
+      'A TypeScript agent framework connecting recorded execution, declared evidence limits and app-configured checks before answer delivery.',
     url: 'https://agentfootprint.dev/',
     repo: 'https://github.com/footprintjs/agentfootprint',
     npm: 'https://www.npmjs.com/package/agentfootprint',

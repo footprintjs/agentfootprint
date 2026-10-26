@@ -6,15 +6,15 @@ import { SkillGraphScene } from '@/components/home/v2/SkillGraphScene';
 import { PhaseRail } from '@/components/home/v2/PhaseRail';
 import { LensBand } from '@/components/home/v2/LensBand';
 import { AnswerFaces } from '@/components/home/v2/AnswerFaces';
+import { AnswerCheckDemo } from '@/components/home/v2/AnswerCheckDemo';
 import { PortsScene } from '@/components/home/v2/PortsScene';
 import { SiteFooter } from '@/components/SiteFooter';
 import { siteJsonLd } from '@/lib/jsonld';
 import { SITE, asset } from '@/lib/site';
 import './v2.css';
 
-const HOME_TITLE = 'agentfootprint — Explainable AI agent framework for TypeScript';
-const HOME_DESC =
-  'agentfootprint is an open-source TypeScript framework for explainable AI agents. Trace context, decisions, and tools, then replay runs to prove what caused each result.';
+const HOME_TITLE = SITE.title;
+const HOME_DESC = SITE.description;
 
 /** The four phases. Ids must match the section headings they open. */
 const PHASES = [
@@ -86,7 +86,10 @@ const CLOUDS = [
   { where: 'AWS', how: 'Bedrock models · AgentCore runtime · S3 · CloudWatch · X-Ray' },
   { where: 'Google Cloud', how: 'Gemini and Vertex models · Vertex sessions · Cloud Storage' },
   { where: 'Microsoft Foundry', how: 'Foundry hosting and models · Azure OpenAI · Entra ID' },
-  { where: 'Your own hardware', how: 'Ollama · PostgreSQL · SQLite · your process · OpenTelemetry' },
+  {
+    where: 'Your own hardware',
+    how: 'Ollama · PostgreSQL · SQLite · your process · OpenTelemetry',
+  },
 ] as const;
 
 export const metadata: Metadata = {
@@ -121,75 +124,200 @@ export default function HomePage() {
       />
 
       <section className="v21-hero" id="overview">
-          <p className="v2-kicker">
-            <span /> Open-source TypeScript agent framework
-          </p>
-          <h1>
-            agentfootprint: Your agent decides what a person used to.{' '}
-            <em>Only one of them leaves a reason.</em>
-          </h1>
-          {/* Developer proof, not logos. Every figure here is real and checkable:
-              downloads from the npm registry API, the licence from the repo, the
-              telemetry claim verified against the source (no analytics endpoint
-              and no URL the library chooses for itself). Star count is
-              deliberately absent — omitting a number is honest, inflating one is
-              not, and a low count next to "Star on GitHub" argues against us. */}
-          <ul className="v21-proof">
-            <li>
-              <strong>21,800+</strong>
-              <small>npm installs a month</small>
-            </li>
-            <li>
-              <strong>MIT</strong>
-              <small>open source, no seat fees</small>
-            </li>
-            <li>
-              <strong>No telemetry</strong>
-              <small>it never phones home</small>
-            </li>
-            <li>
-              <strong>9,800+</strong>
-              <small>tests on every release</small>
-            </li>
-          </ul>
-
+        <p className="v2-kicker">
+          <span /> Open-source TypeScript agent framework
+        </p>
+        <h1>
+          Build agents whose answers <em>can be checked.</em>
+        </h1>
+        <p className="v21-lede">
+          Connect answers to recorded evidence, carry uncertainty forward, and run your app&rsquo;s
+          checks before an answer reaches the customer.
+        </p>
+        <div className="v2-actions">
+          <Link className="v2-button v2-button-primary" href="#answer-check">
+            See an answer check <span aria-hidden="true">↓</span>
+          </Link>
+          <Link className="v2-button v2-button-quiet" href="/docs/getting-started/quick-start">
+            Build your first agent <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+        <ul className="v21-proof">
+          <li>
+            <strong>TypeScript</strong>
+            <small>typed tools and answers</small>
+          </li>
+          <li>
+            <strong>MIT</strong>
+            <small>open source</small>
+          </li>
+          <li>
+            <strong>Your rules</strong>
+            <small>explicit answer checks</small>
+          </li>
+        </ul>
         <div className="v21-hero-row">
           <div className="v21-hero-say">
-          <ul className="v21-lede-points">
-            <li>
-              <strong>Begin at the current step.</strong> The graph defines the instructions and
-              working context available there.
-            </li>
-            <li>
-              <strong>Act, then observe.</strong> Models and tools return evidence to the run.
-            </li>
-            <li>
-              <strong>Advance through the graph.</strong> The next transition can be linear,
-              rule-based, or model-selected.
-            </li>
-            <li>
-              <strong>Keep the path as it runs.</strong> Context → decision → action → outcome stay
-              connected.
-            </li>
-          </ul>
-          <div className="v2-actions">
-            <Link className="v2-button v2-button-primary" href="/docs/build/skill-graph-quickstart">
-              Build your agent with a skill graph <span aria-hidden="true">→</span>
-            </Link>
-            <Link className="v2-button v2-button-quiet" href="#lenses">
-              Inspect a recorded run <span aria-hidden="true">↓</span>
-            </Link>
-          </div>
+            <ul className="v21-lede-points">
+              <li>
+                <strong>Keep the evidence.</strong> Record the tool calls, results and context made
+                available during a run.
+              </li>
+              <li>
+                <strong>Keep the limits.</strong> Tools declare what they checked, what they missed
+                and what they cannot cover.
+              </li>
+              <li>
+                <strong>Check before delivery.</strong> Your app defines the checks. In enforce
+                mode, failed or unverified typed answers are withheld.
+              </li>
+              <li>
+                <strong>Inspect the decision.</strong> Follow the recorded execution and test
+                dependence with a rerun.
+              </li>
+            </ul>
+            <p className="v21-foundation">
+              Built on{' '}
+              <a href="https://footprintjs.github.io/footPrint/">
+                FootprintJS execution provenance
+              </a>
+              . A record shows what ran and what was available; it does not prove external data is
+              true or reveal a model&rsquo;s private reasoning.
+            </p>
           </div>
           <AnswerFaces />
         </div>
       </section>
 
+      <AnswerCheckDemo />
+
+      <section className="v21-contract" id="answer-contract" aria-labelledby="v21-contract-title">
+        <header>
+          <p className="v2-kicker">The guarantee has a boundary</p>
+          <h2 id="v21-contract-title">Check the claim your app knows how to check.</h2>
+          <p>
+            Honest answers need evidence, explicit limits and a delivery rule. Each has its own job.
+          </p>
+        </header>
+        <div className="v21-contract-grid">
+          <article>
+            <span className="v2-kicker">01 · Evidence and limits</span>
+            <h3>A tool result with its scope.</h3>
+            <p>
+              Use <code>absent()</code> or <code>coverage()</code> to declare what was checked and
+              what remains unknown. Carry those limits with the answer.
+            </p>
+            <p className="v21-boundary">
+              The app owns these declarations. Model prose is not independent evidence.
+            </p>
+            <Link href="/docs/build/semantic-results">Declare coverage →</Link>
+          </article>
+          <article>
+            <span className="v2-kicker">02 · Configured checks</span>
+            <h3>An answer held to your rules.</h3>
+            <p>
+              Use <code>answerValidation()</code> to check typed fields against scoped evidence.
+              Enforce mode withholds failed or unverified answers; observe mode records and allows
+              delivery.
+            </p>
+            <p className="v21-boundary">
+              Checks cover only what you configure. Withholding an answer does not undo a tool
+              action.
+            </p>
+            <Link href="/docs/build/output-schema#check-the-answer-against-evidence">
+              Configure answer checks →
+            </Link>
+          </article>
+          <article>
+            <span className="v2-kicker">03 · Recorded execution</span>
+            <h3>A decision you can inspect.</h3>
+            <p>
+              Inspect context, tool calls, results and decisions together. Rerun a case without a
+              source to test whether the output depends on it.
+            </p>
+            <p className="v21-boundary">
+              Execution provenance is the foundation for an audit, not a universal truth guarantee.
+            </p>
+            <Link href="/how-it-works">Inspect a recorded run →</Link>
+          </article>
+        </div>
+        <details className="v21-maturity">
+          <summary>Where the newer “not found” checks stand</summary>
+          <p>
+            Typed <code>negativeClaims()</code> checks are opt-in and available in the source, but
+            not recommended until measured. They check cited searches and write bounded statements;
+            they still trust the app&rsquo;s search declarations. Other model text remains
+            unchecked.
+          </p>
+          <p>
+            Their accuracy and usefulness are unmeasured. The earlier free-text detector failed its
+            benchmark; the revised detector is unmeasured and only adds warnings. A warning-free
+            answer is not a verified answer. See the{' '}
+            <a href="https://github.com/footprintjs/agentfootprint/blob/main/CAPABILITIES.md">
+              capability index
+            </a>{' '}
+            for release availability, including features marked unreleased.
+          </p>
+        </details>
+      </section>
+
+      <section className="v21-position" aria-labelledby="v21-position-title">
+        <p className="v2-kicker">Choosing a framework</p>
+        <h2 id="v21-position-title">A focus on what supports the answer.</h2>
+        <p>
+          LangChain and Mastra help teams build agent applications, and both offer controls during
+          execution. AgentFootprint&rsquo;s emphasis is connecting recorded execution, evidence
+          limits and configured answer delivery in one framework.
+        </p>
+        <div className="v21-comparison-wrap">
+          <table>
+            <caption>Different emphases, with overlapping capabilities.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Framework</th>
+                <th scope="col">What to explore</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">LangChain / LangGraph</th>
+                <td>
+                  Integrations, orchestration and durable workflows, with{' '}
+                  <a href="https://docs.langchain.com/oss/javascript/langchain/guardrails">
+                    runtime guardrails
+                  </a>
+                  .
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Mastra</th>
+                <td>
+                  TypeScript agents, workflows, memory, tracing and evaluations, with{' '}
+                  <a href="https://mastra.ai/docs/agents/processors">input and output processors</a>
+                  .
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">AgentFootprint</th>
+                <td>
+                  Execution provenance, declared evidence limits and app-configured checks before
+                  answer delivery.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="v21-boundary">
+          This is a difference in emphasis, not a claim of exclusive capabilities or measured
+          superiority.
+        </p>
+      </section>
+
       <EvolutionStory />
 
       <header className="v21-lifecycle-bridge">
-        <p className="v2-kicker">A developer&rsquo;s operating model</p>
-        <h2>Four stages. The API you need at each one.</h2>
+        <p className="v2-kicker">The runtime underneath the answer</p>
+        <h2>Build, inspect, run and monitor the whole agent.</h2>
       </header>
 
       <PhaseRail phases={PHASES} />
@@ -203,7 +331,10 @@ export default function HomePage() {
         <header className="v21-scene-copy">
           <p className="v2-kicker">Scope</p>
           <h2 id="v21-skillgraph-title">One state. One reachable skill.</h2>
-          <p>Only its procedure, tools, and model enter the step.</p>
+          <p>
+            With tool scoping enabled, the selected skill brings its procedure, tools and model into
+            the step.
+          </p>
           <Link href="/docs/build/skill-graph-quickstart">Build the graph →</Link>
         </header>
         <SkillGraphScene />
@@ -290,7 +421,9 @@ export default function HomePage() {
           <figure className="v21-runtime" aria-label="AgentFootprint connects to replaceable ports">
             <span className="v21-port is-provider">Models</span>
             <span className="v21-port is-memory">Memory</span>
-            <strong>AF<small>runtime</small></strong>
+            <strong>
+              AF<small>runtime</small>
+            </strong>
             <span className="v21-port is-storage">Storage</span>
             <span className="v21-port is-telemetry">Telemetry</span>
             <figcaption>Keep the graph. Swap the edges.</figcaption>
@@ -312,14 +445,13 @@ export default function HomePage() {
         <section className="v21-adapters" aria-labelledby="v21-adapters-title">
           <header>
             <strong id="v21-adapters-title">
-              Bring your infrastructure — AWS, Google Cloud, Microsoft Foundry, or your own
-              hardware
+              Bring your infrastructure — AWS, Google Cloud, Microsoft Foundry, or your own hardware
             </strong>
             <span>
               The runtime is the whole ecosystem: models, memory, tools, identity, sessions and
               telemetry. Provision with your CDK or SDK and connect through typed ports — detach
-              telemetry when export must not gate the run. Nothing about the agent you wrote
-              changes when the cloud does.
+              telemetry when export must not gate the run. Nothing about the agent you wrote changes
+              when the cloud does.
             </span>
           </header>
           <ul>
@@ -368,15 +500,17 @@ export default function HomePage() {
       <section className="v21-production" id="monitor" aria-labelledby="v21-monitor-title">
         <header className="v21-production-head">
           <p className="v2-kicker">04 · Monitor</p>
-          <h2 id="v21-monitor-title">Watch, export, archive, and learn from the same event stream.</h2>
+          <h2 id="v21-monitor-title">
+            Watch, export, archive, and learn from the same event stream.
+          </h2>
         </header>
 
         <section className="v21-adapters" aria-labelledby="v21-monitor-why">
           <header>
             <strong id="v21-monitor-why">The monitoring foundation ships today</strong>
             <span>
-              Subscribe to typed events while the agent runs, send them to your existing backend,
-              or persist the complete recording. The joins are written during traversal, so each
+              Subscribe to typed events while the agent runs, send them to your existing backend, or
+              persist the complete recording. The joins are written during traversal, so each
               downstream tool starts from the same connected run.
             </span>
           </header>
@@ -384,16 +518,16 @@ export default function HomePage() {
             <li>
               <strong>Watch and export</strong>
               <small>
-                Use <code>.on()</code> for typed decisions, tools, cost, errors, and coverage; mount
-                {' '}<code>.enable.observability()</code> to send the same stream to OTel,
-                CloudWatch, NDJSON, or an audit bundle.
+                Use <code>.on()</code> for typed decisions, tools, cost, errors, and coverage; mount{' '}
+                <code>.enable.observability()</code> to send the same stream to OTel, CloudWatch,
+                NDJSON, or an audit bundle.
               </small>
             </li>
             <li>
               <strong>Archive the joined run</strong>
               <small>
-                <code>recordRun()</code> captures state, events, and structure together;
-                {' '}<code>persistRecording()</code> writes the versioned envelope to your sink.
+                <code>recordRun()</code> captures state, events, and structure together;{' '}
+                <code>persistRecording()</code> writes the versioned envelope to your sink.
               </small>
             </li>
             <li>
@@ -408,9 +542,6 @@ export default function HomePage() {
         </section>
       </section>
 
-      {/* The closing invitation. One analogy, not four — a reader carries exactly
-          one comparison out of a page, and DevTools is the one that is universally
-          understood AND loved rather than merely tolerated. */}
       <section className="v21-try" aria-labelledby="v21-try-title">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -426,15 +557,17 @@ export default function HomePage() {
         />
         <h2 id="v21-try-title">Try agentfootprint</h2>
         <p>
-          A front-end developer would never debug blind — <em>they open DevTools.</em> Your agents
-          deserve the same.
+          Start with one answer, its evidence and the rule that decides whether it can be delivered.
         </p>
         <div className="v21-try-actions">
           <code>npm i agentfootprint</code>
-          <Link className="v2-button v2-button-primary" href="/docs/build/skill-graph-quickstart">
+          <Link className="v2-button v2-button-primary" href="/docs/getting-started/quick-start">
             Build your first agent <span aria-hidden="true">→</span>
           </Link>
-          <Link className="v2-button v2-button-quiet" href="https://github.com/footprintjs/agentfootprint">
+          <Link
+            className="v2-button v2-button-quiet"
+            href="https://github.com/footprintjs/agentfootprint"
+          >
             Star on GitHub
           </Link>
         </div>
