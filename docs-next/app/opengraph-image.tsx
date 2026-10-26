@@ -42,18 +42,27 @@ export default function OpengraphImage() {
 
         {/* middle: headline */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div style={{ display: 'flex', fontSize: 68, fontWeight: 800, color: '#f5f3ec', lineHeight: 1.05, maxWidth: 980 }}>
-            Find the context that made your agent answer wrong.
+          <div
+            style={{
+              display: 'flex',
+              fontSize: 68,
+              fontWeight: 800,
+              color: '#f5f3ec',
+              lineHeight: 1.05,
+              maxWidth: 980,
+            }}
+          >
+            Build agents whose answers can be checked.
           </div>
           <div style={{ display: 'flex', fontSize: 32, color: '#b8b3a8', maxWidth: 900 }}>
-            The explainable AI-agent framework. Why is a query, not a guess.
+            Recorded evidence. Explicit uncertainty. Your checks before delivery.
           </div>
         </div>
 
         {/* bottom: tagline + install */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', fontSize: 30, fontWeight: 700, color: '#ffc700' }}>
-            Inject less. Trace more.
+            {SITE.tagline}
           </div>
           <div style={{ display: 'flex', fontSize: 26, color: '#8c887e', fontFamily: 'monospace' }}>
             npm i agentfootprint
