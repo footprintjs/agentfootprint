@@ -1,28 +1,25 @@
-
-
 <h1 align="center">Agentfootprint</h1>
 
 <p align="center">
-  <strong>Your agent gave an answer that <em>looks</em> right — and it's wrong.<br/>The logs can't tell you who influenced it. Agentfootprint can.</strong>
+  <strong>Build agents whose answers can be checked.</strong>
 </p>
 
 <p align="center">
-  The explainable AI agent framework for TypeScript: every read, write, decision, and tool call becomes
-  <strong>connected evidence</strong> as your agent runs. When something goes wrong, you don't grep logs — you ask.
+  A TypeScript agent framework for connecting answers to recorded evidence, making uncertainty explicit,
+  and checking outputs before delivery. Configure what an answer must support and when to withhold it.
 </p>
 
 <p align="center">
-  <strong>Build</strong> agents — skills, steering, RAG, memory, control flow — and <strong>debug</strong> them like nothing else.<br/>
-  <em>Why</em> is a query, not a guess.
+  Built on <a href="https://github.com/footprintjs/footPrint">FootprintJS execution provenance</a>:
+  context, tool calls, results and decisions become connected records as the agent runs.<br/>
+  Build with tools, skills, memory, RAG and orchestration; use that record for answer checks, debugging and review.
 </p>
 
 <p align="center">
-  <a href="https://footprintjs.github.io/agentThinkingUI/">
-    <img src="docs/assets/hero-atui.png" alt="An agent run replayed in Story Lens — the LLM 'brain' calls the Flight-search tool, the step inspector shows the tool's raw output and the brain's reasoning about it, and the timeline scrubs every step of the run." width="100%">
-  </a>
-</p>
-<p align="center">
-  <sub>A real run, replayed — rendered with <a href="https://github.com/footprintjs/agentThinkingUI"><b>Story Lens</b></a> (<code>npm i agentthinkingui</code>). Every frame is generated from the run's own trace; <a href="https://footprintjs.github.io/agentThinkingUI/">▶ watch it live</a>.</sub>
+  <a href="#what-can-this-answer-support">Evidence and limits</a> ·
+  <a href="#checks-you-can-enable">Checks and guarantees</a> ·
+  <a href="#how-this-compares-with-langchain-and-mastra">Framework comparison</a> ·
+  <a href="#quick-start--runs-offline-no-api-key">Quick start</a>
 </p>
 
 <p align="center">
@@ -37,38 +34,75 @@
 
 ---
 
-## The new error class
+## What can this answer support?
 
-For decades, software had two kinds of errors — and developers never needed deep
-domain knowledge to fix either:
+A tool returned no rows. Before an agent says **"there are no incidents"**, the app
+needs to know which account was searched, what period the read covered, whether it
+finished, and what it could not reach. A successful empty query and a failed query
+support different answers.
 
-| Error class | Where the bug lives | How you find it |
+For example, the bounded claim is: **"The search returned no matching incidents
+for this account and time window. Email reports were not checked."** That is an
+illustration of scope-aware wording, not a claim that no incident exists anywhere.
+When the evidence cannot support the requested conclusion, the app should make
+that uncertainty explicit or withhold the answer.
+
+Agentfootprint supplies the execution record and configurable checks for that
+decision. Your app defines the comparisons and delivery policy. Tool declarations
+must describe the query truthfully: recording a source's assertion does not prove
+the source is correct.
+
+## How evidence reaches the answer
+
+1. **Record what ran.** FootprintJS connects execution steps and data dependencies;
+   Agentfootprint records the context supplied, tools called and results returned.
+2. **Preserve the limits.** Tools declare absence, coverage and time boundaries.
+   Configure those limits to travel with the answer instead of relying on the model
+   to repeat them.
+3. **Check before delivery.** Opt-in answer validation compares the candidate with
+   evidence under app-authored rules. Enforce mode withholds failed or unverified
+   candidates; the host decides how to explain the refusal to the user.
+4. **Inspect the same run.** Review recorded inputs, results, decisions and checks,
+   or replay the execution to investigate a failure.
+
+Execution provenance describes what ran and what was supplied. It does not expose
+the model's internal reasoning or independently establish that an external fact
+is true. Withholding an answer does not undo tool actions already performed.
+
+## Checks you can enable
+
+Installing the framework does not make every answer verified. These mechanisms
+have different jobs and must be configured for the claims your app needs to check.
+
+| Mechanism | What it provides | Boundary of the guarantee |
 |---|---|---|
-| **Infrastructure** — crash, timeout, 500 | the system | infra logs, monitoring |
-| **Business logic** — wrong branch, wrong math | the code | stack trace, debugger, `console.log` |
-| **Contextual** — wrong tool chosen, wrong fact believed, stale memory trusted | **what the model was given** | **nothing. Until now.** |
+| [`absent()`, `coverage()` and `.limitsTravelWithTheAnswer()`](#what-a-tool-returns--three-helpers-one-rule) | Explicit absence and declared limits, carried into prose or returned beside typed output. | Preserves declarations; does not prove that the tool described its coverage correctly. |
+| [`.answerValidation()`](docs-next/content/docs/build/output-schema.mdx#check-the-answer-against-evidence) | App-authored checks on a typed final answer. Enforce mode buffers drafts and withholds failed or unverified answers; observe mode records the report and permits delivery. | Only the configured checks are judged. The app owns their correctness and the trustworthiness of its evidence. |
+| [`.namesAndNumbersFromEvidence()`](docs-next/content/docs/build/evidence-gate.mdx) | A deterministic detector for unsupported values, with configurable extraction limits and delivery postures. | Default `assist` flags; `rails` refuses. A false sentence assembled from real values can pass. This is not general factual verification. |
+| [`Tool.search` and typed `.negativeClaims()`](docs-next/content/docs/build/negative-claims.mdx) | Composed search scope and library-written statements for cited structured negative claims, retaining gaps and withholding or reporting unsupported claims according to policy. | **Opt-in, available but not recommended pending benchmark gates.** Accuracy and usefulness remain unmeasured. Depends on truthful app-owned search declarations; other answer fields remain unchecked model text. |
+| [`.negativeClaims({ prose: true })`](docs-next/content/docs/build/negative-claims.mdx) | Bounded heuristic warnings on the model's own negative sentences. | Never verifies, blocks or rewrites an answer. The previous detector failed its benchmark; the revised path is unmeasured. No warning does not mean verified. |
 
-Agents introduced the third class. The code is correct, the infra is healthy, the
-answer even reads well — and the run is still wrong, because something influenced
-the model:
+The links above describe this branch. Features marked **unreleased** in the
+[capability index](CAPABILITIES.md) are not yet available in the published package;
+check its availability column and the [release notes](CHANGELOG.md) for your
+installed version. The basic quick start below does not enable these checks.
 
-| The model… | because… |
+## How this compares with LangChain and Mastra
+
+These frameworks all support agent building and runtime controls. The useful
+distinction is what each emphasizes, rather than whether it has guardrails.
+
+| Framework | Emphasis and existing runtime controls |
 |---|---|
-| picked the wrong tool | two descriptions read nearly alike — it chose between twins |
-| believed a wrong "fact" | a tool returned it, or an injected fact planted it |
-| followed the wrong instruction | the wrong skill / steering fired — or fired one iteration too early |
-| answered from the past | a previous turn or stale memory bled into this one |
+| **LangChain / LangGraph** | Model and tool integrations, agent loops and stateful orchestration with persistence and human oversight. [LangGraph](https://docs.langchain.com/oss/javascript/langgraph/overview) covers execution; [LangChain guardrails](https://docs.langchain.com/oss/javascript/langchain/guardrails) can check inputs, outputs and tool calls during a run. |
+| **Mastra** | A TypeScript framework for agent applications, with workflows, memory, development tools, tracing and evaluations. Its [input/output processors](https://mastra.ai/docs/agents/processors) can validate or transform messages during execution. [Overview](https://mastra.ai/docs). |
+| **Agentfootprint** | Agent building organized around FootprintJS execution provenance: connected execution records, declared evidence limits, and [configured checks](#checks-you-can-enable) that can govern answer delivery. |
 
-Classical logs can't explain any of it: **they record what the code did, never
-what the context did.** The debugging question changed — no longer *"what did my
-code do?"* but **"who influenced the model?"**
-
-## The idea
-
-If contextual errors live in what the model was given, then the run itself must be
-structured so context is **evidence** — every injection, read, write, decision, and
-tool call recorded *connected*, the moment it happens. Not logs you grep. Evidence
-you ask.
+Choose Agentfootprint when a central requirement is to connect an answer to what
+the agent actually read, the limits of that evidence, and the checks applied before
+delivery. Skills, tools and orchestration build the agent; the execution record
+also supports its answer policy. This comparison describes design emphasis, not
+exclusive capabilities or measured superiority in answer accuracy.
 
 ## Quick start — runs offline, no API key
 
@@ -92,7 +126,12 @@ const weather = defineTool({
 });
 
 const agent = Agent.create({
-  provider: mock({ reply: 'I checked: it is 72°F and sunny.' }),
+  provider: mock({
+    replies: [
+      { toolCalls: [{ id: 'weather-1', name: 'weather', args: { city: 'Paris' } }] },
+      { content: 'The demo weather tool returned 72°F and sunny for Paris.' },
+    ],
+  }),
   model: 'mock',
 })
   .system('You answer weather questions using the weather tool.')
@@ -100,10 +139,19 @@ const agent = Agent.create({
   .build();
 
 const result = await agent.run({ message: 'Weather in Paris?' });
-console.log(result);  // → "I checked: it is 72°F and sunny."
+console.log(result);  // → "The demo weather tool returned 72°F and sunny for Paris."
 ```
 
-For production, import a real provider from `agentfootprint/providers` and swap it in — `anthropic(...)` / `openai(...)` / `bedrock(...)` / `gemini(...)` / `ollama(...)`. Only the import line changes; the agent code stays the same. (Every provider — `mock` included — lives on the `agentfootprint/providers` subpath, so the main `agentfootprint` barrel stays free of optional peer-dep requires.)
+The tool runs locally and the mock scripts its call and reply. The temperature is
+fixture data, not a live weather reading; this example demonstrates wiring, not
+answer validation. For a configured delivery check, run the [mock answer-validation
+example](examples/features/99-guard-presented-code.ts).
+
+To use a real model, replace the scripted mock with a provider from
+`agentfootprint/providers` — `anthropic(...)` / `openai(...)` / `bedrock(...)` /
+`gemini(...)` / `ollama(...)` — and configure its model and any required credentials.
+The agent and tool wiring stays the same. Every provider, including `mock`, lives
+on that subpath so the main barrel stays free of optional provider SDK imports.
 
 **No cloud account?** `ollama('llama3.2')` from `agentfootprint/providers` runs the same agent against a local model for $0 — the free rung between the mock and the bill. Full recipes: [Ollama](https://agentfootprint.dev/docs/build/ollama/) · [OpenAI-compatible endpoints](https://agentfootprint.dev/docs/build/openai/#openai-compatible-endpoints-ollama-llamacpp-vllm-together-groq-lm-studio).
 
@@ -138,7 +186,7 @@ execute: ({ vm, summary }) => {
 
 What the model reads from each, exactly: [Tools → what `execute` returns](https://agentfootprint.dev/docs/build/tools/#what-execute-returns--three-helpers-one-rule).
 
-## How — we abstract context engineering
+## Building agents — context, tools and orchestration
 
 Skills, steering, RAG, facts, memory, guardrails — every name for context does one thing: it injects into one of three LLM slots. So we abstracted the injection itself.
 
@@ -184,12 +232,23 @@ That's the whole model: `Injection = slot × trigger × cache`.
 
 **3 slots × 4 triggers × N flavors = the entire context-engineering surface.**
 
-## What tracking buys you
+## Inspect and replay the evidence
 
-**See it in 30 seconds** — four questions logs can't answer, each answered by code in this repo from a real run:
+The recorded run also supports debugging. These examples illustrate different
+kinds of evidence; a similarity score or recorded dependency alone is not proof
+of why a model chose an answer.
+
+<p align="center">
+  <a href="https://footprintjs.github.io/agentThinkingUI/">
+    <img src="docs/assets/hero-atui.png" alt="An agent run replayed in Story Lens, with recorded tool output, model messages and an execution timeline." width="100%">
+  </a>
+</p>
+<p align="center">
+  <sub>A run replayed with <a href="https://github.com/footprintjs/agentThinkingUI"><b>Story Lens</b></a> (<code>npm i agentthinkingui</code>). Frames are generated from the run's trace; <a href="https://footprintjs.github.io/agentThinkingUI/">▶ watch it live</a>.</sub>
+</p>
 
 ```text
-Q: Why did the model pick refund_full instead of refund_partial?
+Q: Were refund_full and refund_partial described similarly?
 A: margin 0.02 — ⚠ NARROW: the two tool descriptions read nearly identical
    (toolChoiceRecorder — and the catalog lint flags the pair before you ever run)
 
@@ -197,23 +256,27 @@ Q: Why was this loan declined?
 A: decision ← [control: "DTI above the 0.43 affordability ceiling"] ← dti 0.52 ← monthlyDebt / income
    (decide() evidence + the causal slice — every hop is a real recorded edge)
 
-Q: Which piece of context made the answer wrong?
-A: CAUSAL: ablating fact 'vip-override' flipped the outcome in 3/3 seeded reruns
-   (localizeContextBug — ranked proxies, counterfactual proof)
+Q: Did removing a piece of context change the outcome in these reruns?
+A: ablating fact 'vip-override' flipped the outcome in 3/3 seeded reruns
+   (localizeContextBug — evidence from those counterfactual trials)
 
-Q: Prove nobody edited this run's record.
+Q: Does this exported bundle pass its integrity check?
 A: verifyAuditBundle → valid: false, brokenAt: #16 — the tampered record, named
    (hash-chained audit export, offline verification)
 ```
 
-And you don't have to read the trace yourself — the trace toolpack lets a debugger model do it: in one run it found a planted bug while reading **9.5% of the trace** ([self-explain](https://agentfootprint.dev/docs/debug/self-explain/)). The watching costs the run nothing: recorders run one beat behind the agent, never on its hot path.
+The trace toolpack also lets a debugger model inspect the record: in one run it
+found a planted bug while reading **9.5% of the trace**
+([self-explain](https://agentfootprint.dev/docs/debug/self-explain/)). That is one
+debugging result, not an answer-accuracy benchmark. Integrity checks establish
+properties of the exported record; they do not establish that its source data was true.
 
 ## Pick your door
 
-| 🔧 Building an agent? | 🐛 Agent misbehaving? | 🏛️ Need audit / compliance? |
+| Checking answers? | Building an agent? | Inspecting a run? |
 |---|---|---|
-| Typed agents with skills, steering, RAG, memory, guardrails — and the trace for free. | Lint your tool catalog in 5 minutes — works on **any** framework's tool list. Then causal slices, context bisection, and the debugger-LLM toolpack. | Hash-chained, tamper-evident run records with an offline verifier — record-keeping in the EU-AI-Act shape. |
-| [→ Quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) · [→ Build an agent](https://agentfootprint.dev/docs/build/agent/) | [→ Debug](https://agentfootprint.dev/docs/debug/debug/) · [→ Tool-catalog lint](https://agentfootprint.dev/docs/debug/tool-catalog-lint/) · [→ Self-explain](https://agentfootprint.dev/docs/debug/self-explain/) | [→ Exporters & audit bundles](https://agentfootprint.dev/docs/monitor/exporters/) · [→ Security](https://agentfootprint.dev/docs/monitor/security/) |
+| Declare the evidence and limits; configure checks and the response to uncertainty. | Typed agents with skills, steering, RAG, memory and control flow. | Recorded dependencies, counterfactual reruns, replay and audit-bundle integrity checks. |
+| [→ Checks and guarantees](#checks-you-can-enable) · [→ Output contracts](docs-next/content/docs/build/output-schema.mdx) | [→ Quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) · [→ Build an agent](https://agentfootprint.dev/docs/build/agent/) | [→ Debug](https://agentfootprint.dev/docs/debug/debug/) · [→ Exporters & audit bundles](https://agentfootprint.dev/docs/monitor/exporters/) |
 
 ## Mocks first, production second
 
