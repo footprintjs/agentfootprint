@@ -14,7 +14,7 @@ export function SkillGraphScene() {
   return (
     <figure className="v21-skillgraph">
       <figcaption className="v21-visually-hidden">
-        A refund request selects billing.refund from several candidate skills. Only that skill&apos;s
+        With tool scoping enabled, a refund request selects billing.refund. That skill&apos;s
         procedure, three tools, and model enter the working set.
       </figcaption>
 

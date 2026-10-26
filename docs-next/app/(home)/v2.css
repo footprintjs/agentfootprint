@@ -2241,3 +2241,142 @@ html {
     margin-inline: auto;
   }
 }
+
+
+/* Evidence-first opening: retain the existing type, gold accents and scene language. */
+.v21-hero > h1 em {
+  color: var(--yellow-ink);
+  font-style: normal;
+}
+.v21-hero > .v2-actions {
+  margin-top: 24px;
+}
+.v21-foundation,
+.v21-boundary {
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.v21-foundation {
+  margin: 0;
+  max-width: 55ch;
+}
+.v21-foundation a,
+.v21-contract a,
+.v21-position a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-decoration-color: var(--yellow-dark);
+  text-underline-offset: 4px;
+}
+.v21-contract,
+.v21-position {
+  width: min(100%, var(--v2-max));
+  margin: 0 auto;
+  padding: clamp(48px, 7vw, 88px) var(--v2-pad);
+  scroll-margin-top: 80px;
+}
+.v21-contract header > h2,
+.v21-position h2 {
+  max-width: 23ch;
+  margin: 16px 0;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.v21-contract header > p:last-child,
+.v21-position > p:not(.v2-kicker) {
+  max-width: 76ch;
+  color: var(--fg-muted);
+  line-height: 1.7;
+}
+.v21-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 32px;
+}
+.v21-contract-grid article {
+  border-top: 2px solid var(--yellow-dark);
+  padding-top: 22px;
+}
+.v21-contract-grid h3 {
+  font-size: 21px;
+  letter-spacing: -0.03em;
+  margin: 14px 0;
+}
+.v21-contract-grid p {
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.v21-contract-grid a {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 14px;
+}
+.v21-contract code {
+  overflow-wrap: anywhere;
+  font-family: var(--v2-mono);
+  font-size: 0.88em;
+}
+.v21-maturity {
+  margin-top: 36px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-elev);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.v21-maturity summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.v21-maturity p {
+  max-width: 95ch;
+  color: var(--fg-muted);
+}
+.v21-comparison-wrap {
+  margin-top: 28px;
+  overflow-x: auto;
+}
+.v21-position table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+}
+.v21-position caption {
+  padding-bottom: 12px;
+  color: var(--fg-muted);
+  font-size: 13px;
+  text-align: left;
+}
+.v21-position th,
+.v21-position td {
+  padding: 16px 20px 16px 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.v21-position th {
+  min-width: 145px;
+  font-weight: 650;
+}
+.v21-position td {
+  color: var(--fg-muted);
+}
+.v21-contract :focus-visible,
+.v21-position a:focus-visible,
+.v21-foundation a:focus-visible {
+  outline: 2px solid var(--yellow-ink);
+  outline-offset: 4px;
+}
+@media (max-width: 760px) {
+  .v21-contract-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+}
