@@ -25,6 +25,15 @@ export { callTraceTool, traceToolpack, TRACE_TOOL_NAMES } from './traceToolpack.
 export { lazyTraceToolpack, NO_COMPLETED_RUN_MESSAGE } from './lazyToolpack.js';
 export { openRecording, type OpenableRecording } from './openRecording.js';
 export type { TraceCauseArtifacts, TraceCauseOptions, TraceCauseOperation } from './causeTypes.js';
+export { traceCauseTools } from './causeTools.js';
+export { readStoredCauseArtifacts } from './storedCause.js';
+export type {
+  ReadStoredCauseOptions,
+  StoredCauseUnknown,
+  StoredCauseAdmission,
+  StoredCauseArtifacts,
+  StoredCauseResult,
+} from './storedCauseTypes.js';
 // The record a TOOL keeps of its own run — what `inspect_tool_run` opens.
 // `INNER_RUN_RECORDS` / `innerRunsOf` are the join key between a Tool and
 // its store; `innerRunStore` / `mergeInnerRuns` exist for consumers wiring

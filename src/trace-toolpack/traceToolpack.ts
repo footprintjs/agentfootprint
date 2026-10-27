@@ -67,6 +67,8 @@ import { askInner, framed, innerPackSlot, type InnerQuestion } from './innerDesc
 import type { InnerRunRecord } from '../core/innerRunRecords.js';
 import { openRecording } from './openRecording.js';
 import { buildCauseTools } from './causeTools.js';
+import { storedCauseAssessment } from './storedCauseBinding.js';
+import { captureOwn } from './causeCapture.js';
 import {
   homeMountOf,
   innerCommitCount,
@@ -464,6 +466,20 @@ export function traceToolpack(
   artifacts: TraceToolpackArtifacts,
   options?: TraceToolpackOptions,
 ): Tool[] {
+  // Saved-only evidence has its own graph-only door. Inspect the claim as data
+  // before a snapshot getter, indexing or any graph code can run.
+  let savedClaim = true;
+  try {
+    const cause = Object.getOwnPropertyDescriptor(artifacts, 'cause');
+    savedClaim =
+      storedCauseAssessment(artifacts).kind !== 'none' ||
+      (cause === undefined
+        ? 'cause' in artifacts
+        : storedCauseAssessment(captureOwn(artifacts, 'cause')).kind !== 'none');
+  } catch {
+    // An accessor or hostile object cannot supply evidence for a mixed bag.
+  }
+  if (savedClaim) throw new TypeError('Stored capture evidence requires traceCauseTools.');
   const opts = resolveToolpackOptions(options);
   const index = buildIndex(artifacts);
   // ONE reader over the scattered tool-call evidence, shared by the two
