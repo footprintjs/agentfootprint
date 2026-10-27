@@ -16,7 +16,11 @@ function publicDoors(name) {
   const root = resolve(docsRoot, '../node_modules', name);
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
   return Object.entries(pkg.exports)
-    .filter(([door, target]) => door !== './package.json' && target?.import?.default)
+    .filter(([door, target]) => {
+      if (typeof target === 'string' && target.endsWith('.json')) return false;
+      assert.equal(typeof target?.import?.default, 'string', `${name}${door}: unsupported export shape`);
+      return true;
+    })
     .map(([door, target]) => [
       door === '.' ? name : `${name}/${door.slice(2)}`,
       resolve(root, target.import.default),
@@ -36,12 +40,11 @@ function webpackConfig(isServer) {
 test('every current public Foottrace door shares the library root in the client', () => {
   const aliases = webpackConfig(false).resolve.alias;
   const doors = publicDoors('foottrace');
-  assert.deepEqual(doors.map(([name]) => name).sort(), [
-    'foottrace',
-    'foottrace/cause',
-    'foottrace/paths',
-    'foottrace/write',
-  ]);
+  assert.ok(doors.some(([request]) => request === 'foottrace'), 'The public root must be covered');
+  const actualKeys = Object.keys(aliases).filter(
+    (key) => key === 'foottrace' || key === 'foottrace$' || key.startsWith('foottrace/'),
+  );
+  assert.deepEqual(actualKeys.sort(), doors.map(([request]) => `${request}$`).sort());
   for (const [request, file] of doors) {
     assert.equal(aliases[`${request}$`], file, request);
     assert.ok(existsSync(file), file);
