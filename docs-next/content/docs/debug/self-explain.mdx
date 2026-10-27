@@ -224,7 +224,32 @@ A `ready` result can be passed to `traceCauseTools(result.cause, limits)`, which
 
 The factory preserves reads and writes whose value was `undefined`, including literal dotted or slash-containing keys. The returned native `capture` still describes an in-memory root segment. A separate `storage` field describes the adapter's acknowledgement of these saved bytes. Neither a receipt nor an unsigned checksum authenticates the producer or proves whole-workflow delivery. Authorize the source before admission. A ready graph can still have query gaps or no unique root.
 
-Only eligible version-1 native root histories are supported. **Saved version-2 exact-source evidence stays `unknown` with reason `source-ownership-unproven`.** Current records do not independently establish every state namespace and attempt binding; the reader never invents an attempt, copies source labels into their own authorization list or guesses a source from timing. Child and resumed histories are also outside this admission contract. Missing, partial or unsupported capture never becomes complete merely because storage acknowledged it.
+These names describe the history and its evidence:
+
+| Name | What it describes |
+| --- | --- |
+| **Saved execution history** | A run's recorded history, with a separate storage acknowledgement. |
+| **Exact read-source evidence** | Recorded descriptions of which value version a tracked read received, including explicit unknowns and gaps. |
+| **Producer ownership evidence** | Independently recorded bindings between executions, state namespaces and actual invocations. This does not authenticate the producer. |
+
+These are separate kinds of evidence, not upgrade levels. Each retains its own capture status and limitations; a name alone establishes neither completeness nor permission to use it.
+
+Only eligible native root histories without read-source capture are currently supported by this reader. **Saved histories with exact read-source capture stay `unknown` with reason `source-ownership-unproven`.** A producer may include ownership evidence, but this AgentFootprint reader does not yet use it for cause admission. The reader never invents an attempt, treats source labels as their own ownership proof or guesses a source from timing. Child and resumed histories are also outside this admission contract. Missing, partial or unsupported capture never becomes complete merely because storage acknowledged it.
+
+<details>
+<summary>Format identifiers for reader compatibility</summary>
+
+The stored integers identify independent data layouts. They are not package versions, confidence scores or completeness claims. Here, `history` is the history returned by the producer's public reader.
+
+| Field | Layout |
+| --- | --- |
+| `history.capture.version` | `1`: the note reports read-source capture as `not-collected`; `2`: the note can report other read-source capture statuses. |
+| `history.readSources.version` | `1`: read-source observations without an ownership witness; `2`: observations with a separate producer ownership witness. |
+| `history.readSources.ownership.version` | `1`: the ownership witness's own layout. This field exists only when that witness is present. |
+
+The numeric identifiers remain in stored records so readers can recognize their layouts. Recognizing a layout alone does not establish completeness or ownership.
+
+</details>
 
 Keep the exact factory result within the module instance that created it. Its graph is frozen and its saved assessment is bound privately. Copying, spreading, replacing its graph, serializing it or transferring it between separate CommonJS/ESM instances loses that authority. The tools refuse counterfeit stored claims with fixed text before querying a graph. Pass factory results to `traceCauseTools`; the full snapshot `traceToolpack` refuses stored-claim artifacts before indexing. Ordinary host-authorized custom graphs retain their existing behavior.
 
