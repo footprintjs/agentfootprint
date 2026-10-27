@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { readStoredCauseArtifacts } from '../../src/trace-toolpack/storedCause.js';
 import { traceCauseTools } from '../../src/trace-toolpack/causeTools.js';
 import { callTraceTool, traceToolpack } from '../../src/trace-toolpack/traceToolpack.js';
+import legacyV2 from './fixtures/public-v2-no-ownership.json';
 import {
   noteData,
   rehashStoredFixture,
@@ -119,8 +120,8 @@ describe('saved cause: public producer evidence', () => {
     },
   );
 
-  it('leaves a real v2 source record unknown instead of inventing attempt or namespace ownership', async () => {
-    const fixture = await storedCauseFixture({ readSources: true, plain: true });
+  it('leaves the public legacy v2 packet without attempt witnesses unknown', async () => {
+    const fixture = legacyV2;
     const history = await requireStoredHistory(fixture.entries, fixture.runId);
     expect(history.capture.version).toBe(2);
     expect(history.readSources).toBeDefined();
@@ -132,6 +133,21 @@ describe('saved cause: public producer evidence', () => {
     expect(
       history.readSources?.record?.occurrences.every((read) => read.attemptId === undefined),
     ).toBe(true);
+    const answer = await readStoredCauseArtifacts(fixture.entries, { runId: fixture.runId });
+    expect(answer).toEqual({ status: 'unknown', reason: 'source-ownership-unproven' });
+    expect(answer).not.toHaveProperty('cause');
+  });
+
+  it('keeps live native v2 sources unknown even when the producer supplies ownership labels', async () => {
+    const fixture = await storedCauseFixture({ readSources: true, plain: true });
+    const history = await requireStoredHistory(fixture.entries, fixture.runId);
+    expect(history.capture.version).toBe(2);
+    expect(history.capture.persistence).toBe('memory-only');
+    expect(history.readSources).toBeDefined();
+    expect(history.commitLog).toHaveLength(2);
+    expect(history.executionTree.next?.readSourceCounts).toBeDefined();
+    expect(history.readSources?.record?.occurrences.length).toBeGreaterThan(0);
+    // Producer labels may evolve. Their presence alone must not enable saved v2 admission.
     const answer = await readStoredCauseArtifacts(fixture.entries, { runId: fixture.runId });
     expect(answer).toEqual({ status: 'unknown', reason: 'source-ownership-unproven' });
     expect(answer).not.toHaveProperty('cause');
