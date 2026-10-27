@@ -37,6 +37,8 @@ function interpretationFor(
     ? `${text} ${
         capture === true
           ? 'The capture/end attestation was not inspected. No completeness claim is made.'
+          : capture.reason === 'captured-root-log' && capture.readSources !== 'not-collected'
+          ? 'Capture covers this saved root log segment only. Read-source observations use independently collected native ownership; unavailable reads retain gaps. Child scopes and whole-workflow durable delivery remain unproven.'
           : CAPTURE_REASONS[capture.reason]
       }`
     : text;

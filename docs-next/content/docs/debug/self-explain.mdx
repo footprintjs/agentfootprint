@@ -234,7 +234,13 @@ These names describe the history and its evidence:
 
 These are separate kinds of evidence, not upgrade levels. Each retains its own capture status and limitations; a name alone establishes neither completeness nor permission to use it.
 
-Only eligible native root histories without read-source capture are currently supported by this reader. **Saved histories with exact read-source capture stay `unknown` with reason `source-ownership-unproven`.** A producer may include ownership evidence, but this AgentFootprint reader does not yet use it for cause admission. The reader never invents an attempt, treats source labels as their own ownership proof or guesses a source from timing. Child and resumed histories are also outside this admission contract. Missing, partial or unsupported capture never becomes complete merely because storage acknowledged it.
+With FootPrint 10.6.0 or later, the same reader also uses **exact read-source evidence** when the saved history contains captured **producer ownership evidence**. The producer's public reader checks the native invocation counts, state namespaces, attempts and first commit boundaries. AgentFootprint passes those admitted ownership bindings and the same history's source record to Foottrace, which owns the source checks and graph queries. No source row supplies its own authority, and no attempt or namespace is guessed.
+
+<CodeFile path="examples/features/115-saved-read-sources.ts" region="saved-exact-read" title="Use a saved execution's exact read sources without a model" />
+
+**Unproven ownership stays `unknown` with reason `source-ownership-unproven`, without a graph.** This includes older source observations without a captured ownership witness. Partial capture can yield an incomplete graph with explicit gaps; a storage acknowledgement never upgrades it. This reader supports only the top-level root's first segment. Child and resumed histories, staged-write joins, and whole-workflow delivery remain outside this admission contract.
+
+Exact sources establish which version an execution read. They do not establish that a particular output used that read: output-specific queries retain conservative gaps. Recorded unavailable, composite or staged sources remain uncertain, even when the observation itself was captured. `admission.native.version` reports the native capture format, while `admission.readSources` reports the source channel's captured, partial, failed or unknown status. Existing histories without read-source capture still report `not-collected`. The original native note remains memory-only and storage acknowledgement remains separate; neither is producer authentication.
 
 <details>
 <summary>Format identifiers for reader compatibility</summary>

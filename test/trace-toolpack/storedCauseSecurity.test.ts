@@ -138,7 +138,7 @@ describe('saved cause: public producer evidence', () => {
     expect(answer).not.toHaveProperty('cause');
   });
 
-  it('keeps live native v2 sources unknown even when the producer supplies ownership labels', async () => {
+  it('admits public native sources only with the newly retained producer ownership witness', async () => {
     const fixture = await storedCauseFixture({ readSources: true, plain: true });
     const history = await requireStoredHistory(fixture.entries, fixture.runId);
     expect(history.capture.version).toBe(2);
@@ -147,10 +147,13 @@ describe('saved cause: public producer evidence', () => {
     expect(history.commitLog).toHaveLength(2);
     expect(history.executionTree.next?.readSourceCounts).toBeDefined();
     expect(history.readSources?.record?.occurrences.length).toBeGreaterThan(0);
-    // Producer labels may evolve. Their presence alone must not enable saved v2 admission.
+    expect(history.readSources?.version).toBe(2);
     const answer = await readStoredCauseArtifacts(fixture.entries, { runId: fixture.runId });
-    expect(answer).toEqual({ status: 'unknown', reason: 'source-ownership-unproven' });
-    expect(answer).not.toHaveProperty('cause');
+    expect(answer.status).toBe('ready');
+    if (answer.status === 'ready') {
+      expect(answer.cause.admission.native.version).toBe(2);
+      expect(answer.cause.admission.readSources).toBe('captured');
+    }
   });
 
   it.each([

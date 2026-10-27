@@ -15,12 +15,14 @@ export type CaptureReason =
   | 'control-not-retained'
   | 'projection-incomplete';
 
+export type SourceCaptureStatus = 'captured' | 'partial' | 'failed' | 'unknown';
+
 export interface SnapshotCapture {
   readonly status: 'admitted' | 'incomplete';
   readonly reason: CaptureReason;
   readonly scope: 'root-log';
   readonly persistence: 'memory-only';
-  readonly readSources: 'not-collected';
+  readonly readSources: 'not-collected' | SourceCaptureStatus;
 }
 
 /** Own DATA only. A metadata getter is never a source of captured evidence. */
@@ -32,13 +34,16 @@ export function captureOwn(object: unknown, key: string): unknown {
   return field.value;
 }
 
-export function captureAssessment(reason: CaptureReason): SnapshotCapture {
+export function captureAssessment(
+  reason: CaptureReason,
+  readSources: SnapshotCapture['readSources'] = 'not-collected',
+): SnapshotCapture {
   return {
     status: reason === 'captured-root-log' ? 'admitted' : 'incomplete',
     reason,
     scope: 'root-log',
     persistence: 'memory-only',
-    readSources: 'not-collected',
+    readSources,
   };
 }
 
@@ -52,11 +57,33 @@ const BASE_LIMITATIONS = new Set([
 
 /** Admit only the native root/current-leg contract. This is not an authenticity or storage check. */
 export function assessCapture(snapshot: unknown, commits: number): SnapshotCapture {
+  return assessCapturePolicy(snapshot, commits, 'not-collected');
+}
+
+/** Saved-only: the public producer reader has separately admitted source ownership. */
+export function assessSourceCapture(
+  snapshot: unknown,
+  commits: number,
+  sources: SourceCaptureStatus,
+): SnapshotCapture {
+  return assessCapturePolicy(snapshot, commits, sources);
+}
+
+function assessCapturePolicy(
+  snapshot: unknown,
+  commits: number,
+  sources: SnapshotCapture['readSources'],
+): SnapshotCapture {
+  const assessment = (reason: CaptureReason) => captureAssessment(reason, sources);
+  const exact = sources !== 'not-collected';
   try {
     const note = captureOwn(snapshot, 'capture');
-    if (note === undefined) return captureAssessment('missing-attestation');
-    if (captureOwn(note, 'version') !== 1 || captureOwn(note, 'persistence') !== 'memory-only')
-      return captureAssessment('invalid-attestation');
+    if (note === undefined) return assessment('missing-attestation');
+    if (
+      captureOwn(note, 'version') !== (exact ? 2 : 1) ||
+      captureOwn(note, 'persistence') !== 'memory-only'
+    )
+      return assessment('invalid-attestation');
     const runId = captureOwn(snapshot, 'runId');
     if (
       typeof runId !== 'string' ||
@@ -64,7 +91,7 @@ export function assessCapture(snapshot: unknown, commits: number): SnapshotCaptu
       runId.length > 128 ||
       captureOwn(note, 'runId') !== runId
     )
-      return captureAssessment('run-mismatch');
+      return assessment('run-mismatch');
     const address = captureAddress(captureOwn(snapshot, 'logAddress'));
     const covered = captureAddress(captureOwn(note, 'logAddress'));
     if (
@@ -74,12 +101,12 @@ export function assessCapture(snapshot: unknown, commits: number): SnapshotCaptu
       address.logRunId !== runId ||
       covered.logRunId !== address.logRunId
     )
-      return captureAssessment('scope-not-covered');
+      return assessment('scope-not-covered');
     const extent = captureOwn(note, 'commits');
     if (captureOwn(extent, 'from') !== 0 || captureOwn(extent, 'to') !== commits)
-      return captureAssessment('incomplete-extent');
+      return assessment('incomplete-extent');
     if (captureOwn(captureOwn(note, 'boundary'), 'status') !== 'completed')
-      return captureAssessment('run-not-completed');
+      return assessment('run-not-completed');
     const modes = captureOwn(note, 'modes');
     const values = captureOwn(modes, 'commitValues');
     if (
@@ -90,28 +117,32 @@ export function assessCapture(snapshot: unknown, commits: number): SnapshotCaptu
       captureOwn(modes, 'writeProvenance') !== 'reads-prefix' ||
       captureOwn(snapshot, 'writeProvenance') !== 'reads-prefix'
     )
-      return captureAssessment('modes-not-supported');
+      return assessment('modes-not-supported');
     const channels = captureOwn(note, 'channels');
     if (
       !['reads', 'writes', 'attention', 'control'].every(
         (channel) => captureOwn(channels, channel) === 'captured',
       ) ||
-      captureOwn(channels, 'readSources') !== 'not-collected'
+      captureOwn(channels, 'readSources') !== sources ||
+      (exact && sources !== 'captured')
     )
-      return captureAssessment('channel-not-captured');
+      return assessment('channel-not-captured');
     const limits = captureOwn(note, 'limitations');
-    if (!Array.isArray(limits) || limits.length !== BASE_LIMITATIONS.size)
-      return captureAssessment('capture-limited');
+    const expected = exact
+      ? new Set([...BASE_LIMITATIONS].filter((limit) => limit !== 'read-sources-not-collected'))
+      : BASE_LIMITATIONS;
+    if (!Array.isArray(limits) || limits.length !== expected.size)
+      return assessment('capture-limited');
     const seen = new Set<unknown>();
     for (let index = 0; index < limits.length; index++) {
       const limit = captureOwn(limits, String(index));
-      if (typeof limit !== 'string' || !BASE_LIMITATIONS.has(limit) || seen.has(limit))
-        return captureAssessment('capture-limited');
+      if (typeof limit !== 'string' || !expected.has(limit) || seen.has(limit))
+        return assessment('capture-limited');
       seen.add(limit);
     }
-    return captureAssessment('captured-root-log');
+    return assessment('captured-root-log');
   } catch {
-    return captureAssessment('invalid-attestation');
+    return assessment('invalid-attestation');
   }
 }
 

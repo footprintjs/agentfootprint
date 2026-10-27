@@ -107,7 +107,7 @@ describe('saved cause factory admission', () => {
     expect(reader).not.toHaveBeenCalled();
   });
 
-  it('withholds every v2 result without inventing attempt or namespace witnesses', async () => {
+  it('withholds a source-enabled result without inventing attempt or namespace witnesses', async () => {
     const value = history();
     value.capture.version = 2;
     reader.mockResolvedValue({ status: 'acknowledged', history: value });
@@ -116,6 +116,46 @@ describe('saved cause factory admission', () => {
       reason: 'source-ownership-unproven',
     });
   });
+
+  it.each([
+    ['ownership', 'source-ownership-unproven'],
+    ['record', 'source-incomplete'],
+  ])(
+    'refuses a future %s layout even if a newer public producer reader acknowledges it',
+    async (field, reason) => {
+      const original = history();
+      reader.mockResolvedValue({
+        status: 'acknowledged',
+        history: {
+          ...original,
+          capture: {
+            ...original.capture,
+            version: 2,
+            channels: { ...original.capture.channels, readSources: 'captured' },
+            limitations: original.capture.limitations.filter(
+              (gap) => gap !== 'read-sources-not-collected',
+            ),
+          },
+          readSources: {
+            version: 2,
+            status: 'captured',
+            ownership: {
+              version: field === 'ownership' ? 2 : 1,
+              status: 'captured',
+              limitations: [],
+              executions: [],
+            },
+            record: { version: field === 'record' ? 2 : 1, segment: 1 },
+          },
+        },
+      });
+      expect(await readStoredCauseArtifacts([], { runId: 'test-run' })).toEqual({
+        status: 'unknown',
+        reason,
+      });
+      expect(reader).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('maps producer refusal and thrown messages to fixed words', async () => {
     reader.mockResolvedValue({ status: 'unknown', reason: 'PRIVATE_RECEIPT_ERROR' });
