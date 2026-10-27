@@ -20,12 +20,12 @@ type Binding = {
 };
 const bindings = new WeakMap<object, Binding>();
 
-function admissionFor(capture: SnapshotCapture): StoredCauseAdmission {
+function admissionFor(capture: SnapshotCapture, version: 1 | 2): StoredCauseAdmission {
   return Object.freeze({
     native: Object.freeze({
       status: capture.status,
       reason: capture.reason,
-      version: 1 as const,
+      version,
       scope: 'root-log' as const,
       persistence: 'memory-only' as const,
     }),
@@ -33,7 +33,7 @@ function admissionFor(capture: SnapshotCapture): StoredCauseAdmission {
       status: 'adapter-acknowledged-history' as const,
       scope: 'root-log' as const,
     }),
-    readSources: 'not-collected' as const,
+    readSources: capture.readSources,
   });
 }
 
@@ -42,14 +42,15 @@ export function bindStoredCause(
   graph: CauseGraph,
   capture: SnapshotCapture,
   history: object,
+  version: 1 | 2,
 ): StoredCauseArtifacts {
   const frozenGraph = Object.freeze(graph);
   const frozenCapture = Object.freeze({ ...capture });
-  const admission = admissionFor(frozenCapture);
+  const admission = admissionFor(frozenCapture, version);
   // The display copy is separate from the authority retained by this module instance.
   const cause: StoredCauseArtifacts = Object.freeze({
     graph: frozenGraph,
-    admission: admissionFor(frozenCapture),
+    admission: admissionFor(frozenCapture, version),
   });
   bindings.set(cause, { graph: frozenGraph, capture: frozenCapture, admission, history });
   return cause;

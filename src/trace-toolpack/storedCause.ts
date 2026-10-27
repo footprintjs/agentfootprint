@@ -10,7 +10,7 @@ const unknown = (reason: StoredCauseUnknown): StoredCauseResult => ({ status: 'u
 
 /**
  * Admit one host-authorized saved root through the producer's public reader, without a runtime snapshot.
- * Storage acknowledgement is not producer authentication. V2 source ownership remains unknown.
+ * Storage acknowledgement is not producer authentication. Missing source ownership remains unknown.
  * Graph projection is capped at 4,096 nodes/commits and uses the producer's 256-level data depth.
  * Cannot preempt a blocking host iterator; cancellation is checked before and after asynchronous admission.
  */
@@ -50,8 +50,6 @@ export async function readStoredCauseArtifacts(
       );
     }
     const history = captureOwn(result, 'history');
-    if (captureOwn(captureOwn(history, 'capture'), 'version') === 2)
-      return unknown('source-ownership-unproven');
     const { projectStoredCause } = await import('./storedCauseProjection.js');
     if (storedCauseCancelled(configured.signal)) return unknown('cancelled');
     const projected = projectStoredCause(history, configured.runId, configured.maxBytes);

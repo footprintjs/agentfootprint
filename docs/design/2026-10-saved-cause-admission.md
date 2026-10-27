@@ -1,7 +1,10 @@
 # Saved root cause admission contract
 
 **Reviewed design snapshot.** This proposal was approved in PR #215 before implementation.
-The follow-up implements Step A and graph-only serving; Step B remains deferred.
+The first follow-up implemented Step A and graph-only serving. A later adoption implements
+Step B for the first root segment when the public producer reader admits captured native
+ownership evidence. Missing ownership stays unknown; staged, child and resumed source joins
+remain deferred. The original proposal below remains a design snapshot.
 The proposal wording below records the reviewed contract, rather than current release status.
 
 Implementation bounds: producer reading defaults to 16,384 entries, 4,096 missing-commit

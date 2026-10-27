@@ -4,6 +4,7 @@ import { copyJson } from '../lib/boundedJson.js';
 import { captureOwn as own } from './causeCapture.js';
 import { projectCauseBasis } from './causeProjection.js';
 import { bindStoredCause } from './storedCauseBinding.js';
+import { storedCauseSources } from './storedCauseSources.js';
 import type { StoredCauseResult } from './storedCauseTypes.js';
 
 function savedNodes(history: StoredCaptureHistory): {
@@ -78,8 +79,14 @@ export function projectStoredCause(
       return { status: 'unknown', reason: 'native-capture' };
     if (history.commitLog.length > 4096)
       return { status: 'unknown', reason: 'projection-incomplete' };
-    if (own(history.capture, 'version') !== 1 || own(history, 'readSources') !== undefined)
+    const version = own(history.capture, 'version');
+    if (
+      (version !== 1 && version !== 2) ||
+      (version === 1 && own(history, 'readSources') !== undefined)
+    )
       return { status: 'unknown', reason: 'native-capture' };
+    const sources = version === 2 ? storedCauseSources(history) : undefined;
+    if (typeof sources === 'string') return { status: 'unknown', reason: sources };
     const { nodes, readKeys } = savedNodes(history);
     // These are facts from this one history; no runtime-only fields or alternate history are synthesized.
     const basis = {
@@ -94,6 +101,7 @@ export function projectStoredCause(
     const projected = projectCauseBasis(basis, nodes, undefined, {
       readKeys,
       ...(history.initialState === undefined ? {} : { initialState: history.initialState }),
+      ...(sources === undefined ? {} : { sources }),
     });
     if (projected === undefined || projected === 'truncated')
       return { status: 'unknown', reason: 'projection-incomplete' };
@@ -108,7 +116,10 @@ export function projectStoredCause(
       ].includes(projected.capture.reason)
     )
       return { status: 'unknown', reason: 'native-capture' };
-    return { status: 'ready', cause: bindStoredCause(projected.graph, projected.capture, history) };
+    return {
+      status: 'ready',
+      cause: bindStoredCause(projected.graph, projected.capture, history, version),
+    };
   } catch {
     return { status: 'unknown', reason: 'projection-incomplete' };
   }

@@ -11,6 +11,7 @@ interface FixtureState {
 
 export interface StoredFixtureOptions {
   readonly readSources?: boolean;
+  readonly readSourceLimit?: number;
   readonly missing?: boolean;
   readonly readOnlyMissing?: boolean;
   readonly readTracking?: 'full' | 'off';
@@ -84,7 +85,14 @@ export async function storedCauseFixture(options: StoredFixtureOptions = {}): Pr
     readTracking: options.readTracking ?? 'full',
     writeTracking: 'full',
     writeProvenance: 'reads-prefix',
-    ...(options.readSources ? { readSources: true } : {}),
+    ...(options.readSources
+      ? {
+          readSources:
+            options.readSourceLimit === undefined
+              ? true
+              : { limits: { maxOccurrences: options.readSourceLimit } },
+        }
+      : {}),
     sink: capture
       ? {
           adapter,

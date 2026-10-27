@@ -1,5 +1,5 @@
 import type { StoredRecordLimits } from 'foottrace';
-import type { CaptureReason } from './causeCapture.js';
+import type { CaptureReason, SnapshotCapture } from './causeCapture.js';
 import type { TraceCauseArtifacts } from './causeTypes.js';
 
 /** Host-only options for one already authorized saved root; no model storage selector. */
@@ -36,7 +36,7 @@ export interface StoredCauseAdmission {
   readonly native: {
     readonly status: 'admitted' | 'incomplete';
     readonly reason: CaptureReason;
-    readonly version: 1;
+    readonly version: 1 | 2;
     readonly scope: 'root-log';
     readonly persistence: 'memory-only';
   };
@@ -44,7 +44,7 @@ export interface StoredCauseAdmission {
     readonly status: 'adapter-acknowledged-history';
     readonly scope: 'root-log';
   };
-  readonly readSources: 'not-collected';
+  readonly readSources: SnapshotCapture['readSources'];
 }
 
 /** Factory-owned cause. This display assessment is not transferable serving authority. */

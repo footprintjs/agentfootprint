@@ -4,10 +4,12 @@ import type { ControlDepLookup } from 'foottrace';
 import type { TraceCauseArtifacts } from './causeTypes.js';
 import {
   assessCapture,
+  assessSourceCapture,
   captureAddress,
   captureAssessment,
   captureOwn as own,
   type SnapshotCapture,
+  type SourceCaptureStatus,
 } from './causeCapture.js';
 import { capturedControl } from './causeControl.js';
 
@@ -23,6 +25,10 @@ export function projectCauseBasis(
   extras?: {
     readonly readKeys?: ReadonlyMap<string, readonly string[]>;
     readonly initialState?: Record<string, unknown>;
+    readonly sources?: {
+      readonly status: SourceCaptureStatus;
+      readonly scope: NonNullable<RecordScope['readSources']>;
+    };
   },
 ): SnapshotCauseArtifacts | 'truncated' | undefined {
   // A snapshot-local namespace is not a storage address or a service-correlation claim.
@@ -35,10 +41,12 @@ export function projectCauseBasis(
   const log = own(snapshot, 'commitLog') as RecordScope['commitLog'];
   if (!Array.isArray(log)) return undefined;
   if (log.length > 4096) return 'truncated';
-  let capture = assessCapture(snapshot, log.length);
+  let capture = extras?.sources
+    ? assessSourceCapture(snapshot, log.length, extras.sources.status)
+    : assessCapture(snapshot, log.length);
   const nativeControl = capture.status === 'admitted' ? capturedControl(snapshot) : undefined;
   if (capture.status === 'admitted' && nativeControl === undefined)
-    capture = captureAssessment('control-not-retained');
+    capture = captureAssessment('control-not-retained', capture.readSources);
   const reads: Record<string, readonly string[]> = Object.create(null);
   const marks: Record<string, unknown> = Object.create(null);
   const control: Record<string, { deciderId: string }> = Object.create(null);
@@ -60,7 +68,7 @@ export function projectCauseBasis(
     capture.status === 'admitted' &&
     log.some((bundle) => !nodes.has(own(bundle, 'runtimeStageId') as string))
   )
-    capture = captureAssessment('projection-incomplete');
+    capture = captureAssessment('projection-incomplete', capture.readSources);
   const complete = capture.status === 'admitted';
   const scopeAddress = (complete && captureAddress(own(snapshot, 'logAddress'))) || address;
   const scope: RecordScope = {
@@ -75,6 +83,7 @@ export function projectCauseBasis(
       : { controlDeps: control }),
     complete,
     ...(extras?.initialState === undefined ? {} : { initialState: extras.initialState }),
+    ...(extras?.sources === undefined ? {} : { readSources: extras.sources.scope }),
   };
   const graph = createRecordGraph([scope], { maxCommits: 4096 });
   // The public scope reader admits untrusted commits and creates its own official IDs.
