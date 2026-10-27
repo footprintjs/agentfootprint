@@ -1,0 +1,300 @@
+{
+  "provenance": {
+    "producer": "footprintjs@10.5.0",
+    "sink": "foottrace@1.8.0 memorySink",
+    "serialization": "JSON.stringify then JSON.parse of the public sink entries; no packet edits",
+    "acknowledgement": "Explicit test-host durability assertion; not a file sink, fsync, producer authentication or independent durability audit",
+    "options": {
+      "readSources": true,
+      "plain": true
+    }
+  },
+  "runId": "1793114992265-0000000001",
+  "entries": [
+    {
+      "kind": "opened",
+      "address": {
+        "logRunId": "1793114992265-0000000001",
+        "drillPath": []
+      },
+      "at": 1793114992265,
+      "initialState": {},
+      "meta": {
+        "runId": "1793114992265-0000000001",
+        "chart": {
+          "id": "quote",
+          "name": "Recover"
+        }
+      }
+    },
+    {
+      "kind": "commit",
+      "address": {
+        "logRunId": "1793114992265-0000000001",
+        "drillPath": []
+      },
+      "at": 1793114992268,
+      "bundle": {
+        "overwrite": {
+          "quote": 4
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+          {
+            "path": "quote",
+            "verb": "set",
+            "readKeys": []
+          }
+        ],
+        "stage": "Recover",
+        "stageId": "quote",
+        "runtimeStageId": "quote#0",
+        "idx": 0
+      }
+    },
+    {
+      "kind": "commit",
+      "address": {
+        "logRunId": "1793114992265-0000000001",
+        "drillPath": []
+      },
+      "at": 1793114992269,
+      "bundle": {
+        "overwrite": {
+          "decision": 4
+        },
+        "updates": {},
+        "redactedPaths": [],
+        "trace": [
+          {
+            "path": "decision",
+            "verb": "set",
+            "readKeys": [
+              "quote"
+            ]
+          }
+        ],
+        "stage": "Choose",
+        "stageId": "choose",
+        "runtimeStageId": "choose#1",
+        "idx": 1
+      }
+    },
+    {
+      "kind": "closed",
+      "address": {
+        "logRunId": "1793114992265-0000000001",
+        "drillPath": []
+      },
+      "at": 1793114992269,
+      "outcome": "ok",
+      "commits": 2,
+      "meta": {
+        "runId": "1793114992265-0000000001"
+      }
+    },
+    {
+      "kind": "note",
+      "address": {
+        "logRunId": "1793114992265-0000000001",
+        "drillPath": []
+      },
+      "at": 1793114992273,
+      "note": "capture-history",
+      "data": {
+        "target": {
+          "version": 1,
+          "evidenceId": "1793114992265-0000000001",
+          "runId": "1793114992265-0000000001",
+          "digest": "6f985de8c3170bcacb4a85619accc3c84063d34fc2541b23620afd73cb018ebd",
+          "logAddress": {
+            "logRunId": "1793114992265-0000000001",
+            "drillPath": []
+          },
+          "commits": {
+            "from": 0,
+            "to": 2
+          }
+        },
+        "capture": {
+          "version": 2,
+          "runId": "1793114992265-0000000001",
+          "scope": "root-log",
+          "logAddress": {
+            "logRunId": "1793114992265-0000000001",
+            "drillPath": []
+          },
+          "commits": {
+            "from": 0,
+            "to": 2
+          },
+          "boundary": {
+            "status": "completed"
+          },
+          "modes": {
+            "readTracking": "full",
+            "writeTracking": "full",
+            "commitValues": "full",
+            "writeProvenance": "reads-prefix"
+          },
+          "channels": {
+            "reads": "captured",
+            "writes": "captured",
+            "attention": "captured",
+            "control": "captured",
+            "readSources": "captured"
+          },
+          "persistence": "memory-only",
+          "limitations": [
+            "tracked-state-only",
+            "final-attempt-views",
+            "child-scopes-not-attested",
+            "storage-not-attested"
+          ]
+        },
+        "executionTree": {
+          "id": "quote",
+          "runtimeStageId": "quote#0",
+          "name": "Recover",
+          "isDecider": false,
+          "isFork": false,
+          "logs": {},
+          "errors": {},
+          "metrics": {},
+          "evals": {},
+          "readSourceCounts": {
+            "observed": 0,
+            "retained": 0,
+            "kinds": {
+              "base": 0,
+              "committed": 0,
+              "staged": 0,
+              "unavailable": 0
+            }
+          },
+          "stageWrites": {
+            "quote": 4
+          },
+          "flowMessages": [
+            {
+              "type": "next",
+              "description": "Moving to Choose stage",
+              "timestamp": 1793114992268,
+              "targetStage": "Choose"
+            }
+          ],
+          "next": {
+            "id": "choose",
+            "runtimeStageId": "choose#1",
+            "name": "Choose",
+            "isDecider": false,
+            "isFork": false,
+            "logs": {},
+            "errors": {},
+            "metrics": {},
+            "evals": {},
+            "readSourceCounts": {
+              "observed": 1,
+              "retained": 1,
+              "kinds": {
+                "base": 0,
+                "committed": 1,
+                "staged": 0,
+                "unavailable": 0
+              }
+            },
+            "stageWrites": {
+              "decision": 4
+            },
+            "stageReads": {
+              "quote": 4
+            }
+          }
+        },
+        "recorders": [
+          {
+            "id": "control-deps-1",
+            "name": "control-dependencies",
+            "data": {
+              "decisions": [],
+              "controlDeps": {}
+            },
+            "capture": {
+              "version": 1,
+              "runId": "1793114992265-0000000001",
+              "control": "captured"
+            }
+          }
+        ],
+        "readSources": {
+          "version": 1,
+          "runId": "1793114992265-0000000001",
+          "persistence": "memory-only",
+          "commits": {
+            "from": 0,
+            "to": 2
+          },
+          "status": "captured",
+          "limitations": [],
+          "record": {
+            "version": 1,
+            "address": {
+              "logRunId": "1793114992265-0000000001",
+              "drillPath": []
+            },
+            "segment": 1,
+            "status": "captured",
+            "occurrences": [
+              {
+                "ordinal": 1,
+                "runtimeStageId": "choose#1",
+                "attemptStatus": "unavailable",
+                "frame": 2,
+                "key": "quote",
+                "stateAddress": [],
+                "source": {
+                  "kind": "committed",
+                  "commitIdx": 0
+                },
+                "disposition": "released"
+              }
+            ],
+            "gaps": [],
+            "limits": {
+              "maxOccurrences": 4096,
+              "maxPerExecution": 1024,
+              "maxBytes": 1048576,
+              "maxOrigins": 4096,
+              "maxStaging": 2048
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "note",
+      "address": {
+        "logRunId": "1793114992265-0000000001",
+        "drillPath": []
+      },
+      "at": 1793114992274,
+      "note": "capture-receipt",
+      "data": {
+        "version": 1,
+        "evidenceId": "1793114992265-0000000001",
+        "runId": "1793114992265-0000000001",
+        "digest": "6f985de8c3170bcacb4a85619accc3c84063d34fc2541b23620afd73cb018ebd",
+        "logAddress": {
+          "logRunId": "1793114992265-0000000001",
+          "drillPath": []
+        },
+        "commits": {
+          "from": 0,
+          "to": 2
+        },
+        "durability": "durable"
+      }
+    }
+  ]
+}

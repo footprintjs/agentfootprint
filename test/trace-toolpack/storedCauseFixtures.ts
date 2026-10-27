@@ -17,7 +17,7 @@ export interface StoredFixtureOptions {
   readonly withoutControl?: boolean;
   readonly fail?: boolean;
   readonly capture?: boolean;
-  /** Two healthy steps with no retry configuration: the ordinary v2 ownership gap. */
+  /** Two healthy steps with no retry configuration. */
   readonly plain?: boolean;
 }
 
