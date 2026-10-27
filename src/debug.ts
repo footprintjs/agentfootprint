@@ -100,11 +100,18 @@ export {
   TOOLPACK_HARD_CAPS,
   TRACE_TOOL_NAMES,
   traceToolpack,
+  traceCauseTools,
+  readStoredCauseArtifacts,
   type TraceToolpackArtifacts,
   type TraceToolpackOptions,
   type TraceCauseArtifacts,
   type TraceCauseOptions,
   type TraceCauseOperation,
+  type ReadStoredCauseOptions,
+  type StoredCauseUnknown,
+  type StoredCauseAdmission,
+  type StoredCauseArtifacts,
+  type StoredCauseResult,
 } from './trace-toolpack/index.js';
 // `openRecording` — a saved run (`recordRun(...).toRecording()`, live or
 // parsed back from JSON) reopened as toolpack artifacts. The one adapter

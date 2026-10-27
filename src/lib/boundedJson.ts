@@ -22,7 +22,14 @@ export function ownData(value: unknown, allowed?: readonly string[]): Record<str
 }
 
 /** JSON copy without invoking toJSON/getters or silently dropping data. */
-export function copyJson(value: unknown, maxBytes: number, freeze: boolean): unknown {
+export function copyJson(
+  value: unknown,
+  maxBytes: number,
+  freeze: boolean,
+  maxDepth = 100,
+): unknown {
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 0 || maxDepth > 256)
+    throw new Error('JSON nesting limit.');
   let budget = maxBytes;
   const ancestors = new Set<object>();
   const spend = (bytes: number) => {
@@ -34,7 +41,7 @@ export function copyJson(value: unknown, maxBytes: number, freeze: boolean): unk
     spend(encoder.encode(JSON.stringify(item)).byteLength);
   };
   const copy = (item: unknown, depth: number): unknown => {
-    if (depth > 100) throw new Error('JSON nesting limit.');
+    if (depth > maxDepth) throw new Error('JSON nesting limit.');
     if (item === null) {
       spend(4);
       return null;

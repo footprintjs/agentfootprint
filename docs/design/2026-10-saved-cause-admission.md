@@ -1,7 +1,14 @@
 # Saved root cause admission contract
 
-**PROPOSED — NOT IMPLEMENTED.** Review both host APIs and admission rules before
-implementation. Names below are proposals, not exports; no capability, dependency or release is added.
+**Reviewed design snapshot.** This proposal was approved in PR #215 before implementation.
+The follow-up implements Step A and graph-only serving; Step B remains deferred.
+The proposal wording below records the reviewed contract, rather than current release status.
+
+Implementation bounds: producer reading defaults to 16,384 entries, 4,096 missing-commit
+rows, 64 drill-path segments and 2,048 address characters. Host overrides are finite
+non-negative integers, capped at 65,536 entries and the other default ceilings.
+Acknowledged-history copying permits JSON depth 256; existing generic copier callers
+retain their depth-100 default. Projection still refuses over 4,096 nodes or commits.
 
 ## Existing owners and intended boundary
 

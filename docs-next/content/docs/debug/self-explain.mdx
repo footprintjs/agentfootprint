@@ -214,6 +214,24 @@ Admission requires a supported same-run note, a completed boundary, a matching n
 
 This first note attests an **in-memory root-log segment**, not saved delivery or a complete workflow. A JSON round trip does not upgrade that claim. Hosts must authorize and preserve the snapshot and its note together; metadata is not a signature and cannot prove that an untrusted sender told the truth. Other scopes and storage can still use a host-authorized `CauseGraph` through `artifacts.cause`. That executable capability and all query ceilings are unchanged.
 
+### Read an acknowledged saved root
+
+`readStoredCauseArtifacts(entries, { runId })` reads an authorized saved history through FootPrint's public reader. The host selects the run and supplies the entries; tools never receive a storage path, tenant selector or receipt. The new helper requires FootPrint's stored-capture reader. If that reader is unavailable, it returns a fixed `unsupported` result without changing existing snapshot tools.
+
+A `ready` result can be passed to `traceCauseTools(result.cause, limits)`, which returns only `attention_list`, `root_cause` and `impact`. No runtime snapshot or unrelated trace tools are needed. An `unknown` result has a fixed reason and no graph to query. The example uses a real temporary file and the file adapter's explicit acknowledgement; it makes no model calls.
+
+<CodeFile path="examples/features/114-saved-cause-tools.ts" region="saved-cause" title="Load an authorized saved root and ask the existing bounded questions" />
+
+The factory preserves reads and writes whose value was `undefined`, including literal dotted or slash-containing keys. The returned native `capture` still describes an in-memory root segment. A separate `storage` field describes the adapter's acknowledgement of these saved bytes. Neither a receipt nor an unsigned checksum authenticates the producer or proves whole-workflow delivery. Authorize the source before admission. A ready graph can still have query gaps or no unique root.
+
+Only eligible version-1 native root histories are supported. **Saved version-2 exact-source evidence stays `unknown` with reason `source-ownership-unproven`.** Current records do not independently establish every state namespace and attempt binding; the reader never invents an attempt, copies source labels into their own authorization list or guesses a source from timing. Child and resumed histories are also outside this admission contract. Missing, partial or unsupported capture never becomes complete merely because storage acknowledged it.
+
+Keep the exact factory result within the module instance that created it. Its graph is frozen and its saved assessment is bound privately. Copying, spreading, replacing its graph, serializing it or transferring it between separate CommonJS/ESM instances loses that authority. The tools refuse counterfeit stored claims with fixed text before querying a graph. Pass factory results to `traceCauseTools`; the full snapshot `traceToolpack` refuses stored-claim artifacts before indexing. Ordinary host-authorized custom graphs retain their existing behavior.
+
+`ReadStoredCauseOptions` declares the host reader settings. `StoredCauseResult` is the ready/unknown union, and `StoredCauseUnknown` is its fixed reason vocabulary. A ready `StoredCauseArtifacts` contains the graph and a display-only `StoredCauseAdmission`; the display object grants no serving authority.
+
+Reader options are host-only: `readerLimits`, `maxBytes` (default 1 MiB, integer 1–8 MiB) and `signal`. The factory supplies producer-reader defaults of 16,384 entries, 4,096 missing-commit rows, 64 drill-path segments and 2,048 address characters. The host may lower these to non-negative whole numbers, or raise the entry limit to at most 65,536; the other defaults are hard ceilings. Infinite or over-ceiling settings are refused before reading. Projection separately caps nodes and commits at 4,096 and acknowledged-history JSON depth at 256. Cancellation is checked before and after producer admission; it cannot interrupt the upstream reader's synchronous iteration or a blocking host iterator. These are structural data limits, not a deadline for arbitrary host code. Query limits below remain separate and retain their deadline and output bounds.
+
 ### Read one question, keep ambiguity
 
 The example checks a unique root and its impact, then checks two marked ancestors tied as alternatives and a record missing its completion marker. The latter cases must not assert a unique root:
