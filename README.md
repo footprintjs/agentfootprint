@@ -19,12 +19,13 @@
   <a href="#what-can-this-answer-support">Evidence and limits</a> ·
   <a href="#checks-you-can-enable">Checks and guarantees</a> ·
   <a href="#how-this-compares-with-langchain-and-mastra">Framework comparison</a> ·
-  <a href="#quick-start--runs-offline-no-api-key">Quick start</a>
+  <a href="#quick-start--runs-offline-no-api-key">Quick start</a> ·
+  <a href="https://agentfootprint.dev/#answer-check">Try an answer check</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/footprintjs/agentfootprint/actions"><img src="https://github.com/footprintjs/agentfootprint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <!-- coverage-badge --><img src="https://img.shields.io/badge/coverage-87%25-green.svg" alt="coverage: 87%"><!-- /coverage-badge -->
+  <!-- coverage-badge --><img src="https://img.shields.io/badge/line%20coverage-96%25-brightgreen.svg" alt="line coverage: 96%"><!-- /coverage-badge -->
   <a href="https://www.npmjs.com/package/agentfootprint"><img src="https://img.shields.io/npm/v/agentfootprint.svg?style=flat" alt="npm version"></a>
   <a href="https://bundlephobia.com/package/agentfootprint"><img src="https://img.shields.io/bundlephobia/minzip/agentfootprint?label=minzipped" alt="minzipped size"></a>
   <a href="#tree-shakeable--esm-first"><img src="https://img.shields.io/badge/tree--shakeable-%E2%9C%93-success?style=flat" alt="tree-shakeable"></a>
@@ -77,15 +78,15 @@ have different jobs and must be configured for the claims your app needs to chec
 | Mechanism | What it provides | Boundary of the guarantee |
 |---|---|---|
 | [`absent()`, `coverage()` and `.limitsTravelWithTheAnswer()`](#what-a-tool-returns--three-helpers-one-rule) | Explicit absence and declared limits, carried into prose or returned beside typed output. | Preserves declarations; does not prove that the tool described its coverage correctly. |
-| [`.answerValidation()`](docs-next/content/docs/build/output-schema.mdx#check-the-answer-against-evidence) | App-authored checks on a typed final answer. Enforce mode buffers drafts and withholds failed or unverified answers; observe mode records the report and permits delivery. | Only the configured checks are judged. The app owns their correctness and the trustworthiness of its evidence. |
-| [`.namesAndNumbersFromEvidence()`](docs-next/content/docs/build/evidence-gate.mdx) | A deterministic detector for unsupported values, with configurable extraction limits and delivery postures. | Default `assist` flags; `rails` refuses. A false sentence assembled from real values can pass. This is not general factual verification. |
-| [`Tool.search` and typed `.negativeClaims()`](docs-next/content/docs/build/negative-claims.mdx) | Composed search scope and library-written statements for cited structured negative claims, retaining gaps and withholding or reporting unsupported claims according to policy. | **Opt-in, available but not recommended pending benchmark gates.** Accuracy and usefulness remain unmeasured. Depends on truthful app-owned search declarations; other answer fields remain unchecked model text. |
-| [`.negativeClaims({ prose: true })`](docs-next/content/docs/build/negative-claims.mdx) | Bounded heuristic warnings on the model's own negative sentences. | Never verifies, blocks or rewrites an answer. The previous detector failed its benchmark; the revised path is unmeasured. No warning does not mean verified. |
+| [`.answerValidation()`](https://agentfootprint.dev/docs/build/output-schema/#check-the-answer-against-evidence) | App-authored checks on a typed final answer. Enforce mode buffers drafts and withholds failed or unverified answers; observe mode records the report and permits delivery. | Only the configured checks are judged. The app owns their correctness and the trustworthiness of its evidence. |
+| [`.namesAndNumbersFromEvidence()`](https://agentfootprint.dev/docs/build/evidence-gate/) | A deterministic detector for unsupported values, with configurable extraction limits and delivery postures. | Default `assist` flags; `rails` refuses. A false sentence assembled from real values can pass. This is not general factual verification. |
+| [`Tool.search` and typed `.negativeClaims()`](https://agentfootprint.dev/docs/build/negative-claims/) | Composed search scope and library-written statements for cited structured negative claims, retaining gaps and withholding or reporting unsupported claims according to policy. | **Opt-in, available but not recommended pending benchmark gates.** Accuracy and usefulness remain unmeasured. Depends on truthful app-owned search declarations; other answer fields remain unchecked model text. |
+| [`.negativeClaims({ prose: true })`](https://agentfootprint.dev/docs/build/negative-claims/) | Bounded heuristic warnings on the model's own negative sentences. | Never verifies, blocks or rewrites an answer. The previous detector failed its benchmark; the revised path is unmeasured. No warning does not mean verified. |
 
-The links above describe this branch. Features marked **unreleased** in the
-[capability index](CAPABILITIES.md) are not yet available in the published package;
-check its availability column and the [release notes](CHANGELOG.md) for your
-installed version. The basic quick start below does not enable these checks.
+The linked guides describe the published package. Check the availability column
+in the [capability index](CAPABILITIES.md) and the [release notes](CHANGELOG.md)
+for your installed version; features marked **unreleased** in the index have not
+shipped. The quick start below enables one app-authored answer check.
 
 ## How this compares with LangChain and Mastra
 
@@ -106,46 +107,114 @@ exclusive capabilities or measured superiority in answer accuracy.
 
 ## Quick start — runs offline, no API key
 
+The scripted model always proposes **completed**. The app selects the order,
+checks the proposal against a lookup, and writes the customer-facing sentence
+only after that check passes. Missing or contradictory evidence withholds the
+proposal and produces the app's **"I don't know"** fallback.
+
 ```bash
 npm install agentfootprint footprintjs
 ```
 
+Save this as `answer-check.ts` and run `npx tsx answer-check.ts`:
+
 ```typescript
-import { Agent, defineTool } from 'agentfootprint';
+import { Agent, AnswerValidationError, defineTool } from 'agentfootprint';
 import { mock } from 'agentfootprint/providers';
 
-const weather = defineTool({
-  name: 'weather',
-  description: 'Get current weather for a city.',
-  inputSchema: {
-    type: 'object',
-    properties: { city: { type: 'string' } },
-    required: ['city'],
+type Reply = { status: 'completed' | 'pending' };
+type Lookup = Reply & { orderId: string };
+const orderId = 'A-1042'; // Selected by the app, not the model.
+
+const schema = {
+  parse(value: unknown): Reply {
+    const row = value as Partial<Reply> | null;
+    if (!row || (row.status !== 'completed' && row.status !== 'pending'))
+      throw new Error('Expected a refund status.');
+    return { status: row.status };
   },
-  execute: async ({ city }: { city: string }) => `${city}: 72°F, sunny`,
-});
+};
 
-const agent = Agent.create({
-  provider: mock({
-    replies: [
-      { toolCalls: [{ id: 'weather-1', name: 'weather', args: { city: 'Paris' } }] },
-      { content: 'The demo weather tool returned 72°F and sunny for Paris.' },
-    ],
-  }),
-  model: 'mock',
-})
-  .system('You answer weather questions using the weather tool.')
-  .tool(weather)
-  .build();
+async function answerFrom(source: Lookup | null): Promise<string> {
+  // Fresh per run; only the tool writes this evidence, never the model.
+  let observed: Readonly<Lookup> | undefined;
+  const lookup = defineTool({
+    name: 'lookup_refund',
+    description: 'Read the refund ledger for the app-selected order.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    execute: async () => {
+      observed = undefined;
+      if (source === null) throw new Error('Lookup unavailable.');
+      observed = Object.freeze({ ...source });
+      return { ...observed };
+    },
+  });
 
-const result = await agent.run({ message: 'Weather in Paris?' });
-console.log(result);  // → "The demo weather tool returned 72°F and sunny for Paris."
+  const agent = Agent.create({
+    provider: mock({ replies: [
+      { toolCalls: [{ id: 'read-1', name: 'lookup_refund', args: {} }] },
+      { content: JSON.stringify({ status: 'completed' }) },
+    ] }),
+    model: 'mock',
+  })
+    .tool(lookup)
+    .maxIterations(3)
+    .outputSchema(schema, {
+      instruction: 'Return only JSON with status set to "completed" or "pending".',
+      jsonSchema: {
+        type: 'object',
+        properties: { status: { type: 'string', enum: ['completed', 'pending'] } },
+        required: ['status'],
+        additionalProperties: false,
+      },
+    })
+    .answerValidation<Reply>({
+      id: 'refund-status',
+      version: '1',
+      mode: 'enforce',
+      validate(answer) {
+        const read = observed;
+        return { checks: [{
+          id: 'matches-lookup',
+          disposition: !read ? 'unreachable'
+            : read.orderId === orderId && read.status === answer.status
+              ? 'checked-pass' : 'checked-fail',
+          reason: 'The status must match a successful lookup for this order.',
+        }] };
+      },
+    })
+    .build();
+
+  try {
+    const checked = await agent.runTyped<Reply>({ message: 'Is my refund complete?' });
+    return `The ledger records “${checked.status}” for order ${orderId}.`;
+  } catch (error) {
+    if (!(error instanceof AnswerValidationError)) throw error;
+    return `I don’t know whether the refund for order ${orderId} is complete.`;
+  }
+}
+
+async function main() {
+  console.log(await answerFrom({ orderId, status: 'completed' }));
+  console.log(await answerFrom(null));
+  console.log(await answerFrom({ orderId, status: 'pending' }));
+}
+main().catch(console.error);
 ```
 
-The tool runs locally and the mock scripts its call and reply. The temperature is
-fixture data, not a live weather reading; this example demonstrates wiring, not
-answer validation. For a configured delivery check, run the [mock answer-validation
-example](examples/features/99-guard-presented-code.ts).
+```text
+The ledger records “completed” for order A-1042.
+I don’t know whether the refund for order A-1042 is complete.
+I don’t know whether the refund for order A-1042 is complete.
+```
+
+These are local fixtures, not a live refund ledger. The check covers one status
+for one app-selected order; it does not establish bank settlement, freshness,
+source authenticity or model accuracy. The fallback is app-owned wording, not a
+verified refund status. Evidence stays in this run's app-owned variable; it is
+not a persisted audit record. The [live answer-checking demo](https://agentfootprint.dev/#answer-check)
+adds scoped artifact evidence, freshness checks and a view of what reaches the
+customer. For basic tool wiring, see the [introductory quick start](https://agentfootprint.dev/docs/getting-started/quick-start/).
 
 To use a real model, replace the scripted mock with a provider from
 `agentfootprint/providers` — `anthropic(...)` / `openai(...)` / `bedrock(...)` /
@@ -157,7 +226,7 @@ on that subpath so the main barrel stays free of optional provider SDK imports.
 
 ## What a tool returns — three helpers, one rule
 
-Whatever a tool returns is what the model reads next. When that value has limits the model must not lose, return it through one of three helpers — each is the tool's response; nothing is added to the system prompt or the tool's schema:
+By default, a tool's returned value becomes its model-facing result. Configured middleware, truncation and artifact placement can transform or replace what the model receives. When the result has limits the model must not lose, declare them through one of three helpers — each is the tool's response; nothing is added to the system prompt or the tool's schema:
 
 | helper | use it when | the model reads | the record keeps |
 |---|---|---|---|
@@ -219,7 +288,7 @@ That's the whole model: `Injection = slot × trigger × cache`.
 
 - **Slot** — which of the 3 LLM API regions the content lands in (`system` / `messages` / `tools`).
 - **Trigger** — when the content fires (see below).
-- **Cache** — how stable the content is across iterations. The framework places provider cache markers for you — stable content gets 80–90% cheaper prefixes.
+- **Cache** — how stable the content is across iterations. Where the provider and model support prompt caching, the framework applies their cache strategy. Reusing a cached prefix can reduce input cost; savings depend on the provider's pricing and actual cache reuse. Providers without that capability use a no-op strategy.
 
 ### The 4 triggers
 
@@ -276,7 +345,7 @@ properties of the exported record; they do not establish that its source data wa
 | Checking answers? | Building an agent? | Inspecting a run? |
 |---|---|---|
 | Declare the evidence and limits; configure checks and the response to uncertainty. | Typed agents with skills, steering, RAG, memory and control flow. | Recorded dependencies, counterfactual reruns, replay and audit-bundle integrity checks. |
-| [→ Checks and guarantees](#checks-you-can-enable) · [→ Output contracts](docs-next/content/docs/build/output-schema.mdx) | [→ Quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) · [→ Build an agent](https://agentfootprint.dev/docs/build/agent/) | [→ Debug](https://agentfootprint.dev/docs/debug/debug/) · [→ Exporters & audit bundles](https://agentfootprint.dev/docs/monitor/exporters/) |
+| [→ Checks and guarantees](#checks-you-can-enable) · [→ Output contracts](https://agentfootprint.dev/docs/build/output-schema/) | [→ Quick start](https://agentfootprint.dev/docs/getting-started/quick-start/) · [→ Build an agent](https://agentfootprint.dev/docs/build/agent/) | [→ Debug](https://agentfootprint.dev/docs/debug/debug/) · [→ Exporters & audit bundles](https://agentfootprint.dev/docs/monitor/exporters/) |
 
 ## Mocks first, production second
 
@@ -375,7 +444,7 @@ You don't need to learn footprintjs to use agentfootprint — but if you want to
 
 ## Citing
 
-agentfootprint is part of a research program on making software systems explain themselves — every run records *why* it did what it did, as a causal trace. Researching agent transparency, observability, or explainable AI? The [ecosystem map](https://footprintjs.github.io/) is a good starting point.
+agentfootprint is part of a research program on making software execution inspectable: it records execution paths, data dependencies and declared decisions. Those records support audits and controlled reruns; they do not reveal a model's private reasoning. Researching agent transparency, observability, or explainable AI? The [ecosystem map](https://footprintjs.github.io/) is a good starting point.
 
 If you use agentfootprint in academic work, please cite it (or use the "Cite this repository" button on GitHub):
 

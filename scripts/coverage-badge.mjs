@@ -18,7 +18,7 @@ const pct = Math.round(JSON.parse(readFileSync(summary, 'utf8')).total.lines.pct
 const color =
   pct >= 90 ? 'brightgreen' : pct >= 80 ? 'green' : pct >= 70 ? 'yellowgreen'
   : pct >= 60 ? 'yellow' : pct >= 50 ? 'orange' : 'red';
-const badge = `<img src="https://img.shields.io/badge/coverage-${pct}%25-${color}.svg" alt="coverage: ${pct}%">`;
+const badge = `<img src="https://img.shields.io/badge/line%20coverage-${pct}%25-${color}.svg" alt="line coverage: ${pct}%">`;
 
 const readme = new URL('../README.md', import.meta.url);
 let text = readFileSync(readme, 'utf8');
