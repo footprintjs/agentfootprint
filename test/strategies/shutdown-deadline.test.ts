@@ -179,6 +179,77 @@ describe('agent.shutdown() deadline — P2 the deadline timer', () => {
   });
 });
 
+describe('agent.shutdown() deadline — P2 longer than one host timer holds', () => {
+  /** ~24.9 days: past the 2^31 − 1 ms one host timer holds. Node turns a
+   *  longer delay into 1 ms; an earlier version of this deadline turned it
+   *  into no deadline at all. */
+  const PAST_ONE_TIMER = 2 ** 31 + 5_000;
+
+  it('P2 a timeoutMs past 2^31 − 1 ms fires at the time asked — not never, and not after 1 ms', async () => {
+    const agent = buildAgent();
+    const errors: Error[] = [];
+    agent.enable.observability({
+      strategy: fileObservability({
+        path: '/log/events.ndjson',
+        _fs: hungDisk(),
+        flushIntervalMs: 0,
+        onError: (err) => errors.push(err),
+      }),
+      tier: 'firehose',
+    });
+    await agent.run({ message: 'hi' });
+
+    vi.useFakeTimers();
+    let done = false;
+    const shutting = agent.shutdown({ timeoutMs: PAST_ONE_TIMER }).then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(done, 'after 1 ms (the host timer overflow)').toBe(false);
+    await vi.advanceTimersByTimeAsync(PAST_ONE_TIMER - 2);
+    expect(done, '1 ms before the deadline').toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(done, 'at the deadline').toBe(true);
+    await shutting;
+    expect(errors.map((e) => e.message)).toEqual([
+      expect.stringMatching(
+        new RegExp(`^\\[file\\] flush did not finish within ${PAST_ONE_TIMER} ms of shutdown`),
+      ),
+    ]);
+  });
+
+  it('P2 a shutdown that finishes before a long deadline leaves zero timers — every link of the chain is cleared', async () => {
+    const agent = buildAgent();
+    const sink = gatedSink([]);
+    agent.enable.observability({ strategy: sink, tier: 'firehose' });
+
+    vi.useFakeTimers();
+    let done = false;
+    const shutting = agent.shutdown({ timeoutMs: PAST_ONE_TIMER }).then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(2 ** 31); // past the first link: the second is armed
+    expect(done).toBe(false);
+    expect(vi.getTimerCount(), 'the deadline, still armed').toBe(1);
+    sink.open();
+    await shutting;
+    expect(vi.getTimerCount(), 'timers left after a healthy shutdown').toBe(0);
+  });
+
+  it('P2 timeoutMs: Infinity arms no timer at all', async () => {
+    const agent = buildAgent();
+    const sink = gatedSink([]);
+    agent.enable.observability({ strategy: sink, tier: 'firehose' });
+
+    vi.useFakeTimers();
+    const shutting = agent.shutdown({ timeoutMs: Infinity });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount(), 'timers armed for an Infinity deadline').toBe(0);
+    sink.open();
+    await shutting;
+  });
+});
+
 // ─── P3 Scenario ─────────────────────────────────────────────────────
 
 describe('agent.shutdown() deadline — P3 scenario', () => {

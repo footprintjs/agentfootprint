@@ -40,7 +40,7 @@ Defined in: [src/core-flow/Graph.ts:448](https://github.com/footprintjs/agentfoo
 
 > `readonly` **enable**: [`EnableNamespace`](/docs/api/interfaces/EnableNamespace)
 
-Defined in: [src/core/RunnerBase.ts:1062](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1062)
+Defined in: [src/core/RunnerBase.ts:1064](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1064)
 
 Enable-namespace for high-level observability features. Each method
 attaches a pre-built CombinedRecorder and returns an unsubscribe
@@ -124,7 +124,7 @@ that run and none of its beginning.
 
 > **closeToolSessions**(`options?`): `Promise`\<`number`\>
 
-Defined in: [src/core/RunnerBase.ts:1046](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1046)
+Defined in: [src/core/RunnerBase.ts:1048](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1048)
 
 End the tool sessions held for one hosting session.
 Pass `{ scope: 'run', sessionId }` to terminate only its paused turn's
@@ -186,7 +186,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > **emit**(`name`, `payload`): `void`
 
-Defined in: [src/core/RunnerBase.ts:1115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1115)
+Defined in: [src/core/RunnerBase.ts:1117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1117)
 
 Emit a consumer-defined custom event.
 
@@ -763,7 +763,7 @@ mapping, but default invokes getSpec() + FlowChartExecutor.
 
 > **shutdown**(`options?`): `Promise`\<`void`\>
 
-Defined in: [src/core/RunnerBase.ts:957](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L957)
+Defined in: [src/core/RunnerBase.ts:959](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L959)
 
 Drain and release what was enabled on this runner.
 
@@ -810,8 +810,10 @@ Default `true`. Pass `false` to drain WITHOUT
 How long to wait for each sink's flush, in ms.
   Default 30 000 (the same number footprintjs's `drainObservers` uses).
   `Infinity` waits without a deadline — how `shutdown()` behaved before
-  this option existed. A value that is not a positive number makes the
-  returned promise reject with a `TypeError`; nothing throws synchronously.
+  this option existed — and arms no timer. A finite value of any size is
+  honoured, even past the ~24.8 days one host timer can hold. A value that
+  is not a positive number makes the returned promise reject with a
+  `TypeError`; nothing throws synchronously.
 
 #### Returns
 

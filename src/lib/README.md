@@ -165,6 +165,16 @@ each regex's worst case (`test/helpers/workCount.ts`, never a timer).
   somebody's stored data a refusal may quote.
 - `sleep.ts` — `sleep`, the one wait that keeps its minimum; `makeSleep` builds
   one over a test's own clock and timer.
+- `longTimeout.ts` — `setLongTimeout(fn, ms, { unref? })`, a timer for a
+  limit of any length: `Infinity` arms none, and a delay past 2^31 − 1 ms (the
+  most one host timer holds, which Node fires after 1 ms) is waited in chained
+  timers, never early. Used by the shutdown deadline
+  (`strategies/flushDeadline.ts`). A temporary copy of footprintjs#136's
+  helper: swap it for the footprintjs export once footprintjs 10.7.0 ships.
+
+  ```ts
+  const cancel = setLongTimeout(() => giveUp(), timeoutMs); // Infinity: no timer; 30 days: 30 days
+  ```
 - `abort.ts` — the cancellation law: `throwIfAborted`, `untilAborted`,
   `abortableIterable`, `bodyChunks`, `callUnder`, `eitherSignal`,
   `linkedController`, `armDeadline`.

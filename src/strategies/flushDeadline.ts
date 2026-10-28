@@ -17,15 +17,13 @@
  * one, so the report says both.
  */
 
+import { setLongTimeout } from '../lib/longTimeout.js';
+
 import type { BaseStrategy, StrategyHandle } from './types.js';
 
 /** How long `shutdown()` waits for each handle's flush unless told otherwise:
  *  30 s, the same number footprintjs's `drainObservers` uses as its default. */
 export const DEFAULT_SHUTDOWN_TIMEOUT_MS = 30_000;
-
-/** `setTimeout` turns a delay above 2^31 − 1 ms into 1 ms. Anything longer
- *  (and `Infinity`) therefore means "no deadline", not "fire now". */
-const LONGEST_TIMER_MS = 2_147_483_647;
 
 /** Which strategy a handle flushes — so a missed deadline can name it. Weak,
  *  so a released handle is not retained. */
@@ -55,27 +53,29 @@ export function shutdownTimeoutOf(timeoutMs: number | undefined): number {
  * the strategy is reported by name and this resolves `'stuck'`; its flush
  * keeps running — it is not, and cannot be, cancelled.
  *
- * The deadline timer is cleared as soon as the flush settles, so a healthy
- * shutdown leaves no timer behind. It is NOT unref'd: it is bounded, and it is
- * what lets the code after `await agent.shutdown()` run when the stuck write
- * holds nothing else open.
+ * The deadline is armed by `lib/longTimeout.ts · setLongTimeout`: `Infinity`
+ * arms no timer at all, and a finite deadline of ANY length fires when asked —
+ * past the ~24.8 days one host timer holds, it is waited in chained chunks,
+ * never dropped and never fired after 1 ms. Whatever is armed is cleared as
+ * soon as the flush settles, so a healthy shutdown leaves no timer behind.
+ * It is NOT unref'd: it is bounded, and it is what lets the code after
+ * `await agent.shutdown()` run when the stuck write holds nothing else open.
  */
 export async function flushWithinDeadline(
   handle: StrategyHandle,
   timeoutMs: number,
 ): Promise<'flushed' | 'stuck'> {
   const flushing = handle.flush().then(() => 'flushed' as const);
-  if (timeoutMs > LONGEST_TIMER_MS) return flushing;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancelDeadline: () => void = () => undefined;
   const deadline = new Promise<'stuck'>((resolve) => {
-    timer = setTimeout(() => resolve('stuck'), timeoutMs);
+    cancelDeadline = setLongTimeout(() => resolve('stuck'), timeoutMs);
   });
   try {
     const outcome = await Promise.race([flushing, deadline]);
     if (outcome === 'stuck') reportStillFlushing(handle, timeoutMs);
     return outcome;
   } finally {
-    clearTimeout(timer);
+    cancelDeadline();
   }
 }
 

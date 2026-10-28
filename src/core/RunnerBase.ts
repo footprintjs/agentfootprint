@@ -946,8 +946,10 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * @param options.timeoutMs - How long to wait for each sink's flush, in ms.
    *   Default 30 000 (the same number footprintjs's `drainObservers` uses).
    *   `Infinity` waits without a deadline — how `shutdown()` behaved before
-   *   this option existed. A value that is not a positive number makes the
-   *   returned promise reject with a `TypeError`; nothing throws synchronously.
+   *   this option existed — and arms no timer. A finite value of any size is
+   *   honoured, even past the ~24.8 days one host timer can hold. A value that
+   *   is not a positive number makes the returned promise reject with a
+   *   `TypeError`; nothing throws synchronously.
    *
    * @example Graceful exit for a script
    *   const telemetry = agent.enable.observability({ strategy: cloudwatch });
