@@ -13,13 +13,13 @@
  *                     report; a refused strategy echoes no secret
  *   P6 Performance  — a reply that is not the refusal costs one attempt and no
  *                     body read beyond the clone's gate
- *   P7 ROI          — `retry: false`; mcpClient's own 429 retry still wraps it
+ *   P7 ROI          — `retry: false`; mcpClient's own 429 retry joins its series
  *
  * Nothing here reaches AWS: the SDK is a fake module, the HTTPS endpoint a fake
  * fetch, and the server behind both is built from the MCP SDK itself.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { mcpClient } from '../../src/tool-providers/index.js';
 import {
@@ -177,21 +177,29 @@ describe('agentCoreRuntimeMcpTransport — P1 unit', () => {
   });
 
   it('P1 an explicitly undefined retry field keeps the transport’s default of 5 attempts', async () => {
-    let calls = 0;
-    const transport = agentCoreRuntimeMcpTransport({
-      agentRuntimeArn: ARN,
-      region: REGION,
-      retry: { maxAttempts: undefined, maxWaitMs: 60_000 },
-      auth: {
-        bearer: staticTokens({ runtime: 't' }),
-        fetch: async () => {
-          calls++;
-          return jsonReply({ jsonrpc: '2.0', id: 1, error: BUSY });
+    // The default schedule waits 3.75–7.5 s in all; the fake clock runs it at once.
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const transport = agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        retry: { maxAttempts: undefined, maxWaitMs: 60_000 },
+        auth: {
+          bearer: staticTokens({ runtime: 't' }),
+          fetch: async () => {
+            calls++;
+            return jsonReply({ jsonrpc: '2.0', id: 1, error: BUSY });
+          },
         },
-      },
-    });
-    await transport.fetch?.(transport.url, { method: 'POST', body: '{}' });
-    expect(calls).toBe(5);
+      });
+      const pending = transport.fetch?.(transport.url, { method: 'POST', body: '{}' });
+      await vi.runAllTimersAsync();
+      await pending;
+      expect(calls).toBe(5);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -791,7 +799,7 @@ describe('agentCoreRuntimeMcpTransport — P4 property (only the contract’s re
       method: 'POST',
       body: '{}',
     })) as Response;
-    // Not retried HERE — the 429 belongs to the one throttle loop mcpClient wraps around this.
+    // Not retried by the transport ALONE — the 429 rule is mcpClient's, and joins this series.
     expect(sdk.sends()).toBe(1);
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('2');
@@ -1708,7 +1716,7 @@ describe('agentCoreRuntimeMcpTransport — P7 ROI', () => {
     expect(calls).toBe(1);
   });
 
-  it('P7 it is an ordinary `http` transport — mcpClient’s 429 retry still wraps it', async () => {
+  it('P7 it is an ordinary `http` transport — mcpClient’s 429 retry still reaches it, by joining', async () => {
     let calls = 0;
     const throttles: ThrottleRetryInfo[] = [];
     const transport = agentCoreRuntimeMcpTransport({

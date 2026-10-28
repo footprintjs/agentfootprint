@@ -192,11 +192,29 @@ your function receives, so you see them and have the last word. Worked example:
 
 ### Throttling is handled, and only throttling
 
-`retryOnThrottle` is on by default: retry up to 3 times, never more than 10
+`retryOnThrottle` is on by default: up to 3 attempts, never more than 10
 seconds of waiting in total across one call, **429 only**. A 429 is a
 pre-execution rejection —
 the tool did not run — which is the one status where a retry cannot double an
 effect. Ignored for `stdio`, which has no HTTP status to read.
+
+The wait is the server's `Retry-After` when it sends one, and otherwise a
+backoff you can tune: `baseDelayMs` (200) doubling by `multiplier` (2), drawn
+with `jitter` (`'equal'` by default; `'full'` or `'none'`), each of these waits
+capped by `maxDelayMs` if you set one. `maxElapsedMs` adds a deadline for the
+whole call, requests included. A `Retry-After` is waited whole — `maxDelayMs`
+never cuts it — and when it asks for more than `maxWaitMs` or the deadline
+allows, the 429 is delivered instead. `onRetry` is a notification before each
+wait. It gets the refusal's `kind`, the attempt about to start, the wait, the
+endpoint's origin (scheme, host and port), and, if you declared one, your
+`endpointLabel` as `endpoint`. It never gets the URL's path, user info, query or
+fragment, the call's arguments or the server's answer. It is not told how the
+call ended.
+
+A transport that retries a refusal of its own — an MCP server hosted on
+AgentCore Runtime — gets one retry per call, not two: the 429 retry joins the
+transport's, so they share one attempt count and one deadline. See
+[MCP servers hosted on Runtime](doc:agentcore-adapters).
 
 ## Axis 2 — the provider: what the model is *shown*
 

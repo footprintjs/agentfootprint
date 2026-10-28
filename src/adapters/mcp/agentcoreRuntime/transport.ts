@@ -30,7 +30,8 @@
  *                               a handle the transport issues)
  *   retry   (`sessionBusy.ts`)  the session-busy refusal, retried with bounded
  *                               backoff by the SAME loop `mcpClient` uses for a
- *                               429 (`mcp/throttleRetry.ts` · `retryingFetchWhen`)
+ *                               429 (`mcp/throttleRetry.ts` · `retryingFetchFor`,
+ *                               one footprintjs `attempt()` series per request)
  *   auth    (`invoke.ts`)       'sigv4' through the AWS SDK's InvokeAgentRuntime,
  *                               or a bearer token over the documented HTTPS
  *                               endpoint — the SDK has no bearer scheme, and the
@@ -41,7 +42,12 @@
  * signed (or vended) afresh, the ordering `mcp/throttleRetry.ts` requires.
  * What the MCP client reads of a failure is rewritten from the library's own
  * fixed sentences and safe ids (`safeAnswer.ts`), never the service's text.
- * `mcpClient`'s own 429 retry still wraps the whole thing.
+ *
+ * `mcpClient`'s own 429 retry does not wrap this fetch: the fetch is joinable
+ * (`joinableRetry`), so the 429 rule joins the transport's series INSIDE the
+ * session and the rewrite. One request is one series — one attempt count, one
+ * waiting total, one deadline — so the two retries can never multiply requests,
+ * and every attempt, a 429's included, lands in the same runtime session.
  *
  * ── What it does NOT do ──────────────────────────────────────────────────────
  * Deploy or manage a runtime (a control-plane job), or host one (that is
@@ -57,8 +63,11 @@ import {
   type FetchLike,
 } from '../../../mcp/gatewayTransport.js';
 import {
-  retryingFetchWhen,
-  type RetryOnThrottle,
+  joinableRetry,
+  retryingFetchFor,
+  retryRule,
+  type RetryDefaults,
+  type RetryRule,
   type ThrottleFetch,
   type ThrottleRetryOptions,
 } from '../../../mcp/throttleRetry.js';
@@ -71,7 +80,7 @@ import {
   type BedrockAgentCoreRuntimeSdkModule,
 } from './invoke.js';
 import { safeAnswer } from './safeAnswer.js';
-import { sessionStrategy, type AgentCoreRuntimeSession } from './session.js';
+import { sessionStrategy, type AgentCoreRuntimeSession, type SessionStrategy } from './session.js';
 import { sessionBusy } from './sessionBusy.js';
 
 /**
@@ -112,8 +121,9 @@ export interface AgentCoreRuntimeBearerAuth {
 export type AgentCoreRuntimeAuth = 'sigv4' | AgentCoreRuntimeBearerAuth;
 
 /**
- * The session-busy retry: the same ceilings and the same `onRetry` report as
- * `mcpClient`'s `retryOnThrottle`, applied to AgentCore's own refusal.
+ * The session-busy retry: the same options and the same `onRetry` report as
+ * `mcpClient`'s `retryOnThrottle`, applied to AgentCore's own refusal — with
+ * this transport's defaults (see {@link AgentCoreRuntimeMcpTransportOptions.retry}).
  */
 export type AgentCoreRuntimeRetryOptions = ThrottleRetryOptions;
 
@@ -147,14 +157,23 @@ export interface AgentCoreRuntimeMcpTransportOptions {
   /**
    * Retry AgentCore's "session operation in progress" refusal — the MCP
    * contract's HTTP 200 with JSON-RPC -32005, or the API's 409
-   * `RetryableConflictException`. On by default: up to 5 attempts, never more
-   * than 10 s of waiting in total, jittered exponential backoff. `false` lets
-   * the refusal through on the first attempt.
+   * `RetryableConflictException`. `false` lets the refusal through on the
+   * first attempt.
    *
-   * Nothing else is retried here: a 429 goes to `mcpClient`'s own throttle
-   * retry, and a 5xx, a dropped connection or any other JSON-RPC error
-   * (throttling's -32003 included) is delivered as it is — it may be the
-   * record of work that ran.
+   * On by default, set by its MINIMUM total wait: AgentCore can take about
+   * 2.5 s, and up to about 3.4 s, to bring a runtime session up, and refuses
+   * every request until it has. Up to 5 attempts, waiting 500 ms doubling with
+   * equal jitter — 250–500 ms, 500–1000 ms, 1–2 s, 2–4 s — is 3.75 s of waiting
+   * at the shortest draw and 7.5 s at the longest, inside the 10 s ceiling on
+   * waiting (`maxWaitMs`). No deadline (`maxElapsedMs`) and no cap on the
+   * scheduled wait (`maxDelayMs`) unless you set them.
+   *
+   * These are the call's overall limits. Under `mcpClient`, its 429 retry
+   * joins this retry's series rather than wrapping it, so a call makes at most
+   * `maxAttempts` requests whichever refusals it meets, and `retryOnThrottle`'s
+   * own values limit only the 429 retries inside that. A 5xx, a dropped
+   * connection or any other JSON-RPC error (throttling's -32003 included) is
+   * delivered as it is — it may be the record of work that ran.
    */
   readonly retry?: boolean | AgentCoreRuntimeRetryOptions;
   /**
@@ -192,8 +211,24 @@ export interface AgentCoreRuntimeMcpTransportOptions {
   readonly _sdk?: BedrockAgentCoreRuntimeSdkModule;
 }
 
-/** The session-busy retry's own ceilings, when the caller set none. */
-const DEFAULT_RETRY: AgentCoreRuntimeRetryOptions = { maxAttempts: 5, maxWaitMs: 10_000 };
+/**
+ * The session-busy retry's defaults, chosen by their MINIMUM total wait.
+ * AgentCore can take about 2.5 s, and up to about 3.4 s, to bring a runtime
+ * session up. 500 ms doubling with equal jitter over 5 attempts waits
+ * 250 + 500 + 1000 + 2000 = 3750 ms at the shortest draw and
+ * 500 + 1000 + 2000 + 4000 = 7500 ms at the longest: the slowest start is
+ * covered on every draw, and the longest stays inside the 10 s ceiling on
+ * waiting, so the ceiling never cuts the schedule short.
+ */
+export const SESSION_BUSY_RETRY_DEFAULTS: RetryDefaults = Object.freeze({
+  maxAttempts: 5,
+  maxWaitMs: 10_000,
+  maxElapsedMs: Infinity,
+  baseDelayMs: 500,
+  multiplier: 2,
+  jitter: 'equal',
+  maxDelayMs: Infinity,
+});
 
 /** What a bearer token is vended for, unless the caller names another service. */
 const DEFAULT_BEARER_SERVICE = 'runtime';
@@ -215,13 +250,37 @@ export function agentCoreRuntimeMcpTransport(
 ): McpHttpTransport {
   const url = agentCoreRuntimeUrl(options);
   const send = authStrategy(options, url);
-  const retried = retryingFetchWhen(send, retryConfig(options.retry), sessionBusy) ?? send;
+  const busy = retryRule(
+    'session-busy',
+    sessionBusy,
+    options.retry,
+    SESSION_BUSY_RETRY_DEFAULTS,
+    'agentCoreRuntimeMcpTransport: `retry`',
+  );
   const session = sessionStrategy(options.session ?? 'per-call');
+  return {
+    transport: 'http',
+    url,
+    fetch: sessionedFetch(session, send, busy === undefined ? [] : [busy]),
+  };
+}
 
-  // The session is applied ONCE per request the MCP client makes, outside the
-  // retry: every attempt of one request goes to the same runtime session (a
-  // busy refusal is about THAT session coming up), and only the final answer
-  // binds anything.
+/**
+ * The transport's fetch: the session around ONE retry series around the auth.
+ *
+ * The session is applied ONCE per request the MCP client makes, outside the
+ * series: every attempt of one request goes to the same runtime session (a busy
+ * refusal is about THAT session coming up), and only the final answer binds
+ * anything. Joinable: a rule `retryingFetch` offers (`mcpClient`'s 429 retry) is
+ * rebuilt into this same series, inside the session and the rewrite — never
+ * wrapped around them as a second loop.
+ */
+function sessionedFetch(
+  session: SessionStrategy,
+  send: ThrottleFetch,
+  rules: readonly RetryRule[],
+): ThrottleFetch {
+  const retried = retryingFetchFor(send, rules);
   const sessioned: ThrottleFetch = async (input, init) => {
     const headers = new Headers(init?.headers);
     const step = session.request(headers, (init?.method ?? 'GET').toUpperCase());
@@ -231,8 +290,7 @@ export function agentCoreRuntimeMcpTransport(
     // ONE rule for both auth paths, after the retry has read the original.
     return step.settle(await safeAnswer(response));
   };
-
-  return { transport: 'http', url, fetch: sessioned };
+  return joinableRetry(sessioned, (rule) => sessionedFetch(session, send, [...rules, rule]));
 }
 
 /** Where a runtime's MCP endpoint is, as {@link agentCoreRuntimeUrl} needs it. */
@@ -369,17 +427,6 @@ function injectedSdk(
     );
   }
   return sdk ?? legacy;
-}
-
-// ── The retry strategy's configuration ────────────────────────────────
-
-function retryConfig(retry: AgentCoreRuntimeMcpTransportOptions['retry']): RetryOnThrottle {
-  if (retry === false) return false;
-  const given = typeof retry === 'object' && retry !== null ? retry : {};
-  // An explicitly `undefined` field means "not set" — it must fall back to this
-  // transport's default, not erase it (and land on the loop's own default).
-  const set = Object.fromEntries(Object.entries(given).filter(([, v]) => v !== undefined));
-  return { ...DEFAULT_RETRY, ...set };
 }
 
 /**

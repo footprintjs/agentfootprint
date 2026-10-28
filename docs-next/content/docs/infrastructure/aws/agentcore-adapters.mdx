@@ -475,7 +475,38 @@ Three choices, each a strategy you pick by name:
 |---|---|---|
 | `auth` | `'sigv4'` (default) · `{ bearer, service? }` | IAM goes through the AWS SDK's `InvokeAgentRuntime`, with the SDK's own retry turned **off** (`maxAttempts: 1`) — its standard policy would re-send a call after a 5xx or a dropped connection; a `client` you pass keeps its own policy, so build it with `maxAttempts: 1`. An OAuth (JWT) authorizer gets a bearer token over the documented HTTPS endpoint — the SDK has no bearer scheme. The token is vended per request and dropped, by the same code as `gatewayTransport`; it is a machine token (`mode: 'user'` is refused — the request names no user, so a user's token would be sent for whoever calls through the client). |
 | `session` | `'per-call'` (default) · `'reuse'` | `'per-call'` sends a fresh runtime session id of its own with every request and no `Mcp-Session-Id`, and hides the returned one, so nothing carries over and one client can serve every user of a process; it needs a stateless server, the runtime's recommended default. `'reuse'` keeps one runtime session per **client**, keyed by the transport: a client's first request gets a fresh runtime session id, the server's `Mcp-Session-Id` is kept with it, and the client carries a random handle in its place — so a server that numbers its sessions per process can never put two clients in one session, and an unknown handle is answered 404 without being sent. |
-| `retry` | on (5 attempts, ≤ 10 s) · options · `false` | Retries exactly the session-busy refusal, in both its forms: the MCP contract's HTTP 200 with code `-32005` and the "session operation in progress" message, and the API's 409 `RetryableConflictException`. Not `ConflictException` (same code, different message), not a batch, not `-32003` (throttling also arrives as a JSON-RPC error inside a 200 — delivered as it is), not a 5xx or a dropped connection, which may be the record of work that ran. Same loop, ceilings and `onRetry` report as `mcpClient`'s 429 retry. |
+| `retry` | on (5 attempts, 500 ms doubling with equal jitter, ≤ 10 s of waiting) · options · `false` | Retries exactly the session-busy refusal, in both its forms: the MCP contract's HTTP 200 with code `-32005` and the "session operation in progress" message, and the API's 409 `RetryableConflictException`. Not `ConflictException` (same code, different message), not a batch, not `-32003` (throttling also arrives as a JSON-RPC error inside a 200 — delivered as it is), not a 5xx or a dropped connection, which may be the record of work that ran. Same options and `onRetry` report as `mcpClient`'s 429 retry, which joins this retry rather than wrapping it — see below. |
+
+### Retry timing, and one budget per call
+
+A runtime session can take about 2.5 s, and up to about 3.4 s, to come up, and
+every request that lands meanwhile is refused. The default schedule is set by
+its shortest draw: 500 ms doubling with equal jitter over 5 attempts waits
+250–500 ms, 500–1000 ms, 1–2 s and 2–4 s — 3.75 s at least and 7.5 s at most,
+inside the 10 s ceiling on waiting.
+
+| Option | Default | What it does |
+|---|---|---|
+| `maxAttempts` | 5 | Requests per call, the first included. The call's overall limit. |
+| `baseDelayMs` · `multiplier` | 500 · 2 | The first wait's ceiling, and how each ceiling grows. |
+| `jitter` | `'equal'` | `'equal'` waits between half the ceiling and all of it, `'full'` from zero, `'none'` exactly it. |
+| `maxDelayMs` | none | The most one of the library's own backoff waits may last. It caps the ceiling before the jittered draw, so capped waits keep their spread. It never cuts a server's `Retry-After`. |
+| `maxWaitMs` | 10 000 | The most a call spends waiting in total. |
+| `maxElapsedMs` | none | A deadline for the whole call, requests included: no wait that would end past it is begun, and a request still waiting for its answer when it passes is cut. That includes the body the session-busy check reads. |
+| `endpointLabel` | none | A name you declare for this endpoint. `onRetry` reports it as `endpoint`. It is never made up from the URL. |
+| `onRetry` | — | A notification before each wait. It gets the refusal's `kind` (`'session-busy'` or `'throttle'`), the attempt about to start, the wait, the endpoint's origin (scheme, host and port) and your `endpointLabel` as `endpoint`. It never gets the URL's path, user info, query or fragment, the request's arguments or the server's answer. It is not told how the call ended. |
+
+Each request is one retry series on footprintjs's attempt runner. Under
+`mcpClient`, the client's 429 retry (`retryOnThrottle`) joins that series instead
+of wrapping the transport in a second loop, so a call makes at most
+`retry.maxAttempts` requests whatever mix of refusals it meets, and every
+attempt, a 429's included, lands in the same runtime session. The transport's `retry` values are the call's limits; `retryOnThrottle`'s
+limit the 429 retries inside them. A `Retry-After` is waited whole — `maxDelayMs`
+never cuts it — and a wait it asks for past `maxWaitMs` or the deadline is not
+begun: the 429 is delivered instead.
+
+The example above sets a deadline (`maxElapsedMs`) and records each retry's
+`kind` and attempt; everything else there is the default schedule.
 
 <Callout type="warn" title="A 'reuse' client is ONE session">
 Build one client per conversation. Two clients built on one transport are two

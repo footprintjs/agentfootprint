@@ -37,7 +37,7 @@ export const meta: ExampleMeta = {
 
 export async function run(input: string, provider?: LLMProvider): Promise<unknown> {
   const runtime = standInRuntime();
-  const retries: number[] = [];
+  const retries: string[] = [];
 
   // #region transport
   const orders = await mcpClient({
@@ -59,7 +59,14 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       // conversation. The default, 'per-call', gives every request a session of
       // its own: nothing carries over, and one client can serve every user.
       session: 'reuse',
-      retry: { onRetry: ({ attempt }) => retries.push(attempt) },
+      // The default schedule: 5 attempts, 500 ms doubling with equal jitter —
+      // 3.75–7.5 s of waiting in all, enough for a session that takes ~3.4 s
+      // to start. `maxElapsedMs` adds a deadline for the whole call. mcpClient's
+      // own 429 retry joins this one series, so the two never multiply requests.
+      retry: {
+        maxElapsedMs: 15_000,
+        onRetry: ({ kind, attempt }) => retries.push(`${kind} → attempt ${attempt}`),
+      },
     }),
   });
   // #endregion transport
@@ -85,7 +92,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   await orders.close();
 
   // The refusal was retried once, inside the tool call — the model never saw it.
-  assert.deepEqual(retries, [2]);
+  assert.deepEqual(retries, ['session-busy → attempt 2']);
   // ONE runtime session id on every request, and the MCP session the runtime
   // minted at `initialize` carried by every request after it.
   const posts = runtime.seen.filter((s) => s.method === 'POST');
