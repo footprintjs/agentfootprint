@@ -37,10 +37,13 @@
  * returns. Batches are appended asynchronously on a size trigger
  * (`maxBufferEvents` / `maxBufferBytes`), on a timer (`flushIntervalMs`), and on
  * `flush()` — all through ONE queue (`outbox.ts`), so one append is in flight
- * at a time and lines land whole, in dispatch order (#223). A hard kill
- * therefore loses at most the buffer — the price of not making telemetry a term
- * in agent-loop latency. Call `flush()` (or `agent.shutdown()`, which does) at
- * process end; see the 8.12.0 lifecycle laws on {@link BaseStrategy.flush}.
+ * at a time: this sink's appends never interleave, and lines land in dispatch
+ * order (#223). That is not atomicity — a disk that fails partway through an
+ * append (ENOSPC) can still leave part of a line behind, and that batch is
+ * reported dropped. A hard kill loses the buffer and can interrupt the append
+ * in flight — the price of not making telemetry a term in agent-loop latency.
+ * Call `flush()` (or `agent.shutdown()`, which does) at process end; see the
+ * 8.12.0 lifecycle laws on {@link BaseStrategy.flush}.
  *
  * ## Rotation is ONE generation, and that is deliberate
  *

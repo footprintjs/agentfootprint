@@ -14,9 +14,17 @@
  *     of them interleaved tear NDJSON lines (reported in #223, where the timer
  *     bypassed the chain). Whatever a sink does around its write — the file
  *     sink's rotation — runs inside its delivery, so it can never be skipped
- *     or reordered either.
- *   - **Oldest first.** A delivery takes the oldest waiting items, so items
- *     leave in the order they were accepted.
+ *     or reordered either. This keeps ONE sink's deliveries from interleaving;
+ *     it does not make a delivery atomic (a disk that fails partway through an
+ *     append can still leave part of it behind).
+ *   - **Oldest first, within the receiver's limits.** A delivery takes the
+ *     oldest waiting items, so items leave in the order they were accepted.
+ *     When a receiving service limits one request (`maxItemsPerDelivery`,
+ *     `maxBytesPerDelivery` — CloudWatch's PutLogEvents), a delivery takes
+ *     only the oldest items that fit, and the rest go in the next delivery,
+ *     right after. That matters BECAUSE of the queue: a slow delivery lets a
+ *     backlog build behind it, which one request may not be allowed to carry.
+ *     Each part settles on its own — shipped, or dropped and reported.
  *   - **`drain()` is bounded.** It resolves once every item accepted BEFORE
  *     the call has settled (delivered, or dropped and reported), one the timer
  *     already had in flight included — then makes one sweep of what arrived
@@ -55,6 +63,15 @@ export interface OutboxOptions<T> {
    *  own option to one first, and refuses by its own name what cannot map.
    *  Omitted → everything waiting. */
   readonly maxItemsPerDelivery?: number;
+  /** Most bytes one delivery may carry, as the receiving service counts them:
+   *  for each item, the `bytes` it was added with plus `overheadBytesPerItem`.
+   *  A delivery always takes at least one item, so an item too large for any
+   *  delivery still goes — alone — and the service's answer decides it.
+   *  Omitted → no byte limit. */
+  readonly maxBytesPerDelivery?: number;
+  /** Bytes the receiving service adds to each item it counts (CloudWatch
+   *  Logs: 26 per event). Default 0. */
+  readonly overheadBytesPerItem?: number;
   /** Timer trigger for sparse traffic, in ms. `0` disables it: only the size
    *  trigger and `drain()` deliver. */
   readonly flushIntervalMs: number;
@@ -151,26 +168,48 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
 
   async function deliverNext(): Promise<void> {
     deliveryQueued = false;
-    const batch = takeOldest();
+    const { batch, leftBehind } = takeOldest();
     if (batch.length === 0) return;
     try {
       await opts.deliver(batch);
     } catch (cause) {
       reportDropped(batch, cause);
     }
+    // Settled exactly once, whatever happened to the deliveries around it.
     settled += batch.length;
-    // Items the per-delivery cap left behind were already due when this
+    // Items a per-delivery limit left behind were already due when this
     // delivery started — deliver them now rather than on the next timer.
-    if (waiting.length > 0 && batch.length === opts.maxItemsPerDelivery) queueDelivery();
+    if (leftBehind) queueDelivery();
   }
 
-  function takeOldest(): T[] {
-    const count = Math.min(waiting.length, opts.maxItemsPerDelivery ?? waiting.length);
-    const batch = waiting.splice(0, count);
-    for (const entry of batch) waitingBytes -= entry.bytes;
+  /** Take the oldest waiting items one delivery may carry. `leftBehind` says
+   *  a per-delivery limit stopped the take with items still waiting. */
+  function takeOldest(): { readonly batch: T[]; readonly leftBehind: boolean } {
+    const entries = waiting.splice(0, countForOneDelivery());
+    for (const entry of entries) waitingBytes -= entry.bytes;
     if (waiting.length === 0) waitingBytes = 0;
-    taken += batch.length;
-    return batch.map((entry) => entry.item);
+    taken += entries.length;
+    return { batch: entries.map((entry) => entry.item), leftBehind: waiting.length > 0 };
+  }
+
+  /** How many of the oldest waiting items fit one delivery: at least one,
+   *  then as many as the item and byte limits allow, in order. */
+  function countForOneDelivery(): number {
+    const most = Math.min(waiting.length, opts.maxItemsPerDelivery ?? waiting.length);
+    const byteLimit = opts.maxBytesPerDelivery;
+    if (byteLimit === undefined) return most;
+    const overhead = opts.overheadBytesPerItem ?? 0;
+    let count = 0;
+    let bytes = 0;
+    while (count < most) {
+      const entry = waiting[count];
+      if (entry === undefined) break;
+      const cost = entry.bytes + overhead;
+      if (count > 0 && bytes + cost > byteLimit) break;
+      bytes += cost;
+      count++;
+    }
+    return count;
   }
 
   function reportDropped(batch: readonly T[], cause: unknown): void {

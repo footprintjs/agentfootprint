@@ -50,6 +50,23 @@ import { createOutbox } from './outbox.js';
 /** One CloudWatch log event, as `PutLogEvents` takes it. */
 type LogEvent = { timestamp: number; message: string };
 
+/**
+ * What ONE `PutLogEvents` request may carry — CloudWatch Logs' documented
+ * per-request limits (PutLogEvents API reference): "The maximum number of log
+ * events in a batch is 10,000", and "The maximum batch size is 1,048,576
+ * bytes. This size is calculated as the sum of all event messages in UTF-8,
+ * plus 26 bytes for each log event."
+ *
+ * These split a delivery into legal requests; they are NOT triggers.
+ * `maxBatchEvents` / `maxBatchBytes` still decide when a delivery starts,
+ * exactly as before. The split matters because puts now go one at a time
+ * (#223): a slow put lets a backlog build behind it, and without the split
+ * the next delivery sent the whole backlog as one request CloudWatch refuses.
+ */
+const PUT_LOG_EVENTS_MAX_EVENTS = 10_000;
+const PUT_LOG_EVENTS_MAX_BYTES = 1_048_576;
+const PUT_LOG_EVENTS_BYTES_PER_EVENT = 26;
+
 // ─── Public options ──────────────────────────────────────────────────
 
 export interface CloudwatchObservabilityOptions {
@@ -71,11 +88,15 @@ export interface CloudwatchObservabilityOptions {
    *  {@link CloudwatchObservabilityOptions.logGroupName}). Defaults to
    *  `agentfootprint`. */
   readonly logStreamName?: string;
-  /** Max events buffered before forced flush. Default 100. */
+  /** Max events buffered before forced flush. Default 100. A trigger, not a
+   *  request size: however many events are waiting when a put starts, one
+   *  put never carries more than CloudWatch accepts (10,000 events,
+   *  1,048,576 bytes) — the rest go in the next put, right after. */
   readonly maxBatchEvents?: number;
   /** Max payload bytes (UTF-8) buffered before forced flush. Default
    *  10240 (10 KB). CloudWatch hard caps at 1 MB / batch but we keep
-   *  the default low so latency stays bounded. */
+   *  the default low so latency stays bounded. A trigger too: a backlog
+   *  larger than one request is split into requests CloudWatch accepts. */
   readonly maxBatchBytes?: number;
   /** Forced-flush interval when traffic is sparse. Default 1000ms.
    *  `0` disables time-based flush — only size triggers fire. */
@@ -275,8 +296,18 @@ export function _buildCloudWatchObservability(
   // trigger, timer, `flush()`, shutdown (outbox.ts; #223).
   const outbox = createOutbox<LogEvent>({
     name: strategyName,
+    // When a delivery starts — compared as given, as before.
     maxItems: maxBatchEvents,
     maxBytes: maxBatchBytes,
+    // What one put may carry: the oldest events that fit; the rest ship in
+    // the next put, right after, in order. The byte measure is the one `add`
+    // records (UTF-8 message bytes) plus CloudWatch's 26 per event. An event
+    // too large for any request is still sent — alone — as it was before;
+    // CloudWatch refuses it and that one event is reported dropped, without
+    // taking its neighbours with it.
+    maxItemsPerDelivery: PUT_LOG_EVENTS_MAX_EVENTS,
+    maxBytesPerDelivery: PUT_LOG_EVENTS_MAX_BYTES,
+    overheadBytesPerItem: PUT_LOG_EVENTS_BYTES_PER_EVENT,
     flushIntervalMs,
     // An un-stopped strategy lingers up to `flushIntervalMs` so the timer can
     // still ship the tail (see `stop()`).

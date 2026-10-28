@@ -25,6 +25,24 @@ landed. The same timer sat in CloudWatch and X-Ray. What a sink does around its
 write — the file sink's rotation — runs inside its delivery, so it is
 serialized with it.
 
+What serializing promises, and what it does not: ONE sink's deliveries never
+interleave. It does not make a delivery atomic. A disk that fails partway
+through an append (ENOSPC) can still leave part of a line behind, and that
+batch is reported dropped. Two sink instances or two processes writing one
+file are not coordinated either.
+
+- **A receiver's per-request limits split a delivery.** Serializing means a
+  slow delivery lets a backlog build behind it, which one request may not be
+  allowed to carry. With `maxItemsPerDelivery` / `maxBytesPerDelivery` (plus
+  `overheadBytesPerItem`), a delivery takes only the oldest items that fit,
+  and the rest go in the next delivery, right after, in order. Each part
+  settles on its own (shipped, or dropped and reported), so a failed part
+  never takes its neighbours with it. CloudWatch passes its documented
+  `PutLogEvents` limits: 10,000 events, and 1,048,576 bytes counted as UTF-8
+  message bytes plus 26 per event. An item too large for any request still
+  goes, alone, and the service's answer decides it. These limits never change
+  when a delivery starts; the size triggers below still do that.
+
 - `drain()` (the sink's `flush()`) is bounded. It resolves once every item
   accepted before the call has settled (delivered, or dropped and reported),
   including one a timed delivery already had in flight. It then makes one
