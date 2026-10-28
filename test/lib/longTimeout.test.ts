@@ -1,6 +1,6 @@
 /**
  * setLongTimeout — a host timer for a limit of any length (`lib/longTimeout.ts`,
- * a temporary copy of footprintjs#136's helper until footprintjs 10.7.0).
+ * agentfootprint's own copy of a helper footprintjs keeps private).
  *
  * A host timer holds at most 2^31 − 1 ms; Node fires a longer delay after 1 ms.
  * Vitest's fake timers do the same (checked here first), so these tests can

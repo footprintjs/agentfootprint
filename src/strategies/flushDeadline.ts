@@ -37,14 +37,18 @@ export function rememberStrategyOf(handle: object, strategy: BaseStrategy): void
 
 /** The deadline a `shutdown({ timeoutMs })` asked for. Throws a `TypeError`
  *  when it is not a positive number of milliseconds — called from the async
- *  `shutdown()`, so its caller sees a REJECTED promise, never a sync throw. */
+ *  `shutdown()`, so its caller sees a REJECTED promise, never a sync throw.
+ *
+ *  The refusal names the field and the shape it takes, NEVER the value: a
+ *  value of the wrong type can be anything a caller had at hand, and an error
+ *  message is copied into logs, reports and traces. */
 export function shutdownTimeoutOf(timeoutMs: number | undefined): number {
   if (timeoutMs === undefined) return DEFAULT_SHUTDOWN_TIMEOUT_MS;
   // `> 0` is false for NaN, so NaN is refused here too.
   if (typeof timeoutMs === 'number' && timeoutMs > 0) return timeoutMs;
   throw new TypeError(
-    `shutdown({ timeoutMs }) must be a positive number of milliseconds ` +
-      `(got ${String(timeoutMs)}). Pass Infinity to wait for every flush without a deadline.`,
+    'shutdown({ timeoutMs }) must be a positive number of milliseconds, ' +
+      'or Infinity to wait for every flush without a deadline.',
   );
 }
 

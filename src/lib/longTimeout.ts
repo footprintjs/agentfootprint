@@ -17,9 +17,10 @@
  * The returned function cancels whichever chunk is armed; it is a no-op when
  * nothing was armed.
  *
- * TEMPORARY COPY: this is footprintjs's `setLongTimeout` (footprintjs#136),
- * same signature and same law. Swap it for the footprintjs export once
- * footprintjs 10.7.0 ships, and delete this file.
+ * A COPY, ON PURPOSE: footprintjs has the same helper (`setLongTimeout`,
+ * footprintjs#136) but keeps it private — it is not part of footprintjs's
+ * public exports. agentfootprint keeps this copy, with the same signature and
+ * the same law, until footprintjs exports a supported long-timer helper.
  *
  * A leaf: imports nothing.
  */

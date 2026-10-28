@@ -348,6 +348,32 @@ describe('agent.shutdown() deadline — P5 security', () => {
     },
   );
 
+  // A value of the wrong type can be anything a caller had at hand, and an
+  // error message is copied into logs, reports and traces: the refusal names
+  // the field and its shape, never what was passed.
+  it.each([
+    { value: 0, shown: '0' },
+    { value: -7, shown: '-7' },
+    { value: Number.NaN, shown: 'NaN' },
+    { value: 'SENTINEL-5000', shown: 'SENTINEL-5000' },
+    { value: { toString: () => 'SENTINEL-OBJECT' }, shown: 'SENTINEL-OBJECT' },
+  ])(
+    'P5 the refusal names the field and its shape, never the value ($shown)',
+    async ({ value, shown }) => {
+      const agent = buildAgent();
+      const refusal: unknown = await agent.shutdown({ timeoutMs: value as unknown as number }).then(
+        () => undefined,
+        (err: unknown) => err,
+      );
+      expect(refusal).toBeInstanceOf(TypeError);
+      const message = (refusal as TypeError).message;
+      expect(message).toMatch(
+        /^shutdown\(\{ timeoutMs \}\) must be a positive number of milliseconds, or Infinity/,
+      );
+      expect(message).not.toContain(shown);
+    },
+  );
+
   it('P5 a bad timeoutMs never throws synchronously: it is a rejected promise', async () => {
     const agent = buildAgent();
     let shutting: Promise<void> | undefined;

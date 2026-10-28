@@ -169,8 +169,9 @@ each regex's worst case (`test/helpers/workCount.ts`, never a timer).
   limit of any length: `Infinity` arms none, and a delay past 2^31 − 1 ms (the
   most one host timer holds, which Node fires after 1 ms) is waited in chained
   timers, never early. Used by the shutdown deadline
-  (`strategies/flushDeadline.ts`). A temporary copy of footprintjs#136's
-  helper: swap it for the footprintjs export once footprintjs 10.7.0 ships.
+  (`strategies/flushDeadline.ts`). footprintjs has the same helper
+  (footprintjs#136) but keeps it private, so agentfootprint keeps its own copy
+  until footprintjs exports a supported long-timer helper.
 
   ```ts
   const cancel = setLongTimeout(() => giveUp(), timeoutMs); // Infinity: no timer; 30 days: 30 days
