@@ -42,6 +42,7 @@ import {
   retainStrategy,
   stopStrategyIfUnused,
 } from './lifecycle.js';
+import { rememberStrategyOf } from './flushDeadline.js';
 import {
   selectStatus,
   renderStatusLine,
@@ -106,6 +107,8 @@ function makeStrategyHandle(args: {
       },
     },
   );
+  // So a shutdown whose deadline this handle's flush misses can name the sink.
+  rememberStrategyOf(handle, args.strategy);
   // The computed `ASYNC_DISPOSE` key gives TypeScript a symbol INDEX
   // signature rather than the one well-known member `AsyncDisposable` names,
   // so the cast goes through `unknown`. At runtime the key IS

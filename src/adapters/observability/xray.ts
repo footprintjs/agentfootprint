@@ -74,6 +74,7 @@ import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
+import { createOutbox } from './outbox.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -186,11 +187,8 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
     }
   >();
 
-  // Outbound segment buffer (flat list of closed segments ready for
-  // PutTraceSegments). Drained by flush() / size-trigger / time-trigger.
-  const outbox: XraySegment[] = [];
-  let lastFlushPromise: Promise<void> = Promise.resolve();
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Set by `stop()`: no more events accepted. NOT a guard on delivery (8.11.1):
+  // segments already closed and queued are still owed to X-Ray.
   let stopped = false;
   // The fallback when the consumer wires nothing. Rate-limited; a
   // consumer-supplied sink is not.
@@ -204,46 +202,35 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
     return client;
   }
 
-  function scheduleTimedFlush(): void {
-    if (timer || flushIntervalMs <= 0 || stopped) return;
-    timer = setTimeout(() => {
-      timer = undefined;
-      void doFlush();
-    }, flushIntervalMs);
+  /** Ship one batch of closed segments. Throws when it could not — the
+   *  outbox drops the batch and reports it once. */
+  async function shipSegments(batch: readonly XraySegment[]): Promise<void> {
+    await ensureClient().putTraceSegments({
+      TraceSegmentDocuments: batch.map((s) => toWireJson(s)),
+    });
   }
 
-  async function doFlush(): Promise<void> {
-    // `stopped` is deliberately NOT a guard here (8.11.1). `stop()` stops this
-    // strategy ACCEPTING events and cancels its timer; segments already closed
-    // and queued are still owed to X-Ray. Guarding here made `flush()` after
-    // `stop()` loop forever waiting for a drain that could no longer happen —
-    // an infinite microtask spin that starved the event loop of the process
-    // trying to shut down.
-    if (outbox.length === 0) return;
-    const batch = outbox.splice(0, maxBatchSegments);
-    try {
-      await ensureClient().putTraceSegments({
-        TraceSegmentDocuments: batch.map((s) => toWireJson(s)),
-      });
-    } catch (err) {
-      // Routed through the strategy's CURRENT `_onError` (not a hook captured
-      // at construction), so a consumer who assigns it — or passes `onError`
-      // — actually receives delivery failures. Before 8.11.0 the hook was
-      // installed lazily inside `_onError` itself and was `undefined` here,
-      // so every failed put was silent.
-      strategy._onError?.(
-        new Error(
-          `${batch.length} segment(s) dropped shipping to X-Ray: ` +
-            (err instanceof Error ? err.message : String(err)),
-        ),
-      );
-    }
-    // If outbox grew during the put (size > maxBatchSegments emits
-    // arrived), chain another flush.
-    if (outbox.length > 0 && !stopped) {
-      lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
-    }
-  }
+  // Closed segments ready for PutTraceSegments, and the one queue every put
+  // goes through — size trigger, timer, `flush()`, shutdown (outbox.ts;
+  // #223). A put takes at most `maxBatchSegments`; what the cap leaves behind
+  // ships right after it.
+  const outbox = createOutbox<XraySegment>({
+    name: 'xray',
+    maxItems: maxBatchSegments,
+    maxItemsPerDelivery: maxBatchSegments,
+    flushIntervalMs,
+    timerHoldsProcess: true,
+    deliver: shipSegments,
+    dropped: (batch, cause) =>
+      new Error(
+        `${batch.length} segment(s) dropped shipping to X-Ray: ` +
+          (cause instanceof Error ? cause.message : String(cause)),
+      ),
+    // Routed through the strategy's CURRENT `_onError` (not a hook captured
+    // at construction), so a consumer who assigns it — or passes `onError`
+    // — actually receives delivery failures (8.11.0).
+    report: (err) => strategy._onError?.(err),
+  });
 
   function pushSegment(
     turnState: NonNullable<ReturnType<typeof activeTurns.get>>,
@@ -324,14 +311,9 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
       seg.metadata = { default: { ...(seg.metadata?.default ?? {}), ...extra.metadata } };
     if (turnState.sampled) {
       turnState.closed.push(seg);
-      // Once the root closes, the whole turn graduates to outbox.
+      // Once the root closes, the whole turn graduates to the outbox.
       if (turnState.stack.length === 0) {
-        outbox.push(...turnState.closed);
-        if (outbox.length >= maxBatchSegments) {
-          lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
-        } else {
-          scheduleTimedFlush();
-        }
+        for (const closed of turnState.closed) outbox.add(closed);
       }
     }
   }
@@ -545,20 +527,11 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
         if (!t.sampled) continue;
         while (t.stack.length > 0) closeSegment(t, undefined);
       }
-      // BOUNDED BY CONSTRUCTION — every pass must shrink the outbox (a put
-      // takes up to `maxBatchSegments` at a time, so several passes are
-      // normal); a pass that shrinks nothing ends the drain instead of trying
-      // again. The previous `while (outbox.length > 0)` trusted `doFlush()` to
-      // make progress, which it stopped doing after `stop()` — an infinite
-      // microtask spin that starved the event loop during shutdown.
-      for (;;) {
-        const pending = outbox.length;
-        // Chain, never replace: segments ship in the order they closed.
-        lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
-        await lastFlushPromise;
-        if (outbox.length === 0) return;
-        if (outbox.length >= pending) return;
-      }
+      // Segments ship in the order they closed, one put at a time, behind the
+      // put in flight — one the timer started included. Resolves once nothing
+      // is queued or in flight; a put that never settles holds it, which is
+      // why `agent.shutdown()` waits under a deadline.
+      await outbox.drain();
     },
     /** Stop the flush timer and stop accepting events. **The framework does
      *  not call this for you** — an un-stopped strategy keeps a `setTimeout`
@@ -569,10 +542,7 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
      *  (8.11.1). */
     stop(): void {
       stopped = true;
-      if (timer) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
+      outbox.stop();
     },
     /**
      * Where errors go. Two callers: the dispatch layer (when `exportEvent`

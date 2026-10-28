@@ -300,7 +300,7 @@ export interface Runner<TIn = unknown, TOut = unknown> {
    * not broken by its arrival; every runner this package ships implements it.
    * See `RunnerBase.shutdown` for the ordering and the refcount rules.
    */
-  shutdown?(options?: { readonly stop?: boolean }): Promise<void>;
+  shutdown?(options?: { readonly stop?: boolean; readonly timeoutMs?: number }): Promise<void>;
 
   /**
    * Emit a consumer-defined custom event through the same dispatcher.

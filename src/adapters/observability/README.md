@@ -10,6 +10,42 @@ that; an exporter that drops an event drops only its own copy.
 Telemetry that fails invisibly is indistinguishable from telemetry that works,
 so delivery failures are themselves reported (`deliveryErrors.ts`).
 
+## One batch at a time (`outbox.ts`)
+The batching sinks — `file`, `cloudwatch` (and `agentcore`, built on it) and
+`xray` — do not keep their own buffer, timer or promise chain. Each owns one
+`createOutbox(...)` and hands it items; the outbox decides when a batch leaves
+and keeps one rule: **every trigger (size, timer, `flush()`, shutdown) queues on
+the same chain, so one delivery is in flight at a time, oldest items first.**
+
+Why it is one module: the timer used to start its write directly while the
+other triggers chained theirs (reported in #223). A large `appendFile` is
+several `write()`s, so two overlapping appends tore NDJSON lines, finished out
+of order, skipped a rotation, and let `flush()` return before a timed write
+landed. The same timer sat in CloudWatch and X-Ray. What a sink does around its
+write — the file sink's rotation — runs inside its delivery, so it is
+serialized with it.
+
+- `drain()` (the sink's `flush()`) resolves only when nothing waits and nothing
+  is in flight; an item accepted while it waits is delivered by it.
+- A failed batch is dropped and reported once through the sink's `onError`;
+  the next batch still goes. The queue never rejects: an `onError` that throws
+  is said on the console instead.
+- A delivery that never settles holds the queue. The deadline is the
+  shutdown's (`strategies/flushDeadline.ts`): `agent.shutdown({ timeoutMs })`
+  stops waiting at 30 s by default and names the stuck sink.
+
+```ts
+const outbox = createOutbox<string>({
+  name: 'file', maxItems: 100, maxBytes: 65_536, flushIntervalMs: 1000,
+  timerHoldsProcess: false,
+  deliver: (lines) => appendLines(lines),           // never called twice at once
+  dropped: (lines, cause) => new Error(`${lines.length} dropped: ${String(cause)}`),
+  report: (err) => strategy._onError?.(err),        // read at call time
+});
+outbox.add(line, bytesOf(line)); // hot path: sync, no I/O
+await outbox.drain();            // flush(): behind whatever is in flight
+```
+
 ## How an Error reaches a wire (`lib/wireJson.ts`)
 An `Error` anywhere in an event is written as `{ name, message, code? }` plus a
 bounded `cause` chain — never a custom property (an axios error's
@@ -127,3 +163,4 @@ agent.emit('agentfootprint.eval.score', {
 - `githubBugReporter.ts`, `githubDeviceSignIn.ts` — filing a report as the
   reporter, not as the library.
 - `deliveryErrors.ts` — where an exporter's own failures go.
+- `outbox.ts` — buffered, timed, one-at-a-time delivery for the batching sinks.

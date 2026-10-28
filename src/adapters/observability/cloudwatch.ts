@@ -45,6 +45,10 @@ import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
+import { createOutbox } from './outbox.js';
+
+/** One CloudWatch log event, as `PutLogEvents` takes it. */
+type LogEvent = { timestamp: number; message: string };
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -166,11 +170,8 @@ export function _buildCloudWatchObservability(
   const maxBatchBytes = opts.maxBatchBytes ?? 10_240;
   const flushIntervalMs = opts.flushIntervalMs ?? 1000;
 
-  // Buffered batch — drained by `flush()` / size-trigger / time-trigger.
-  const buffer: Array<{ timestamp: number; message: string }> = [];
-  let bufferBytes = 0;
-  let lastFlushPromise: Promise<void> = Promise.resolve();
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Set by `stop()`: no more events accepted. NOT a guard on delivery (8.11.1):
+  // stopping does not authorise throwing away what was already accepted.
   let stopped = false;
 
   // What we know about the log stream (8.11.0). This is the per-(group,stream)
@@ -198,14 +199,6 @@ export function _buildCloudWatchObservability(
     return client;
   }
 
-  function scheduleTimedFlush(): void {
-    if (timer || flushIntervalMs <= 0 || stopped) return;
-    timer = setTimeout(() => {
-      timer = undefined;
-      void doFlush();
-    }, flushIntervalMs);
-  }
-
   /** Route a delivery failure through whatever `_onError` IS RIGHT NOW.
    *  Reading it at call time (rather than capturing a hook at construction)
    *  is the whole fix: a consumer who assigns `_onError` after building the
@@ -215,10 +208,7 @@ export function _buildCloudWatchObservability(
     strategy._onError?.(err);
   }
 
-  async function putBatch(
-    client: CloudWatchLikeClient,
-    batch: ReadonlyArray<{ timestamp: number; message: string }>,
-  ): Promise<void> {
+  async function putBatch(client: CloudWatchLikeClient, batch: readonly LogEvent[]): Promise<void> {
     await client.putLogEvents({
       logGroupName: opts.logGroupName,
       logStreamName,
@@ -226,93 +216,85 @@ export function _buildCloudWatchObservability(
     });
   }
 
-  async function doFlush(): Promise<void> {
-    // `stopped` is deliberately NOT a guard here (8.11.1). `stop()` stops this
-    // strategy ACCEPTING events and cancels its timer; it does not authorise
-    // throwing away events already accepted. Guarding here made `flush()`
-    // after `stop()` unable to make progress while its loop waited for
-    // progress — an infinite microtask spin that starved the event loop of
-    // the very process trying to shut down. Same stance as `auditExport`:
-    // stop observing, never destroy what was collected.
-    if (buffer.length === 0) return;
-    // Snapshot + clear so concurrent emits during the in-flight put
-    // accumulate into the next batch.
-    const batch = buffer.splice(0);
-    bufferBytes = 0;
+  /** Ship one batch. Throws when it could not — the outbox drops the batch
+   *  and reports it once. Runs inside the outbox's queue, so two puts are
+   *  never in flight at once and CloudWatch's per-stream order holds. */
+  async function shipBatch(batch: readonly LogEvent[]): Promise<void> {
+    const client = ensureClient();
     try {
-      const client = ensureClient();
-      try {
-        await putBatch(client, batch);
-        streamState = 'created'; // a successful put proves the stream is there
-        return;
-      } catch (err) {
-        // The one recoverable shape: CloudWatch rejects a put into a stream
-        // that doesn't exist. Before 8.11.0 this adapter asserted that
-        // precondition and never established it, so any stream name that
-        // didn't already exist dropped every event, forever, in silence —
-        // and the documented `${HOSTNAME}/${Date.now()}` convention can never
-        // pre-exist, so following the docs guaranteed the bug.
-        if (!isMissingStreamError(err) || streamState === 'unavailable') throw err;
-        if (!client.createLogStream) {
-          throw new Error(
-            `log stream '${logStreamName}' does not exist in log group ` +
-              `'${opts.logGroupName}', and the injected \`_client\` has no ` +
-              `\`createLogStream\` to create it.`,
-          );
-        }
-        try {
-          await client.createLogStream({
-            logGroupName: opts.logGroupName,
-            logStreamName,
-          });
-        } catch (createErr) {
-          // Two processes racing to create the same stream is normal and
-          // expected — whoever lost the race still has a usable stream.
-          if (!isAlreadyExistsError(createErr)) {
-            // Anything else (no `logs:CreateLogStream`, or the log GROUP
-            // itself is missing) will not fix itself. Latch it off so we
-            // never loop, and say which of the two it probably is.
-            streamState = 'unavailable';
-            throw new Error(
-              `could not create log stream '${logStreamName}' in log group ` +
-                `'${opts.logGroupName}': ${errorMessage(createErr)}. Check that the log ` +
-                `GROUP exists (this adapter never creates one) and that the role allows ` +
-                `\`logs:CreateLogStream\`.`,
-            );
-          }
-        }
-        streamState = 'created';
-        // Exactly ONE re-put of the same batch. Not a retry loop: if this
-        // fails the events are gone, and saying so is better than growing a
-        // buffer during an outage.
-        await putBatch(client, batch);
-      }
+      await putBatch(client, batch);
+      streamState = 'created'; // a successful put proves the stream is there
     } catch (err) {
-      const cause = errorMessage(err);
-      reportFailure(
-        new Error(
-          `${batch.length} event(s) dropped shipping to log group '${opts.logGroupName}' ` +
-            `stream '${logStreamName}': ${cause}`,
-        ),
-      );
+      // The one recoverable shape: CloudWatch rejects a put into a stream
+      // that doesn't exist. Before 8.11.0 this adapter asserted that
+      // precondition and never established it, so any stream name that
+      // didn't already exist dropped every event, forever, in silence —
+      // and the documented `${HOSTNAME}/${Date.now()}` convention can never
+      // pre-exist, so following the docs guaranteed the bug.
+      if (!isMissingStreamError(err) || streamState === 'unavailable') throw err;
+      await createStream(client);
+      // Exactly ONE re-put of the same batch. Not a retry loop: if this
+      // fails the events are gone, and saying so is better than growing a
+      // buffer during an outage.
+      await putBatch(client, batch);
     }
   }
+
+  /** Create the missing stream, or latch it off for good when retrying cannot
+   *  help. Losing a create race to another process is success. */
+  async function createStream(client: CloudWatchLikeClient): Promise<void> {
+    if (!client.createLogStream) {
+      throw new Error(
+        `log stream '${logStreamName}' does not exist in log group ` +
+          `'${opts.logGroupName}', and the injected \`_client\` has no ` +
+          `\`createLogStream\` to create it.`,
+      );
+    }
+    try {
+      await client.createLogStream({ logGroupName: opts.logGroupName, logStreamName });
+    } catch (createErr) {
+      // Two processes racing to create the same stream is normal and
+      // expected — whoever lost the race still has a usable stream.
+      if (!isAlreadyExistsError(createErr)) {
+        // Anything else (no `logs:CreateLogStream`, or the log GROUP itself is
+        // missing) will not fix itself. Latch it off so we never loop, and say
+        // which of the two it probably is.
+        streamState = 'unavailable';
+        throw new Error(
+          `could not create log stream '${logStreamName}' in log group ` +
+            `'${opts.logGroupName}': ${errorMessage(createErr)}. Check that the log ` +
+            `GROUP exists (this adapter never creates one) and that the role allows ` +
+            `\`logs:CreateLogStream\`.`,
+        );
+      }
+    }
+    streamState = 'created';
+  }
+
+  // Buffered log events, and the one queue every put goes through — size
+  // trigger, timer, `flush()`, shutdown (outbox.ts; #223).
+  const outbox = createOutbox<LogEvent>({
+    name: strategyName,
+    maxItems: maxBatchEvents,
+    maxBytes: maxBatchBytes,
+    flushIntervalMs,
+    // An un-stopped strategy lingers up to `flushIntervalMs` so the timer can
+    // still ship the tail (see `stop()`).
+    timerHoldsProcess: true,
+    deliver: shipBatch,
+    dropped: (batch, cause) =>
+      new Error(
+        `${batch.length} event(s) dropped shipping to log group '${opts.logGroupName}' ` +
+          `stream '${logStreamName}': ${errorMessage(cause)}`,
+      ),
+    report: reportFailure,
+  });
 
   function enqueue(event: AgentfootprintEvent): void {
     if (stopped) return;
     // The wire rule (`lib/wireJson.ts`) — an Error's custom properties never ship.
     const message = toWireJson(event);
-    const bytes = Buffer.byteLength(message, 'utf8');
-    buffer.push({ timestamp: Date.now(), message });
-    bufferBytes += bytes;
-
-    if (buffer.length >= maxBatchEvents || bufferBytes >= maxBatchBytes) {
-      // Size trigger — flush immediately. Chain onto last to preserve
-      // CloudWatch's per-stream ordering requirement.
-      lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
-    } else {
-      scheduleTimedFlush();
-    }
+    outbox.add({ timestamp: Date.now(), message }, Buffer.byteLength(message, 'utf8'));
   }
 
   const strategy: ObservabilityStrategy = {
@@ -334,23 +316,14 @@ export function _buildCloudWatchObservability(
      * since 8.11.1: a flush after a stop still ships what was already
      * accepted.
      */
-    async flush(): Promise<void> {
-      // BOUNDED BY CONSTRUCTION. Every pass must remove at least one buffered
-      // event; a pass that removes none ends the drain instead of trying
-      // again. The previous shape looped `while (buffer.length > 0)` and
-      // trusted `doFlush()` to make progress — which it stopped doing once
-      // `stop()` had been called, turning shutdown into an infinite microtask
-      // spin (no timer could fire, no deadline could expire, 100% of a core).
-      // A drain that cannot finish must return, never retry forever.
-      for (;;) {
-        const pending = buffer.length;
-        // Chain, never replace: CloudWatch requires per-stream ordering, so a
-        // drain waits for the in-flight put rather than racing it.
-        lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
-        await lastFlushPromise;
-        if (buffer.length === 0) return;
-        if (buffer.length >= pending) return;
-      }
+    flush(): Promise<void> {
+      // Waits behind the in-flight put — one the timer started included —
+      // and resolves once nothing is buffered or in flight. Every put makes
+      // progress (a failed one drops its batch), so it ends; a put that never
+      // settles holds it, which is why `agent.shutdown()` waits under a
+      // deadline. Since 8.11.1 delivery ignores `stop()`, so a flush after a
+      // stop still ships and never spins.
+      return outbox.drain();
     },
     /** Stop the flush timer and stop accepting events. **The framework does
      *  not call this for you** — an un-stopped strategy keeps a `setTimeout`
@@ -362,10 +335,7 @@ export function _buildCloudWatchObservability(
      *  `stop()` still ships it (8.11.1). */
     stop(): void {
       stopped = true;
-      if (timer) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
+      outbox.stop();
     },
     /**
      * Where errors go. Two callers: the dispatch layer (when `exportEvent`
