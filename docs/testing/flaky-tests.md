@@ -2,6 +2,20 @@
 
 No unresolved flaky tests are currently recorded.
 
+## Paused-session isolation — identifier collision (2026-10-27)
+
+- Test: `test/hosting/pausedSession.test.ts` → "a resume that fails before its
+  run starts, on a shared agent".
+- Evidence: [the merged-main Node 22 failure](https://github.com/footprintjs/agentfootprint/actions/runs/40605029340/job/122542282349).
+  The whole-record search for `4242` matched four copies of one legitimate
+  consent identifier, not another session's conversation.
+- Fixed: generate that identifier deterministically with the recorded nonce,
+  then use a session-secret marker containing non-hexadecimal characters.
+  The whole-record leak check, own conversation, unanswered pause and single
+  successful resume assertions remain. The randomness stub is restored before
+  the other session runs, including if the initial request fails.
+- No product change, delay, retry, skip or quarantine.
+
 The turn-artifact hand-over timing race was fixed in
 [PR #174](https://github.com/footprintjs/agentfootprint/pull/174).
 The tests wait for operation signals instead of a fixed delay; no test was
