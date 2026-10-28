@@ -548,10 +548,6 @@ See `RunnerBase.shutdown` for the ordering and the refcount rules.
 
 `boolean`
 
-###### timeoutMs?
-
-`number`
-
 #### Returns
 
 `Promise`\<`void`\>

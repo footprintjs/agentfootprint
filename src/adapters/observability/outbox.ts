@@ -6,7 +6,7 @@
  * A sink accepts items on its hot path (sync, no I/O) and hands them here. The
  * outbox decides WHEN a batch leaves and makes sure only one leaves at a time:
  *
- *   - **One queue, every trigger.** The size trigger, the timer, `drain()`
+ *   - **One queue, every trigger.** The size trigger, the timer and `drain()`
  *     (the sink's `flush()`, and so every shutdown) all queue a delivery on
  *     the same promise chain. Nothing calls `deliver` any other way.
  *   - **One delivery in flight.** A delivery starts only after the previous
@@ -17,18 +17,18 @@
  *     or reordered either.
  *   - **Oldest first.** A delivery takes the oldest waiting items, so items
  *     leave in the order they were accepted.
- *   - **`drain()` means drained.** It resolves only when nothing is waiting
- *     AND nothing is in flight. An item accepted while it waits is delivered
- *     by that drain, never left behind it.
+ *   - **`drain()` is bounded.** It resolves once every item accepted BEFORE
+ *     the call has settled (delivered, or dropped and reported), one the timer
+ *     already had in flight included — then makes one sweep of what arrived
+ *     while it waited. It never chases a producer that keeps emitting: under
+ *     steady traffic it ends after about two deliveries.
  *   - **A failed batch is dropped and reported once**, then the next batch
  *     goes. It is never requeued, so a full disk or an outage cannot grow the
  *     outbox. The queue never rejects: a failure report that itself throws is
  *     said on the console instead of becoming an unhandled rejection.
  *
  * What it does NOT do: bound a delivery that never settles. A hung disk holds
- * the queue, and `drain()` with it. The deadline belongs to the one caller
- * that must finish — `RunnerBase · shutdown` — which stops waiting and names
- * the stuck sink.
+ * the queue, and `drain()` with it; nothing can cancel an in-flight write.
  *
  * Role: leaf helper for `adapters/observability/*`. Composed as a field,
  * never inherited.
@@ -38,15 +38,23 @@ import { rateLimitedConsoleSink } from './deliveryErrors.js';
 
 /** What a sink tells its outbox. */
 export interface OutboxOptions<T> {
-  /** The sink's name, for the console line when a failure report throws. */
+  /** The sink's name: it prefixes a refused option and the console line when
+   *  a failure report throws. */
   readonly name: string;
-  /** Size trigger: deliver once this many items wait. */
+  /** Size trigger: deliver once this many items wait. A positive integer. */
   readonly maxItems: number;
   /** Size trigger: deliver once this many bytes wait. Omitted → no byte
    *  trigger. */
   readonly maxBytes?: number;
-  /** Most items one delivery takes. Omitted → everything waiting. */
+  /** Most items one delivery takes. A positive integer; omitted → everything
+   *  waiting. */
   readonly maxItemsPerDelivery?: number;
+  /** What the sink's caller calls those two counts, so a refusal names the
+   *  option they actually wrote (`maxBufferEvents`, not `maxItems`). */
+  readonly optionNames?: {
+    readonly maxItems?: string;
+    readonly maxItemsPerDelivery?: string;
+  };
   /** Timer trigger for sparse traffic, in ms. `0` disables it: only the size
    *  trigger and `drain()` deliver. */
   readonly flushIntervalMs: number;
@@ -71,8 +79,8 @@ export interface Outbox<T> {
    *  toward the byte trigger. Accepting is the SINK's decision — the outbox
    *  takes what it is given, including after `stop()`. */
   add(item: T, bytes?: number): void;
-  /** Deliver everything waiting, behind whatever is in flight. Resolves when
-   *  nothing waits and nothing is in flight. Never rejects. */
+  /** Settle everything accepted before this call — behind whatever is in
+   *  flight — then sweep once what arrived meanwhile. Never rejects. */
   drain(): Promise<void>;
   /** Cancel the timer and arm no new one. Discards nothing: `drain()`
    *  afterwards still delivers what was accepted. */
@@ -84,15 +92,33 @@ interface Waiting<T> {
   readonly bytes: number;
 }
 
-/** Build the outbox one sink owns. */
+/** Build the outbox one sink owns. Refuses, by the sink's name, a count that
+ *  is not a positive integer: a delivery that may take zero items can never
+ *  finish a drain. */
 export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
+  const names = opts.optionNames;
+  requirePositiveInteger(opts.name, names?.maxItems ?? 'maxItems', opts.maxItems);
+  if (opts.maxItemsPerDelivery !== undefined) {
+    requirePositiveInteger(
+      opts.name,
+      names?.maxItemsPerDelivery ?? 'maxItemsPerDelivery',
+      opts.maxItemsPerDelivery,
+    );
+  }
+
   const waiting: Waiting<T>[] = [];
   let waitingBytes = 0;
+  // Running counts. Deliveries take the oldest items, one delivery at a time,
+  // so once `settled` reaches n the first n accepted items are done.
+  let accepted = 0; // handed to `add`
+  let taken = 0; // taken by a delivery (in flight or settled)
+  let settled = 0; // delivered, or dropped and reported
   // The ONE queue. Every delivery is chained here; `deliverNext` never
   // rejects, so the chain never does either.
   let queue: Promise<void> = Promise.resolve();
   // A delivery is queued and has not started yet. It will take everything
-  // waiting when it starts, so another trigger meanwhile has nothing to add.
+  // waiting when it starts, so another trigger meanwhile has nothing to add —
+  // and the chain cannot grow while a delivery hangs.
   let deliveryQueued = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
@@ -101,6 +127,7 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
   function add(item: T, bytes = 0): void {
     waiting.push({ item, bytes });
     waitingBytes += bytes;
+    accepted++;
     if (atSizeTrigger()) queueDelivery();
     else armTimer();
   }
@@ -138,6 +165,7 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
     } catch (cause) {
       reportDropped(batch, cause);
     }
+    settled += batch.length;
     // Items the per-delivery cap left behind were already due when this
     // delivery started — deliver them now rather than on the next timer.
     if (waiting.length > 0 && batch.length === opts.maxItemsPerDelivery) queueDelivery();
@@ -145,10 +173,11 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
 
   function takeOldest(): T[] {
     const count = Math.min(waiting.length, opts.maxItemsPerDelivery ?? waiting.length);
-    const taken = waiting.splice(0, count);
-    for (const entry of taken) waitingBytes -= entry.bytes;
+    const batch = waiting.splice(0, count);
+    for (const entry of batch) waitingBytes -= entry.bytes;
     if (waiting.length === 0) waitingBytes = 0;
-    return taken.map((entry) => entry.item);
+    taken += batch.length;
+    return batch.map((entry) => entry.item);
   }
 
   function reportDropped(batch: readonly T[], cause: unknown): void {
@@ -171,14 +200,24 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
   }
 
   async function drain(): Promise<void> {
-    for (;;) {
-      const observed = queue;
-      await observed;
-      // A delivery was queued while we waited: wait for that one too.
-      if (observed !== queue) continue;
-      // The queue is idle. Done only if nothing is waiting either.
-      if (waiting.length === 0) return;
-      queueDelivery();
+    // Everything accepted before this call, in flight or waiting…
+    await settleThrough(accepted);
+    // …then ONE sweep of what arrived while it waited, so a `stop()` right
+    // after `flush()` strands nothing that was already here. The target is
+    // fixed when the sweep starts, so steady traffic cannot keep it going.
+    await settleThrough(accepted);
+  }
+
+  /** Wait until the first `target` accepted items have settled. */
+  async function settleThrough(target: number): Promise<void> {
+    while (settled < target) {
+      const before = settled;
+      // Some of them still wait: make sure a delivery will take them.
+      if (taken < target) queueDelivery();
+      await queue;
+      // A pass that settled nothing would repeat forever. With the counts
+      // refused above it cannot happen; if it ever does, end — never spin.
+      if (settled === before) return;
     }
   }
 
@@ -191,6 +230,17 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
   }
 
   return { add, drain, stop };
+}
+
+/** A count that decides how much a delivery takes must be a whole number
+ *  above zero. Refused at construction, where the caller still reads it. */
+function requirePositiveInteger(name: string, option: string, value: number): void {
+  if (Number.isInteger(value) && value > 0) return;
+  const got = String(value);
+  throw new TypeError(
+    `[${name}Observability] \`${option}\` must be a positive whole number (got ${got}). ` +
+      'Use 1 to deliver every item as soon as it arrives.',
+  );
 }
 
 function messageOf(err: unknown): string {

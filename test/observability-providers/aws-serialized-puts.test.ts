@@ -12,6 +12,10 @@
  *   P4 Property  — over many seeds of timer + size + `flush()` triggers against
  *                  a client whose puts take a random time: one put at a time,
  *                  every event shipped once, in order
+ *
+ * And what each sink keeps from before the shared queue: X-Ray's per-put cap
+ * ships its remainder at once; CloudWatch and X-Ray keep their timer
+ * referenced (an un-stopped sink still ships its tail), the file sink does not.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +24,7 @@ import {
   cloudwatchObservability,
   type CloudWatchLikeClient,
 } from '../../src/adapters/observability/cloudwatch.js';
+import { fileObservability } from '../../src/adapters/observability/file.js';
 import { xrayObservability, type XRayLikeClient } from '../../src/adapters/observability/xray.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { ObservabilityStrategy } from '../../src/strategies/types.js';
@@ -259,5 +264,89 @@ describe('xrayObservability serialized puts', () => {
         );
       }
     }
+  });
+});
+
+// ─── What each sink keeps from before the shared queue ───────────────
+
+describe('xrayObservability — the per-put cap', () => {
+  it('P2 what the cap leaves behind ships right after, with no timer and no flush()', async () => {
+    const puts: number[] = [];
+    const strat = xrayObservability({
+      serviceName: 'svc',
+      maxBatchSegments: 2,
+      flushIntervalMs: 0, // no timer: only the cap's own follow-up can ship the rest
+      _client: {
+        putTraceSegments: (input) => {
+          puts.push(input.TraceSegmentDocuments.length);
+          return Promise.resolve();
+        },
+      },
+    });
+    // One turn of five segments (root + four iterations) graduates at turn_end.
+    const runId = 'run-cap';
+    strat.exportEvent(envelope('agentfootprint.agent.turn_start', {}, runId));
+    for (let i = 0; i < 4; i++) {
+      strat.exportEvent(envelope('agentfootprint.agent.iteration_start', { iterIndex: i }, runId));
+      strat.exportEvent(envelope('agentfootprint.agent.iteration_end', {}, runId));
+    }
+    strat.exportEvent(envelope('agentfootprint.agent.turn_end', {}, runId));
+    await settle();
+
+    expect(puts).toEqual([2, 2, 1]);
+    strat.stop?.();
+  });
+});
+
+describe('timers — which sink may hold the process open', () => {
+  /** The real timer a sink arms for one buffered event. */
+  function timerArmedBy(strat: ObservabilityStrategy, event: AgentfootprintEvent) {
+    const armed = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      strat.exportEvent(event);
+      expect(armed).toHaveBeenCalledTimes(1);
+      return armed.mock.results[0]!.value as { hasRef(): boolean };
+    } finally {
+      armed.mockRestore();
+      strat.stop?.();
+    }
+  }
+
+  it('P2 CloudWatch and X-Ray keep their timer referenced, so the tail still ships', () => {
+    const cw = cloudwatchObservability({
+      logGroupName: '/g',
+      flushIntervalMs: 60_000,
+      _client: { putLogEvents: () => Promise.resolve() },
+    });
+    expect(
+      timerArmedBy(cw, envelope('agentfootprint.test.numbered', { seq: 0 }, 'r')).hasRef(),
+    ).toBe(true);
+
+    const xray = xrayObservability({
+      serviceName: 'svc',
+      flushIntervalMs: 60_000,
+      _client: { putTraceSegments: () => Promise.resolve() },
+    });
+    xray.exportEvent(envelope('agentfootprint.agent.turn_start', {}, 'r'));
+    expect(timerArmedBy(xray, envelope('agentfootprint.agent.turn_end', {}, 'r')).hasRef()).toBe(
+      true,
+    );
+  });
+
+  it('P2 the file sink unrefs its timer — a local write never holds a process open', () => {
+    const file = fileObservability({
+      path: '/log/e.ndjson',
+      flushIntervalMs: 60_000,
+      _fs: {
+        mkdirSync: () => undefined,
+        appendFileSync: () => undefined,
+        statSync: () => ({ size: 0 }),
+        appendFile: () => Promise.resolve(),
+        rename: () => Promise.resolve(),
+      },
+    });
+    expect(
+      timerArmedBy(file, envelope('agentfootprint.test.numbered', { seq: 0 }, 'r')).hasRef(),
+    ).toBe(false);
   });
 });

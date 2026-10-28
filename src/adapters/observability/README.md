@@ -25,14 +25,20 @@ landed. The same timer sat in CloudWatch and X-Ray. What a sink does around its
 write — the file sink's rotation — runs inside its delivery, so it is
 serialized with it.
 
-- `drain()` (the sink's `flush()`) resolves only when nothing waits and nothing
-  is in flight; an item accepted while it waits is delivered by it.
+- `drain()` (the sink's `flush()`) is bounded. It resolves once every item
+  accepted before the call has settled (delivered, or dropped and reported),
+  including one a timed delivery already had in flight. It then makes one
+  sweep of what arrived while it waited. It does not chase a producer that
+  keeps emitting.
 - A failed batch is dropped and reported once through the sink's `onError`;
   the next batch still goes. The queue never rejects: an `onError` that throws
   is said on the console instead.
-- A delivery that never settles holds the queue. The deadline is the
-  shutdown's (`strategies/flushDeadline.ts`): `agent.shutdown({ timeoutMs })`
-  stops waiting at 30 s by default and names the stuck sink.
+- A count that decides what a delivery takes (`maxItems`,
+  `maxItemsPerDelivery`) must be a positive whole number. Anything else is
+  refused at construction, by the sink's own option name, because a delivery
+  that may take nothing can never finish a drain.
+- A delivery that never settles holds the queue, and `drain()` with it.
+  Nothing can cancel an in-flight write.
 
 ```ts
 const outbox = createOutbox<string>({

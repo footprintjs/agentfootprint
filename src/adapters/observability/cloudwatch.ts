@@ -277,6 +277,7 @@ export function _buildCloudWatchObservability(
     name: strategyName,
     maxItems: maxBatchEvents,
     maxBytes: maxBatchBytes,
+    optionNames: { maxItems: 'maxBatchEvents' },
     flushIntervalMs,
     // An un-stopped strategy lingers up to `flushIntervalMs` so the timer can
     // still ship the tail (see `stop()`).
@@ -317,12 +318,12 @@ export function _buildCloudWatchObservability(
      * accepted.
      */
     flush(): Promise<void> {
-      // Waits behind the in-flight put — one the timer started included —
-      // and resolves once nothing is buffered or in flight. Every put makes
-      // progress (a failed one drops its batch), so it ends; a put that never
-      // settles holds it, which is why `agent.shutdown()` waits under a
-      // deadline. Since 8.11.1 delivery ignores `stop()`, so a flush after a
-      // stop still ships and never spins.
+      // Resolves once every event accepted before the call is shipped (or
+      // dropped and reported) — one a timed put already had in flight
+      // included — after one more sweep of what arrived while it waited; it
+      // does not chase a producer that keeps emitting. A put that never
+      // settles holds it. Since 8.11.1 delivery ignores `stop()`, so a flush
+      // after a stop still ships and never spins.
       return outbox.drain();
     },
     /** Stop the flush timer and stop accepting events. **The framework does

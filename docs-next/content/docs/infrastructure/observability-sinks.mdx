@@ -44,11 +44,6 @@ default `shutdown: 'flush'`. **`agent.run()` never flushes** — that part is
 unchanged, and it is why a batching exporter still needs one of the three at
 process end.
 
-`agent.shutdown()` waits for each sink's flush under one deadline,
-`timeoutMs` (default 30 000; `Infinity` waits without one). A sink whose
-delivery never settles is reported by name through its own `onError` and the
-shutdown goes on; its write is not cancelled, because nothing can cancel it.
-
 ## Mounting one
 
 ```ts

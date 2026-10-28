@@ -13,12 +13,14 @@
  * API permits, and only a fake can hold a write open or split it in two.
  *
  *   P2 Boundary  — `flush()` waits for a write the timer started; an event that
- *                  arrives while `flush()` waits is written by it
+ *                  arrives while `flush()` waits is written by it; `flush()`
+ *                  does not chase a producer that keeps emitting
  *   P4 Property  — over many seeds of timer + size + `flush()` triggers against
  *                  a disk that splits each append into two writes: one write
- *                  at a time, every line parses, order is dispatch order; the
- *                  rotation count matches a sequential model and no line is
- *                  split across the two files
+ *                  at a time, every line parses, order is dispatch order; every
+ *                  event accepted before a `flush()` is on disk when it
+ *                  resolves; the rotation count matches a sequential model and
+ *                  no line is split across the two files
  *   P5 Security  — a failed batch (ENOSPC, EACCES) is dropped and reported
  *                  once and later writes continue; a throwing `onError` never
  *                  becomes an unhandled rejection
@@ -190,6 +192,25 @@ function splittingDisk(next: () => number): {
   return { fs, files, appendBytes, peak: () => peak, renames: () => renames };
 }
 
+/** A healthy disk: each append lands whole after `ms` (fake timers). */
+function timedDisk(ms: number): { fs: FileSinkFs; files: Map<string, string> } {
+  const { files, append } = fileTable();
+  const fs: FileSinkFs = {
+    mkdirSync: () => undefined,
+    appendFileSync: append,
+    statSync: (file) => ({ size: Buffer.byteLength(files.get(file) ?? '', 'utf8') }),
+    appendFile: (file, data) =>
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          append(file, data);
+          resolve();
+        }, ms),
+      ),
+    rename: () => Promise.resolve(),
+  };
+  return { fs, files };
+}
+
 /** The rotation rule run one batch at a time, in order — what the sink must
  *  agree with. */
 function modelRenames(appendBytes: readonly number[], ceiling: number): number {
@@ -301,6 +322,41 @@ describe('fileObservability serialized writes — P2 boundary', () => {
     strat.stop?.();
     expect(readLines(disk.files.get(PATH)).seqs).toEqual([0, 1, 2, 3]);
   });
+
+  it('P2 flush() is bounded under steady traffic on a healthy disk — it does not chase the producer', async () => {
+    vi.useFakeTimers();
+    const disk = timedDisk(3); // healthy: every append lands in 3 ms
+    const strat = fileObservability({
+      path: PATH,
+      _fs: disk.fs,
+      maxBufferEvents: 5,
+      flushIntervalMs: 10,
+    });
+    let seq = 0;
+    const producer = setInterval(() => strat.exportEvent(numbered(seq++)), 1); // one event per ms
+    try {
+      await vi.advanceTimersByTimeAsync(30);
+      const acceptedAtCall = seq;
+      let flushed = false;
+      void Promise.resolve(strat.flush?.()).then(() => {
+        flushed = true;
+      });
+      let waited = 0;
+      while (!flushed && waited < 600) {
+        await vi.advanceTimersByTimeAsync(1);
+        waited++;
+      }
+      expect(waited, 'fake ms flush() took while the producer kept emitting').toBeLessThanOrEqual(
+        30,
+      );
+      // …and it still wrote everything accepted before it was called.
+      const { seqs } = readLines(disk.files.get(PATH));
+      expect(seqs.slice(0, acceptedAtCall)).toEqual(range(acceptedAtCall));
+    } finally {
+      clearInterval(producer);
+      strat.stop?.();
+    }
+  });
 });
 
 // ─── P4 Property ─────────────────────────────────────────────────────
@@ -314,6 +370,55 @@ describe('fileObservability serialized writes — P4 property', () => {
       expect(disk.peak(), `seed ${seed}: appends open at once`).toBe(1);
       expect(torn, `seed ${seed}: torn lines`).toBe(0);
       expect(seqs, `seed ${seed}: line order`).toEqual(range(count));
+    }
+  });
+
+  it('P4 over 200 seeds: every event accepted before a flush() is on disk when it resolves', async () => {
+    vi.useFakeTimers();
+    for (let seed = 1; seed <= 200; seed++) {
+      const next = seeded(seed + 10_000);
+      const pick = (n: number): number => Math.floor(next() * n);
+      const disk = splittingDisk(next);
+      const strat = fileObservability({
+        path: PATH,
+        _fs: disk.fs,
+        flushIntervalMs: 1 + pick(15),
+        maxBufferEvents: 1 + pick(5),
+        maxBufferBytes: 150 + pick(400),
+      });
+      const misses: string[] = [];
+      const flushes: Array<Promise<void>> = [];
+      /** Flush now; when it resolves, the first `acceptedAtCall` events must
+       *  be whole lines on disk (a later write may be half-way through). */
+      const flushExpecting = (acceptedAtCall: number): void => {
+        flushes.push(
+          Promise.resolve(strat.flush?.()).then(() => {
+            const head = readLines(disk.files.get(PATH)).seqs.slice(0, acceptedAtCall);
+            if (head.length < acceptedAtCall || head.some((s, i) => s !== i)) {
+              misses.push(`flush after ${acceptedAtCall} events resolved with ${head.length}`);
+            }
+          }),
+        );
+      };
+      // Some seeds leave the disk idle between events, some keep it busy.
+      const maxGap = 5 + pick(30);
+      for (let seq = 0; seq < 30; seq++) {
+        await vi.advanceTimersByTimeAsync(pick(maxGap));
+        // A flush long after the last event: what was accepted is waiting,
+        // in a write, or already written.
+        if (seq > 0 && next() < 0.2) flushExpecting(seq);
+        strat.exportEvent(numbered(seq, 'x'.repeat(pick(120))));
+        // A flush just after a size trigger started its write: everything
+        // accepted may be in flight with nothing left waiting.
+        if (next() < 0.2) {
+          await settle();
+          flushExpecting(seq + 1);
+        }
+      }
+      await vi.runAllTimersAsync();
+      await Promise.all(flushes);
+      strat.stop?.();
+      expect(misses, `seed ${seed}`).toEqual([]);
     }
   });
 

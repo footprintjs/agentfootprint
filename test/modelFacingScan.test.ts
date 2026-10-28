@@ -292,6 +292,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the placement ticket that replaces an over-long tool result — it teaches routing in the imperative ('Do not retype …') on a surface that keeps the sentence long after the ref is swept",
     },
   ],
+  'src/adapters/observability/outbox.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the refusal of a batch count that is not a positive whole number — thrown when a file, CloudWatch or X-Ray sink is constructed, to the developer configuring it',
+    },
+  ],
   'src/core/agent/evidence/gate.ts': [
     {
       kind: 'not-model-facing',
@@ -1231,12 +1238,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Typed negatives: the always-active citation schema and one-use correction
         // are system frames, never persistent tool results. Two new files/literals;
         // the persistent and unrepaired budgets are unchanged.
-        files: 104,
-        total: 203,
+        // One queue for the batching sinks (#223): the outbox refuses a batch
+        // count that is not a positive whole number when a sink is built —
+        // host-facing. One new file: files 104 → 105, total 203 → 204,
+        // notModelFacing 135 → 136.
+        files: 105,
+        total: 204,
         registry: 8,
         ephemeral: 26,
         unrepaired: 34,
-        notModelFacing: 135,
+        notModelFacing: 136,
         unrepairedEntries: 14,
       });
       // And the ledger's own total is the number of literals the scan flagged —

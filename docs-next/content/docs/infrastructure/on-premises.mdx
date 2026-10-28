@@ -298,9 +298,8 @@ Four things it is honest about:
   so every line lands whole and in dispatch order. A hard kill loses at most the
   buffer — the price of keeping telemetry out of agent-loop latency.
   `agent.shutdown()` flushes, as do the handle and a closing `standingAgent`.
-  It waits for a write already in flight, but not forever: a write that never
-  settles (a hung mount) is reported by name through `onError` after
-  `timeoutMs` (30 s by default), and the shutdown goes on.
+  A flush waits for a write already in flight, and writes every event accepted
+  before it was called.
 - **Rotation is ONE generation.** With `maxBytes` set, a batch that would cross
   the ceiling renames the file to `<path>.1`, replacing any previous `.1`, and
   starts fresh. No `.2`, no compression, no schedule, no cross-process

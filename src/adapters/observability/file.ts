@@ -39,9 +39,8 @@
  * `flush()` — all through ONE queue (`outbox.ts`), so one append is in flight
  * at a time and lines land whole, in dispatch order (#223). A hard kill
  * therefore loses at most the buffer — the price of not making telemetry a term
- * in agent-loop latency. Call `flush()` (or `agent.shutdown()`, which does, under
- * a deadline) at process end; see the 8.12.0 lifecycle laws on
- * {@link BaseStrategy.flush}.
+ * in agent-loop latency. Call `flush()` (or `agent.shutdown()`, which does) at
+ * process end; see the 8.12.0 lifecycle laws on {@link BaseStrategy.flush}.
  *
  * ## Rotation is ONE generation, and that is deliberate
  *
@@ -247,6 +246,7 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
     name: strategyName,
     maxItems: maxBufferEvents,
     maxBytes: maxBufferBytes,
+    optionNames: { maxItems: 'maxBufferEvents' },
     flushIntervalMs,
     // Never hold the process open for a local write.
     timerHoldsProcess: false,
@@ -295,11 +295,11 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
      * handle `enable.observability()` returns, by `agent.shutdown()`, and by a
      * `standingAgent` closing. Safe at any time, including after `stop()`.
      *
-     * Resolves only once every write has settled — one the timer started
-     * included — and nothing is left buffered. An event that arrives while it
-     * waits is written by it. Every write makes progress (a failed one drops
-     * its batch), so it ends; a write that never settles holds it, which is
-     * why `agent.shutdown()` waits under a deadline.
+     * Resolves once every event accepted before the call is written (or
+     * dropped and reported) — one a timed write already had in flight
+     * included — after one more sweep of what arrived while it waited. It
+     * does not chase a producer that keeps emitting. A write that never
+     * settles holds it: nothing can cancel an in-flight write.
      */
     flush(): Promise<void> {
       return outbox.drain();

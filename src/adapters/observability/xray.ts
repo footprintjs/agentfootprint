@@ -218,6 +218,9 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
     name: 'xray',
     maxItems: maxBatchSegments,
     maxItemsPerDelivery: maxBatchSegments,
+    // A zero, negative or fractional cap is refused here, by this name — a
+    // put that may take no segments could never finish a flush.
+    optionNames: { maxItems: 'maxBatchSegments', maxItemsPerDelivery: 'maxBatchSegments' },
     flushIntervalMs,
     timerHoldsProcess: true,
     deliver: shipSegments,
@@ -528,9 +531,9 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
         while (t.stack.length > 0) closeSegment(t, undefined);
       }
       // Segments ship in the order they closed, one put at a time, behind the
-      // put in flight — one the timer started included. Resolves once nothing
-      // is queued or in flight; a put that never settles holds it, which is
-      // why `agent.shutdown()` waits under a deadline.
+      // put in flight — one the timer started included. Resolves once every
+      // segment closed before this call is shipped (or dropped and reported),
+      // after one more sweep; a put that never settles holds it.
       await outbox.drain();
     },
     /** Stop the flush timer and stop accepting events. **The framework does
