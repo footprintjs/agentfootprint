@@ -204,9 +204,11 @@ with `jitter` (`'equal'` by default; `'full'` or `'none'`), each of these waits
 capped by `maxDelayMs` if you set one. `maxElapsedMs` adds a deadline for the
 whole call, requests included. A `Retry-After` is waited whole — `maxDelayMs`
 never cuts it — and when it asks for more than `maxWaitMs` or the deadline
-allows, the 429 is delivered instead. `onRetry`
-is told the refusal's `kind`, the attempt about to start and the wait — never
-the call's arguments or the server's answer.
+allows, the 429 is delivered instead. `onRetry` is a notification before each
+wait. It gets the refusal's `kind`, the attempt about to start, the wait, and the
+endpoint's origin and path. It never gets the call's arguments, the server's
+answer, or a URL's user info, query or fragment. It is not told how the call
+ended.
 
 A transport that retries a refusal of its own — an MCP server hosted on
 AgentCore Runtime — gets one retry per call, not two: the 429 retry joins the

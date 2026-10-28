@@ -4,8 +4,9 @@
  *
  * STAND-IN, TO BE DELETED. footprintjs is adding these two helpers to its
  * attempt runner (`attempt/backoff.ts`): `exponentialBackoff({ baseDelayMs,
- * multiplier, jitter, random })` and `statedWaitFirst(readStatedWaitMs,
- * inner)`, with these names, signatures and laws. Once a footprintjs release
+ * multiplier, jitter, maxDelayMs, random })` and
+ * `statedWaitFirst(readStatedWaitMs, inner)`, with these names, signatures and
+ * laws. Once a footprintjs release
  * ships them, import them in `throttleRetry.ts` and delete this file; nothing
  * else changes.
  *
@@ -16,7 +17,8 @@
  * ── THE LAW ──────────────────────────────────────────────────────────────
  * `exponentialBackoff`: after failed attempt `n` (1-based) the ceiling is
  *
- *     c = baseDelayMs × multiplier^(n − 1)     saturating at MAX_SAFE_INTEGER
+ *     c = min(maxDelayMs, baseDelayMs × multiplier^(n − 1))
+ *                                     (saturating at MAX_SAFE_INTEGER)
  *
  * and, for `r = random()` in [0, 1]:
  *
@@ -33,9 +35,11 @@
  * answers anything else states nothing, so a malformed `Retry-After` falls back
  * to the schedule rather than to a wrong wait.
  *
- * Neither caps a wait. A cap on the SCHEDULE is the caller's to wrap around
- * `inner` (`throttleRetry.ts` does, for its `maxDelayMs`), so a stated wait is
- * never cut by it.
+ * `maxDelayMs` caps the CEILING, before the draw, so capped waits keep their
+ * jitter: at the cap, equal jitter still spreads between c/2 and c. Capped
+ * after the draw instead, every wait past twice the cap would BE the cap, and
+ * clients refused together would retry in lockstep. A stated wait is never
+ * capped: `statedWaitFirst` hands it back whole.
  */
 
 /** How much of an exponential wait is random: none of it, half of it, or all of it. */
@@ -49,6 +53,11 @@ export interface BackoffSpec {
   readonly multiplier?: number;
   /** How much of each wait is random. Default `'none'`: the wait IS the ceiling. */
   readonly jitter?: BackoffJitter;
+  /**
+   * The cap on every ceiling, in milliseconds — a number ≥ 0, applied BEFORE
+   * the draw, so capped waits keep their jitter. Default: none.
+   */
+  readonly maxDelayMs?: number;
   /** The jitter's random source, answering in [0, 1]. Default `Math.random`, taken when built. */
   readonly random?: () => number;
 }
@@ -72,9 +81,10 @@ const MAX_WAIT_MS = Number.MAX_SAFE_INTEGER;
  *   `RangeError` for one out of range — each naming the option.
  */
 export function exponentialBackoff(spec: BackoffSpec): BackoffFunction {
-  const { baseDelayMs, multiplier, jitter, random } = readSpec(spec);
+  const { baseDelayMs, multiplier, jitter, maxDelayMs, random } = readSpec(spec);
   return (attempt) => {
-    const ceiling = ceilingOf(baseDelayMs, multiplier, stepOf(attempt));
+    // The cap bounds the ceiling, so the draw below still spreads under it.
+    const ceiling = Math.min(maxDelayMs, ceilingOf(baseDelayMs, multiplier, stepOf(attempt)));
     if (jitter === 'none') return ceiling;
     const r = draw(random);
     // Never above the ceiling: halving a subnormal ceiling can round up.
@@ -112,14 +122,30 @@ export function statedWaitFirst(
 function readSpec(spec: BackoffSpec): Required<BackoffSpec> {
   if (spec === null || typeof spec !== 'object') {
     throw new TypeError(
-      `exponentialBackoff: the spec must be an object ({ baseDelayMs, multiplier?, jitter?, random? }) (got ${shown(
+      `exponentialBackoff: the spec must be an object ({ baseDelayMs, multiplier?, jitter?, maxDelayMs?, random? }) (got ${shown(
         spec,
       )})`,
     );
   }
-  const { baseDelayMs, multiplier = 2, jitter = 'none', random = Math.random } = spec;
+  const {
+    baseDelayMs,
+    multiplier = 2,
+    jitter = 'none',
+    maxDelayMs = Infinity,
+    random = Math.random,
+  } = spec;
   checkNumber('exponentialBackoff: baseDelayMs', baseDelayMs, 0, 'a finite number >= 0');
   checkNumber('exponentialBackoff: multiplier', multiplier, 1, 'a finite number >= 1');
+  if (typeof maxDelayMs !== 'number') {
+    throw new TypeError(
+      `exponentialBackoff: maxDelayMs must be a number >= 0 (got ${shown(maxDelayMs)})`,
+    );
+  }
+  if (!(maxDelayMs >= 0)) {
+    throw new RangeError(
+      `exponentialBackoff: maxDelayMs must be a number >= 0 (got ${shown(maxDelayMs)})`,
+    );
+  }
   if (!JITTERS.includes(jitter)) {
     throw new RangeError(
       `exponentialBackoff: jitter must be 'none', 'equal' or 'full' (got ${shown(jitter)})`,
@@ -130,7 +156,7 @@ function readSpec(spec: BackoffSpec): Required<BackoffSpec> {
       `exponentialBackoff: random must be a function answering in [0, 1] (got ${shown(random)})`,
     );
   }
-  return { baseDelayMs, multiplier, jitter, random };
+  return { baseDelayMs, multiplier, jitter, maxDelayMs, random };
 }
 
 /** A finite number ≥ `min`, or the error naming `field`: a `TypeError` for a non-number, else a `RangeError`. */

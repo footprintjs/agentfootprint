@@ -187,6 +187,39 @@ describe('retry series — P1 the backoff law and the AgentCore defaults', () =>
     expect(retries.map((r) => r.waitMs)).toEqual([500, 1_000, 1_500, 1_500]);
   });
 
+  it('capped waits keep their jitter: at the cap, equal jitter still spreads between c/2 and c', () => {
+    const capped = (r: number) =>
+      exponentialBackoff({
+        baseDelayMs: 500,
+        multiplier: 2,
+        jitter: 'equal',
+        maxDelayMs: 1_000,
+        random: () => r,
+      })(6);
+    // 500 × 2^5 = 16 s, capped to 1 s BEFORE the draw: the wait still spreads over 500–1000 ms.
+    expect([capped(0), capped(0.5), capped(1)]).toEqual([500, 750, 1_000]);
+  });
+
+  it('on the wire, capped waits keep their jitter — they never lock to the cap', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const stand = endpoint((n) => (n < 5 ? throttle() : served()));
+    const retries: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      baseDelayMs: 500,
+      jitter: 'equal',
+      maxDelayMs: 1_000,
+      maxAttempts: 5,
+      maxWaitMs: 60_000,
+      onRetry: (info) => retries.push(info),
+    }) as ThrottleFetch;
+
+    await drive(fetch(URL_, POST));
+
+    // Ceilings 500, 1000, then 2000 and 4000 capped to 1000: the shortest draw
+    // stays at half of each, so clients refused together do not retry together.
+    expect(retries.map((r) => r.waitMs)).toEqual([250, 500, 500, 500]);
+  });
+
   it('an option outside its range is refused when the fetch is BUILT, by name', () => {
     expect(() => retryingFetch(undefined, { multiplier: 0.5 })).toThrow(
       /retryOnThrottle: `multiplier`/,
@@ -423,6 +456,66 @@ describe('retry series — P4 the overall limit and the deadline hold by constru
     await expect(drive(pending)).rejects.toThrow(/deadline/);
     expect(signal?.aborted).toBe(true);
   });
+  it('a body that stalls past the deadline is aborted and released — no reader left open', async () => {
+    let released = false;
+    // Headers arrive, the JSON body never ends: the session-busy check must read it.
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{'));
+      },
+      cancel() {
+        released = true;
+      },
+    });
+    const { fetch, inits } = runtime(
+      () => new Response(body, { headers: { 'content-type': 'application/json' } }),
+      { maxElapsedMs: 1_000 },
+    );
+
+    await expect(drive(fetch(URL_, POST))).rejects.toThrow(/deadline/);
+    await flush();
+
+    // The request was stopped, and the body — clone and original — cancelled.
+    expect(inits[0]?.signal?.aborted).toBe(true);
+    expect(released).toBe(true);
+  });
+
+  it('a delivered stream keeps streaming to its end after the series ends — the deadline lets go', async () => {
+    const encoder = new TextEncoder();
+    const event = (n: number) =>
+      `data: ${JSON.stringify({ jsonrpc: '2.0', id: n, result: { n } })}\n\n`;
+    const { fetch, inits } = runtime(
+      () => {
+        const signal = inits[inits.length - 1]?.signal;
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode(event(1)));
+            const later = setTimeout(() => {
+              controller.enqueue(encoder.encode(event(2)));
+              controller.close();
+            }, 3_000);
+            // As a platform fetch does: a request whose signal fires errors its body.
+            signal?.addEventListener('abort', () => {
+              clearTimeout(later);
+              controller.error(signal.reason);
+            });
+          },
+        });
+        return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
+      },
+      { maxElapsedMs: 1_000 },
+    );
+
+    const res = await drive(fetch(URL_, POST));
+    const reading = res.text();
+    // The second event lands two seconds past the 1 s deadline.
+    await vi.advanceTimersByTimeAsync(3_000);
+    const text = await reading;
+
+    expect(text).toContain('"n":1');
+    expect(text).toContain('"n":2');
+    expect(inits[0]?.signal?.aborted).toBe(false);
+  });
 });
 
 // ─── P5 Security — cancellation, and what onRetry may say ───────────
@@ -464,6 +557,21 @@ describe('retry series — P5 cancellation, and what onRetry may say', () => {
     await expect(pending).rejects.toThrow();
     await vi.runAllTimersAsync();
     expect(stand.calls()).toBe(1);
+  });
+
+  it('onRetry gets the endpoint as origin and path — never userinfo, a query or a fragment', async () => {
+    const stand = endpoint((n) => (n === 1 ? throttle('0') : served()));
+    const reports: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      onRetry: (info) => reports.push(info),
+    }) as ThrottleFetch;
+
+    await drive(
+      fetch('https://user:URL-SECRET@example.test/mcp/v1?token=QUERY-SECRET#FRAGMENT-SECRET', POST),
+    );
+
+    expect(reports.map((r) => r.url)).toEqual(['https://example.test/mcp/v1']);
+    expect(JSON.stringify(reports)).not.toMatch(/SECRET/);
   });
 
   it('onRetry carries the kind, the attempt and the wait — never the arguments, the answer or the token', async () => {

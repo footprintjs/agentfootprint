@@ -490,10 +490,10 @@ inside the 10 s ceiling on waiting.
 | `maxAttempts` | 5 | Requests per call, the first included. The call's overall limit. |
 | `baseDelayMs` · `multiplier` | 500 · 2 | The first wait's ceiling, and how each ceiling grows. |
 | `jitter` | `'equal'` | `'equal'` waits between half the ceiling and all of it, `'full'` from zero, `'none'` exactly it. |
-| `maxDelayMs` | none | The most one of the library's own backoff waits may last. It never cuts a server's `Retry-After`. |
+| `maxDelayMs` | none | The most one of the library's own backoff waits may last. It caps the ceiling before the jittered draw, so capped waits keep their spread. It never cuts a server's `Retry-After`. |
 | `maxWaitMs` | 10 000 | The most a call spends waiting in total. |
-| `maxElapsedMs` | none | A deadline for the whole call, requests included: no wait that would end past it is begun, and a request still waiting for its answer when it passes is cut. |
-| `onRetry` | — | Told the refusal's `kind` (`'session-busy'` or `'throttle'`), the attempt about to start and the wait — never the request's arguments or the server's answer. |
+| `maxElapsedMs` | none | A deadline for the whole call, requests included: no wait that would end past it is begun, and a request still waiting for its answer when it passes is cut. That includes the body the session-busy check reads. |
+| `onRetry` | — | A notification before each wait. It gets the refusal's `kind` (`'session-busy'` or `'throttle'`), the attempt about to start, the wait, and the endpoint's origin and path. It never gets the request's arguments, the server's answer, or a URL's user info, query or fragment. It is not told how the call ended. |
 
 Each request is one retry series on footprintjs's attempt runner. Under
 `mcpClient`, the client's 429 retry (`retryOnThrottle`) joins that series instead

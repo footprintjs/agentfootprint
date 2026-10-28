@@ -45,11 +45,15 @@
  * gateway secrecy invariant is untouched: each attempt vends, applies, drops.
  *
  * ── The loop is footprintjs's attempt runner, one series per call ────────────
- * Each call runs ONE `attempt()` series (footprintjs, used as it ships). An
- * attempt sends the request once. A response a rule's decision recognises is
- * thrown as a refusal that names its kind, and the policy's `retryOn` accepts
- * those refusals and nothing else — so a 5xx, a dropped connection or a timeout
- * ends the series on the attempt it happened in, as it always did. When the
+ * Each call runs ONE `attempt()` series (footprintjs, used as it ships). Its
+ * runner makes an attempt record per try; they stay inside this module for
+ * now — only `onRetry`, before each wait, reaches a caller. An attempt sends
+ * the request once, and an attempt that got a RESPONSE is not an operation
+ * that succeeded: a 503 is delivered as the answer it was, never retried.
+ * A response a rule's decision recognises is thrown as a refusal that names
+ * its kind, and the policy's `retryOn` accepts those refusals and nothing
+ * else — so a 5xx, a dropped connection or a timeout ends the series on the
+ * attempt it happened in, as it always did. When the
  * series ends on a refusal (attempts spent, a ceiling reached, no time left),
  * the refusal's response is delivered as the server sent it: the caller sees
  * the 429, never an error of ours.
@@ -67,10 +71,11 @@
  * they can stop its retries sooner, never make the call longer.
  *
  * ── The wait: a stated one wins, whole ───────────────────────────────────────
- * Each retry's wait is `statedWaitFirst(retry-after, (n) => min(maxDelayMs,
- * exponentialBackoff(spec)(n)))`: the server's `Retry-After` when it sent one,
- * else our jittered backoff capped at `maxDelayMs`. The cap is on the SCHEDULE
- * only — never on a stated wait — so the footprintjs policy's `maxBackoffMs`,
+ * Each retry's wait is `statedWaitFirst(retry-after, exponentialBackoff({ …,
+ * maxDelayMs }))`: the server's `Retry-After` when it sent one, else our
+ * jittered backoff, whose CEILING is capped at `maxDelayMs` before the draw
+ * (so capped waits keep their jitter). The cap is on the SCHEDULE only —
+ * never on a stated wait — so the footprintjs policy's `maxBackoffMs`,
  * which would cut every wait and send the request again before the server
  * said it may, is left unset. A stated wait too long for `maxWaitMs` or the
  * deadline is never shortened either: the series stops, and the 429 is
@@ -121,8 +126,11 @@ export interface ThrottleRetryInfo {
   /** What the server's `Retry-After` asked for, when it sent one. Absent
    *  means the wait below is our own jittered backoff. */
   readonly retryAfterMs?: number;
-  /** The endpoint being retried. Carries no credential: the URL is the URL
-   *  the transport was built with, never a signed or tokenised variant. */
+  /**
+   * The endpoint being retried: its origin and path ONLY — never userinfo
+   * (`user:pass@`), a query string or a fragment, where a credential or a token
+   * can ride. A path can still hold whatever the endpoint puts there.
+   */
   readonly url: string;
 }
 
@@ -177,18 +185,22 @@ export interface ThrottleRetryOptions {
   /**
    * The most one of OUR backoff waits may last, in milliseconds. Default: none.
    *
-   * It caps the scheduled wait only, never a server's `Retry-After` — unlike
-   * footprintjs's `RetryPolicy.maxBackoffMs`, which caps every wait. A stated
-   * wait is waited whole; asking sooner than the server said would only spend
-   * an attempt on a refusal it already announced.
+   * It caps the scheduled wait's ceiling before the jittered draw, so capped
+   * waits still spread between half the cap and the cap. It never caps a
+   * server's `Retry-After` — unlike footprintjs's `RetryPolicy.maxBackoffMs`,
+   * which caps every wait. A stated wait is waited whole; asking sooner than
+   * the server said would only spend an attempt on a refusal it announced.
    */
   readonly maxDelayMs?: number;
   /**
-   * Called before each wait. The per-attempt visibility hook, matching the
-   * contract `withRetry` and `withCredentialRetry` already use — a decorator
-   * at a transport boundary reports to its consumer, and emits no events of
-   * its own. It is told the refusal's kind, the attempt about to start and the
-   * wait — never the request's arguments or the server's answer.
+   * A notification before each wait — and, today, the ONLY retry report a
+   * caller gets. It is told the refusal's kind, the attempt about to start,
+   * the wait and the endpoint (origin and path) — never the request's
+   * arguments or the server's answer. The series' final outcome and the
+   * attempt records footprintjs's runner makes for each try are NOT passed on
+   * yet. The contract matches what `withRetry` and `withCredentialRetry`
+   * already use: a decorator at a transport boundary reports to its consumer,
+   * and emits no events of its own.
    *
    * A retried call is not invisible without this: the wait lands inside the
    * tool's `stream.tool_end` `durationMs`, and an exhausted retry still
@@ -236,6 +248,12 @@ export interface RetryVerdict {
  */
 export type RetryDecision = (
   response: Response,
+  /**
+   * The request's signal. It fires when the caller cancels or the call's
+   * deadline passes; a decision that reads the body must stop reading then,
+   * and release what it read from.
+   */
+  signal?: AbortSignal,
 ) => RetryVerdict | undefined | Promise<RetryVerdict | undefined>;
 
 /** HTTP 429, with the server's own `Retry-After` when it sent one. */
@@ -433,6 +451,7 @@ function boundRule(rule: RetryRule, owner: RetryRule): BoundRule {
     baseDelayMs: rule.baseDelayMs,
     multiplier: rule.multiplier,
     jitter: rule.jitter,
+    maxDelayMs,
   });
   return {
     ...rule,
@@ -440,8 +459,8 @@ function boundRule(rule: RetryRule, owner: RetryRule): BoundRule {
     maxWaitMs: Math.min(rule.maxWaitMs, owner.maxWaitMs),
     maxElapsedMs: Math.min(rule.maxElapsedMs, owner.maxElapsedMs),
     maxDelayMs,
-    // The cap is on the schedule only: a stated wait wins, whole.
-    backoffMs: statedWaitFirst(retryAfterOf, (n) => Math.min(maxDelayMs, schedule(n))),
+    // The cap is on the schedule's ceiling only: a stated wait wins, whole.
+    backoffMs: statedWaitFirst(retryAfterOf, schedule),
   };
 }
 
@@ -521,38 +540,57 @@ class Series {
     };
   }
 
-  /** One attempt: the request, sent once. A refusal a rule recognises is thrown for the runner to decide on. */
+  /**
+   * One attempt: the request, sent once, and its answer classified. A refusal
+   * a rule recognises is thrown for the runner to decide on.
+   *
+   * With no deadline of ours the request carries the caller's own `init`,
+   * exactly as before this series existed. Under a deadline the runner can cut
+   * the attempt before it is ANSWERED — and an answer is not in until it has
+   * been classified, which can mean reading its body (a session-busy reply is
+   * JSON in a 200). So the cut stays connected through the classification: a
+   * stall in the request or in that body stops the request and releases the
+   * body. Only then does it let go: an answer handed back to the caller keeps
+   * streaming for as long as the caller's own signal allows.
+   */
   private async send(inner: ThrottleFetch, t: AttemptContext): Promise<Response> {
     this.attemptNo = t.attempt;
     // The previous attempt's refusal will not be delivered: release its body, so
     // a keep-alive connection is not pinned by an unread stream.
     this.supersede();
-    const response = await this.fetchFor(inner, t);
-    for (const rule of this.rules) {
-      const verdict = await rule.decide(response);
-      if (verdict === undefined) continue;
-      const refusal = new RetryableRefusal(rule.kind, verdict);
-      this.latest = { refusal, rule, verdict, response };
-      throw refusal;
+    const cut = this.deadline === undefined ? undefined : linkedController(t.signal);
+    const signal = eitherSignal(this.signal, cut?.controller.signal);
+    try {
+      const init = cut === undefined ? this.init : { ...this.init, ...(signal && { signal }) };
+      const response = await inner(this.input, init);
+      const refused = await this.recognise(response, signal);
+      if (refused === undefined) return response;
+      this.latest = refused;
+      throw refused.refusal;
+    } finally {
+      cut?.unlink();
     }
-    return response;
   }
 
   /**
-   * The request. With no deadline of ours it carries the caller's own `init`,
-   * exactly as it did before this series existed. Under a deadline the runner
-   * can cut the attempt before it answers, and the request is stopped with it —
-   * but only until it answers: a response already arriving keeps streaming for
-   * as long as the caller's own signal allows.
+   * The first rule whose decision says "again", or none. A decision the
+   * request's signal cut short leaves an answer nobody will read: it is
+   * released here, so its connection is not held open.
    */
-  private async fetchFor(inner: ThrottleFetch, t: AttemptContext): Promise<Response> {
-    if (this.deadline === undefined) return inner(this.input, this.init);
-    const cut = linkedController(t.signal);
+  private async recognise(
+    response: Response,
+    signal: AbortSignal | undefined,
+  ): Promise<Refused | undefined> {
     try {
-      const signal = eitherSignal(this.signal, cut.controller.signal);
-      return await inner(this.input, { ...this.init, ...(signal !== undefined && { signal }) });
-    } finally {
-      cut.unlink();
+      for (const rule of this.rules) {
+        const verdict = await rule.decide(response, signal);
+        if (verdict === undefined) continue;
+        return { refusal: new RetryableRefusal(rule.kind, verdict), rule, verdict, response };
+      }
+      return undefined;
+    } catch (error) {
+      discardBody(response);
+      throw error;
     }
   }
 
@@ -737,7 +775,20 @@ function discardBody(response: Response): void {
   }
 }
 
-/** The endpoint, for the `onRetry` report. Never a credential. */
+/**
+ * The endpoint, for the `onRetry` report: origin and path only. Userinfo, the
+ * query and the fragment are dropped, because a credential or a token can ride
+ * in each. A URL that does not parse is cut at its query or fragment, and kept
+ * only when it holds no `@` that could be userinfo.
+ */
 function describeUrl(input: string | URL): string {
-  return typeof input === 'string' ? input : input.toString();
+  const text = typeof input === 'string' ? input : input.toString();
+  try {
+    const url = new URL(text);
+    return `${url.protocol}//${url.host}${url.pathname}`;
+  } catch {
+    const cut = text.search(/[?#]/);
+    const bare = cut === -1 ? text : text.slice(0, cut);
+    return bare.includes('@') ? '(endpoint)' : bare;
+  }
 }

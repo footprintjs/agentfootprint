@@ -41,6 +41,7 @@
  * Pattern: Strategy (a `RetryDecision`). Role: outer ring, vendor fact.
  */
 
+import { bodyChunks } from '../../../lib/abort.js';
 import type { RetryVerdict } from '../../../mcp/throttleRetry.js';
 import { awsErrorType } from './errorType.js';
 
@@ -65,8 +66,15 @@ const SESSION_BUSY_MESSAGE = /session operation in progress/i;
  * Reads a CLONE of the body, so the response is delivered intact either way.
  * Answers `{}` (wait the loop's own backoff, then send the same request again)
  * or `undefined` (deliver it).
+ *
+ * `signal` is the request's: when it fires mid-read (the call's deadline, the
+ * caller's cancellation), the clone's read is cancelled and released, and this
+ * rejects with the abort — a stalled body never leaves a reader behind.
  */
-export async function sessionBusy(response: Response): Promise<RetryVerdict | undefined> {
+export async function sessionBusy(
+  response: Response,
+  signal?: AbortSignal,
+): Promise<RetryVerdict | undefined> {
   if (response.status === 409) {
     return awsErrorType(response.headers) === SESSION_BUSY_TYPE ? {} : undefined;
   }
@@ -74,8 +82,10 @@ export async function sessionBusy(response: Response): Promise<RetryVerdict | un
   if (!isJson(response.headers.get('content-type'))) return undefined;
   let text: string;
   try {
-    text = await response.clone().text();
-  } catch {
+    text = await cloneText(response, signal);
+  } catch (error) {
+    // A stopped request is the caller's word, never "not busy": pass it on.
+    if (signal?.aborted) throw error;
     return undefined;
   }
   // A cheap gate before parsing: a large tool result does not contain the
@@ -103,6 +113,29 @@ export function isSessionBusyReply(body: unknown): boolean {
   return (
     code === SESSION_BUSY_CODE && typeof message === 'string' && SESSION_BUSY_MESSAGE.test(message)
   );
+}
+
+/**
+ * The text of a clone of `response`'s body, read under `signal`: an abort
+ * cancels the clone's reader and releases it (`lib/abort.ts` · `bodyChunks`).
+ * Decoded as `Response.text()` decodes: UTF-8, a leading BOM dropped.
+ */
+async function cloneText(response: Response, signal: AbortSignal | undefined): Promise<string> {
+  const body = response.clone().body;
+  if (body === null) return '';
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for await (const chunk of bodyChunks(body, signal)) {
+    chunks.push(chunk);
+    length += chunk.byteLength;
+  }
+  const bytes = new Uint8Array(length);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 /** `application/json`, with or without parameters, in any case. */
