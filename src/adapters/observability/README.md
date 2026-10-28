@@ -33,10 +33,12 @@ serialized with it.
 - A failed batch is dropped and reported once through the sink's `onError`;
   the next batch still goes. The queue never rejects: an `onError` that throws
   is said on the console instead.
-- A count that decides what a delivery takes (`maxItems`,
-  `maxItemsPerDelivery`) must be a positive whole number. Anything else is
-  refused at construction, by the sink's own option name, because a delivery
-  that may take nothing can never finish a drain.
+- The size triggers (`maxItems`, `maxBytes`) compare the value as given — the
+  meaning each sink's option had before the outbox, so `0` still delivers
+  every item at once and `NaN` still never triggers by count. Only the
+  per-delivery cap must take at least one item: X-Ray maps
+  `maxBatchSegments` to its whole part (what `splice` took before) and
+  refuses, by name, a value below 1 — it used to send empty puts in a loop.
 - A delivery that never settles holds the queue, and `drain()` with it.
   Nothing can cancel an in-flight write. The deadline belongs to the one
   caller that must finish: `agent.shutdown({ timeoutMs })`

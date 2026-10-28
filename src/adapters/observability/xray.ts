@@ -212,15 +212,13 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
 
   // Closed segments ready for PutTraceSegments, and the one queue every put
   // goes through — size trigger, timer, `flush()`, shutdown (outbox.ts;
-  // #223). A put takes at most `maxBatchSegments`; what the cap leaves behind
-  // ships right after it.
+  // #223). A put takes at most `maxBatchSegments` (its whole part); what the
+  // cap leaves behind ships right after it.
   const outbox = createOutbox<XraySegment>({
     name: 'xray',
+    // The trigger compares the value as given, as before the outbox.
     maxItems: maxBatchSegments,
-    maxItemsPerDelivery: maxBatchSegments,
-    // A zero, negative or fractional cap is refused here, by this name — a
-    // put that may take no segments could never finish a flush.
-    optionNames: { maxItems: 'maxBatchSegments', maxItemsPerDelivery: 'maxBatchSegments' },
+    maxItemsPerDelivery: segmentsPerPut(maxBatchSegments),
     flushIntervalMs,
     timerHoldsProcess: true,
     deliver: shipSegments,
@@ -560,6 +558,29 @@ export function xrayObservability(opts: XrayObservabilityOptions): Observability
   };
 
   return strategy;
+}
+
+// ─── Batch size ──────────────────────────────────────────────────────
+
+/**
+ * How many segments one put takes — exactly what `outbox.splice(0,
+ * maxBatchSegments)` took before the shared queue: the whole part of the
+ * value, and every segment for `Infinity` (returned as no cap).
+ *
+ * A value whose whole part is below 1 — `0`, a fraction under 1, a negative
+ * number, `NaN` — took NO segments, so every put was empty and the queue
+ * never emptied: puts in a loop, forever. That never worked, so it is refused
+ * here, by the option's name; every value that did work keeps its meaning.
+ */
+function segmentsPerPut(maxBatchSegments: number): number | undefined {
+  const whole = Math.trunc(maxBatchSegments);
+  if (whole === Infinity) return undefined;
+  if (whole >= 1) return whole;
+  throw new TypeError(
+    `[xrayObservability] \`maxBatchSegments\` must be at least 1 (got ${String(
+      maxBatchSegments,
+    )}): ` + `it is how many segments one put takes, and a put of none never empties the queue.`,
+  );
 }
 
 // ─── ID + time helpers ───────────────────────────────────────────────

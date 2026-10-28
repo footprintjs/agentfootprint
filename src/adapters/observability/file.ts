@@ -246,7 +246,6 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
     name: strategyName,
     maxItems: maxBufferEvents,
     maxBytes: maxBufferBytes,
-    optionNames: { maxItems: 'maxBufferEvents' },
     flushIntervalMs,
     // Never hold the process open for a local write.
     timerHoldsProcess: false,

@@ -41,20 +41,20 @@ export interface OutboxOptions<T> {
   /** The sink's name: it prefixes a refused option and the console line when
    *  a failure report throws. */
   readonly name: string;
-  /** Size trigger: deliver once this many items wait. A positive integer. */
+  /** Size trigger: deliver once `waiting >= maxItems`. Compared as given —
+   *  the meaning each sink's option had before the outbox, so no value that
+   *  worked is refused: `0` or a negative number triggers on every item,
+   *  `2.5` on the third, `NaN` or `Infinity` never (then only the byte
+   *  trigger, the timer and `drain()` deliver). It never limits what a
+   *  delivery takes. */
   readonly maxItems: number;
-  /** Size trigger: deliver once this many bytes wait. Omitted → no byte
-   *  trigger. */
+  /** Size trigger: deliver once `waitingBytes >= maxBytes`, compared as
+   *  given. Omitted → no byte trigger. */
   readonly maxBytes?: number;
-  /** Most items one delivery takes. A positive integer; omitted → everything
-   *  waiting. */
+  /** Most items one delivery takes: a positive whole number — a sink maps its
+   *  own option to one first, and refuses by its own name what cannot map.
+   *  Omitted → everything waiting. */
   readonly maxItemsPerDelivery?: number;
-  /** What the sink's caller calls those two counts, so a refusal names the
-   *  option they actually wrote (`maxBufferEvents`, not `maxItems`). */
-  readonly optionNames?: {
-    readonly maxItems?: string;
-    readonly maxItemsPerDelivery?: string;
-  };
   /** Timer trigger for sparse traffic, in ms. `0` disables it: only the size
    *  trigger and `drain()` deliver. */
   readonly flushIntervalMs: number;
@@ -92,18 +92,11 @@ interface Waiting<T> {
   readonly bytes: number;
 }
 
-/** Build the outbox one sink owns. Refuses, by the sink's name, a count that
- *  is not a positive integer: a delivery that may take zero items can never
- *  finish a drain. */
+/** Build the outbox one sink owns. A per-delivery cap that could take
+ *  nothing is refused: such a delivery could never finish a drain. */
 export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
-  const names = opts.optionNames;
-  requirePositiveInteger(opts.name, names?.maxItems ?? 'maxItems', opts.maxItems);
   if (opts.maxItemsPerDelivery !== undefined) {
-    requirePositiveInteger(
-      opts.name,
-      names?.maxItemsPerDelivery ?? 'maxItemsPerDelivery',
-      opts.maxItemsPerDelivery,
-    );
+    requireDeliveryCap(opts.name, opts.maxItemsPerDelivery);
   }
 
   const waiting: Waiting<T>[] = [];
@@ -215,7 +208,7 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
       // Some of them still wait: make sure a delivery will take them.
       if (taken < target) queueDelivery();
       await queue;
-      // A pass that settled nothing would repeat forever. With the counts
+      // A pass that settled nothing would repeat forever. With the cap
       // refused above it cannot happen; if it ever does, end — never spin.
       if (settled === before) return;
     }
@@ -232,14 +225,14 @@ export function createOutbox<T>(opts: OutboxOptions<T>): Outbox<T> {
   return { add, drain, stop };
 }
 
-/** A count that decides how much a delivery takes must be a whole number
- *  above zero. Refused at construction, where the caller still reads it. */
-function requirePositiveInteger(name: string, option: string, value: number): void {
-  if (Number.isInteger(value) && value > 0) return;
-  const got = String(value);
+/** The sink-to-outbox contract: a cap is a whole number above zero. Sinks
+ *  map and refuse their own options first (X-Ray: `segmentsPerPut`), so this
+ *  guards the contract rather than a caller's input. */
+function requireDeliveryCap(name: string, cap: number): void {
+  if (Number.isInteger(cap) && cap > 0) return;
   throw new TypeError(
-    `[${name}Observability] \`${option}\` must be a positive whole number (got ${got}). ` +
-      'Use 1 to deliver every item as soon as it arrives.',
+    `[${name}Observability] the outbox was given a per-delivery cap of ${String(cap)}; ` +
+      `a delivery that may take no items could never finish a drain.`,
   );
 }
 
