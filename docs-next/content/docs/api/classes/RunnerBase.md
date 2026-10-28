@@ -4,7 +4,7 @@ title: "Abstract Class: RunnerBase<TIn, TOut>"
 
 # Abstract Class: RunnerBase\<TIn, TOut\>
 
-Defined in: [src/core/RunnerBase.ts:226](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L226)
+Defined in: [src/core/RunnerBase.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L227)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -42,7 +42,7 @@ composition.
 
 > **new RunnerBase**\<`TIn`, `TOut`\>(): `RunnerBase`\<`TIn`, `TOut`\>
 
-Defined in: [src/core/RunnerBase.ts:326](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L326)
+Defined in: [src/core/RunnerBase.ts:327](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L327)
 
 Registers this runner's LIVE taps — the real-value event path and the live
 committed state — for the library's own mechanisms outside this class
@@ -60,7 +60,7 @@ reach the real values through a runner, so none can make them a record.
 
 > `readonly` **enable**: [`EnableNamespace`](/docs/api/interfaces/EnableNamespace)
 
-Defined in: [src/core/RunnerBase.ts:1043](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1043)
+Defined in: [src/core/RunnerBase.ts:1062](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1062)
 
 Enable-namespace for high-level observability features. Each method
 attaches a pre-built CombinedRecorder and returns an unsubscribe
@@ -77,7 +77,7 @@ instead of N `.on()` subscriptions.
 
 > **attach**(`recorder`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:856](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L856)
+Defined in: [src/core/RunnerBase.ts:857](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L857)
 
 Attach a footprintjs CombinedRecorder to observe every subsequent run.
 
@@ -128,7 +128,7 @@ that run and none of its beginning.
 
 > **closeToolSessions**(`options?`): `Promise`\<`number`\>
 
-Defined in: [src/core/RunnerBase.ts:1027](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1027)
+Defined in: [src/core/RunnerBase.ts:1046](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1046)
 
 End the tool sessions held for one hosting session.
 Pass `{ scope: 'run', sessionId }` to terminate only its paused turn's
@@ -186,7 +186,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > **emit**(`name`, `payload`): `void`
 
-Defined in: [src/core/RunnerBase.ts:1096](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1096)
+Defined in: [src/core/RunnerBase.ts:1115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L1115)
 
 Emit a consumer-defined custom event.
 
@@ -219,7 +219,7 @@ minimal meta. Library events remain reserved under `agentfootprint.*`.
 
 > **getCommitCount**(): `number`
 
-Defined in: [src/core/RunnerBase.ts:411](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L411)
+Defined in: [src/core/RunnerBase.ts:412](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L412)
 
 How many commits the run has written so far — footprintjs's
 `executor.getCommitCount()`, forwarded.
@@ -252,7 +252,7 @@ timeline, not a sum of every nested one.
 
 > **getLastSnapshot**(): `RuntimeSnapshot` \| `undefined`
 
-Defined in: [src/core/RunnerBase.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L293)
+Defined in: [src/core/RunnerBase.ts:294](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L294)
 
 Returns the footprintjs snapshot from the most recent run. The snapshot is
 the CANONICAL STRUCTURE: nodes, edges, executionTree, runtimeStageId,
@@ -299,7 +299,7 @@ getter — what it computes on is the live run (`liveSnapshot`).
 
 > **getSnapshot**(): `RuntimeSnapshot` \| `undefined`
 
-Defined in: [src/core/RunnerBase.ts:389](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L389)
+Defined in: [src/core/RunnerBase.ts:390](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L390)
 
 Alias for `getLastSnapshot()` that mirrors `FlowChartExecutor.getSnapshot()`
 so consumers (lens, playground, ExplainableShell) can read the live or
@@ -323,7 +323,7 @@ redaction policy, the placeholder where a selected value was.
 
 > **getSpec**(): `FlowChart`
 
-Defined in: [src/core/RunnerBase.ts:434](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L434)
+Defined in: [src/core/RunnerBase.ts:435](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L435)
 
 Return the footprintjs FlowChart for this runner — the canonical
 design-time blueprint. STABLE REFERENCE across calls (`getSpec()
@@ -355,7 +355,7 @@ instead; this getter must remain a thin cache-read.
 
 > **getUIGroup**\<`T`\>(): `T` \| `undefined`
 
-Defined in: [src/core/RunnerBase.ts:470](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L470)
+Defined in: [src/core/RunnerBase.ts:471](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L471)
 
 Return the consumer-shaped UI group for this composition — produced
 by invoking the consumer's `groupTranslator` (if attached) with this
@@ -390,7 +390,7 @@ supply the `GroupMetadata` for their composition kind. This method
 
 > **getUIGroupWith**\<`T`\>(`override`): `T` \| `undefined`
 
-Defined in: [src/core/RunnerBase.ts:514](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L514)
+Defined in: [src/core/RunnerBase.ts:515](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L515)
 
 Translate this runner's group metadata with a CALLER-SUPPLIED
 translator that overrides the runner's own default. Used by
@@ -423,7 +423,7 @@ See the `Runner.getUIGroupWith` JSDoc for the contract.
 
 > **listenerCount**(`type?`): `number`
 
-Defined in: [src/core/RunnerBase.ts:820](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L820)
+Defined in: [src/core/RunnerBase.ts:821](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L821)
 
 Diagnostic — how many event listeners this runner currently retains.
 No argument = total across all buckets (the leak-detection number);
@@ -452,7 +452,7 @@ keyof AgentfootprintEventMap \| `WildcardSubscription`
 
 > **off**\<`K`\>(`type`, `listener`): `void`
 
-Defined in: [src/core/RunnerBase.ts:763](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L763)
+Defined in: [src/core/RunnerBase.ts:764](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L764)
 
 Unsubscribe a previously-registered listener.
 
@@ -484,7 +484,7 @@ Unsubscribe a previously-registered listener.
 
 > **off**(`type`, `listener`): `void`
 
-Defined in: [src/core/RunnerBase.ts:764](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L764)
+Defined in: [src/core/RunnerBase.ts:765](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L765)
 
 ##### Parameters
 
@@ -512,7 +512,7 @@ Defined in: [src/core/RunnerBase.ts:764](https://github.com/footprintjs/agentfoo
 
 > **on**\<`K`\>(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:740](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L740)
+Defined in: [src/core/RunnerBase.ts:741](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L741)
 
 Subscribe a typed listener. Returns unsubscribe.
 
@@ -554,7 +554,7 @@ runners (servers).
 
 > **on**(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:745](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L745)
+Defined in: [src/core/RunnerBase.ts:746](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L746)
 
 Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
@@ -588,7 +588,7 @@ Subscribe to a domain wildcard (e.g. 'agentfootprint.context.*') or '*'.
 
 > **once**\<`K`\>(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:774](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L774)
+Defined in: [src/core/RunnerBase.ts:775](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L775)
 
 Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal }`.
 
@@ -624,7 +624,7 @@ Subscribe a one-shot listener (fires once then auto-removes). Accepts `{ signal 
 
 > **once**(`type`, `listener`, `options?`): `Unsubscribe`
 
-Defined in: [src/core/RunnerBase.ts:779](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L779)
+Defined in: [src/core/RunnerBase.ts:780](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L780)
 
 ##### Parameters
 
@@ -654,7 +654,7 @@ Defined in: [src/core/RunnerBase.ts:779](https://github.com/footprintjs/agentfoo
 
 > **removeAllListeners**(): `void`
 
-Defined in: [src/core/RunnerBase.ts:810](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L810)
+Defined in: [src/core/RunnerBase.ts:811](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L811)
 
 Lifecycle escape hatch — drop EVERY event listener on this runner in
 one call (typed, domain-wildcard, and `'*'`). Delegates to
@@ -681,7 +681,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > `abstract` **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-Defined in: [src/core/RunnerBase.ts:578](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L578)
+Defined in: [src/core/RunnerBase.ts:579](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L579)
 
 Resume a paused run from its checkpoint. Default behavior: rebuild the
 chart, wire the same core recorders + consumer recorders, call
@@ -716,7 +716,7 @@ returning. Subclass overrides only if it needs specialized behavior.
 
 > `abstract` **run**(`input`, `options?`): `Promise`\<[`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome) \| `TOut`\>
 
-Defined in: [src/core/RunnerBase.ts:570](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L570)
+Defined in: [src/core/RunnerBase.ts:571](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L571)
 
 Execute the runner. Subclass may override for specialized input
 mapping, but default invokes getSpec() + FlowChartExecutor.
@@ -745,7 +745,7 @@ mapping, but default invokes getSpec() + FlowChartExecutor.
 
 > **shutdown**(`options?`): `Promise`\<`void`\>
 
-Defined in: [src/core/RunnerBase.ts:941](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L941)
+Defined in: [src/core/RunnerBase.ts:957](https://github.com/footprintjs/agentfootprint/blob/main/src/core/RunnerBase.ts#L957)
 
 Drain and release what was enabled on this runner.
 
@@ -763,6 +763,16 @@ The order is the part worth having in one place:
   3. a strategy is stopped only once nothing is still subscribed to it,
      and at most once ever (see `strategies/lifecycle.ts`).
 
+Each flush waits under ONE deadline, `timeoutMs`. A sink still flushing at
+the deadline — still delivering, or stuck on a hung disk, mount or network
+call — cannot hold the shutdown: it is reported by name through that
+sink's own `onError` (the console when it has none), and the shutdown goes
+on. Its write is not cancelled; nothing can cancel it.
+
+A call made while a shutdown is in flight joins it: its own `timeoutMs`
+is still checked, but the first call's deadline governs, as its `stop`
+does.
+
 #### Parameters
 
 ##### options?
@@ -774,6 +784,16 @@ The order is the part worth having in one place:
 Default `true`. Pass `false` to drain WITHOUT
   releasing — what a host does when it is shutting down but does not own
   the agent it was handed (`standingAgent`'s default `shutdown: 'flush'`).
+
+###### timeoutMs?
+
+`number`
+
+How long to wait for each sink's flush, in ms.
+  Default 30 000 (the same number footprintjs's `drainObservers` uses).
+  `Infinity` waits without a deadline — how `shutdown()` behaved before
+  this option existed. A value that is not a positive number makes the
+  returned promise reject with a `TypeError`; nothing throws synchronously.
 
 #### Returns
 

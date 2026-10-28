@@ -38,7 +38,10 @@ serialized with it.
   refused at construction, by the sink's own option name, because a delivery
   that may take nothing can never finish a drain.
 - A delivery that never settles holds the queue, and `drain()` with it.
-  Nothing can cancel an in-flight write.
+  Nothing can cancel an in-flight write. The deadline belongs to the one
+  caller that must finish: `agent.shutdown({ timeoutMs })`
+  (`strategies/flushDeadline.ts`) stops waiting after 30 s by default and
+  names the sink still flushing — still delivering, or stuck.
 
 ```ts
 const outbox = createOutbox<string>({

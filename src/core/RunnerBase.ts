@@ -65,6 +65,7 @@ import {
 } from '../strategies/attach.js';
 import type { StrategyHandle } from '../strategies/types.js';
 import { ASYNC_DISPOSE } from '../strategies/lifecycle.js';
+import { flushWithinDeadline, shutdownTimeoutOf } from '../strategies/flushDeadline.js';
 import {
   attachFlowchart,
   type FlowchartHandle,
@@ -929,23 +930,41 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    *   3. a strategy is stopped only once nothing is still subscribed to it,
    *      and at most once ever (see `strategies/lifecycle.ts`).
    *
+   * Each flush waits under ONE deadline, `timeoutMs`. A sink still flushing at
+   * the deadline — still delivering, or stuck on a hung disk, mount or network
+   * call — cannot hold the shutdown: it is reported by name through that
+   * sink's own `onError` (the console when it has none), and the shutdown goes
+   * on. Its write is not cancelled; nothing can cancel it.
+   *
+   * A call made while a shutdown is in flight joins it: its own `timeoutMs`
+   * is still checked, but the first call's deadline governs, as its `stop`
+   * does.
+   *
    * @param options.stop - Default `true`. Pass `false` to drain WITHOUT
    *   releasing — what a host does when it is shutting down but does not own
    *   the agent it was handed (`standingAgent`'s default `shutdown: 'flush'`).
+   * @param options.timeoutMs - How long to wait for each sink's flush, in ms.
+   *   Default 30 000 (the same number footprintjs's `drainObservers` uses).
+   *   `Infinity` waits without a deadline — how `shutdown()` behaved before
+   *   this option existed. A value that is not a positive number makes the
+   *   returned promise reject with a `TypeError`; nothing throws synchronously.
    *
    * @example Graceful exit for a script
    *   const telemetry = agent.enable.observability({ strategy: cloudwatch });
    *   const answer = await agent.run({ message: 'hi' });
    *   await agent.shutdown();
    */
-  async shutdown(options: { readonly stop?: boolean } = {}): Promise<void> {
+  async shutdown(
+    options: { readonly stop?: boolean; readonly timeoutMs?: number } = {},
+  ): Promise<void> {
+    const timeoutMs = shutdownTimeoutOf(options.timeoutMs);
     if (this.shutdownInFlight) return this.shutdownInFlight;
     const shouldStop = options.stop ?? true;
     const handles = [...this.liveStrategyHandles];
     this.shutdownInFlight = (async () => {
       // Flush everything before stopping anything — a strategy two handles
       // share must not be stopped while the other still has data to ship.
-      await Promise.allSettled(handles.map((handle) => handle.flush()));
+      await Promise.allSettled(handles.map((handle) => flushWithinDeadline(handle, timeoutMs)));
       // TOOL SESSIONS CLOSE ON EITHER SETTING (9.7.0) — including
       // `{ stop: false }`, and this is a deliberate asymmetry worth reading.
       //
