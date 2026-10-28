@@ -10,6 +10,70 @@ that; an exporter that drops an event drops only its own copy.
 Telemetry that fails invisibly is indistinguishable from telemetry that works,
 so delivery failures are themselves reported (`deliveryErrors.ts`).
 
+## One batch at a time (`outbox.ts`)
+The batching sinks — `file`, `cloudwatch` (and `agentcore`, built on it) and
+`xray` — do not keep their own buffer, timer or promise chain. Each owns one
+`createOutbox(...)` and hands it items; the outbox decides when a batch leaves
+and keeps one rule: **every trigger (size, timer, `flush()`, shutdown) queues on
+the same chain, so one delivery is in flight at a time, oldest items first.**
+
+Why it is one module: the timer used to start its write directly while the
+other triggers chained theirs (reported in #223). A large `appendFile` is
+several `write()`s, so two overlapping appends tore NDJSON lines, finished out
+of order, skipped a rotation, and let `flush()` return before a timed write
+landed. The same timer sat in CloudWatch and X-Ray. What a sink does around its
+write — the file sink's rotation — runs inside its delivery, so it is
+serialized with it.
+
+What serializing promises, and what it does not: ONE sink's deliveries never
+interleave. It does not make a delivery atomic. A disk that fails partway
+through an append (ENOSPC) can still leave part of a line behind, and that
+batch is reported dropped. Two sink instances or two processes writing one
+file are not coordinated either.
+
+- **A receiver's per-request limits split a delivery.** Serializing means a
+  slow delivery lets a backlog build behind it, which one request may not be
+  allowed to carry. With `maxItemsPerDelivery` / `maxBytesPerDelivery` (plus
+  `overheadBytesPerItem`), a delivery takes only the oldest items that fit,
+  and the rest go in the next delivery, right after, in order. Each part
+  settles on its own (shipped, or dropped and reported), so a failed part
+  never takes its neighbours with it. CloudWatch passes its documented
+  `PutLogEvents` limits: 10,000 events, and 1,048,576 bytes counted as UTF-8
+  message bytes plus 26 per event. An item too large for any request still
+  goes, alone, and the service's answer decides it. These limits never change
+  when a delivery starts; the size triggers below still do that.
+
+- `drain()` (the sink's `flush()`) is bounded. It resolves once every item
+  accepted before the call has settled (delivered, or dropped and reported),
+  including one a timed delivery already had in flight. It then makes one
+  sweep of what arrived while it waited. It does not chase a producer that
+  keeps emitting. So an event that arrives during that final sweep and is
+  followed by `stop()` stays in the buffer, unreported — the same as on main;
+  every bounded drain has this limit.
+- A failed batch is dropped and reported once through the sink's `onError`;
+  the next batch still goes. The queue never rejects: an `onError` that throws
+  is said on the console instead.
+- The size triggers (`maxItems`, `maxBytes`) compare the value as given — the
+  meaning each sink's option had before the outbox, so `0` still delivers
+  every item at once and `NaN` still never triggers by count. Only the
+  per-delivery cap must take at least one item: X-Ray maps
+  `maxBatchSegments` to its whole part (what `splice` took before) and
+  refuses, by name, a value below 1 — it used to send empty puts in a loop.
+- A delivery that never settles holds the queue, and `drain()` with it.
+  Nothing can cancel an in-flight write.
+
+```ts
+const outbox = createOutbox<string>({
+  name: 'file', maxItems: 100, maxBytes: 65_536, flushIntervalMs: 1000,
+  timerHoldsProcess: false,
+  deliver: (lines) => appendLines(lines),           // never called twice at once
+  dropped: (lines, cause) => new Error(`${lines.length} dropped: ${String(cause)}`),
+  report: (err) => strategy._onError?.(err),        // read at call time
+});
+outbox.add(line, bytesOf(line)); // hot path: sync, no I/O
+await outbox.drain();            // flush(): behind whatever is in flight
+```
+
 ## How an Error reaches a wire (`lib/wireJson.ts`)
 An `Error` anywhere in an event is written as `{ name, message, code? }` plus a
 bounded `cause` chain — never a custom property (an axios error's
@@ -127,3 +191,4 @@ agent.emit('agentfootprint.eval.score', {
 - `githubBugReporter.ts`, `githubDeviceSignIn.ts` — filing a report as the
   reporter, not as the library.
 - `deliveryErrors.ts` — where an exporter's own failures go.
+- `outbox.ts` — buffered, timed, one-at-a-time delivery for the batching sinks.

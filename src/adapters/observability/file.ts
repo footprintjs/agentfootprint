@@ -36,10 +36,14 @@
  * `exportEvent` is sync and never touches the disk: it serializes, buffers, and
  * returns. Batches are appended asynchronously on a size trigger
  * (`maxBufferEvents` / `maxBufferBytes`), on a timer (`flushIntervalMs`), and on
- * `flush()`. A hard kill therefore loses at most the buffer — the price of not
- * making telemetry a term in agent-loop latency. Call `flush()` (or
- * `agent.shutdown()`, which does) at process end; see the 8.12.0 lifecycle laws
- * on {@link BaseStrategy.flush}.
+ * `flush()` — all through ONE queue (`outbox.ts`), so one append is in flight
+ * at a time: this sink's appends never interleave, and lines land in dispatch
+ * order (#223). That is not atomicity — a disk that fails partway through an
+ * append (ENOSPC) can still leave part of a line behind, and that batch is
+ * reported dropped. A hard kill loses the buffer and can interrupt the append
+ * in flight — the price of not making telemetry a term in agent-loop latency.
+ * Call `flush()` (or `agent.shutdown()`, which does) at process end; see the
+ * 8.12.0 lifecycle laws on {@link BaseStrategy.flush}.
  *
  * ## Rotation is ONE generation, and that is deliberate
  *
@@ -76,6 +80,7 @@ import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
+import { createOutbox } from './outbox.js';
 
 // ─── Public options ──────────────────────────────────────────────────
 
@@ -198,28 +203,14 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
     );
   }
 
-  // Buffered lines — drained by `flush()` / size trigger / timer.
-  const buffer: string[] = [];
-  let bufferBytes = 0;
-  let lastFlushPromise: Promise<void> = Promise.resolve();
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Set by `stop()`: this sink accepts no more events. It is NOT a guard on
+  // writing — `stop()` does not authorise throwing away what was already
+  // accepted, and `flush()` after it still writes (the 8.11.1 stance).
   let stopped = false;
 
   // The fallback when the consumer wires nothing. Rate-limited; a
   // consumer-supplied sink is not.
   const consoleSink = rateLimitedConsoleSink(strategyName);
-
-  function scheduleTimedFlush(): void {
-    if (timer || flushIntervalMs <= 0 || stopped) return;
-    timer = setTimeout(() => {
-      timer = undefined;
-      void doFlush();
-    }, flushIntervalMs);
-    // Never hold the process open for telemetry. `unref` exists on Node's
-    // Timeout and not on the browser's number — feature-detected, so a
-    // non-Node runtime with an injected `_fs` still works.
-    (timer as { unref?: () => void }).unref?.();
-  }
 
   /** Route a delivery failure through whatever `_onError` IS RIGHT NOW —
    *  reading it at call time, so a consumer who assigns `_onError` after
@@ -241,28 +232,31 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
     bytesOnDisk = 0;
   }
 
-  async function doFlush(): Promise<void> {
-    // `stopped` is deliberately NOT a guard here — same stance as the AWS
-    // adapters since 8.11.1. `stop()` stops this strategy ACCEPTING events; it
-    // does not authorise throwing away events already accepted, and a `flush()`
-    // that cannot make progress after a `stop()` is how shutdown spins forever.
-    if (buffer.length === 0) return;
-    // Snapshot + clear so events emitted during the in-flight write accumulate
-    // into the next batch.
-    const batch = buffer.splice(0);
-    const batchBytes = bufferBytes;
-    bufferBytes = 0;
-    const data = `${batch.join('\n')}\n`;
-    try {
-      await rotateIfNeeded(batchBytes);
-      await fs.appendFile(path, data);
-      bytesOnDisk += byteLength(data);
-    } catch (err) {
-      reportFailure(
-        new Error(`${batch.length} event(s) dropped writing to '${path}': ${errorMessage(err)}`),
-      );
-    }
+  /** One batch: rotate if it would cross the ceiling, then append. Runs
+   *  inside the outbox's queue, so no other batch — and no other rotation —
+   *  can start until this one settles. */
+  async function writeBatch(lines: readonly string[]): Promise<void> {
+    const data = `${lines.join('\n')}\n`;
+    const bytes = byteLength(data);
+    await rotateIfNeeded(bytes);
+    await fs.appendFile(path, data);
+    bytesOnDisk += bytes;
   }
+
+  // Buffered lines, and the one queue every write goes through — size
+  // trigger, timer, `flush()`, shutdown (outbox.ts; #223).
+  const outbox = createOutbox<string>({
+    name: strategyName,
+    maxItems: maxBufferEvents,
+    maxBytes: maxBufferBytes,
+    flushIntervalMs,
+    // Never hold the process open for a local write.
+    timerHoldsProcess: false,
+    deliver: writeBatch,
+    dropped: (lines, cause) =>
+      new Error(`${lines.length} event(s) dropped writing to '${path}': ${errorMessage(cause)}`),
+    report: reportFailure,
+  });
 
   function enqueue(event: AgentfootprintEvent): void {
     if (stopped) return;
@@ -286,17 +280,11 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
     // `JSON.stringify` returns undefined for an undefined input — nothing to
     // write, and a bare "undefined" line would corrupt the NDJSON stream.
     if (line === undefined) return;
-    buffer.push(line);
-    bufferBytes += byteLength(line) + 1; // + the newline this line will carry
-
-    if (buffer.length >= maxBufferEvents || bufferBytes >= maxBufferBytes) {
-      // Size trigger. Chain onto the last write rather than racing it — the
-      // file's line order IS the dispatch order, and that is the only thing an
-      // offline reader can rely on.
-      lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
-    } else {
-      scheduleTimedFlush();
-    }
+    // + the newline this line will carry. The outbox decides when it is
+    // written, and writes it after every line accepted before it — the file's
+    // line order IS the dispatch order, the one thing an offline reader can
+    // rely on.
+    outbox.add(line, byteLength(line) + 1);
   }
 
   const strategy: ObservabilityStrategy = {
@@ -308,29 +296,22 @@ export function fileObservability(opts: FileObservabilityOptions): Observability
      * Write what is buffered. Called for you on shutdown (8.12.0) — by the
      * handle `enable.observability()` returns, by `agent.shutdown()`, and by a
      * `standingAgent` closing. Safe at any time, including after `stop()`.
+     *
+     * Resolves once every event accepted before the call is written (or
+     * dropped and reported) — one a timed write already had in flight
+     * included — after one more sweep of what arrived while it waited. It
+     * does not chase a producer that keeps emitting. A write that never
+     * settles holds it: nothing can cancel an in-flight write.
      */
-    async flush(): Promise<void> {
-      // BOUNDED BY CONSTRUCTION — every pass must remove at least one buffered
-      // line; a pass that removes none ends the drain instead of retrying. The
-      // shape the CloudWatch adapter arrived at in 8.11.1, for the same reason:
-      // a drain that cannot finish must return, never spin.
-      for (;;) {
-        const pending = buffer.length;
-        lastFlushPromise = lastFlushPromise.then(doFlush, doFlush);
-        await lastFlushPromise;
-        if (buffer.length === 0) return;
-        if (buffer.length >= pending) return;
-      }
+    flush(): Promise<void> {
+      return outbox.drain();
     },
     /** Clear the timer and stop accepting events. Terminal: there is no
      *  restart. What it does NOT do is discard the buffer — `flush()` after
      *  `stop()` still writes it. */
     stop(): void {
       stopped = true;
-      if (timer) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
+      outbox.stop();
     },
     /** Where failures go. Two callers: the dispatch layer (when `exportEvent`
      *  itself throws) and this adapter's own write path. */
