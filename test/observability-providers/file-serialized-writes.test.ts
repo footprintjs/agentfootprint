@@ -323,40 +323,53 @@ describe('fileObservability serialized writes — P2 boundary', () => {
     expect(readLines(disk.files.get(PATH)).seqs).toEqual([0, 1, 2, 3]);
   });
 
-  it('P2 flush() is bounded under steady traffic on a healthy disk — it does not chase the producer', async () => {
-    vi.useFakeTimers();
-    const disk = timedDisk(3); // healthy: every append lands in 3 ms
-    const strat = fileObservability({
-      path: PATH,
-      _fs: disk.fs,
-      maxBufferEvents: 5,
-      flushIntervalMs: 10,
-    });
-    let seq = 0;
-    const producer = setInterval(() => strat.exportEvent(numbered(seq++)), 1); // one event per ms
-    try {
-      await vi.advanceTimersByTimeAsync(30);
-      const acceptedAtCall = seq;
-      let flushed = false;
-      void Promise.resolve(strat.flush?.()).then(() => {
-        flushed = true;
+  // Two disks, because the bound can only be broken on one of them. On the fast
+  // disk the queue goes idle between writes; on the slow one the size trigger
+  // fires mid-write, so a write is always waiting behind the one in flight —
+  // the case where a drain that re-read its target would chase the producer.
+  it.each([
+    { diskMs: 3, disk: 'a fast disk (3 ms): the queue goes idle between writes' },
+    { diskMs: 50, disk: 'a slow disk (50 ms): a write always waits behind the one in flight' },
+  ])(
+    'P2 flush() is bounded under steady traffic on $disk — it does not chase the producer',
+    async ({ diskMs }) => {
+      vi.useFakeTimers();
+      const disk = timedDisk(diskMs); // healthy: every append lands in `diskMs`
+      const strat = fileObservability({
+        path: PATH,
+        _fs: disk.fs,
+        maxBufferEvents: 5,
+        flushIntervalMs: 10,
       });
-      let waited = 0;
-      while (!flushed && waited < 600) {
-        await vi.advanceTimersByTimeAsync(1);
-        waited++;
+      let seq = 0;
+      const producer = setInterval(() => strat.exportEvent(numbered(seq++)), 1); // one event per ms
+      try {
+        await vi.advanceTimersByTimeAsync(30);
+        const acceptedAtCall = seq;
+        let flushed = false;
+        void Promise.resolve(strat.flush?.()).then(() => {
+          flushed = true;
+        });
+        let waited = 0;
+        while (!flushed && waited < 2_000) {
+          await vi.advanceTimersByTimeAsync(1);
+          waited++;
+        }
+        // What was accepted before the call: at most the write in flight, the
+        // one queued behind it, then one sweep — four writes is generous.
+        const bound = 4 * diskMs + 20;
+        expect(waited, 'fake ms flush() took while the producer kept emitting').toBeLessThanOrEqual(
+          bound,
+        );
+        // …and it still wrote everything accepted before it was called.
+        const { seqs } = readLines(disk.files.get(PATH));
+        expect(seqs.slice(0, acceptedAtCall)).toEqual(range(acceptedAtCall));
+      } finally {
+        clearInterval(producer);
+        strat.stop?.();
       }
-      expect(waited, 'fake ms flush() took while the producer kept emitting').toBeLessThanOrEqual(
-        30,
-      );
-      // …and it still wrote everything accepted before it was called.
-      const { seqs } = readLines(disk.files.get(PATH));
-      expect(seqs.slice(0, acceptedAtCall)).toEqual(range(acceptedAtCall));
-    } finally {
-      clearInterval(producer);
-      strat.stop?.();
-    }
-  });
+    },
+  );
 });
 
 // ─── P4 Property ─────────────────────────────────────────────────────

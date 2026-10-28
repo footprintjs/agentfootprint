@@ -29,7 +29,9 @@ serialized with it.
   accepted before the call has settled (delivered, or dropped and reported),
   including one a timed delivery already had in flight. It then makes one
   sweep of what arrived while it waited. It does not chase a producer that
-  keeps emitting.
+  keeps emitting. So an event that arrives during that final sweep and is
+  followed by `stop()` stays in the buffer, unreported — the same as on main;
+  every bounded drain has this limit.
 - A failed batch is dropped and reported once through the sink's `onError`;
   the next batch still goes. The queue never rejects: an `onError` that throws
   is said on the console instead.
