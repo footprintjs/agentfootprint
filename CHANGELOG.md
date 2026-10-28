@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.1.0] - 2026-10-28
+
+### Added
+
+- **Query acknowledged saved root histories without a synthetic snapshot.** The host-only `readStoredCauseArtifacts` reader preserves the producer's capture note, missing-value observations and separate storage acknowledgement; `traceCauseTools` serves the existing attention, root-cause and impact questions through the shared Foottrace query path. Storage labels are privately bound to the exact admitted graph. Unsupported, partial or unproven evidence remains explicitly uncertain. Saved histories with unproven execution, state-namespace or invocation bindings stay unknown. The new reader requires the newer public producer reader; existing memory and custom-graph paths keep their behavior.
+
+- **Ask cause and impact questions using exact read sources from saved execution histories.** `readStoredCauseArtifacts` now uses captured producer ownership evidence admitted by the public producer reader, including zero-read executions and actual retry invocations. Missing or unproven ownership still returns unknown without a graph; partial capture and unavailable sources retain gaps. Read-before-write observations never become proof of output derivation. Native capture format and source-channel status are reported separately from storage acknowledgement; neither receipts nor unkeyed digests authenticate a producer. This adds possible values to the public admission types; consumers handling every case should handle both native capture formats and source-channel statuses. Existing memory, custom-graph and histories without source capture keep their behavior. The newer public producer reader is required for the new admission; no package release is performed by this change.
+
 ## [11.0.0] - 2026-10-25
 
 ### Breaking
