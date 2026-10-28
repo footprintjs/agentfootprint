@@ -3,10 +3,13 @@
  *
  *   P4 Property  — the queue does not grow while a delivery hangs: however
  *                  many triggers fire, at most one delivery waits behind it
- *   P5 Security  — a count that decides what a delivery takes must be a
- *                  positive whole number, refused by the sink's own option
- *                  name; a cap that could take nothing never hangs a drain
- *                  (proved in a child process, which a spin cannot starve)
+ *   P5 Security  — only what never worked is refused: an X-Ray
+ *                  `maxBatchSegments` whose whole part is below 1 (it sent
+ *                  empty puts in a loop), by name; the size triggers of the
+ *                  file and CloudWatch sinks accept every value they did before
+ *                  (their meaning, row by row: size-options-as-main.test.ts);
+ *                  a cap that could take nothing never hangs a drain (proved
+ *                  in a child process, which a spin cannot starve)
  */
 
 import { dirname, join } from 'node:path';
@@ -73,47 +76,61 @@ describe('outbox — P4 property', () => {
 // ─── P5 Security ─────────────────────────────────────────────────────
 
 describe('outbox — P5 security', () => {
-  it.each([0, -1, 1.5, Number.NaN])('P5 xray maxBatchSegments %s is refused by name', (cap) => {
-    expect(() => xrayObservability({ serviceName: 'svc', maxBatchSegments: cap })).toThrow(
-      /^\[xrayObservability\] `maxBatchSegments` must be a positive whole number/,
-    );
-  });
+  it.each([0, -1, 0.5, Number.NaN])(
+    'P5 xray maxBatchSegments %s — a put of no segments, in a loop before — is refused by name',
+    (cap) => {
+      expect(() => xrayObservability({ serviceName: 'svc', maxBatchSegments: cap })).toThrow(
+        /^\[xrayObservability\] `maxBatchSegments` must be at least 1 \(got .+\): it is how many segments one put takes/,
+      );
+    },
+  );
 
-  it.each([0, -1, 1.5, Number.NaN])('P5 file maxBufferEvents %s is refused by name', (count) => {
-    expect(() =>
-      fileObservability({ path: '/log/e.ndjson', _fs: memoryFs, maxBufferEvents: count }),
-    ).toThrow(/^\[fileObservability\] `maxBufferEvents` must be a positive whole number/);
-  });
-
-  it.each([0, -1, 1.5, Number.NaN])(
-    'P5 cloudwatch maxBatchEvents %s is refused by name',
+  it.each([0, -1, 2.5, Number.NaN, Infinity])(
+    'P5 file maxBufferEvents and cloudwatch maxBatchEvents %s are accepted — they worked before',
     (count) => {
+      expect(() =>
+        fileObservability({ path: '/log/e.ndjson', _fs: memoryFs, maxBufferEvents: count }),
+      ).not.toThrow();
       expect(() =>
         cloudwatchObservability({
           logGroupName: '/g',
           maxBatchEvents: count,
-          _client: {
-            putLogEvents: () => Promise.resolve(),
-          },
+          _client: { putLogEvents: () => Promise.resolve() },
         }),
-      ).toThrow(/^\[cloudwatchObservability\] `maxBatchEvents` must be a positive whole number/);
+      ).not.toThrow();
     },
   );
 
-  it('P5 the refusal says how to get "deliver every item at once"', () => {
-    expect(() => xrayObservability({ serviceName: 'svc', maxBatchSegments: 0 })).toThrow(
-      /Use 1 to deliver every item as soon as it arrives/,
-    );
+  it('P5 the outbox itself refuses a per-delivery cap that could take nothing', () => {
+    expect(() =>
+      createOutbox({
+        name: 'xray',
+        maxItems: 1,
+        maxItemsPerDelivery: 0,
+        flushIntervalMs: 0,
+        timerHoldsProcess: false,
+        deliver: () => Promise.resolve(),
+        dropped: () => new Error('dropped'),
+        report: () => undefined,
+      }),
+    ).toThrow(/a delivery that may take no items could never finish a drain/);
   });
 
-  it('P5 a per-delivery cap of 0, NaN or -1 is refused or drains — never spins (child process)', async () => {
+  it('P5 X-Ray maxBatchSegments (and an outbox cap) of 0, NaN or -1 is refused or drains — never spins (child process)', async () => {
     const { stdout } = await runInChildProcess(
       join(HERE, 'fixtures', 'outbox-cap-child.ts'),
       {},
       { timeoutMs: 15_000 },
     );
     const outcomes = JSON.parse(stdout.trim()) as Record<string, string>;
-    expect(Object.keys(outcomes).sort()).toEqual(['-1', '0', 'NaN']);
+    expect(Object.keys(outcomes).sort()).toEqual([
+      'outbox -1',
+      'outbox 0',
+      'outbox NaN',
+      'xray -1',
+      'xray 0',
+      'xray NaN',
+    ]);
     for (const outcome of Object.values(outcomes)) {
       expect(['refused', 'returned']).toContain(outcome);
     }

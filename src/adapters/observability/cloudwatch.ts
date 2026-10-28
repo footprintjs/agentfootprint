@@ -277,7 +277,6 @@ export function _buildCloudWatchObservability(
     name: strategyName,
     maxItems: maxBatchEvents,
     maxBytes: maxBatchBytes,
-    optionNames: { maxItems: 'maxBatchEvents' },
     flushIntervalMs,
     // An un-stopped strategy lingers up to `flushIntervalMs` so the timer can
     // still ship the tail (see `stop()`).
