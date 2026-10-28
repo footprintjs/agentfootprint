@@ -197,7 +197,7 @@ export interface McpClientOptions {
    * equal jitter), never longer than 10 seconds of waiting in total across one
    * call. Set `false` to let a throttled call fail immediately, or pass an
    * object to tune the ceilings and the backoff (`baseDelayMs`, `multiplier`,
-   * `jitter`, `maxBackoffMs`, a `maxElapsedMs` deadline) and to learn when it
+   * `jitter`, `maxDelayMs`, a `maxElapsedMs` deadline) and to learn when it
    * happens:
    *
    * ```ts

@@ -62,9 +62,19 @@
  * one around it. One series means one attempt count, one waiting total and one
  * deadline per call, by construction: the layers can never multiply requests.
  * The series' FIRST rule holds the call's budget — its `maxAttempts`,
- * `maxWaitMs`, `maxElapsedMs` and `maxBackoffMs` bound every attempt and wait,
- * whatever the reason. A rule that joins keeps its own values as limits on its
- * own kind: they can stop its retries sooner, never make the call longer.
+ * `maxWaitMs` and `maxElapsedMs` bound every attempt and wait, whatever the
+ * reason. A rule that joins keeps its own values as limits on its own kind:
+ * they can stop its retries sooner, never make the call longer.
+ *
+ * ── The wait: a stated one wins, whole ───────────────────────────────────────
+ * Each retry's wait is `statedWaitFirst(retry-after, (n) => min(maxDelayMs,
+ * exponentialBackoff(spec)(n)))`: the server's `Retry-After` when it sent one,
+ * else our jittered backoff capped at `maxDelayMs`. The cap is on the SCHEDULE
+ * only — never on a stated wait — so the footprintjs policy's `maxBackoffMs`,
+ * which would cut every wait and send the request again before the server
+ * said it may, is left unset. A stated wait too long for `maxWaitMs` or the
+ * deadline is never shortened either: the series stops, and the 429 is
+ * delivered as the server sent it.
  *
  * Pattern: Decorator over `fetch`. Role: Layer-3 tool transport.
  */
@@ -78,7 +88,7 @@ import {
 } from 'footprintjs';
 
 import { abortErrorOf, eitherSignal, linkedController } from '../lib/abort.js';
-import { exponentialBackoff } from './exponentialBackoff.js';
+import { exponentialBackoff, statedWaitFirst, type BackoffFunction } from './backoff.js';
 
 /**
  * The fetch shape the MCP SDK's `fetch` hook uses — deliberately NARROWER
@@ -165,14 +175,14 @@ export interface ThrottleRetryOptions {
    */
   readonly jitter?: 'none' | 'equal' | 'full';
   /**
-   * The most one wait may last, in milliseconds. Default: none.
+   * The most one of OUR backoff waits may last, in milliseconds. Default: none.
    *
-   * It caps our own backoff's ceiling, before the jittered draw. A
-   * `Retry-After` longer than it is never shortened: asking sooner than the
-   * server said only spends an attempt on a refusal it already announced, so
-   * that refusal is delivered instead.
+   * It caps the scheduled wait only, never a server's `Retry-After` — unlike
+   * footprintjs's `RetryPolicy.maxBackoffMs`, which caps every wait. A stated
+   * wait is waited whole; asking sooner than the server said would only spend
+   * an attempt on a refusal it already announced.
    */
-  readonly maxBackoffMs?: number;
+  readonly maxDelayMs?: number;
   /**
    * Called before each wait. The per-attempt visibility hook, matching the
    * contract `withRetry` and `withCredentialRetry` already use — a decorator
@@ -239,7 +249,7 @@ export function throttled(response: Response): RetryVerdict | undefined {
 
 /**
  * @internal What a rule's options fall back to. `Infinity` means none: no
- * deadline (`maxElapsedMs`), no cap on one wait (`maxBackoffMs`).
+ * deadline (`maxElapsedMs`), no cap on the scheduled wait (`maxDelayMs`).
  */
 export interface RetryDefaults {
   readonly maxAttempts: number;
@@ -248,7 +258,7 @@ export interface RetryDefaults {
   readonly baseDelayMs: number;
   readonly multiplier: number;
   readonly jitter: 'none' | 'equal' | 'full';
-  readonly maxBackoffMs: number;
+  readonly maxDelayMs: number;
 }
 
 /**
@@ -263,7 +273,7 @@ export const THROTTLE_RETRY_DEFAULTS: RetryDefaults = Object.freeze({
   baseDelayMs: 200,
   multiplier: 2,
   jitter: 'equal',
-  maxBackoffMs: Infinity,
+  maxDelayMs: Infinity,
 });
 
 /**
@@ -277,7 +287,7 @@ export interface RetryRule {
   readonly maxAttempts: number;
   readonly maxWaitMs: number;
   readonly maxElapsedMs: number;
-  readonly maxBackoffMs: number;
+  readonly maxDelayMs: number;
   readonly baseDelayMs: number;
   readonly multiplier: number;
   readonly jitter: 'none' | 'equal' | 'full';
@@ -312,7 +322,7 @@ export function retryRule(
     ),
     maxWaitMs: option.atLeast('maxWaitMs', Math.max(0, opts.maxWaitMs ?? defaults.maxWaitMs)),
     maxElapsedMs: option.positive('maxElapsedMs', opts.maxElapsedMs ?? defaults.maxElapsedMs),
-    maxBackoffMs: option.nonNegative('maxBackoffMs', opts.maxBackoffMs ?? defaults.maxBackoffMs),
+    maxDelayMs: option.nonNegative('maxDelayMs', opts.maxDelayMs ?? defaults.maxDelayMs),
     baseDelayMs: option.finite('baseDelayMs', opts.baseDelayMs ?? defaults.baseDelayMs, 0),
     multiplier: option.finite('multiplier', opts.multiplier ?? defaults.multiplier, 1),
     jitter: option.jitter(opts.jitter ?? defaults.jitter),
@@ -411,26 +421,33 @@ const platformFetch: ThrottleFetch = (input, init) => globalThis.fetch(input, in
 
 // ─── One call's series ───────────────────────────────────────────────
 
-/** A rule as a series runs it: its limits no looser than the owner's, its backoff built. */
+/** A rule as a series runs it: its limits no looser than the owner's, its wait built. */
 interface BoundRule extends RetryRule {
-  readonly backoffMs: (attempt: number) => number;
+  /** The wait after failed attempt `n`: the stated one, else the capped schedule. */
+  readonly backoffMs: BackoffFunction;
 }
 
 function boundRule(rule: RetryRule, owner: RetryRule): BoundRule {
-  const maxBackoffMs = Math.min(rule.maxBackoffMs, owner.maxBackoffMs);
+  const maxDelayMs = Math.min(rule.maxDelayMs, owner.maxDelayMs);
+  const schedule = exponentialBackoff({
+    baseDelayMs: rule.baseDelayMs,
+    multiplier: rule.multiplier,
+    jitter: rule.jitter,
+  });
   return {
     ...rule,
     maxAttempts: Math.min(rule.maxAttempts, owner.maxAttempts),
     maxWaitMs: Math.min(rule.maxWaitMs, owner.maxWaitMs),
     maxElapsedMs: Math.min(rule.maxElapsedMs, owner.maxElapsedMs),
-    maxBackoffMs,
-    backoffMs: exponentialBackoff({
-      baseDelayMs: rule.baseDelayMs,
-      multiplier: rule.multiplier,
-      jitter: rule.jitter,
-      maxBackoffMs,
-    }),
+    maxDelayMs,
+    // The cap is on the schedule only: a stated wait wins, whole.
+    backoffMs: statedWaitFirst(retryAfterOf, (n) => Math.min(maxDelayMs, schedule(n))),
   };
+}
+
+/** The wait a refusal stated (its parsed `Retry-After`), or none. */
+function retryAfterOf(error: unknown): number | undefined {
+  return error instanceof RetryableRefusal ? error.retryAfterMs : undefined;
 }
 
 /** The latest attempt's refusal: what it threw, the rule that recognised it, the answer it stands for. */
@@ -479,16 +496,19 @@ class Series {
     }
   }
 
-  /** The owner's budget as footprintjs reads it; the rest is this series' `retryOn` and backoff. */
+  /**
+   * The owner's budget as footprintjs reads it; the rest is this series'
+   * `retryOn` and backoff. `maxBackoffMs` is deliberately unset: it would cap a
+   * stated `Retry-After` too, and send the request before the server said.
+   */
   private policy(): RetryPolicy {
-    const { maxAttempts, maxBackoffMs } = this.owner;
+    const { maxAttempts } = this.owner;
     return {
       // A whole number for the runner; "no count" is a count no call reaches.
       attempts: Number.isFinite(maxAttempts) ? Math.ceil(maxAttempts) : Number.MAX_SAFE_INTEGER,
       retryOn: (error) => this.retryOn(error),
       // `retryOn` planned the wait — it needs the length to hold the ceilings.
       backoffMs: () => this.plannedWaitMs,
-      ...(Number.isFinite(maxBackoffMs) && { maxBackoffMs }),
     };
   }
 
@@ -550,14 +570,13 @@ class Series {
     // MCP (JSON strings), but silently replaying half a stream would be worse
     // than surfacing the refusal.
     if (!this.replayable) return false;
-    const { rule, verdict } = refused;
+    const { rule } = refused;
     if (this.attemptNo >= rule.maxAttempts) return false;
-    const stated = verdict.retryAfterMs;
-    // A stated wait is never shortened: past the cap, the refusal is delivered.
-    if (stated !== undefined && stated > rule.maxBackoffMs) return false;
-    const waitMs = stated ?? rule.backoffMs(this.attemptNo);
+    // The stated wait whole, else the schedule under `maxDelayMs`.
+    const waitMs = rule.backoffMs(this.attemptNo, error);
     // The rail on Retry-After: never let a server talk us into a wait that
-    // breaks the caller's budget.
+    // breaks the caller's budget. It stops the series; it never shortens the
+    // wait. Past the deadline, the runner stops it the same way (`no-time-left`).
     if (this.waitedMs + waitMs > rule.maxWaitMs) return false;
     // A joined rule's own, sooner deadline. The owner's is the runner's to hold.
     if (

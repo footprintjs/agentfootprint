@@ -490,7 +490,7 @@ inside the 10 s ceiling on waiting.
 | `maxAttempts` | 5 | Requests per call, the first included. The call's overall limit. |
 | `baseDelayMs` · `multiplier` | 500 · 2 | The first wait's ceiling, and how each ceiling grows. |
 | `jitter` | `'equal'` | `'equal'` waits between half the ceiling and all of it, `'full'` from zero, `'none'` exactly it. |
-| `maxBackoffMs` | none | The most one wait may last. It caps the ceiling before the draw, so capped waits keep their jitter. |
+| `maxDelayMs` | none | The most one of the library's own backoff waits may last. It never cuts a server's `Retry-After`. |
 | `maxWaitMs` | 10 000 | The most a call spends waiting in total. |
 | `maxElapsedMs` | none | A deadline for the whole call, requests included: no wait that would end past it is begun, and a request still waiting for its answer when it passes is cut. |
 | `onRetry` | — | Told the refusal's `kind` (`'session-busy'` or `'throttle'`), the attempt about to start and the wait — never the request's arguments or the server's answer. |
@@ -500,9 +500,9 @@ Each request is one retry series on footprintjs's attempt runner. Under
 of wrapping the transport in a second loop, so a call makes at most
 `retry.maxAttempts` requests whatever mix of refusals it meets, and every
 attempt, a 429's included, lands in the same runtime session. The transport's `retry` values are the call's limits; `retryOnThrottle`'s
-limit the 429 retries inside them. A `Retry-After` is honoured as stated and
-never shortened: a wait it asks for past `maxBackoffMs`, `maxWaitMs` or the
-deadline is not begun, and the 429 is delivered instead.
+limit the 429 retries inside them. A `Retry-After` is waited whole — `maxDelayMs`
+never cuts it — and a wait it asks for past `maxWaitMs` or the deadline is not
+begun: the 429 is delivered instead.
 
 The example above sets a deadline (`maxElapsedMs`) and records each retry's
 `kind` and attempt; everything else there is the default schedule.

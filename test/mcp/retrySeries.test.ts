@@ -24,7 +24,7 @@ import {
   SESSION_BUSY_RETRY_DEFAULTS,
   type AgentCoreRuntimeRetryOptions,
 } from '../../src/adapters/mcp/agentcoreRuntime/transport.js';
-import { exponentialBackoff } from '../../src/mcp/exponentialBackoff.js';
+import { exponentialBackoff, statedWaitFirst } from '../../src/mcp/backoff.js';
 import {
   retryingFetch,
   type ThrottleFetch,
@@ -126,8 +126,8 @@ describe('retry series — P1 the backoff law and the AgentCore defaults', () =>
   it('the default minimum total wait is above 3.4 s, and the maximum inside the 10 s ceiling', () => {
     expect(sumOfWaits(() => 0)).toBe(3750);
     expect(sumOfWaits(() => 0)).toBeGreaterThan(3400);
-    expect(sumOfWaits(() => 0.999_999)).toBe(7500);
-    expect(sumOfWaits(() => 0.999_999)).toBeLessThanOrEqual(SESSION_BUSY_RETRY_DEFAULTS.maxWaitMs);
+    expect(sumOfWaits(() => 1)).toBe(7500);
+    expect(sumOfWaits(() => 1)).toBeLessThanOrEqual(SESSION_BUSY_RETRY_DEFAULTS.maxWaitMs);
   });
 
   it('on the wire, the shortest draw waits 250, 500, 1000, 2000 ms — 3.75 s before the fifth attempt', async () => {
@@ -152,22 +152,39 @@ describe('retry series — P1 the backoff law and the AgentCore defaults', () =>
   it('equal jitter draws between half the ceiling and all of it; full from zero; none the ceiling', () => {
     const at = (jitter: 'none' | 'equal' | 'full', r: number) =>
       exponentialBackoff({ baseDelayMs: 400, multiplier: 2, jitter, random: () => r })(2);
-    expect([at('equal', 0), at('equal', 0.5), at('equal', 0.999_999)]).toEqual([400, 600, 800]);
-    expect([at('full', 0), at('full', 0.5), at('full', 0.999_999)]).toEqual([0, 400, 800]);
+    expect([at('equal', 0), at('equal', 0.5), at('equal', 1)]).toEqual([400, 600, 800]);
+    expect([at('full', 0), at('full', 0.5), at('full', 1)]).toEqual([0, 400, 800]);
     expect([at('none', 0), at('none', 0.7)]).toEqual([800, 800]);
+    // Exact, never rounded; a random source outside [0, 1] is refused when asked.
+    expect(at('equal', 0.123)).toBe(400 + 0.123 * 400);
+    expect(() => at('full', 1.5)).toThrow(RangeError);
   });
 
-  it('a cap bounds the ceiling BEFORE the draw, so capped waits keep their jitter', () => {
-    const capped = (r: number) =>
-      exponentialBackoff({
-        baseDelayMs: 500,
-        multiplier: 2,
-        jitter: 'equal',
-        maxBackoffMs: 1000,
-        random: () => r,
-      })(6);
-    // 500 × 2^5 = 16 s, capped to 1 s: the draw still spreads over 500–1000 ms.
-    expect([capped(0), capped(0.5), capped(0.999_999)]).toEqual([500, 750, 1000]);
+  it('a stated wait wins over the schedule; a malformed one falls back to it', () => {
+    const wait = statedWaitFirst(
+      (error) => (error as { retryAfterMs?: number }).retryAfterMs,
+      exponentialBackoff({ baseDelayMs: 100 }),
+    );
+    expect(wait(3, { retryAfterMs: 2_500 })).toBe(2_500);
+    expect(wait(3, { retryAfterMs: Number.NaN })).toBe(400);
+    expect(wait(3, {})).toBe(400);
+  });
+
+  it('maxDelayMs caps the scheduled wait', async () => {
+    const stand = endpoint((n) => (n < 5 ? throttle() : served()));
+    const retries: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      baseDelayMs: 500,
+      jitter: 'none',
+      maxDelayMs: 1_500,
+      maxAttempts: 5,
+      maxWaitMs: 60_000,
+      onRetry: (info) => retries.push(info),
+    }) as ThrottleFetch;
+
+    expect((await drive(fetch(URL_, POST))).status).toBe(200);
+    // 500, 1000, then 2000 and 4000 held at the 1500 ms cap.
+    expect(retries.map((r) => r.waitMs)).toEqual([500, 1_000, 1_500, 1_500]);
   });
 
   it('an option outside its range is refused when the fetch is BUILT, by name', () => {
@@ -176,6 +193,7 @@ describe('retry series — P1 the backoff law and the AgentCore defaults', () =>
     );
     expect(() => retryingFetch(undefined, { baseDelayMs: -1 })).toThrow(/`baseDelayMs`/);
     expect(() => retryingFetch(undefined, { maxElapsedMs: 0 })).toThrow(/`maxElapsedMs`/);
+    expect(() => retryingFetch(undefined, { maxDelayMs: -1 })).toThrow(/`maxDelayMs`/);
     expect(() => retryingFetch(undefined, { maxAttempts: Number.NaN })).toThrow(/`maxAttempts`/);
     expect(() =>
       agentCoreRuntimeMcpTransport({
@@ -212,10 +230,31 @@ describe('retry series — P2 Retry-After is honoured, and capped', () => {
     ]);
   });
 
-  it('capped by the deadline: a stated wait that would end past it is never begun', async () => {
+  it('longer than maxDelayMs but inside the deadline: the full stated wait is waited', async () => {
+    const stand = endpoint((n) => (n === 1 ? throttle('3') : served()));
+    const retries: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      maxDelayMs: 1_000,
+      maxElapsedMs: 10_000,
+      maxWaitMs: 60_000,
+      onRetry: (info) => retries.push(info),
+    }) as ThrottleFetch;
+
+    const pending = fetch(URL_, POST);
+    await flush();
+    // Cut to the 1 s cap, the request would go again here — before the server said.
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(stand.calls()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await pending).status).toBe(200);
+    expect(retries.map((r) => [r.waitMs, r.retryAfterMs])).toEqual([[3_000, 3_000]]);
+  });
+
+  it('past the deadline: the series stops without waiting — the cap never shortens it to fit', async () => {
     const stand = endpoint((n) => (n === 1 ? throttle('30') : served()));
     const retries: ThrottleRetryInfo[] = [];
     const fetch = retryingFetch(stand.fetch, {
+      maxDelayMs: 1_000,
       maxElapsedMs: 5_000,
       maxWaitMs: 60_000,
       onRetry: (info) => retries.push(info),
@@ -227,21 +266,6 @@ describe('retry series — P2 Retry-After is honoured, and capped', () => {
     expect(res.status).toBe(429);
     expect(stand.calls()).toBe(1);
     expect(retries).toEqual([]);
-    expect(Date.now() - startedAt).toBe(0);
-  });
-
-  it('capped by maxBackoffMs WITHOUT being shortened: the 429 is delivered, never asked again early', async () => {
-    const stand = endpoint((n) => (n === 1 ? throttle('3') : served()));
-    const fetch = retryingFetch(stand.fetch, {
-      maxBackoffMs: 1_000,
-      maxWaitMs: 60_000,
-    }) as ThrottleFetch;
-
-    const startedAt = Date.now();
-    const res = await drive(fetch(URL_, POST));
-
-    expect(res.status).toBe(429);
-    expect(stand.calls()).toBe(1);
     expect(Date.now() - startedAt).toBe(0);
   });
 });

@@ -53,8 +53,8 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a
   transport fetch that already retries is joined, never wrapped.
-- `exponentialBackoff.ts` — the backoff schedule, a stand-in for footprintjs's
-  own `exponentialBackoff` until a release ships it.
+- `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
+  footprintjs's own helpers (same names and laws) until a release ships them.
 - `toolExtras.ts` — our own declarations, carried over MCP.
 - `toolResult.ts` — text and explicitly opted-in structured result decoding.
 - `elicitation.ts` — a typed ask (`AwaitingInput`) as an MCP elicitation and the

@@ -165,8 +165,8 @@ export interface AgentCoreRuntimeMcpTransportOptions {
    * every request until it has. Up to 5 attempts, waiting 500 ms doubling with
    * equal jitter — 250–500 ms, 500–1000 ms, 1–2 s, 2–4 s — is 3.75 s of waiting
    * at the shortest draw and 7.5 s at the longest, inside the 10 s ceiling on
-   * waiting (`maxWaitMs`). No deadline (`maxElapsedMs`) and no cap on one wait
-   * (`maxBackoffMs`) unless you set them.
+   * waiting (`maxWaitMs`). No deadline (`maxElapsedMs`) and no cap on the
+   * scheduled wait (`maxDelayMs`) unless you set them.
    *
    * These are the call's overall limits. Under `mcpClient`, its 429 retry
    * joins this retry's series rather than wrapping it, so a call makes at most
@@ -227,7 +227,7 @@ export const SESSION_BUSY_RETRY_DEFAULTS: RetryDefaults = Object.freeze({
   baseDelayMs: 500,
   multiplier: 2,
   jitter: 'equal',
-  maxBackoffMs: Infinity,
+  maxDelayMs: Infinity,
 });
 
 /** What a bearer token is vended for, unless the caller names another service. */

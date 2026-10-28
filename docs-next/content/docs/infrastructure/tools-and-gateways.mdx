@@ -200,10 +200,11 @@ effect. Ignored for `stdio`, which has no HTTP status to read.
 
 The wait is the server's `Retry-After` when it sends one, and otherwise a
 backoff you can tune: `baseDelayMs` (200) doubling by `multiplier` (2), drawn
-with `jitter` (`'equal'` by default; `'full'` or `'none'`), each wait capped by
-`maxBackoffMs` if you set one. `maxElapsedMs` adds a deadline for the whole call,
-requests included. A `Retry-After` is never shortened: when it asks for more
-than a ceiling or the deadline allows, the 429 is delivered instead. `onRetry`
+with `jitter` (`'equal'` by default; `'full'` or `'none'`), each of these waits
+capped by `maxDelayMs` if you set one. `maxElapsedMs` adds a deadline for the
+whole call, requests included. A `Retry-After` is waited whole — `maxDelayMs`
+never cuts it — and when it asks for more than `maxWaitMs` or the deadline
+allows, the 429 is delivered instead. `onRetry`
 is told the refusal's `kind`, the attempt about to start and the wait — never
 the call's arguments or the server's answer.
 
