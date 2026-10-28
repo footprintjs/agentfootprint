@@ -108,19 +108,28 @@ describe('mcp throttle — P1 unit', () => {
 
 describe('mcp throttle — P2 boundary', () => {
   it('P2 honours Retry-After (seconds) rather than guessing a backoff', async () => {
+    // The wait is footprintjs's attempt runner's, so it is asserted on a fake
+    // clock — exactly the stated second, not a millisecond less.
+    vi.useFakeTimers();
     const scripted = scriptedFetch([429, 200], { 0: { 'retry-after': '1' } });
     const seen: ThrottleRetryInfo[] = [];
     const wrapped = retryingFetch(scripted.fetch, { onRetry: (i) => seen.push(i) });
 
-    const startedMs = Date.now();
-    const res = await wrapped?.('http://example.test/mcp', { body: '{}' });
+    const pending = wrapped?.('http://example.test/mcp', { body: '{}' });
+    await vi.advanceTimersByTimeAsync(SECOND - 1);
+    expect(scripted.calls()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const res = await pending;
 
     expect(res?.status).toBe(200);
     expect(scripted.calls()).toBe(2);
-    // The full second, no tolerance: the wait keeps its minimum (lib/sleep.ts).
-    expect(Date.now() - startedMs).toBeGreaterThanOrEqual(SECOND);
     expect(seen).toHaveLength(1);
-    expect(seen[0]).toMatchObject({ attempt: 2, waitMs: SECOND, retryAfterMs: SECOND });
+    expect(seen[0]).toMatchObject({
+      kind: 'throttle',
+      attempt: 2,
+      waitMs: SECOND,
+      retryAfterMs: SECOND,
+    });
   });
 
   it('P2 falls back to a jittered backoff when the server sends no Retry-After', async () => {
@@ -415,15 +424,18 @@ describe('mcp throttle — P5 security', () => {
     expect(scripted.calls()).toBe(1);
   });
 
-  it('P5 an already-aborted signal never starts a retry at all', async () => {
+  it('P5 an already-aborted signal sends nothing — the call ends with the caller’s own reason', async () => {
+    // Once a request's signal has fired, nothing more is sent (lib/abort.ts). A
+    // platform fetch refuses an aborted signal the same way, so this is what a
+    // real call always did; a custom fetch that ignored the signal no longer
+    // gets a first request either.
     const scripted = scriptedFetch([429, 200], { 0: { 'retry-after': '0' } });
     const wrapped = retryingFetch(scripted.fetch, true);
-    const res = await wrapped?.('http://example.test/mcp', {
-      body: '{}',
-      signal: AbortSignal.abort(),
-    });
-    expect(res?.status).toBe(429);
-    expect(scripted.calls()).toBe(1);
+    const signal = AbortSignal.abort();
+    await expect(wrapped?.('http://example.test/mcp', { body: '{}', signal })).rejects.toBe(
+      signal.reason,
+    );
+    expect(scripted.calls()).toBe(0);
   });
 });
 

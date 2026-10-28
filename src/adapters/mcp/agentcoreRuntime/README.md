@@ -89,9 +89,20 @@ sentence. A vended bearer token is used for one request and dropped.
    `RetryableConflictException`. Not a batch, not SSE, not `-32003` (throttling
    also arrives as an HTTP 200 JSON-RPC error; the contract does not call it
    retryable, so it is delivered). The loop is `mcp/throttleRetry.ts` ·
-   `retryingFetchWhen` — the 429 loop, with this one decision passed in.
-   Default: 5 attempts, ≤10 s of waiting. A 429 is left to `mcpClient`'s own
-   throttle retry, which wraps this transport like any other.
+   `retryingFetchFor` — the 429 loop, with this one decision passed in: one
+   footprintjs `attempt()` series per request. Default: 5 attempts, 500 ms
+   doubling with equal jitter (3.75–7.5 s of waiting in all — a session that
+   takes up to about 3.4 s to start is waited out on every draw), ≤10 s of
+   waiting. A 429 is `mcpClient`'s to retry, and its rule JOINS this series
+   (`joinableRetry`) rather than wrapping the transport: one request is one
+   series, so the two retries share one attempt count, one waiting total and
+   one deadline, and every attempt, a 429's included, lands in the same
+   runtime session.
+
+   ```ts
+   agentCoreRuntimeMcpTransport({ agentRuntimeArn, region, retry: { maxAttempts: 6, maxElapsedMs: 15_000 } });
+   // → at most 6 requests per call, whatever mix of session-busy and 429 it meets
+   ```
 6. **The SDK's own retry is off.** The client `invoke.ts` builds has
    `maxAttempts: 1`: the SDK's standard policy re-sends after a 5xx or a dropped
    connection — a `tools/call` that may have run, in the same pinned session.

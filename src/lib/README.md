@@ -66,7 +66,9 @@ const said = [...request.messages].reverse().find((m) => isSaidByPerson(m)); // 
 ## A wait from here is never early
 `sleep.ts` · `sleep` is the library's ONE wait: the retry back-offs, the
 device-flow poll, the mock provider's thinking time and the sign-in door's
-minimum answer time all go through it. It never resolves before `ms` of
+minimum answer time all go through it. (One back-off does not: the MCP retry,
+`mcp/throttleRetry.ts`, runs on footprintjs's `attempt()`, which waits on its
+own timer.) It never resolves before `ms` of
 MONOTONIC time have passed. A bare `setTimeout` cannot promise that — Node's
 loop clock counts whole milliseconds and floors the stamp it arms with, so a
 timer fires up to a millisecond early, and more on Linux, where the loop clock
