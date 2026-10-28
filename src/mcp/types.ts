@@ -192,11 +192,13 @@ export interface McpClientOptions {
    * What happens when the server says "too many requests" (HTTP 429). New in
    * 8.11.0, and **on by default**.
    *
-   * Default: retry up to 3 times, waiting as long as the server's
-   * `Retry-After` header asks (and, when it sends none, a jittered backoff),
-   * never longer than 10 seconds of waiting in total across one call. Set
-   * `false` to let a throttled call fail immediately, or pass an object to
-   * tune the ceilings and to learn when it happens:
+   * Default: up to 3 attempts, waiting as long as the server's `Retry-After`
+   * header asks (and, when it sends none, a backoff of 200 ms doubling, with
+   * equal jitter), never longer than 10 seconds of waiting in total across one
+   * call. Set `false` to let a throttled call fail immediately, or pass an
+   * object to tune the ceilings and the backoff (`baseDelayMs`, `multiplier`,
+   * `jitter`, `maxBackoffMs`, a `maxElapsedMs` deadline) and to learn when it
+   * happens:
    *
    * ```ts
    * const gateway = await mcpClient({
@@ -204,11 +206,18 @@ export interface McpClientOptions {
    *   transport: gatewayTransport({ url, credentials }),
    *   retryOnThrottle: {
    *     maxAttempts: 5,
-   *     onRetry: ({ attempt, waitMs, retryAfterMs }) =>
-   *       log.warn({ attempt, waitMs, retryAfterMs }, 'gateway throttled'),
+   *     onRetry: ({ kind, attempt, waitMs, retryAfterMs }) =>
+   *       log.warn({ kind, attempt, waitMs, retryAfterMs }, 'gateway throttled'),
    *   },
    * });
    * ```
+   *
+   * Each call is ONE retry series (footprintjs's attempt runner). When the
+   * transport's own fetch already retries — `agentCoreRuntimeMcpTransport`'s
+   * session-busy retry — this 429 retry joins that series instead of wrapping
+   * it: one attempt count, one waiting total and one deadline per call, with
+   * the transport's `retry` values as the call's overall limits and these as
+   * limits on the 429 retries inside them.
    *
    * **Why this is on by default.** A 429 is a *pre-execution rejection* — the
    * rate limiter refused the request at the edge and the server never ran the

@@ -20,7 +20,7 @@
  * ── Why asking again is safe ─────────────────────────────────────────────────
  * The refusal is the PLATFORM's, about the session, made before the request
  * reached the MCP server: nothing ran. That is the license a 429 holds, and the
- * only one `retryingFetchWhen` accepts (see `mcp/throttleRetry.ts` ·
+ * only one the retry series accepts (see `mcp/throttleRetry.ts` ·
  * `RetryDecision`).
  *
  * ── What it must NOT match ───────────────────────────────────────────────────

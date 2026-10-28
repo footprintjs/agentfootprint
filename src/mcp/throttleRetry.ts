@@ -1,5 +1,6 @@
 /**
- * throttleRetry — when an MCP server says "too many requests", wait and ask again.
+ * throttleRetry — when an MCP server refuses a request before running it, wait
+ * and ask again.
  *
  * ── Why this exists ──────────────────────────────────────────────────────────
  * Managed MCP gateways enforce per-principal rate limits. A throttled
@@ -43,10 +44,41 @@
  * that would have died during the wait is simply never the one reused. The
  * gateway secrecy invariant is untouched: each attempt vends, applies, drops.
  *
+ * ── The loop is footprintjs's attempt runner, one series per call ────────────
+ * Each call runs ONE `attempt()` series (footprintjs, used as it ships). An
+ * attempt sends the request once. A response a rule's decision recognises is
+ * thrown as a refusal that names its kind, and the policy's `retryOn` accepts
+ * those refusals and nothing else — so a 5xx, a dropped connection or a timeout
+ * ends the series on the attempt it happened in, as it always did. When the
+ * series ends on a refusal (attempts spent, a ceiling reached, no time left),
+ * the refusal's response is delivered as the server sent it: the caller sees
+ * the 429, never an error of ours.
+ *
+ * ── A fetch that already retries is JOINED, never wrapped ────────────────────
+ * A transport whose own fetch runs a series (AgentCore Runtime's session-busy
+ * retry) says how to rebuild itself with one more rule (`joinableRetry`).
+ * `retryingFetch` over such a fetch — what `mcpClient` applies to every http
+ * transport — adds its 429 rule to THAT series instead of starting a second
+ * one around it. One series means one attempt count, one waiting total and one
+ * deadline per call, by construction: the layers can never multiply requests.
+ * The series' FIRST rule holds the call's budget — its `maxAttempts`,
+ * `maxWaitMs`, `maxElapsedMs` and `maxBackoffMs` bound every attempt and wait,
+ * whatever the reason. A rule that joins keeps its own values as limits on its
+ * own kind: they can stop its retries sooner, never make the call longer.
+ *
  * Pattern: Decorator over `fetch`. Role: Layer-3 tool transport.
  */
 
-import { sleep } from '../lib/sleep.js';
+import {
+  attempt,
+  type AttemptContext,
+  type AttemptOptions,
+  type AttemptRecord,
+  type RetryPolicy,
+} from 'footprintjs';
+
+import { abortErrorOf, eitherSignal, linkedController } from '../lib/abort.js';
+import { exponentialBackoff } from './exponentialBackoff.js';
 
 /**
  * The fetch shape the MCP SDK's `fetch` hook uses — deliberately NARROWER
@@ -60,11 +92,19 @@ export type ThrottleFetch = (input: string | URL, init?: RequestInit) => Promise
 
 // ─── Public option shape ─────────────────────────────────────────────
 
+/**
+ * Which refusal a retry answers: HTTP 429 (`'throttle'`), or AgentCore
+ * Runtime's "session operation in progress" (`'session-busy'`).
+ */
+export type RetryKind = 'throttle' | 'session-busy';
+
 /** Reported to {@link ThrottleRetryOptions.onRetry} before each wait. */
 export interface ThrottleRetryInfo {
+  /** Which refusal this retry answers. */
+  readonly kind: RetryKind;
   /** The attempt about to START. `2` is the first retry. */
   readonly attempt: number;
-  /** Ceiling in force for this call, including the first attempt. */
+  /** Ceiling in force for this refusal, including the first attempt. */
   readonly maxAttempts: number;
   /** How long we are about to wait, in milliseconds. */
   readonly waitMs: number;
@@ -76,7 +116,19 @@ export interface ThrottleRetryInfo {
   readonly url: string;
 }
 
-/** Fine-tuning for {@link McpClientOptions.retryOnThrottle}. */
+/**
+ * Fine-tuning for {@link McpClientOptions.retryOnThrottle}, and — with its own
+ * defaults — for `agentCoreRuntimeMcpTransport`'s `retry`. The defaults below
+ * are `retryOnThrottle`'s.
+ *
+ * Every limit here is the CALL's — unless this retry joins a series a
+ * transport already runs (an AgentCore Runtime transport under `mcpClient`).
+ * Then the transport's own values are the call's limits, and these limit only
+ * the 429 retries inside them: each can stop a 429 retry sooner (a 429 is
+ * retried only while the call has made fewer attempts than `maxAttempts`, has
+ * waited less than `maxWaitMs`, …), never make the call longer. The deadline
+ * that cuts a request in flight is the transport's `maxElapsedMs`.
+ */
 export interface ThrottleRetryOptions {
   /** Total attempts including the first. Default 3. Minimum 1. */
   readonly maxAttempts?: number;
@@ -91,15 +143,49 @@ export interface ThrottleRetryOptions {
    */
   readonly maxWaitMs?: number;
   /**
+   * A deadline for the whole call, in milliseconds from its start — requests
+   * included, not just waits. A wait that would end past it is never begun
+   * (the refusal is delivered at once), and a request still waiting for its
+   * answer when it passes is cut: the call fails with the deadline's error.
+   * Default: none — `maxWaitMs` is the default rail.
+   */
+  readonly maxElapsedMs?: number;
+  /**
+   * The ceiling of the first wait our own backoff draws, in milliseconds, when
+   * the server stated none. Default 200.
+   */
+  readonly baseDelayMs?: number;
+  /** How much each backoff ceiling grows over the last. Default 2. At least 1. */
+  readonly multiplier?: number;
+  /**
+   * How a backoff wait is drawn below its ceiling: `'equal'` (the default)
+   * waits between half the ceiling and all of it, `'full'` anywhere from zero
+   * up to it, `'none'` exactly it. Jitter is what keeps clients refused at the
+   * same moment from asking again at the same moment.
+   */
+  readonly jitter?: 'none' | 'equal' | 'full';
+  /**
+   * The most one wait may last, in milliseconds. Default: none.
+   *
+   * It caps our own backoff's ceiling, before the jittered draw. A
+   * `Retry-After` longer than it is never shortened: asking sooner than the
+   * server said only spends an attempt on a refusal it already announced, so
+   * that refusal is delivered instead.
+   */
+  readonly maxBackoffMs?: number;
+  /**
    * Called before each wait. The per-attempt visibility hook, matching the
    * contract `withRetry` and `withCredentialRetry` already use — a decorator
    * at a transport boundary reports to its consumer, and emits no events of
-   * its own.
+   * its own. It is told the refusal's kind, the attempt about to start and the
+   * wait — never the request's arguments or the server's answer.
    *
    * A retried call is not invisible without this: the wait lands inside the
    * tool's `stream.tool_end` `durationMs`, and an exhausted retry still
    * reaches the model with `error: true`. This hook is what turns "that call
    * was slow" into "that call was throttled twice".
+   *
+   * A throw from it is isolated: the call goes on as if it had returned.
    */
   readonly onRetry?: (info: ThrottleRetryInfo) => void;
 }
@@ -109,30 +195,6 @@ export interface ThrottleRetryOptions {
  * retry with default settings; `false` disables it entirely.
  */
 export type RetryOnThrottle = boolean | ThrottleRetryOptions;
-
-// ─── Defaults ────────────────────────────────────────────────────────
-
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_MAX_WAIT_MS = 10_000;
-/** First backoff when the server sent no `Retry-After`. */
-const BASE_BACKOFF_MS = 200;
-
-interface ResolvedThrottleConfig {
-  readonly maxAttempts: number;
-  readonly maxWaitMs: number;
-  readonly onRetry?: (info: ThrottleRetryInfo) => void;
-}
-
-/** `undefined` means "do not retry" — the caller then leaves `fetch` alone. */
-function resolveConfig(config: RetryOnThrottle | undefined): ResolvedThrottleConfig | undefined {
-  if (config === false) return undefined;
-  const opts: ThrottleRetryOptions = config === true || config === undefined ? {} : config;
-  return {
-    maxAttempts: Math.max(1, opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS),
-    maxWaitMs: Math.max(0, opts.maxWaitMs ?? DEFAULT_MAX_WAIT_MS),
-    ...(opts.onRetry && { onRetry: opts.onRetry }),
-  };
-}
 
 // ─── The decision ────────────────────────────────────────────────────
 
@@ -159,8 +221,8 @@ export interface RetryVerdict {
  * AgentCore Runtime's documented "session operation in progress" refusal,
  * which lives with that vendor's adapter (`adapters/mcp/agentcoreRuntime/`).
  * Each stays ONE small function, so a retry has exactly one place it is
- * decided — and one place to route it when retries are written down as
- * attempts.
+ * decided — and each attempt is written down as one footprintjs attempt
+ * record.
  */
 export type RetryDecision = (
   response: Response,
@@ -173,6 +235,92 @@ export function throttled(response: Response): RetryVerdict | undefined {
   return retryAfterMs === undefined ? {} : { retryAfterMs };
 }
 
+// ─── Rules ───────────────────────────────────────────────────────────
+
+/**
+ * @internal What a rule's options fall back to. `Infinity` means none: no
+ * deadline (`maxElapsedMs`), no cap on one wait (`maxBackoffMs`).
+ */
+export interface RetryDefaults {
+  readonly maxAttempts: number;
+  readonly maxWaitMs: number;
+  readonly maxElapsedMs: number;
+  readonly baseDelayMs: number;
+  readonly multiplier: number;
+  readonly jitter: 'none' | 'equal' | 'full';
+  readonly maxBackoffMs: number;
+}
+
+/**
+ * `retryOnThrottle`'s defaults — unchanged since 8.11.0: 3 attempts, a 200 ms
+ * backoff doubling with equal jitter (100–200 ms, then 200–400 ms), never more
+ * than 10 s of waiting in total. No deadline and no cap on one wait.
+ */
+export const THROTTLE_RETRY_DEFAULTS: RetryDefaults = Object.freeze({
+  maxAttempts: 3,
+  maxWaitMs: 10_000,
+  maxElapsedMs: Infinity,
+  baseDelayMs: 200,
+  multiplier: 2,
+  jitter: 'equal',
+  maxBackoffMs: Infinity,
+});
+
+/**
+ * @internal One refusal a series may retry: the decision that recognises it,
+ * the kind it reports as, and the limits and backoff it retries by.
+ */
+export interface RetryRule {
+  readonly kind: RetryKind;
+  readonly decide: RetryDecision;
+  /** Total attempts while this refusal is the reason to go on. ≥ 1; `Infinity` is no count. */
+  readonly maxAttempts: number;
+  readonly maxWaitMs: number;
+  readonly maxElapsedMs: number;
+  readonly maxBackoffMs: number;
+  readonly baseDelayMs: number;
+  readonly multiplier: number;
+  readonly jitter: 'none' | 'equal' | 'full';
+  readonly onRetry?: (info: ThrottleRetryInfo) => void;
+}
+
+/**
+ * @internal A rule from a caller's options — `undefined` when retry is off
+ * (`false`). An option field left out, or set to `undefined`, takes its
+ * default. `maxAttempts` and `maxWaitMs` keep the clamps they always had (below
+ * 1 reads as 1, below 0 as 0).
+ *
+ * @throws TypeError, when the rule is BUILT, for a value the schedule cannot
+ *   mean — named by option, never echoing a value that is not a number.
+ */
+export function retryRule(
+  kind: RetryKind,
+  decide: RetryDecision,
+  config: RetryOnThrottle | undefined,
+  defaults: RetryDefaults,
+  where: string,
+): RetryRule | undefined {
+  if (config === false) return undefined;
+  const opts: ThrottleRetryOptions = typeof config === 'object' && config !== null ? config : {};
+  const option = new OptionReader(where);
+  const rule: RetryRule = {
+    kind,
+    decide,
+    maxAttempts: option.atLeast(
+      'maxAttempts',
+      Math.max(1, opts.maxAttempts ?? defaults.maxAttempts),
+    ),
+    maxWaitMs: option.atLeast('maxWaitMs', Math.max(0, opts.maxWaitMs ?? defaults.maxWaitMs)),
+    maxElapsedMs: option.positive('maxElapsedMs', opts.maxElapsedMs ?? defaults.maxElapsedMs),
+    maxBackoffMs: option.nonNegative('maxBackoffMs', opts.maxBackoffMs ?? defaults.maxBackoffMs),
+    baseDelayMs: option.finite('baseDelayMs', opts.baseDelayMs ?? defaults.baseDelayMs, 0),
+    multiplier: option.finite('multiplier', opts.multiplier ?? defaults.multiplier, 1),
+    jitter: option.jitter(opts.jitter ?? defaults.jitter),
+    ...(opts.onRetry && { onRetry: opts.onRetry }),
+  };
+  return rule;
+}
+
 // ─── The decorator ───────────────────────────────────────────────────
 
 /**
@@ -181,6 +329,10 @@ export function throttled(response: Response): RetryVerdict | undefined {
  * Returns `inner` untouched when retry is disabled — including `undefined`,
  * so a transport that passed no custom fetch keeps passing none and its
  * behaviour is byte-identical to before this existed.
+ *
+ * When `inner` already runs a retry series of its own (an AgentCore Runtime
+ * transport's fetch), the 429 rule JOINS that series rather than wrapping it,
+ * so the two can never multiply requests — see the module note.
  *
  * ── Why this is public ───────────────────────────────────────────────────────
  * `mcpClient({ transport })` applies it for you, ON by default. `mcpClient({
@@ -203,81 +355,331 @@ export function throttled(response: Response): RetryVerdict | undefined {
  * @param inner the fetch to wrap. `undefined` means the global `fetch`,
  *   resolved at CALL time so a later polyfill still wins.
  * @param config `true` / `undefined` for the defaults, `false` to get `inner`
- *   back unchanged, or an object to tune the ceilings.
+ *   back unchanged, or an object to tune the ceilings and the backoff.
+ * @throws TypeError when an option is outside its range — here, when the fetch
+ *   is built, never at the first call.
  */
 export function retryingFetch(
   inner: ThrottleFetch | undefined,
   config: RetryOnThrottle | undefined,
 ): ThrottleFetch | undefined {
-  return retryingFetchWhen(inner, config, throttled);
+  const rule = retryRule('throttle', throttled, config, THROTTLE_RETRY_DEFAULTS, 'retryOnThrottle');
+  if (rule === undefined) return inner;
+  const join = inner === undefined ? undefined : JOINS.get(inner);
+  return join !== undefined ? join(rule) : retryingFetchFor(inner ?? platformFetch, [rule]);
 }
 
 /**
- * The bounded loop itself, asking `decide` of every response.
- *
- * {@link retryingFetch} is this loop asking {@link throttled}. A vendor adapter
- * whose service documents a refusal of its own — one made before anything ran —
- * passes its decision here instead of writing a second loop, so the ceilings,
- * the `Retry-After` rail, the replay check, the abort and the `onRetry` report
- * stay one implementation.
- *
- * `decide` is asked only when a retry could actually follow — attempts left, a
- * body that can be sent again, no abort — so a decision that has to read the
- * response pays for that only when its answer can matter.
- *
- * @internal Public to adapters, not to the door: the decision is the vendor's
- *   fact, and each one is reviewed against the license on {@link RetryDecision}.
+ * Fetches that run their retries in one series, each with the way to rebuild
+ * it with one more rule. Module-private: only `joinableRetry` adds to it, so a
+ * caller cannot make a fetch claim a series it does not run.
  */
-export function retryingFetchWhen(
-  inner: ThrottleFetch | undefined,
-  config: RetryOnThrottle | undefined,
-  decide: RetryDecision,
-): ThrottleFetch | undefined {
-  const resolved = resolveConfig(config);
-  if (!resolved) return inner;
+const JOINS = new WeakMap<ThrottleFetch, (rule: RetryRule) => ThrottleFetch>();
 
-  const base: ThrottleFetch = inner ?? ((input, init) => globalThis.fetch(input, init));
+/**
+ * @internal Declare that `fetch` runs its retries in ONE series, and how to
+ * rebuild it with one more rule in that same series. `retryingFetch` joins such
+ * a fetch instead of wrapping it. A transport whose public fetch wraps its
+ * series (a session applied around it, its answers rewritten after it) uses
+ * this so the rule lands INSIDE that wrapping.
+ */
+export function joinableRetry(
+  fetch: ThrottleFetch,
+  join: (rule: RetryRule) => ThrottleFetch,
+): ThrottleFetch {
+  JOINS.set(fetch, join);
+  return fetch;
+}
 
-  return async (input, init) => {
-    let totalWaited = 0;
+/**
+ * @internal The one series per call over `inner`, asking `rules` in order —
+ * `inner` itself when there are none. The first rule holds the call's budget;
+ * see the module note. The result is joinable.
+ */
+export function retryingFetchFor(inner: ThrottleFetch, rules: readonly RetryRule[]): ThrottleFetch {
+  const [owner] = rules;
+  if (owner === undefined) return inner;
+  const bound = rules.map((rule) => boundRule(rule, owner));
+  return joinableRetry(
+    (input, init) => new Series(bound, input, init).run(inner),
+    (rule) => retryingFetchFor(inner, [...rules, rule]),
+  );
+}
 
-    for (let attempt = 1; ; attempt++) {
-      const response = await base(input, init);
-      if (attempt >= resolved.maxAttempts) return response;
-      // A body we cannot send twice makes a retry a different request. Rare
-      // for MCP (JSON strings), but silently replaying half a stream would be
-      // worse than surfacing the refusal.
-      if (!isReplayable(input, init)) return response;
-      if (init?.signal?.aborted) return response;
+/** The platform's fetch, looked up at call time so a later polyfill still wins. */
+const platformFetch: ThrottleFetch = (input, init) => globalThis.fetch(input, init);
 
-      const verdict = await decide(response);
-      if (verdict === undefined) return response;
+// ─── One call's series ───────────────────────────────────────────────
 
-      const { retryAfterMs } = verdict;
-      const waitMs = retryAfterMs ?? backoffMs(attempt);
-      // The rail on Retry-After: never let a server talk us into a wait that
-      // breaks the caller's budget.
-      if (totalWaited + waitMs > resolved.maxWaitMs) return response;
+/** A rule as a series runs it: its limits no looser than the owner's, its backoff built. */
+interface BoundRule extends RetryRule {
+  readonly backoffMs: (attempt: number) => number;
+}
 
-      // Release the throttle response's body before asking again, so a
-      // keep-alive connection is not pinned by an unread stream.
-      discardBody(response);
-
-      resolved.onRetry?.({
-        attempt: attempt + 1,
-        maxAttempts: resolved.maxAttempts,
-        waitMs,
-        ...(retryAfterMs !== undefined && { retryAfterMs }),
-        url: describeUrl(input),
-      });
-
-      await sleep(waitMs, init?.signal);
-      totalWaited += waitMs;
-    }
+function boundRule(rule: RetryRule, owner: RetryRule): BoundRule {
+  const maxBackoffMs = Math.min(rule.maxBackoffMs, owner.maxBackoffMs);
+  return {
+    ...rule,
+    maxAttempts: Math.min(rule.maxAttempts, owner.maxAttempts),
+    maxWaitMs: Math.min(rule.maxWaitMs, owner.maxWaitMs),
+    maxElapsedMs: Math.min(rule.maxElapsedMs, owner.maxElapsedMs),
+    maxBackoffMs,
+    backoffMs: exponentialBackoff({
+      baseDelayMs: rule.baseDelayMs,
+      multiplier: rule.multiplier,
+      jitter: rule.jitter,
+      maxBackoffMs,
+    }),
   };
 }
 
+/** The latest attempt's refusal: what it threw, the rule that recognised it, the answer it stands for. */
+interface Refused {
+  readonly refusal: RetryableRefusal;
+  readonly rule: BoundRule;
+  readonly verdict: RetryVerdict;
+  readonly response: Response;
+}
+
+/** What a series names its records' target — a name from code, never a value. */
+const SERIES_TARGET = 'mcp-request';
+
+/**
+ * One call: one `attempt()` series, and what its policy's functions share while
+ * it runs — the waiting so far, and the latest refusal.
+ */
+class Series {
+  private readonly owner: BoundRule;
+  private readonly startedAt = Date.now();
+  private readonly deadline: number | undefined;
+  private readonly signal: AbortSignal | undefined;
+  private readonly replayable: boolean;
+  private attemptNo = 0;
+  private waitedMs = 0;
+  private plannedWaitMs = 0;
+  private latest: Refused | undefined;
+
+  constructor(
+    private readonly rules: readonly BoundRule[],
+    private readonly input: string | URL,
+    private readonly init: RequestInit | undefined,
+  ) {
+    this.owner = rules[0] as BoundRule;
+    this.signal = init?.signal ?? undefined;
+    this.replayable = isReplayable(input, init);
+    const { maxElapsedMs } = this.owner;
+    this.deadline = Number.isFinite(maxElapsedMs) ? this.startedAt + maxElapsedMs : undefined;
+  }
+
+  async run(inner: ThrottleFetch): Promise<Response> {
+    try {
+      return await attempt((t) => this.send(inner, t), this.policy(), this.options());
+    } catch (error) {
+      return this.settle(error);
+    }
+  }
+
+  /** The owner's budget as footprintjs reads it; the rest is this series' `retryOn` and backoff. */
+  private policy(): RetryPolicy {
+    const { maxAttempts, maxBackoffMs } = this.owner;
+    return {
+      // A whole number for the runner; "no count" is a count no call reaches.
+      attempts: Number.isFinite(maxAttempts) ? Math.ceil(maxAttempts) : Number.MAX_SAFE_INTEGER,
+      retryOn: (error) => this.retryOn(error),
+      // `retryOn` planned the wait — it needs the length to hold the ceilings.
+      backoffMs: () => this.plannedWaitMs,
+      ...(Number.isFinite(maxBackoffMs) && { maxBackoffMs }),
+    };
+  }
+
+  private options(): AttemptOptions {
+    return {
+      target: SERIES_TARGET,
+      ...(this.signal !== undefined && { signal: this.signal }),
+      ...(this.deadline !== undefined && { deadline: this.deadline }),
+      onAttempt: (record) => this.report(record),
+    };
+  }
+
+  /** One attempt: the request, sent once. A refusal a rule recognises is thrown for the runner to decide on. */
+  private async send(inner: ThrottleFetch, t: AttemptContext): Promise<Response> {
+    this.attemptNo = t.attempt;
+    // The previous attempt's refusal will not be delivered: release its body, so
+    // a keep-alive connection is not pinned by an unread stream.
+    this.supersede();
+    const response = await this.fetchFor(inner, t);
+    for (const rule of this.rules) {
+      const verdict = await rule.decide(response);
+      if (verdict === undefined) continue;
+      const refusal = new RetryableRefusal(rule.kind, verdict);
+      this.latest = { refusal, rule, verdict, response };
+      throw refusal;
+    }
+    return response;
+  }
+
+  /**
+   * The request. With no deadline of ours it carries the caller's own `init`,
+   * exactly as it did before this series existed. Under a deadline the runner
+   * can cut the attempt before it answers, and the request is stopped with it —
+   * but only until it answers: a response already arriving keeps streaming for
+   * as long as the caller's own signal allows.
+   */
+  private async fetchFor(inner: ThrottleFetch, t: AttemptContext): Promise<Response> {
+    if (this.deadline === undefined) return inner(this.input, this.init);
+    const cut = linkedController(t.signal);
+    try {
+      const signal = eitherSignal(this.signal, cut.controller.signal);
+      return await inner(this.input, { ...this.init, ...(signal !== undefined && { signal }) });
+    } finally {
+      cut.unlink();
+    }
+  }
+
+  /**
+   * The runner's `retryOn`: is this attempt's error a refusal worth another
+   * attempt? Plans the wait as it answers, because the ceilings need its length.
+   */
+  private retryOn(error: unknown): boolean {
+    this.plannedWaitMs = 0;
+    const refused = this.latest;
+    // The license: only a refusal made before the server ran anything. A 5xx, a
+    // dropped connection or a timeout may be the record of work that ran.
+    if (refused === undefined || error !== refused.refusal) return false;
+    // A body we cannot send twice makes a retry a different request. Rare for
+    // MCP (JSON strings), but silently replaying half a stream would be worse
+    // than surfacing the refusal.
+    if (!this.replayable) return false;
+    const { rule, verdict } = refused;
+    if (this.attemptNo >= rule.maxAttempts) return false;
+    const stated = verdict.retryAfterMs;
+    // A stated wait is never shortened: past the cap, the refusal is delivered.
+    if (stated !== undefined && stated > rule.maxBackoffMs) return false;
+    const waitMs = stated ?? rule.backoffMs(this.attemptNo);
+    // The rail on Retry-After: never let a server talk us into a wait that
+    // breaks the caller's budget.
+    if (this.waitedMs + waitMs > rule.maxWaitMs) return false;
+    // A joined rule's own, sooner deadline. The owner's is the runner's to hold.
+    if (
+      rule.maxElapsedMs < this.owner.maxElapsedMs &&
+      this.elapsedAfter(waitMs) > rule.maxElapsedMs
+    ) {
+      return false;
+    }
+    this.plannedWaitMs = waitMs;
+    return true;
+  }
+
+  private elapsedAfter(waitMs: number): number {
+    return Date.now() - this.startedAt + waitMs;
+  }
+
+  /** Each record as the runner ends an attempt: a retry is counted and reported to its rule. */
+  private report(record: AttemptRecord): void {
+    const refused = this.latest;
+    if (record.next !== 'retry' || refused === undefined) return;
+    const waitMs = record.delayMs ?? 0;
+    this.waitedMs += waitMs;
+    const { rule, verdict } = refused;
+    rule.onRetry?.({
+      kind: rule.kind,
+      attempt: record.attempt + 1,
+      maxAttempts: rule.maxAttempts,
+      waitMs,
+      ...(verdict.retryAfterMs !== undefined && { retryAfterMs: verdict.retryAfterMs }),
+      url: describeUrl(this.input),
+    });
+  }
+
+  /** How the call ends when the series did not answer. */
+  private settle(error: unknown): Response {
+    // The caller's cancellation wins: the call ends with their reason, and the
+    // refusal nobody is waiting for any more is released.
+    if (this.signal?.aborted) {
+      this.supersede();
+      throw abortErrorOf(this.signal);
+    }
+    // The series ended on a refusal — attempts spent, a ceiling reached, no
+    // time left. The server's answer is delivered as it sent it.
+    if (this.latest !== undefined && error === this.latest.refusal) return this.latest.response;
+    throw error;
+  }
+
+  private supersede(): void {
+    if (this.latest !== undefined) discardBody(this.latest.response);
+    this.latest = undefined;
+  }
+}
+
+/**
+ * A response a rule recognised as a refusal made before anything ran, thrown so
+ * the attempt runner decides on it. It carries only what an attempt record may
+ * keep: a fixed sentence, its kind as `code`, a 429's status and the wait the
+ * server stated. Never the server's text, the request or the response — the
+ * series holds the response, not the error.
+ */
+class RetryableRefusal extends Error {
+  override readonly name = 'RetryableRefusal';
+  readonly code: RetryKind;
+  /** A throttle's status, so footprintjs's `errorCategory` reads it as rate-limited. */
+  readonly status: number | undefined;
+  readonly retryAfterMs: number | undefined;
+
+  constructor(kind: RetryKind, verdict: RetryVerdict) {
+    super(REFUSAL_SENTENCES[kind]);
+    this.code = kind;
+    this.status = kind === 'throttle' ? 429 : undefined;
+    this.retryAfterMs = verdict.retryAfterMs;
+  }
+}
+
+const REFUSAL_SENTENCES: Readonly<Record<RetryKind, string>> = {
+  throttle: 'The server refused the request with HTTP 429 before running it.',
+  'session-busy':
+    'AgentCore Runtime refused the request while its session was starting or stopping, before running it.',
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────
+
+/** Reads one rule's numeric options, refusing by name what the schedule cannot mean. */
+class OptionReader {
+  constructor(private readonly where: string) {}
+
+  /** A number that is not NaN (`Infinity` allowed) — the clamps already applied. */
+  atLeast(name: string, value: number): number {
+    if (typeof value !== 'number' || Number.isNaN(value)) this.refuse(name, 'a number');
+    return value;
+  }
+
+  /** A number > 0; `Infinity` is none. */
+  positive(name: string, value: number): number {
+    if (!(typeof value === 'number' && value > 0)) this.refuse(name, 'a number > 0');
+    return value;
+  }
+
+  /** A number ≥ 0; `Infinity` is none. */
+  nonNegative(name: string, value: number): number {
+    if (!(typeof value === 'number' && value >= 0)) this.refuse(name, 'a number ≥ 0');
+    return value;
+  }
+
+  /** A finite number ≥ `min`. */
+  finite(name: string, value: number, min: number): number {
+    if (!(typeof value === 'number' && Number.isFinite(value) && value >= min)) {
+      this.refuse(name, `a finite number ≥ ${min}`);
+    }
+    return value;
+  }
+
+  jitter(value: unknown): 'none' | 'equal' | 'full' {
+    if (value === 'none' || value === 'equal' || value === 'full') return value;
+    return this.refuse('jitter', "'none', 'equal' or 'full'");
+  }
+
+  private refuse(name: string, wanted: string): never {
+    throw new TypeError(`${this.where}: \`${name}\` must be ${wanted}.`);
+  }
+}
 
 /**
  * `Retry-After` in either legal form: delta-seconds (`"2"`) or an HTTP-date
@@ -291,16 +693,6 @@ export function parseRetryAfter(value: string | null | undefined): number | unde
   const when = Date.parse(trimmed);
   if (Number.isNaN(when)) return undefined;
   return Math.max(0, when - Date.now());
-}
-
-/**
- * Exponential backoff with equal jitter — half fixed, half random. The fixed
- * half keeps the wait meaningful; the random half stops a fleet of agents that
- * were all throttled at the same instant from retrying at the same instant.
- */
-function backoffMs(attempt: number): number {
-  const ceiling = BASE_BACKOFF_MS * Math.pow(2, attempt - 1);
-  return Math.round(ceiling / 2 + Math.random() * (ceiling / 2));
 }
 
 /** Can this exact request be sent again? A stream body cannot be rewound. */

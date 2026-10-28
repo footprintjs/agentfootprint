@@ -8,6 +8,8 @@
  *          `retryingFetch`, `typesafe`), the device-flow poll, the mock
  *          provider's thinking time and the sign-in door's minimum answer
  *          time. Every one promised "at least `ms`", and none kept it.
+ *          (`retryingFetch` has since moved onto footprintjs's `attempt()`
+ *          runner, which waits on its own timer.)
  * Emits:   N/A.
  *
  * ── WHY A BARE `setTimeout` IS NOT A MINIMUM ─────────────────────────────

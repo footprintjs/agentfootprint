@@ -282,7 +282,9 @@ async function buildTransport(
   // the wait is simply never the one reused. `retryingFetch` returns its input
   // untouched when retry is off — including `undefined`, so a plain `http`
   // transport with no custom fetch still passes none and behaves exactly as it
-  // did before 8.11.0.
+  // did before 8.11.0. A transport fetch that already runs a retry series of
+  // its own (AgentCore Runtime's) is never wrapped: `retryingFetch` joins the
+  // 429 rule to that series, so one call is one series.
   if (t.transport === 'gateway') {
     // The consumer's own `fetch` (9.32.0) goes UNDERNEATH the vending, not
     // beside it: `createVendingFetch` resolves the credential, applies it to
