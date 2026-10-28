@@ -30,13 +30,17 @@ export interface ChildResult {
 /**
  * Bundle `entry` (a .ts path) and run it in a fresh `node` process.
  *
- * @throws whatever `node` wrote to stderr, when the child exits non-zero — a
- *   child that failed silently would show up as an unhelpful parse error in
- *   the assertion below it.
+ * @param options.timeoutMs - Kill the child after this long. For a fixture that
+ *   proves something does NOT spin: a spin in-process would starve the test's
+ *   own timer, so only a separate process can be stopped and named.
+ * @throws whatever `node` wrote to stderr, when the child exits non-zero or
+ *   is killed at `timeoutMs` — a child that failed silently would show up as
+ *   an unhelpful parse error in the assertion below it.
  */
 export async function runInChildProcess(
   entry: string,
   env: Record<string, string>,
+  options: { readonly timeoutMs?: number } = {},
 ): Promise<ChildResult> {
   const esbuild = (await import('esbuild')) as typeof import('esbuild');
   mkdirSync(BUILD_DIR, { recursive: true });
@@ -72,6 +76,7 @@ export async function runInChildProcess(
       env: { ...process.env, ...env },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      ...(options.timeoutMs !== undefined && { timeout: options.timeoutMs }),
     });
     return { stdout, stderr: '' };
   } catch (err) {

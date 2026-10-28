@@ -243,7 +243,11 @@ describe('S1 — bounded whatever the run held (the reviewer’s size cases)', (
     bounded(a, rec);
   });
 
-  it('3,000 in-view witnesses with 500-character tool names', () => {
+  // The heaviest size case in the suite. It asserts output BOUNDS, not speed: about 1 s
+  // locally, but 2.9–5.4 s for this whole file on CI runners under coverage, so the
+  // 5 s default timed out twice on slow runner draws (release PR #227). The limit is
+  // raised for this one case only; the size assertions are unchanged.
+  it('3,000 in-view witnesses with 500-character tool names', { timeout: 30_000 }, () => {
     const rec = fixtureA() as unknown as {
       events: E[];
       snapshot: { sharedState: { history: unknown[] } };
