@@ -227,6 +227,8 @@ describe('retry series — P1 the backoff law and the AgentCore defaults', () =>
     expect(() => retryingFetch(undefined, { baseDelayMs: -1 })).toThrow(/`baseDelayMs`/);
     expect(() => retryingFetch(undefined, { maxElapsedMs: 0 })).toThrow(/`maxElapsedMs`/);
     expect(() => retryingFetch(undefined, { maxDelayMs: -1 })).toThrow(/`maxDelayMs`/);
+    expect(() => retryingFetch(undefined, { endpointLabel: '' })).toThrow(/`endpointLabel`/);
+    expect(() => retryingFetch(undefined, { endpointLabel: 'a\nb' })).toThrow(/`endpointLabel`/);
     expect(() => retryingFetch(undefined, { maxAttempts: Number.NaN })).toThrow(/`maxAttempts`/);
     expect(() =>
       agentCoreRuntimeMcpTransport({
@@ -259,7 +261,14 @@ describe('retry series — P2 Retry-After is honoured, and capped', () => {
     expect((await pending).status).toBe(200);
     expect(stand.calls()).toBe(2);
     expect(retries).toEqual([
-      { kind: 'throttle', attempt: 2, maxAttempts: 3, waitMs: 2000, retryAfterMs: 2000, url: URL_ },
+      {
+        kind: 'throttle',
+        attempt: 2,
+        maxAttempts: 3,
+        waitMs: 2000,
+        retryAfterMs: 2000,
+        url: 'http://example.test',
+      },
     ]);
   });
 
@@ -559,7 +568,7 @@ describe('retry series — P5 cancellation, and what onRetry may say', () => {
     expect(stand.calls()).toBe(1);
   });
 
-  it('onRetry gets the endpoint as origin and path — never userinfo, a query or a fragment', async () => {
+  it('a token in the path never reaches onRetry: url is the ORIGIN only', async () => {
     const stand = endpoint((n) => (n === 1 ? throttle('0') : served()));
     const reports: ThrottleRetryInfo[] = [];
     const fetch = retryingFetch(stand.fetch, {
@@ -567,11 +576,67 @@ describe('retry series — P5 cancellation, and what onRetry may say', () => {
     }) as ThrottleFetch;
 
     await drive(
-      fetch('https://user:URL-SECRET@example.test/mcp/v1?token=QUERY-SECRET#FRAGMENT-SECRET', POST),
+      fetch(
+        'https://user:PASS-SECRET@example.test:8443/mcp/tok_SECRET/v1?token=QUERY-SECRET#FRAGMENT-SECRET',
+        POST,
+      ),
     );
 
-    expect(reports.map((r) => r.url)).toEqual(['https://example.test/mcp/v1']);
-    expect(JSON.stringify(reports)).not.toMatch(/SECRET/);
+    expect(reports.map((r) => r.url)).toEqual(['https://example.test:8443']);
+    expect(JSON.stringify(reports)).not.toMatch(/SECRET|tok_/);
+  });
+
+  it('a declared endpointLabel is reported as `endpoint` — and the url is still the origin only', async () => {
+    const stand = endpoint((n) => (n === 1 ? throttle('0') : served()));
+    const reports: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      endpointLabel: 'orders-gateway',
+      onRetry: (info) => reports.push(info),
+    }) as ThrottleFetch;
+
+    await drive(fetch('https://example.test/mcp/tok_SECRET/v1', POST));
+
+    expect(reports.map((r) => [r.url, r.endpoint])).toEqual([
+      ['https://example.test', 'orders-gateway'],
+    ]);
+  });
+
+  it('with no endpointLabel there is no `endpoint` field — none is made up from the URL', async () => {
+    const stand = endpoint((n) => (n === 1 ? throttle('0') : served()));
+    const reports: ThrottleRetryInfo[] = [];
+    const fetch = retryingFetch(stand.fetch, {
+      onRetry: (info) => reports.push(info),
+    }) as ThrottleFetch;
+
+    await drive(fetch('https://example.test/mcp/tok_SECRET/v1', POST));
+
+    expect(reports).toHaveLength(1);
+    expect(Object.keys(reports[0] ?? {})).not.toContain('endpoint');
+    expect(reports[0]?.url).toBe('https://example.test');
+  });
+
+  it('each retry layer reports its own declared label', async () => {
+    const busyReports: ThrottleRetryInfo[] = [];
+    const throttleReports: ThrottleRetryInfo[] = [];
+    const { transport } = runtime((n) => (n === 1 ? busy() : n === 2 ? throttle('0') : served()), {
+      endpointLabel: 'orders-runtime',
+      onRetry: (info) => busyReports.push(info),
+    });
+    const fetch = retryingFetch(transport.fetch, {
+      endpointLabel: 'orders-429',
+      onRetry: (info) => throttleReports.push(info),
+    }) as ThrottleFetch;
+
+    await drive(fetch(transport.url, POST));
+
+    expect(busyReports.map((r) => [r.kind, r.endpoint])).toEqual([
+      ['session-busy', 'orders-runtime'],
+    ]);
+    expect(throttleReports.map((r) => [r.kind, r.endpoint])).toEqual([['throttle', 'orders-429']]);
+    expect([...busyReports, ...throttleReports].map((r) => r.url)).toEqual([
+      'https://bedrock-agentcore.us-west-2.amazonaws.com',
+      'https://bedrock-agentcore.us-west-2.amazonaws.com',
+    ]);
   });
 
   it('onRetry carries the kind, the attempt and the wait — never the arguments, the answer or the token', async () => {

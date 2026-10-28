@@ -127,11 +127,17 @@ export interface ThrottleRetryInfo {
    *  means the wait below is our own jittered backoff. */
   readonly retryAfterMs?: number;
   /**
-   * The endpoint being retried: its origin and path ONLY — never userinfo
-   * (`user:pass@`), a query string or a fragment, where a credential or a token
-   * can ride. A path can still hold whatever the endpoint puts there.
+   * The ORIGIN of the endpoint being retried — scheme, host and port, nothing
+   * else. Never its path, user info (`user:pass@`), query or fragment: a
+   * token, a credential or a customer id can ride in any of them. The empty
+   * string when the URL has no origin (a relative one).
    */
   readonly url: string;
+  /**
+   * The {@link ThrottleRetryOptions.endpointLabel} you declared for this
+   * endpoint — absent when you declared none. Never derived from the URL.
+   */
+  readonly endpoint?: string;
 }
 
 /**
@@ -193,9 +199,18 @@ export interface ThrottleRetryOptions {
    */
   readonly maxDelayMs?: number;
   /**
+   * A name for this endpoint, declared by you, that `onRetry` reports as
+   * `endpoint` — so a log line can say which server was retried without
+   * carrying any part of its URL past the origin. 1–128 characters, none of
+   * them control characters. Absent, `onRetry` has no `endpoint` field; the
+   * library never makes one up from the URL.
+   */
+  readonly endpointLabel?: string;
+  /**
    * A notification before each wait — and, today, the ONLY retry report a
    * caller gets. It is told the refusal's kind, the attempt about to start,
-   * the wait and the endpoint (origin and path) — never the request's
+   * the wait, the endpoint's origin and the label you declared for it
+   * (`endpointLabel`) — never the URL's path, the request's
    * arguments or the server's answer. The series' final outcome and the
    * attempt records footprintjs's runner makes for each try are NOT passed on
    * yet. The contract matches what `withRetry` and `withCredentialRetry`
@@ -309,6 +324,8 @@ export interface RetryRule {
   readonly baseDelayMs: number;
   readonly multiplier: number;
   readonly jitter: 'none' | 'equal' | 'full';
+  /** The caller's own name for the endpoint, reported as `endpoint`. */
+  readonly endpointLabel?: string;
   readonly onRetry?: (info: ThrottleRetryInfo) => void;
 }
 
@@ -344,6 +361,7 @@ export function retryRule(
     baseDelayMs: option.finite('baseDelayMs', opts.baseDelayMs ?? defaults.baseDelayMs, 0),
     multiplier: option.finite('multiplier', opts.multiplier ?? defaults.multiplier, 1),
     jitter: option.jitter(opts.jitter ?? defaults.jitter),
+    ...(opts.endpointLabel !== undefined && { endpointLabel: option.label(opts.endpointLabel) }),
     ...(opts.onRetry && { onRetry: opts.onRetry }),
   };
   return rule;
@@ -644,7 +662,8 @@ class Series {
       maxAttempts: rule.maxAttempts,
       waitMs,
       ...(verdict.retryAfterMs !== undefined && { retryAfterMs: verdict.retryAfterMs }),
-      url: describeUrl(this.input),
+      url: originOf(this.input),
+      ...(rule.endpointLabel !== undefined && { endpoint: rule.endpointLabel }),
     });
   }
 
@@ -733,6 +752,19 @@ class OptionReader {
     return this.refuse('jitter', "'none', 'equal' or 'full'");
   }
 
+  /** A caller's label: 1–128 characters, no control character. Never echoed in a refusal. */
+  label(value: unknown): string {
+    if (
+      typeof value === 'string' &&
+      value.length >= 1 &&
+      value.length <= 128 &&
+      !hasControl(value)
+    ) {
+      return value;
+    }
+    return this.refuse('endpointLabel', 'a string of 1–128 characters with no control character');
+  }
+
   private refuse(name: string, wanted: string): never {
     throw new TypeError(`${this.where}: \`${name}\` must be ${wanted}.`);
   }
@@ -776,19 +808,25 @@ function discardBody(response: Response): void {
 }
 
 /**
- * The endpoint, for the `onRetry` report: origin and path only. Userinfo, the
- * query and the fragment are dropped, because a credential or a token can ride
- * in each. A URL that does not parse is cut at its query or fragment, and kept
- * only when it holds no `@` that could be userinfo.
+ * The endpoint's ORIGIN, for the `onRetry` report: scheme, host and port. The
+ * path, user info, query and fragment are all dropped — a token, a credential
+ * or a customer id can ride in any of them. A URL that does not parse has no
+ * origin to report: the empty string.
  */
-function describeUrl(input: string | URL): string {
-  const text = typeof input === 'string' ? input : input.toString();
+function originOf(input: string | URL): string {
   try {
-    const url = new URL(text);
-    return `${url.protocol}//${url.host}${url.pathname}`;
+    const url = new URL(typeof input === 'string' ? input : input.toString());
+    return url.host === '' ? '' : `${url.protocol}//${url.host}`;
   } catch {
-    const cut = text.search(/[?#]/);
-    const bare = cut === -1 ? text : text.slice(0, cut);
-    return bare.includes('@') ? '(endpoint)' : bare;
+    return '';
   }
+}
+
+/** Whether `text` holds a control character (C0, DEL or C1). */
+function hasControl(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
 }
