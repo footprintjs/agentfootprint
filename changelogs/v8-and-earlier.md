@@ -7050,7 +7050,7 @@ New exports (main barrel): `toolContractCheckup`, `formatToolContractCheckup`, t
 `ToolContractCheckup` / `ToolContractProblem` / `ToolContractCode` / `ServerToolEntry`.
 New example `30-tool-contract-checkup.ts`.
 
-Motivation: a real adopter hit "tools don't work" against an MCP-ish Python
+Motivation: a real adopter (the host app) hit "tools don't work" against an MCP-ish Python
 sidecar. Running this against the sidecar's `/tools` catalog proves the schemas are
 **already aligned** (the failures were a deployment `MOCK`/env config issue, not a
 contract drift) — exactly the kind of fast, honest verdict a static check gives.
@@ -7061,7 +7061,7 @@ contract drift) — exactly the kind of fast, honest verdict a static check give
 
 A skill's `body` (prose injected into the system prompt) can quietly contradict the tools
 it actually unlocks — and the model then **refuses a tool that is right there**, or is told
-about one it can't call. This was the core of a real adopter's tool-visibility report.
+about one it can't call. This was the core of a real adopter (the host app) tool-visibility report.
 The library already knows each skill's real tool set, so it now flags the mismatch at
 authoring time.
 
@@ -7615,7 +7615,7 @@ specified-only.
   compresses prose into ~0.85–0.97, so `MOCK_EMBEDDER_CALIBRATION`
   (0.94/0.02) applies with the mock and only RELATIVE ordering is
   trustworthy — acceptance fixtures assert ordering, never absolute
-  scores (the fcns twins are each other's mutual top-1 partner and
+  scores (the host-app fcns twins are each other's mutual top-1 partner and
   flag confusable; a known-false-positive pin documents the mock's floor).
 - **C2 — pluggable structural rule pack** (`defaultStructuralRules` +
   factories `descriptionRule` / `saysWhatNotWhenRule` / `enumInProseRule`
@@ -10798,7 +10798,7 @@ fails by NAME so the bug is caught before it leaks into Lens.
 
 ### Verified
 
-In a real MDS triage browser app (1630/1630 tests passing, lens dist
+In the host MDS triage browser app (1630/1630 tests passing, lens dist
 unchanged):
 
 - 5-iteration run, before fix: 30+ visible step-graph nodes
@@ -10865,7 +10865,7 @@ references.** Two unrelated docs cleanups bundled together:
    noisy benchmark tables are gone.
 
 2. **Removed all application-specific references.** Earlier docs referred
-   to an app (a Cisco MDS Fibre Channel triage agent used internally for
+   to "the host app" (a Cisco MDS Fibre Channel triage agent used internally for
    benchmarking) by name. Generic phrasing now: "production-shaped Skills
    agent (10 skills, 18 tools after dedup)." Affected: README.md,
    CHANGELOG.md (2.6.0 + 2.5.0 entries), docs/guides/caching.md,

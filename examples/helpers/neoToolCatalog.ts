@@ -1,5 +1,5 @@
 /**
- * SAN-operations tool catalog — the RFC-002 acceptance fixture.
+ * Host-app SAN-operations tool catalog — the RFC-002 acceptance fixture.
  *
  * A representative subset (16 of 29) of the real catalog served by
  * a host app's `py-tools/server.py` (`GET /tools`). Kept verbatim

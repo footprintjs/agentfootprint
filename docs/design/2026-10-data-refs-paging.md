@@ -661,7 +661,7 @@ saved artifacts remain untouched and honestly report unsupported range access.
 
 ### Problem and options
 
-Hosts such as the proof-viewer app verify a proof chain again for every page. Options are caching an
+Hosts such as the host app verify a proof chain again for every page. Options are caching an
 earlier approval, holding a cross-adapter read lease, or using conditional reads only
 where a backend can bind one immutable generation. Neither a digest in `head` nor a
 JavaScript frozen object proves that a later store read is unchanged. All current

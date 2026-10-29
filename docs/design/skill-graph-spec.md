@@ -1,6 +1,6 @@
 # Skill Graph + Explainable Routing — Spec & Usage
 
-**Audience:** a developer *or a coding agent* adopting these features (e.g. in a host app). This is the single ready-to-reference doc: what exists, how to use it (with code), where it lives, and what is still a gated proposal.
+**Audience:** a developer *or a coding agent* adopting these features (e.g. on the host app). This is the single ready-to-reference doc: what exists, how to use it (with code), where it lives, and what is still a gated proposal.
 
 > ## ⚠️ Status legend — read this first
 > - ✅ **SHIPPED** — on npm, importable, usable today.

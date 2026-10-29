@@ -14,7 +14,7 @@ Two ways to drive a "what's the agent doing right now?" line:
 | `agent.enable.liveStatus({ strategy: chatBubbleLiveStatus({ onLine }) })` | One strategy, opinionated formatter, zero subscriptions to wire. Use for **chat widgets** that just want strings to render. See [`04-observability.md`](./04-observability.md). |
 | `agentfootprint/observe` (this example) | Lower-level state machine + templates + renderer. Use when you need **full control** — custom formatting, per-tool overrides, locale switching, custom UI shapes. |
 
-This example shows the lower-level surface. It's what `agentfootprint-lens` and host apps use to drive their custom chat-bubble status feeds.
+This example shows the lower-level surface. It's what `agentfootprint-lens` and consumers like the host app use to drive their custom chat-bubble status feeds.
 
 ## The state machine
 
@@ -77,7 +77,7 @@ Filled by `selectStatus`:
 
 ## Arg-aware templates (when you need `{{switchName}}`, `{{interface}}`, etc.)
 
-`selectStatus` does NOT surface tool args today. For arg-aware status lines (e.g., `"Reading errors on {{switchName}} {{interface}}…"`), consumers walk the raw event stream and substitute from `event.payload.args` directly. See the host app's `ChatFeed.tsx::renderToolLabel` for the reference pattern: per-tool template lookup, then `for (const [k, v] of Object.entries(args))` to pull string args into the substitution map.
+`selectStatus` does NOT surface tool args today. For arg-aware status lines (e.g., `"Reading errors on {{switchName}} {{interface}}…"`), consumers walk the raw event stream and substitute from `event.payload.args` directly. See the host app's `web/src/components/ChatFeed.tsx::renderToolLabel` for the reference pattern: per-tool template lookup, then `for (const [k, v] of Object.entries(args))` to pull string args into the substitution map.
 
 ## When to pick `'*'` vs domain wildcard
 

@@ -4,7 +4,7 @@
  * integration-test layer; if an example silently breaks, the guide
  * silently lies).
  *
- *   02 — the fcns twin pair is flagged confusable with a hint
+ *   02 — the host-app fcns twin pair is flagged confusable with a hint
  *   03 — before fails the gate, after passes under the SAME options
  *   04 — margins + flags from a live agent run, embedder lazy
  */

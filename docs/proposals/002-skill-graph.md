@@ -20,7 +20,7 @@ A naive agent puts **all skills + all tools** in the system prompt every turn â†
 
 `skillGraph()` makes the dynamic-loading topology **declarative and drawable**: the consumer declares *"when `get_interface_counters` returns CRC > 0 â†’ load the `sfp-diagnostics` skill,"* and that single line is **the routing rule, the token-saving loader, and the picture.**
 
-This also gives **near-1:1 parity with LangGraph** (declared nodes + conditional edges), so LangGraph-origin agents (e.g. a host app's migration) port mechanically.
+This also gives **near-1:1 parity with LangGraph** (declared nodes + conditional edges), so LangGraph-origin agents (e.g. the host app migration) port mechanically.
 
 ---
 
