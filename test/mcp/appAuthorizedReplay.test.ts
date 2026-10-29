@@ -342,7 +342,7 @@ describe('app-authorized replay — R1 a timeout, then a session-busy refusal', 
     }
   });
 
-  it('the call fails as "may have run": footprintjs UnknownEffectError, its own error the cause', async () => {
+  it('the call fails as "may have run": footprintjs UnknownEffectError, the final refusal its cause', async () => {
     const endpoint = server(reply);
     const client = await agentCoreClientOver(endpoint, replay);
     try {
@@ -357,6 +357,8 @@ describe('app-authorized replay — R1 a timeout, then a session-busy refusal', 
       expect(unknown.attempts).toBe(3);
       expect(unknown.cause).toBeInstanceOf(Error);
       expect(unknown.cause).not.toBeInstanceOf(UnknownEffectError);
+      // The final server error is the cause: the last busy refusal, as the SDK raised it.
+      expect((unknown.cause as { readonly code?: unknown }).code).toBe(-32005);
       // No key value rides the error: the arguments stay the caller's.
       expect(unknown).not.toHaveProperty('idempotencyKey');
     } finally {

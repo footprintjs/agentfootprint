@@ -27,19 +27,19 @@
  *      verdict in the request's shared replay facts (`replay.ts` ·
  *      `RequestReplay`) before it settles the series' wait.
  *   5. "MAY HAVE RUN" IS RAISED HERE — footprintjs's law, under the
- *      `'app-authorized'` policy (`replay.ts` · `RequestReplay.uncertain`).
- *      A received refusal or error is preserved: a 429, a 503, a JSON-RPC or
- *      tool error — or a chain in which every attempt received one — keeps the
- *      server's error as it came, its effect still `unknown`. A call that
- *      genuinely lacked an answer somewhere — an attempt with no response at
- *      all, or a request the HTTP layer accepted whose JSON-RPC answer never
- *      came — and then fails, fails with footprintjs's `UnknownEffectError`,
- *      its final error (a later refusal's, or the timeout) as the `cause`:
- *      that error alone would read as "failed, try again". A call that
- *      completes returns normally. Under `'compatibility'` the caller sees the
- *      error it always did; the record still says the effect is unknown. A
- *      cancellation never raises it: a call its caller cancelled ends with the
- *      caller's reason, as it always did.
+ *      `'app-authorized'` policy (`replay.ts` · `RequestReplay`, its
+ *      `uncertain`). A received refusal or error is preserved: a 429, a 503,
+ *      a JSON-RPC or tool error — or a chain in which every attempt received
+ *      one — keeps the server's error as it came, its effect still `unknown`.
+ *      A call that genuinely lacked an answer somewhere — an attempt with no
+ *      response at all, or a request the HTTP layer accepted whose JSON-RPC
+ *      answer never came — and then fails, fails with footprintjs's
+ *      `UnknownEffectError`, its final error (a later refusal's, or the
+ *      timeout) as the `cause`: that error alone would read as "failed, try
+ *      again". A call that completes returns normally. Under `'compatibility'`
+ *      the caller sees the error it always did; the record still says the
+ *      effect is unknown. A cancellation never raises it: a call its caller
+ *      cancelled ends with the caller's reason, as it always did.
  *
  * In dev mode, a ticket that no request was bound to by the time the call
  * settled, when a `tools/call` request DID go out, is named once per connection: the SDK copied
