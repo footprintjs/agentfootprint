@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 12;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 13;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -217,8 +217,14 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
 
   // ── It found ─────────────────────────────────────────────────────────
-  'found.absent': t('{{tool:code}} looked for {{lookedFor}} and found none.', 'tool'),
-  'found.bare': t('{{tool:code}} found nothing matching.', 'tool'),
+  // v2, set 13: a declared absence is what the TOOL reported — its declared scope kept, in the
+  // attribution "How sure" and the standing line use; "found none" read as established absence.
+  'found.absent': t(
+    '{{tool:code}} looked for {{lookedFor}} and reported no matching results.',
+    'tool',
+    2,
+  ),
+  'found.bare': t('{{tool:code}} reported no matching results.', 'tool', 2),
   'found.undeclaredEmpty': t(
     '{{tool:code}} returned an empty result and did not declare what it searched.',
   ),
@@ -243,11 +249,17 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     '{{tool:code}} ran, but a rule named {{by:code}} withheld its result from the model.',
   ),
   'found.beforePause': t('What the tools found before the pause is not in this record.'),
+  // v2, set 13: the same attribution for the part before a pause.
   'found.beforePause.absent': t(
-    'Before the pause, {{tool:code}} looked for {{lookedFor}} and found none.',
+    'Before the pause, {{tool:code}} looked for {{lookedFor}} and reported no matching results.',
     'tool',
+    2,
   ),
-  'found.beforePause.bare': t('Before the pause, {{tool:code}} found nothing matching.', 'tool'),
+  'found.beforePause.bare': t(
+    'Before the pause, {{tool:code}} reported no matching results.',
+    'tool',
+    2,
+  ),
   'found.beforePause.undeclaredEmpty': t(
     'Before the pause, {{tool:code}} returned an empty result and did not declare what it searched.',
   ),
@@ -411,7 +423,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.expected.more': t(
     "…and {{count:n,'more call','more calls'}} the model declared an expectation for, not listed here.",
   ),
-  'howSure.outcome.nothing': t('The call found nothing.', 'tool'),
+  // v2, set 13: a declared absence is what the TOOL reported — the attribution the standing
+  // line uses ("{who} reported no matching results"); "found nothing" read as established
+  // absence. The voucher stays the tool's.
+  'howSure.outcome.nothing': t('The call reported no matching results.', 'tool', 2),
   'howSure.outcome.empty': t('The call returned an empty result.'),
   'howSure.evidence.lookedUp': t(
     "The library looked up {{count:lookedUp,'value','values'}} from the answer in what the tools returned and found {{allOf:lookedUp}}.",

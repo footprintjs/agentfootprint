@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { copyJson, ownData } from '../../src/lib/boundedJson.js';
+import { copyJson, ownData, readOwnList } from '../../src/lib/boundedJson.js';
 
 describe('shared bounded JSON copy preserves the answer-validation contract', () => {
   it('keeps own prototype-named data and detaches every shared child', () => {
@@ -64,5 +64,50 @@ describe('shared bounded JSON copy preserves the answer-validation contract', ()
     expect(() => ownData({ extra: 1 }, ['validate'])).toThrow('Unknown property.');
     expect(() => ownData(Object.create({ validate: fn }))).toThrow('Expected a plain data object.');
     expect(() => ownData({ [Symbol('private')]: 1 })).toThrow('Unknown property.');
+  });
+});
+
+describe('readOwnList — a list read the way copyJson reads an array, by a reader that never refuses', () => {
+  it('reads a plain array by index: a hole and an accessor entry read as undefined, the getter never called', () => {
+    const getter = vi.fn(() => 'PRIVATE_VALUE');
+    const list: unknown[] = ['a'];
+    list.length = 3; // index 1 is a hole
+    Object.defineProperty(list, 2, { enumerable: true, get: getter });
+    expect(readOwnList(list, 10)).toEqual({ entries: ['a', undefined, undefined], unread: 0 });
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it('never calls the list’s iterator or a method on it', () => {
+    const iterate = vi.fn(function* () {
+      yield 'not an entry';
+    });
+    const list = Object.defineProperty(['a', 'b'], Symbol.iterator, { value: iterate });
+    const map = vi.fn();
+    Object.defineProperty(list, 'map', { value: map });
+    expect(readOwnList(list, 10)).toEqual({ entries: ['a', 'b'], unread: 0 });
+    expect(iterate).not.toHaveBeenCalled();
+    expect(map).not.toHaveBeenCalled();
+  });
+
+  it('reads at most maxEntries and counts the rest — a claimed length is never walked', () => {
+    expect(readOwnList(['a', 'b', 'c'], 2)).toEqual({ entries: ['a', 'b'], unread: 1 });
+    const list: unknown[] = [];
+    list.length = 2 ** 32 - 1;
+    const read = readOwnList(list, 1_000);
+    expect(read?.entries).toHaveLength(1_000);
+    expect(read?.unread).toBe(2 ** 32 - 1 - 1_000);
+  });
+
+  it('a value that is not a plain array is no list at all', () => {
+    for (const value of [
+      undefined,
+      null,
+      'ab',
+      { 0: 'a', length: 1 },
+      Object.setPrototypeOf(['a'], null),
+      new (class Rows extends Array {})(),
+    ]) {
+      expect(readOwnList(value, 10)).toBeUndefined();
+    }
   });
 });

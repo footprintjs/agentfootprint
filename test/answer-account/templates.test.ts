@@ -108,6 +108,24 @@ describe('REGRESSION — one golden per template', () => {
 });
 
 describe('CONVENTION — the words', () => {
+  it('a DECLARED absence is what the tool reported — never "found none" or "found nothing"', () => {
+    // Every line the account says about a declared absence: "It found" (this run and the part
+    // before a pause, with and without the declared scope) and "How sure"'s outcome line.
+    const declaredAbsence: readonly TemplateId[] = [
+      'found.absent',
+      'found.bare',
+      'found.beforePause.absent',
+      'found.beforePause.bare',
+      'howSure.outcome.nothing',
+    ];
+    for (const id of declaredAbsence) {
+      const text = ANSWER_ACCOUNT_TEMPLATES[id].text;
+      expect(text, id).toMatch(/reported no matching results\.$/);
+      expect(text, id).not.toMatch(/found (none|nothing)/);
+      expect(ANSWER_ACCOUNT_TEMPLATES[id].voucher, id).toBe('tool');
+    }
+  });
+
   it('never "a" / "an" before a placeholder', () => {
     const offenders = IDS.filter((id) => /\b(a|an) \{\{/i.test(ANSWER_ACCOUNT_TEMPLATES[id].text));
     expect(offenders).toEqual([]);

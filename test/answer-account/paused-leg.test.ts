@@ -292,7 +292,7 @@ describe('a tool before the pause that declared its search — its rows are judg
       ]),
     );
     expect(rowText(a, 'found')).toContain(
-      'Before the pause, find_vm looked for a VM named web01 and found none.',
+      'Before the pause, find_vm looked for a VM named web01 and reported no matching results.',
     );
   });
 

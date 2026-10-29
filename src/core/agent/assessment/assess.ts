@@ -31,9 +31,12 @@
  * continued conversation carries earlier turns' results in `history`, and a
  * library frame (a correction, a nudge) is not a person's turn. The fold reads
  * the tool results after that message, every coverage row of the run
- * (`coverageDeclared` is never carried into a next turn), the conflict rows that
- * name one of those calls (the ledger IS carried, so rows about earlier turns'
- * calls are left out), and the answer's own rows (`unsupportedValues`,
+ * (`coverageDeclared` is never carried into a next turn), the conflict rows of
+ * this turn — one that names one of those calls, or one stamped with this turn
+ * whose readings the record does not all place in earlier turns
+ * (`conflictOfThisTurn`; the ledger IS carried, so rows about earlier turns'
+ * calls are left out), and the
+ * answer's own rows (`unsupportedValues`,
  * `stoppedEarly`, `answerValidation`). "Rests on" is every call of the turn: it
  * may over-report, it never hides.
  *
@@ -59,7 +62,7 @@ import {
 } from '../emptiness.js';
 import { argumentRewritesOf } from '../middleware/rewrites.js';
 import { REASONS, reasonEntry } from './reasons.js';
-import { reasonSourceOf, type SourceRead } from './sources.js';
+import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -153,11 +156,13 @@ interface TurnResult {
 
 /**
  * The results after the last message a person said — or all of them, said so,
- * when none is — each read as the tool's own bytes.
+ * when none is — each read as the tool's own bytes; and where that message
+ * sits (`begins`, `-1` when there is none).
  */
 function turnResults(history: readonly unknown[]): {
   readonly results: readonly TurnResult[];
   readonly from: AnswerAssessment['turnFrom'];
+  readonly begins: number;
 } {
   let start = -1;
   for (let i = history.length - 1; i >= 0; i--) {
@@ -187,7 +192,29 @@ function turnResults(history: readonly unknown[]): {
       content: toolBytesOf({ content: m.content, toolChars: m.toolChars }),
     });
   }
-  return { results, from: start >= 0 ? 'person' : 'whole-history' };
+  return { results, from: start >= 0 ? 'person' : 'whole-history', begins: start };
+}
+
+/**
+ * The calls the record places in an EARLIER turn: each call id `history` holds
+ * before this turn began (`begins`) — a tool result's, or an id an assistant
+ * message asked for (`toolCalls`, through the one row-list reader). Only a
+ * placement the record shows: an id it does not hold anywhere is not in it.
+ */
+function earlierCalls(history: readonly unknown[], begins: number): ReadonlySet<string> {
+  const ids = new Set<string>();
+  const add = (id: unknown): void => {
+    if (typeof id === 'string' && id.length > 0) ids.add(id);
+  };
+  for (let i = 0; i < begins; i++) {
+    const m = history[i];
+    if (!isRecord(m)) continue;
+    if (m.role === 'tool') add(m.toolCallId);
+    for (const call of rowList(m.toolCalls)?.entries ?? []) {
+      if (isRecord(call)) add(call.id);
+    }
+  }
+  return ids;
 }
 
 /** One coverage row the run committed, as the fold reads it. */
@@ -404,9 +431,9 @@ function callsNamedBy(row: Readonly<Record<string, unknown>>): string[] {
   if (id !== undefined) named.push(id);
   const on = isRecord(row.declaredOn) ? str(row.declaredOn.toolCallId) : undefined;
   if (on !== undefined) named.push(on);
+  // Read through the one row-list reader (`sources.ts` · `rowList`): by index, never the list's code.
   for (const list of [row.carriers, row.witnesses]) {
-    if (!Array.isArray(list)) continue;
-    for (const entry of list as readonly unknown[]) {
+    for (const entry of rowList(list)?.entries ?? []) {
       const at = isRecord(entry) ? str(entry.toolCallId) : undefined;
       if (at !== undefined) named.push(at);
     }
@@ -733,28 +760,71 @@ function readTurnCalls(
   return calls;
 }
 
+/** Which turn the record places a call in, from this turn's view of it. */
+interface CallPlaces {
+  /** This turn's calls (`readTurnCalls`). */
+  readonly current: ReadonlySet<string>;
+  /** The calls `history` places before this turn began (`earlierCalls`). */
+  readonly earlier: ReadonlySet<string>;
+}
+
 /**
- * Layer 3, the model's readings: a conflict row that names a call of THIS turn.
- * A row the one writer stamped with its `turn` (the honesty layers' turn stamp,
- * filed while a layer is armed) is this turn's only when the stamp says so —
- * a provider that reuses call ids across turns no longer makes an earlier
- * turn's conflict read as this one's. An unstamped row keeps the call-id rule.
+ * Layer 3, the model's readings: a conflict row of THIS turn
+ * (`conflictOfThisTurn`). A row the one writer stamped with its `turn` (the
+ * honesty layers' turn stamp, filed while a layer is armed) is this turn's
+ * only when the stamp says so — a provider that reuses call ids across turns
+ * no longer makes an earlier turn's conflict read as this one's.
  */
 function readConflicts(
   state: Readonly<Record<string, unknown>>,
-  calls: ReadonlySet<string>,
+  places: CallPlaces,
   g: Gathered,
 ): void {
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.kind !== 'conflict' || !Array.isArray(row.witnesses)) return;
-    if (typeof row.turn === 'number' && turn !== undefined && row.turn !== turn) return;
-    const ofThisTurn = row.witnesses.some(
-      (w: unknown) => isRecord(w) && typeof w.toolCallId === 'string' && calls.has(w.toolCallId),
-    );
-    if (ofThisTurn) fire(g, 'sources-conflict', statePointer('findingsLedger', index, 'kind'));
+    if (!isRecord(row) || row.kind !== 'conflict') return;
+    if (conflictOfThisTurn(row, turn, places)) {
+      fire(g, 'sources-conflict', statePointer('findingsLedger', index, 'kind'));
+    }
   });
+}
+
+/**
+ * Whether a conflict row is this turn's — THE INCOMPLETE-RECORD POLICY. Each
+ * reading (`witnesses`) is placed by the call it names, as the record shows
+ * it: CURRENT (a call of this turn), EARLIER (a call `history` places before
+ * this turn began — its result, or the request that asked for it) or
+ * UNRESOLVED (no call id, or one the record does not place: a hole, a getter's
+ * entry, an id whose result the kept history no longer holds).
+ *
+ * - a row stamped with ANOTHER turn is never this turn's;
+ * - a CURRENT reading places the row here, stamped or not (the call-id rule);
+ * - a row stamped with THIS turn stays this turn's unless EVERY reading is
+ *   EARLIER — a contrary placement the record establishes. An unresolved
+ *   reading establishes none: the stamp keeps its doubt, and the source
+ *   counts the reading in `unnamed` (`sources.ts`). No readings at all, or a
+ *   list the fold cannot read whole (not a plain array, or longer than it
+ *   reads — `sources.ts` · `rowList`), establish none either;
+ * - an UNSTAMPED row is never placed by a reading that is not current: an
+ *   earlier turn's conflict whose ids are gone, or unresolved, stays out of
+ *   this turn. Nor is any row of a record with no `turnNumber`, where no stamp
+ *   can be read against the turn.
+ */
+function conflictOfThisTurn(
+  row: Readonly<Record<string, unknown>>,
+  turn: number | undefined,
+  places: CallPlaces,
+): boolean {
+  const stamped = typeof row.turn === 'number' && turn !== undefined;
+  if (stamped && row.turn !== turn) return false;
+  const witnesses = rowList(row.witnesses);
+  const ids = (witnesses?.entries ?? []).map((w) => (isRecord(w) ? w.toolCallId : undefined));
+  if (ids.some((id) => typeof id === 'string' && places.current.has(id))) return true;
+  if (!stamped) return false;
+  const placedEarlier = (id: unknown): boolean => typeof id === 'string' && places.earlier.has(id);
+  const readWhole = witnesses !== undefined && witnesses.unread === 0;
+  return !(readWhole && ids.length > 0 && ids.every(placedEarlier));
 }
 
 /** One answer-layer witness row of this turn, where it sits on the ledger. */
@@ -846,19 +916,16 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
   if (!isRecord(report) || typeof report.status !== 'string') return;
   const at = statePointer('answerValidation', 'status');
   g.checked.push({ layer: 4, check: 'answer-checks', ran: 1, of: 1, witness: [at] });
-  if (Array.isArray(report.checks)) {
-    for (const [index, check] of report.checks.entries()) {
-      if (
-        !isRecord(check) ||
-        typeof check.id !== 'string' ||
-        !check.id.startsWith('agent:negative-claims:')
-      )
-        continue;
-      if (check.disposition === 'checked-fail')
-        fire(g, 'claim-exceeds-search', statePointer('answerValidation', 'checks', index));
-      if (check.reason === 'declaration-overclaimed')
-        fire(g, 'declaration-overclaimed', statePointer('answerValidation', 'checks', index));
-    }
+  // By index over the list's own length — never its iterator or its own `entries`.
+  const checks: readonly unknown[] = Array.isArray(report.checks) ? report.checks : [];
+  for (let index = 0; index < checks.length; index++) {
+    const check = checks[index];
+    if (!isRecord(check) || typeof check.id !== 'string') continue;
+    if (!check.id.startsWith('agent:negative-claims:')) continue;
+    if (check.disposition === 'checked-fail')
+      fire(g, 'claim-exceeds-search', statePointer('answerValidation', 'checks', index));
+    if (check.reason === 'declaration-overclaimed')
+      fire(g, 'declaration-overclaimed', statePointer('answerValidation', 'checks', index));
   }
   if (report.status === 'failed') fire(g, 'answer-check-failed', at);
   if (report.status === 'unverified') fire(g, 'check-unreachable', at);
@@ -1007,7 +1074,7 @@ export function foldState(
     : { state: recorded, asked: new Set<string>() };
   const g: Gathered = { fired: new Map(), checked: [] };
   const history = Array.isArray(state.history) ? (state.history as readonly unknown[]) : [];
-  const { results, from } = turnResults(history);
+  const { results, from, begins } = turnResults(history);
   const coverage = coverageRows(state);
 
   const reads = readResults(results, coverage);
@@ -1021,7 +1088,7 @@ export function foldState(
   readContingentRows(state, calls, g);
   readTurnResults(reads, declarations, g);
   readPeriodVerdicts(periodRows(state), argumentVerdicts, g);
-  readConflicts(state, calls, g);
+  readConflicts(state, { current: calls, earlier: earlierCalls(history, begins) }, g);
   readAnswerRows(state, g);
 
   if (asked.size > 0) {
