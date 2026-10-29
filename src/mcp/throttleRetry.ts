@@ -18,11 +18,11 @@
  * replay })`), and kept apart from what is known of an attempt's effect. Before
  * every repeat the series asks `permit`; the record keeps its answer.
  *
- *   - `'compatibility'` (the 11.x default) keeps today's behaviour by name: a
- *     429 is repeated for every tool, ASSUMING the server refused it before
- *     running it — and every such repeat records that assumption.
- *   - `'app-authorized'` (opt-in, the next major's default) repeats a 429 only
- *     for a tool the app declared repeatable on it.
+ *   - `'compatibility'` (the default, kept in 12.0) keeps today's behaviour by
+ *     name: a 429 is repeated for every tool, ASSUMING the server refused it
+ *     before running it — and every such repeat records that assumption.
+ *   - `'app-authorized'` (opt-in, by name) repeats a 429 only for a tool the
+ *     app declared repeatable on it.
  *   - A request that failed in transport without an answer (footprintjs's
  *     `network`: a lost connection, a timeout below the series) is repeated
  *     only when the app declared that for the tool. A 5xx is an answer, never

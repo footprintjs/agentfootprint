@@ -319,7 +319,7 @@ call.
 | The adapter you chose retries its own refusal (AgentCore Runtime's session-busy reply) | Yes, within the budget: the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
 | Your entry for the tool names `throttle` (or `network`) | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on }` |
 | No entry, `policy: 'app-authorized'` | No: the 429 is returned as the server sent it | `reason: 'not-permitted'`, `effect: 'unknown'` |
-| No entry, `policy: 'compatibility'` (the default in 11.x) | Yes, as before | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
+| No entry, `policy: 'compatibility'` (the default, kept in 12.0) | Yes, as before | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
 
 `network` is a request that failed without an answer: a lost connection, or a
 timeout below the retry. It may have run, so it is sent again only when your
@@ -382,22 +382,31 @@ marker in its request's `_meta`, which the transport takes out before sending,
 so the server receives the request it always did and an MCP SDK that copies the
 params is still matched. The answers are watched on the connection, and the
 library confirms the watch works when the `initialize` answer passes it. When
-either fact is missing, the call is refused before it is sent, with an
-`McpReplayUnavailableError` (`sent: false`) whose `reason` is an
-`McpReplayUnavailableReason`:
+either fact is missing, the tool call is refused before its request is sent,
+with an `McpReplayUnavailableError` (`sent: false`) whose `reason` is an
+`McpReplayUnavailableReason`. Only tool invocations are refused. Connecting and
+listing tools run first and may already have reached the server (on `stdio`,
+the server process has started), so `sent: false` speaks of that tool request
+alone.
 
 | `reason` | What is missing | When |
 |---|---|---|
-| `'answers-unobserved'` | The `initialize` answer never reached the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it, as SDK 1.10 does |
-| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta` |
+| `'answers-unobserved'` | The `initialize` answer never reached the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it, as SDK 1.10 does when run (reading the source finds the same through 1.13) |
+| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta`, on any call, including after the connection initialized |
 | `'requests-unwatched'` | The library cannot watch the transport's requests | `stdio`, or a transport whose `send` cannot be wrapped |
+
+The check tests what the connection does, never an SDK version number or a
+transport's name.
 
 Without these facts, a request the server accepted and never answered would
 reach the caller as a plain timeout, and the strict contract would be weaker
-than it says. `'compatibility'` needs neither, and behaves as before. A watch on
-an answer ends when the answer arrives, when the SDK cancels the request, when
-the call settles or when the client closes, so a long-lived client keeps
-nothing for calls that are over.
+than it says. An explicit `'app-authorized'` never falls back to
+`'compatibility'`: not when a connection cannot give these facts, and not when a
+request loses its match after the connection initialized. A refused request is
+never sent again to recover the match. `'compatibility'` needs neither fact, and
+behaves as before. A watch on an answer ends when the answer arrives, when the
+SDK cancels the request, when the call settles or when the client closes, so a
+long-lived client keeps nothing for calls that are over.
 
 The example's run, read back from the saved recording: the search was sent
 again on your declaration and its effects stay unknown; the ticket was not sent
@@ -406,12 +415,22 @@ model as the server sent it.
 
 <CodeFile path="examples/features/118-app-authorized-replay.ts" region="record" title="examples/features/118-app-authorized-replay.ts (region: record)" />
 
-**Moving to the next major.** `'app-authorized'` becomes the default. To keep
-today's behaviour, write `replay: { policy: 'compatibility' }`; its records go on
-naming the assumption. To move now, add an entry with `on: ['throttle']` for
-each tool you want sent again on a 429, mark the tools that make changes, and
-declare `deduplicates` only for a server that honours the key. `replay` is
-refused beside `connection` and ignored for `stdio`.
+**The default stays `'compatibility'` in 12.0.** 11.5.0 said `'app-authorized'`
+would become the default in the next major. That is superseded: 12.0.0 keeps
+`'compatibility'` as the default, as an interim policy rather than a permanent
+one. Strict refuses a tool call it cannot observe and correlate, so as a default
+it would refuse every tool invocation over `stdio`, and every one through an MCP
+SDK that replaces the transport's handler. `'compatibility'` keeps its stated
+retry assumption, and its records go on naming it; it does not gain the strict
+policy's observation or correlation guarantees. A strict default may come in a
+later major, after the supported transport and SDK combinations are measured,
+with migration notes; none is scheduled. A `policy` you write is the one used: a
+default never replaces it, and nothing picks it from the transport. To choose
+`'app-authorized'` now, add an entry with `on: ['throttle']` for each tool you
+want sent again on a 429, mark the tools that make changes, and declare
+`deduplicates` only for a server that honours the key. `replay` is refused
+beside `connection`. On `stdio` it is ignored under `'compatibility'`, and under
+`'app-authorized'` each tool call is refused (`'requests-unwatched'`).
 
 ## Axis 2 — the provider: what the model is *shown*
 
@@ -527,15 +546,39 @@ interface CodeRunner {
 interface CodeSession {
   readonly id: string;
   execute(req: { code: string; language?: string; timeoutMs?: number }): Promise<CodeResult>;
+  // Optional verbs — feature-detect each one; an adapter that cannot do it leaves it out.
+  stageInputs?(inputs: CodeInput[]): Promise<StagedCodeInput[]>;
+  readFile?(path: string, options: { maxBytes: number }): Promise<CodeFile>;
+  runCommand?(command: string, options?: CodeCommandOptions): Promise<CodeCommandResult>;
   stop(): Promise<void>;
 }
 ```
 
-`CodeResult` is `{ ok, stdout, stderr, exitCode?, artifacts?, truncated? }`.
+`CodeResult` is `{ ok?, stdout, stderr, exitCode?, serviceError?, terminatedBy?, artifacts?, truncated? }`.
 `truncated` is the load-bearing field: **an unstated slice is a silent success.**
 A runner that quietly cuts its own output to fit is the same context-window bug
 wearing a different hat, and the model would reason over a fragment of a table
 believing it had the table.
+
+`ok` is what the runner reported: `true` or `false` only when the backend said
+which — an exit status, or its own error verdict. When it reported neither, `ok`
+is **absent**: the outcome is unknown, and an absent `ok` is never success.
+Check `result.ok === true` where you mean "it worked". A `false` is one of three
+different facts, and the result says which:
+
+- **a program that failed** — `exitCode` holds the status the runner reported
+  (it is never inferred and never defaulted);
+- **an unconfirmed run** — `serviceError: true`: the backend flagged an error
+  and reported no exit status, so whether the code ran at all is not known;
+- **a process ended before it exited** — `terminatedBy` names the signal when
+  the runner knows it (`'SIGKILL'`), and there is no exit status at all.
+
+`codeRunnerTool` keeps them apart in the result the model reads — `[exit 7] …`,
+`[not confirmed: …]`, `[no exit status reported (terminated by SIGKILL): …]` and
+`[exit status unknown: …]` — writes `[exit N]` only when N was supplied, and
+never contradicts a field the runner did supply. The `tools.code_run` record
+carries `ok`, `exitCode`, `serviceError` and `terminatedBy` exactly as the
+runner supplied them.
 
 `start({ key })` takes the ISOLATION key the caller derived. An adapter may use
 it to name the remote session; it must never widen it.
@@ -565,16 +608,22 @@ that are merely *limited*.
 
 A `CodeSession` is what `start()` hands back — `execute()` and `stop()`, where
 `stop()` must tolerate a session the far side already reaped, because an idle
-timeout is the reality on every managed backend. Each adapter's options bag is
+timeout is the reality on every managed backend — plus the optional verbs below,
+each feature-detected (`canStageCodeInputs`, `canReadCodeFiles`,
+`canRunCodeCommands`). Each adapter's options bag is
 `LocalCodeRunnerOptions` and `AgentCoreCodeRunnerOptions` respectively; the AWS
 one also exports `AgentCoreCodeClientLike` (the operation-semantic seam you can
-inject a whole client through, via `_client`), `AgentCoreInvokeAnswer` (one
-invocation already drained of its event stream) and
+inject a whole client through, via `_client`), `AgentCoreInvokeInput` (one
+`InvokeCodeInterpreter` request: an `AgentCoreInvokeTarget` plus one arm per
+service tool), `AgentCoreFileContent` (one `writeFiles` entry, text or bytes),
+`AgentCoreInvokeAnswer` (one invocation already drained of its event stream),
+`AgentCoreResource` (a file a `readFiles` answer carried) and
 `BedrockAgentCoreCodeSdkModule` (the `_sdk` test seam every AWS adapter here
 carries).
 
 `agentCoreCodeRunner` dispatches `StartCodeInterpreterSessionCommand`,
-`InvokeCodeInterpreterCommand` and `StopCodeInterpreterSessionCommand` through
+`InvokeCodeInterpreterCommand` (the service tools `executeCode`, `writeFiles`,
+`readFiles` and `executeCommand`) and `StopCodeInterpreterSessionCommand` through
 `client.send(new Command(...))` — never a method on the client, which is the
 9.4.0 law. Two shapes worth knowing because guessing them is how this class of
 bug ships: `Invoke` answers with an **event stream** (`response.stream`), and
@@ -609,6 +658,85 @@ narrowing multiplies start-up cost with nothing to show for it.
 Worked end to end, with the payoff, the isolation and the events printed:
 `examples/features/52-run-code.ts`.
 
+### Files in and out, and commands
+
+A session moves data in and out **exactly and bounded**, and every result says
+only what the backend reported.
+
+- **In — `stageInputs`.** Text goes in as text, bytes as bytes (on AgentCore, a
+  `writeFiles` `blob` — never base64 inside text). The code finds each file
+  through the `AF_STAGED_INPUTS` manifest on both runners. On AgentCore one
+  staging call is one request, refused before it is sent when it would pass
+  AgentCore's 100 MB per-call limit (`CodeSandboxError`, `reason:
+  'request-too-large'`). AgentCore takes no environment, so the adapter sets the
+  variable in the code's runtime **before every execution**, inside the same
+  deadline, and checks the line that setup prints — the runtime keeps state the
+  code can change, so a value set for an earlier run is never assumed to still
+  be there.
+- **Out — `readFile(path, { maxBytes })`.** One file, whole, or refused. The bound
+  is required, and a file over it is refused (`'file-too-large'`), never cut. On
+  AgentCore the file is paired with the path by the URI the service put on it; a
+  missing or different URI fails closed (`'uri-missing'`, `'uri-mismatch'`). The
+  URI is read one way, as a `file:///` URI: each segment percent-decoded, a raw
+  `?` or `#` refused as the query or fragment it is (a name with `?` or `#`
+  arrives as `%3F` / `%23`), and an encoded `/` never taken for a separator.
+  Text or bytes is whichever the backend returned — never decided by the
+  extension; `localCodeRunner` returns bytes, because a file on disk is bytes.
+- **Commands — `runCommand(command, { timeoutMs, signal, maxOutputChars,
+  checkpoint })`.** It runs arbitrary shell, so it is **off by default**: a session
+  has it only when the runner is built with `commands: true` (one runner per agent
+  that should have it). stdout and stderr are bounded and the cut stated on
+  `truncated`. `exitCode` is the one the backend reported, or absent — never
+  inferred from AgentCore's `isError` (reported separately, as `isError`); a
+  process ended before it exited names the signal on `terminatedBy`. On POSIX
+  `localCodeRunner` runs each command, and each code run, in a process group of
+  its own, and when it ends a run — a timeout, an abort, the output ceiling, a
+  child `error` event — the owned process group is stopped with SIGKILL at that
+  moment. That is cleanup, not containment: a descendant that starts its own
+  session or group is outside it, and a host killed before its exit handlers
+  run cannot clean up. The local runner is not a sandbox. On Windows only the
+  process itself can be stopped, and the timeout error says work it started may
+  still be running. An `error` event for a process that had started is a
+  `CodeSandboxError` with `reason: 'error-after-start'`: the process ran, and
+  its outcome is unknown. It never reads "could not run", which would say
+  nothing ran.
+  A `checkpoint` line is looked for in the **whole** stdout, before the cut, and
+  `checkpointSeen` proves only that the command got that far.
+- **Paths.** Both runners apply one rule, `sandboxPath`: relative to the working
+  directory and never above it. An absolute path, a `..` that climbs out, a
+  backslash, a leading `~` or a NUL is refused (`'path-refused'`) before anything
+  is read or sent. `localCodeRunner` also refuses a symbolic link that leads out.
+- **A gone session.** On AgentCore a service error naming the session as "not
+  active", or a `ResourceNotFoundException` on a call that addresses nothing but
+  the session (code, a command, a write), is one `SessionExpiredError`. On a
+  READ the same exception may mean the file, so it is `'file-not-returned'`,
+  naming both possibilities — never offered as proof the session is gone. Start
+  a new session after `SessionExpiredError`: nothing reconnects, because a
+  session name is not an address.
+
+The shapes: `readFile` takes `CodeReadOptions` (`maxBytes`, `signal`) and
+returns a `CodeFile`; `runCommand` takes `CodeCommandOptions` and returns a
+`CodeCommandResult`; a cut on either result is a `CodeTruncation`; and every
+refusal is a `CodeSandboxError` whose `reason` is one `CodeSandboxRefusal`.
+
+<CodeFile path="examples/features/119-code-files-and-commands.ts" region="files-in-out" title="examples/features/119-code-files-and-commands.ts (region: files-in-out)" />
+
+An outcome nobody reported stays unknown:
+
+<CodeFile path="examples/features/119-code-files-and-commands.ts" region="unknown-stays-unknown" title="examples/features/119-code-files-and-commands.ts (region: unknown-stays-unknown)" />
+
+**Network.** A command reaches whatever the sandbox's network reaches, and the
+runner does not choose it. On AgentCore the network mode is set on the code
+interpreter resource: the built-in `aws.codeinterpreter.v1` runs with AWS's most
+restrictive defaults — Sandbox mode, documented as limited external network
+access that includes Amazon S3 — while a custom interpreter may be created in
+Public mode (internet access) or VPC mode. `localCodeRunner` has no network
+isolation at all: a command reaches everything this machine reaches.
+
+Neither the command text nor a file's contents ever appears in an error. A
+modelled AgentCore error from a file or command call names the exception and
+leaves out the service's message, which can quote what was sent.
+
 ### Turn repeated code into a tool backlog
 
 Every completed run leaves a privacy-safe `CodeRunFacts` record keyed by its
@@ -623,7 +751,10 @@ agent is repeatedly writing the same missing operation; the most frequent
 shapes are a measured backlog of tools worth implementing. The remaining facts
 — language, staged-input count, output size, truncation and success — let you
 prioritize that backlog without sending the model-written code or the customer
-data embedded in it to an observability provider.
+data embedded in it to an observability provider. `ok`, `exitCode`,
+`serviceError` and `terminatedBy` are recorded exactly as the runner supplied
+them, so a failed program, an unconfirmed run, a stopped process and an
+unreported outcome stay different rows.
 
 ### Why it is a plain tool — and what the chart form buys you
 
