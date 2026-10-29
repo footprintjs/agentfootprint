@@ -10,7 +10,13 @@ calculation over a narrower window never verifies the wider claim; the check is 
 flow that tells contradiction apart from inability to check; the inherited scope, latest-read
 and freshness safeguards are steps of that flow; a window carries the executed range's
 boundary convention; the whole answer never gets an unqualified "known" beside a model
-interpretation; and the measurement claims only what the registered cases test.
+interpretation; and the measurement claims only what the registered cases test. Revised
+again after Codex's second review (two findings, both adopted, and one clarification): an
+aggregated operand establishes its own coverage through a declared interval AND anchor, and
+the operands must tile the window position by position, never by count; a gap inside the
+population an aggregate ranges over stops support, as a missing time slice does; and the
+selection key for reads is the complete scoped identity plus the executed window, stated
+once and used the same way in the check and the worked case.
 
 Code is cited as `file` · `symbol`, under `src/`. A name marked † does not exist yet: it is
 this page's proposal, and the build may rename it. Examples use neutral subjects (customers,
@@ -32,10 +38,12 @@ nodes); "the host app" names the app the field report came from.
   declared operation from a complete set of observed rows), **interpretation** (the model's
   reading of observed values), **missing** (the record holds no value for it). A bound value
   that disagrees with its complete operands is **contradicted**.
-- Three rules keep it honest: one reading at one moment never proves a claim about an hour;
-  a calculation over the part the store held never verifies the claim about the whole
-  window; and a maximum never supports a claim that says "average", because the operation
-  is declared and checked before any number is compared.
+- Five rules keep it honest: one reading at one moment never proves a claim about an hour; a
+  calculation over the part the store held never verifies the claim about the whole window; a
+  maximum never supports a claim that says "average", because the operation is declared and
+  checked before any number is compared; a bucketed reading must say which span it covers,
+  and the buckets must tile the window one position at a time, never by count; and a member
+  the read did not reach stops a statistic over the whole population.
 - An answer that carries a model interpretation, or any field the contract does not name,
   is never "known" as a whole: the checked fields keep their labels, and the standing says
   "consistent with the record" at most, naming the field.
@@ -80,9 +88,9 @@ coverage of the read that returned it.
 | A typed answer, read value by value | `extract.ts` · `readAnswer`, `answerTexts`; the Route judge `core/agent/stages/route.ts` · `readValidatedAnswer` | The claim side: V1 reads the typed field itself. The reader gains the JSON path of each literal (§ 8). |
 | The claim contract | `core/agent/AgentBuilder.ts` · `claims()`; `integrity/unsupported-claim/check.ts` · `compareClaim`, `DeclaredClaim`, `ClaimLedgerRow`; `delivered.ts` · `judgeDeliveredClaim`; `evaluate.ts` · `evaluateClaimPair`, `compareClaimValues` | Extended with the scoped form of #195 and V1's parts (§ 4). The short form keeps #195's ruling: it may fail, it never verifies. |
 | Answer validation and the agent's own rows | `answer-validation/validate.ts` · `executeAnswerValidation`; `agentChecks.ts` · `claimChecksOf`, `evidenceCheckOf`, `AGENT_CHECK_PREFIX`; the stage `core/agent/stages/answerValidation.ts` · `withAnswerValidation`; `agentChecks: ['claims']` (#197) | The seam V1 runs at: the delivered candidate. |
-| The semantic envelope | `semantics/described.ts` · `describedResult`; `semantics/types.ts` · `ToolSemantics`, `SemanticFact` (`entity` required), `SemanticSeriesPoint` (`t`, `entity`, `metric`, `value`), `SemanticGrain` (`interval`, `aggregation`, `is_counter`, `collapsed`), `SemanticProvenance` (`measured_at`, `source`) | The first result shape that binds (§ 5). It already says what each row is about, and how each value was folded. |
+| The semantic envelope | `semantics/described.ts` · `describedResult`; `semantics/types.ts` · `ToolSemantics`, `SemanticFact` (`entity` required), `SemanticSeriesPoint` (`t`, `entity`, `metric`, `value`), `SemanticGrain` (`interval`, `aggregation`, `is_counter`, `collapsed`), `SemanticProvenance` (`measured_at`, `source`) | The first result shape that binds (§ 5). It already says what each row is about and how each value was folded; V1 adds which span a folded value covers. |
 | Resolved population values | `semantics/coverage/search/resultFacts.ts` · `ResolvedDeclaration` (`argument`, `id`, `name`, `aliases`); on the composed row `semantics/coverage/composedCoverage.ts` · `ComposedItem.resolved` | How the person's subject word is joined to a row's subject (§ 4). |
-| Composed coverage and result identity | `composedCoverage.ts` · `ComposedCoverage` (`resultId`, `handle`, `complete`, `gaps`, `period`); `Tool.search` (`semantics/coverage/search/types.ts` · `ToolSearch`, `SearchRole`) | The coverage a bound value inherits, and the one result identity (never a provider call id). |
+| Composed coverage and result identity | `composedCoverage.ts` · `ComposedCoverage` (`resultId`, `handle`, `complete`, `gaps`, `period`); `CoverageGap` (`kind`, `bears`), `GapFacet`, `CoverageFacet`; `Tool.search` (`semantics/coverage/search/types.ts` · `ToolSearch`, `SearchRole`) | The coverage a bound value inherits, which gaps bear on a population, and the one result identity (never a provider call id). |
 | The period a read covered | `semantics/coverage/period.ts` · `DeclaredPeriod`, `periodVerdict`, `PeriodRow`; the results layer `core/agent/results/subflow.ts`; under `.time()` `time/check.ts` · `periodTimeCheck` | The coverage rule (§ 6). V1 adds no second period law. |
 | The executed window and its edges | `time/rows.ts` · `CallWindowRow` (`asked`, `sent`); `time/range.ts` · `TimeRange`, `InclusiveSpan`; `time/periodForm.ts` · `Bound`, `ToBound`, `Edge` (a `to` bound declares its edge, never defaulted) | The window and its boundary convention (§ 6). |
 | Declared columns | `tools/tools.ts` · `DefineToolOptions.resultColumns`; `integrity/column-types/types.ts` · `ToolResultColumns`, `ColumnDeclaration`, `ColumnType` | The second result shape that binds, once columns carry a role and a unit (§ 5). |
@@ -118,13 +126,16 @@ coverage of the read that returned it.
   `checkFindingClaim` starts from the model's `_findings`). V1 binds the delivered typed field
   (#195's position); the model declares nothing new.
 - #109's scope is the CALL's side only: the arguments at declared paths. V1 adds the ROW's
-  side: a row must itself name its subject, field, unit and time, and how its value was
-  folded (§ 5). A tool asked for node 7 that serves node 9's row does not bind.
+  side: a row must itself name its subject, field, unit and time, how its value was folded,
+  and which span a folded value covers (§ 5). A tool asked for node 7 that serves node 9's
+  row does not bind.
 - #109 has no unit, no per-row time, no window, no operation, no interpretation. V1 adds
   each. The claim's OPERATION is V1's: a point value, or a mean, minimum or maximum over the
   window, declared on the claim and checked for compatibility before any number is compared.
 - #109's completeness is an authored callback (`ClaimBindingRule.coverage`). V1 reads the
-  composed coverage row and the declared period instead; no callback.
+  composed coverage row and the declared period instead; no callback. Completeness has two
+  halves in V1, both required: the time the operands cover, position by position, and the
+  population an aggregate ranges over.
 
 **From PR #195 (design for mounting exact claim checks), reused:**
 
@@ -151,8 +162,9 @@ coverage of the read that returned it.
    identity the tool's `reads` declares (§ 4). A bare string the record does not resolve
    places nothing; a name two scopes resolved is ambiguous, not a match.
 2. **A window and an operation per claim.** #195 has freshness (age of `measured_at`). V1
-   adds the claim's time window and the operation over it, matched against the rows' times,
-   the rows' declared fold and the read's declared period (§ 6).
+   adds the claim's time window and the operation over it, matched against the rows'
+   declared spans, the rows' declared fold and the read's declared period, and the operands
+   must cover the window position by position (§ 6).
 3. **Units have a door.** #195 says units "come from the record's own row" and names no
    field. V1 names the declarations (§ 5).
 4. **Calculated values, narrowly.** #195 defers derived figures. V1 admits three operations
@@ -167,8 +179,9 @@ coverage of the read that returned it.
    `subject-mismatch` carry a note saying where the value does appear ("1200 appears only
    under Customer A"), which is the probe's finding. The note explains; it never binds.
 8. **A narrower statement is the library's own claim.** When the store held only part of the
-   window, #195's recorded value is reused as a statement with ITS OWN scope (the held part)
-   and verdict; it never supports the model's claim about the whole window (§ 7).
+   window, or a member of the population was not read, #195's recorded value is reused as a
+   statement with ITS OWN scope (the part held, the members read) and verdict; it never
+   supports the model's claim about the whole (§ 7).
 9. **No correction turn in v1.** #195 keeps the correction off by default; V1 does not build
    one. A contradiction under enforce goes to the recorded value or "I don't know", by
    #195's table.
@@ -180,7 +193,7 @@ value }`, and checked with the coverage of the result that binds it.
 
 ```ts
 agent
-  .outputSchema(NodeAnswer) // { node, cpu_pct, cpu_peak, status }
+  .outputSchema(NodeAnswer) // { node, cpu_pct, status }
   .claims(
     {
       cpu_pct: {
@@ -190,13 +203,7 @@ agent
         operation: 'mean',                      // † the statistic the field claims over the window
         compare: 'number',
       },
-      cpu_peak: {
-        tool: 'node_metrics', fact: 'cpu_pct',
-        subject: { fields: { node: 'node' } }, window: 'turn',
-        operation: 'max',                       // † a different claim: the same field, another operation
-        compare: 'number',
-      },
-      status: { kind: 'interpretation', of: ['cpu_pct', 'cpu_peak'] }, // † labelled, never verified
+      status: { kind: 'interpretation', of: ['cpu_pct'] }, // † labelled, never verified
     },
     { tools: { node_metrics: { reads: { cluster: ['cluster'], node: ['node'] } } } }, // #195's contract
   );
@@ -204,7 +211,7 @@ agent
 
 | Part | Comes from | Never from |
 |---|---|---|
-| subject | the COMPLETE scoped identity of the claim's tool, one value per dimension the contract's `reads` declares (`cluster`, `node`): each from `claimScope`, built on the server (#195 § 3.1), or from a declared subject field (`subject.fields`†) whose value, after the app's normalizer, equals the `id`, the `name` or an `aliases` entry of a `resolved` population value of a read of this leg (`ComposedItem.resolved`). A dimension the claim does not supply is filled only when every read of this leg that matches the supplied dimensions agrees on it. Case-exact after the normalizer; no fuzzy match. | the model's prose; a spelling only the answer uses; a guess from a result's text; a dimension two reads disagree on |
+| subject | the COMPLETE scoped identity of the claim's tool, one value per dimension the contract's `reads` declares (`cluster`, `node`): each from `claimScope`, built on the server (#195 § 3.1), or from a declared subject field (`subject.fields`†) whose value, after the app's normalizer, equals the `id`, the `name` or an `aliases` entry of a `resolved` population value of a read of this leg (`ComposedItem.resolved`). A dimension the claim does not supply is filled only when every read of this leg that matches the supplied dimensions agrees on it. Case-exact after the normalizer; no fuzzy match. A subject may be a POPULATION (a cluster) when the tool folds its members into one row (`grain.collapsed`); such a claim ranges over every member, and § 6 asks whether every member was read. | the model's prose; a spelling only the answer uses; a guess from a result's text; a dimension two reads disagree on |
 | field | the contract: `fact` (an envelope fact's key, or a series `metric`) or `column`† (a declared column). Exact name. | a synonym; the answer's own key name; the model |
 | operation | the contract: `operation`†, one of `value` (a point), `mean`, `min`, `max`. A claim with a window must declare `mean`, `min` or `max`; a point claim is `value`. Refused at build otherwise. | the model; a guess from which operation reproduces the number |
 | unit | the result's declaration (§ 5). The answer's unit, when the contract names a unit field (`unit: { field }`†) or a fixed unit (`unit: '%'`†), is read only to compare. | the model's unit alone; a unit guessed from a column name |
@@ -238,13 +245,17 @@ the gate, and it can never be observed.
   one the fact is a point, "as of `measured_at`".
 - `series[]`: `entity`, `metric` (the field), `t` (the time, read by `time/instant.ts` ·
   `instantOf`, lenient; a `t` without an offset is read with the offset of the result's
-  `period` when it declares one, else the point has no time), `value`. With
-  `grain.aggregation`, each point is a fold over one `grain.interval` ending or starting at
-  `t` as the tool declares (`grain.interval` and `grain.aggregation` are both required for any
-  computed operation, § 6).
+  `period` when it declares one, else the point has no time), `value`. Without `grain`, a
+  point is a raw sample whose coverage is the instant `t`, and it serves point claims only.
+  With `grain.aggregation`, each point is a fold over one bucket of `grain.interval`, and
+  which bucket is declared by `grain.anchor`† — `'start'`: the bucket is `[t, t + interval)`;
+  `'end'`: `[t − interval, t)`. A folded point with no anchor has an unknown span: it serves
+  no span claim (§ 6, `anchor-undeclared`), because a timestamp inside a window says nothing
+  about where the bucket it stamps begins or ends.
 - `grain.collapsed` names the population a fold was taken over ("per-node rows collapsed to
-  per-cluster"); such a row's `entity` is that population, and it binds only a claim whose
-  subject is that population.
+  per-cluster"); such a row's `entity` is that population, it binds only a claim whose
+  subject is that population, and the result's composed coverage then says whether every
+  member was read (§ 6).
 - `units`†: `{ [field]: unit }`, declared on the envelope. A field with no unit binds a
   unitless claim only.
 - `resolved[]`: the entity each population value resolved to, with `aliases` for every
@@ -278,22 +289,26 @@ What a tool must declare, in one list:
    codes for `money`); an unknown unit string is kept as an opaque label compared by equality;
 4. when: `t` on a series point, a `time` column, or `provenance.measured_at`; and the read's
    `period` (`{ queried, held }`) for any span claim;
-5. how each value was folded, for any span claim: `grain.aggregation` (`avg`, `max`, `min`,
-   `sum`, `count`, …) and `grain.interval`, and `is_counter` when the aggregation is
+5. how each value was folded and what span it covers, for any span claim:
+   `grain.aggregation` (`avg`, `max`, `min`, `sum`, `count`, …), `grain.interval`,
+   `grain.anchor`† (`start` or `end`), and `is_counter` when the aggregation is
    counter-looking;
 6. `resolved` for the population arguments of its `search`, with `aliases`, so the person's
    word for the subject joins the rows' ids;
-7. `search`, `period` (with each `to` bound's `edge`) and `effects` as today, so coverage,
-   the executed window and read-or-write compose.
+7. `search`, `period` (with each `to` bound's `edge`) and `effects` as today, so coverage —
+   the members read and the gaps, each with the facet it bears on — the executed window and
+   read-or-write compose.
 
 A declaration is REFUSED at the mint, never repaired (the `periodProblem` law): a `units`
 entry naming a field no row carries, a unit outside the vocabulary that is not a plain
 label, two subject columns, a `time` column whose values do not parse, a `role: 'subject'`
-column absent on any row, a `grain.aggregation` with no `grain.interval`. A remote (MCP)
-result is `result-unbound` in v1: only an envelope minted in this process by a first-party
-tool, or a local tool's declared columns, binds (#195's envelope-origin rule). Local
-provenance establishes where a row came from; it does not establish that the tool told the
-truth (§ 11).
+column absent on any row, a `grain.aggregation` with no `grain.interval`, an `anchor` with
+no `interval` or with a value other than `start` or `end`. An `interval` without an `anchor`
+is not refused — tools declare one today — but it serves no span calculation, and a dev-mode
+warning names the tool once when a span claim is declared against it. A remote (MCP) result
+is `result-unbound` in v1: only an envelope minted in this process by a first-party tool, or
+a local tool's declared columns, binds (#195's envelope-origin rule). Local provenance
+establishes where a row came from; it does not establish that the tool told the truth (§ 11).
 
 ## 6. The check
 
@@ -321,25 +336,32 @@ operation is ever chosen because it happens to reproduce the answer's number.
    value no read of this leg resolved and `claimScope` does not name: `subject-unplaced`. A
    value that joins two different identities (node `7` in two clusters when the claim does
    not say which; an alias two resolved entities declared): `subject-ambiguous`.
-4. **Select the reads**: this leg's attempts of the claim's tool whose executed scope
-   (`executedScope` over the arguments `execute` received) equals the subject's identity on
-   every dimension; for a span claim, the attempts whose executed window meets W. Per scope,
-   the LATEST attempt decides, failures included: if it failed, was withheld, never finished
-   or returned no bound result, the claim is `latest-read-failed` (an older success is never
-   reused). Rows of an earlier leg: `stale-turn`. A call of a tool that is not a declared read,
-   dispatched after a selected read in this leg (a same-batch call counts as after):
-   `superseded-by-write`. A selected result in a shape that does not bind: `result-unbound`.
+4. **Select the reads.** The SELECTION KEY of an attempt is its complete scoped identity
+   (`executedScope` over the arguments `execute` received, one value per `reads` dimension)
+   PLUS its executed window. Eligible keys are those whose identity equals the subject's and,
+   for a span claim, whose executed window meets W. Per key, the LATEST attempt decides,
+   failures included: a key whose latest attempt failed, was withheld, never finished or
+   returned no bound result is INVALIDATED, and the row names it (`invalidated`†: the key's
+   window and the reason); an older success of that same key is never reused
+   (`latest-read-failed` when no eligible key remains). A key with a different executed
+   window is a different key: its latest success stays eligible, and the union of the
+   eligible results is the evidence. Rows of an earlier leg: `stale-turn`. A call of a tool
+   that is not a declared read, dispatched after a selected read in this leg (a same-batch
+   call counts as after): `superseded-by-write`. A selected result in a shape that does not
+   bind: `result-unbound`.
 5. **Freshness**, for a point claim only, when the contract declares `maxAgeSeconds` (#195):
    the age of `measured_at` at the delivery decision; older is `stale`; none is
    `no-measured-at`. A span claim is about fixed instants, so coverage, not freshness,
    decides it.
 6. **Collect observations** from the selected results: rows whose subject is the claim's and
    whose field is the claim's. An observation's identity is `(resultId, position)`: the row's
-   place in the envelope or rowset. Its content key is `(subject, field, t)`. None: when rows
-   of that subject exist without the field, `field-unbound`; when rows of that field exist
-   for other subjects only, `subject-mismatch`. On `subject-unplaced` and `subject-mismatch`
-   alike, when the answer's value appears under another subject, the reason carries that note
-   (the probe: "1200 appears only under Customer A"). The note explains; it never binds.
+   place in the envelope or rowset. Its content key is `(subject, field, span)`, where the
+   span is the instant `t` for a raw sample or a point fact, the declared bucket for a folded
+   series point, and the fold window for a folded fact. None: when rows of that subject exist
+   without the field, `field-unbound`; when rows of that field exist for other subjects only,
+   `subject-mismatch`. On `subject-unplaced` and `subject-mismatch` alike, when the answer's
+   value appears under another subject, the reason carries that note (the probe: "1200
+   appears only under Customer A"). The note explains; it never binds.
 7. **Unit**: let U be the field's declared unit and A the answer's. No U and A given:
    `unit-undeclared`. A equal to U: compare as is. A a declared scale of U (the figures dial's
    1000^k / 1024^k families): compare after the scale, and the label names the scale. Else
@@ -356,49 +378,65 @@ operation is ever chosen because it happens to reproduce the answer's number.
    `window-undeclared` when no row has a time and no period is declared.
 9. **A span claim** (`mean`, `min`, `max`) binds in one of two ways, and the way is decided
    by the rows' declared grain, never by the answer's value:
-   - **A tool fold.** An observation whose `grain.aggregation` is compatible with the claimed
-     operation (`mean` ↔ `avg` or `mean`; `max` ↔ `max`; `min` ↔ `min`; anything else, and any
-     `is_counter: true`, is `fold-incompatible`), whose `entity` is the subject, and whose
-     fold window equals W (a fact: the result's `period.queried`; a series point: the one
-     interval at `t`) under `periodTimeCheck`'s equality. A fold over another window is
+   - **A whole-window tool fold.** An observation whose `grain.aggregation` is compatible
+     with the claimed operation (`mean` ↔ `avg` or `mean`; `max` ↔ `max`; `min` ↔ `min`;
+     anything else, and any `is_counter: true`, is `fold-incompatible`), whose `entity` is the
+     subject, and whose declared span equals W: for a fact, the result's `period.queried`
+     under `periodTimeCheck`'s equality; for a series point, the bucket its interval and
+     anchor declare (`anchor-undeclared` without one). A fold over another span is
      `window-differs`, never a contradiction: it is a different statistic.
-   - **Point samples the library folds.** When the rows are samples finer than W: every
-     distinct observation whose `t` lies in W under W's convention. Requirements, each a
-     reason when unmet: one declared `grain.interval` across every selected result
-     (`grain-undeclared`, `grain-mixed`); the read's `held` covers W (`periodVerdict` is
-     `covered`; `partly-held` is `coverage-partial`, `not-held` is `coverage-not-held`,
-     `unknown` is `coverage-unknown`); the operand set is complete: its count equals the
-     number of cadence stops inside W under W's convention (`operands-incomplete`, with the
-     count found and the count expected). Duplicates (the same content key from retried or
-     overlapping reads) collapse to one operand when their values are equal and are
-     `rows-disagree` when not. Each operand has equal weight: one declared interval means
-     equal-width buckets, which is the only weighting v1 admits. A sample belongs to W by its
-     `t` alone; the library does not reason about a bucket that straddles an edge.
-   A composed coverage gap bearing on the population is stated on the label and never
-   changes the verdict (the typed negatives' rule: a gap is stated, not a withhold); a gap on
-   the PERIOD is coverage, and coverage must be sufficient for the claimed operation: store
-   retention of the window and a complete returned operand set are two different facts, and
-   both are required.
+   - **Buckets the library folds.** When the rows are folded points finer than W: the
+     operand set is built position by position, never by count. Requirements, each a reason
+     when unmet: one declared `interval`, `aggregation` and `anchor` across every selected
+     result (`grain-undeclared`, `anchor-undeclared`, `grain-mixed`); the aggregation
+     compatible with the claimed operation as above, because a mean of bucket means is the
+     window's mean only when the buckets are means, and the maximum of bucket averages is not
+     the window's maximum (`fold-incompatible`); W a whole number of intervals
+     (`cadence-misfit`); the EXPECTED SET of spans `[W.from + k·interval, W.from + (k+1)·interval)`
+     for every k that tiles W; every returned bucket's span, from its `t` and the anchor, a
+     member of the expected set — a bucket outside it, one that straddles an edge of W, or
+     one on a different grid, is `operands-misaligned`; every expected span supplied by a
+     bucket (`operands-incomplete`, with the missing positions listed): twelve stamps crowded
+     into one minute supply one position, not twelve; the read's `held` covers W
+     (`periodVerdict` is `covered`; `partly-held` is `coverage-partial`, `not-held` is
+     `coverage-not-held`, `unknown` is `coverage-unknown`). Duplicates (the same content key
+     from retried or overlapping reads) collapse to one operand when their values are equal
+     and are `rows-disagree` when not. Each operand has equal weight: one declared interval
+     means equal-width buckets, which is the only weighting v1 admits.
+10. **The population an aggregate ranges over.** A claim whose subject is one member (node 7)
+    needs that member's rows and nothing else: a composed coverage gap about other members or
+    other facets is stated on the label and never changes the verdict (the typed negatives'
+    rule: a gap is stated, not a withhold). A claim whose subject is a population (a
+    `collapsed` fold over a cluster) ranges over every member, so the read must have reached
+    every member: the result's composed coverage must be `complete: true` and carry no gap
+    that bears on `population` (`bears`), and no `cap-reached`, `paged`, `credential-limited`,
+    `match`, `ranking` or `scope` gap; otherwise `population-incomplete`, not checked, with
+    the gap's own words on the row. A missing member stops a whole-population statistic
+    exactly as a missing time slice does: the readable members' maximum is not the cluster's
+    maximum. Coverage must be sufficient for the claimed operation on both axes: store
+    retention of the window, a complete returned operand set, and every member read are
+    three different facts, and all are required.
 
 **C. Compare or compute, then decide**
 
-10. **A point claim**: `compareClaimValues`, both ways round (#195), decimals at the answer's
+11. **A point claim**: `compareClaimValues`, both ways round (#195), decimals at the answer's
     own precision (`roundsTo`), text and vocabulary exactly after the declared table,
     instants by `compareInstants`. Equal: **observed**. Different: **contradicted**
     (`value-differs`).
-11. **A tool fold**: the same comparison against the fold's value. Equal: **observed**.
-    Different: **contradicted**.
-12. **A library fold**: compute the ONE declared operation over the complete operand set in
-    exact decimals (`numberPrecision.ts` · `decimalsOf`, the BigInt path `scientificDecimalOf`
-    uses), then compare at the answer's precision. Equal: **calculated**, the operation and
-    the operand count named. Different: **contradicted**. A singleton operand set — the
-    cadence has exactly one stop inside W — is complete, and the mean of one sample is that
-    sample: calculated, labelled "1 reading". One sample where twelve are expected is
-    `operands-incomplete` in B, never observed and never contradicted.
+12. **A whole-window tool fold**: the same comparison against the fold's value. Equal:
+    **observed**. Different: **contradicted**.
+13. **Buckets the library folds**: compute the ONE declared operation over the complete,
+    tiling operand set in exact decimals (`numberPrecision.ts` · `decimalsOf`, the BigInt
+    path `scientificDecimalOf` uses), then compare at the answer's precision. Equal:
+    **calculated**, the operation, the bucket width and the operand count named. Different:
+    **contradicted**. A singleton operand set — one interval equal to W — is complete, and
+    the mean of one bucket is that bucket: calculated, labelled "1 reading". One bucket where
+    twelve positions are expected is `operands-incomplete` in B, never observed and never
+    contradicted.
 
-A claim that fails in B for coverage or completeness may get a SEPARATE statement, written
-by the library from the rows with its own scope and its own verdict (§ 7, "A narrower
-statement"). It never supports the model's claim.
+A claim that fails in B for coverage, completeness or population may get a SEPARATE
+statement, written by the library from the rows with its own scope and its own verdict
+(§ 7, "A narrower statement"). It never supports the model's claim.
 
 Two axes come out of it. The **kind** is one of `observed`, `calculated`, `interpretation`,
 `missing`. The **verdict** is `supported`, `contradicted` or `not-checked`. An observed or
@@ -413,7 +451,7 @@ The failure modes, in one table:
 | `declined` | A | the field is absent, `null` or `'unknown'` | an honest "I don't know" |
 | `subject-unplaced` | A | a dimension has no value, or a value no read of this leg resolved and `claimScope` does not name; the account adds where the value does appear | Codex's probe: nothing was read about Customer B; "1200 appears only under Customer A" |
 | `subject-ambiguous` | A | the supplied dimensions join two identities, or an alias two entities declared | node `7` read in two clusters; the claim names only the node |
-| `latest-read-failed` | A | the latest attempt for the scope failed, was withheld, never finished or returned nothing bound | a success at 09:14, then a failed read of the same node at 09:16 |
+| `latest-read-failed` | A | every eligible key's latest attempt failed, was withheld, never finished or returned nothing bound | a success at 09:14, then a failed read of the same node and window at 09:16 |
 | `stale-turn` | A | the bound read belongs to an earlier leg | an answer after a pause, from the read before it |
 | `superseded-by-write` | A | a non-read call after the selected read, same leg | a reset after the metrics read |
 | `result-unbound` | A | the result declares neither envelope nor subject column | plain JSON from an MCP tool |
@@ -424,48 +462,59 @@ The failure modes, in one table:
 | `operation-mismatch` | B | a point claim meets a fold row | an hourly average served to a "right now" claim |
 | `window-outside` | B | every observation of the subject and field lies outside W, or outside the point claim's time | node 7's 07:30 reading for the 08:15–09:15 claim |
 | `window-undeclared` | B | no row time and no declared period | a result with rows and no `t`, no `measured_at`, no `period` |
-| `window-differs` | B | a compatible tool fold over another window | a daily average served to an hourly claim |
-| `fold-incompatible` | B | the rows' declared aggregation is not the claimed operation, or the values are counters | a `max` fold served to a `mean` claim |
-| `grain-undeclared`, `grain-mixed` | B | samples with no declared interval, or two intervals across the selected results | a rowset for a span claim; a 5-minute and a 1-minute read of one node |
+| `window-differs` | B | a compatible tool fold over another span | a daily average served to an hourly claim |
+| `fold-incompatible` | B | the rows' declared aggregation is not the claimed operation, or the values are counters | a `max` fold served to a `mean` claim; a `max` claim over 5-minute averages |
+| `grain-undeclared`, `anchor-undeclared`, `grain-mixed` | B | buckets with no declared interval, no declared anchor, or two intervals across the selected results | a rowset for a span claim; a tool that stamps buckets without saying which end; a 5-minute and a 1-minute read of one node |
+| `cadence-misfit` | B | W is not a whole number of intervals | a 58-minute window at 5-minute buckets |
+| `operands-misaligned` | B | a returned bucket's span is not in the expected set: outside W, straddling an edge, or on another grid | end-stamped buckets whose first span starts before W; twelve stamps in one minute |
+| `operands-incomplete` | B | an expected span has no bucket | one 08:30 bucket for an hour at 5 minutes; the last position missing under an end anchor |
 | `coverage-partial`, `coverage-not-held`, `coverage-unknown` | B | the read's `held` does not reach all of W, none of it, or is `unknown` | a nightly export asked about the last hour; a store that holds the second half only |
-| `operands-incomplete` | B | fewer samples inside W than the cadence expects | one 08:30 reading for an hour at 5 minutes |
+| `population-incomplete` | B | a whole-population claim, and the read's coverage is not complete for the population | the cluster's maximum when node D was not read |
 | `rows-disagree` | B | two observations with one content key and two values | two reads of one store that disagree |
-| `value-differs` | C | complete operands under the declared operation give another value | 87 stated; the mean of the twelve readings is 71.3 |
+| `value-differs` | C | complete operands under the declared operation give another value | 87 stated; the mean of the twelve buckets is 71.3 |
 
 ## 7. The four kinds, and how each is labelled
 
 | Kind | When | The account's line (library-rendered, fixed templates, versioned) | The standing line | The standing |
 |---|---|---|---|---|
-| **observed** | a point claim equal to its observation, or a span claim equal to a compatible tool fold over W (§ 6 steps 10–11) | "Observed — `node_metrics` returned cpu_pct for node-7 at 09:10, read 09:15, covering 08:15–09:15." / "Observed — `node_metrics` returned the hourly average of cpu_pct for node-7 over 08:15–09:15." | nothing; under "known": "Known — N values observed in results of {who}" | counts toward the tie check behind "known" with enforce (#195 § 3.5, § 10) |
-| **calculated** | the declared operation, recomputed over a complete operand set (step 12) | "Calculated — the answer's cpu_pct is the mean of 12 readings of node-7 between 08:15 and 09:15 (every 5 minutes), from `node_metrics`; the library recomputed it." | nothing | counts like observed, under the declared operation and a complete operand set only (open question 1) |
-| **interpretation** | a field declared `kind: 'interpretation'`† with `of: [fields]` | "Interpretation — the answer's status is the model's reading of cpu_pct (observed) and cpu_peak (calculated); the record holds no rule for it." | "'status' is the model's reading of observed values" | never supports; the whole answer is then "consistent with the record" at most (below); `claim-unbound` on an `of` field that is not observed or calculated |
+| **observed** | a point claim equal to its observation, or a span claim equal to a compatible whole-window tool fold with its population complete (§ 6 steps 11–12) | "Observed — `node_metrics` returned cpu_pct for node-7 at 09:10, read 09:15, covering 08:15–09:15." / "Observed — `node_metrics` returned the hourly average of cpu_pct for node-7 over 08:15–09:15." | nothing; under "known": "Known — N values observed in results of {who}" | counts toward the tie check behind "known" with enforce (#195 § 3.5, § 10) |
+| **calculated** | the declared operation, recomputed over a complete, tiling operand set (step 13) | "Calculated — the answer's cpu_pct is the mean of 12 five-minute averages of node-7 that tile 08:15–09:15, from `node_metrics`; the library recomputed it." | nothing | counts like observed, under the declared operation and a complete operand set only (open question 1) |
+| **interpretation** | a field declared `kind: 'interpretation'`† with `of: [fields]` | "Interpretation — the answer's status is the model's reading of cpu_pct (calculated); the record holds no rule for it." | "'status' is the model's reading of observed values" | never supports; the whole answer is then "consistent with the record" at most (below); `claim-unbound` on an `of` field that is not observed or calculated |
 | **missing** | declined, or any not-checked reason of § 6 | "Missing — the answer states cpu_pct for node-7 over 08:15–09:15; no result of this turn can settle it: `node_metrics` read 07:00–08:00 for node-7, and the value appears only under node-9." | "the record holds no value for {subject}'s {field} in the window asked" | `claim-unbound`†, not sure; `declined` fires nothing new |
-| contradicted (a verdict, not a kind) | complete operands, another value | "Contradicted — the answer's cpu_pct for node-7 over 08:15–09:15 differs from the mean of the 12 readings `node_metrics` returned (read 09:15)." | "a value the answer states differs from what {who} returned" | `claim-contradicted` (planned in `honesty/README.md` § 4.2), not sure |
+| contradicted (a verdict, not a kind) | complete operands, another value | "Contradicted — the answer's cpu_pct for node-7 over 08:15–09:15 differs from the mean of the 12 five-minute averages `node_metrics` returned (read 09:15)." | "a value the answer states differs from what {who} returned" | `claim-contradicted` (planned in `honesty/README.md` § 4.2), not sure |
 
 **How a calculation is checked.** The operation is declared on the claim and checked for
 compatibility with the rows' declared fold BEFORE any number is compared (§ 6, part B). The
-set is closed and narrow in v1: `mean`, `min` and `max` over the samples of ONE subject and
-ONE field inside W, each recomputed in exact decimals and compared at the answer's
-precision. The operand set must be complete (every cadence stop inside W), from reads whose
-`held` covers W, with one declared interval and equal weights; duplicates from retried or
-overlapping reads collapse when equal and refuse when not. Nothing is tried in turn: a
-`mean` claim is compared to the mean, and a `max` fold of 87 never supports `cpu_pct: 87`
-when `cpu_pct` claims a mean. The figures dial's multi-column arithmetic (sums, ratios,
-differences, complements) is NOT admitted for a claim in v1: each needs every operand and its
-order declared, and that binding is deferred (§ 14). The coincidence window the figures dial
-names (±0.5 for a whole number) remains for a calculated value and is reported, not hidden;
-with the operands fixed by binding it is no longer a search over the results.
+set is closed and narrow in v1: `mean`, `min` and `max` over the buckets of ONE subject and
+ONE field, each recomputed in exact decimals and compared at the answer's precision. The
+operands are buckets whose own coverage is declared (`interval` and `anchor`) and which tile
+W exactly, one bucket per expected position; a timestamp inside W is never enough, because
+an end-stamped bucket at 08:15 covers the five minutes BEFORE 08:15, and twelve such buckets
+stamped 08:15 to 09:10 cover `[08:10, 09:10)`, not the hour asked. The operand set must come
+from reads whose `held` covers W, with one declared interval and equal weights, and the
+buckets' own aggregation must be the claimed one (a mean of means, a max of maxes).
+Duplicates from retried or overlapping reads collapse when equal and refuse when not.
+Nothing is tried in turn: a `mean` claim is compared to the mean, and a `max` fold of 87
+never supports `cpu_pct: 87` when `cpu_pct` claims a mean. The figures dial's multi-column
+arithmetic (sums, ratios, differences, complements) is NOT admitted for a claim in v1: each
+needs every operand and its order declared, and that binding is deferred (§ 14). The
+coincidence window the figures dial names (±0.5 for a whole number) remains for a calculated
+value and is reported, not hidden; with the operands fixed by binding it is no longer a
+search over the results.
 
 **A narrower statement is the library's claim, not the model's.** When part B fails because
-the store held only part of W, or the operand set is incomplete, the model's claim stays
-not-checked (a value over the part is not a value over the whole: a window that averages 50
-can have a second half that averages 100). The library may then write its OWN statement from
-the rows, on the precedent of the typed negatives' statements and #195's recorded value:
-"Over 08:45–09:15, the part `node_metrics` held, the mean of 6 readings of cpu_pct for node-7
-is 100%." It carries its own scope, its own kind (observed or calculated) and its own verdict;
-it is vouched by the library and the tool; it appears in the account and, under enforce, as
-the recorded value (#195 § 3.6). It never supports the model's claim, and the standing's
-period reason fires as today.
+the store held only part of W, the operand set does not tile W, or a member of the population
+was not read, the model's claim stays not-checked (a value over the part is not a value over
+the whole: a window that averages 50 can have a second half that averages 100; a cluster
+whose readable members peak at 50 can hold a member at 90). The library may then write its
+OWN statement from the rows, on the precedent of the typed negatives' statements and #195's
+recorded value: "Over 08:45–09:15, the part `node_metrics` held, the mean of 6 five-minute
+averages of cpu_pct for node-7 is 100%." / "Over 08:15–09:15, the maximum of cpu_pct across
+the 11 nodes of cluster cl-a that `cluster_metrics` read is 50%; node-d was not read." It
+carries its own scope, its own kind (observed or calculated) and its own verdict; it is
+vouched by the library and the tool; it appears in the account and, under enforce, as the
+recorded value (#195 § 3.6). It never supports the model's claim, and the standing's period
+or coverage reason fires as today.
 
 **What an interpretation is.** A word or sentence the model wrote over observed values:
 "high", "healthy", "stable", "improving". The library cannot verify it and does not try. It
@@ -544,7 +593,7 @@ const nodeMetrics = defineTool({
   execute: async ({ cluster, node, window }, ctx) =>
     describedResult({
       series: points,                                     // { t, entity: 'node-7', metric: 'cpu_pct', value }, one per 5 minutes
-      grain: { interval: '5m', aggregation: 'avg' },      // each point is the 5-minute average
+      grain: { interval: '5m', aggregation: 'avg', anchor: 'start' }, // † each point is the average over [t, t + 5m)
       units: { cpu_pct: '%' },                            // †
       provenance: { measuredAt: lastSample, source: 'the metrics store' },
       period: { queried: executedWindow, held: storeHeld },
@@ -556,48 +605,55 @@ const nodeMetrics = defineTool({
 
 The person asks "node 7 CPU over the last hour". Under `.time()` the window is confirmed and
 the call runs with it: the lookback's executed range is `[08:15, 09:15)`, its end exclusive
-as the time layer serves a lookback. At a 5-minute cadence that is 12 stops (08:15, 08:20,
-…, 09:10); with an inclusive end it would be 13, which is why the convention travels with
-the window. `claimScope` names the cluster (`cl-a`) from the session; the store returns
-node-7's points for two hours (the backend's minimum) and, because the host app's store is
-shared, node-9's points too. The typed answer is `{ node: 'node 7', cpu_pct: 71, cpu_peak:
-87, status: 'high' }` under the contract of § 4.
+as the time layer serves a lookback. At a 5-minute cadence the expected set is 12 spans,
+`[08:15, 08:20)` to `[09:10, 09:15)`; with an inclusive end it would be 13, which is why the
+convention travels with the window. `claimScope` names the cluster (`cl-a`) from the
+session; the store returns node-7's buckets for two hours (the backend's minimum) and,
+because the host app's store is shared, node-9's buckets too. The typed answer is
+`{ node: 'node 7', cpu_pct: 71, status: 'high' }` under the contract of § 4.
 
 | Step | What V1 reads | Outcome |
 |---|---|---|
 | operation, window | `cpu_pct` claims `mean` over W = `[08:15, 09:15)` | a span claim |
 | subject | `cl-a` from `claimScope`; `node 7` equals `resolved[].name` of this leg's read | placed: `(cl-a, node-7)` |
-| reads | one attempt of `node_metrics` with that executed scope, the latest, returned | selected |
-| observations | series points with `entity: 'node-7'`, `metric: 'cpu_pct'` | 24 points; node-9's 24 points are never candidates |
-| grain | `interval: '5m'`, `aggregation: 'avg'`: samples finer than W, compatible with a library `mean` of 5-minute averages | a library fold |
-| operands | `t` inside W under its convention | 12 of the 12 expected: complete |
-| coverage | `period.held` covers W; `complete: true`; no gap | covered |
+| reads | one attempt of `node_metrics` with that identity and the executed window `[08:15, 09:15)`: one key, its latest attempt returned | selected |
+| observations | series points with `entity: 'node-7'`, `metric: 'cpu_pct'` | 24 buckets; node-9's 24 buckets are never candidates |
+| grain | `interval: '5m'`, `aggregation: 'avg'`, `anchor: 'start'`: buckets finer than W, averages, each covering `[t, t + 5m)` | buckets the library folds, compatible with `mean` |
+| operands | the 12 expected spans, each supplied by one bucket; the 07:15–08:10 buckets are outside the set | complete, position by position |
+| coverage | `period.held` covers W; `complete: true`; no gap; the subject is one member, so no population question | covered |
 | unit | `units.cpu_pct` is `%`; the answer states none | compare as `%` |
-| value | the mean of the 12 points is 71.3; at the answer's precision, 71 | **calculated**, `mean`, 12 readings |
-| `cpu_peak` | the same operands; `max` is 87 | **calculated**, `max` |
-| `status` | `kind: 'interpretation'`, `of: ['cpu_pct', 'cpu_peak']`, both calculated | **interpretation**, fires nothing |
+| value | the mean of the 12 buckets is 71.3; at the answer's precision, 71 | **calculated**, `mean`, 12 five-minute averages |
+| `status` | `kind: 'interpretation'`, `of: ['cpu_pct']`, calculated | **interpretation**, fires nothing |
 
-Standing: "consistent with the record" — the two claims are supported and the interpretation
-field states a value, so the tie check fails and nothing fires. The line: "Consistent with the
-record — 2 values calculated from results of the node metrics read; 'status' is the model's
-reading of them." Without the `status` field, and under enforce with the app's checks passing,
+Standing: "consistent with the record" — the claim is supported and the interpretation field
+states a value, so the tie check fails and nothing fires. The line: "Consistent with the
+record — 1 value calculated from results of the node metrics read; 'status' is the model's
+reading of it." Without the `status` field, and under enforce with the app's checks passing,
 the same answer reads "known".
 
-The same question with other drafts:
+The same question with other drafts, tools or contracts:
 
-| The answer | Where it came from | V1 |
-|---|---|---|
-| `cpu_pct: 87` | node-9's point at 07:40 | the operands are node-7's 12 readings, complete; their mean is 71.3: **contradicted**, `value-differs`. The account adds: "87 appears only under node-9." |
-| `cpu_pct: 87` | node-7's own peak at 08:50 | the same complete operands, the declared operation is `mean`: **contradicted**. The maximum is never tried for a field that claims a mean. The `cpu_peak` field is where 87 is **calculated**, `max`. |
-| `cpu_pct: 87`, and the store returned one sample, 08:30 | a single reading | 1 of 12 expected: `operands-incomplete`, kind **missing**, not checked. Never observed: one reading at one moment is not an hour. |
-| `cpu_pct: 87`, from a tool whose grain is `interval: '1h', aggregation: 'avg'` with one point at 08:15 | a tool fold over W | compatible fold, window equals W: **observed** (the tool's hourly average). With `aggregation: 'max'` instead: `fold-incompatible`, not checked. |
-| `cpu_pct: 100`, and the store held `[08:45, 09:15)` only, all 100 | the held half | `coverage-partial`: kind **missing**, not checked; `period-partly-held` fires as today. The library's own statement: "Over 08:45–09:15, the part the node metrics read held, the mean of 6 readings of cpu_pct for node-7 is 100%." It never supports the model's 100 for the hour. |
-| `cpu_pct: 64` | node-7's point at 07:30 | 12 complete operands in W, mean 71.3: **contradicted**. The account adds: "64 appears for node-7 only at 07:30, outside the window." |
-| `cpu_pct: 71`, with no `claimScope` cluster, and the leg read node 7 in `cl-a` and `cl-b` | two identities | `subject-ambiguous`, kind **missing**, not checked. |
-| `cpu_pct: 71`, after a second read of the same scope failed at 09:16 | the latest attempt failed | `latest-read-failed`, kind **missing**, not checked; the 09:14 success is never reused. |
-| `cpu_pct: 71`, from two overlapping reads (`[08:00, 09:00)` and `[08:30, 09:30)`) | retried or overlapping reads | duplicates by content key collapse when equal; the union is the operand set; 12 of 12: **calculated**. One shared `t` with two values: `rows-disagree`, not checked. |
-| `cpu_pct: 71`, from a read of a tool that declares no `units` and no `entity` | a plain JSON result | `result-unbound`: kind **missing**; the gate still grounds `71` only if some result spells it. |
-| `cpu_pct: null` | the model declined | **missing**, `declined`; nothing new fires. |
+| The answer, and what changed | V1 |
+|---|---|
+| `cpu_pct: 87`, node-9's bucket at 07:40 | the operands are node-7's 12 buckets, complete; their mean is 71.3: **contradicted**, `value-differs`. The account adds: "87 appears only under node-9." |
+| `cpu_pct: 87`, node-7's own peak bucket at 08:50 | the same complete operands, the declared operation is `mean`: **contradicted**. The maximum is never tried for a field that claims a mean. |
+| a `cpu_peak` field claiming `max` over the same 5-minute averages | `fold-incompatible`, kind **missing**: the maximum of averages is not the hour's maximum. A tool that returns `max` buckets, or an hourly `max` fold, would bind it. |
+| `cpu_pct: 87`, and the store returned one bucket, 08:30 | 1 of 12 expected positions: `operands-incomplete`, kind **missing**, not checked. Never observed: one bucket is not an hour. |
+| `cpu_pct: 87`, from a tool whose grain is `interval: '1h', aggregation: 'avg', anchor: 'start'` with one point at 08:15 | a whole-window tool fold: its span `[08:15, 09:15)` equals W, the aggregation is compatible: **observed** (the tool's hourly average). With `aggregation: 'max'` instead: `fold-incompatible`, not checked. With no `anchor`: `anchor-undeclared`. |
+| `cpu_pct: 0`, from a tool that declares `anchor: 'end'` and stamps its twelve buckets 08:15 to 09:10, all 0, while `[09:10, 09:15)` was 100 | the buckets cover `[08:10, 09:10)`: the span `[08:10, 08:15)` is outside the expected set (`operands-misaligned`) and the expected `[09:10, 09:15)` has no bucket (`operands-incomplete`, position named). Kind **missing**, not checked; never a mean of 0. The hour's mean is 100/12. |
+| `cpu_pct: 71`, from the same end-anchored tool stamping 08:20 to 09:15 | the twelve spans are `[08:15, 08:20)` to `[09:10, 09:15)`: they tile W. **calculated**. |
+| `cpu_pct: 71`, from 10-minute buckets start-stamped at 08:10, 08:20, … | W is 6 intervals (`cadence-misfit` passes), but `[08:10, 08:20)` straddles W's start and no bucket starts at 08:15: `operands-misaligned`, kind **missing**. |
+| `cpu_pct: 71`, from twelve buckets stamped within 08:15–08:16 | twelve distinct stamps, one expected position supplied and eleven spans off the grid: `operands-misaligned`, kind **missing**. Count never passes a check. |
+| `cpu_pct: 100`, and the store held `[08:45, 09:15)` only, all 100 | `coverage-partial`: kind **missing**, not checked; `period-partly-held` fires as today. The library's own statement: "Over 08:45–09:15, the part the node metrics read held, the mean of 6 five-minute averages of cpu_pct for node-7 is 100%." It never supports the model's 100 for the hour. |
+| `cpu_pct: 64`, node-7's bucket at 07:30 | 12 complete operands in W, mean 71.3: **contradicted**. The account adds: "64 appears for node-7 only at 07:30, outside the window." |
+| `cpu_pct: 71`, with no `claimScope` cluster, and the leg read node 7 in `cl-a` and `cl-b` | two identities: `subject-ambiguous`, kind **missing**, not checked. |
+| `cpu_pct: 71`, after a second read of the same identity and window failed at 09:16 | the key's latest attempt failed: the key is invalidated and the row names it; no eligible key remains: `latest-read-failed`, kind **missing**; the 09:14 success is never reused. |
+| `cpu_pct: 71`, from two reads with windows `[08:00, 09:00)` and `[08:30, 09:30)` | two keys, each its own latest success: the union by span; the shared spans collapse when equal; 12 expected spans supplied: **calculated**. One shared span with two values: `rows-disagree`, not checked. |
+| the same two reads, and the `[08:30, 09:30)` read failed on a later attempt | that key is invalidated and named on the row; the `[08:00, 09:00)` key stays eligible and supplies `[08:15, 08:20)` to `[08:55, 09:00)`; the three positions from 09:00 have no bucket: `operands-incomplete`, kind **missing**. |
+| a contract field `cluster_cpu_max: { tool: 'cluster_metrics', fact: 'cpu_pct', operation: 'max', subject: { fields: { cluster: 'cluster' } }, window: 'turn' }`; the tool returns a `collapsed` `max` fold over W for `cl-a`, and its composed coverage carries a `population` gap "node-d was not read"; the answer says `50` | a whole-population claim with an incomplete population: `population-incomplete`, kind **missing**, not checked, even though the fold's span, operation and cluster all match. The library's own statement: "Over 08:15–09:15, the maximum of cpu_pct across the 11 nodes of cl-a that `cluster_metrics` read is 50%; node-d was not read." The same with `operation: 'mean'`: `population-incomplete`. |
+| the same gap "node-d was not read" on the node-7 claim of the main walk | the subject is one member, and node-7 was read: the gap is a note on the label; **calculated** as in the main walk. |
+| `cpu_pct: 71`, from a read of a tool that declares no `units` and no `entity` | `result-unbound`: kind **missing**; the gate still grounds `71` only if some result spells it. |
+| `cpu_pct: null` | **missing**, `declined`; nothing new fires. |
 
 Codex's probe runs the same way with facts instead of series: the contract declares
 `owes: { tool: 'get_balance', fact: 'balance', operation: 'value', subject: { fields: {
@@ -614,11 +670,13 @@ did in the probe.
   `findingsLedger` through the one writer (`core/agent/findings/ledger.ts` · `appendRows`):
   `turn`, `candidateDigest`, `answerField`, `kind`, `verdict`, `reason?`, `subject` (the
   resolved identity, as `coverageDeclared` rows already carry resolved ids), `field`,
-  `operation`, `unit?`, `window?` (two instants and the end edge), the selected results'
-  `resultId`, `toolCallId` and `toolName`, the operand observations' identities and their
-  count, the count expected, and the rule version. Never a value from the answer or a row:
-  values stay on the receipt (#109's `ResultEvidence.facts`, under the app's grant) and are
-  kept out by name like everything else.
+  `operation`, `unit?`, `window?` (two instants and the end edge), the selected keys with
+  their `resultId`, `toolCallId` and `toolName`, the invalidated keys with their window and
+  reason, the operand observations' identities, the positions expected and the positions
+  missing or misaligned, the population gap's words when one stopped support, and the rule
+  version. Never a value from the answer or a row: values stay on the receipt (#109's
+  `ResultEvidence.facts`, under the app's grant) and are kept out by name like everything
+  else.
 - **One report row per claim** (`AnswerCheck`, id `agent:claims:<field>`, through
   `claimChecksOf`): supported → `checked-pass`, contradicted → `checked-fail`, not-checked →
   `unreachable`, declined → `not-applicable`. This is the one law V1 changes, and it is the
@@ -642,7 +700,7 @@ did in the probe.
   `tool:<name>` (the rows) and the library (the match); calculated by the library;
   interpretation by the model; missing by the library; the library's narrower statement by
   the library and the tool. "How sure" counts them beside the reasons. The operand rows' leaf
-  joins the show-me allow-list as a derived `{ value, unit, t, at }`†, so "show me" reaches
+  joins the show-me allow-list as a derived `{ value, unit, span, at }`†, so "show me" reaches
   the rows without a tool result's bytes.
 - **No new event in v1.** The report and the row carry the verdict; the fold never reads
   events.
@@ -660,24 +718,27 @@ did in the probe.
 | Input | Trust | It cannot |
 |---|---|---|
 | The model's draft and its typed fields | untrusted | choose the evidence, the row, the subject, the window or the operation; pass by naming a subject the record did not resolve; make a value observed by writing it twice; make a maximum pass as an average |
-| **A value from the wrong subject or window** | — | bind: the rows must name the claim's complete subject and lie in its window; the value's appearance elsewhere is the explanation, never support (§ 6 steps 3–8) |
-| **A statistic of the wrong operation** (a peak served or written where a mean is claimed) | — | bind: the operation is declared on the claim; a fold's declared aggregation must be compatible before any comparison; no operation is chosen because it reproduces the number |
-| **A narrower read** (the store held half the window; the operand set is short) | — | verify the claim about the whole: the claim stays not-checked; the library's own statement about the part carries its own scope and never supports the model's |
+| **A value from the wrong subject or window** | — | bind: the rows must name the claim's complete subject and their declared spans must lie in its window; the value's appearance elsewhere is the explanation, never support (§ 6 steps 3–9) |
+| **A statistic of the wrong operation** (a peak served or written where a mean is claimed) | — | bind: the operation is declared on the claim; a fold's declared aggregation must be compatible before any comparison, on the whole-window route and the bucket route alike; no operation is chosen because it reproduces the number |
+| **Buckets over a different stretch of time** (end-stamped buckets whose stamps fall inside W; buckets straddling an edge; stamps crowded into one minute) | — | pass as the window's operands: each bucket's own span is declared by interval and anchor, and the operand set must tile W one position at a time; a tool that declares no anchor serves no span calculation |
+| **A narrower read** (the store held half the window; the operand set is short; a member was not read) | — | verify the claim about the whole: the claim stays not-checked; the library's own statement about the part carries its own scope and never supports the model's |
+| **A population gap under a whole-population aggregate** (the cluster's maximum when a node was not read) | the read's composed coverage, which already names the gap | be reduced to a note: a gap that bears on the population the aggregate ranges over stops support; a gap outside a single-member claim's subject stays a note |
 | **Unit confusion** | — | bind silently: no unit on the field admits a unitless claim only; a unit the answer states must equal the declared one or be a declared scale; a conversion is named on the label |
 | **A subject alias** | the tool's `resolved[].aliases` and the app's normalizer are the trusted base | be invented by the model: a spelling neither declares places nothing (`subject-unplaced`); an alias two entities declare is `subject-ambiguous`. The cost is over-abstention on spellings the app forgot; it is counted (§ 13), and the fix is a declaration, never a looser match |
 | **Partial coverage** | the read's declared `held` and composed gaps | be hidden: `partly-held`, `not-held` and `unknown` never observe a span claim, and the period reason fires |
 | **A model inventing a binding** | — | happen: the model declares no binding. Its only levers are the subject fields and the values, both checked against rows. A `restsOn`-style hint is not read in v1 |
-| **A tool declaring a binding it cannot honour** (a `%` unit over fractions; a subject column holding display names; an `avg` grain over raw samples; a `measured_at` over cached data) | the trusted base, as every declaration is | be caught by V1 in general: the check vouches for agreement with the tool, not for truth, and local provenance does not establish tool truth. What can be checked is refused at the mint (§ 5); the `check:semantics` gate judges sample results; declarations carry versions on the row; the bench scores a misreporting tool apart (§ 13) |
+| **A tool declaring a binding it cannot honour** (a `%` unit over fractions; a subject column holding display names; an `avg` grain over raw samples; a wrong anchor; a `measured_at` over cached data) | the trusted base, as every declaration is | be caught by V1 in general: the check vouches for agreement with the tool, not for truth, and local provenance does not establish tool truth. What can be checked is refused at the mint (§ 5); the `check:semantics` gate judges sample results; declarations carry versions on the row; the bench scores a misreporting tool apart (§ 13) |
 | Tool text, and instructions inside it | untrusted | add a row; sway a value into support: a swayed value is checked like any other |
 | A result passed through from another process (an MCP structured result, an HTTP body carrying `af_semantics: true`) | untrusted | bind: `result-unbound` in v1 (#195's envelope-origin rule) |
-| Two reads of one subject that disagree; a newer failed read | — | let the model pick: `rows-disagree`; `latest-read-failed`: an older success is never reused |
+| Two reads of one subject that disagree; a newer failed read | — | let the model pick: `rows-disagree`; an invalidated key is named and never reused, and a failure of one key never silently discards another key's success or silently revives it |
 | A write after the selected read | — | hide behind the read: `superseded-by-write` |
 | A saved checkpoint | shape-checked only | revive a binding from another leg: `stale-turn` |
 | The app's contract, normalizers, `claimScope`; each first-party tool's declarations and minted envelopes | the trusted base | — |
 
 **Fail closed.** Any error, limit, timeout, unparseable time, missing declaration or ambiguity
 is not-checked, never supported. A supported claim is always rows the record holds, under
-the operation the contract declared.
+the operation the contract declared, covering the window and the population the claim is
+about.
 
 ## 12. Test plan
 
@@ -689,36 +750,54 @@ beyond them.
   the standing not sure, the gate still grounded. The variant where a read for B returned
   `absent()` → `subject-mismatch`, the same note. And the control:
   `{ customer: 'A', owes: 1200 }` → observed, supported.
-- **The CPU case**, each row of the § 9 tables: calculated 71 (`mean`) and 87 (`max`);
-  contradicted 87 (node-9), 87 (node-7's peak under a `mean` claim) and 64 (07:30); the
-  single-sample claim `operands-incomplete`; the hourly tool fold observed, and
-  `fold-incompatible` for a `max` grain; the half-held store not checked, with the library's
-  own narrower statement; `subject-ambiguous` for node 7 in two clusters;
-  `latest-read-failed` after a failed same-scope read; overlapping reads collapsing by content
-  key, and `rows-disagree` on a shared `t`; `result-unbound`; declined; the interpretation
-  label; node-9's points never candidates.
-- **Singleton and multi-point controls**: one sample where the cadence expects one (interval
-  equals the window) → calculated, "1 reading"; one sample where twelve are expected →
+- **The CPU case**, each row of the § 9 tables: calculated 71 (`mean`); contradicted 87
+  (node-9), 87 (node-7's peak under a `mean` claim) and 64 (07:30); `fold-incompatible` for a
+  `max` claim over averages; the single-bucket claim `operands-incomplete`; the hourly tool
+  fold observed, `fold-incompatible` for a `max` grain, `anchor-undeclared` without an
+  anchor; the half-held store not checked, with the library's own narrower statement;
+  `subject-ambiguous` for node 7 in two clusters; `latest-read-failed` after a failed
+  same-key read; two keys unioned by span, and `rows-disagree` on a shared span; a later
+  failure invalidating one key with the positions it leaves missing; `result-unbound`;
+  declined; the interpretation label; node-9's buckets never candidates.
+- **Anchors and tiling (the second review's controls)**: start-stamped buckets tiling W →
+  calculated; end-stamped buckets tiling W (stamps 08:20 to 09:15) → calculated; end-stamped
+  buckets stamped 08:15 to 09:10 (covering `[08:10, 09:10)`), twelve zeros with the last
+  expected bucket 100 → not checked, never a mean of 0, the missing position named; a
+  10-minute bucket straddling W's start → `operands-misaligned`; twelve stamps within one
+  minute (equal count, wrong positions) → `operands-misaligned`; a bucket on another grid
+  (stamps at :02, :07, …) → `operands-misaligned`; a 58-minute window → `cadence-misfit`;
+  an interval with no anchor → `anchor-undeclared`; raw samples (no grain) under a span
+  claim → `grain-undeclared`.
+- **Population (the second review's controls)**: a `collapsed` cluster `max` fold with a
+  `population` gap (a member not read) → `population-incomplete`, with the library's own
+  statement about the members read; the same with `mean`; `cap-reached`, `paged`,
+  `credential-limited` and `complete: false` each stop a whole-population claim; the
+  unaffected single-node control: the same gap about another node leaves the node-7 claim
+  calculated, with the gap as a note.
+- **Singleton and multi-point controls**: one bucket where the cadence expects one (interval
+  equals the window) → calculated, "1 reading"; one bucket where twelve are expected →
   `operands-incomplete`; twelve of twelve → calculated; eleven of twelve → incomplete, with
-  both counts on the row.
+  the missing position on the row.
 - **Operation binding**: a `mean` claim against `avg`, `mean`, `max`, `sum`, `count` and
-  `is_counter: true` grains, each with the expected verdict; a `max` claim the same way; the
-  number that a non-declared operation would reproduce is never credited.
+  `is_counter: true` grains, on both the whole-window and the bucket route, each with the
+  expected verdict; a `max` claim the same way; the number that a non-declared operation
+  would reproduce is never credited.
 - **Unavailable operands**: a span claim over a rowset (`grain-undeclared`); two intervals
   across two reads (`grain-mixed`); a declared scale with no declared unit
   (`unit-undeclared`); a point claim against a fold (`operation-mismatch`).
 - **The narrower calculation**: a window that averages 50 whose second half, all 100, is the
   part held → `coverage-partial`, not checked, never supported; the library's statement
-  carries `[08:45, 09:15)` and 6 readings, and the model's claim row still reads not-checked.
+  carries `[08:45, 09:15)` and 6 buckets, and the model's claim row still reads not-checked.
 - **Scope and selection**: node `7` in two clusters, with and without `claimScope`; a success
-  followed by a failed same-scope lookup; a success followed by a successful same-scope read
-  (the latest decides); an alias two entities declare; a read of another cluster never
-  selected; `stale-turn` across a pause; `superseded-by-write` from a same-batch non-read
-  call; freshness on a point claim (`stale`, `no-measured-at`), and no freshness on a span
-  claim.
+  followed by a failed same-key lookup; a success followed by a successful same-key read
+  (the latest decides); two keys with different windows, both eligible; a failed key never
+  discarding another key's success; an alias two entities declare; a read of another cluster
+  never selected; `stale-turn` across a pause; `superseded-by-write` from a same-batch
+  non-read call; freshness on a point claim (`stale`, `no-measured-at`), and no freshness on
+  a span claim.
 - **Windows and edges**: a lookback's `[from, to)`; a `bounds` form with `edge: 'inclusive'`
   and with `edge: 'exclusive'`; a sample exactly at an excluded stop stays outside, and at an
-  included stop inside; the expected count follows the convention (12 against 13); a `t`
+  included stop inside; the expected set follows the convention (12 spans against 13); a `t`
   without an offset read with the result's period offset, and refused without one; a
   declared `queried` read as `[from, to + step)`.
 - **Every reason of § 6**, one test each.
@@ -742,15 +821,19 @@ beyond them.
 - **Properties**: an observed value is grounded by the gate (never widened); adding a result
   never turns a not-checked or contradicted claim into supported except through rows that
   bind it under the declared operation (monotone in the #197 sense); the in-run rows equal
-  the read-after fold (`assessAnswer` over the recording, the equality law).
+  the read-after fold (`assessAnswer` over the recording, the equality law); over generated
+  bucket sets, a set that does not tile W never yields support, whatever its count.
 - **Declarations refused at the mint**: a `units` field no row carries; two subject columns; a
   time column that does not parse; a unit outside the vocabulary; an aggregation with no
-  interval.
+  interval; an anchor with no interval or outside `start` / `end`; and the dev-mode warning
+  for an interval with no anchor under a span claim.
 - **The account and the line**: goldens for the four kinds, the contradiction and the
-  library's narrower statement; the line's named and unnamed clauses; `displayName` used,
-  the registered name never.
+  library's narrower statements (time and population); the line's named and unnamed
+  clauses; `displayName` used, the registered name never.
 - **Byte identity**: an agent without the scoped contract is byte-identical, every reference
-  under `test/core/tools/reference/` unchanged; the short form of `.claims()` unchanged.
+  under `test/core/tools/reference/` unchanged; the short form of `.claims()` unchanged; a
+  tool that declares an `interval` with no `anchor` is byte-identical when no span claim
+  names it.
 - **Mutation tests**: each failure reason has at least one mutant that makes the check
   supported, and the suite catches it.
 
@@ -763,46 +846,50 @@ a universal guarantee, and this page makes none.
 **Independent adversarial cases first.** Before the build is tuned, an author who did not
 write the build freezes a set of adversarial cases with oracle labels: wrong scope (another
 node, another cluster, an alias), wrong aggregation (a peak for a mean, a counter for a
-gauge, a daily fold for an hourly claim), and incomplete coverage (a half-held store, a short
-operand set, a read with no grain). The build is then run against them unchanged; a case it
-fails is reported, not re-labelled.
+gauge, a daily fold for an hourly claim, a maximum of averages), wrong operand coverage
+(end-stamped buckets inside the window, a straddling bucket, crowded stamps, a wrong anchor
+declared), and incomplete coverage (a half-held store, a short operand set, a read with no
+grain, a member not read under a cluster aggregate). The build is then run against them
+unchanged; a case it fails is reported, not re-labelled.
 
 **Registered rule `binding-rule-v1`**† (`bench/binding/RULE.md`†, written before any paid
 call, on the figures bench's pattern — `bench/figures/RULE.md`):
 
 - **Model**: Haiku 4.5 only, through the package's own adapter; the answer bench's protocol.
 - **Tasks**: two typed-answer tasks. (1) The node task of § 9 over a fixture store with
-  several nodes, two clusters and several hours; (2) the customer balance task of the probe
-  over a fixture with several customers. Each fixture holds a world table, read by the tools
-  and by a deterministic fixture reader that labels every stated claim true or false with its
-  own comparison code.
+  several nodes, two clusters and several hours, including a cluster-level claim; (2) the
+  customer balance task of the probe over a fixture with several customers. Each fixture
+  holds a world table, read by the tools and by a deterministic fixture reader that labels
+  every stated claim true or false with its own comparison code.
 - **Cases**: controls (the person names one subject; the answer should be observed or
   calculated); provoking (a shared store that returns neighbouring subjects and extra hours;
   a store that returns a fraction under a `%` field; an alias spelling; a half-held read; a
   question that invites a peak where a mean is claimed; a question that invites an average
-  over two clusters); fail-closed (no alias declared; a read that declares no grain; a remote
-  tool; the same node in two clusters); a misreporting tool (the world says 64, the tool
-  serves 87), scored apart.
+  over two clusters; a cluster question where one node was not read); fail-closed (no alias
+  declared; a read that declares no grain or no anchor; a remote tool; the same node in two
+  clusters); a misreporting tool (the world says 64, the tool serves 87; a tool whose anchor
+  is declared wrong), scored apart.
 - **Planted drafts**: on every control and provoking case, 3 extra runs swap the model's final
   draft for a planted wrong one after the real tool turns: the neighbour's value, the value
-  from the hour before, the peak in the mean's field, the value in the wrong unit, a value no
-  row carries. At least 20 planted drafts reach the checker, else NOT-MEASURABLE.
+  from the hour before, the peak in the mean's field, the readable members' maximum under a
+  cluster claim, the value in the wrong unit, a value no row carries. At least 20 planted
+  drafts reach the checker, else NOT-MEASURABLE.
 - **Pass bar**, on the registered cases: false `supported` 0 (a planted or natural false claim
   labelled observed or calculated); false `contradicted` 0 (a true claim contradicted);
   needless not-sure on natural true answers (`claim-unbound` or `check-unreachable` on a true
   claim) ≤ 0.10 over ≥ 40 answers, with `subject-unplaced`, `subject-ambiguous`,
-  `window-undeclared`, `grain-undeclared` and `unit-undeclared` counted apart as declaration
-  gaps; the gate's verdict on observed values grounded 100%; repair turns asked on a true
-  calculated value, counted and reported (the § 8 limit); an answer with an interpretation
-  field never `known`, 100%; model calls per run equal to the unarmed agent (V1 adds no
-  turn); in-run rows equal the read-after fold 100%.
+  `window-undeclared`, `grain-undeclared`, `anchor-undeclared` and `unit-undeclared` counted
+  apart as declaration gaps; the gate's verdict on observed values grounded 100%; repair
+  turns asked on a true calculated value, counted and reported (the § 8 limit); an answer
+  with an interpretation field never `known`, 100%; model calls per run equal to the unarmed
+  agent (V1 adds no turn); in-run rows equal the read-after fold 100%.
 - **Reported**: per case, with intervals that treat the case as the unit; the reason mix; the
-  misreport case apart; the declaration gaps, since they say what an app must declare before
+  misreport cases apart; the declaration gaps, since they say what an app must declare before
   V1 is quiet; the independent adversarial set's results, case by case.
 - **What a pass licenses**: shipping the scoped contract opt-in for typed direct facts and
   the three admitted operations, on Haiku 4.5, single turn, for the registered task shapes.
   Nothing about prose, other models, other operations or follow-up turns.
-- **Cost**: about 170 runs; estimate under $1; cap `--max-usd 1.50`. **No paid run is
+- **Cost**: about 180 runs; estimate under $1; cap `--max-usd 1.50`. **No paid run is
   authorized by this note**; it waits for the owner's budget go.
 
 The figures bench's known limitation ("whichever pool the person asked about") becomes a
@@ -815,6 +902,14 @@ asked pool only.
 - Multi-column operations: sums, ratios, differences and complements over claims. Each needs
   every operand and its order declared; a later design.
 - Weighted folds (unequal buckets, sparse samples), medians, percentiles, counts.
+- A "mean of the readings whose stamps lie in W" claim: a different statistic with its own
+  operation name (`mean-of-stamped`†), deferred; if it is ever admitted it never supports a
+  whole-window statistic.
+- Raw samples (a series with no grain) supporting a span claim: a sample's coverage is an
+  instant, so they serve point claims only.
+- A library fold across members (an average over the nodes of a cluster from per-node
+  rows): v1 binds a population claim only to a tool's `collapsed` fold with complete
+  population coverage.
 - A correction turn (#195 § 7.4 keeps it off; v1 builds none).
 - A model-cited handle (`restsOn`) narrowing the binding.
 - Binding at the draft, before the gate's repair turn.
@@ -830,11 +925,12 @@ asked pool only.
 ## 15. Open questions, with proposed answers
 
 1. **Does a calculated value count toward "known"?** Proposed: yes, under the declared
-   operation and a complete operand set only, because the operands are observed rows and the
-   arithmetic is the library's. The figures dial's `computed` never counts, and still does not.
+   operation and a complete, tiling operand set only, because the operands are observed rows
+   and the arithmetic is the library's. The figures dial's `computed` never counts, and still
+   does not.
 2. **Which operations in v1?** Proposed: `value`, `mean`, `min`, `max`. `sum` and `count` over
-   points, medians and percentiles wait for a case; multi-column arithmetic waits for its own
-   operand binding.
+   buckets, medians and percentiles wait for a case; multi-column arithmetic waits for its own
+   operand binding; `mean-of-stamped` is deferred and never supports a whole-window claim.
 3. **Should V1 also bind at the draft**, so the guard's repair turn does not ask the model to
    replace a correct mean? Proposed: not in v1; the limit is documented and measured (§ 8,
    § 13), and the draft-time repair stays the figures dial's concern.
@@ -850,9 +946,16 @@ asked pool only.
 9. **The library's narrower statement under enforce.** Proposed: delivered as the recorded
    value only when the app has a template for it (#195 § 3.6); otherwise it stays in the
    account and the delivery is "I don't know" with the limitation.
-10. **A bucket that straddles an edge.** Proposed: a sample belongs to W by its `t` alone in
-    v1; a tool whose buckets end at `t` rather than start there declares nothing today, and
-    a `grain.anchor`† declaration is a later addition if a case needs it.
+10. **Should the mint require `anchor` beside `interval`?** Proposed: not for existing mints
+    (tools declare an interval today, and an app without the contract must stay byte-identical);
+    the anchor is required only where a span calculation needs it, with one dev-mode warning
+    per tool when a span claim is declared against an anchorless grain. A later major may
+    require it at the mint.
+11. **Which gap kinds stop a whole-population claim?** Proposed: any gap that bears on
+    `population`, plus `cap-reached`, `paged`, `credential-limited`, `match`, `ranking` and
+    `scope`, and `complete: false`. A `period`-bearing gap is coverage; a `source` or filter
+    facet gap under a claim whose filters the subject fixes is a note. Codex and the owner
+    may want the list closed differently.
 
 ## 16. Decisions
 
@@ -860,50 +963,60 @@ asked pool only.
    the operation the claim declares. Prose binds nothing; an undeclared field is
    `unchecked-field`.
 2. The app declares which fields are claims, what settles each and which operation each
-   claims; the tool declares what its rows are about and how each value was folded; the
-   library binds. The model declares nothing and names no evidence.
+   claims; the tool declares what its rows are about, how each value was folded and which
+   span each folded value covers; the library binds. The model declares nothing and names no
+   evidence.
 3. Two result shapes bind: the envelope (`facts` with `entity`, `series` with `entity`,
-   `metric`, `t`, with `grain` for any span claim) and a rowset with a declared subject
-   column (point claims only). Units are declared on the envelope (`units`†) or the column
-   (`unit`†). Anything else is `result-unbound`.
+   `metric`, `t`, with `grain` — interval, aggregation and anchor — for any span claim) and a
+   rowset with a declared subject column (point claims only). Units are declared on the
+   envelope (`units`†) or the column (`unit`†). Anything else is `result-unbound`.
 4. The subject is the complete scoped identity of the claim's tool, from `claimScope` or
    declared subject fields joined to this leg's `resolved` values and aliases, after the
    app's normalizer. No fuzzy match; two identities are ambiguous, not a match.
 5. The window carries the executed range's boundary convention (the form's declared `to`
-   edge; a lookback ends exclusive); a sample at an excluded stop is outside. Coverage is the
-   read's declared `held` and the completeness of the operand set, two different facts.
+   edge; a lookback ends exclusive); a sample at an excluded stop is outside.
 6. One point never proves a span claim, whatever the row count. A span claim is observed only
-   through a compatible tool fold over the same window, or calculated over a complete operand
-   set at one declared interval with equal weights.
-7. The operation is bound before the number: fold compatibility is checked first, and no
-   operation is chosen because it reproduces the answer. v1 admits `value`, `mean`, `min`,
-   `max`; multi-column arithmetic is deferred.
-8. A calculation over a narrower window never verifies the wider claim. The library may write
-   its own statement about the part, with its own scope and verdict.
-9. The check is one control flow: eligible inputs, then the operand set, then the one allowed
-   comparison or calculation. Contradiction is possible only in the last part, from complete
-   operands; everything else is "cannot check". The inherited safeguards — complete scoped
-   identity, the latest attempt including failures, freshness for point claims, observation
-   identity — are steps of that flow.
-10. Four kinds: observed, calculated, interpretation, missing. Three verdicts: supported,
+   through a compatible tool fold whose declared span equals the window, or calculated over
+   buckets whose declared spans tile the window one position at a time, at one interval
+   with equal weights and the claimed aggregation. A timestamp inside the window is never
+   enough; a count is never a check.
+7. The operation is bound before the number: fold compatibility is checked first, on both
+   routes, and no operation is chosen because it reproduces the answer. v1 admits `value`,
+   `mean`, `min`, `max`; multi-column arithmetic is deferred.
+8. Coverage must be sufficient for the claimed operation on every axis: the store's retention
+   of the window, a complete operand set, and every member of the population an aggregate
+   ranges over. A missing member stops a whole-population statistic as a missing time slice
+   does; a gap outside a single-member claim's subject is a note.
+9. A calculation over a narrower window or population never verifies the wider claim. The
+   library may write its own statement about the part, with its own scope and verdict.
+10. The check is one control flow: eligible inputs, then the operand set, then the one allowed
+    comparison or calculation. Contradiction is possible only in the last part, from complete
+    operands; everything else is "cannot check". The inherited safeguards — complete scoped
+    identity, the latest attempt per selection key including failures, freshness for point
+    claims, observation identity — are steps of that flow.
+11. The selection key is the complete scoped identity plus the executed window. Per key the
+    latest attempt decides; a failed key is invalidated and named, never silently reused and
+    never silently discarding another key; eligible keys are unioned by span.
+12. Four kinds: observed, calculated, interpretation, missing. Three verdicts: supported,
     contradicted, not-checked. Every failure is named and fails closed.
-11. The whole answer is never an unqualified "known" beside a model interpretation or an
+13. The whole answer is never an unqualified "known" beside a model interpretation or an
     undeclared field: the tie check requires every shown field to be a supported claim or
     app-printed; otherwise "consistent with the record" at most, with the field named. A
     delivery acceptance test pins it.
-12. V1 runs on the delivered candidate inside answer validation. The gate runs first and is
+14. V1 runs on the delivered candidate inside answer validation. The gate runs first and is
     never widened; V1's calculated value reaches the gate as a computed figure for that
     field's path only; the draft-time repair on a true calculated value is a documented,
     measured limit.
-13. Two reasons (`claim-unbound`†, `claim-contradicted`), one check (`claim-binding`†), one row
+15. Two reasons (`claim-unbound`†, `claim-contradicted`), one check (`claim-binding`†), one row
     per claim, one line per claim in the account, no new event.
-14. Reused from #109: identity, capture with grants, executed scope on the complete identity,
+16. Reused from #109: identity, capture with grants, executed scope on the complete identity,
     reasons, the evaluator. Reused from #195: the position, the contract, comparators, the
     latest-attempt and freshness rules, `unchecked-field`, the delivery table, the recorded
     value, the bench shape. Changed: the subject may come from the answer; a window and an
-    operation per claim; a unit door; the row side of binding; calculated and interpretation
-    kinds; the narrower statement as the library's own claim; no correction turn.
-15. Measured on registered cases before it ships, with an independent author's adversarial
+    operation per claim, with operands that must cover the window; a unit door; the row side
+    of binding; calculated and interpretation kinds; the narrower statement as the library's
+    own claim; no correction turn.
+17. Measured on registered cases before it ships, with an independent author's adversarial
     cases frozen first: zero false supported, zero false contradicted, needless not-sure
     ≤ 0.10 on natural true answers, declaration gaps counted apart. No universal claim, and no
     paid run authorized by this note.
