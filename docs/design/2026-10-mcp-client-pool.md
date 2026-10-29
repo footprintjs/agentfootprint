@@ -11,8 +11,10 @@ process lost is no longer reported as a server expiry. Revised again the same da
 second review: an abort no longer frees capacity before the work under it settles, and a
 per-client list belongs to one client incarnation, so a replacement client lists again.
 After the third review, a pool-wide operation budget bounds outstanding work on any
-client, and no release returns capacity before that work settles. The build follows in
-its own PR, after the owner's and Codex's review.
+client, and no release returns capacity before that work settles. After the fourth, an
+ending reserves its slots before a client leaves the open set, the accounting unit is
+named, and the note says what the budgets do not bound. The build follows in its own PR,
+after the owner's and Codex's review.
 
 Code is cited as `file` · `symbol`, under `src/`. A name marked † does not exist yet: it
 is this page's proposal, and the build may rename it. Facts about the MCP SDK were read
@@ -294,7 +296,8 @@ per key. A second caller for the same key joins it (the `starting` map of
   signal, not proof that the work stopped (§ 5.3). Until it settles, the key cannot open
   again: an acquire for it meanwhile is refused at once with the same reason, so one key
   never has two opens. If, once settled, the open turns out to have opened a session, that
-  client moves to the ending set.
+  client is ended under the ending rule of § 5.3: its slots are reserved first, and
+  otherwise it is kept, counted and reported as deferred.
 - on failure, hands the same refusal (`init-failed`, the original error kept as `cause`
   for the app and never composed into the message) to every current waiter. The failure
   is not cached: the next acquire opens again.
@@ -340,26 +343,53 @@ A client leaves the open set only into the ending set, and only when it holds no
 The one exception is a lost handle (§ 5.5): there is nothing to send, so it leaves at once
 and its ending is recorded unresolved.
 
+**Ending a client reserves two slots first.** An ending is an operation (§ 5.2), so moving a
+client into the ending set reserves both an ending slot (`maxEnding`) and an operation slot
+(`maxOperations`) before the client leaves the open set. If either is full, the client
+stays in the open set, still counted, and is reported as deferred (§ 8); the pool never
+reports a cleanup as done before it has run. This one rule covers every way a client
+ends: eviction to make room, the idle sweep, `terminate`, `close`, and an abandoned open
+that turns out to have opened a session.
+
 **Admission.** Every operation is admitted against `maxOperations` before anything is
 sent. When that budget is full: `PoolFullError`, `limit: 'operations'`, and the open, the
 listing or the `tools/call` never starts. That holds for the tenth call on one existing
 client as much as for a new conversation. With `maxClients: 1` and `maxOperations: 20`,
 one conversation whose calls keep timing out in a stalled credential vend has at most
-twenty outstanding; the twenty-first is refused before it is sent. Then, when a key with no
-client needs one:
+twenty outstanding; the twenty-first is refused before it is sent.
+
+**The accounting unit is the admitted logical operation.** A `tools/call`, a listing (one
+`list(ctx)` for one conversation), an `acquire` and an ending each take exactly one
+operation slot, at admission. Setup an operation performs for itself runs inside that slot
+and is never charged again: the open of its key's client, and the revalidating
+`tools/list` a call performs on a replacement client (§ 6.3). Opens and listings stay one
+at a time per key; an operation that joins one waits inside its own slot. A held app lease
+is not an operation: it is bounded by `maxLeaseMs` and pins a client that `maxClients`
+counts, and the `acquire` that opened it was the operation. An ending is never nested
+setup, because it ends a client on its own schedule, so it always takes its own slot. At
+each interaction the lazy idle sweep reserves its endings before the new operation is
+admitted. So a cold call, or a call that meets a replacement, needs one slot, and at
+`maxOperations: 1` work still completes one operation at a time, although making room by
+eviction then waits for the idle sweep. Endings and other work share `maxOperations`;
+`maxEnding` caps the endings' share, and a deployment sizes `maxOperations` above
+`maxEnding` so that endings alone never fill it (the defaults, 8 and 256, do). The build
+pins this unit with tests at `maxOperations: 1` (§ 10).
+
+Then, when a key with no client needs one:
 
 1. If the principal already holds `maxClientsPerPrincipal` clients, its least recently
    used idle client moves to the ending set. If none of them is idle: `PoolFullError`†,
    `limit: 'principal'`.
 2. If the pool holds `maxClients`, its least recently used idle client moves to the ending
    set. If none is idle: `PoolFullError`, `limit: 'pool'`.
-3. Either move needs a free ending slot. If none is free: `PoolFullError`, `limit:
-   'ending'`.
+3. Either move reserves an ending slot and an operation slot first. If the ending set is
+   full: `PoolFullError`, `limit: 'ending'`; if the operation budget is full: `limit:
+   'operations'`.
 
 The refusal comes at once; there is no queue. "Used" means the last lease taken or
 released. The idle sweep, `terminate`, `close` and an abandoned open also move clients
-into the ending set only while it has room; the rest stay in the open set, still counted,
-until a slot frees. So the pool holds at most `maxClients + maxEnding` client objects and
+into the ending set only once both slots are reserved; the rest stay in the open set,
+still counted and reported deferred, until slots free. So the pool holds at most `maxClients + maxEnding` client objects and
 has at most `maxEnding` endings charged, past their deadline or not, however fast
 conversations churn. With `maxClients: 1` and `maxEnding: 1`, a hundred short
 conversations hold at most two clients and one ending; while an ending has not settled,
@@ -388,9 +418,21 @@ provider that honours it settles at the abort; one that does not stays charged u
 settles.
 
 `PoolFullError` reaches the model as the call's error, so its message is one fixed
-sentence: "The connection pool for this server was full, so nothing was sent." The counts
+sentence: "The connection pool for this server was full, so the tool call was not sent." Its
+scope is the `tools/call`, as with `sent: false` (§ 6.3). A refused listing never reaches the
+model as a tool result: it fails that iteration's tool discovery
+(`agentfootprint.tools.discovery_failed`), as any failing `ToolProvider` does. The counts
 (`limit`, `max`, `busy`, `ending`, `operations`) ride typed fields the app reads, never the
 message.
+
+**What the budgets bound, and what they do not.** They bound client objects
+(`maxClients + maxEnding`), endings (`maxEnding`) and admitted operations
+(`maxOperations`). They do not bound the bytes of a response: `src/mcp/README.md` states
+that its structured-result limits apply after the transport has received the response.
+Nor do they bound a caller's own allocations, waiters joined on work already admitted (a
+second `terminate` for the same conversation, `settled()`, `close()`), or the process's
+total memory. The build documents those limits separately, and never folds them into these
+counts.
 
 One consequence, named: when the pool is saturated, an idle client can be ended between
 two calls of one turn. Its next call opens a new client, and the record says `previous:
@@ -727,12 +769,14 @@ in `tools/toolSessions.ts` today) is exported and shared, not copied. In additio
 
 - **`pool.terminate(scope)`** stops new leases on the matching clients at once; the next
   acquire for that key opens a new client. It waits for in-flight work, up to 5 s, then
-  moves the clients into the ending set as it has room. A client still leased by then is
-  reported `deferred` and ended when its last lease is released.
+  moves each client into the ending set once an ending slot and an operation slot are
+  reserved for it (§ 5.3). A client still leased by then, or one whose slots cannot be
+  reserved yet, is reported `deferred`, never as ended, and is ended when it can be.
 - **`pool.close()`** refuses new work, revokes app leases, and aborts in-flight calls
   through the pool's own signal. Their leases are released as they settle. Then it ends
-  every client, `maxEnding` at a time. It resolves after a bounded wait and reports the
-  work still unsettled by count, never as done; that work stays charged until it settles.
+  every client as slots can be reserved, at most `maxEnding` at a time. It resolves after
+  a bounded wait and reports the clients it could not end yet as deferred, and the work
+  still unsettled by count, never as done; that work stays charged until it settles.
 
 The pool does not register with an agent's tool-session tier (§ 1.2): it has one owner,
 the composition root that built it.
@@ -802,7 +846,7 @@ vocabulary canary (`test/redaction/agent-redaction.vocabulary.test.ts`) as paylo
 | 2 | **A confused deputy.** The pool or a tool acts with one conversation's client for another caller, or a credential is vended for whoever is calling. | The provider keys only on the identity the caller named. Every `execute` checks the calling run's identity against its key before anything is sent, so a cached or handed-on tool cannot run under another conversation. A replacement client is checked against the tool's binding. A transport factory is called with the identity its client is for. The runtime transport already refuses a user-delegated bearer it would send for whoever calls. | On a shared machine credential (SigV4's role), every client acts with the process's authority, and the server can tell users apart only by session. Per-user authority needs per-user credentials; the pool cannot add it. |
 | 3 | **A key derived from model input.** | Two doors only: `callerIdentity`, from `run({ identity })`, and the identity app code passes to `acquire` and `terminate`. There is no key function. Arguments, model output, the message, a request body and a `sessionId` alone are never read. A derived identity is refused, and so is a missing principal by default. No caller flag claims verification. | The pool cannot tell a verified principal from a claimed one; the host door verifies (`hosting/identityVerification.ts`). An app that builds `run({ identity })` from a request body has moved the problem, not solved it. |
 | 4 | **Stale or poisoned definitions.** One conversation's listing changes what another conversation's model sees, or a tool listed before a revocation, a reconfiguration or a replacement is still sent. | Per client by default. Sharing needs the app's two names and a `configHash` computed from the plan before anything opens, with the tenant always in the context. Lists are written by one listing at a time, as frozen plain-data copies, with declarations judged field by field by `readToolExtras`; a listing that races an invalidation is discarded; a notice can only invalidate. Every tool re-checks its binding after each wait and at the send gate, before every attempt and last after credential and signing work. A per-client list belongs to one client incarnation: a replacement lists again, and an old tool is sent only if the fresh list holds the same definition; generations never carry across incarnations. | A server that serves a malicious list serves it to every client anyway: sharing adds no new source. Wrong names (a server whose list follows the session, declared shared) let one session's list reach the rest of its context; the docs name it, and per client is the fix. A request already handed on, to the network or to the app's own `fetch`, cannot be recalled. |
-| 5 | **Pool exhaustion as a denial of service.** Many conversations, slow calls, slow endings or work that ignores its abort fill the pool, or leave work and remote sessions behind. | Open clients are capped globally and per principal; endings by `maxEnding`; and every outstanding open, listing, call and ending, on any client, by `maxOperations`, so repeated calls on one existing client are bounded too. Each stays charged until its work settles, not until its abort, so at most `maxClients + maxEnding` clients are held and at most `maxEnding` endings and `maxOperations` operations are charged, however fast conversations churn and whatever ignores an abort. Callers get their answer by the deadline; the gate sends nothing after it, and the vending path checks again after the credential arrives. There is no queue: `PoolFullError` (`pool`, `principal`, `ending` or `operations`) comes at once, before anything is sent. A failed open frees its slot once it has settled. | Work that never settles (a credential provider that never answers, a `fetch` that ignores its abort) holds its charge until it settles, or until the process, or an isolated worker running it, ends. There is no release that returns capacity sooner; once a budget is full, new work is refused. `stats().unsettled` reports it; the budgets enforce. A local cap is not a remote cap. A remote session whose ending was not confirmed (`not-offered`, `failed`, `timed-out`, `handle-lost`) lives until the platform's own timeout; the pool counts these as `unresolvedEndings` and cannot bound them. A principal can fill its own share, and many principals of one tenant can fill the pool: there is no per-tenant share. Per-caller limits belong at the door (`hosting/admission.ts` · `AdmissionPolicy`). With no negative cache, a failing server is opened again at each acquire, one open per key at a time. |
+| 5 | **Pool exhaustion as a denial of service.** Many conversations, slow calls, slow endings or work that ignores its abort fill the pool, or leave work and remote sessions behind. | Open clients are capped globally and per principal; endings by `maxEnding`; and every outstanding open, listing, call and ending, on any client, by `maxOperations`, so repeated calls on one existing client are bounded too. Each stays charged until its work settles, not until its abort, so at most `maxClients + maxEnding` clients are held and at most `maxEnding` endings and `maxOperations` operations are charged, however fast conversations churn and whatever ignores an abort. Ending a client reserves an ending slot and an operation slot first; otherwise the client is kept, counted and reported deferred. Callers get their answer by the deadline; the gate sends nothing after it, and the vending path checks again after the credential arrives. There is no queue: `PoolFullError` (`pool`, `principal`, `ending` or `operations`) comes at once, before anything is sent. A failed open frees its slot once it has settled. | Work that never settles (a credential provider that never answers, a `fetch` that ignores its abort) holds its charge until it settles, or until the process, or an isolated worker running it, ends. There is no release that returns capacity sooner; once a budget is full, new work is refused. `stats().unsettled` reports it; the budgets enforce. The budgets bound client objects, endings and admitted operations; they do not bound response bytes, caller allocations, waiters joined on admitted work, or total process memory. At a very small `maxOperations`, making room by eviction waits for the idle sweep. A local cap is not a remote cap. A remote session whose ending was not confirmed (`not-offered`, `failed`, `timed-out`, `handle-lost`) lives until the platform's own timeout; the pool counts these as `unresolvedEndings` and cannot bound them. A principal can fill its own share, and many principals of one tenant can fill the pool: there is no per-tenant share. Per-caller limits belong at the door (`hosting/admission.ts` · `AdmissionPolicy`). With no negative cache, a failing server is opened again at each acquire, one open per key at a time. |
 | 6 | **A leaked lease.** App code acquires and never releases, or a call never settles. | Library leases are `try`/`finally` around one operation. An app lease is revoked after `maxLeaseMs` and reported; its next use throws, and its in-flight calls keep their own leases. `release()` is idempotent, and `Symbol.asyncDispose` makes `await using` work. | A call whose request never settles keeps its client busy until it does. The SDK's request timeout (60 s by default) and the run's signal answer the caller sooner; the charge stays until settlement. |
 | 7 | **Remote session ids as capabilities, and what outlives an ending.** A runtime session id, plus permission to invoke the runtime, lands a request in that session; a stopped session can be resumed. | The runtime session id and the server's `Mcp-Session-Id` stay inside the transport; the client sees a random handle (`session.ts`). Neither appears in the record, a report, an error or `stats()`. The pool never resumes a session id it ended. | A stopped AgentCore session's id stays valid until the runtime is deleted, and configured session storage persists: anyone holding the id and the permission can resume it, and its stored files outlive `terminated`. Deleting stored data is the runtime's configuration, not the pool's. |
 
@@ -857,7 +901,15 @@ conversation's session.
   `stats()` shows twenty operations, all unsettled, with `open: 1` and `ending: 0`. When
   A's credential is released after its deadline, A sends nothing and settles, and exactly
   one new call is admitted. A streamed answer whose `send()` has returned keeps its
-  operation charged until the response itself has arrived.
+  operation charged until the response itself has arrived. The accounting unit, at
+  `maxOperations: 1` and `maxEnding: 1`: a cold listing (open, list), a cold call (open,
+  call) and a call that meets a replacement (open, revalidating list, call) each complete
+  in one slot; a joiner waits inside its own slot; an idle client due for ending is ended
+  before the next admission, and a conversation refused while the only slot was held
+  succeeds once that ending settles. Ending admission: with the operation budget full, an
+  eviction, an idle end, `terminate`, `close` and an abandoned open that opened a session
+  each leave the client in the open set, counted and reported deferred, never as ended;
+  once slots free, the client moves and ends.
 - **`binding.test.ts`** — (a) two conversations of one principal, with `share` returning
   the same names, whose factory chooses another `qualifier` for the second: the hashes
   differ, the second lists on its own client and never sees the first's list; (b)
@@ -968,7 +1020,8 @@ adopted here as the design's proposed answers, **adopted from review, owner to c
     outstanding operations, a 30 s open, a 5 s deadline for an ending's answer, 600 s
     idle, a 15-minute app lease, a 600 s definitions limit, 256 entries and 512 shared
     tools. The ending and operation budgets, charged until settlement (§ 5.3), are in place
-    before any claim of bounded local resource use.
+    before any claim of bounded local resource use, and that claim covers client objects,
+    endings and admitted operations only.
 
 The second review answered the two questions this draft left open. Its proposals are
 adopted the same way, **proposed, owner to confirm**:
@@ -1011,11 +1064,17 @@ owner to confirm**:
    outstanding operations (`maxOperations`: every open, listing, call and ending, on any
    client). Every operation is admitted against the operation budget before anything is
    sent, and making room for a new client needs an idle client and a free ending slot.
-   Otherwise `PoolFullError` comes at once, naming the budget. There is no queue.
+   Otherwise `PoolFullError` comes at once, naming the budget. There is no queue. Ending a
+   client reserves an ending slot and an operation slot before it leaves the open set;
+   otherwise it is kept, counted and reported deferred, never as ended.
 6. An abort is not settlement. Every operation stays charged until its logical request and
    all work under it have settled; its caller gets the answer by the deadline. Work that
    never settles keeps its charge, and there is no release in v1. The gate sends nothing
-   after a deadline, and the vending path checks again after the credential arrives.
+   after a deadline, and the vending path checks again after the credential arrives. The
+   accounting unit is the admitted logical operation: its own setup runs inside its slot,
+   and an ending always takes its own. The budgets bound client objects, endings and
+   admitted operations, not response bytes, caller allocations, joined waiters or process
+   memory.
 7. Definitions are per client by default, and a per-client list belongs to one client
    incarnation. Sharing needs the app's `configuration` and `authorization` names and a
    `configHash` computed from the plan before anything opens; the tenant is always in the
