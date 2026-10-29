@@ -193,10 +193,16 @@ your function receives, so you see them and have the last word. Worked example:
 ### Throttling is handled, and only throttling
 
 `retryOnThrottle` is on by default: up to 3 attempts, never more than 10
-seconds of waiting in total across one call, **429 only**. A 429 is a
-pre-execution rejection —
-the tool did not run — which is the one status where a retry cannot double an
-effect. Ignored for `stdio`, which has no HTTP status to read.
+seconds of waiting in total across one call, **429 only**. Ignored for `stdio`,
+which has no HTTP status to read.
+
+Automatic 429 retries assume the server rejected the request before executing
+it. The saved response records that assumption's basis (the server's 429), not
+proof that nothing ran: HTTP 429 says the request was rate-limited, nothing
+more. A tool with side effects is retried on 429 like any other today, because
+this retry has no side-effect guard and sends no deduplication key.
+`retryOnThrottle: false` turns that off for the server. Nothing else is retried:
+a 5xx or a timeout may be the record of work that ran.
 
 The wait is the server's `Retry-After` when it sends one, and otherwise a
 backoff you can tune: `baseDelayMs` (200) doubling by `multiplier` (2), drawn
@@ -232,7 +238,10 @@ disk and read back still says what each call's retries did:
 
 An attempt's `outcome` is `answered`, `refused`, `failed`, `timed-out` or
 `cut`. A response received is `answered` whatever its status: a 503 is
-`answered` with `status: 503`, never a success, and it is still not retried. Its
+`answered` with `status: 503`, never a success, and it is still not retried.
+`refused` is a response the retry policy recognises as a refusal (HTTP 429, or
+AgentCore Runtime's session-busy reply), recorded as the server sent it. It is
+not proof that nothing ran. Its
 `reason` says why the series went on or stopped after it — `retryable` (the only
 one that is not an end), `answered`, `exhausted`, `wait-limit`, `no-time-left`,
 `not-replayable`, `not-retryable` or `cancelled`.

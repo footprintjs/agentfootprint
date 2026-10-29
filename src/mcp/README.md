@@ -101,6 +101,12 @@ sent.
 ```
 
 A response received is `answered` with its status — a 503 is never success.
+`refused` is a response the retry policy recognises as a refusal (a 429, a
+session-busy reply), recorded as the server sent it — not proof that nothing
+ran. Automatic 429 retries assume the server rejected the request before
+executing it. There is no side-effect guard on them today: a tool with side
+effects is retried on 429 like any other, and `retryOnThrottle: false` turns that
+off per server.
 A row holds numbers and the library's own words; a failure is a fixed sentence
 and its category, never the thrown error's text. See `seriesEvidence.ts`.
 

@@ -219,13 +219,18 @@ export interface McpClientOptions {
    * the transport's `retry` values as the call's overall limits and these as
    * limits on the 429 retries inside them.
    *
-   * **Why this is on by default.** A 429 is a *pre-execution rejection* — the
-   * rate limiter refused the request at the edge and the server never ran the
-   * tool, so a retry cannot double-execute anything. That is not true of a
-   * 5xx or a timeout, where the call may have half-run, which is why this
-   * retries 429 and nothing else. Managed gateways rate-limit per principal
-   * by design, and without this a designed, self-clearing condition reached
-   * the model as a thrown tool error it reads as "this tool is broken".
+   * **What this assumes.** Automatic 429 retries assume the server rejected
+   * the request before executing it. The saved response records that
+   * assumption's basis (the server's 429), not proof that nothing ran: HTTP 429
+   * says the request was rate-limited, nothing more (RFC 6585 §4). A tool with
+   * side effects is retried on 429 like any other today — this retry has no
+   * side-effect guard and sends no deduplication key — and
+   * `retryOnThrottle: false` turns that off for this server. Nothing else is
+   * retried: a 5xx or a timeout may be the record of work that ran.
+   *
+   * **Why this is on by default.** Managed gateways rate-limit per principal by
+   * design, and without this a designed, self-clearing condition reached the
+   * model as a thrown tool error it reads as "this tool is broken".
    *
    * Ignored for `stdio`, which has no HTTP status to read.
    */

@@ -19,9 +19,9 @@
  *
  * ── Why asking again is safe ─────────────────────────────────────────────────
  * The refusal is the PLATFORM's, about the session, made before the request
- * reached the MCP server: nothing ran. That is the license a 429 holds, and the
- * only one the retry series accepts (see `mcp/throttleRetry.ts` ·
- * `RetryDecision`).
+ * reached the MCP server: nothing ran. That is the license the retry series
+ * asks of every refusal it repeats — for a 429 it is an assumption, not proof
+ * (see `mcp/throttleRetry.ts` · `RetryDecision`).
  *
  * ── What it must NOT match ───────────────────────────────────────────────────
  * `ConflictException` shares the code -32005 ("Resource conflict - Resource

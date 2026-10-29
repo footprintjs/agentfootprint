@@ -1,6 +1,6 @@
 /**
- * throttleRetry — when an MCP server refuses a request before running it, wait
- * and ask again.
+ * throttleRetry — when an MCP server refuses a request with a response the
+ * retry policy recognises (HTTP 429), wait and ask again.
  *
  * ── Why this exists ──────────────────────────────────────────────────────────
  * Managed MCP gateways enforce per-principal rate limits. A throttled
@@ -10,20 +10,24 @@
  * tool, or invents an answer. A designed, transient, self-clearing condition
  * was being turned into a wrong answer.
  *
- * ── Why retrying a 429 is safe, and why the policy is 429-ONLY ───────────────
- * **A 429 is a pre-execution rejection.** The rate limiter refused the request
- * at the edge; the server never ran the tool. Retrying therefore cannot
- * double-execute anything — which is exactly what is NOT true of a 500 or a
+ * ── What retrying a 429 assumes, and why the policy is 429-ONLY ─────────────
+ * **Automatic 429 retries assume the server rejected the request before
+ * executing it.** A rate limiter that refuses at the edge has not run the tool —
+ * but HTTP 429 says only that the request was rate-limited (RFC 6585 §4), so the
+ * saved response records the assumption's basis (the server's 429), not proof
+ * that nothing ran. There is no side-effect guard here: a tool with side
+ * effects is retried on 429 like any other today, and `retryOnThrottle: false`
+ * turns that off per server. What is certain is the contrast with a 500 or a
  * timeout, where the call may have half-run and a retry could charge a card
  * twice.
  *
- * That asymmetry is the whole license for this module, so the policy must never
- * widen. Only HTTP 429 retries here. Not 5xx, not network errors, not timeouts
+ * That assumption is the whole license for this module, so the policy must
+ * never widen. Only HTTP 429 retries here. Not 5xx, not network errors, not timeouts
  * — those belong to a caller who knows whether the specific tool is idempotent,
  * and this seam does not. A property test pins the boundary.
  *
  * The loop takes its question as a {@link RetryDecision}, so the one other
- * refusal a service DOCUMENTS as pre-execution — AgentCore Runtime's "session
+ * refusal a service documents as one to retry — AgentCore Runtime's "session
  * operation in progress" — reuses this loop rather than growing a second one.
  * That decision is applied only by that vendor's own transport; what
  * `mcpClient` and `retryingFetch` retry is still a 429 and nothing else.
@@ -264,9 +268,10 @@ export interface RetryVerdict {
  * The one question the loop asks of each response.
  *
  * ── The license every decision must hold ─────────────────────────────────────
- * A decision may answer "again" ONLY for a refusal the server made BEFORE it
- * ran anything — the property that makes a 429 safe to repeat (see the module
- * note). A response that could be the record of half-done work is never one.
+ * A decision may answer "again" ONLY for a response the library treats as a
+ * refusal made before anything ran — the assumption a 429 retry rests on (see
+ * the module note: the 429 is its basis, not proof). A response that could be
+ * the record of half-done work is never one.
  * The library holds exactly two such decisions: {@link throttled} below, and
  * AgentCore Runtime's documented "session operation in progress" refusal,
  * which lives with that vendor's adapter (`adapters/mcp/agentcoreRuntime/`).
@@ -728,8 +733,9 @@ class Series {
   private retryOn(error: unknown): boolean {
     this.plannedWaitMs = 0;
     const refused = this.latest;
-    // The license: only a refusal made before the server ran anything. A 5xx, a
-    // dropped connection or a timeout may be the record of work that ran.
+    // The license: only a response a rule recognises as a refusal (the 429
+    // assumption — see the module note). A 5xx, a dropped connection or a
+    // timeout may be the record of work that ran.
     if (refused === undefined || error !== refused.refusal) return this.decline('not-retryable');
     // A body we cannot send twice makes a retry a different request. Rare for
     // MCP (JSON strings), but silently replaying half a stream would be worse
@@ -838,8 +844,8 @@ function whereOf(rules: readonly BoundRule[], input: string | URL): RequestWhere
 }
 
 /**
- * A response a rule recognised as a refusal made before anything ran, thrown so
- * the attempt runner decides on it. It carries only what an attempt record may
+ * A response a rule recognised as a refusal (a 429, a session-busy reply), thrown
+ * so the attempt runner decides on it. It carries only what an attempt record may
  * keep: a fixed sentence, its kind as `code`, a 429's status and the wait the
  * server stated. Never the server's text, the request or the response — the
  * series holds the response, not the error.

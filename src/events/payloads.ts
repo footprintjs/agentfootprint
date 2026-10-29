@@ -2423,9 +2423,11 @@ export interface ToolsCodeRunPayload {
  *     delivered as it came, WHATEVER its status: a 503 is `answered` with
  *     `status: 503`. A response received is not an operation that succeeded,
  *     so nothing here is called success; read `status`.
- *   - `'refused'` — the server refused BEFORE running anything, in a way a
- *     retry rule recognises (`kind`): HTTP 429, or AgentCore Runtime's
- *     session-busy reply. The only outcome that is ever retried.
+ *   - `'refused'` — a response the retry policy recognises as a refusal
+ *     (`kind`): HTTP 429, or AgentCore Runtime's session-busy reply. The only
+ *     outcome that is ever retried. It records the response the server sent,
+ *     not proof that nothing ran: a 429 says the request was rate-limited,
+ *     nothing more (RFC 6585 §4).
  *   - `'failed'` — the request threw before an answer arrived (a dropped
  *     connection, a DNS failure). Never retried: the server may have run it.
  *   - `'timed-out'` — the call's deadline (`maxElapsedMs`) cut the request
@@ -2474,7 +2476,8 @@ export type ToolRequestRemote = 'unknown';
  *     or the deadline cut a request or a wait.
  *   - `'not-replayable'` — refused, but the request's body cannot be sent twice.
  *   - `'not-retryable'` — the attempt failed in a way this retry never
- *     repeats: only a refusal made before the server ran anything is retried.
+ *     repeats: only a response the retry policy recognises as a refusal (a 429,
+ *     a session-busy reply) is retried.
  *   - `'cancelled'` — the caller's signal ended the request.
  */
 export type ToolRequestReason =
@@ -2545,8 +2548,9 @@ export interface ToolRequestAttempt {
   /**
    * `'unknown'` when the attempt ended without an answer (`failed`,
    * `timed-out`, `cut`): it was sent, and whether the server received and ran
-   * it is not known. Absent when an answer arrived — the response says what
-   * the server did.
+   * it is not known. Absent when a response arrived: the record keeps what the
+   * server answered (`status`) — for a `refused` attempt that is the server's
+   * own refusal, not proof that nothing ran.
    */
   readonly remote?: ToolRequestRemote;
 }
