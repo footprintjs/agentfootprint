@@ -7,8 +7,10 @@ details. Revised 2026-10-29 after Codex's review of the first draft: tool defini
 now per client unless the app declares a context the pool can check before anything opens;
 every tool re-checks its binding after each wait and at the send boundary; endings run in
 a bounded set, and a local cap is no longer claimed to bound remote sessions; a handle this
-process lost is no longer reported as a server expiry. The build follows in its own PR,
-after the owner's and Codex's review.
+process lost is no longer reported as a server expiry. Revised again the same day after the
+second review: an abort no longer frees capacity before the work under it settles, and a
+per-client list belongs to one client incarnation, so a replacement client lists again. The
+build follows in its own PR, after the owner's and Codex's review.
 
 Code is cited as `file` · `symbol`, under `src/`. A name marked † does not exist yet: it
 is this page's proposal, and the build may rename it. Facts about the MCP SDK were read
@@ -38,12 +40,13 @@ read 2026-10-29.
    - One open per key at a time, with a timeout. A failure is not cached.
    - A client in use holds a lease and is never evicted or closed. A full pool moves its
      least recently used idle client into a bounded set of endings, or refuses at once with
-     `PoolFullError`†.
-   - Tool definitions are per client by default. They are shared only when the app names
-     the configuration and the authorization they depend on, and the pool has checked,
-     before any client opens, the configuration it can see. Every tool is bound to that
-     context and its generation, and re-checks the binding after each wait and at the send
-     boundary.
+     `PoolFullError`†. Local work stays charged to its budget until it has settled, not
+     merely until it was aborted.
+   - Tool definitions are per client by default, and belong to one client incarnation: a
+     replacement client lists again. They are shared only when the app names the
+     configuration and the authorization they depend on, and the pool has checked, before
+     any client opens, the configuration it can see. Every tool is bound to that list and
+     its generation, and re-checks the binding after each wait and at the send boundary.
    - `terminate`† ends the remote session through the transport and reports what the
      remote side answered, including when nothing could be confirmed. On AgentCore Runtime
      it is `StopRuntimeSession`. `close()` stays local.
@@ -205,7 +208,7 @@ opening throws (`PoolFullError`, `McpPoolRefusedError`†).
 await orders.terminate({ tenant, principal, conversationId });  // † one conversation ended
 await orders.terminate({ tenant, principal });                   // † every conversation of a principal
 await orders.close();                                            // † shutdown
-await orders.settled();                                          // † endings in progress have finished
+await orders.settled();                                          // † charged work has settled
 orders.permissionsChanged({ tenant, principal });                // † § 6.2
 orders.toolsChanged();                                           // † § 6.2: the server was redeployed
 orders.sweep();                                                  // † the lazy idle sweep, now
@@ -282,9 +285,10 @@ per key. A second caller for the same key joins it (the `starting` map of
 - runs under the pool's own signal and `initTimeoutMs`, never a caller's. One caller's
   cancelled run detaches that caller only; the open goes on for the others.
 - holds a lease while it runs and counts toward `maxClients`.
-- on timeout, is aborted. Every waiter gets `McpPoolRefusedError` (`init-timeout`) and the
-  open slot is freed. If the transport issued a session before the timeout, that client is
-  ended through the ending set (§ 5.3).
+- on timeout, is aborted, and every waiter gets `McpPoolRefusedError` (`init-timeout`) at
+  once. The open stays charged to the open set until its own work settles: an abort is a
+  signal, not proof that the work stopped (§ 5.3). If, once settled, it turns out to have
+  opened a session, that client moves to the ending set.
 - on failure, hands the same refusal (`init-failed`, the original error kept as `cause`
   for the app and never composed into the message) to every current waiter. The failure
   is not cached: the next acquire opens again.
@@ -296,11 +300,12 @@ The default ceiling, 30 s, sits above the runtime transport's session-busy retry
 
 A client is **busy** while any lease is open and **idle** otherwise. Two kinds of lease:
 
-- **The library's**, for exactly one operation (an open, a `tools/list`, a `tools/call`),
-  taken and released in `finally`. Each is bounded: an open by `initTimeoutMs`; a list or
-  a call by the run's `ctx.signal` and by the SDK's request timeout (60 s by default).
-  Today `wrapMcpTool` never passes the run's signal; a bound tool does, so a cancelled run
-  releases its lease.
+- **The library's**, for exactly one operation (an open, a `tools/list`, a `tools/call`).
+  Each answers its caller in bounded time: an open by `initTimeoutMs`; a list or a call by
+  the run's `ctx.signal` and by the SDK's request timeout (60 s by default). Today
+  `wrapMcpTool` never passes the run's signal; a bound tool does. The lease itself is
+  released when the operation's own work settles, which the pool's `send()` wrapper
+  observes, not merely when the caller got its answer (§ 5.3).
 - **The app's**, through `acquire`, held until `release()`. Bounded by `maxLeaseMs`† (15
   minutes by default). Past it, the lease is revoked at the next pool interaction and
   reported. Its next use throws (`lease-expired`), and calls already in flight keep their
@@ -315,7 +320,8 @@ The pool holds clients in two sets, each bounded:
 
 - **Open** — opening, busy or idle — at most `maxClients`, and at most
   `maxClientsPerPrincipal` for one principal.
-- **Ending** — a termination in flight — at most `maxEnding`†.
+- **Ending** — from the decision to end a client until the work of ending it has
+  settled — at most `maxEnding`†.
 
 A client leaves the open set only into the ending set, and only when it holds no lease.
 The one exception is a lost handle (§ 5.5): there is nothing to send, so it leaves at once
@@ -335,14 +341,30 @@ The refusal comes at once; there is no queue. "Used" means the last lease taken 
 released. The idle sweep, `terminate`, `close` and an abandoned open also move clients
 into the ending set only while it has room; the rest stay in the open set, still counted,
 until a slot frees. So the pool holds at most `maxClients + maxEnding` client objects and
-runs at most `maxEnding` endings at once, however fast conversations churn. With
-`maxClients: 1` and `maxEnding: 1`, a hundred short conversations hold at most two clients
-and run at most one ending; one that arrives while an ending is still running is refused
-(`limit: 'ending'`), not queued and not admitted past the cap.
+has at most `maxEnding` endings charged, past their deadline or not, however fast
+conversations churn. With `maxClients: 1` and `maxEnding: 1`, a hundred short
+conversations hold at most two clients and one ending; while an ending has not settled,
+every arrival that needs room is refused (`limit: 'ending'`), not queued and not admitted
+past the cap.
 
-Each ending's local wait is bounded by `TOOL_TEARDOWN_TIMEOUT_MS` (5 s). At the deadline
-the request is aborted and the slot frees. That bounds this process's work. It does not
-bound the remote side (§ 7).
+**An abort is not settlement.** Each ending answers its caller by
+`TOOL_TEARDOWN_TIMEOUT_MS` (5 s): at that deadline its request is aborted and `terminate()`
+resolves with `timed-out`. The slot is not freed then. It stays charged until the ending's
+own work settles, because an abort only asks: `mcp/gatewayTransport.ts` ·
+`createVendingFetch` awaits `getCredential` with no signal, and an app's own `fetch` may
+ignore one. The same rule covers an abandoned open (§ 5.1) and calls: a client whose call
+has not settled stays busy, so it can be neither evicted nor ended, even after the SDK's
+own timeout has failed the call. Work that never settles keeps its charge, and the pool
+refuses new work rather than pretend the room exists; `stats().unsettled`† counts such
+work by kind, and a late settlement is reported. That is what makes the bound real for
+this process. It does not bound the remote side (§ 7).
+
+**No request after its deadline.** The send gate (§ 6.3) also refuses any request whose
+operation was aborted or timed out. On the vending path it runs after the credential
+arrives and before the request is handed on, so a credential that arrives late sends
+nothing. The credential request carries the signal too (`CredentialRequest.signal`†), so a
+provider that honours it settles at the abort; one that does not stays charged until it
+settles.
 
 `PoolFullError` reaches the model as the call's error, so its message is one fixed
 sentence: "The connection pool for this server was full, so nothing was sent." The counts
@@ -444,9 +466,12 @@ and the declarations its `_meta` carries (read by `mcp/toolExtras.ts` · `readTo
 The executable half (`execute`, the connection) is never shared.
 
 **The default is `'per-client'`.** A conversation's definitions are listed on its own
-client and used by that conversation alone. It is the one mode whose correctness the pool
-can check for itself. It costs one `tools/list` per conversation, and a new conversation
-opens its client before its first model call.
+client, and the list belongs to that client incarnation alone: a replacement client, even
+one opened from the same plan for the same conversation, is a new session whose list may
+differ, so it lists again (§ 6.3). It is the one mode whose correctness the pool can check
+for itself. It costs one `tools/list` per client, and a new conversation opens its client
+before its first model call. Reusing a list across incarnations needs the app's sharing
+contract below.
 
 **Sharing is declared by the app, and checked by the pool.** An app that knows what a
 server's tool list depends on says so:
@@ -532,8 +557,11 @@ entry and to a client's own list alike.
 **The time limit.** `definitionTtlMs`† (600 s by default). A lapsed list is listed again
 at the next list. Its generation moves only if the new list differs.
 
-**Generations.** Invalidation moves a list's generation; a new configuration is a new
-context. A listing still in flight when the generation moved is discarded, not written.
+**Generations.** A generation counts within one list: a shared entry's, or one client
+incarnation's. Invalidation moves it; a new configuration is a new context; a replacement
+client starts a list and a count of its own, so no number from an old incarnation can
+match, or revive, a binding to the new one. A listing still in flight when the generation
+moved is discarded, not written.
 
 **Entries.** Each list is a frozen plain-data copy, made under the reading law of
 `mcp/plainData.ts` · `copyJsonObject`, written once per context and generation, by one
@@ -544,8 +572,9 @@ and `nextCursor` is not followed.
 
 ### 6.3 Bound tools, and the checks after every wait
 
-A bound tool carries its **binding**: the key it was listed for, the context it was listed
-in (§ 6.1; per client, the key and the `configHash`), and the list's generation. It has the
+A bound tool carries its **binding**: the key it was listed for; the context it was listed
+in (§ 6.1; per client, the key and the `configHash`); the list it came from (per client, the
+client incarnation, `clientId`; shared, the entry); and that list's generation. It has the
 shape `wrapMcpTool` builds (`schema`, `source` set to the pool's name, the declarations),
 and the build factors that wrapper into one function both use. Its `execute`:
 
@@ -557,11 +586,16 @@ and the build factors that wrapper into one function both use. Its `execute`:
    opened from a plan resolved now. If that plan's context differs from the binding
    (the factory now chooses another configuration, or another credential), the tool
    refuses with `binding-changed`† and nothing is sent; the new client stays for the
-   conversation's next list;
+   conversation's next list. If the client is not the incarnation the tool was listed
+   from, the tool is revalidated. Per client, the replacement's own fresh list is taken
+   (one `tools/list`, which also serves the conversation's next list), and the call goes on
+   only if that list holds the same definition, compared as canonical JSON; otherwise
+   `stale-tools`, and nothing is sent. Under the app's sharing contract, a replacement
+   whose context matches uses the shared entry as it stands;
 4. after that wait, and after every other wait, checks step 2 again. A `permissionsChanged`
    that landed during a cold open is refused here;
-5. sends through the send gate below, classifies the outcome (§ 5.5), releases the lease,
-   and files its facts (§ 8).
+5. sends through the send gate below, classifies the outcome (§ 5.5), files its facts
+   (§ 8), and releases the lease once the request's own work has settled (§ 5.2).
 
 Every refusal happens before anything is sent, and says so (`sent: false`†) for E3's
 record of what an attempt did.
@@ -571,19 +605,25 @@ its own headers, and a gateway transport awaits the credential it vends inside `
 the last check cannot live in the tool. The pool wraps the SDK transport it built. At
 `send()`, it moves the call's binding from a library-private `_meta` marker into a map
 keyed by the request's JSON-RPC `id`, and removes the marker, so the server receives
-today's bytes. The gate is a synchronous check of that binding. It joins the transport's
-one retry series the way `mcpClient`'s 429 rule does (`mcp/throttleRetry.ts` ·
-`joinableRetry`), and is asked before every attempt and again after a credential is
-vended, immediately before the bytes are handed on. A binding that went stale in between
-is refused there (`stale-tools`, not sent). On a transport with no series, the gate is a
-pass-through `fetch`. stdio has no `fetch`, and its `send()` writes without waiting, so
-the check at `send()` is the last. What the gate cannot recall: a revocation that lands
-after it passed, while the AWS SDK signs or on the wire (§ 9, threat 4).
+today's bytes. The gate is a synchronous check of that binding and of the operation's
+abort and deadline. It joins the transport's one retry series the way `mcpClient`'s 429
+rule does (`mcp/throttleRetry.ts` · `joinableRetry`) and is asked before every attempt;
+it is asked last at the latest boundary the library controls, after all asynchronous
+credential and signing work and before the network handoff. On the vending path that is
+after the credential arrives and before the base `fetch`, or the app's own. On SigV4 it is
+a step on each command's own AWS SDK middleware stack, after the request is signed and
+before the request handler sends it; a step on the command, not the client, so an AWS
+client the app passed is not changed. A binding that went stale, or an operation that was
+aborted or timed out, is refused there, and nothing is sent. On a transport with no
+series, the gate is a pass-through `fetch`. stdio has no `fetch`, and its `send()` writes
+without waiting, so the check at `send()` is the last. What no gate can recall is a
+request already handed on: to the network, or to the app's own `fetch` (§ 9, threat 4).
 
 **Never another conversation's connection.** The binding is to the KEY. A replacement
-client for the same key, opened from a plan whose context matches, serves the same bound
-tool; a client of any other key never does, and a tool handed to another conversation's
-run is refused at step 1.
+client for the same key serves an old bound tool only after step 3 found the same
+definition in that client's own fresh list, or, under the app's sharing contract, in the
+shared entry for a matching context. A client of any other key never serves it, and a tool
+handed to another conversation's run is refused at step 1.
 
 ## 7. Termination
 
@@ -620,11 +660,12 @@ interface McpTerminateOutcome {   // †
 }
 ```
 
-**A local cap is not a remote cap.** The local wait is bounded: 5 s, then the request is
-aborted. The remote session is not. After `not-offered`, `failed`, `timed-out`,
-`handle-lost` or `unavailable`, the remote session may live until the platform's own
-timeout (900 s idle on AgentCore by default), and nothing in this process can shorten
-that. Such an ending is `resolved: false`. The pool counts it
+**A local cap is not a remote cap.** The caller's wait is bounded: by 5 s it has its
+answer and the request is aborted, while the slot stays charged until the local work
+settles (§ 5.3). The remote session is bounded by neither. After `not-offered`, `failed`,
+`timed-out`, `handle-lost` or `unavailable`, the remote session may live until the
+platform's own timeout (900 s idle on AgentCore by default), and nothing in this process
+can shorten that. Such an ending is `resolved: false`. The pool counts it
 (`stats().unresolvedEndings`†) and reports each one. No number in this design bounds
 remote sessions whose ending was not confirmed.
 
@@ -655,7 +696,7 @@ it did."
 **In the pool**, every end goes through `terminate()`, inside the ending set (§ 5.3): idle,
 eviction, an abandoned open, `pool.terminate`, `close`, and an expiry, whose answering
 compute may still run. The exception is a lost handle: nothing can be sent, so the ending
-is recorded unresolved. The tier's laws hold: each client is ended at most once, the local
+is recorded unresolved. The tier's laws hold: each client is ended at most once, the caller's
 wait is bounded, nothing is thrown into a run, every end is reported, and "already gone" is
 an outcome, not an incident. The tier's bounded-wait helper (`withTimeout`, module-private
 in `tools/toolSessions.ts` today) is exported and shared, not copied. In addition:
@@ -666,7 +707,8 @@ in `tools/toolSessions.ts` today) is exported and shared, not copied. In additio
   reported `deferred` and ended when its last lease is released.
 - **`pool.close()`** refuses new work, revokes app leases, and aborts in-flight calls
   through the pool's own signal. Their leases are released as they settle. Then it ends
-  every client, `maxEnding` at a time.
+  every client, `maxEnding` at a time. It resolves after a bounded wait and reports the
+  work still unsettled by count, never as done; that work stays charged until it settles.
 
 The pool does not register with an agent's tool-session tier (§ 1.2): it has one owner,
 the composition root that built it.
@@ -705,19 +747,24 @@ interface ToolsMcpClientPayload {   // † events/payloads.ts
   readonly initMs?: number;             // opened or joined: how long the open took
   readonly definitions?: 'shared' | 'listed';  // at 'list'
   readonly definitionsAgeMs?: number;   // when shared
+  readonly revalidated?: 'kept' | 'refused';  // at 'call': met a replacement client (§ 6.3)
 }
 ```
 
 `client: 'not-needed'` is a list served from shared definitions, touching no client. The
 call's own `stream.tool_start` and `tool_end` are unchanged.
 
-**Outside a run**, idle ends, evictions, terminations, revoked leases and deferred ends
-happen when no run exists. They reach `onEvent` as an `McpPoolReport`†:
-`{ kind, server, clientId, keyHash, reason, remote, resolved, status?, errorClass?,
-durationMs }`. The precedent is the tier's `report` option (`tools/toolSessions.ts` ·
+**Outside a run**, idle ends, evictions, terminations, revoked leases, deferred ends and
+work that settled after its deadline happen when no run exists. They reach `onEvent` as an
+`McpPoolReport`†: `{ kind, server, clientId, keyHash, reason, remote, resolved, status?,
+errorClass?, durationMs }`, where a late settlement is `kind: 'settled-late'`. The
+precedent is the tier's `report` option (`tools/toolSessions.ts` ·
 `ToolSessionTierOptions`). A throwing `onEvent` is swallowed and changes nothing.
-`pool.stats()` returns counts, never keys: open, busy, idle, opening, ending, entries, and
-`unresolvedEndings`, the endings whose remote outcome was not confirmed.
+`pool.stats()` returns counts, never keys: open, busy, idle, opening, ending, entries;
+`unsettled`, the charged work past its deadline that has not settled, by kind (open,
+ending, call); and `unresolvedEndings`, the endings whose remote outcome was not
+confirmed. The two are different facts: an ending can settle locally and stay unresolved
+remotely, and neither implies the other.
 
 The new payloads carry no field a redaction policy selects by name. They join the
 vocabulary canary (`test/redaction/agent-redaction.vocabulary.test.ts`) as payload-free.
@@ -729,9 +776,9 @@ vocabulary canary (`test/redaction/agent-redaction.vocabulary.test.ts`) as paylo
 | 1 | **Cross-tenant leakage.** A client, a list, a lease or a record row crosses tenants. | Client keys are the injective encoding: the tenant is a segment, and its absence is a segment of its own. Every definitions context carries the tenant, whatever the app names. A bound tool refuses a caller whose key differs. Records carry `keyHash`; errors and reports carry no ids. A transport per client gives each client a session map of one. `requireTenant` refuses a tenantless identity on a multitenant host. | An app that omits `tenant` without `requireTenant` merges tenants whose principal ids coincide. One tenant's demand can end another tenant's idle clients: state is lost, nothing is disclosed. `keyHash` is the existing unsalted digest: a reader of the record who can guess a whole tuple can confirm the guess. |
 | 2 | **A confused deputy.** The pool or a tool acts with one conversation's client for another caller, or a credential is vended for whoever is calling. | The provider keys only on the identity the caller named. Every `execute` checks the calling run's identity against its key before anything is sent, so a cached or handed-on tool cannot run under another conversation. A replacement client is checked against the tool's binding. A transport factory is called with the identity its client is for. The runtime transport already refuses a user-delegated bearer it would send for whoever calls. | On a shared machine credential (SigV4's role), every client acts with the process's authority, and the server can tell users apart only by session. Per-user authority needs per-user credentials; the pool cannot add it. |
 | 3 | **A key derived from model input.** | Two doors only: `callerIdentity`, from `run({ identity })`, and the identity app code passes to `acquire` and `terminate`. There is no key function. Arguments, model output, the message, a request body and a `sessionId` alone are never read. A derived identity is refused, and so is a missing principal by default. No caller flag claims verification. | The pool cannot tell a verified principal from a claimed one; the host door verifies (`hosting/identityVerification.ts`). An app that builds `run({ identity })` from a request body has moved the problem, not solved it. |
-| 4 | **Stale or poisoned definitions.** One conversation's listing changes what another conversation's model sees, or a tool listed before a revocation, a reconfiguration or a replacement is still sent. | Per client by default. Sharing needs the app's two names and a `configHash` computed from the plan before anything opens, with the tenant always in the context. Lists are written by one listing at a time, as frozen plain-data copies, with declarations judged field by field by `readToolExtras`; a listing that races an invalidation is discarded; a notice can only invalidate. Every tool re-checks its binding after each wait and at the send gate, before every attempt. | A server that serves a malicious list serves it to every client anyway: sharing adds no new source. Wrong names (a server whose list follows the session, declared shared) let one session's list reach the rest of its context; the docs name it, and per client is the fix. A revocation that lands after the gate passed, while the AWS SDK signs or on the wire, cannot recall that one call. |
-| 5 | **Pool exhaustion as a denial of service.** Many conversations, slow calls or slow endings fill the pool, or leave work and remote sessions behind. | Open clients are capped globally and per principal; endings are capped by `maxEnding`, so at most `maxClients + maxEnding` clients are held and `maxEnding` endings run, however fast conversations churn. Each ending's local wait is bounded and then aborted. There is no queue: `PoolFullError` (`pool`, `principal` or `ending`) comes at once. A failed open frees its slot at once. | A local cap is not a remote cap. A remote session whose ending was not confirmed (`not-offered`, `failed`, `timed-out`, `handle-lost`) lives until the platform's own timeout; the pool counts these as `unresolvedEndings` and cannot bound them. A principal can fill its own share, and many principals of one tenant can fill the pool: there is no per-tenant share. Per-caller limits belong at the door (`hosting/admission.ts` · `AdmissionPolicy`). With no negative cache, a failing server is opened again at each acquire, one open per key at a time. |
-| 6 | **A leaked lease.** App code acquires and never releases, or a call never settles. | Library leases are `try`/`finally` around one operation. An app lease is revoked after `maxLeaseMs` and reported; its next use throws, and its in-flight calls keep their own leases. `release()` is idempotent, and `Symbol.asyncDispose` makes `await using` work. | A call whose server holds the request open keeps its slot until the SDK's request timeout (60 s by default) or the run's signal. |
+| 4 | **Stale or poisoned definitions.** One conversation's listing changes what another conversation's model sees, or a tool listed before a revocation, a reconfiguration or a replacement is still sent. | Per client by default. Sharing needs the app's two names and a `configHash` computed from the plan before anything opens, with the tenant always in the context. Lists are written by one listing at a time, as frozen plain-data copies, with declarations judged field by field by `readToolExtras`; a listing that races an invalidation is discarded; a notice can only invalidate. Every tool re-checks its binding after each wait and at the send gate, before every attempt and last after credential and signing work. A per-client list belongs to one client incarnation: a replacement lists again, and an old tool is sent only if the fresh list holds the same definition; generations never carry across incarnations. | A server that serves a malicious list serves it to every client anyway: sharing adds no new source. Wrong names (a server whose list follows the session, declared shared) let one session's list reach the rest of its context; the docs name it, and per client is the fix. A request already handed on, to the network or to the app's own `fetch`, cannot be recalled. |
+| 5 | **Pool exhaustion as a denial of service.** Many conversations, slow calls, slow endings or work that ignores its abort fill the pool, or leave work and remote sessions behind. | Open clients are capped globally and per principal; endings are capped by `maxEnding`. Every open, call and ending stays charged until its own work settles, not until its abort, so at most `maxClients + maxEnding` clients are held and `maxEnding` endings are charged, however fast conversations churn and whatever ignores an abort. Callers get their answer by the deadline; the gate sends nothing after it, and the vending path checks again after the credential arrives. There is no queue: `PoolFullError` (`pool`, `principal` or `ending`) comes at once. A failed open frees its slot once it has settled. | Work that never settles (a credential provider that never answers, a `fetch` that ignores its abort) holds its charge until the process restarts; the pool refuses new work rather than pretend, and `stats().unsettled` shows it. A local cap is not a remote cap. A remote session whose ending was not confirmed (`not-offered`, `failed`, `timed-out`, `handle-lost`) lives until the platform's own timeout; the pool counts these as `unresolvedEndings` and cannot bound them. A principal can fill its own share, and many principals of one tenant can fill the pool: there is no per-tenant share. Per-caller limits belong at the door (`hosting/admission.ts` · `AdmissionPolicy`). With no negative cache, a failing server is opened again at each acquire, one open per key at a time. |
+| 6 | **A leaked lease.** App code acquires and never releases, or a call never settles. | Library leases are `try`/`finally` around one operation. An app lease is revoked after `maxLeaseMs` and reported; its next use throws, and its in-flight calls keep their own leases. `release()` is idempotent, and `Symbol.asyncDispose` makes `await using` work. | A call whose request never settles keeps its client busy until it does. The SDK's request timeout (60 s by default) and the run's signal answer the caller sooner; the charge stays until settlement. |
 | 7 | **Remote session ids as capabilities, and what outlives an ending.** A runtime session id, plus permission to invoke the runtime, lands a request in that session; a stopped session can be resumed. | The runtime session id and the server's `Mcp-Session-Id` stay inside the transport; the client sees a random handle (`session.ts`). Neither appears in the record, a report, an error or `stats()`. The pool never resumes a session id it ended. | A stopped AgentCore session's id stays valid until the runtime is deleted, and configured session storage persists: anyone holding the id and the permission can resume it, and its stored files outlive `terminated`. Deleting stored data is the runtime's configuration, not the pool's. |
 
 ## 10. The test plan
@@ -751,9 +798,10 @@ conversation's session.
   refused under `requireTenant: true`; canary identity strings appear in no error, event
   or report.
 - **`open-once.test.ts`** — ten concurrent first calls under one key open once (counted at
-  the transport); an open past `initTimeoutMs`, and a failed open, refuse every waiter,
-  cache nothing, and the next acquire opens again; one waiter's abort detaches only that
-  waiter.
+  the transport); an open past `initTimeoutMs`, and a failed open, refuse every waiter at
+  once, cache nothing, and the next acquire opens again; an abandoned open whose work has
+  not settled still counts toward `maxClients`, and frees its slot only when it settles;
+  one waiter's abort detaches only that waiter.
 - **`capacity.test.ts`** — a leased client is never evicted, idle-closed or terminated,
   even when it is the oldest; a full pool moves its least recently used idle client to the
   ending set, and that key's next open says `previous: 'evicted'`; all busy gives
@@ -763,12 +811,17 @@ conversation's session.
   releases; `terminate` on a leased client reports `deferred` and ends it at the last
   release.
 - **`churn.test.ts`** — `maxClients: 1`, `maxEnding: 1`, and 100 short conversations whose
-  terminations are fast, slow (past the local wait), failing (500 and 403) and 405. At
-  every pool transition: at most two clients held and at most one ending running. An
-  arrival during a running ending gets `PoolFullError` (`limit: 'ending'`), counted.
-  `unresolvedEndings` equals the number of slow, failing and 405 endings exactly; resolved
-  ones are not counted. Every timed-out termination request is seen aborted by the fake
-  transport.
+  terminations are fast, slow (past the local wait), failing (500 and 403), 405, stalled
+  in a credential provider that never answers until released, and sent through an app
+  `fetch` that ignores its abort. At every pool transition: at most two clients held and
+  at most one ending charged, settled or not. While the hung provider or the
+  abort-ignoring `fetch` holds its ending, every arrival that needs room gets
+  `PoolFullError` (`limit: 'ending'`), counted, and `stats().unsettled` shows the charge;
+  `terminate()` still answers its caller with `timed-out` at the deadline. When the
+  provider is released after the deadline, the post-credential check sends nothing: the
+  fake network sees no request after any timeout. The slot frees only at settlement, and a
+  late settlement is reported. `unresolvedEndings` equals the number of slow, failing,
+  405 and stalled endings exactly; resolved ones are not counted.
 - **`binding.test.ts`** — (a) two conversations of one principal, with `share` returning
   the same names, whose factory chooses another `qualifier` for the second: the hashes
   differ, the second lists on its own client and never sees the first's list; (b)
@@ -777,7 +830,11 @@ conversation's session.
   during a session-busy wait: refused at the send gate, nothing sent; (d) a replacement
   client whose plan changed (another credential provider id, other scopes, another URL):
   the old bound tool refuses with `binding-changed` before sending, and the next list binds
-  the new client.
+  the new client; (e) a same-key, same-plan replacement, per client: the old session
+  listed `status` and `unlocked_tool`, the fresh session lists only `status`; after the
+  old client is evicted, the old binding's `unlocked_tool` is refused with `stale-tools`
+  and never sent, while `status` is revalidated against the fresh list and sent; the old
+  incarnation's generation numbers never match the new list's, even when they coincide.
 - **`definitions.test.ts`** — per client by default: two conversations of one principal
   list twice; `share` with equal names and plans lists once; different names list twice;
   equal names in two tenants never share; a tools-changed notice invalidates and the next
@@ -808,8 +865,10 @@ conversation's session.
   the bearer HTTPS path, and the handle is forgotten first; `ResourceNotFoundException`
   gives `already-gone`; `AccessDeniedException` gives `failed`; a 409 is retried in the
   series; under `'per-call'` the outcome is `no-session`; a GET is still 405; a forgotten
-  handle throws `LocalSessionHandleLostError` and sends nothing. The AWS pin gains
-  `StopRuntimeSessionCommand`.
+  handle throws `LocalSessionHandleLostError` and sends nothing; on SigV4 the gate step runs
+  after signing and before the request handler, refusing a request whose binding went stale
+  or whose deadline passed during signing, and an AWS client the app passed keeps its own
+  middleware stack unchanged. The AWS pin gains `StopRuntimeSessionCommand`.
 - **`record.test.ts`** — `tools.mcp_client` on list and call, with the fields of § 8 and
   nothing else; canary identities, session ids, headers, arguments and results appear in
   no event, report or `stats()`.
@@ -817,8 +876,9 @@ conversation's session.
   strings), distinct tuples never share a client. For random interleavings of acquire,
   release, call, evict, sweep, terminate and invalidation: a busy client is never ended;
   held clients never exceed `maxClients + maxEnding`; running endings never exceed
-  `maxEnding`; no `tools/call` is sent under a binding that was stale when it was sent; and
-  every lease is released exactly once.
+  `maxEnding`; no charge is released before its work settles; no request is handed on
+  after its deadline; no `tools/call` is sent under a binding that was stale when it was
+  sent; and every lease is released exactly once.
 
 **The rest.** Byte identity: an agent without a pool emits the same events, the existing
 MCP suites under `test/mcp/` are unchanged apart from the named transport changes, and
@@ -846,6 +906,7 @@ budget, and the termination outcomes.
 - Digests of remote session ids on the record.
 - Tools-changed handling for a standalone `mcpClient`: a separate follow-up.
 - Any change to what `close()` does.
+- Releasing the charge of work that never settled (§ 12, still open).
 
 ## 12. Answers to the open questions
 
@@ -867,18 +928,31 @@ adopted here as the design's proposed answers, **adopted from review, owner to c
    required member of `McpClient` (§ 7).
 9. **Tools-changed handling for a standalone `mcpClient`** is a separate follow-up.
 10. **The numeric defaults are provisional**: 64 clients, 8 per principal, 8 endings, a
-    30 s open, a 5 s local ending wait, 600 s idle, a 15-minute app lease, a 600 s
-    definitions limit, 256 entries and 512 shared tools. The ending budget (§ 5.3) is in
-    place before any claim of bounded resource use.
+    30 s open, a 5 s deadline for an ending's answer, 600 s idle, a 15-minute app lease, a
+    600 s definitions limit, 256 entries and 512 shared tools. The ending budget, charged
+    until settlement (§ 5.3), is in place before any claim of bounded local resource use.
+
+The second review answered the two questions this draft left open. Its proposals are
+adopted the same way, **proposed, owner to confirm**:
+
+11. **The transport's own LRU.** No silent, unbounded background `StopRuntimeSession` in
+    the runtime transport's 256-entry LRU. Ending a forgotten session becomes an explicit,
+    bounded lifecycle change with observable outcomes: when its cleanup budget is full, the
+    transport keeps the handle, or refuses the new session, rather than lose a live handle.
+    Until that change lands, a local loss stays `LocalSessionHandleLostError`, with the
+    remote outcome unknown (§ 5.5).
+12. **The last authorization check** runs at the latest boundary the library controls,
+    after all asynchronous credential and signing work and before the network handoff: on
+    SigV4, a step on each command's own AWS SDK middleware stack after signing (§ 6.3). The
+    window after the handoff stays named: a request already sent cannot be recalled.
 
 Still open:
 
-1. **The transport's own LRU.** Outside a pool, the runtime transport's 256-entry LRU
-   still forgets a live handle without stopping its runtime session. Should it stop the
-   session before forgetting it, at the cost of a background request the transport has no
-   channel to report?
-2. **The gate's last window.** A revocation that lands while the AWS SDK signs a SigV4
-   request is not caught. Close it with an AWS SDK middleware step, or accept it as named?
+1. **Work that never settles.** A credential provider that never answers, or an app
+   `fetch` that ignores its abort, holds its charge until the process restarts. Is a hard
+   budget with `stats().unsettled` and a late-settlement report enough, or should the pool
+   offer an explicit, recorded release of a stuck charge, which would let capacity return
+   while the work may still be running?
 
 ## 13. Decisions
 
@@ -894,29 +968,38 @@ Still open:
    is never evicted, closed for idleness, or terminated.
 5. Two bounded sets: open clients (`maxClients`, per principal) and endings (`maxEnding`).
    Making room needs an idle client and a free ending slot; otherwise `PoolFullError` comes
-   at once. There is no queue and no detached work beyond `maxEnding`.
-6. Definitions are per client by default. Sharing needs the app's `configuration` and
-   `authorization` names and a `configHash` computed from the plan before anything opens;
-   the tenant is always in the context.
-7. Invalidation: the configuration is part of the context; the tools-changed notice,
-   `permissionsChanged`, `toolsChanged` and a time limit move the generation.
-8. Every tool carries its binding (key, context, generation). It re-checks after every wait
-   and at the send gate, before every attempt. A replacement client is checked against the
-   binding. A tool never runs on another key's client.
-9. `terminate` is a feature-detected capability. It issues the transport's termination and
-   reports the remote answer, with `resolved` saying whether the ending was confirmed.
-   Under `'reuse'`, the AgentCore Runtime transport maps it to `StopRuntimeSession`.
-   `close()` stays local, and the docs say so.
-10. A local cap is not a remote cap: endings whose remote outcome was not confirmed are
-    counted and reported, never claimed bounded.
-11. Idle expiry is 600 s by default, below the platform's 900 s, and lazy. The pool does not
+   at once. There is no queue.
+6. An abort is not settlement. Every open, call and ending stays charged until its own work
+   settles; its caller gets the answer by the deadline. Work that never settles keeps its
+   charge, and new work is refused. The gate sends nothing after a deadline, and the
+   vending path checks again after the credential arrives.
+7. Definitions are per client by default, and a per-client list belongs to one client
+   incarnation. Sharing needs the app's `configuration` and `authorization` names and a
+   `configHash` computed from the plan before anything opens; the tenant is always in the
+   context.
+8. Invalidation: the configuration is part of the context; the tools-changed notice,
+   `permissionsChanged`, `toolsChanged` and a time limit move the generation. A generation
+   counts within one list and never carries across incarnations.
+9. Every tool carries its binding (key, context, list, generation). It re-checks after every
+   wait and at the send gate, before every attempt and last after credential and signing
+   work. A replacement client serves an old tool only after its own fresh list holds the
+   same definition, or under the app's sharing contract. A tool never runs on another key's
+   client.
+10. `terminate` is a feature-detected capability. It issues the transport's termination and
+    reports the remote answer, with `resolved` saying whether the ending was confirmed.
+    Under `'reuse'`, the AgentCore Runtime transport maps it to `StopRuntimeSession`.
+    `close()` stays local, and the docs say so.
+11. A local cap is not a remote cap: endings whose remote outcome was not confirmed are
+    counted and reported, never claimed bounded. Local settlement and remote resolution
+    are reported apart.
+12. Idle expiry is 600 s by default, below the platform's 900 s, and lazy. The pool does not
     track lifetime, never replaces a client on an assumed lifetime, and never resumes a
     session id it ended.
-12. `SessionExpiredError` is raised only on documented evidence: an MCP server's 404 for the
+13. `SessionExpiredError` is raised only on documented evidence: an MCP server's 404 for the
     session id it issued. A handle this process lost is `LocalSessionHandleLostError`, with
     the remote outcome unknown and the ending unresolved. Neither call is repeated, and the
     next client opens under the same key.
-13. The pool owns its lifecycle. It does not ride an agent's tool-session tier; it keeps the
+14. The pool owns its lifecycle. It does not ride an agent's tool-session tier; it keeps the
     tier's laws.
-14. The record is `agentfootprint.tools.mcp_client` for each list and call, and `onEvent`
+15. The record is `agentfootprint.tools.mcp_client` for each list and call, and `onEvent`
     outside a run: ids, digests, evidence, outcomes and durations only.
