@@ -528,6 +528,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.script.attached.cut': t(
     'The attached script of call {{call:code}} shows {{shown}} of its {{bytes}} bytes — not the whole program.',
   ),
+  'howSure.script.attached.notInText': t(
+    "{{count:n,'attached script is','attached scripts are'}} named under the answer, not printed: the formatting above could have shown part of a program as ordinary text. The programs are on the record.",
+  ),
   'howSure.script.attached.omitted': t(
     "{{count:n,'more script of this turn was','more scripts of this turn were'}} not attached: over the bound or past the cap.",
   ),

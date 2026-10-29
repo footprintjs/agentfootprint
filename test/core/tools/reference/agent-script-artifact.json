@@ -579,6 +579,7 @@
           {
             "argument": "code",
             "bytes": 13,
+            "dispatch": 1,
             "exitCode": 0,
             "iteration": 1,
             "kind": "script",

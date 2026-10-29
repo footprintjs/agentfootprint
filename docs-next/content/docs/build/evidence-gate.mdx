@@ -165,14 +165,18 @@ What the record holds, by type:
   (`{ argument, language? }`). The argument must be a declared string property.
 * Each call of a declaring tool files one `ScriptRow` on the findings ledger:
   the program the tool was handed, its UTF-8 `bytes` and `lines`, its
-  `ScriptLabel`, and `exitCode` only when the runner gave one.
+  `ScriptLabel`, and `exitCode` only when the runner gave one. A row belongs to
+  a `dispatch`: the call's order within the turn. A provider that reuses a call
+  id still makes two calls, and a pause and its resume are one.
 * `evidence_checked.scripts` is a `ScriptsVerdict`, with one
   `ScriptBlockVerdict` per fenced block. Each verdict holds either the matched
   call with its label, or `unmatched` with an `UnmatchedReason`:
   `no-submission-this-turn`, `over-size`, or `kept-out`. Only a reader of a
   redacted record produces `kept-out`; a live run never does.
 * `turn_end.scripts` is a `TurnEndScripts`: one `ShownScript` per attached
-  program, plus how many were left out.
+  program, plus how many were left out. `closedFence` says the library closed a
+  fence the text above left open before attaching; `withheldFromText` says the
+  programs are in the data only (see the gotchas).
 * `.scriptTravelsWithTheAnswer()` takes `ScriptTravelOptions`. `which` is
   `'last'` (the default) or `'all'`; `maxBytes` defaults to 4,000.
 * The answer that stands files one `ScriptShownRow` per block, for the
@@ -206,6 +210,18 @@ Gotchas:
   (never matched, never attached); 16 calls a turn keep a row; 32 blocks an
   answer are read; an attached program over `maxBytes` (default 4,000 bytes) is
   cut and says it is incomplete.
+* **The attachment never renders inside an unfinished block.** If the answer
+  ends inside a fence the model never closed, the library closes it before the
+  attached program. If the answer holds a line after which a renderer could pair
+  fences another way (an indented fence, raw HTML, `$$`), the text names each
+  script and says it is not shown here; the program rides `turn_end.scripts`.
+* **Names and ids are shown as code.** A tool's name and a call id appear as
+  inline code, with line breaks and invisible characters written as escapes:
+  a provider's id can never start a paragraph of its own.
+* **The record attests the exact call.** The program on a row is the one read
+  just before the tool ran; a tool that edits its arguments afterwards does not
+  change it. A runner's exit code reaches only the call that ran the program,
+  even when two agents share one tool and their providers reuse an id.
 * **A redaction policy** keeps the program out of every record; the label and
   the counts stay. The attached text is part of the answer `run()` returns,
   which no policy covers — an app that attaches scripts shows what its own tool

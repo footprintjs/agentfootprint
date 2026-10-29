@@ -150,14 +150,40 @@ const DEFAULT_MAX_OUTPUT_CHARS = 4_000;
 export const TOOL_SESSIONS: unique symbol = Symbol.for('agentfootprint.tools.sessions');
 
 /**
- * Where a finished code run leaves its facts, keyed by `toolCallId`.
+ * Where a finished code run leaves its facts when NO agent dispatched it — a
+ * direct `execute` with a hand-built context (a script, a test, `mcpServe`) —
+ * keyed by `toolCallId`. A call an agent dispatched files into that
+ * dispatch's own slot instead ({@link CODE_RUN_SLOT}), never here.
  *
  * `Symbol.for` for the same CJS/ESM reason as {@link TOOL_SESSIONS}, and keyed
- * by the CALL rather than stored as "the last run" because two tool calls in one
- * iteration run concurrently — a single slot would report one call's facts under
- * the other's name. The dispatch loop takes the entry and deletes it.
+ * by the CALL rather than stored as "the last run" because two tool calls can
+ * run concurrently — a single slot would report one call's facts under the
+ * other's name.
  */
 export const CODE_RUNS: unique symbol = Symbol.for('agentfootprint.tools.codeRuns');
+
+/**
+ * Where a code run's facts go when the AGENT dispatched the call: a slot the
+ * dispatch loop puts on that one call's execution context
+ * (`core/agent/stages/toolCalls.ts`, both execute boundaries) and reads back
+ * when `execute` returns.
+ *
+ * Why not the map above: the map is keyed by the provider's call id, and two
+ * runs — two agents sharing one tool object, or one run whose provider reuses
+ * an id — can hold the same id at once. A fact filed under an id then reaches
+ * whichever dispatch reads first: one run's exit code attested another run's
+ * script. The slot is the dispatch's own object, so its facts can only reach
+ * it. A wrapper tool that hands the same context (or a spread of it) to this
+ * one keeps the slot. `Symbol.for`, for the CJS/ESM reason above.
+ *
+ * @internal Library plumbing between the dispatch loop and this tool.
+ */
+export const CODE_RUN_SLOT: unique symbol = Symbol.for('agentfootprint.tools.codeRunSlot');
+
+/** One dispatch's slot for the facts of the code it ran. @internal */
+export interface CodeRunSlot {
+  facts?: CodeRunFacts;
+}
 
 /** What one finished code run is worth reporting, minus the code itself. */
 export interface CodeRunFacts {
@@ -421,7 +447,7 @@ export function codeRunnerTool(
       const rendered = render(result, maxOutputChars, name, minted, stagedNames, wantNames);
       // Facts only, never `args.code` — generated code quotes the data it was
       // handed, so the code is the one part of this that must not travel.
-      codeRuns.set(ctx.toolCallId, {
+      const facts: CodeRunFacts = {
         tool: name,
         language,
         stagedInputs: stagedNames.length,
@@ -438,7 +464,12 @@ export function codeRunnerTool(
         ...(result.serviceError === true && { serviceError: true as const }),
         ...(result.terminatedBy !== undefined && { terminatedBy: result.terminatedBy }),
         shapeHash: fnv1a(codeShape(args.code)),
-      });
+      };
+      // An agent's dispatch: into that call's own slot, exactly. A direct
+      // execute outside an agent (no slot): by the call's id, as before.
+      const slot = (ctx as { readonly [CODE_RUN_SLOT]?: CodeRunSlot })[CODE_RUN_SLOT];
+      if (slot !== undefined) slot.facts = facts;
+      else codeRuns.set(ctx.toolCallId, facts);
       return rendered;
     },
   });

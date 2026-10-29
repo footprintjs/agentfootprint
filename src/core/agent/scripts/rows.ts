@@ -67,13 +67,18 @@ export interface ScriptCall {
   readonly iteration: number;
   /** `AgentState.turnNumber`. */
   readonly turn: number;
-  /** The arguments the model proposed (`_findings` peeled). */
-  readonly proposed: Readonly<Record<string, unknown>>;
   /**
-   * The arguments handed to `execute` — or, for a call that never got there,
-   * as they stood when it paused or was refused. Absent → `proposed`.
+   * The declared argument's VALUE as the model proposed it — read once, as
+   * the call arrived, before any before-tool rule ran (`programIn`). A string
+   * is immutable: no code that runs later can change what was captured.
    */
-  readonly submitted?: Readonly<Record<string, unknown>>;
+  readonly proposed: unknown;
+  /**
+   * The declared argument's value as handed to `execute` — read once, just
+   * before the tool ran, after every rule. Absent: the call never got there,
+   * and the proposal stands.
+   */
+  readonly submitted?: unknown;
   readonly settlement: CallSettlement;
   /** The runner's facts, when the tool filed them. */
   readonly facts?: RunnerOutcome;
@@ -84,13 +89,28 @@ export interface ScriptCall {
 }
 
 /**
+ * The declared argument's value in `args` — the one read a call's program is
+ * captured with. Read it at the boundary it names (as the call arrives; just
+ * before `execute`) and keep the value: never the arguments object, which app
+ * code may edit after it was handed over.
+ */
+export function programIn(
+  script: ToolScript,
+  args: Readonly<Record<string, unknown>> | undefined,
+): unknown {
+  return args === undefined ? undefined : args[script.argument];
+}
+
+/** A row before the writer gives it its dispatch identity. */
+export type ScriptRowDraft = Omit<ScriptRow, 'dispatch'>;
+
+/**
  * The row for one call, or `undefined` when the call carried no program — the
  * declared argument is not a string (an argument check refuses such a call;
  * there is nothing to record as "the program submitted").
  */
-export function scriptRowFor(call: ScriptCall): ScriptRow | undefined {
-  const submitted = call.submitted ?? call.proposed;
-  const program = submitted[call.script.argument];
+export function scriptRowFor(call: ScriptCall): ScriptRowDraft | undefined {
+  const program = call.submitted !== undefined ? call.submitted : call.proposed;
   if (typeof program !== 'string') return undefined;
   const bytes = utf8Length(program);
   const outcome = call.paused
@@ -99,9 +119,7 @@ export function scriptRowFor(call: ScriptCall): ScriptRow | undefined {
         settlement: call.settlement,
         ...(call.facts !== undefined && { facts: call.facts }),
       });
-  const rewritten =
-    call.submitted !== undefined &&
-    call.proposed[call.script.argument] !== call.submitted[call.script.argument];
+  const rewritten = call.submitted !== undefined && call.submitted !== call.proposed;
   return {
     kind: 'script',
     toolCallId: call.toolCallId,
@@ -131,48 +149,72 @@ const isScriptRow = (row: unknown): row is ScriptRow =>
   row !== null && typeof row === 'object' && (row as { kind?: unknown }).kind === 'script';
 
 /**
- * THE ONE WRITER of a `script` row: appended, unless the turn already holds
- * {@link MAX_SCRIPT_ROWS} other calls — then the call files nothing and
- * `scriptsDropped` counts it (value-conditional: absent until a call is
- * dropped). A call that already has a row of this turn (it paused) is never
- * dropped, and a PAUSE is never counted (`paused`): its call is counted once,
- * when it settles. Synchronous: one read, one write, no await between.
+ * THE ONE WRITER of a `script` row, and the one place a call gets its
+ * DISPATCH identity: the 1-based order of the actual dispatch within its turn.
+ * A call is a dispatch, never a provider id: a later call that reuses an id is
+ * a new dispatch. `options.dispatch` names a dispatch that already has a row
+ * (a paused call, settling): its row joins that dispatch.
+ *
+ * Appended, unless the turn already holds {@link MAX_SCRIPT_ROWS} other
+ * dispatches — then the call files nothing and `scriptsDropped` counts it
+ * (value-conditional: absent until a call is dropped). A dispatch that already
+ * has a row is never dropped, and a PAUSE is never counted (`paused`): its call
+ * is counted once, when it settles. Returns the dispatch the row was filed
+ * under, `undefined` when it was dropped. Synchronous: one read, one write, no
+ * await between.
  */
 export function recordScriptRow(
   scope: ScriptScope,
-  row: ScriptRow,
-  options: { readonly paused?: boolean } = {},
-): void {
+  draft: ScriptRowDraft,
+  options: { readonly paused?: boolean; readonly dispatch?: number } = {},
+): number | undefined {
   const prev: FindingsRow[] = [...((scope.findingsLedger as FindingsLedger | undefined) ?? [])];
-  const calls = new Set<string>();
-  for (const r of prev) if (isScriptRow(r) && r.turn === row.turn) calls.add(r.toolCallId);
-  if (!calls.has(row.toolCallId) && calls.size >= MAX_SCRIPT_ROWS) {
+  const dispatches = new Set<number>();
+  let highest = 0;
+  for (const r of prev) {
+    if (!isScriptRow(r) || r.turn !== draft.turn) continue;
+    dispatches.add(r.dispatch);
+    if (r.dispatch > highest) highest = r.dispatch;
+  }
+  const joins = options.dispatch !== undefined && dispatches.has(options.dispatch);
+  if (!joins && dispatches.size >= MAX_SCRIPT_ROWS) {
     if (options.paused !== true) {
       scope.scriptsDropped = ((scope.scriptsDropped as number | undefined) ?? 0) + 1;
     }
-    return;
+    return undefined;
   }
-  scope.findingsLedger = [...prev, row];
+  const dispatch = joins ? (options.dispatch as number) : highest + 1;
+  const { kind, toolCallId, ...rest } = draft;
+  scope.findingsLedger = [...prev, { kind, toolCallId, dispatch, ...rest }];
+  return dispatch;
 }
 
-/** This turn's calls — the LAST row of each, in the order the calls were first filed. */
+/** This turn's calls — the LAST row of each dispatch, in the order those rows were filed. */
 export interface TurnScripts {
   readonly current: readonly ScriptRow[];
   /** Calls of EARLIER turns on the ledger: counted, never compared. */
   readonly earlier: number;
 }
 
-/** The one reader of a turn's script rows: last row per call wins, earlier turns counted. */
+/**
+ * The one reader of a turn's script rows: the last row per DISPATCH wins, and
+ * a dispatch sits where its last row was filed — execution order, so a call
+ * that settles after a later one ran is read after it. Earlier turns counted.
+ */
 export function scriptRowsOfTurn(
   ledger: readonly unknown[] | undefined,
   turn: number,
 ): TurnScripts {
-  const latest = new Map<string, ScriptRow>();
+  const latest = new Map<number, ScriptRow>();
   const earlier = new Set<string>();
   for (const row of ledger ?? []) {
     if (!isScriptRow(row)) continue;
-    if (row.turn === turn) latest.set(row.toolCallId, row);
-    else earlier.add(`${row.turn}\u001f${row.toolCallId}`);
+    if (row.turn === turn) {
+      latest.delete(row.dispatch);
+      latest.set(row.dispatch, row);
+    } else {
+      earlier.add(`${row.turn}\u001f${row.dispatch}`);
+    }
   }
   return { current: [...latest.values()], earlier: earlier.size };
 }
@@ -208,6 +250,8 @@ export function scriptRowIsWellFormed(r: Readonly<Record<string, unknown>>): boo
   return (
     r.kind === 'script' &&
     typeof r.toolCallId === 'string' &&
+    Number.isInteger(r.dispatch) &&
+    (r.dispatch as number) >= 1 &&
     typeof r.tool === 'string' &&
     typeof r.argument === 'string' &&
     (r.language === undefined || typeof r.language === 'string') &&

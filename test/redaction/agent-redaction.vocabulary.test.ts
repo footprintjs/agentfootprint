@@ -372,6 +372,43 @@ const CASES: readonly FeatureCase[] = [
     drive: (agent) => agent.run({ message: 'print it' }),
   },
   {
+    // A code-running call that asked a person from INSIDE `execute`: its
+    // program, as proposed and as handed to the tool, waits on the pause
+    // carrier (`pausedScriptPrograms`) for the row that settles it.
+    feature: 'code in an answer — a call paused from inside execute',
+    canaries: ['CANARY-SCRIPT-PAUSED'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            {
+              toolCalls: [
+                { id: 'c1', name: 'run_code', args: { code: 'print("CANARY-SCRIPT-PAUSED")' } },
+              ],
+            },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          defineTool<{ code: string }, string>({
+            name: 'run_code',
+            description: 'Runs a program after a person says so.',
+            inputSchema: {
+              type: 'object',
+              properties: { code: { type: 'string' } },
+              required: ['code'],
+            },
+            script: { argument: 'code', language: 'python' },
+            execute: () => askHuman({ question: 'Run it?' }) as never,
+          }),
+        )
+        .scriptTravelsWithTheAnswer()
+        .build(),
+    drive: (agent) => agent.run({ message: 'print it' }),
+  },
+  {
     // A GUARDING gate keeps the draft's unsupported values (`evidenceUnsupported`).
     feature: 'the evidence gate (names and numbers) — guard posture',
     canaries: ['CANARY-GUARD-ROW', '918273645'],

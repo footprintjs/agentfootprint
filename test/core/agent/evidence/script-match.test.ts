@@ -44,18 +44,20 @@ import {
 const printing = (out: string) =>
   runnerAnswering({ ok: true, exitCode: 0, stdout: out, stderr: '' });
 
-/** A turn-1 row for `program`, as the dispatch loop files it. */
-const rowFor = (program: string, id = 'c1', turn = 1): ScriptRow =>
-  scriptRowFor({
+/** A turn-1 row for `program`, as the dispatch loop files it — its dispatch from its id (`c2` → 2). */
+const rowFor = (program: string, id = 'c1', turn = 1): ScriptRow => ({
+  ...scriptRowFor({
     script: { argument: 'code', language: 'python' },
     tool: 'run_code',
     toolCallId: id,
     iteration: 1,
     turn,
-    proposed: { code: program },
+    proposed: program,
     settlement: 'returned',
     facts: { ok: true, exitCode: 0 },
-  })!;
+  })!,
+  dispatch: Number(id.replace(/\D/g, '')) || 1,
+});
 
 const read = (answerText: string, rows: readonly ScriptRow[]) =>
   readShownScripts(answerText, { current: rows, earlier: 0 });
@@ -74,7 +76,16 @@ describe('functional — a block that equals a submission is script content', ()
     expect(check.action).toBe('grounded');
     expect(check.unsupported).toEqual([]);
     expect(check.scripts).toEqual({
-      blocks: [{ block: 1, label: 'completed', exitCode: 0, toolCallId: 'c1', tool: 'run_code' }],
+      blocks: [
+        {
+          block: 1,
+          label: 'completed',
+          exitCode: 0,
+          toolCallId: 'c1',
+          tool: 'run_code',
+          dispatch: 1,
+        },
+      ],
       earlierTurnRows: 0,
       regionsDropped: 0,
     });
@@ -218,6 +229,7 @@ describe("security — the review's counterexamples are misses, in both directio
         exitCode: 0,
         toolCallId: 'c2',
         tool: 'run_code',
+        dispatch: 2,
         alsoMatches: 1,
       },
     ]);
@@ -227,7 +239,14 @@ describe("security — the review's counterexamples are misses, in both directio
     const other = `${PROGRAM} `;
     const { verdict } = read(fenced(other), [rowFor(PROGRAM, 'c1'), rowFor(other, 'c2')]);
     expect(verdict.blocks).toEqual([
-      { block: 1, label: 'completed', exitCode: 0, toolCallId: 'c2', tool: 'run_code' },
+      {
+        block: 1,
+        label: 'completed',
+        exitCode: 0,
+        toolCallId: 'c2',
+        tool: 'run_code',
+        dispatch: 2,
+      },
     ]);
   });
 
@@ -279,7 +298,14 @@ describe("security — the review's counterexamples are misses, in both directio
       (e) => e.name === 'agentfootprint.agent.evidence_checked',
     );
     expect((matched.at(-1)!.payload as { scripts: { blocks: unknown[] } }).scripts.blocks).toEqual([
-      { block: 1, label: 'completed', exitCode: 0, toolCallId: 'c1', tool: 'run_code' },
+      {
+        block: 1,
+        label: 'completed',
+        exitCode: 0,
+        toolCallId: 'c1',
+        tool: 'run_code',
+        dispatch: 1,
+      },
     ]);
   });
 });
@@ -410,7 +436,14 @@ describe('property — the library’s attachment unwraps to the program; any on
     for (const program of programs) {
       const { verdict } = read(`Answer.\n\n${wrapProgram(program, 'python')}\n`, [rowFor(program)]);
       expect(verdict.blocks).toEqual([
-        { block: 1, label: 'completed', exitCode: 0, toolCallId: 'c1', tool: 'run_code' },
+        {
+          block: 1,
+          label: 'completed',
+          exitCode: 0,
+          toolCallId: 'c1',
+          tool: 'run_code',
+          dispatch: 1,
+        },
       ]);
     }
   });

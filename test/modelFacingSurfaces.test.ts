@@ -126,7 +126,7 @@ import { standingLineOf } from '../src/core/agent/assessment/compose.js';
 import { scriptRecoveryClause } from '../src/core/agent/scripts/recovery.js';
 import { scriptsBlock, scriptsOfAnswer } from '../src/core/agent/scripts/attachment.js';
 import { scriptRowFor } from '../src/core/agent/scripts/rows.js';
-import type { ScriptLabel } from '../src/core/agent/scripts/types.js';
+import type { ScriptLabel, ScriptRow } from '../src/core/agent/scripts/types.js';
 import { resolveToolWants } from '../src/artifacts/wants.js';
 import { parkCard } from '../src/maps/engagement/parkCard.js';
 import type {
@@ -748,19 +748,19 @@ function scriptRowLabelled(
   facts: Parameters<typeof scriptRowFor>[0]['facts'],
   settlement: Parameters<typeof scriptRowFor>[0]['settlement'],
   id: string,
-): NonNullable<ReturnType<typeof scriptRowFor>> {
+): ScriptRow {
   const row = scriptRowFor({
     script: { argument: 'code', language: 'python' },
     tool: 'run_code',
     toolCallId: id,
     iteration: 1,
     turn: 1,
-    proposed: { code: `print("${label}")` },
+    proposed: `print("${label}")`,
     settlement,
     ...(facts !== undefined && { facts }),
   });
   if (row === undefined || row.outcome !== label) throw new Error(`no ${label} row`);
-  return row;
+  return { ...row, dispatch: Number(id.replace(/\D/g, '')) || 1 };
 }
 
 /**
@@ -2359,7 +2359,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'record held',
     drivenBy: ['test/core/agent/evidence/script-artifact.test.ts'],
     reaches: [
-      /^Script submitted to run_code on call c1 — completed, exit 0\. Attached by the library/m,
+      /^Script submitted to `run_code` on call `c1` — completed, exit 0\. Attached by the library/m,
       /— completed with failure, exit 7\./,
       /— runner reported success; no exit code\./,
       /— runner reported failure; no exit code\./,
@@ -2378,16 +2378,19 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
         scriptRowLabelled('returned', undefined, 'returned', 'c5'),
         scriptRowLabelled('outcome-unknown', undefined, 'threw', 'c6'),
       ];
-      const big = scriptRowFor({
-        script: { argument: 'code' },
-        tool: 'run_code',
-        toolCallId: 'c7',
-        iteration: 1,
-        turn: 1,
-        proposed: { code: 'x'.repeat(40_000) },
-        settlement: 'returned',
-        facts: { exitCode: 0 },
-      })!;
+      const big: ScriptRow = {
+        ...scriptRowFor({
+          script: { argument: 'code' },
+          tool: 'run_code',
+          toolCallId: 'c7',
+          iteration: 1,
+          turn: 1,
+          proposed: 'x'.repeat(40_000),
+          settlement: 'returned',
+          facts: { exitCode: 0 },
+        })!,
+        dispatch: 7,
+      };
       return [
         scriptsBlock(scriptsOfAnswer([...rows, big], travel)),
         scriptsBlock(scriptsOfAnswer([rows[0]!], { which: 'last', maxBytes: 5 })),

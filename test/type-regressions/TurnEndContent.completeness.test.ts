@@ -64,6 +64,7 @@ export const TURN_END_FIELDS = {
 
 export const SHOWN_SCRIPT_FIELDS = {
   toolCallId: 'record',
+  dispatch: 'record',
   tool: 'record',
   language: 'record',
   label: 'record',
@@ -89,6 +90,7 @@ function shownScriptWith(canary: string): ShownScript {
   );
   return {
     toolCallId: 'c1',
+    dispatch: 1,
     tool: 'run_code',
     language: 'python',
     label: 'completed',
@@ -308,6 +310,7 @@ describe('turn_end content reaches an exporter only where it is declared to', ()
       shown: [
         {
           toolCallId: 'c1',
+          dispatch: 1,
           tool: 'run_code',
           language: 'python',
           label: 'completed',

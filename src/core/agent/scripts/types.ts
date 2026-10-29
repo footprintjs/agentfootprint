@@ -44,7 +44,15 @@ export type {
  */
 export interface ScriptRow {
   readonly kind: 'script';
+  /** The provider's id for the call — display only; two calls may share one. */
   readonly toolCallId: string;
+  /**
+   * The library's identity for the call: the 1-based order of the actual
+   * dispatch within its turn (`rows.ts` · `recordScriptRow`). A pause and its
+   * settlement share it; a later call that reuses the provider id is a new
+   * dispatch. Rows are counted, read and matched by it.
+   */
+  readonly dispatch: number;
   /** The name the model called. */
   readonly tool: string;
   /** The declared argument that carried the program. */

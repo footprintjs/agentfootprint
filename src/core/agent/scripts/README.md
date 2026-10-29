@@ -67,6 +67,33 @@ declaring tool, through ONE writer (`rows.ts` · `recordScriptRow`):
 - `resultWithheld: 'over-ceiling'` when the tool's own ceiling replaced the
   delivered result — a withheld result never undoes a completed execution.
 
+**The attestation rule: what a row says is bound to the exact dispatch it
+describes.**
+
+- **A row belongs to a dispatch, never to a provider id.** `dispatch` is the
+  1-based order of the actual dispatch within its turn, set by the one writer.
+  A later call that reuses a provider id is a new dispatch; a pause and the row
+  that settles it share one (`AgentState.pausedScriptDispatch` carries it
+  across the checkpoint). Rows are counted against `MAX_SCRIPT_ROWS`, read
+  (`scriptRowsOfTurn`: the last row per dispatch, in execution order), matched,
+  attached and looked up by the account by it.
+- **The program is a value read at its boundary.** The proposal is read as the
+  call arrives, before any rule runs; the submission just before `execute`
+  (`rows.ts` · `programIn`). A string cannot be edited afterwards, so a tool
+  that edits its own arguments after receiving them never rewrites the record.
+  A call that pauses from inside `execute` carries both values across the
+  checkpoint (`AgentState.pausedScriptPrograms`, named in the redaction
+  vocabulary), because its resume does not run it again.
+- **The runner's facts reach only the dispatch that ran.** Each dispatch puts
+  its own slot on the call's execution context (`codeRunnerTool.ts` ·
+  `CODE_RUN_SLOT`); the runner files its exit code there. A map keyed by the
+  provider's id let one run's facts attest another run's script when two agents
+  shared a tool.
+
+Why: a row is an attestation ("this program ran, and exited 7"). One read from
+a live object, or a fact found by an id two calls share, can attach one call's
+outcome to another call's program.
+
 ## The labels — execution evidence first, then settlement, never delivery
 
 | Label | Words | The record says |
@@ -145,11 +172,45 @@ after the standing line and the limits block, in the library's own fence
 bytes unchanged). A typed answer gets the data only. Attached even when the
 model also showed a matched copy.
 
+**The boundary rule: the attachment never renders inside a block the text
+before it left open.** The composer hands the scripts block the exact text it
+follows (`semantics/coverage/answer.ts` · `composeAnswerWithCoverage`), and the
+block reads it like a renderer (`attachment.ts` · `attachmentBoundary`):
+
+- a fence still open there (an answer that ends inside an unfinished fence) is
+  closed first, with the same character and length, and the record says so
+  (`turn_end.scripts.closedFence`);
+- after a line where a renderer could pair fences another way (an indented
+  fence, raw HTML, display math), the reader cannot tell what is open, so the
+  programs stay out of the text: each script is its label line alone, and the
+  data carries them (`turn_end.scripts.withheldFromText`).
+
+Why: inside a model's unfinished fence, a fence line in the program closes the
+model's block, and the rest of the program renders as prose, under the answer,
+unchecked.
+
+````text
+The total is computed.
+
+```text
+unfinished output            ← the model never closed this
+```                          ← the library closes it (closedFence)
+
+Script submitted to `run_code` on call `c1` — completed, exit 0. Attached by the library from the run record:
+````
+
+**Every dynamic value in a library line is inert** (`inert.ts` ·
+`inertCode`): a tool's name or a call id is one inline code span, its line
+breaks and format characters written as `\u{…}`, its delimiter longer than any
+backtick run inside. A provider may hand the library any string as a call id;
+interpolated as it is, a blank line in an id would start a paragraph of its own.
+
 ## Bounds — one unit, UTF-8 payload bytes
 
 `MAX_SCRIPT_BYTES` 32,768 per program at record time (a longer one keeps its
-facts, no text: unmatchable, unattachable, counted); `MAX_SCRIPT_ROWS` 16 calls
-per turn keep a row (the rest counted in `AgentState.scriptsDropped`);
+facts, no text: unmatchable, unattachable, counted); `MAX_SCRIPT_ROWS` 16
+dispatches per turn keep a row, however the provider numbered them (the rest
+counted in `AgentState.scriptsDropped`);
 `MAX_CODE_REGIONS` 32 blocks read per answer; `MAX_ATTACHED_SCRIPTS` 8;
 `maxBytes` 4,000 per attached program, cut at a code-point boundary and said.
 A row's text lives for its own turn (seed drops it from earlier turns'

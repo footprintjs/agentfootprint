@@ -21,8 +21,8 @@ import {
 } from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
 import { scriptRowsOfTurn } from '../core/agent/scripts/rows.js';
-import { scriptsBlock } from '../core/agent/scripts/attachment.js';
-import type { ScriptRow, ShownScript } from '../core/agent/scripts/types.js';
+import { boundaryOfRecord, scriptsBlock } from '../core/agent/scripts/attachment.js';
+import type { ScriptRow, ShownScript, TurnEndScripts } from '../core/agent/scripts/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION, type TemplateId } from './templates.js';
@@ -187,10 +187,13 @@ function appendedStandingLine(
  * by words. The block is one function of `turn_end.scripts` (the shown
  * scripts and the omitted count) and, for a program over the bound, of that
  * call's committed `script` row (`core/agent/scripts/attachment.ts` ·
- * `scriptsBlock`). With a script shown, its label line opens the block; with
- * none shown, the omission lines do — rebuilt for the last call that reached
- * the tool and for every one (the record does not keep `which`). Anything the
- * record does not hold in full, and the block is not claimed.
+ * `scriptsBlock`), behind the boundary the record states (`closedFence`: the
+ * block opens with the fence it closed; `withheldFromText`: each script is
+ * its label line alone). With a script shown, the block's text up to its
+ * first label line opens it; with none shown, the omission lines do —
+ * rebuilt for the last call that reached the tool and for every one (the
+ * record does not keep `which`). Anything the record does not hold in full,
+ * and the block is not claimed.
  */
 function appendedScriptsOpenings(
   end: ViewEvent,
@@ -199,11 +202,14 @@ function appendedScriptsOpenings(
   const scripts = end.payload.scripts;
   if (!isRecord(scripts) || !Array.isArray(scripts.shown)) return [];
   const omitted = num(scripts.omitted) ?? 0;
+  const boundary = boundaryOfRecord(scripts as unknown as TurnEndScripts);
   if (scripts.shown.length > 0) {
     const first = scripts.shown[0];
     if (!isRecord(first) || typeof first.text !== 'string') return [];
     const only = { shown: [first as unknown as ShownScript], omitted: 0 };
-    return [scriptsBlock(only).split('\n')[0] as string];
+    // Up to and including the first label line: the closed fence, if any, then it.
+    const lines = scriptsBlock(only, boundary).split('\n');
+    return [lines.slice(0, boundary.kind === 'closed' ? 3 : 1).join('\n')];
   }
   if (omitted === 0 || state === undefined) return [];
   const turn = num(state.turnNumber);
@@ -214,7 +220,7 @@ function appendedScriptsOpenings(
   ).current.filter((row) => row.outcome !== 'submitted');
   const overSizeOf = (rows: readonly ScriptRow[]) => rows.filter((row) => row.text === undefined);
   return [overSizeOf(reached.slice(-1)), overSizeOf(reached)].map((overSize) =>
-    scriptsBlock({ shown: [], omitted, overSize }),
+    scriptsBlock({ shown: [], omitted, overSize }, boundary),
   );
 }
 

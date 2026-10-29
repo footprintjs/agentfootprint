@@ -428,6 +428,7 @@ const BOUND_FIELDS: Readonly<
 /** The fields of one attached script that are the record's own words, never content. */
 const SHOWN_SCRIPT_RECORD_FIELDS: ReadonlySet<string> = new Set([
   'toolCallId',
+  'dispatch',
   'tool',
   'language',
   'label',
@@ -461,6 +462,9 @@ function boundScripts(value: unknown): unknown {
     if (key === 'shown' && Array.isArray(entry))
       out[key] = sanitizeJson(entry.map(boundShownScript));
     else if (key === 'omitted' && typeof entry === 'number') out[key] = entry;
+    // The rendering boundary the text was written behind: the library's own words and counts.
+    else if (key === 'closedFence' || (key === 'withheldFromText' && entry === true))
+      out[key] = sanitizeJson(entry);
     else out[key] = charsMarker(entry);
   }
   return out;

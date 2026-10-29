@@ -52,6 +52,8 @@
  */
 
 import { utf8Length, utf8Prefix } from '../../../lib/utf8.js';
+import { codeRegionsOf } from '../evidence/codeRegions.js';
+import { inertCode } from './inert.js';
 import { labelWords } from './label.js';
 import type {
   ResolvedScriptTravel,
@@ -112,6 +114,7 @@ function shownFrom(row: ScriptRow & { readonly text: string }, maxBytes: number)
   const shownBytes = cut === row.text ? row.bytes : utf8Length(cut);
   return {
     toolCallId: row.toolCallId,
+    dispatch: row.dispatch,
     tool: row.tool,
     ...(row.language !== undefined && { language: row.language }),
     label: row.outcome,
@@ -153,8 +156,8 @@ export function scriptsOfAnswer(
   return { shown, omitted, overSize };
 }
 
-/** The label line of one attached script — library words, past tense, the call named. */
-export function scriptLabelLine(script: ShownScript): string {
+/** The call a line names, and what its record says — every dynamic value inert (`inert.ts`). */
+function callSaid(script: ShownScript): string {
   const withheld =
     script.resultWithheld === 'over-ceiling'
       ? "; its result was withheld over the tool's ceiling"
@@ -162,9 +165,21 @@ export function scriptLabelLine(script: ShownScript): string {
   const rewritten =
     script.rewritten === true ? '; a before-tool rule changed it before dispatch' : '';
   return (
-    `Script submitted to ${script.tool} on call ${script.toolCallId} — ` +
-    `${labelWords(script.label, script.exitCode)}${withheld}${rewritten}. ` +
-    'Attached by the library from the run record:'
+    `Script submitted to ${inertCode(script.tool)} on call ${inertCode(script.toolCallId)} — ` +
+    `${labelWords(script.label, script.exitCode)}${withheld}${rewritten}.`
+  );
+}
+
+/** The label line of one attached script — library words, past tense, the call named. */
+export function scriptLabelLine(script: ShownScript): string {
+  return `${callSaid(script)} Attached by the library from the run record:`;
+}
+
+/** The line that stands for a script whose program is kept out of the text (`withheldFromText`). */
+export function scriptWithheldLine(script: ShownScript): string {
+  return (
+    `${callSaid(script)} The program is not shown here: the formatting above could display ` +
+    'part of it as ordinary text. It is kept on the run record.'
   );
 }
 
@@ -179,19 +194,70 @@ export function shownScriptBlock(script: ShownScript): string {
 }
 
 /**
+ * What the text BEFORE the attachment leaves open, as a CommonMark renderer
+ * reads it — the rendering boundary (finding: a model answer that ends inside
+ * an unfinished fence would take the library's programs in, and a fence line
+ * inside a program would then close it, leaving the rest as prose).
+ *
+ * - `clean`: nothing the attachment could fall into.
+ * - `closed`: a fence is still open; the attachment begins by closing it
+ *   (`fence`, the same character and length).
+ * - `unsettled`: the reader stopped (an indented fence, raw HTML, display
+ *   math — `../evidence/codeRegions.ts`), so nothing says what a program would
+ *   render inside. The programs stay out of the text; the data keeps them.
+ *
+ * `before` is exactly the text the attachment follows — the composer's
+ * (`semantics/coverage/answer.ts` · `composeAnswerWithCoverage`). Read with a
+ * line ending after it, as it is composed: an opening fence on its last line
+ * opens there.
+ */
+export type AttachmentBoundary =
+  | { readonly kind: 'clean' }
+  | { readonly kind: 'closed'; readonly fence: string }
+  | { readonly kind: 'unsettled' };
+
+const CLEAN: AttachmentBoundary = { kind: 'clean' };
+
+/** The boundary after `before` (see {@link AttachmentBoundary}). */
+export function attachmentBoundary(before: string): AttachmentBoundary {
+  if (before.length === 0) return CLEAN;
+  const read = codeRegionsOf(`${before}\n`);
+  if (read.stoppedAt !== undefined) return { kind: 'unsettled' };
+  if (read.openFence !== undefined) return { kind: 'closed', fence: read.openFence };
+  return CLEAN;
+}
+
+/** The boundary a `turn_end.scripts` record states — what a reader rebuilds the text with. */
+export function boundaryOfRecord(scripts: TurnEndScripts): AttachmentBoundary {
+  if (scripts.withheldFromText === true) return { kind: 'unsettled' };
+  const closed = scripts.closedFence;
+  if (closed !== undefined) {
+    return { kind: 'closed', fence: (closed.char === 'tilde' ? '~' : '`').repeat(closed.length) };
+  }
+  return CLEAN;
+}
+
+/**
  * The text form: one block per attached script, then one line per omission —
  * `''` when nothing travels (the composer then appends nothing). Every cut and
- * every omission is stated.
+ * every omission is stated. Behind a `closed` boundary the block opens with
+ * the closing fence; behind an `unsettled` one each script is its label line
+ * alone (`scriptWithheldLine`) — the programs ride the data only.
  */
 export function scriptsBlock(
   scripts: TurnEndScripts & { readonly overSize?: readonly ScriptRow[] },
+  boundary: AttachmentBoundary = CLEAN,
 ): string {
-  const parts = scripts.shown.map(shownScriptBlock);
+  const parts =
+    boundary.kind === 'unsettled'
+      ? scripts.shown.map(scriptWithheldLine)
+      : scripts.shown.map(shownScriptBlock);
   const overSize = scripts.overSize ?? [];
   for (const row of overSize) {
     parts.push(
-      `One script of ${row.bytes} bytes (${row.tool}, call ${row.toolCallId}) is over the bound ` +
-        'and is not shown.',
+      `One script of ${row.bytes} bytes (${inertCode(row.tool)}, call ${inertCode(
+        row.toolCallId,
+      )}) is over the bound and is not shown.`,
     );
   }
   const others = scripts.omitted - overSize.length;
@@ -201,16 +267,42 @@ export function scriptsBlock(
         `${others === 1 ? 'is' : 'are'} not shown here.`,
     );
   }
+  if (parts.length === 0) return '';
+  if (boundary.kind === 'closed') parts.unshift(boundary.fence);
   return parts.join('\n\n');
 }
 
+/**
+ * The text form behind the boundary the text before it leaves — `''` when
+ * nothing travels (no boundary is then taken). The second value is the
+ * boundary the text was written behind: what `turn_end.scripts` records.
+ */
+export function scriptsBlockAfter(
+  scripts: TurnEndScripts & { readonly overSize?: readonly ScriptRow[] },
+  before: string,
+): { readonly text: string; readonly boundary: AttachmentBoundary } {
+  if (scriptsBlock(scripts) === '') return { text: '', boundary: CLEAN };
+  const boundary = attachmentBoundary(before);
+  return { text: scriptsBlock(scripts, boundary), boundary };
+}
+
 /** The data form as detached plain data — what `turn_end.scripts` carries. */
-export function turnEndScriptsOf(scripts: TurnEndScripts): TurnEndScripts {
+export function turnEndScriptsOf(
+  scripts: TurnEndScripts,
+  boundary: AttachmentBoundary = CLEAN,
+): TurnEndScripts {
   return {
     shown: scripts.shown.map((s) => ({
       ...s,
       ...(s.truncated !== undefined && { truncated: { shownBytes: s.truncated.shownBytes } }),
     })),
     omitted: scripts.omitted,
+    ...(boundary.kind === 'closed' && {
+      closedFence: {
+        char: boundary.fence.charCodeAt(0) === 0x7e ? ('tilde' as const) : ('backtick' as const),
+        length: boundary.fence.length,
+      },
+    }),
+    ...(boundary.kind === 'unsettled' && { withheldFromText: true as const }),
   };
 }

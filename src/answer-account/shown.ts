@@ -71,9 +71,11 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
     '/answerCoverage/assumed/*/{toolName,argument}',
     // The scripts the library attached: the call, its label and its counts — never `text`
     // (a tool argument: the program).
-    '/scripts/shown/*/{toolCallId,tool,language,label,exitCode,resultWithheld,rewritten,bytes,lines}',
+    '/scripts/shown/*/{toolCallId,dispatch,tool,language,label,exitCode,resultWithheld,rewritten,bytes,lines}',
     '/scripts/shown/*/truncated/shownBytes',
     '/scripts/omitted',
+    '/scripts/closedFence/{char,length}',
+    '/scripts/withheldFromText',
   ),
   'middleware.decision': list('/{middleware,moment,outcome,changed,toolName,toolCallId}'),
   'permission.check': list('/{target,result,policyRuleId}'),
@@ -116,7 +118,7 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
     '/{posture,candidates,lookedUp,action,afterRevision,evidenceTruncated}',
     '/unsupported/*/{value,region}',
     // The script match's verdict on each block the answer showed — never the code.
-    '/scripts/blocks/*/{block,label,exitCode,toolCallId,tool,alsoMatches,reason}',
+    '/scripts/blocks/*/{block,label,exitCode,toolCallId,tool,dispatch,alsoMatches,reason}',
     '/scripts/{earlierTurnRows,regionsDropped,scriptsDropped}',
   ),
 });
@@ -143,7 +145,9 @@ export const SHOWN_STATE_PATHS: Readonly<Record<string, readonly string[]>> = Ob
   turnRoute: list('/{by,from,to}', '/witness/text'),
   entryScores: list('/*/{id,score}'),
   // A call's script row (`core/agent/scripts/`): its label and counts — never `text`.
-  findingsLedger: list('/*/{outcome,bytes,lines,exitCode,serviceError,resultWithheld,rewritten}'),
+  findingsLedger: list(
+    '/*/{dispatch,outcome,bytes,lines,exitCode,serviceError,resultWithheld,rewritten}',
+  ),
 });
 const HISTORY_PATHS = ['/toolName', '/toolCallId', '#emptiness'];
 

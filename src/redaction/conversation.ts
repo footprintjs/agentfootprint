@@ -130,6 +130,9 @@ const NAMES = {
     'pausedAskArgs',
     'pausedCheckInArgs',
     'pausedCredentialArgs',
+    // A code-running call that asked from inside `execute`: its program as
+    // proposed and as handed to the tool, carried to the row that settles it.
+    'pausedScriptPrograms',
     // A consent request's record: its nonce lets whoever holds it confirm a
     // guess of the paused call's arguments against the request id
     // (`core/consentRequest.ts`), so it is kept out with them.

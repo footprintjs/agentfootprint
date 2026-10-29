@@ -115,6 +115,7 @@ export function readShownScripts(
       ...(latest.exitCode !== undefined && { exitCode: latest.exitCode }),
       toolCallId: latest.toolCallId,
       tool: latest.tool,
+      dispatch: latest.dispatch,
       ...(calls.length > 1 && { alsoMatches: calls.length - 1 }),
     });
   }
@@ -146,6 +147,7 @@ export function copyScriptsVerdict(verdict: ScriptsVerdict): ScriptsVerdict {
             ...(b.exitCode !== undefined && { exitCode: b.exitCode }),
             toolCallId: b.toolCallId,
             tool: b.tool,
+            dispatch: b.dispatch,
             ...(b.alsoMatches !== undefined && { alsoMatches: b.alsoMatches }),
           },
     ),

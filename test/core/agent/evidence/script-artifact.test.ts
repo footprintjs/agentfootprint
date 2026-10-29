@@ -58,13 +58,14 @@ describe('which — the last call that reached the tool, or every one', () => {
     const out = await agent.run('compute');
     expect(out).toBe(
       'The answer is 42.\n\n---\n\n' +
-        'Script submitted to run_code on call c2 — completed, exit 0. Attached by the library from the run record:\n\n' +
+        'Script submitted to `run_code` on call `c2` — completed, exit 0. Attached by the library from the run record:\n\n' +
         '```python\nprint(41 + 1)\n```',
     );
     expect(scriptsOf(turnEnds.at(-1))).toEqual({
       shown: [
         {
           toolCallId: 'c2',
+          dispatch: 2,
           tool: 'run_code',
           language: 'python',
           label: 'completed',
@@ -147,7 +148,9 @@ describe('the text form and the data form', () => {
     expect((checks.at(-1)!.scripts as { blocks: Array<{ label: string }> }).blocks[0]!.label).toBe(
       'completed',
     );
-    expect(out.startsWith(`${shown}\n\n---\n\nScript submitted to run_code on call c1`)).toBe(true);
+    expect(
+      out.startsWith(`${shown}\n\n---\n\nScript submitted to \`run_code\` on call \`c1\``),
+    ).toBe(true);
   });
 
   it('one label line per label — the label’s own words, the call named, never a destination', () => {
@@ -173,24 +176,26 @@ describe('the text form and the data form', () => {
           text: 'x',
         }),
       ).toBe(
-        `Script submitted to run_code on call c9 — ${words}. Attached by the library from the run record:`,
+        `Script submitted to \`run_code\` on call \`c9\` — ${words}. Attached by the library from the run record:`,
       );
     }
   });
 });
 
 describe('the library’s fence', () => {
-  const rowWith = (program: string): ScriptRow =>
-    scriptRowFor({
+  const rowWith = (program: string): ScriptRow => ({
+    ...scriptRowFor({
       script: { argument: 'code', language: 'python' },
       tool: 'run_code',
       toolCallId: 'c1',
       iteration: 1,
       turn: 1,
-      proposed: { code: program },
+      proposed: program,
       settlement: 'returned',
       facts: { exitCode: 0 },
-    })!;
+    })!,
+    dispatch: 1,
+  });
   const textOf = (program: string, maxBytes = 4_000) =>
     scriptsBlock(scriptsOfAnswer([rowWith(program)], { which: 'last', maxBytes }));
 
@@ -220,7 +225,7 @@ describe('the library’s fence', () => {
     expect(data.shown).toEqual([]);
     expect(data.omitted).toBe(1);
     expect(scriptsBlock(data)).toBe(
-      'One script of 40000 bytes (run_code, call c1) is over the bound and is not shown.',
+      'One script of 40000 bytes (`run_code`, call `c1`) is over the bound and is not shown.',
     );
   });
 });
@@ -292,7 +297,7 @@ describe('the record across a redaction policy, a pause and a window', () => {
       first.checkpoint,
       checkInApproved({ request: pausedRequest(first), by: 'alice' }),
     );
-    expect(out).toContain('Script submitted to run_code on call c1 — completed, exit 0.');
+    expect(out).toContain('Script submitted to `run_code` on call `c1` — completed, exit 0.');
     // Append only, last wins: the settled row carries the text.
     expect(scriptRows(r.agent).at(-1)).toMatchObject({ outcome: 'completed', text: P2 });
     // The resumed execute boundary takes the runner's facts too.
@@ -323,6 +328,6 @@ describe('the record across a redaction policy, a pause and a window', () => {
     expect(scriptRows(agent).find((row) => row.toolCallId === 'c1')).toMatchObject({
       text: 'print(0)',
     });
-    expect(out).toContain('Script submitted to run_code on call c1 — completed, exit 0.');
+    expect(out).toContain('Script submitted to `run_code` on call `c1` — completed, exit 0.');
   });
 });

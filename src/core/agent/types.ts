@@ -2292,6 +2292,32 @@ export interface AgentState {
    * `.scriptTravelsWithTheAnswer()` (`omitted`). Those calls are unmatchable.
    */
   scriptsDropped?: number;
+  /**
+   * The dispatch a PAUSED call of a declared code-running tool was filed under
+   * (`scripts/rows.ts` · `recordScriptRow`), carried across the checkpoint so
+   * the row that settles it on resume joins the same dispatch — one call, one
+   * dispatch, counted once. Ids and numbers only, never the program. Written
+   * at the pause, read and cleared by the resume; absent on every run that
+   * files no script row.
+   */
+  pausedScriptDispatch?: {
+    readonly dispatch: number;
+    readonly toolCallId: string;
+    readonly turn: number;
+  };
+  /**
+   * The program values of a call that paused from INSIDE `execute`
+   * (`pauseHere()` / `askHuman()`): its declared argument as the model
+   * proposed it and as `execute` was handed it, read before the tool ran. The
+   * resume settles that call without running it again, so the values travel
+   * here — never re-read from a carrier the tool may have edited. Content: named
+   * in the conversation redaction vocabulary. Written at that pause, read and
+   * cleared by its resume.
+   */
+  pausedScriptPrograms?: {
+    readonly proposed?: string;
+    readonly submitted?: string;
+  };
 
   // ── The honesty layers (`sf-inputs`, …) ───────────────────────
   /**

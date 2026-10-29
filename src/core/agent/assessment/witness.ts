@@ -138,6 +138,8 @@ export interface ScriptShownRow {
   /** On a match: the call it equals, and the name the model called. */
   readonly toolCallId?: string;
   readonly tool?: string;
+  /** On a match: the call's dispatch within the turn (`ScriptRow.dispatch`) — its identity. */
+  readonly dispatch?: number;
   /** On a match: exactly the runner's exit code, when it supplied one. */
   readonly exitCode?: number;
 }
@@ -170,6 +172,7 @@ export function scriptShownRowsFrom(
           label: b.label,
           toolCallId: b.toolCallId,
           tool: b.tool,
+          dispatch: b.dispatch,
           ...(b.exitCode !== undefined && { exitCode: b.exitCode }),
         },
   );
@@ -244,10 +247,13 @@ export function witnessRowIsWellFormed(r: Readonly<Record<string, unknown>>): bo
       (unmatched
         ? typeof r.reason === 'string' &&
           (UNMATCHED_REASONS as readonly string[]).includes(r.reason) &&
-          r.toolCallId === undefined
+          r.toolCallId === undefined &&
+          r.dispatch === undefined
         : r.reason === undefined &&
           typeof r.toolCallId === 'string' &&
-          typeof r.tool === 'string') &&
+          typeof r.tool === 'string' &&
+          Number.isInteger(r.dispatch) &&
+          (r.dispatch as number) >= 1) &&
       (r.exitCode === undefined || Number.isInteger(r.exitCode))
     );
   }

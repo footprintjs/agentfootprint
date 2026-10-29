@@ -81,7 +81,7 @@ describe('40 turns × 16 calls of 32,768 bytes, 32 blocks per answer', () => {
             toolCallId: `c${call}`,
             iteration: 1,
             turn,
-            proposed: { code: program },
+            proposed: program,
             settlement: 'returned',
             facts: { exitCode: 0 },
           })!;

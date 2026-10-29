@@ -55,7 +55,7 @@ describe('from execution evidence — an explicit exit code proves an exit', () 
       runnerAnswering({ ok: true, exitCode: 0, stdout: '3600', stderr: '' }),
     );
     expect(row).toMatchObject({ outcome: 'completed', exitCode: 0, text: PROGRAM });
-    expect(out).toContain('Script submitted to run_code on call c1 — completed, exit 0.');
+    expect(out).toContain('Script submitted to `run_code` on call `c1` — completed, exit 0.');
   });
 
   it('a completed script plus a SIZE refusal → completed, resultWithheld, the refusal on the record', async () => {

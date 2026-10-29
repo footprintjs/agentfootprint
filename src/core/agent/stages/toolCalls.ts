@@ -52,9 +52,9 @@ import { findingsReferenceRefusal } from '../findings/admission.js';
  * activates that Skill (lifetime: turn).
  */
 
-import { codeRunsOf, type CodeRunFacts } from '../../codeRunnerTool.js';
+import { CODE_RUN_SLOT, type CodeRunFacts, type CodeRunSlot } from '../../codeRunnerTool.js';
 import { scriptOf } from '../../../tools/script.js';
-import { recordScriptRow, scriptRowFor } from '../scripts/rows.js';
+import { programIn, recordScriptRow, scriptRowFor } from '../scripts/rows.js';
 import type { CallSettlement } from '../scripts/label.js';
 import { isDevMode } from 'footprintjs';
 import type { PausableHandler, TypedScope } from 'footprintjs';
@@ -283,8 +283,12 @@ import { joinSystemPrompt } from '../composeRequest.js';
 
 /** What a resumed call's `execute` saw — read by its script row (`deps.scriptRecord`). */
 interface ResumedCallFacts {
-  /** The arguments handed to `execute`. */
-  ranWith?: Readonly<Record<string, unknown>>;
+  /** Set once `execute` was about to be handed the call (the program values below were read then). */
+  entered?: true;
+  /** The declared argument's value as the model proposed it — read before `execute`. */
+  proposed?: unknown;
+  /** The declared argument's value handed to `execute` — read just before it ran. */
+  submitted?: unknown;
   /** The runner's facts, when the tool filed them. */
   codeRun?: CodeRunFacts;
   /** The tool's own `resultCeiling` refused the result. */
@@ -2996,17 +3000,21 @@ export function buildToolCallsHandler(
       readonly toolName: string;
       readonly toolCallId: string;
       readonly iteration: number;
-      readonly proposed: Readonly<Record<string, unknown>>;
-      readonly submitted?: Readonly<Record<string, unknown>>;
+      /** The declared argument's value as the call arrived (`programOfCall`). */
+      readonly proposed: unknown;
+      /** Its value handed to `execute` — or as it stood at a pause or a refusal. */
+      readonly submitted?: unknown;
       readonly settlement: CallSettlement;
       readonly facts?: CodeRunFacts;
       readonly withheld?: boolean;
       readonly paused?: boolean;
+      /** The dispatch a settling paused call already has (`pausedScriptDispatch`). */
+      readonly dispatch?: number;
     },
-  ): void => {
-    if (deps.scriptRecord !== true) return;
+  ): number | undefined => {
+    if (deps.scriptRecord !== true) return undefined;
     const script = scriptOf(call.tool);
-    if (script === undefined) return;
+    if (script === undefined) return undefined;
     const row = scriptRowFor({
       script,
       tool: call.toolName,
@@ -3020,7 +3028,32 @@ export function buildToolCallsHandler(
       ...(call.withheld === true && { withheld: true }),
       ...(call.paused === true && { paused: true }),
     });
-    if (row !== undefined) recordScriptRow(scope, row, { paused: call.paused === true });
+    if (row === undefined) return undefined;
+    const dispatch = recordScriptRow(scope, row, {
+      paused: call.paused === true,
+      ...(call.dispatch !== undefined && { dispatch: call.dispatch }),
+    });
+    // A paused call keeps its dispatch across the checkpoint: the row that
+    // settles it on resume joins the same dispatch, never a new one.
+    if (call.paused === true && dispatch !== undefined) {
+      scope.pausedScriptDispatch = { dispatch, toolCallId: call.toolCallId, turn: row.turn };
+    }
+    return dispatch;
+  };
+
+  /**
+   * The declared argument's VALUE in `args`, read now — `undefined` when the
+   * agent is unarmed or the tool declares no `script`. Asked at the boundary
+   * each value belongs to (as the call arrives; just before `execute`) and
+   * kept: a string cannot be edited afterwards, the arguments object can.
+   */
+  const programOfCall = (
+    tool: Tool | undefined,
+    args: Readonly<Record<string, unknown>> | undefined,
+  ): unknown => {
+    if (deps.scriptRecord !== true) return undefined;
+    const script = scriptOf(tool);
+    return script === undefined ? undefined : programIn(script, args);
   };
 
   /**
@@ -3059,16 +3092,46 @@ export function buildToolCallsHandler(
   ): void => {
     if (deps.scriptRecord !== true) return;
     const tool = resolveTool(call.toolName, scope.pausedToolParty as ToolParty | undefined).tool;
+    // The dispatch the pause filed this call under — when it is THIS call's.
+    const held = scope.pausedScriptDispatch as
+      | { readonly dispatch: number; readonly toolCallId: string; readonly turn: number }
+      | undefined;
+    const dispatch =
+      held !== undefined &&
+      held.toolCallId === call.toolCallId &&
+      held.turn === (scope.turnNumber as number)
+        ? held.dispatch
+        : undefined;
+    if (held !== undefined) scope.pausedScriptDispatch = undefined;
+    // A call that paused from inside `execute` carried the values read before
+    // it ran (`pausedScriptPrograms`) — this call's, when the dispatch is.
+    const carried = scope.pausedScriptPrograms as
+      | { readonly proposed?: string; readonly submitted?: string }
+      | undefined;
+    if (carried !== undefined) scope.pausedScriptPrograms = undefined;
+    const own = dispatch !== undefined ? carried : undefined;
+    // Read before `execute` ran (`seen`), or carried from before it ran; a
+    // call that never got there reads its carrier now — no tool code ran on it.
+    const proposed =
+      call.seen.entered === true
+        ? call.seen.proposed
+        : own?.proposed ??
+          programOfCall(tool, proposedArgsOf(scope, call.toolCallId) ?? call.carried);
+    const submitted =
+      call.seen.entered === true
+        ? call.seen.submitted
+        : own?.submitted ?? programOfCall(tool, call.carried);
     fileScript(scope, {
       tool,
       toolName: call.toolName,
       toolCallId: call.toolCallId,
       iteration: call.iteration,
-      proposed: proposedArgsOf(scope, call.toolCallId) ?? call.carried,
-      submitted: call.seen.ranWith ?? call.carried,
+      proposed,
+      ...(submitted !== undefined && { submitted }),
       settlement: !call.entered ? 'not-entered' : call.seen.threw === true ? 'threw' : 'returned',
       ...(call.seen.codeRun !== undefined && { facts: call.seen.codeRun }),
       withheld: call.seen.overCeiling === true,
+      ...(dispatch !== undefined && { dispatch }),
     });
   };
 
@@ -3082,14 +3145,12 @@ export function buildToolCallsHandler(
    */
   const takeCodeRun = (
     scope: TypedScope<AgentState>,
-    tool: Tool,
+    slot: CodeRunSlot,
     toolName: string,
-    toolCallId: string,
   ): CodeRunFacts | undefined => {
-    const held = codeRunsOf(tool);
-    const ranCode = held?.get(toolCallId);
+    const ranCode = slot.facts;
     if (ranCode === undefined) return undefined;
-    held?.delete(toolCallId);
+    slot.facts = undefined;
     // `tool` is the name the model CALLED, not the one the runner's closure
     // was built with: a runner re-exposed under another schema name must be
     // recognizable by the name its calls carry (a content exporter withholds
@@ -4171,7 +4232,7 @@ export function buildToolCallsHandler(
           toolName: call.name,
           toolCallId: call.id,
           iteration: scope.iteration as number,
-          proposed: peelCall(call).args,
+          proposed: programOfCall(resolveTool(call.name).tool, peelCall(call).args),
           settlement: 'not-entered',
         });
       }
@@ -4360,7 +4421,12 @@ export function buildToolCallsHandler(
       if (dispatched !== undefined) args = dispatched.args;
       // `let`, not `const`: the semantic projection below replaces the value
       // on the non-envelope path exactly as the batch loop does.
+      // This dispatch's own slot for the runner's facts (`CODE_RUN_SLOT`):
+      // facts reach the exact dispatch that ran, never another run's call
+      // that happens to reuse the provider's id.
+      const codeRunSlot: CodeRunSlot = {};
       const executionContext = {
+        [CODE_RUN_SLOT]: codeRunSlot,
         toolCallId,
         iteration,
         ...(callTime !== undefined && { time: callTime }),
@@ -4422,10 +4488,16 @@ export function buildToolCallsHandler(
             })
           : undefined;
       executed = true;
-      if (seen !== undefined) seen.ranWith = args;
+      if (seen !== undefined) {
+        // Read now, before any tool code runs: what the call proposed and
+        // what `execute` is handed — values, never the arguments object.
+        seen.entered = true;
+        seen.proposed = programOfCall(tool, proposedArgsOf(scope, toolCallId) ?? args);
+        seen.submitted = programOfCall(tool, args);
+      }
       let result = await tool.execute(args, executionContext);
       // The runner's facts, at this execute boundary as at the batch loop's.
-      const codeRun = takeCodeRun(scope, tool, toolName, toolCallId);
+      const codeRun = takeCodeRun(scope, codeRunSlot, toolName);
       if (seen !== undefined && codeRun !== undefined) seen.codeRun = codeRun;
       if (negativeDispatch !== undefined)
         result = captureNegativeResult(scope, negativeDispatch, result, tool);
@@ -4901,6 +4973,10 @@ export function buildToolCallsHandler(
         // same reference — `tc.args` — and not one byte moves.
         const peeled: SplitFindings = peelCall(tc);
         const args: ToolArgs = peeled.args;
+        // The script record's proposal (`deps.scriptRecord`): the declared
+        // argument's value, read as the call arrives — before any rule or tool
+        // code runs. `undefined` unarmed.
+        const proposedProgram = programOfCall(tool, args);
         // ── THE BASIS ROW — immediately, so it precedes `tool_start` in the
         // event log and every pause `return` in program order (a paused
         // call's row is on the pre-pause partial commit; a denied call keeps
@@ -5022,6 +5098,8 @@ export function buildToolCallsHandler(
         let denied = findingsRefusal !== undefined;
         /** True once `tool.execute` has been entered — see `afterMoment`. */
         let executed = false;
+        /** The declared argument's value handed to `execute`, read just before it ran. */
+        let submittedProgram: unknown;
         /** `execute` was entered and threw — a settlement the script row reads. */
         let executeThrew = false;
         /** The code-run facts a code-runner tool left for this call (`takeCodeRun`). */
@@ -5394,8 +5472,8 @@ export function buildToolCallsHandler(
               toolName: tc.name,
               toolCallId: tc.id,
               iteration,
-              proposed: args,
-              submitted: bound.args,
+              proposed: proposedProgram,
+              submitted: programOfCall(tool, bound.args),
               settlement: 'not-entered',
               paused: true,
             });
@@ -5624,8 +5702,8 @@ export function buildToolCallsHandler(
               toolName: tc.name,
               toolCallId: tc.id,
               iteration,
-              proposed: args,
-              submitted: bound.args,
+              proposed: proposedProgram,
+              submitted: programOfCall(tool, bound.args),
               settlement: 'not-entered',
               paused: true,
             });
@@ -5732,8 +5810,8 @@ export function buildToolCallsHandler(
                     toolName: tc.name,
                     toolCallId: tc.id,
                     iteration,
-                    proposed: args,
-                    submitted: callArgs,
+                    proposed: proposedProgram,
+                    submitted: programOfCall(tool, callArgs),
                     settlement: 'not-entered',
                     paused: true,
                   });
@@ -5818,7 +5896,11 @@ export function buildToolCallsHandler(
               // Set BEFORE the await: a tool that throws has still run, and a
               // tool that does not exist has not. This flag is the entire
               // precondition of the after-tool moment below.
+              // This dispatch's own slot for the runner's facts — see the
+              // resume path's twin in `resolveCredentialAndExecute`.
+              const codeRunSlot: CodeRunSlot = {};
               const executionContext = {
+                [CODE_RUN_SLOT]: codeRunSlot,
                 toolCallId: tc.id,
                 iteration,
                 ...(callTime !== undefined && { time: callTime }),
@@ -5863,6 +5945,7 @@ export function buildToolCallsHandler(
                     })
                   : undefined;
               executed = true;
+              submittedProgram = programOfCall(tool, callArgs);
               result = await tool.execute(callArgs, executionContext);
               if (negativeDispatch !== undefined)
                 result = captureNegativeResult(scope, negativeDispatch, result, tool);
@@ -5875,7 +5958,7 @@ export function buildToolCallsHandler(
               // session events follow with `keyHash`, never the key. Generated
               // code quotes the data it was handed, so the program is the one
               // part of a code run that must not reach an exporter.
-              ranCode = takeCodeRun(scope, tool, tc.name, tc.id);
+              ranCode = takeCodeRun(scope, codeRunSlot, tc.name);
               // The typed effects channel (9.19.0): a recognized envelope is
               // unwrapped HERE, at the one boundary the raw return crosses —
               // everything downstream (governance rules, the cap, history,
@@ -6070,16 +6153,28 @@ export function buildToolCallsHandler(
                   // person, and the resources it opened are what the resume
                   // needs. No `'call'` teardown here, deliberately.
                   writePause();
-                  fileScript(scope, {
+                  // The tool asked from INSIDE `execute`: its program is the
+                  // value read before it ran, never the arguments as it left them.
+                  const pausedDispatch = fileScript(scope, {
                     tool,
                     toolName: tc.name,
                     toolCallId: tc.id,
                     iteration,
-                    proposed: args,
-                    submitted: callArgs,
+                    proposed: proposedProgram,
+                    submitted: submittedProgram,
                     settlement: 'not-entered',
                     paused: true,
                   });
+                  // The resume settles this call without running it again, so
+                  // the values read before it ran ride the checkpoint.
+                  if (pausedDispatch !== undefined) {
+                    scope.pausedScriptPrograms = {
+                      ...(typeof proposedProgram === 'string' && { proposed: proposedProgram }),
+                      ...(typeof submittedProgram === 'string' && {
+                        submitted: submittedProgram,
+                      }),
+                    };
+                  }
                   const stamped =
                     declaration === undefined
                       ? undefined
@@ -6471,8 +6566,8 @@ export function buildToolCallsHandler(
           toolName: tc.name,
           toolCallId: tc.id,
           iteration,
-          proposed: args,
-          submitted: callArgs,
+          proposed: proposedProgram,
+          submitted: executed ? submittedProgram : programOfCall(tool, callArgs),
           settlement: !executed ? 'not-entered' : executeThrew ? 'threw' : 'returned',
           ...(ranCode !== undefined && { facts: ranCode }),
           withheld: withheldOverCeiling,

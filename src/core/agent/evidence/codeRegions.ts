@@ -117,6 +117,14 @@ export interface CodeRegions {
    * whole answer was read.
    */
   readonly stoppedAt?: number;
+  /**
+   * The opening run of a fence still open at the END (`'```'`, `'~~~~'`) —
+   * the block a renderer is still inside there. The fence is prose for the
+   * match; a writer that appends after this text closes it first
+   * (`../scripts/attachment.ts` · `attachmentBoundary`). Never set with
+   * `stoppedAt`: after a stop the reader does not know what is open.
+   */
+  readonly openFence?: string;
 }
 
 const BACKTICK = 0x60;
@@ -322,6 +330,10 @@ export function codeRegionsOf(text: string, max: number = MAX_CODE_REGIONS): Cod
     }
     lineStart = line.next;
   }
-  // A fence still open here never closed: prose to the end, not a region.
+  // A fence still open here never closed: prose to the end, not a region —
+  // and the block a renderer is still inside, for a writer appending after.
+  if (open !== undefined) {
+    return { regions, dropped, openFence: String.fromCharCode(open.char).repeat(open.length) };
+  }
   return { regions, dropped };
 }

@@ -2485,6 +2485,15 @@
   ],
   "source": "library"
  },
+ "howSure.script.attached.notInText@1": {
+  "text": "2 attached scripts are named under the answer, not printed: the formatting above could have shown part of a program as ordinary text. The programs are on the record.",
+  "parts": [
+   {
+    "text": "2 attached scripts are named under the answer, not printed: the formatting above could have shown part of a program as ordinary text. The programs are on the record."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.script.attached.omitted@1": {
   "text": "2 more scripts of this turn were not attached: over the bound or past the cap.",
   "parts": [

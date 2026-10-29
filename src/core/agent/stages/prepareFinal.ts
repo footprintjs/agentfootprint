@@ -41,8 +41,14 @@ import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
 import { assistantReplayFields } from '../assistantReplay.js';
 import { scriptRowsOfTurn } from '../scripts/rows.js';
-import { scriptsBlock, scriptsOfAnswer, turnEndScriptsOf } from '../scripts/attachment.js';
-import type { ResolvedScriptTravel, TurnEndScripts } from '../scripts/types.js';
+import {
+  scriptsBlock,
+  scriptsBlockAfter,
+  scriptsOfAnswer,
+  turnEndScriptsOf,
+  type AttachmentBoundary,
+} from '../scripts/attachment.js';
+import type { ResolvedScriptTravel, ScriptRow, TurnEndScripts } from '../scripts/types.js';
 
 type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
 
@@ -73,18 +79,34 @@ type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
 const RAILS_REFUSED = new WeakSet<object>();
 
 /**
- * `.scriptTravelsWithTheAnswer()` — what travels with THIS capture, composed
- * once by `withScripts` from the turn's `script` rows and keyed by the stage's
- * own scope (the `RAILS_REFUSED` channel): `data` rides `turn_end.scripts`;
- * `text` is appended to a prose answer by the one composer ('' for a typed
- * answer, whose bytes are never edited). Absent → every capture keeps its
- * bytes.
+ * `.scriptTravelsWithTheAnswer()` — what travels with THIS capture, read once
+ * by `withScripts` from the turn's `script` rows and keyed by the stage's own
+ * scope (the `RAILS_REFUSED` channel). The data rides `turn_end.scripts`; the
+ * text is composed by the one composer, behind the rendering boundary the
+ * text before it leaves (`boundary`, set when the composer asks — what the
+ * data records). A typed answer gets the data only, its bytes never edited.
+ * Absent → every capture keeps its bytes.
  */
-const SCRIPTS = new WeakMap<object, { readonly data: TurnEndScripts; readonly text: string }>();
+interface AttachedScripts {
+  readonly attached: TurnEndScripts & { readonly overSize: readonly ScriptRow[] };
+  readonly typed: boolean;
+  boundary?: AttachmentBoundary;
+}
+const SCRIPTS = new WeakMap<object, AttachedScripts>();
 
-/** The script block a prose composition appends — '' without the arm. */
-function scriptTextOf(scope: object): string {
-  return SCRIPTS.get(scope)?.text ?? '';
+/**
+ * The script block a prose composition appends — `''` without the arm, on a
+ * typed answer, or when nothing travels; otherwise the composer's callback,
+ * handed the exact text the block follows.
+ */
+function scriptTextOf(scope: object): '' | ((before: string) => string) {
+  const entry = SCRIPTS.get(scope);
+  if (entry === undefined || entry.typed || scriptsBlock(entry.attached) === '') return '';
+  return (before) => {
+    const { text, boundary } = scriptsBlockAfter(entry.attached, before);
+    entry.boundary = boundary;
+    return text;
+  };
 }
 
 const captureTurnPayload = (
@@ -175,7 +197,9 @@ const captureTurnPayload = (
     ...(standingLineNames !== undefined && { standingLineNames }),
     // The scripts the library attached (`.scriptTravelsWithTheAnswer()`) —
     // on every answer under the arm, a typed one included; absent otherwise.
-    ...(attached !== undefined && { scripts: attached.data }),
+    ...(attached !== undefined && {
+      scripts: turnEndScriptsOf(attached.attached, attached.boundary),
+    }),
     // A refused answer rides for the record, flagged so no consumer shows it.
     ...(refused && { refused: { by: 'evidence-rails' as const } }),
   });
@@ -566,10 +590,7 @@ function withScripts(
       travel,
       (scope.scriptsDropped as number | undefined) ?? 0,
     );
-    SCRIPTS.set(scope, {
-      data: turnEndScriptsOf(attached),
-      text: travel.typed === true ? '' : scriptsBlock(attached),
-    });
+    SCRIPTS.set(scope, { attached, typed: travel.typed === true });
     try {
       await stage(scope);
     } finally {

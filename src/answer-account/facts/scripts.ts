@@ -43,20 +43,25 @@ const ATTACHED_LINES: Readonly<Partial<Record<ScriptLabel, TemplateId>>> = {
   'outcome-unknown': 'howSure.script.attached.unknown',
 };
 
-/** A call's `script` row in the committed ledger: this turn's last row for it. */
+/** A call's `script` row in the committed ledger: this turn's last row of its dispatch. */
 interface RowRead {
   readonly row: Readonly<Record<string, unknown>>;
   readonly pointer: (key: string) => RecordPointer;
 }
 
-function rowOf(ctx: ReadContext, toolCallId: string): RowRead | undefined {
+/**
+ * The row of one DISPATCH (`ScriptRow.dispatch`) — never looked up by the
+ * provider's call id, which two calls of a turn may share.
+ */
+function rowOf(ctx: ReadContext, dispatch: number | undefined): RowRead | undefined {
+  if (dispatch === undefined) return undefined;
   if (ctx.view.isStateKeptOut('findingsLedger')) return undefined;
   const ledger = ctx.view.state?.findingsLedger;
   if (!Array.isArray(ledger)) return undefined;
   const turn = num(ctx.view.state?.turnNumber);
   for (let i = ledger.length - 1; i >= 0; i--) {
     const row: unknown = ledger[i];
-    if (!isRecord(row) || row.kind !== 'script' || row.toolCallId !== toolCallId) continue;
+    if (!isRecord(row) || row.kind !== 'script' || row.dispatch !== dispatch) continue;
     if (turn !== undefined && row.turn !== turn) continue;
     return { row, pointer: (key) => stateAt('findingsLedger', i, key) };
   }
@@ -88,7 +93,7 @@ function shownLines(ctx: ReadContext, e: ViewEvent): Sentence[] {
       ctx.noteUnread();
       return;
     }
-    const found = rowOf(ctx, call);
+    const found = rowOf(ctx, num(block.dispatch));
     const vars = {
       tool: toolVar(tool, at(e, 'scripts', 'blocks', i, 'tool')),
       call: v(call, 'library', at(e, 'scripts', 'blocks', i, 'toolCallId')),
@@ -184,6 +189,15 @@ function attachedLines(ctx: ReadContext): Sentence[] {
       );
     }
   });
+  // The programs rode the data only: the text names them and says so.
+  if (scripts.withheldFromText === true && scripts.shown.length > 0) {
+    lines.push(
+      ctx.say('howSure.script.attached.notInText', {
+        vars: { n: n(scripts.shown.length) },
+        pointers: [at(end, 'scripts', 'withheldFromText')],
+      }),
+    );
+  }
   const omitted = num(scripts.omitted);
   if (omitted !== undefined && omitted > 0) {
     lines.push(
