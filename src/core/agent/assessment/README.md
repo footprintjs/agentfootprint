@@ -166,7 +166,7 @@ grows as later honesty steps commit new rows.
 | `period-undeclared` | 3 | `findingsLedger`: a `period` row of this turn with verdict `undeclared` — the tool declares a `ToolPeriod` and its result declared no period |
 | `period-differs-from-asked` | 3 | `findingsLedger`: a `period` row of this turn with `differs` (the time layer, step T8 — `time/check.ts` · `periodTimeCheck`): what the call read is not the range it asked for — `missing` (asked, not read) or `extra` (read, not asked; TQ8: "not sure" too) — or, for a window the model chose, not the person's window. Witnesses: the row and the call's `argument` row |
 | `period-beyond-retention` | 3 | `findingsLedger`: a `period` row of this turn with `beyondRetention` (step T8): the window was wholly older than the tool declares its source keeps — refused before dispatch, or read that way |
-| `sources-conflict` | 3 | `findingsLedger`: a conflict row of this turn — one whose witnesses name a call of this turn, or one stamped with this turn whose witnesses do not all name a call (the incomplete-record policy, below) |
+| `sources-conflict` | 3 | `findingsLedger`: a conflict row of this turn — one whose witnesses name a call of this turn, or one stamped with this turn whose witnesses the record does not all place in earlier turns (the incomplete-record policy, below) |
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
 | `derived-from-reading` | 4 | `findingsLedger`: a `time-derived` row of this turn — the answer states a time value no tool result carried that the library itself spelled from a reading of the person's words (an implied year, an offset, the end-of-grain minute, the served time line; the time layer, step T7 — `time/forms.ts` · `timeFormsOf`). Folded like `argument-assumed`: "not sure", never "known" |
@@ -217,36 +217,48 @@ that looked nothing up did not apply, so it is left out; it never supports "know
 stays the verdict when both exist. A `steps-unfinished` row fires the reason of that
 name and files no check: the record holds only the unfinished verdict.
 
-**A conflict whose readings the record cannot name — the incomplete-record
-policy** (`assess.ts` · `conflictOfThisTurn`). A conflict row's readings
-(`witnesses`) name the calls they read, when the record holds the ids. Which turn
-the row belongs to is decided in this order:
+**A conflict whose readings the record cannot place — the incomplete-record
+policy** (`assess.ts` · `conflictOfThisTurn`). Each reading of a conflict row
+(`witnesses`) is placed by the call it names, as the record shows it:
+
+- **current** — a call of this turn;
+- **earlier** — a call `history` places before this turn began: its result, or
+  the request that asked for it;
+- **unresolved** — no call id, or one the record does not place anywhere: a
+  hole, a getter's entry, an id whose result the kept history no longer holds.
+
+Which turn the row belongs to is decided in this order:
 
 1. a row stamped with ANOTHER turn is never this turn's;
-2. a reading that names a call of this turn places the row here, stamped or not
-   (the call-id rule);
-3. a row stamped with THIS turn stays this turn's unless every reading names a
-   call and none is a call of this turn — a reading with no call id (a hole, or no
-   readings at all) is one the record cannot place in an earlier turn. Its source
-   counts those readings in `unnamed`;
-4. an UNSTAMPED row is never placed by a missing id, and neither is any row of a
+2. a current reading places the row here, stamped or not (the call-id rule);
+3. a row stamped with THIS turn stays this turn's unless EVERY reading is
+   earlier. An unresolved reading, no readings at all, or a list the fold cannot
+   read whole (`rowList`, above) establishes no placement elsewhere, and its
+   source counts those readings in `unnamed`;
+4. an UNSTAMPED row is placed only by a current reading, and so is any row of a
    record with no `turnNumber`.
 
-**Why.** The stamp says the writer filed this conflict in this turn; a missing id
-says nothing about which turn a reading belongs to. Reading the missing id as "not
-this turn" made a doubt the record holds vanish — the answer read "consistent with
-the record" over a conflict filed in its own turn. The fold keeps the uncertainty
-instead: "not sure", resting on readings it cannot name. The reverse stays
-refused: an earlier turn's unstamped conflict whose ids are gone is never
-attached to today's answer.
+**Why.** The stamp says the writer filed this conflict in this turn. A missing
+id says nothing about which turn a reading belongs to, and neither does an id
+the kept history does not hold — a shortened history is not proof of an earlier
+turn. Reading either as "not this turn" made a doubt the record holds vanish:
+the answer read "consistent with the record" over a conflict filed in its own
+turn. The fold keeps the uncertainty instead — "not sure", resting on readings
+it cannot name — and lifts the stamp only on a placement the record establishes.
+The reverse stays refused: an unstamped conflict is never attached to today's
+answer by a reading the record does not show to be today's.
 
 ```ts
-const reading = { subject: { kind: 'host', id: 'h1' }, predicate: 'state' }; // no toolCallId
-const filedNow = { kind: 'conflict', key: 'host h1 · state', witnesses: [reading, reading], iteration: 1, turn: 2 };
-const a = assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [filedNow] } } });
-a.standing;          // 'not-sure' (before: 'consistent')
-a.reasons[0].source; // { kind: 'calls', calls: [], unnamed: 2 }
-// The same row with no `turn`: no reason — a missing id never attaches it to this turn.
+// turnNumber: 2; history: [person 't1', result of old1, person 't2', result of c2]
+const reading = (toolCallId?: string) => ({ toolCallId, subject: { kind: 'host', id: 'h1' }, predicate: 'state' });
+const filedNow = (witnesses: unknown[]) => ({ kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 });
+const fold = (witnesses: unknown[]) =>
+  assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [filedNow(witnesses)] } } });
+fold([reading('missingA'), reading('missingB')]).reasons[0].source; // { kind: 'calls', calls: [], unnamed: 2 }
+fold([reading('old1'), reading('missingB')]).standing;               // 'not-sure' — one earlier, one unresolved
+fold([reading(), reading()]).standing;                               // 'not-sure' — no ids at all
+fold([reading('old1')]).standing;                                    // 'consistent' — every reading earlier
+// The same rows with no `turn`: none of them is placed in this turn.
 ```
 
 Every result is read through the ONE emptiness reader,

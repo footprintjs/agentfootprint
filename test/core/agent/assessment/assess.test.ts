@@ -392,10 +392,11 @@ describe('UNIT — a conflict row stamped with its turn counts in that turn only
 
 describe('UNIT — a conflict whose readings the record cannot name: the incomplete-record policy (L-49)', () => {
   // A conflict row's readings name their calls (`witnesses[].toolCallId`) — when the record
-  // holds the ids. A row STAMPED with this turn whose readings do not all name a call stays
-  // this turn's: the stamp filed it here, and a missing id must not make the doubt vanish
-  // (before: `consistent`, no reason). An UNSTAMPED row is never placed by a missing id, so an
-  // earlier turn's conflict whose ids are gone is never attached to this one.
+  // holds the ids. Each is placed as CURRENT, EARLIER (history places it before this turn
+  // began) or UNRESOLVED. A row STAMPED with this turn stays this turn's unless every reading
+  // is earlier: the stamp filed it here, and a missing or unplaced id must not make the doubt
+  // vanish (before: `consistent`, no reason). An UNSTAMPED row is placed only by a current
+  // reading, so an earlier turn's conflict whose ids are gone is never attached to this one.
   const reading = (toolCallId?: string) => ({
     ...(toolCallId !== undefined && { toolCallId }),
     subject: { kind: 'host', id: 'h1' },
@@ -448,6 +449,52 @@ describe('UNIT — a conflict whose readings the record cannot name: the incompl
 
   it('stamped with this turn, every reading names an earlier call → the record places it there', () => {
     const a = run({ turnNumber: 2, history, findingsLedger: [conflict([reading('old1')], 2)] });
+    expect(reasonsOf(a)).toEqual([]);
+    // Placed by its request too: an assistant asked for `old2` in turn 1, no result kept.
+    const asked = { role: 'assistant', content: '', toolCalls: [{ id: 'old2', name: 'lookup' }] };
+    const withRequest = [user('t1'), asked, user('t2'), tool('c2', [{ id: 1 }])];
+    const b = run({
+      turnNumber: 2,
+      history: withRequest,
+      findingsLedger: [conflict([reading('old2')], 2)],
+    });
+    expect(reasonsOf(b)).toEqual([]);
+  });
+
+  // An UNRESOLVED id — one the record does not place in any turn (its result is not in the
+  // history this record kept) — is not proof of an earlier turn (review of #250, finding 1).
+  // It counts like an unnamed reading: only readings ALL placed in earlier turns lift the stamp.
+  it('stamped with this turn, readings whose ids the record does not place → still this turn’s', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict([reading('missingA'), reading('missingB')], 2)],
+    });
+    expect(a.standing).toBe('not-sure');
+    expect(reasonsOf(a)).toEqual(['sources-conflict']);
+    expect(sourceOf(a)).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
+  });
+
+  it('stamped with this turn, one earlier reading and one unresolved → still this turn’s', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict([reading('old1'), reading('missingB')], 2)],
+    });
+    expect(reasonsOf(a)).toEqual(['sources-conflict']);
+    expect(sourceOf(a)).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'old1', toolName: 'lookup' }],
+      unnamed: 1,
+    });
+  });
+
+  it('UNSTAMPED, readings whose ids the record does not place → never placed in this turn', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict([reading('missingA'), reading('old1')])],
+    });
     expect(reasonsOf(a)).toEqual([]);
   });
 
