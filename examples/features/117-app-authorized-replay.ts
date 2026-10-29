@@ -1,5 +1,5 @@
 /**
- * 116 — App-authorized replay: YOU decide which MCP tool calls are sent again.
+ * 117 — App-authorized replay: YOU decide which MCP tool calls are sent again.
  *
  * A 429 says the request was rate-limited — not that the server ran nothing —
  * so permission to send a tool call again is the app's, declared per tool when
@@ -15,7 +15,7 @@
  * 'app-authorized' that call fails as "may have run" (footprintjs's
  * `UnknownEffectError`, the 429 its cause) — never as a plain "try again".
  *
- * Run:  npm run example examples/features/116-app-authorized-replay.ts
+ * Run:  npm run example examples/features/117-app-authorized-replay.ts
  */
 import assert from 'node:assert/strict';
 import { Agent, type LLMProvider } from '../../src/index.js';
@@ -25,7 +25,7 @@ import type { Payloads } from '../../src/events.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/116-app-authorized-replay',
+  id: 'features/117-app-authorized-replay',
   title: 'App-authorized replay — you decide which MCP calls are sent again',
   group: 'features',
   description:

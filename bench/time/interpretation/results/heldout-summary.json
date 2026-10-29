@@ -1,0 +1,2677 @@
+{
+ "set": "heldout",
+ "n": 80,
+ "clock": "2026-10-27T09:30:00.000Z",
+ "expected": {
+  "reads": 17,
+  "ask": 54,
+  "none": 9,
+  "inspect": 0
+ },
+ "sampling": 7,
+ "current": 1,
+ "versions": {
+  "scan": "1.1.0",
+  "meaningRule": "2.0.0"
+ },
+ "parsers": {
+  "recognizers": {
+   "coverageGaps": 26,
+   "value-only": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 61,
+    "unnecessaryClarifications": 0,
+    "exact": 11,
+    "wrong-window": 47,
+    "silent-default": 14,
+    "correct-ask": 0,
+    "unnecessary-ask": 0,
+    "correct-none": 8
+   },
+   "structure": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 18,
+    "unnecessaryClarifications": 7,
+    "exact": 11,
+    "wrong-window": 15,
+    "silent-default": 3,
+    "correct-ask": 36,
+    "unnecessary-ask": 7,
+    "correct-none": 8
+   },
+   "strict": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 7,
+    "exact": 11,
+    "wrong-window": 1,
+    "silent-default": 0,
+    "correct-ask": 53,
+    "unnecessary-ask": 7,
+    "correct-none": 8
+   },
+   "strict+agree": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 7,
+    "exact": 11,
+    "wrong-window": 1,
+    "silent-default": 0,
+    "correct-ask": 53,
+    "unnecessary-ask": 7,
+    "correct-none": 8
+   },
+   "complete": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 10,
+    "exact": 8,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 10,
+    "correct-none": 8
+   },
+   "complete+nouns": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 7,
+    "exact": 11,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 7,
+    "correct-none": 8
+   }
+  },
+  "chrono": {
+   "coverageGaps": 36,
+   "value-only": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 59,
+    "unnecessaryClarifications": 0,
+    "exact": 13,
+    "wrong-window": 47,
+    "silent-default": 12,
+    "correct-ask": 0,
+    "unnecessary-ask": 0,
+    "correct-none": 8
+   },
+   "structure": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 12,
+    "unnecessaryClarifications": 15,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 12,
+    "correct-ask": 45,
+    "unnecessary-ask": 15,
+    "correct-none": 8
+   },
+   "strict": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 18,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 18,
+    "correct-none": 8
+   },
+   "strict+agree": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 18,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 18,
+    "correct-none": 8
+   },
+   "complete": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 18,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 18,
+    "correct-none": 8
+   },
+   "complete+nouns": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 18,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 18,
+    "correct-none": 8
+   }
+  },
+  "duckling": {
+   "coverageGaps": 32,
+   "value-only": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 66,
+    "unnecessaryClarifications": 0,
+    "exact": 8,
+    "wrong-window": 62,
+    "silent-default": 4,
+    "correct-ask": 0,
+    "unnecessary-ask": 0,
+    "correct-none": 6
+   },
+   "structure": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 7,
+    "unnecessaryClarifications": 11,
+    "exact": 8,
+    "wrong-window": 3,
+    "silent-default": 4,
+    "correct-ask": 48,
+    "unnecessary-ask": 11,
+    "correct-none": 6
+   },
+   "strict": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 12,
+    "exact": 8,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 12,
+    "correct-none": 6
+   },
+   "strict+agree": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 12,
+    "exact": 8,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 12,
+    "correct-none": 6
+   },
+   "complete": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 15,
+    "exact": 5,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 15,
+    "correct-none": 6
+   },
+   "complete+nouns": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 12,
+    "exact": 8,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 12,
+    "correct-none": 6
+   }
+  },
+  "agentfootprint": {
+   "coverageGaps": 40,
+   "value-only": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 55,
+    "unnecessaryClarifications": 0,
+    "exact": 10,
+    "wrong-window": 24,
+    "silent-default": 31,
+    "correct-ask": 6,
+    "unnecessary-ask": 0,
+    "correct-none": 9
+   },
+   "structure": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 40,
+    "unnecessaryClarifications": 1,
+    "exact": 10,
+    "wrong-window": 22,
+    "silent-default": 18,
+    "correct-ask": 20,
+    "unnecessary-ask": 1,
+    "correct-none": 9
+   },
+   "strict": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 7,
+    "exact": 10,
+    "wrong-window": 1,
+    "silent-default": 0,
+    "correct-ask": 53,
+    "unnecessary-ask": 7,
+    "correct-none": 9
+   },
+   "strict+agree": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 7,
+    "exact": 10,
+    "wrong-window": 1,
+    "silent-default": 0,
+    "correct-ask": 53,
+    "unnecessary-ask": 7,
+    "correct-none": 9
+   },
+   "complete": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 11,
+    "exact": 6,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 11,
+    "correct-none": 9
+   },
+   "complete+nouns": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 7,
+    "exact": 10,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 7,
+    "correct-none": 9
+   }
+  },
+  "library-grammar": {
+   "coverageGaps": 44,
+   "value-only": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 54,
+    "unnecessaryClarifications": 0,
+    "exact": 17,
+    "wrong-window": 28,
+    "silent-default": 26,
+    "correct-ask": 0,
+    "unnecessary-ask": 0,
+    "correct-none": 9
+   },
+   "structure": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 53,
+    "unnecessaryClarifications": 0,
+    "exact": 17,
+    "wrong-window": 27,
+    "silent-default": 26,
+    "correct-ask": 1,
+    "unnecessary-ask": 0,
+    "correct-none": 9
+   },
+   "strict": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 0,
+    "exact": 17,
+    "wrong-window": 1,
+    "silent-default": 0,
+    "correct-ask": 53,
+    "unnecessary-ask": 0,
+    "correct-none": 9
+   },
+   "strict+agree": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 0,
+    "exact": 17,
+    "wrong-window": 1,
+    "silent-default": 0,
+    "correct-ask": 53,
+    "unnecessary-ask": 0,
+    "correct-none": 9
+   },
+   "complete": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 8,
+    "exact": 9,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 8,
+    "correct-none": 9
+   },
+   "complete+nouns": {
+    "n": 80,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 0,
+    "exact": 17,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 54,
+    "unnecessary-ask": 0,
+    "correct-none": 9
+   }
+  }
+ },
+ "reference": {
+  "vsExpected": {
+   "n": 80,
+   "inspected": 0,
+   "wrongReadings": 9,
+   "unnecessaryClarifications": 7,
+   "exact": 10,
+   "wrong-window": 6,
+   "silent-default": 3,
+   "correct-ask": 45,
+   "unnecessary-ask": 7,
+   "correct-none": 9
+  },
+  "vsLabelsAsWritten": {
+   "n": 80,
+   "inspected": 0,
+   "wrongReadings": 3,
+   "unnecessaryClarifications": 9,
+   "exact": 13,
+   "wrong-window": 3,
+   "silent-default": 0,
+   "correct-ask": 43,
+   "unnecessary-ask": 9,
+   "correct-none": 12
+  }
+ },
+ "byClass": {
+  "negation-complement": {
+   "n": 8,
+   "recognizers": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 8,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 8,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "recurrence": {
+   "n": 7,
+   "recognizers": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 7,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 7,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "condition-event": {
+   "n": 9,
+   "recognizers": {
+    "strict+agree": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 1,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 1,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 1,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 1,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 1,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 1,
+     "silent-default": 0,
+     "correct-ask": 8,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 9,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 9,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 9,
+    "inspected": 0,
+    "wrongReadings": 2,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 2,
+    "silent-default": 0,
+    "correct-ask": 7,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "approximation": {
+   "n": 7,
+   "recognizers": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 7,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 1,
+    "silent-default": 0,
+    "correct-ask": 6,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "fraction": {
+   "n": 8,
+   "recognizers": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 3,
+     "exact": 4,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 3,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 4,
+     "exact": 3,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 4,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 3,
+     "exact": 4,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 3,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 2,
+     "exact": 5,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 2,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 4,
+     "exact": 3,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 4,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 2,
+     "exact": 5,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 2,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 7,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 4,
+     "exact": 3,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 4,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 8,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 7,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 8,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 7,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 1,
+    "unnecessary-ask": 7,
+    "correct-none": 0
+   }
+  },
+  "range": {
+   "n": 7,
+   "recognizers": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 7,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 7,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "calendar-scope": {
+   "n": 7,
+   "recognizers": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 7,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 7,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "plain-lookback": {
+   "n": 10,
+   "recognizers": {
+    "strict+agree": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 3,
+     "exact": 7,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 3,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 5,
+     "exact": 5,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 5,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 3,
+     "exact": 7,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 3,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 10,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 10,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 10,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 10,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 10,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 10,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 3,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 8,
+     "exact": 2,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 8,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 7,
+     "exact": 3,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 7,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 10,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 4,
+     "exact": 6,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 4,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 10,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 10,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 4,
+     "exact": 6,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 4,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 10,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 10,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 10,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 0,
+    "exact": 10,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 0,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "identifier": {
+   "n": 7,
+   "recognizers": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 1,
+     "correct-none": 6
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 1,
+     "correct-none": 6
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 1,
+     "correct-none": 6
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 1,
+     "correct-none": 6
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 1,
+     "correct-none": 6
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 1,
+     "correct-none": 6
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 2,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 2,
+     "correct-none": 5
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 2,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 2,
+     "correct-none": 5
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 2,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 2,
+     "correct-none": 5
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 7
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 7
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 7
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 7
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 7
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 0,
+     "unnecessary-ask": 0,
+     "correct-none": 7
+    }
+   },
+   "reference": {
+    "n": 7,
+    "inspected": 0,
+    "wrongReadings": 0,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 0,
+    "correct-ask": 0,
+    "unnecessary-ask": 0,
+    "correct-none": 7
+   }
+  },
+  "sampling-cadence": {
+   "n": 7,
+   "recognizers": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    },
+    "complete+nouns": {
+     "n": 7,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 7,
+     "unnecessary-ask": 0,
+     "correct-none": 0
+    }
+   },
+   "reference": {
+    "n": 7,
+    "inspected": 0,
+    "wrongReadings": 5,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 3,
+    "silent-default": 2,
+    "correct-ask": 2,
+    "unnecessary-ask": 0,
+    "correct-none": 0
+   }
+  },
+  "no-time": {
+   "n": 3,
+   "recognizers": {
+    "strict+agree": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete+nouns": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    }
+   },
+   "chrono": {
+    "strict+agree": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete+nouns": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    }
+   },
+   "duckling": {
+    "strict+agree": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 1,
+     "correct-none": 1
+    },
+    "complete": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 1,
+     "correct-none": 1
+    },
+    "complete+nouns": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 1,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 1,
+     "correct-none": 1
+    }
+   },
+   "agentfootprint": {
+    "strict+agree": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete+nouns": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    }
+   },
+   "library-grammar": {
+    "strict+agree": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    },
+    "complete+nouns": {
+     "n": 3,
+     "inspected": 0,
+     "wrongReadings": 0,
+     "unnecessaryClarifications": 0,
+     "exact": 0,
+     "wrong-window": 0,
+     "silent-default": 0,
+     "correct-ask": 1,
+     "unnecessary-ask": 0,
+     "correct-none": 2
+    }
+   },
+   "reference": {
+    "n": 3,
+    "inspected": 0,
+    "wrongReadings": 1,
+    "unnecessaryClarifications": 0,
+    "exact": 0,
+    "wrong-window": 0,
+    "silent-default": 1,
+    "correct-ask": 0,
+    "unnecessary-ask": 0,
+    "correct-none": 2
+   }
+  }
+ }
+}

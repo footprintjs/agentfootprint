@@ -59,6 +59,7 @@ import {
 } from '../emptiness.js';
 import { argumentRewritesOf } from '../middleware/rewrites.js';
 import { REASONS, reasonEntry } from './reasons.js';
+import { reasonSourceOf, type SourceRead } from './sources.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -896,13 +897,23 @@ function readTimeDerived(state: Readonly<Record<string, unknown>>, g: Gathered):
   });
 }
 
-/** The reasons in `REASONS` order, and the value by precedence: a reason > support > a check ran > nothing. */
-function valueOf(g: Gathered): Pick<AnswerAssessment, 'assessment' | 'reasons'> {
+/**
+ * The reasons in `REASONS` order, each with what it rests on (its DECLARED
+ * kind, and for `calls` the calls its rows name — `sources.ts`), and the value
+ * by precedence: a reason > support > a check ran > nothing. The source never
+ * moves the value: it is read after the reason fired, from the same rows.
+ */
+function valueOf(g: Gathered, read: SourceRead): Pick<AnswerAssessment, 'assessment' | 'reasons'> {
   const reasons = REASONS.flatMap((entry) => {
     const witness = g.fired.get(entry.reason);
     if (witness === undefined) return [];
     return [
-      { reason: entry.reason, ...(entry.layer !== undefined && { layer: entry.layer }), witness },
+      {
+        reason: entry.reason,
+        ...(entry.layer !== undefined && { layer: entry.layer }),
+        witness,
+        source: reasonSourceOf(entry.reason, entry.source, witness, read),
+      },
     ];
   });
   const assessment: AnswerAssessment['assessment'] =
@@ -1023,7 +1034,7 @@ export function foldState(
       keptOut: [...asked].sort(),
     };
   }
-  const { assessment, reasons } = valueOf(g);
+  const { assessment, reasons } = valueOf(g, { state, turnResults: results });
   return {
     assessment,
     standing: standingOf(assessment, reasons),

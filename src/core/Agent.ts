@@ -49,6 +49,7 @@ import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { assistantReplayFields } from './agent/assistantReplay.js';
 import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../lib/conventions.js';
+import { readDisplayName } from '../lib/displayName.js';
 import {
   DecisionRequiredError,
   ResumeDecisionError,
@@ -5292,6 +5293,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       toolClaimants,
       notServed: notServedResult,
     });
+    // A tool's `displayName` — the app's words for a call, read by a person — read
+    // through the same resolver, so a ToolProvider's tool is read as well, and through
+    // the one rule (`lib/displayName.ts` · `readDisplayName`), so a value nobody vetted
+    // is never printed. Wired only where a tool can declare one: on every other agent
+    // the final branch is the one it always was.
+    const displayNameOf =
+      this.externalToolProvider !== undefined ||
+      [...registryByName.values()].some((tool) => tool.displayName !== undefined)
+        ? (toolName: string): string | undefined =>
+            readDisplayName(resolveForLayer(toolName).tool?.displayName)
+        : undefined;
     const readSkillFor = this.readSkillOfferFor();
     // Per-role skill visibility. The Injection Engine resolves the ids once per
     // iteration and publishes them on scope (`buildInjectionEngineSubflow.ts` ·
@@ -6083,8 +6095,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           }),
           ...(this.answerLayerOption.standingLine === true && { standingLine: true as const }),
           ...(this.answerValidationConfig !== undefined && { validated: true as const }),
+          ...(displayNameOf !== undefined && { displayNameOf }),
         },
       }),
+      // The prose limits block names an item's calls in the app's words — under the same wiring.
+      ...(displayNameOf !== undefined && { displayNameOf }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools
       // branch and the key across the sf-llm-call boundary, under the arm.
       ...(this.toolChoiceOptions !== undefined && { hasToolChoice: true }),

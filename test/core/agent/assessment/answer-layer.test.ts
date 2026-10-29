@@ -348,6 +348,7 @@ describe('UNIT — the fold reads the witness rows', () => {
         reason: 'steps-unfinished',
         layer: 4,
         witness: [{ kind: 'state', key: 'findingsLedger', path: '/0/kind' }],
+        source: { kind: 'run' },
       },
     ]);
   });

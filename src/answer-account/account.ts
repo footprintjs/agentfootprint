@@ -15,7 +15,9 @@ import {
   assessmentDataFrom,
   assumedValuesSourceOf,
   rewrittenBehind,
+  sourcesByReason,
   standingLineOf,
+  standingNamesFrom,
 } from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
@@ -143,6 +145,13 @@ const BLOCK_HEADINGS: readonly string[] = [
  * that exact line, where the composer puts it, is the library's. Without the
  * committed state an assumed value cannot be rebuilt, and the line is not
  * claimed.
+ *
+ * A line that named calls in the app's words (a tool's `displayName`) is
+ * rebuilt from the words the record kept beside it (`turn_end.standingLineNames`)
+ * and the calls the fold reads off the committed state (each reason's
+ * `source`) — the same two inputs the layer's stage composed it from. Words
+ * the record does not hold in full, or no committed state, and the line is
+ * not claimed.
  */
 function appendedStandingLine(
   end: ViewEvent,
@@ -150,13 +159,23 @@ function appendedStandingLine(
 ): string | undefined {
   const data = assessmentDataFrom(end.payload.answerAssessment);
   if (data === undefined) return undefined;
-  if (!data.reasons.includes('argument-assumed')) return standingLineOf(data, [], false);
+  const kept = end.payload.standingLineNames;
+  const displayNames = kept === undefined ? undefined : standingNamesFrom(kept);
+  if (kept !== undefined && displayNames === undefined) return undefined;
+  if (!data.reasons.includes('argument-assumed') && displayNames === undefined) {
+    return standingLineOf(data, [], false);
+  }
   if (state === undefined) return undefined;
   const source = assumedValuesSourceOf(data.reasons, state);
   const assumed =
     source === undefined ? [] : assumedLinesFor(source.ledger, source.turn, source.readDecisions);
-  const rewritten = rewrittenBehind(assessAnswer({ snapshot: { sharedState: state } }));
-  return standingLineOf(data, assumed, rewritten);
+  const assessed = assessAnswer({ snapshot: { sharedState: state } });
+  return standingLineOf(
+    data,
+    assumed,
+    rewrittenBehind(assessed),
+    displayNames === undefined ? undefined : { sources: sourcesByReason(assessed), displayNames },
+  );
 }
 
 /** Whether `text` opens the framework's appended section: the run's own line, or a block's heading. */
