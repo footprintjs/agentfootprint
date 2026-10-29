@@ -180,7 +180,7 @@ sent:
 | The adapter you chose retries its own refusal (AgentCore's session-busy) | Yes, within the budget — the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
 | Any other server, and your declaration names `throttle` for the tool | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on: 'throttle' }` |
 | Any other server, no declaration, `policy: 'app-authorized'` | No — the 429 is returned as the server sent it | `reason: 'not-permitted'`, `effect: 'unknown'` |
-| Any other server, no declaration, `policy: 'compatibility'` (the 11.x default) | Yes — today's behaviour | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
+| Any other server, no declaration, `policy: 'compatibility'` (the default, kept in 12.0) | Yes — today's behaviour | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
 
 A request that failed in transport without an answer (footprintjs's `network`: a
 lost connection, a timeout below the series) is sent again only when the entry
@@ -227,20 +227,29 @@ says the effect is unknown and names the policy's assumption.
 **What `'app-authorized'` needs of a connection** (`replayUnavailable.ts`). The
 rule above rests on two things the library must establish for every call, never
 assume: its request is matched to the call, and its answer is seen. When either is
-missing, the call is refused BEFORE it is sent, with `McpReplayUnavailableError`
-(`sent: false`) and a typed `reason`:
+missing, the tool call is refused BEFORE its request is sent, with
+`McpReplayUnavailableError` (`sent: false`) and a typed `reason`. Only tool
+invocations (`tools/call`) are refused. Connecting (`initialize`) and listing
+tools run first and may already have reached the server (on `stdio`, the server
+process has started), so `sent: false` speaks of that tool request alone.
 
 | `reason` | What is missing | When |
 |---|---|---|
-| `'answers-unobserved'` | The `initialize` answer never passed the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it (SDK 1.10 does) |
-| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta` |
+| `'answers-unobserved'` | The `initialize` answer never passed the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it (SDK 1.10 does when run; reading the source finds the same through 1.13) |
+| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta` — on any call, including after the connection initialized |
 | `'requests-unwatched'` | The library cannot watch the transport's requests at all | `stdio`, or a transport whose `send` cannot be wrapped |
+
+The rule tests what the connection does, never an SDK version number or a
+transport's name.
 
 **Why.** Without them, a request the server accepted and never answered would
 reach the caller as a plain timeout: the strict contract, silently weakened. A
-refusal says so instead, and nothing reaches the server. `'compatibility'` asks
-none of this and behaves as before: it never treats an unwatched response as
-unanswered.
+refusal says so instead, and the tool request never reaches the server. An
+explicit `'app-authorized'` never falls back to `'compatibility'`: not when a
+connection cannot give these facts, not when a request loses its match after the
+connection initialized, and a refused request is never sent again to recover the
+match. `'compatibility'` asks none of this and behaves as before: it never treats
+an unwatched response as unanswered.
 
 An answer's watch ends, by its request id, when the answer arrives, when the SDK
 cancels the request, when the call settles (found by its marker) or when the client
@@ -252,8 +261,10 @@ try {
   await tool.execute(args, ctx);
 } catch (error) {
   if (error instanceof McpReplayUnavailableError) {
-    // Nothing was sent. error.reason says what the connection cannot give;
-    // keep this server under policy: 'compatibility', or upgrade the MCP SDK.
+    // This tool request was not sent; connecting and listing tools may have
+    // been. error.reason names what this connection cannot give. Choose
+    // policy: 'compatibility' for this server (its stated assumption, not the
+    // strict guarantees), or a connection that gives both facts.
   }
 }
 ```
@@ -263,7 +274,7 @@ const orders = await mcpClient({
   name: 'orders',
   transport: { transport: 'http', url },
   replay: {
-    policy: 'app-authorized', // opt-in in 11.x; the default from the next major
+    policy: 'app-authorized', // opt-in; 'compatibility' stays the default in 12.0
     tools: {
       search_orders: { on: ['throttle', 'network'] },
       create_order: { on: ['throttle'], changes: true },
@@ -277,9 +288,18 @@ const orders = await mcpClient({
 //   permission: { by: 'declaration', on: 'throttle' }, durationMs: 41 }
 ```
 
-**Moving to the next major.** `'app-authorized'` becomes the default. To keep
-today's behaviour, write `replay: { policy: 'compatibility' }` — its records keep
-naming the assumption. To move now, list each tool you want sent again on a 429
+**The default stays `'compatibility'` in 12.0.** 11.5.0 said `'app-authorized'`
+would become the default in the next major. That is superseded: 12.0.0 keeps
+`'compatibility'` as the default, as an interim policy rather than a permanent
+one. Strict refuses a tool call it cannot observe and correlate, so as a default
+it would refuse every tool invocation over `stdio`, and every one through an MCP
+SDK that replaces the transport's handler. `'compatibility'` keeps its stated
+retry assumption, and its records keep naming it; it does not gain the strict
+policy's observation or correlation guarantees. A strict default may come in a
+later major, after the supported transport and SDK combinations are measured,
+with migration notes; none is scheduled. A `policy` you write is the one used: a
+default never replaces it, and nothing picks it from the transport. To choose
+`'app-authorized'` now, list each tool you want sent again on a 429
 (`on: ['throttle']`), mark the tools that make changes (`changes: true`), and
 declare `deduplicates` only for a server that honours the key.
 

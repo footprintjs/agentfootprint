@@ -39,14 +39,16 @@
  * made afresh for each attempt (signatures expire), for that same identity.
  *
  * ── THE POLICIES ─────────────────────────────────────────────────────────────
- *   'compatibility' — the 11.x default, today's behaviour by name: a 429 is
- *       repeated for every tool, on the ASSUMPTION that the server refused it
- *       before running it. Each such repeat records that assumption; the
- *       attempt's effect stays `unknown`, and the caller sees the error it
- *       always did.
- *   'app-authorized' — opt-in now, the default in the next major: a 429 or a
- *       network failure is repeated only when the app's entry for the tool
- *       names it. What the caller sees follows footprintjs's law
+ *   'compatibility' — the default, kept in 12.0: today's behaviour by name. A
+ *       429 is repeated for every tool, on the ASSUMPTION that the server
+ *       refused it before running it. Each such repeat records that
+ *       assumption; the attempt's effect stays `unknown`, and the caller sees
+ *       the error it always did. It gains none of the strict policy's
+ *       guarantees: it never establishes that answers are seen or that
+ *       requests are matched to their calls.
+ *   'app-authorized' — opt-in, by name only: a 429 or a network failure is
+ *       repeated only when the app's entry for the tool names it. What the
+ *       caller sees follows footprintjs's law
  *       (`RequestReplay` · `uncertain`, `callLifetime.ts`): a received refusal
  *       or error keeps the server's error as it came, its effect still
  *       `unknown`; a call that genuinely lacked an answer somewhere — an
@@ -54,8 +56,10 @@
  *       JSON-RPC answer never came — and then fails, fails with
  *       `UnknownEffectError`, its final error the cause. That needs each
  *       request matched to its call and each answer seen; a connection that
- *       cannot give both refuses the call before it is sent
- *       (`replayUnavailable.ts`), so the contract never silently weakens.
+ *       cannot give both refuses the tool call before its request is sent
+ *       (`replayUnavailable.ts`), so the contract never silently weakens. It
+ *       never falls back to 'compatibility', and nothing chooses it from the
+ *       transport.
  *
  * Under both, the adapter the app chose retries its own refusal within the
  * budget — AgentCore's session-busy reply — as the ADAPTER's policy, on an
@@ -84,8 +88,9 @@ import type {
 
 /**
  * Which rule decides whether a tool call is sent again after a refusal or a
- * failure. `'compatibility'` is the default in 11.x; `'app-authorized'` becomes
- * the default in the next major.
+ * failure. `'compatibility'` is the default, kept in 12.0: it keeps its stated
+ * retry assumption and gains none of the strict guarantees. `'app-authorized'`
+ * applies only when written, and never falls back to `'compatibility'`.
  */
 export type McpReplayPolicy = 'app-authorized' | 'compatibility';
 
@@ -135,7 +140,10 @@ export interface McpReplayDeduplication {
  * misspelled `changes` cannot quietly switch the side-effect guard off.
  */
 export interface McpReplayOptions {
-  /** Default `'compatibility'` in 11.x. */
+  /**
+   * Default `'compatibility'`, in 12.0 as in 11.x. An explicit
+   * `'app-authorized'` never falls back to it.
+   */
   readonly policy?: McpReplayPolicy;
   /** The tools of this server, by the name the server lists them under. */
   readonly tools?: Readonly<Record<string, McpReplayTool>>;

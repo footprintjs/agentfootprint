@@ -44,7 +44,8 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     transport: { transport: 'http', url: 'https://tickets.example.test/mcp', fetch: server.fetch },
     retryOnThrottle: { baseDelayMs: 1, jitter: 'none' },
     replay: {
-      // Only what you declare is sent again (the default from the next major).
+      // Only what you declare is sent again. Opt-in: the default stays
+      // 'compatibility' in 12.0.
       policy: 'app-authorized',
       tools: {
         search_tickets: { on: ['throttle'] },

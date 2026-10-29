@@ -717,6 +717,15 @@ export {
   ERR_CONTEXT_WINDOW_EXCEEDED,
   isContextWindowExceeded,
 } from './provider-contract/contextWindow.js';
+// The code-session port's refusals and its one path rule — exported from the
+// ROOT with the `CodeSession` port they belong to, so a caller catches the same
+// names whichever code runner is behind the port.
+export {
+  CodeSandboxError,
+  sandboxPath,
+  type CodeSandboxRefusal,
+} from './provider-contract/codeSandbox.js';
+export { SessionExpiredError } from './provider-contract/sessionExpired.js';
 // The conversation refusals (9.2.0) — `instanceof`-able so a caller can tell
 // "you are already running" from "somebody is still waiting on an answer" from
 // "there is nothing to follow up on".
