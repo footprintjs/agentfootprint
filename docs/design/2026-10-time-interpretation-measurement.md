@@ -75,7 +75,7 @@ lookback's length, its modifiers, and whether it is ambiguous.
 | Mode | Rule |
 |---|---|
 | value-only | The reader's first value is taken as the window: how an app plugs a parser in today. |
-| structure | Exactly one mention, a lookback ending now, no modifier, not ambiguous. Anything else asks. No mention: no time named. |
+| structure | Exactly one mention, a lookback ending now, no modifier, not ambiguous. Anything else asks. No mention: the tool's default applies. |
 | strict | Plus the leftover scan: any time-bearing word outside the reading asks. This is the owner's first rule as written. |
 | strict + agree | Plus quote agreement: the closed lookback grammar must read the same length from the reading's own words. |
 | complete | Plus the complete-meaning rule: every word of the message must be accounted for (§ 2). Tool profile `declared-from-existing`. |
