@@ -25,6 +25,18 @@ export type {
   ThrottleRetryInfo,
   ThrottleRetryOptions,
 } from './throttleRetry.js';
+// Who may send a tool call again — the app's declaration for one server
+// (`mcpClient({ replay })`), read once when the client is built.
+export type {
+  McpReplayDeduplication,
+  McpReplayKind,
+  McpReplayOptions,
+  McpReplayPolicy,
+  McpReplayTool,
+} from './replay.js';
+// A call under 'app-authorized' that a connection cannot honour is refused
+// before it is sent, with a typed reason.
+export { McpReplayUnavailableError, type McpReplayUnavailableReason } from './replayUnavailable.js';
 export type {
   McpCallToolResult,
   McpClient,

@@ -53,9 +53,15 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a
   transport fetch that already retries is joined, never wrapped.
-- `requestLedger.ts`, `seriesEvidence.ts`, `callLifetime.ts` — which dispatched
-  call a request belongs to, that request's series written down for the call's
-  run, and the call's own lifetime: what cancels it, and what its settling stops.
+- `requestLedger.ts`, `callMarker.ts`, `seriesEvidence.ts`, `callLifetime.ts` —
+  which dispatched call a request belongs to (by a private `_meta` marker the
+  transport strips), that request's series written down for the call's run, and
+  the call's own lifetime: what cancels it, what its settling stops, and the
+  "may have run" failure.
+- `replay.ts` — who may send a tool call again (the app's declaration, one
+  permission rule) and what is known of a series' effect.
+- `replayUnavailable.ts` — what `'app-authorized'` needs of a connection, and the
+  typed refusal (`McpReplayUnavailableError`) when the connection cannot give it.
 - `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
   footprintjs's own helpers (same names and laws) until a release ships them.
 - `toolExtras.ts` — our own declarations, carried over MCP.
@@ -72,15 +78,18 @@ The retry series is the one retry owner, and it runs inside the transport's
 `fetch` — built before any run, handed only a serialized body. A call the agent
 dispatched still gets its request's attempts in its own run: the dispatcher puts
 an internal port on the call's context (`tools/requestEvidence.ts`), the MCP tool
-keys a ticket by the request's params OBJECT, the watched transport binds it to
-the JSON-RPC id the SDK assigned, and the series claims it from its own body.
-Identity at every hop, never content: two calls with the same arguments, or two
-runs on one client, cannot claim each other's request, and nothing is added to
-the wire. The series files ONE `agentfootprint.tools.request_attempts` when the
-request ends — and, for a cancellation, the moment it lands. Every request the
-series sent is a row, or counted in `omitted`. One cut in flight is a `cut` row,
-`remote: 'unknown'`: it was sent, and the server may have run it — a cut is never
-recorded as not run. A request never sent has no row.
+puts a library-private marker in its request's `_meta` (`callMarker.ts`), the
+watched transport takes the marker out again and binds the call to the JSON-RPC
+id the SDK assigned, and the series claims it from its own body. The marker, not
+the params object, is what ties the request to the call, so an SDK that copies
+the params is still matched. Never content: two calls with the same arguments,
+or two runs on one client, cannot claim each other's request, and the server
+receives the bytes it always did. The series files ONE
+`agentfootprint.tools.request_attempts` when the request ends — and, for a
+cancellation, the moment it lands. Every request the series sent is a row, or
+counted in `omitted`. One cut in flight is a `cut` row, `remote: 'unknown'`: it
+was sent, and the server may have run it — a cut is never recorded as not run. A
+request never sent has no row.
 
 Cancellation never waits on attribution (`callLifetime.ts`): the call's
 `ctx.signal` and the client's reach the SDK request while the call runs, and the
@@ -103,12 +112,139 @@ sent.
 A response received is `answered` with its status — a 503 is never success.
 `refused` is a response the retry policy recognises as a refusal (a 429, a
 session-busy reply), recorded as the server sent it — not proof that nothing
-ran. Automatic 429 retries assume the server rejected the request before
-executing it. There is no side-effect guard on them today: a tool with side
-effects is retried on 429 like any other, and `retryOnThrottle: false` turns that
-off per server.
+ran. Who may send a call again, and what each attempt is known to have done,
+are the next section's.
 A row holds numbers and the library's own words; a failure is a fixed sentence
 and its category, never the thrown error's text. See `seriesEvidence.ts`.
+
+## Who may send a tool call again (`replay.ts`)
+
+**The rule.** Permission to repeat is the APP's, declared per (server, tool) when
+the client is built — never the model's, a tool description's or a server
+annotation's (`readOnlyHint`). What is known of an attempt's effect comes only
+from the record and an established service guarantee — and no reply is one.
+Each attempt records three facts apart, none read from another: its `failure`
+(footprintjs's category), its `effect` (`none` | `unknown` | `applied`,
+footprintjs's effect law), and — when another attempt followed — the
+`permission` that allowed it.
+
+**Why.** A generic 429 does not prove non-execution: RFC 6585 §4 defines it as
+rate limiting, and `Retry-After` says when to ask again, not that asking is safe.
+A vendor's SDK may retry its own 429s because the vendor documents its own
+service; a generic MCP client cannot assume that of an arbitrary server. Nor is
+AgentCore's session-busy body proof: AWS documents a retryable conflict while a
+session starts or stops, and the body is matched by its code and words, which a
+server behind the runtime can send after it ran the call. So every attempt that
+was sent and did not complete is `unknown`, and `none` is only a request never
+sent:
+
+| Situation | Sent again automatically? | Recorded |
+|---|---|---|
+| The adapter you chose retries its own refusal (AgentCore's session-busy) | Yes, within the budget — the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
+| Any other server, and your declaration names `throttle` for the tool | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on: 'throttle' }` |
+| Any other server, no declaration, `policy: 'app-authorized'` | No — the 429 is returned as the server sent it | `reason: 'not-permitted'`, `effect: 'unknown'` |
+| Any other server, no declaration, `policy: 'compatibility'` (the 11.x default) | Yes — today's behaviour | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
+
+A request that failed in transport without an answer (footprintjs's `network`: a
+lost connection, a timeout below the series) is sent again only when the entry
+names `network`. A 5xx is an answer and never is. `retryOnThrottle: false` turns
+off the 429 rule and nothing else: a declared `network` repeat (and the strict
+policy's record) keeps its series, with the default budget. **The side-effect guard** holds
+under every policy: a tool declared `changes: true` is never sent again unless the
+server is declared to deduplicate (`deduplicates`) and the call carries the key —
+and a key protects only when the server uses it. A repeat re-sends the SAME
+request: the same body, server and session, as the same identity (a credential is
+vended afresh for each attempt, for that identity). The protocol's own requests
+(`initialize`, `tools/list`, notifications) run no tool and keep the 429 retry.
+
+**Uncertainty survives** (`SeriesKnowledge`). The `end` says how many requests
+were sent (`attempts`) and what is known of the whole series: once any attempt is
+`unknown`, so is the series — a later refusal does not resolve it, and a later
+success does not prove the operation happened once. `applied` means the call
+completed (the server answered, not with an error), never that anything was
+written; an answered attempt's effect comes from the call's verdict, so a ticketed
+request files when its call settles (or at once, when cancelled).
+
+**What the caller sees under `'app-authorized'`** (footprintjs's law; the record is
+the same under both policies). Two layers are kept apart: a row's `outcome:
+'answered'` is the HTTP observation — a response arrived — and not the MCP call's
+answer, which the ledger watches for by JSON-RPC id (a 202, or a stream, can be
+accepted and never carry it). Then:
+
+- a received refusal or error — a 429, a 503, a JSON-RPC or tool error, or a chain
+  in which every attempt received one — keeps the server's error as it came; its
+  effect stays `unknown`, and the record says why it was not sent again;
+- a call that genuinely lacked an answer somewhere — an attempt with no response at
+  all, or a request accepted over HTTP whose JSON-RPC answer never came — and then
+  fails, fails as "may have run": `UnknownEffectError`, its final error (a later
+  refusal's, or the timeout) as the `cause` (`callLifetime.ts`), and the `end` says
+  `mayHaveRun: true`;
+- a call that completes returns normally, and the series' effect stays `unknown`
+  after an earlier unknown attempt;
+- a cancellation keeps the caller's reason; once a request was sent, the record
+  says its effect is `unknown`.
+
+Under `'compatibility'` the caller sees the error it always did; the record still
+says the effect is unknown and names the policy's assumption.
+
+**What `'app-authorized'` needs of a connection** (`replayUnavailable.ts`). The
+rule above rests on two things the library must establish for every call, never
+assume: its request is matched to the call, and its answer is seen. When either is
+missing, the call is refused BEFORE it is sent, with `McpReplayUnavailableError`
+(`sent: false`) and a typed `reason`:
+
+| `reason` | What is missing | When |
+|---|---|---|
+| `'answers-unobserved'` | The `initialize` answer never passed the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it (SDK 1.10 does) |
+| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta` |
+| `'requests-unwatched'` | The library cannot watch the transport's requests at all | `stdio`, or a transport whose `send` cannot be wrapped |
+
+**Why.** Without them, a request the server accepted and never answered would
+reach the caller as a plain timeout: the strict contract, silently weakened. A
+refusal says so instead, and nothing reaches the server. `'compatibility'` asks
+none of this and behaves as before: it never treats an unwatched response as
+unanswered.
+
+An answer's watch ends, by its request id, when the answer arrives, when the SDK
+cancels the request, when the call settles (found by its marker) or when the client
+closes. It never ends when only the HTTP send finished: a 202 or a stream can still
+carry the answer later.
+
+```ts
+try {
+  await tool.execute(args, ctx);
+} catch (error) {
+  if (error instanceof McpReplayUnavailableError) {
+    // Nothing was sent. error.reason says what the connection cannot give;
+    // keep this server under policy: 'compatibility', or upgrade the MCP SDK.
+  }
+}
+```
+
+```ts
+const orders = await mcpClient({
+  name: 'orders',
+  transport: { transport: 'http', url },
+  replay: {
+    policy: 'app-authorized', // opt-in in 11.x; the default from the next major
+    tools: {
+      search_orders: { on: ['throttle', 'network'] },
+      create_order: { on: ['throttle'], changes: true },
+    },
+    deduplicates: { argument: 'idempotency_key' }, // set by your code, never the model
+  },
+});
+// a search throttled once, then answered — what the saved run's row says:
+// { attempt: 1, outcome: 'refused', reason: 'retryable', status: 429, kind: 'throttle',
+//   failure: 'rate-limited', waitMs: 200, effect: 'unknown',
+//   permission: { by: 'declaration', on: 'throttle' }, durationMs: 41 }
+```
+
+**Moving to the next major.** `'app-authorized'` becomes the default. To keep
+today's behaviour, write `replay: { policy: 'compatibility' }` — its records keep
+naming the assumption. To move now, list each tool you want sent again on a 429
+(`on: ['throttle']`), mark the tools that make changes (`changes: true`), and
+declare `deduplicates` only for a server that honours the key.
 
 ## Structured results for execution adapters
 

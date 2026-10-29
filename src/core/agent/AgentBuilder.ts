@@ -84,6 +84,7 @@ import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
+import type { StandingLineWhen } from './assessment/compose.js';
 import type { CheckInBuilderOptions } from '../checkin.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
 import type { Watcher } from './watch.js';
@@ -358,7 +359,7 @@ export class AgentBuilder {
   /** `.answerLayer()` (honesty layer 4). Undefined for every agent that did
    *  not ask for it — the chart, the rows, the events and the answer are then
    *  byte-identical; `standingLine` is the prose line's own opt-in. */
-  private answerLayerValue?: { readonly standingLine?: true };
+  private answerLayerValue?: { readonly standingLine?: StandingLineWhen };
   /** `.time()` (the time layer). Undefined for every agent that did not ask —
    *  then no clock is read, no time row is filed and `time` on a run is refused. */
   private timeValue?: TimeOptions;
@@ -2072,6 +2073,25 @@ export class AgentBuilder {
    * limits block, is appended to the answer the run returns — never streamed
    * on `stream.token`.
    *
+   * `{ standingLine: { when } }` says the line only when it matters:
+   * `'always'` (what `true` means), `'unless-consistent'` (not for
+   * "consistent with the run's record"), or `'not-sure-or-ask'` (only "not
+   * sure" and "ask" — not "consistent", "not assessed" or "known"). `ask` is
+   * said in every mode. The mode decides the LINE only: the standing travels
+   * as data in every mode (`turn_end.answerAssessment`, the event), the limits
+   * block (`.limitsTravelWithTheAnswer()`) is appended whether or not the line
+   * is, and memory keeps exactly the answer that was delivered. **No line is
+   * never a check:** under `'not-sure-or-ask'` it means no reason fired, which
+   * includes "nothing could be checked" — and an app that hides both the line
+   * and the data leaves the person unable to tell "checked" from "not
+   * assessed".
+   *
+   * @example Say it only when it matters
+   *   Agent.create({ provider, model })
+   *     .tool(searchLogs)
+   *     .answerLayer({ standingLine: { when: 'not-sure-or-ask' } })
+   *     .build();
+   *
    * The in-run fold reads no app declarations: `agent.assessment(declarations)`
    * and the answer account take `rowsAt`, and can say more than the run did.
    *
@@ -2088,7 +2108,11 @@ export class AgentBuilder {
    * @example One line to the person, too
    *   Agent.create({ provider, model }).tool(searchLogs).answerLayer({ standingLine: true }).build();
    */
-  answerLayer(options?: { readonly standingLine?: boolean }): this {
+  answerLayer(options?: {
+    readonly standingLine?:
+      | boolean
+      | { readonly when: 'always' | 'unless-consistent' | 'not-sure-or-ask' };
+  }): this {
     if (this.answerLayerValue !== undefined) {
       throw new Error(
         'AgentBuilder.answerLayer: already set. One agent folds one standing per answer — ' +
@@ -2097,7 +2121,9 @@ export class AgentBuilder {
     }
     if (options !== undefined && (typeof options !== 'object' || options === null)) {
       throw new Error(
-        'AgentBuilder.answerLayer: options must be an object — { standingLine?: boolean } — or omitted.',
+        'AgentBuilder.answerLayer: options must be an object — ' +
+          "{ standingLine?: boolean | { when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } } " +
+          '— or omitted.',
       );
     }
     this.answerLayerValue = answerLayerArm(options ?? {}, 'AgentBuilder.answerLayer');
@@ -3470,7 +3496,7 @@ export class AgentBuilder {
     // The answer layer's line appends prose to the answer — refused where the
     // answer's bytes are judged or must parse. The standing itself still
     // travels as data on both (`turn_end.answerAssessment`).
-    if (answerLayer?.standingLine === true) {
+    if (answerLayer?.standingLine !== undefined) {
       if (this.answerValidationConfig !== undefined) {
         throw new Error(
           'AgentBuilder.answerLayer({ standingLine: true }) cannot be combined with ' +
@@ -3536,7 +3562,12 @@ export class AgentBuilder {
             // The answer layer (honesty layer 4), the same door grammar — the
             // value resolved above, whichever door set it.
             ...(answerLayer !== undefined && {
-              answerLayer: answerLayer.standingLine === true ? { standingLine: true } : true,
+              answerLayer:
+                answerLayer.standingLine === undefined
+                  ? true
+                  : answerLayer.standingLine === 'always'
+                  ? { standingLine: true }
+                  : { standingLine: { when: answerLayer.standingLine } },
             }),
             // The time layer, the same door grammar — the builder's value wins
             // over an `AgentOptions.time` given to `Agent.create`.
@@ -4073,27 +4104,67 @@ export class AgentBuilder {
 }
 
 /**
+ * The line's modes, as the option doors check them — keyed by the type the
+ * layer's composer decides with (`assessment/compose.ts` · `StandingLineWhen`),
+ * so a mode added there does not compile until it is listed here. A type-only
+ * import: the composer stays off a plain agent's module graph.
+ */
+const STANDING_LINE_MODES: { readonly [W in StandingLineWhen]: true } = Object.freeze({
+  always: true,
+  'unless-consistent': true,
+  'not-sure-or-ask': true,
+});
+
+/**
  * THE ANSWER LAYER'S ARM (honesty layer 4), checked by ONE rule for both of
  * its doors — `.answerLayer(options)` and `AgentOptions.answerLayer` — so a
- * value one door refuses, the other refuses too: an unknown key, or a
- * `standingLine` that is not a boolean, is refused by name. Returns the arm
- * normalised (`{ standingLine: true }` or `{}`).
+ * value one door refuses, the other refuses too: an unknown key, a
+ * `standingLine` that is neither a boolean nor `{ when }`, or a `when` outside
+ * the three modes, is refused by name. Returns the arm normalised — the line's
+ * mode (`true` → `'always'`), or `{}` for no line.
  */
 function answerLayerArm(
   options: Readonly<Record<string, unknown>>,
   door: string,
-): { readonly standingLine?: true } {
+): { readonly standingLine?: StandingLineWhen } {
   const unknown = Object.keys(options).filter((k) => k !== 'standingLine');
   if (unknown.length > 0) {
     throw new Error(
       `${door}: unknown option(s) ${unknown.map((k) => `'${k}'`).join(', ')}. ` +
-        'The one option is standingLine (boolean).',
+        "The one option is standingLine (boolean, or { when: 'always' | 'unless-consistent' | " +
+        "'not-sure-or-ask' }).",
     );
   }
-  if (options.standingLine !== undefined && typeof options.standingLine !== 'boolean') {
-    throw new Error(`${door}: standingLine must be a boolean.`);
+  const line = options.standingLine;
+  if (line === undefined || line === false) return {};
+  if (line === true) return { standingLine: 'always' };
+  const modes = Object.keys(STANDING_LINE_MODES)
+    .map((w) => `'${w}'`)
+    .join(', ');
+  if (typeof line !== 'object' || line === null || Array.isArray(line)) {
+    throw new Error(
+      `${door}: standingLine must be a boolean or { when } — when is one of ${modes}.`,
+    );
   }
-  return options.standingLine === true ? { standingLine: true } : {};
+  const extra = Object.keys(line).filter((k) => k !== 'when');
+  if (extra.length > 0) {
+    throw new Error(
+      `${door}: standingLine has unknown option(s) ${extra.map((k) => `'${k}'`).join(', ')}. ` +
+        `The one option is when: ${modes}.`,
+    );
+  }
+  const when = (line as { readonly when?: unknown }).when;
+  if (
+    typeof when !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(STANDING_LINE_MODES, when)
+  ) {
+    throw new Error(
+      `${door}: standingLine.when must be one of ${modes} (got ${
+        JSON.stringify(when) ?? 'nothing'
+      }).`,
+    );
+  }
+  return { standingLine: when as StandingLineWhen };
 }
 
 /**
@@ -4102,12 +4173,15 @@ function answerLayerArm(
  * `answerLayerArm` — so the options door meets every refusal the builder's
  * door does. Anything else is refused by name.
  */
-function answerLayerFromOptions(value: unknown): { readonly standingLine?: true } | undefined {
+function answerLayerFromOptions(
+  value: unknown,
+): { readonly standingLine?: StandingLineWhen } | undefined {
   if (value === undefined || value === false) return undefined;
   if (value === true) return {};
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(
-      'AgentOptions.answerLayer must be a boolean or an object — { standingLine?: boolean }.',
+      'AgentOptions.answerLayer must be a boolean or an object — ' +
+        "{ standingLine?: boolean | { when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } }.",
     );
   }
   return answerLayerArm(value as Readonly<Record<string, unknown>>, 'AgentOptions.answerLayer');

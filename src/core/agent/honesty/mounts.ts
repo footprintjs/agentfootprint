@@ -697,8 +697,11 @@ export type AnswerFoldKey =
 export interface AnswerMountDeps {
   /** The committed keys the fold reads — only those this agent's arms can write (`answerFoldReads`). */
   readonly reads: readonly AnswerFoldKey[];
-  /** `.answerLayer({ standingLine: true })` — compose one line for a prose answer. */
-  readonly standingLine?: true;
+  /**
+   * `.answerLayer({ standingLine })` — compose one line for a prose answer, in
+   * the answers its mode says it for (`true` is `'always'`).
+   */
+  readonly standingLine?: import('../assessment/compose.js').StandingLineWhen;
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
   readonly validated?: true;
   /**
