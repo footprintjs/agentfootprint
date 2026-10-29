@@ -33,7 +33,10 @@
  *          `agentfootprint.stream.tool_start` / `tool_end` events
  *          when the agent calls them. Add `name: '<mcp-server>'` to
  *          `McpClientOptions` so observability surfaces can group
- *          tool calls by server.
+ *          tool calls by server. On a transport this module builds,
+ *          a call the agent dispatched also gets its request's retry
+ *          series as `agentfootprint.tools.request_attempts`, filed by
+ *          the series through the call's own port (`requestLedger.ts`).
  *
  * Lazy-require pattern: the `@modelcontextprotocol/sdk` peer-dep
  * loads only when a consumer actually constructs a client. Tests
@@ -54,7 +57,9 @@ import type {
 import { callMetaOf, readToolExtras } from './toolExtras.js';
 import { readToolResult, resultModeOf } from './toolResult.js';
 import { createVendingFetch } from './gatewayTransport.js';
-import { retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
+import { ledgeredFetch, retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
+import { RequestLedger } from './requestLedger.js';
+import { openCall } from './callLifetime.js';
 import { refuseConflictingOptions } from './connectionRefusals.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { transportUrl } from './transportUrl.js';
@@ -96,7 +101,7 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
   // Before anything connects: an option that names a behaviour which cannot
   // happen on the chosen arm is a defect, not a preference.
   refuseConflictingOptions(opts, name);
-  const connection = await openConnection(opts);
+  const { connection, ledger } = await openConnection(opts);
 
   // Tool cache so consumers calling `.tools()` more than once don't
   // hammer the server. `.refresh()` invalidates it.
@@ -117,7 +122,9 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
     const listed = opts.signal
       ? await connection.listTools(undefined, { signal: opts.signal })
       : await connection.listTools();
-    return listed.tools.map((t) => wrapMcpTool(name, connection, t, opts.signal, resultMode));
+    return listed.tools.map((t) =>
+      wrapMcpTool(name, connection, t, opts.signal, resultMode, ledger),
+    );
   };
 
   return {
@@ -143,18 +150,26 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
 
 // ─── Getting a connection ──────────────────────────────────────────
 
+/** A connection, and — when the library built its transport — the ledger its requests are claimed by. */
+interface OpenConnection {
+  readonly connection: McpConnection;
+  readonly ledger?: RequestLedger;
+}
+
 /**
  * The one funnel every arm passes through, in precedence order: a connection
  * you handed over, the internal test seam, then the library building one.
+ * Only the last has a ledger: a connection built elsewhere has no retry series
+ * of ours to file a call's attempts.
  *
  * A call with neither `connection` nor `sdk` reaches `resolveClient` with two
  * `undefined` arguments and takes the identical path it always took.
  */
 async function openConnection(
   opts: McpClientOptions | McpConnectionOptions,
-): Promise<McpConnection> {
-  if (opts.connection !== undefined) return opts.connection;
-  if (opts._client !== undefined) return opts._client;
+): Promise<OpenConnection> {
+  if (opts.connection !== undefined) return { connection: opts.connection };
+  if (opts._client !== undefined) return { connection: opts._client };
   // `refuseConflictingOptions` has already refused the case where this is
   // absent, so the assertion documents that guarantee rather than assuming it.
   const transport = opts.transport as McpTransport;
@@ -169,7 +184,7 @@ async function resolveClient(
   signal?: AbortSignal,
   retryOnThrottle?: RetryOnThrottle,
   sdk?: McpSdk,
-): Promise<McpSdkClient> {
+): Promise<OpenConnection> {
   if (sdk !== undefined) assertSdk(sdk, transport.transport);
   const mod: McpSdkExports = sdk ?? loadClientModule();
 
@@ -177,11 +192,11 @@ async function resolveClient(
     capabilities: {},
   });
 
-  const transportImpl = await buildTransport(transport, retryOnThrottle, sdk);
+  const built = await buildTransport(transport, retryOnThrottle, sdk);
   // Same rule as callTool: options ride beside the transport, never inside it.
-  if (signal) await client.connect(transportImpl, { signal });
-  else await client.connect(transportImpl);
-  return client;
+  if (signal) await client.connect(built.transport, { signal });
+  else await client.connect(built.transport);
+  return { connection: client, ...(built.ledger !== undefined && { ledger: built.ledger }) };
 }
 
 /**
@@ -238,11 +253,17 @@ function loadClientModule(): McpSdkExports {
   }
 }
 
+/** The SDK transport, and the ledger its retry series files each call's attempts through. */
+interface BuiltTransport {
+  readonly transport: unknown;
+  readonly ledger?: RequestLedger;
+}
+
 async function buildTransport(
   t: McpTransport,
   retryOnThrottle?: RetryOnThrottle,
   sdk?: McpSdk,
-): Promise<unknown> {
+): Promise<BuiltTransport> {
   if (t.transport === 'stdio') {
     // Deliberately NOT served by `sdk`: stdio spawns a subprocess, so it can
     // never run in a browser, and `client/stdio.js` is the SDK's one client
@@ -265,12 +286,15 @@ async function buildTransport(
         }),
       );
     }
-    return new stdioMod.StdioClientTransport({
-      command: t.command,
-      args: t.args ? [...t.args] : [],
-      ...(t.env && { env: { ...t.env } }),
-      ...(t.cwd !== undefined && { cwd: t.cwd }),
-    });
+    // No fetch, so no retry series: a stdio call has no attempts to file.
+    return {
+      transport: new stdioMod.StdioClientTransport({
+        command: t.command,
+        args: t.args ? [...t.args] : [],
+        ...(t.env && { env: { ...t.env } }),
+        ...(t.cwd !== undefined && { cwd: t.cwd }),
+      }),
+    };
   }
 
   // http + gateway transports both ride Streamable HTTP. They differ only in
@@ -285,6 +309,12 @@ async function buildTransport(
   // did before 8.11.0. A transport fetch that already runs a retry series of
   // its own (AgentCore Runtime's) is never wrapped: `retryingFetch` joins the
   // 429 rule to that series, so one call is one series.
+  //
+  // The ledger joins the same series, so each request a dispatched tool call
+  // sends files its attempts into that call's run; the transport's `send` is
+  // watched to bind each request to its call (`requestLedger.ts`). A fetch that
+  // runs no series (retry off) gets no ledger: there is nothing to file.
+  const ledger = new RequestLedger();
   if (t.transport === 'gateway') {
     // The consumer's own `fetch` (9.32.0) goes UNDERNEATH the vending, not
     // beside it: `createVendingFetch` resolves the credential, applies it to
@@ -293,19 +323,41 @@ async function buildTransport(
     // credential is still vended per request. Passing `undefined` is the
     // default global `fetch`, which is byte-identical to every release before
     // the seam existed.
-    return new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
-      fetch: retryingFetch(createVendingFetch(t, t.fetch), retryOnThrottle),
-    });
+    const gatewayFetch = retryingFetch(createVendingFetch(t, t.fetch), retryOnThrottle);
+    const ledgered = gatewayFetch && ledgeredFetch(gatewayFetch, ledger);
+    return watched(
+      new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
+        fetch: ledgered ?? gatewayFetch,
+      }),
+      ledgered && ledger,
+    );
   }
   // Both options ride the SAME SDK transport, and both are forwarded when both
   // are given. The SDK folds `requestInit.headers` into the `init.headers` it
   // hands the custom fetch, so a signer sees the static headers and has the
   // final word over the bytes — see `McpHttpTransport.fetch`.
   const httpFetch = retryingFetch(t.fetch, retryOnThrottle);
-  return new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
-    ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
-    ...(httpFetch && { fetch: httpFetch }),
-  });
+  const ledgered = httpFetch && ledgeredFetch(httpFetch, ledger);
+  const fetch = ledgered ?? httpFetch;
+  return watched(
+    new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
+      ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
+      ...(fetch && { fetch }),
+    }),
+    ledgered && ledger,
+  );
+}
+
+/**
+ * `transport` with its sends watched by `ledger` — the SAME object, its own
+ * `send` installed in place. As it is, with no ledger, when there is none or it
+ * cannot be watched: then no call expects its attempts filed.
+ */
+function watched(transport: unknown, ledger: RequestLedger | undefined): BuiltTransport {
+  if (ledger === undefined || transport === null || typeof transport !== 'object') {
+    return { transport };
+  }
+  return ledger.watch(transport) === undefined ? { transport } : { transport, ledger };
 }
 
 /** The Node loader path for Streamable HTTP — reached only with no `sdk`. */
@@ -337,6 +389,7 @@ function wrapMcpTool(
   mcp: McpListedTool,
   signal?: AbortSignal,
   resultMode?: McpClientOptions['resultMode'],
+  ledger?: RequestLedger,
 ): Tool {
   const tool: Tool = {
     schema: {
@@ -379,10 +432,21 @@ function wrapMcpTool(
         arguments: argsObj,
         ...(ctx?.time !== undefined && { _meta: callMetaOf(ctx.time) }),
       };
-      const result = signal
-        ? await connection.callTool(params, undefined, { signal })
-        : await connection.callTool(params);
-      return readToolResult(result, mcp.name, serverName, resultMode);
+      // The call's lifetime (`callLifetime.ts`): its context's signal and the
+      // client's cancel the SDK request while it runs; a call the agent
+      // dispatched issues a ticket keyed by THIS params object — the one the
+      // SDK hands the transport — so the retry series that sends it files its
+      // attempts into the call's run; and however the call settles, a series
+      // still sending is cut, inside the call. Nothing is added to the request.
+      const call = openCall(params, ctx, signal, ledger, serverName);
+      try {
+        const result = call.signal
+          ? await connection.callTool(params, undefined, { signal: call.signal })
+          : await connection.callTool(params);
+        return readToolResult(result, mcp.name, serverName, resultMode);
+      } finally {
+        call.close();
+      }
     },
   };
   return tool;
