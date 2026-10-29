@@ -866,9 +866,10 @@ class RetryableRefusal extends Error {
 }
 
 const REFUSAL_SENTENCES: Readonly<Record<RetryKind, string>> = {
-  throttle: 'The server refused the request with HTTP 429 before running it.',
+  throttle:
+    'The server answered with HTTP 429, a response the retry policy recognises as a refusal. It is recorded as sent, which is not proof that nothing ran.',
   'session-busy':
-    'AgentCore Runtime refused the request while its session was starting or stopping, before running it.',
+    'AgentCore Runtime answered that its session was starting or stopping, a response the retry policy recognises as a refusal. It is recorded as sent, which is not proof that nothing ran.',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
