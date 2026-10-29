@@ -120,7 +120,7 @@ its reason comes from; the moment it could have been caught and the door that ex
 scored-entry setup; D partial scores; E the setup that puts the app's own subject reading in
 front of the model. The 2026-09-23 run is Haiku 4.5, n = 1 per arm, 45 rows, on the host's
 `docs/measurements/selection-arms-2026-09-23.json`; the event-level record survives on disk for
-arm A only (host `src/agent.ts` · `seoTelemetry` opens ONE sink per process and the bench
+arm A only (host `src/agent.ts` · the host app's telemetry function opens ONE sink per process and the bench
 starts five servers in one process), so arms B–E rest on the harness rows. That retention gap
 is itself the first finding (§ 8).
 
@@ -1405,7 +1405,7 @@ found in the bench itself:
 
 - **H1 · The record is not retained.** The event-level record for 36 of 45 rows is not on disk:
   one telemetry sink per process, five servers in one process (host `src/agent.ts` ·
-  `seoTelemetry`, `scripts/bench/selection-arms.ts` · `main`). Fix: one sink per server (point
+  the host app's telemetry function, `scripts/bench/selection-arms.ts` · `main`). Fix: one sink per server (point
   the events log per server), so the RECORDING, not the harness row, is the durable unit.
 - **H2 · MATCH never reads truth.** `scripts/bench/selection-observe.ts` · `judgeTurn`:
   "Completed means a right-domain collector ran without error; it never reads the answer's

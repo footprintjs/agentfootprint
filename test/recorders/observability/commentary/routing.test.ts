@@ -43,7 +43,7 @@ function evaluatedEvent(routing?: unknown): AgentfootprintEvent {
   } as any;
 }
 
-const ctx = { appName: 'Neo' };
+const ctx = { appName: 'Bot' };
 const render = (e: AgentfootprintEvent) => {
   const key = selectCommentaryKey(e);
   if (!key) return null;

@@ -32,7 +32,7 @@ const answers = (recorder: ReturnType<typeof agentThinkingTrace>) =>
 for (const reactMode of ['classic', 'dynamic', 'dynamic-grouped'] as const) {
   describe(`Story answer admission — ${reactMode}`, () => {
     it('records the accepted rewritten answer only at its native delivery stage', async () => {
-      const recorder = agentThinkingTrace({ agent: 'Neo' });
+      const recorder = agentThinkingTrace({ agent: 'Bot' });
       let beforeVerdict: unknown;
       let deliveredAt: string | undefined;
       const agent = Agent.create({ provider: mock({ reply: DRAFT }), model: 'mock', reactMode })

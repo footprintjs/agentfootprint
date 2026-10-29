@@ -394,11 +394,11 @@ describe('a cross-site request never reaches the agent — security', () => {
   it('refuses a rebinding request whose page ALSO sets X-Forwarded-Host to a listed name — Host alone decides (421)', async () => {
     // After rebinding the page is same-origin and may set any non-forbidden
     // header, X-Forwarded-Host included. `allowedHosts` must never read it.
-    const { port, calls } = await door({ allowedHosts: ['neo.corp.example'] }, '0.0.0.0');
+    const { port, calls } = await door({ allowedHosts: ['bot.corp.example'] }, '0.0.0.0');
     const reply = await send(port, {
       headers: {
         host: 'rebind.evil.example',
-        'x-forwarded-host': 'neo.corp.example',
+        'x-forwarded-host': 'bot.corp.example',
         origin: 'http://rebind.evil.example',
         'content-type': 'application/json',
       },
@@ -451,7 +451,7 @@ describe('a cross-site request never reaches the agent — security', () => {
     expect(error).toMatch(/allowedHosts/);
     expect(calls()).toBe(0);
     // An operator-set list keeps the plain sentence.
-    const listed = await door({ allowedHosts: ['neo.corp.example'] });
+    const listed = await door({ allowedHosts: ['bot.corp.example'] });
     const plain = await send(listed.port, {
       headers: { host: 'app.example', 'content-type': 'application/json' },
       body: turn(),
@@ -460,7 +460,7 @@ describe('a cross-site request never reaches the agent — security', () => {
   });
 
   it('an explicit allowedOrigins also refuses the rebinding shape — the attacker’s origin is not listed', async () => {
-    const { port, calls } = await door({ allowedOrigins: ['https://neo.corp.example'] }, '0.0.0.0');
+    const { port, calls } = await door({ allowedOrigins: ['https://bot.corp.example'] }, '0.0.0.0');
     const reply = await send(port, {
       headers: {
         host: `rebind.evil.example:${port}`,
@@ -579,8 +579,8 @@ describe('what the field client sends still works — scenario', () => {
       headers: {
         'content-type': 'application/json',
         host: `127.0.0.1:${port}`,
-        'x-forwarded-host': 'neo.corp.example',
-        origin: 'https://neo.corp.example',
+        'x-forwarded-host': 'bot.corp.example',
+        origin: 'https://bot.corp.example',
       },
       body: turn(),
     });
@@ -601,7 +601,7 @@ describe('what the field client sends still works — scenario', () => {
   });
 
   it('GET health and every unowned path are unchanged — probes are not doors', async () => {
-    const { port } = await door({ allowedHosts: ['neo.corp.example'] });
+    const { port } = await door({ allowedHosts: ['bot.corp.example'] });
     // A kubelet or load-balancer probe sends the TARGET's address as Host.
     const health = await send(port, {
       method: 'GET',
@@ -935,19 +935,19 @@ describe('doorGuard — unit', () => {
 
   it('compares a default Origin with Host or any X-Forwarded-Host entry, by authority', () => {
     const json = { 'content-type': 'application/json' };
-    expect(post({ ...json, host: 'neo.corp:443', origin: 'https://neo.corp' })).toBeUndefined();
-    expect(post({ ...json, host: 'neo.corp', origin: 'http://neo.corp:8080' })).toBeInstanceOf(
+    expect(post({ ...json, host: 'bot.corp:443', origin: 'https://bot.corp' })).toBeUndefined();
+    expect(post({ ...json, host: 'bot.corp', origin: 'http://bot.corp:8080' })).toBeInstanceOf(
       OriginNotAllowedError,
     );
     expect(
       post({
         ...json,
         host: '127.0.0.1:5230',
-        'x-forwarded-host': 'a.b, neo.corp',
-        origin: 'https://neo.corp',
+        'x-forwarded-host': 'a.b, bot.corp',
+        origin: 'https://bot.corp',
       }),
     ).toBeUndefined();
-    expect(post({ ...json, host: 'neo.corp', origin: 'not an origin' })).toBeInstanceOf(
+    expect(post({ ...json, host: 'bot.corp', origin: 'not an origin' })).toBeInstanceOf(
       OriginNotAllowedError,
     );
   });
@@ -973,32 +973,32 @@ describe('doorGuard — unit', () => {
     expect(
       post({
         ...json,
-        host: 'neo.corp',
-        origin: 'https://neo.corp',
+        host: 'bot.corp',
+        origin: 'https://bot.corp',
         'sec-fetch-site': 'cross-site',
       }),
     ).toBeInstanceOf(OriginNotAllowedError);
   });
 
   it('judges Host on every method once allowedHosts is set — an app’s own GET routes included', () => {
-    const hosts = doorGuard({ name: 'unit', allowedHosts: ['neo.corp.example'] });
+    const hosts = doorGuard({ name: 'unit', allowedHosts: ['bot.corp.example'] });
     expect(hosts.check({ method: 'GET', headers: { host: 'rebind.evil.example' } })).toBeInstanceOf(
       HostNotAllowedError,
     );
-    expect(hosts.check({ method: 'GET', headers: { host: 'neo.corp.example' } })).toBeUndefined();
+    expect(hosts.check({ method: 'GET', headers: { host: 'bot.corp.example' } })).toBeUndefined();
   });
 
   it('matches allowedHosts by name, case- and trailing-dot-insensitively, a port only when listed', () => {
     const hosts = doorGuard({
       name: 'unit',
-      allowedHosts: ['Neo.Corp.Example', '[::1]', 'lab.corp:8443'],
+      allowedHosts: ['Bot.Corp.Example', '[::1]', 'lab.corp:8443'],
     });
     const at = (host: string) =>
       hosts.check({ method: 'POST', headers: { host, 'content-type': 'application/json' } });
     for (const host of [
-      'neo.corp.example',
-      'NEO.corp.example:5230',
-      'neo.corp.example.',
+      'bot.corp.example',
+      'BOT.corp.example:5230',
+      'bot.corp.example.',
       '[::1]:5230',
       'lab.corp:8443',
     ]) {
@@ -1006,7 +1006,7 @@ describe('doorGuard — unit', () => {
     }
     for (const host of [
       'evil.example',
-      'neo.corp.example.evil.example',
+      'bot.corp.example.evil.example',
       'lab.corp:8444',
       'lab.corp',
       '',
@@ -1058,13 +1058,13 @@ describe('doorGuard — unit', () => {
   });
 
   it('never trusts X-Forwarded-Host for allowedHosts — the pin a mutation once survived', () => {
-    const hosts = doorGuard({ name: 'unit', allowedHosts: ['neo.corp.example'] });
+    const hosts = doorGuard({ name: 'unit', allowedHosts: ['bot.corp.example'] });
     expect(
       hosts.check({
         method: 'POST',
         headers: {
           host: 'rebind.evil.example',
-          'x-forwarded-host': 'neo.corp.example',
+          'x-forwarded-host': 'bot.corp.example',
           'content-type': 'application/json',
         },
       }),
@@ -1073,14 +1073,14 @@ describe('doorGuard — unit', () => {
 
   it('reads a portless Host under X-Forwarded-Proto, so port 80 and port 443 are two origins', () => {
     const json = { 'content-type': 'application/json' };
-    const behindTls = { ...json, host: 'neo.corp.example', 'x-forwarded-proto': 'https' };
-    expect(post({ ...behindTls, origin: 'https://neo.corp.example' })).toBeUndefined();
-    expect(post({ ...behindTls, origin: 'http://neo.corp.example' })).toBeInstanceOf(
+    const behindTls = { ...json, host: 'bot.corp.example', 'x-forwarded-proto': 'https' };
+    expect(post({ ...behindTls, origin: 'https://bot.corp.example' })).toBeUndefined();
+    expect(post({ ...behindTls, origin: 'http://bot.corp.example' })).toBeInstanceOf(
       OriginNotAllowedError,
     );
     // No proxy said which scheme: the Origin's own is used, as before.
     expect(
-      post({ ...json, host: 'neo.corp.example', origin: 'http://neo.corp.example' }),
+      post({ ...json, host: 'bot.corp.example', origin: 'http://bot.corp.example' }),
     ).toBeUndefined();
   });
 
@@ -1117,7 +1117,7 @@ describe('doorGuard — unit', () => {
       '::2',
       '::ffff:10.0.0.1',
       '10.0.0.7',
-      'neo.corp.example',
+      'bot.corp.example',
     ]) {
       expect([bind, isLoopbackBind(bind)]).toEqual([bind, false]);
     }
@@ -1482,10 +1482,10 @@ describe('the refusal costs nothing it does not have to — performance', () => 
   });
 
   it('the pure check is cheap: 100k decisions well under a second', () => {
-    const guard = doorGuard({ name: 'perf', allowedHosts: ['neo.corp.example'] });
+    const guard = doorGuard({ name: 'perf', allowedHosts: ['bot.corp.example'] });
     const headers = {
-      host: 'neo.corp.example',
-      origin: 'https://neo.corp.example',
+      host: 'bot.corp.example',
+      origin: 'https://bot.corp.example',
       'content-type': 'application/json',
     };
     const started = performance.now();

@@ -146,6 +146,17 @@ spelling would no longer match it.
 The existing `figures: true` option separately enables measurement units and
 its established arithmetic checks.
 
+The same number in scientific notation counts too. Scripts often print small
+values as `1.12e-02`. With `decimalRounding: true`, such a token in a tool's
+text output is read as the exact decimal it states, so an answer's `0.0112` is
+grounded, `0.011` is recorded as a rounding, and `0.012` or `1.12` is still
+flagged. An answer written in scientific notation (`1.12e-2`) is checked at
+the precision it was written with. A value with no fractional places after
+expansion matches digit for digit: `1.2e+21` grounds `1200000000000000000000`.
+Only a whole token counts, so hashes and versions such as `9f3e10ab` or
+`1.2e3-rc` stay identifiers, and a percentage (`1.12%`) is never read as the
+fraction `0.0112`.
+
 ## Check a range endpoint by endpoint
 
 A range of exactly two plain numbers, separated by a hyphen or en dash, is

@@ -1,14 +1,14 @@
 # Proposal 009 — Skill-body ↔ tool-contract consistency check
 
 **Status:** DESIGN (no code yet — gated on approval)
-**Motivation:** a real adopter bug (Neo / `neo-agentfootprint`).
+**Motivation:** a real adopter bug (the host app).
 
 ## The bug this prevents
 
 A skill's `body` (prose injected into the system prompt) can contradict its tools'
 *actual* contracts. The model then **refuses a tool that is right there in the request**.
 
-Real instance (Neo, commit `1424a8f`): the `fabric-inventory` skill body wrote
+Real instance (the host app, commit `1424a8f`): the `fabric-inventory` skill body wrote
 `influx_get_switch_inventory(switch_name)` as if `switch_name` were **required**. The
 tool's `inputSchema.required` does **not** list it (it's optional, no-arg = whole
 fleet). Result: *"'give me the switch inventory' was being refused — the model claimed
@@ -26,7 +26,7 @@ Pure static checks over each skill's `body` text + its `tools[]` schemas:
 
 | Code | Checks | Catches |
 |---|---|---|
-| `body-tool-uncallable` | a tool NAME appears in the body but is not in this skill's `tools[]` (nor a global `.tool()`) | "told the model about a tool it can't call" (the §5(e) trap; Neo's intentional cross-skill handoff hints would be flagged → allow an opt-out marker) |
+| `body-tool-uncallable` | a tool NAME appears in the body but is not in this skill's `tools[]` (nor a global `.tool()`) | "told the model about a tool it can't call" (the §5(e) trap; the host app's intentional cross-skill handoff hints would be flagged → allow an opt-out marker) |
 | `body-unknown-param` | the body references `tool(param)` / a `param` that is not in that tool's `inputSchema.properties` | typo'd / stale param names |
 | `body-tool-unused` (off by default) | a tool in `tools[]` is never named in the body | forgotten/dead tool in a bundle |
 

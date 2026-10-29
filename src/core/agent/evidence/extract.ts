@@ -53,7 +53,7 @@ import {
   tokenize,
 } from '../../../lib/normalize.js';
 import { splitNumericRange } from './numericRanges.js';
-import { decimalsOf } from './numberPrecision.js';
+import { decimalsOf, scientificDecimalOf } from './numberPrecision.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from './types.js';
 
 /**
@@ -263,6 +263,30 @@ export function candidateForms(candidate: Candidate): readonly string[] {
   return forms;
 }
 
+/**
+ * Under `decimalRounding`: the number a standalone scientific spelling states
+ * (`numberPrecision.ts` · `scientificDecimalOf`), as a number candidate —
+ * whatever its digit count, like a plain decimal under the dial. It is looked
+ * up under its exact decimal (`0.0112` for `1.12e-2`) and under its own
+ * spelling (`token`, which a result may have printed as it is), and, when it
+ * is a fraction, rounded at the precision it was written with (`1.12e-2` is
+ * four places, `0.0112`). The spelling is read with its `%` kept, so a
+ * percentage is never read as the fraction (`1.12e-2%`). `undefined` for any
+ * other spelling, and for one outside the bounds: it stays what the
+ * classifier makes of it.
+ */
+function scientificCandidateOf(spelling: string, token: string): Candidate | undefined {
+  const decimal = scientificDecimalOf(spelling);
+  if (decimal === undefined) return undefined;
+  const value = normalizeToken(decimal.exact);
+  return {
+    value,
+    shape: 'number',
+    ...(token !== value && { token }),
+    ...(decimal.written !== undefined && { decimalSpelling: decimal.written }),
+  };
+}
+
 /** How one answer is read. */
 export interface AnswerReadOptions {
   /** Under the figures dial: the numbers the answer writes wearing a unit
@@ -357,13 +381,18 @@ export function readAnswer(
     const token = normalizeToken(spelling);
     let candidate = classifyToken(token, gate, figures);
     // Declared shapes and exemptions win, including over precision promotion.
-    if (
-      gate.decimalRounding === true &&
-      /^[-+]?\d+\.\d+$/.test(spelling) &&
-      !isDeclaredExempt(token, gate) &&
-      !gate.shapes.some((shape) => shape.match.test(token))
-    ) {
-      candidate = { value: token, shape: 'number', decimalSpelling: spelling };
+    if (gate.decimalRounding === true) {
+      const promoted = /^[-+]?\d+\.\d+$/.test(spelling)
+        ? { value: token, shape: 'number', decimalSpelling: spelling }
+        : scientificCandidateOf(spelling, token);
+      if (
+        promoted !== undefined &&
+        !isDeclaredExempt(token, gate) &&
+        !gate.shapes.some((shape) => shape.match.test(token))
+      ) {
+        // An exempt value stays exempt in another spelling (`1.12e-2` for `0.0112`).
+        candidate = isDeclaredExempt(promoted.value, gate) ? undefined : promoted;
+      }
     }
     record(
       candidate !== undefined && rangeToken !== undefined

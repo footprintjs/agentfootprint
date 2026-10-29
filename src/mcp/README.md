@@ -53,6 +53,9 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a
   transport fetch that already retries is joined, never wrapped.
+- `requestLedger.ts`, `seriesEvidence.ts`, `callLifetime.ts` — which dispatched
+  call a request belongs to, that request's series written down for the call's
+  run, and the call's own lifetime: what cancels it, and what its settling stops.
 - `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
   footprintjs's own helpers (same names and laws) until a release ships them.
 - `toolExtras.ts` — our own declarations, carried over MCP.
@@ -62,6 +65,50 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
   `answerFromElicitation`); a time range travels as two `date-time` properties.
 - `connectionRefusals.ts`, `sdkLoadFailure.ts` — the two refusals, authored once.
 - `types.ts`, `index.ts`.
+
+## A retried call is in the run that made it
+
+The retry series is the one retry owner, and it runs inside the transport's
+`fetch` — built before any run, handed only a serialized body. A call the agent
+dispatched still gets its request's attempts in its own run: the dispatcher puts
+an internal port on the call's context (`tools/requestEvidence.ts`), the MCP tool
+keys a ticket by the request's params OBJECT, the watched transport binds it to
+the JSON-RPC id the SDK assigned, and the series claims it from its own body.
+Identity at every hop, never content: two calls with the same arguments, or two
+runs on one client, cannot claim each other's request, and nothing is added to
+the wire. The series files ONE `agentfootprint.tools.request_attempts` when the
+request ends — and, for a cancellation, the moment it lands. Every request the
+series sent is a row, or counted in `omitted`. One cut in flight is a `cut` row,
+`remote: 'unknown'`: it was sent, and the server may have run it — a cut is never
+recorded as not run. A request never sent has no row.
+
+Cancellation never waits on attribution (`callLifetime.ts`): the call's
+`ctx.signal` and the client's reach the SDK request while the call runs, and the
+ledger stops any `tools/call` the SDK sends `notifications/cancelled` for. A call
+that settles before its series (the SDK's own timeout) cuts the series in a
+`finally`, inside the call, so nothing is filed after the run and nothing more is
+sent.
+
+```ts
+// what a saved run gives back for a call throttled once, then answered
+{ toolCallId: 'tc-1', toolName: 'search_tickets', iteration: 1, endpoint: 'tickets-gateway',
+  attempts: [
+    { attempt: 1, outcome: 'refused', reason: 'retryable', status: 429, kind: 'throttle',
+      failure: 'rate-limited', waitMs: 1000, retryAfterMs: 1000 },
+    { attempt: 2, outcome: 'answered', reason: 'answered', status: 200 } ],
+  omitted: 0,
+  end: { outcome: 'answered', reason: 'answered', status: 200 } }
+```
+
+A response received is `answered` with its status — a 503 is never success.
+`refused` is a response the retry policy recognises as a refusal (a 429, a
+session-busy reply), recorded as the server sent it — not proof that nothing
+ran. Automatic 429 retries assume the server rejected the request before
+executing it. There is no side-effect guard on them today: a tool with side
+effects is retried on 429 like any other, and `retryOnThrottle: false` turns that
+off per server.
+A row holds numbers and the library's own words; a failure is a fixed sentence
+and its category, never the thrown error's text. See `seriesEvidence.ts`.
 
 ## Structured results for execution adapters
 

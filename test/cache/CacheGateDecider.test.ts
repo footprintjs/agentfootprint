@@ -164,7 +164,7 @@ describe('cacheGateDecide — boundary', () => {
 // ─── 3. Scenario — realistic combined-state cases ─────────────────
 
 describe('cacheGateDecide — scenario', () => {
-  it('Neo-like: 5 iters all on port-error-triage + 60% hit rate → applies', async () => {
+  it('Host-app-like: 5 iters all on port-error-triage + 60% hit rate → applies', async () => {
     const result = await runGate({
       recentHitRate: 0.6,
       skillHistory: [

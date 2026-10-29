@@ -45,7 +45,7 @@ import {
 import { call, login, mountDoor, type MountedDoor } from './signInDoorHarness.js';
 import { browserSignIn, mountRedirect } from './signInRedirectHarness.js';
 
-const GROUP = 'CN=Neo Users,OU=G,DC=corp,DC=example';
+const GROUP = 'CN=Bot Users,OU=G,DC=corp,DC=example';
 const ACCOUNTS: FakeAccount[] = [
   { sam: 'alice', password: 'Quartz-River-41!', displayName: 'Alice', memberOf: [GROUP] },
   { sam: 'bob', password: 'Maple-Stone-52!', memberOf: [GROUP] },
@@ -610,7 +610,7 @@ describe('sign-in audit — integration', () => {
     }
     const env = {
       IDENTITY_STRATEGY: 'directory-password',
-      IDENTITY_PUBLIC_URL: 'https://neo.corp.example',
+      IDENTITY_PUBLIC_URL: 'https://bot.corp.example',
       IDENTITY_LDAP_URL: 'ldaps://ad.corp.example:636',
       IDENTITY_LDAP_CA_FILE: 'system',
       IDENTITY_LDAP_DOMAIN: 'corp.example',
@@ -620,7 +620,7 @@ describe('sign-in audit — integration', () => {
       IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES: '15',
       IDENTITY_SIGN_IN_ADDRESS_REFUSE_AFTER: '20',
     };
-    const boot = { production: true, crossSite: { allowedHosts: ['neo.corp.example'] } };
+    const boot = { production: true, crossSite: { allowedHosts: ['bot.corp.example'] } };
     const records: SignInAuditRecord[] = [];
     const lines: string[] = [];
     const choice = await identityFromConfig(identityConfigFromEnv(env), {
@@ -648,7 +648,7 @@ describe('sign-in audit — integration', () => {
             port,
             path: '/auth/login',
             method: 'POST',
-            headers: { 'content-type': 'application/json', host: 'neo.corp.example' },
+            headers: { 'content-type': 'application/json', host: 'bot.corp.example' },
           },
           (res) => {
             res.resume();

@@ -20,7 +20,7 @@ import { accountForAnswer } from '../../src/answer-account/account.js';
 import { answeringIteration, witnessesOf } from '../../src/answer-account/facts/inView.js';
 import { recordingView } from '../../src/answer-account/view.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-import { fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from './helpers.js';
+import { fixtureA, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS } from './helpers.js';
 
 type E = { type: string; payload: Record<string, any>; meta: Record<string, any> };
 
@@ -49,7 +49,7 @@ describe('the witness rule on the real recording', () => {
   });
 
   it('R3-M1 — events[68] (this run’s own call) never becomes an in-view line; [64] does, at distance 1', () => {
-    const account = accountForAnswer(fixtureA(), NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+    const account = accountForAnswer(fixtureA(), HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
     expect(account.facts.inView).toHaveLength(1);
     expect(account.facts.inView[0]).toMatchObject({
       toolName: 'powerstore_get_volumes',
@@ -79,7 +79,7 @@ describe('the witness rule on the real recording', () => {
         ? { ...e, type: 'agentfootprint.unknown.dropped' }
         : e,
     );
-    const account = accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, {
+    const account = accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(account.facts.inView.map((f) => f.toolCallId)).toEqual([
@@ -90,7 +90,7 @@ describe('the witness rule on the real recording', () => {
   it('no answering compose → nothing is "in view" (history alone never proves it)', () => {
     const rec = fixtureA() as unknown as { events: E[] };
     rec.events = rec.events.filter((_, i) => i !== 69);
-    const account = accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, {
+    const account = accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(account.facts.inView).toEqual([]);
@@ -126,7 +126,7 @@ describe('the own-run key', () => {
 
   it('S3 — a runId that owns NO event: "not in this record", never "no tools" or "did not finish"', () => {
     const rec = fixtureA();
-    const account = accountForAnswer(rec, NEO_DECLARATIONS, { runId: 'run-nope' });
+    const account = accountForAnswer(rec, HOST_APP_DECLARATIONS, { runId: 'run-nope' });
     expect(account.foreign).toBe(rec.events.length);
     const ids = account.rows.flatMap((r) => r.lines.map((l) => l.template.id));
     for (const claim of [
@@ -191,7 +191,7 @@ describe('the own-run key', () => {
       meta: { runId: 'run-intruder', runtimeStageId: 'tool-calls#1' },
     };
     rec.events = [...rec.events, intruder];
-    const account = accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, {
+    const account = accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(account.foreign).toBe(1);
