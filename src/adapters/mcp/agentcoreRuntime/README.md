@@ -48,8 +48,11 @@ words that name `sdk`, and never at the first call. `_sdk` is the older name of
 Reads the MCP client's requests and the runtime's replies. Under `'reuse'`,
 holds each client's connection — its runtime session id and the server's own
 session id — under a handle the transport issued (at most 256, least recently
-used forgotten first; a client's `DELETE` forgets its own). Writes nothing to a run: no scope, no event, no
-sentence. A vended bearer token is used for one request and dropped.
+used forgotten first; a client's `DELETE` — its `terminate()` — forgets its own
+first). Writes nothing to a run: no scope, no event, no sentence. A vended bearer
+token is used for one request and dropped. States its auth and session
+strategies as data on `settings` (`McpHttpTransport.settings`), so a pool can
+compare two configurations — never a credential.
 
 ## The rules here
 1. **One port, three strategies.** `transport.ts` returns an `http` member of
@@ -79,9 +82,12 @@ sentence. A vended bearer token is used for one request and dropped.
    `Mcp-Session-Id` is stored with it and the client is handed a random handle
    in its place, which every later request is translated back from. A server
    that numbers sessions per process (every fresh microVM says `s-1`) cannot
-   put two clients in one session, and a handle the transport does not know is
-   answered 404 "Session not found" here, unsent. One client is one session
-   for whoever calls through it — build a client per conversation.
+   put two clients in one session, and a handle the transport does not know —
+   one it never issued, or one its LRU forgot — fails with
+   `LocalSessionHandleLostError`, unsent: no server said anything, and the
+   runtime session behind a forgotten handle may still run. One client is one
+   session for whoever calls through it — build a client per conversation, or
+   let `mcpClientPool` hold one per conversation.
 5. **Only the session-busy refusal is retried — and only here.** `sessionBusy`
    matches ONE JSON-RPC reply with code `-32005` AND the "session operation in
    progress" message (`ConflictException` shares the code and is not
@@ -121,10 +127,28 @@ sentence. A vended bearer token is used for one request and dropped.
    `x-amzn-errortype`, `retry-after`); a failure with no status is thrown once.
    A `client` the caller passes keeps its own policy — build it with
    `maxAttempts: 1`.
-7. **POST only on the SDK path.** A GET (server-message stream) or DELETE (end a
-   session) has no `InvokeAgentRuntime` form; it is answered 405 locally, which
-   the MCP Streamable HTTP spec defines as "not offered" for both.
-8. **What the MCP client reads of a failure is the library's, never the
+7. **POST only on the SDK path.** A GET (server-message stream) has no
+   `InvokeAgentRuntime` form; it is answered 405 locally, which the MCP
+   Streamable HTTP spec defines as "not offered". A DELETE under `'per-call'`
+   is answered the same way.
+8. **`close()` does not end the remote session; `terminate()` does, and says
+   whether it did.** Under `'reuse'`, a client's DELETE (its `terminate()`) for a
+   handle the transport holds forgets the handle FIRST, then becomes
+   `StopRuntimeSession` for that connection's runtime session id — the AWS
+   SDK's `StopRuntimeSessionCommand` on SigV4 (pass it in `sdk` beside the other
+   two commands when you supply the module), `POST
+   /runtimes/{arn}/stopruntimesession` with a vended token on the bearer path —
+   sent through the same retry series, so a 409 while the platform starts or
+   stops the session is retried. It is answered as a server answers the DELETE:
+   204 once stopped, 404 for a session the platform no longer holds, otherwise
+   the safe failure. `terminated` means the compute is stopped; by AWS's own
+   account the session id stays valid and configured session storage persists.
+9. **The send gate runs after signing.** A request the MCP client pool sent
+   carries its send gate (`mcp/requestGuard.ts`): asked before each command is
+   sent and, as a step on the COMMAND's own middleware stack, after the request
+   is signed and before the request handler sends it — never on the client's
+   stack, so an AWS client the app passed is not changed.
+10. **What the MCP client reads of a failure is the library's, never the
    service's.** Every non-2xx answer, a 2xx JSON-RPC error reply and an error
    event in a 2xx stream are rewritten from parts that cannot carry a secret
    (`safeAnswer.ts`): the status; the AWS error type when it is a plain name;
@@ -140,7 +164,7 @@ sentence. A vended bearer token is used for one request and dropped.
    `tool_end`. Scrubbing known values out of that text misses whatever it was
    not told about. Both auth strategies, one function, applied outside the
    retry (which still reads the original).
-9. **One reading of an answer.** A 2xx is never handed on as its raw bytes: it
+11. **One reading of an answer.** A 2xx is never handed on as its raw bytes: it
    is classified by one rule (exactly `application/json` or
    `text/event-stream`, UTF-8), parsed ONCE (`strictJson.ts`), checked, and
    re-serialized — the MCP client reads the value that was checked, so no
@@ -150,7 +174,7 @@ sentence. A vended bearer token is used for one request and dropped.
    that is not UTF-8, a content type that is not one of the two. An event
    stream is read event by event as it passes, by the SSE rules, and an event
    that cannot be read cuts the stream with the same kind of refusal.
-10. **No user-delegated bearer.** `auth.mode` must be `'machine'`: the vending
+12. **No user-delegated bearer.** `auth.mode` must be `'machine'`: the vending
    request names no user, so a `'user'` token would be sent for whoever calls
    through the client. For a token per user, build a transport per user whose
    provider vends that user's token.

@@ -28,7 +28,7 @@
  * service-style answers use an in-memory runner standing in for a managed
  * sandbox. The model is the mock provider: $0, deterministic.
  *
- * Run:  npx tsx examples/features/120-script-artifact.ts
+ * Run:  npx tsx examples/features/121-script-artifact.ts
  */
 
 import {
@@ -43,7 +43,7 @@ import { localCodeRunner, mock } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/120-script-artifact',
+  id: 'features/121-script-artifact',
   title: 'Code in an answer — the script travels with the answer',
   group: 'features',
   description:

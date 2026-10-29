@@ -1,5 +1,8 @@
 # A per-conversation MCP client pool
 
+> Built in #258. § 14 lists the statements below that the build superseded; the rest of
+> the page is kept as it was reviewed.
+
 **Design for review. Not approved to implement.** Nothing in this page is built.
 Approval to review it is not approval to implement it. Written 2026-10-28 from the
 revised E4 requirement. Its seven decisions are taken as given; this page designs the
@@ -1105,3 +1108,50 @@ owner to confirm**:
     tier's laws.
 15. The record is `agentfootprint.tools.mcp_client` for each list and call, and `onEvent`
     outside a run: ids, digests, evidence, outcomes and durations only.
+
+## 14. Superseded after implementation (2026-10-29)
+
+The sections above are kept as they were reviewed. Where the build, or a later review,
+changed a statement, the build is current, and this list says so. Each entry names the
+section, what it said, and what holds now.
+
+- **§ 6.1 "Entries", § 11 — `nextCursor` not followed.** Superseded by #248: `mcpClient`
+  reads every page of a `tools/list` answer, and a pooled client lists through it. A list
+  that does not end is refused (`McpToolListIncompleteError`), never served cut short.
+- **§ 5.5 — `SessionExpiredError†` as a new name.** The class already shipped (E2). A
+  pooled client's expiry is that class, with `evidence: 'server-404'`; no second class
+  exists.
+- **§ 5.5 — the two fixed sentences.** Reworded to pass the model-facing scan, which refuses
+  "this call" and "this conversation". Expiry: "The server had already ended the
+  conversation's session when the call this result answers reached it." Lost handle: "The
+  session for the call this result answers could not be reached from here, so that call was
+  not sent."
+- **§ 5.3 and § 5.5 — a lost handle leaves the open set at once.** Its local close is work.
+  It leaves its KEY at once, but it is ended under the ending rule like any other client: an
+  ending slot and an operation slot, held until the close settles, and `settled()` waits for
+  it. Its ending sends nothing; its remote outcome is `handle-lost`, unresolved.
+- **§ 5.1 — the open and the lease.** Every operation waiting for an open holds a
+  reservation on the client until it takes its lease. The client is checked again after
+  every wait, and an `acquire` checks the pool and its caller before it creates its hold.
+- **§ 6.1 — `share` asked before anything opens.** It is asked again at every listing,
+  every call and every send gate, over the client's own configuration. A changed
+  `authorization` name reaches a conversation that already has a client, and a tool bound
+  under the old name is refused (`binding-changed`).
+- **§ 6.3 — the send gate.** A pooled client's transport must let its `send` be watched;
+  one that does not is never opened. A request with no guard, such as a tool call the SDK
+  rebuilt without its marker, is refused unsent (`request-unmatched`), under either replay
+  policy. When the gate stops a retry, the series' record ends `not-permitted` on the last
+  answer the server sent, with no row for the attempt that was not sent.
+- **§ 7 — the bounded answer.** One deadline answers the caller: the remote answer and the
+  local close together, measured as elapsed time by timers started together, so a clock
+  stepped back cannot stretch it. A close that hangs never holds the answer. The ending
+  stays charged until the close settles.
+- **§ 6.1–6.2 — where a listing's answer is kept.** A listing is for the context it began
+  under; its requests are sent only while that context holds, and its answer is kept
+  only if the context still holds when it arrives. An answer the app's names moved under
+  is dropped, and the next round lists under the new context. A caller that joined
+  someone else's listing is asked again after the join.
+- **§ 3.1 — what is passed to every client.** `replay` and `jsonSchemaValidator` are passed
+  as well (the second for #248's per-tool checks).
+- **§ 10 — "Properties (fast-check)".** The repo's seeded `mulberry32` generators are used
+  (fast-check is not a dependency here). They cover the interleavings this list names.

@@ -98,7 +98,26 @@ export interface McpHttpTransport {
    * reads, stores, logs or records the headers your function produces.
    */
   readonly fetch?: (input: string | URL, init?: RequestInit) => Promise<Response>;
+  /**
+   * What a library-built transport keeps inside its `fetch`, stated as data:
+   * the settings that decide where a request lands and as whom, which no one can
+   * read back out of a function. `agentCoreRuntimeMcpTransport` fills it (its
+   * auth strategy, its session strategy, the bearer service, scopes and
+   * credential provider id). `mcpClientPool` compares it, with the URL and the
+   * header names, to decide whether two conversations open the same
+   * configuration (`McpClientPoolOptions.definitions`).
+   *
+   * Never a secret: names and modes only. A transport you write by hand may
+   * leave it out; your `configuration` name then covers what your `fetch` does.
+   */
+  readonly settings?: McpTransportSettings;
 }
+
+/**
+ * The comparable settings of a transport — plain names and modes, never a
+ * credential. See {@link McpHttpTransport.settings}.
+ */
+export type McpTransportSettings = Readonly<Record<string, string | readonly string[]>>;
 
 /**
  * `gateway` transport — MCP over Streamable HTTP, with the auth headers vended
@@ -501,8 +520,74 @@ export interface McpClient {
    */
   refresh(): Promise<readonly Tool[]>;
 
-  /** Close the underlying transport. After `close()` the client is unusable. */
+  /**
+   * Close the underlying transport. After `close()` the client is unusable.
+   *
+   * `close()` does not end the remote session; `terminate()` does, and says
+   * whether it did.
+   */
   close(): Promise<void>;
+
+  /**
+   * End the remote session, then close locally, whatever happened — and say
+   * what the remote side answered (`McpTerminateOutcome`).
+   *
+   * Optional: a capability, not a required member, so a hand-written
+   * `McpClient` keeps compiling. Ask {@link canTerminate} before calling it.
+   * `mcpClient()` and `mockMcpClient()` provide it.
+   *
+   * It sends the transport's own session termination (Streamable HTTP: a
+   * `DELETE` carrying `Mcp-Session-Id`) and reads the status itself, because
+   * the MCP SDK treats a 405 as success. The wait is bounded: after
+   * `TOOL_TEARDOWN_TIMEOUT_MS` (5 s) the request is aborted and the outcome is
+   * `'timed-out'`. Ends the client at most once: a second call answers the
+   * first outcome. Never throws for a remote failure; the outcome says it.
+   *
+   * @throws when called after `close()`, like every other method
+   */
+  terminate?(): Promise<McpTerminateOutcome>;
+}
+
+/**
+ * What ending a client's remote session came to — `McpClient.terminate()`.
+ *
+ * `resolved` is true only when the remote side is known not to hold the session
+ * any more: `'terminated'`, `'already-gone'`, `'no-session'`. Every other
+ * outcome leaves the remote session to its own timeout, which nothing in this
+ * process can shorten. Local settlement and remote resolution are different
+ * facts: an ending can settle here and stay unresolved there.
+ */
+export interface McpTerminateOutcome {
+  /**
+   * - `'terminated'` — 2xx: the remote side ended the session it held.
+   * - `'already-gone'` — 404: it no longer held it.
+   * - `'no-session'` — nothing to end: no session id was ever issued (a
+   *   `'per-call'` runtime transport, a server that issues none, stdio, the mock).
+   * - `'not-offered'` — 405: the server does not end sessions on request.
+   * - `'failed'` — the request failed (another status, or no answer).
+   * - `'timed-out'` — the local wait ended first, and the request was aborted.
+   * - `'handle-lost'` — this process no longer holds the session's handle, so
+   *   nothing could be sent (`LocalSessionHandleLostError`).
+   * - `'unavailable'` — a client built on `connection`: the library did not
+   *   build its transport, so it cannot end the session.
+   */
+  readonly remote:
+    | 'terminated'
+    | 'already-gone'
+    | 'no-session'
+    | 'not-offered'
+    | 'failed'
+    | 'timed-out'
+    | 'handle-lost'
+    | 'unavailable';
+  /** True only for `'terminated'`, `'already-gone'` and `'no-session'`. */
+  readonly resolved: boolean;
+  /** The HTTP status the remote side answered with, when one was read. */
+  readonly status?: number;
+  /** A failure's class name — never its message. */
+  readonly errorClass?: string;
+  /** How long the ending took, as the caller waited for it. */
+  readonly durationMs: number;
 }
 
 // ─── SDK shim — minimal surface we need from @modelcontextprotocol/sdk ──

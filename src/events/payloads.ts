@@ -2452,6 +2452,71 @@ export interface ToolsCodeRunPayload {
   readonly shapeHash: string;
 }
 
+// ─── tools.mcp_client — one use of an MCP client pool ────────────────────────
+
+/**
+ * One use of an `mcpClientPool` in a run — a listing (`at: 'list'`, filed by the
+ * tools slot after `list(ctx)`) or a tool call (`at: 'call'`, filed by the
+ * dispatch loop for that call). Ids, digests, evidence and outcomes only: never
+ * an identity value, a remote session id or handle, a header value, an
+ * argument, a result, a definition or a server's error text. Rides the
+ * `agentfootprint.tools.` prefix: a new domain would need a new bridge and
+ * wildcard (see the `tools.session_*` note above).
+ */
+export interface ToolsMcpClientPayload {
+  /** The pool's name, which `Tool.source` also carries. */
+  readonly server: string;
+  readonly at: 'list' | 'call';
+  /** At `'call'`. */
+  readonly toolCallId?: string;
+  /**
+   * The tool-session digest of the conversation's key (`hashSessionKey`):
+   * enough to join two rows, not enough to name anyone. Absent when the caller
+   * named no identity, so there was no key.
+   */
+  readonly keyHash?: string;
+  /** The pool's own random id for the client touched; absent when none was. */
+  readonly clientId?: string;
+  /** 1 = the key's first client, 2 = its first replacement, … */
+  readonly generation?: number;
+  /** What happened to the conversation's client. */
+  readonly client:
+    | 'opened'
+    | 'joined'
+    | 'reused'
+    | 'not-needed'
+    | 'refused'
+    | 'expired'
+    | 'handle-lost';
+  /** Why the key's previous client left, when this use opened its replacement. */
+  readonly previous?: 'idle' | 'evicted' | 'expired' | 'handle-lost' | 'terminated';
+  /** With `'expired'` or `'handle-lost'`: what proves it. */
+  readonly evidence?: 'server-404' | 'transport-forgot-handle';
+  readonly refusal?:
+    | 'pool-full'
+    | 'principal-full'
+    | 'ending-full'
+    | 'init-timeout'
+    | 'init-failed'
+    | 'no-identity'
+    | 'incomplete-identity'
+    | 'identity-mismatch'
+    | 'stale-tools'
+    | 'binding-changed'
+    | 'request-unmatched'
+    | 'lease-expired'
+    | 'operations-full'
+    | 'closed';
+  /** Opened or joined: how long the open took. */
+  readonly initMs?: number;
+  /** At `'list'`: a shared entry, or the conversation's own client's list. */
+  readonly definitions?: 'shared' | 'listed';
+  /** When shared: the entry's age. */
+  readonly definitionsAgeMs?: number;
+  /** At `'call'`: the call met a replacement client and was checked against its fresh list. */
+  readonly revalidated?: 'kept' | 'refused';
+}
+
 // ─── tools.request_attempts — an MCP request's retry series ────────────────
 
 /**

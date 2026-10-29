@@ -74,16 +74,23 @@ import {
   type ThrottleFetch,
   type ThrottleRetryOptions,
 } from '../../../mcp/throttleRetry.js';
-import type { McpHttpTransport } from '../../../mcp/types.js';
+import type { McpHttpTransport, McpTransportSettings } from '../../../mcp/types.js';
+import { guardOf, withGuard } from '../../../mcp/requestGuard.js';
 import type { CredentialProvider } from '../../../identity/types.js';
 import {
   invokeFetch,
   invokeSdk,
+  STOP_RUNTIME_SESSION,
   type AgentCoreRuntimeSdkClient,
   type BedrockAgentCoreRuntimeSdkModule,
 } from './invoke.js';
 import { safeAnswer } from './safeAnswer.js';
-import { sessionStrategy, type AgentCoreRuntimeSession, type SessionStrategy } from './session.js';
+import {
+  AGENTCORE_RUNTIME_SESSION_HEADER,
+  sessionStrategy,
+  type AgentCoreRuntimeSession,
+  type SessionStrategy,
+} from './session.js';
 import { SESSION_BUSY_ASSUMES, sessionBusy } from './sessionBusy.js';
 
 /**
@@ -266,8 +273,50 @@ export function agentCoreRuntimeMcpTransport(
   return {
     transport: 'http',
     url,
-    fetch: sessionedFetch(session, send, { rules: busy === undefined ? [] : [busy] }),
+    fetch: sessionedFetch(
+      session,
+      send,
+      { rules: busy === undefined ? [] : [busy] },
+      stopUrl(options),
+    ),
+    settings: settingsOf(options),
   };
+}
+
+/**
+ * What this transport keeps inside its `fetch`, stated as data
+ * (`McpHttpTransport.settings`): its auth strategy and session strategy, and on
+ * the bearer path the service, scopes, mode and credential provider id a token
+ * is vended for. Names and modes only — never a credential.
+ */
+function settingsOf(options: AgentCoreRuntimeMcpTransportOptions): McpTransportSettings {
+  const auth = options.auth ?? 'sigv4';
+  const session = options.session ?? 'per-call';
+  if (auth === 'sigv4') return { auth: 'sigv4', session };
+  return {
+    auth: 'bearer',
+    session,
+    service: auth.service ?? DEFAULT_BEARER_SERVICE,
+    ...(auth.scopes !== undefined && { scopes: [...auth.scopes] }),
+    mode: auth.mode ?? 'machine',
+    credentials: auth.bearer.id,
+  };
+}
+
+/**
+ * Where `StopRuntimeSession` goes over HTTPS:
+ * `POST https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{url-encoded ARN}/stopruntimesession`,
+ * with `qualifier` as a query parameter when given — the operation's request
+ * line. The SigV4 path sends the AWS SDK's command instead, and ignores it.
+ */
+function stopUrl(options: AgentCoreRuntimeMcpTransportOptions): string {
+  const query = new URLSearchParams();
+  if (options.qualifier) query.set('qualifier', options.qualifier);
+  const base =
+    `https://bedrock-agentcore.${options.region}.amazonaws.com/runtimes/` +
+    `${encodeURIComponent(options.agentRuntimeArn)}/stopruntimesession`;
+  const search = query.toString();
+  return search === '' ? base : `${base}?${search}`;
 }
 
 /**
@@ -284,18 +333,63 @@ function sessionedFetch(
   session: SessionStrategy,
   send: ThrottleFetch,
   spec: SeriesSpec,
+  stopAt: string,
 ): ThrottleFetch {
   const retried = retryingFetchFor(send, spec);
   const sessioned: ThrottleFetch = async (input, init) => {
     const headers = new Headers(init?.headers);
+    // A handle this transport does not hold throws here, before anything is
+    // sent (`session.ts` · `LocalSessionHandleLostError`).
     const step = session.request(headers, (init?.method ?? 'GET').toUpperCase());
     if ('answer' in step) return step.answer;
+    if ('stop' in step) return stopSession(retried, stopAt, step.stop, init);
     const response = await retried(input, { ...init, headers });
     // What the MCP client may read of a failure is rewritten from safe parts —
     // ONE rule for both auth paths, after the retry has read the original.
     return step.settle(await safeAnswer(response));
   };
-  return joinableRetry(sessioned, (join) => sessionedFetch(session, send, joinedSpec(spec, join)));
+  return joinableRetry(sessioned, (join) =>
+    sessionedFetch(session, send, joinedSpec(spec, join), stopAt),
+  );
+}
+
+/**
+ * A `'reuse'` connection's `DELETE`, as `StopRuntimeSession` for its runtime
+ * session — sent through the SAME series as every other request, so the
+ * platform's 409 while it starts or stops the session is retried like the
+ * session-busy refusal, signed (or vended) afresh each attempt. Answered as a
+ * server answers the `DELETE`: 204 once stopped; 404 when the platform no longer
+ * holds the session ("not found or already terminated"); otherwise the safe
+ * failure (`safeAnswer.ts`), its status kept.
+ *
+ * Carries the `DELETE`'s signal and, for a pooled client, its send gate
+ * (`mcp/requestGuard.ts`), so a deadline or a stale binding sends nothing.
+ */
+async function stopSession(
+  retried: ThrottleFetch,
+  stopAt: string,
+  runtimeSessionId: string,
+  init: RequestInit | undefined,
+): Promise<Response> {
+  const stop = {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      [AGENTCORE_RUNTIME_SESSION_HEADER]: runtimeSessionId,
+    },
+    // The operation's idempotency token: one per stop, so an attempt the
+    // series repeats is the same stop.
+    body: JSON.stringify({ clientToken: globalThis.crypto.randomUUID() }),
+    ...(init?.signal !== undefined && init.signal !== null && { signal: init.signal }),
+    [STOP_RUNTIME_SESSION]: runtimeSessionId,
+  } as RequestInit;
+  const guard = guardOf(init);
+  const response = await retried(stopAt, guard === undefined ? stop : withGuard(stop, guard));
+  if (response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    return new Response(null, { status: 204, statusText: 'No Content' });
+  }
+  return safeAnswer(response);
 }
 
 /** Where a runtime's MCP endpoint is, as {@link agentCoreRuntimeUrl} needs it. */
@@ -347,7 +441,7 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
   const auth = options.auth ?? 'sigv4';
   const sdk = injectedSdk(options);
   if (auth === 'sigv4') {
-    const { client, InvokeAgentRuntimeCommand } = invokeSdk({
+    const { client, InvokeAgentRuntimeCommand, StopRuntimeSessionCommand } = invokeSdk({
       region: options.region,
       ...(options.client !== undefined && { client: options.client }),
       ...(sdk !== undefined && { sdk }),
@@ -360,6 +454,7 @@ function authStrategy(options: AgentCoreRuntimeMcpTransportOptions, url: string)
       },
       client,
       InvokeAgentRuntimeCommand,
+      StopRuntimeSessionCommand,
     );
   }
   if (auth !== null && typeof auth === 'object' && auth.bearer !== undefined) {

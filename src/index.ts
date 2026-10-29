@@ -1016,6 +1016,9 @@ export {
   toolSessionKey,
   hashSessionKey,
   ToolTeardownTimeoutError,
+  // A handle this process lost — never confused with a server's expiry
+  // (`SessionExpiredError`, above): nothing was sent, the remote fate unknown.
+  LocalSessionHandleLostError,
   TOOL_TEARDOWN_TIMEOUT_MS,
   type TeardownScope,
   type TeardownReason,

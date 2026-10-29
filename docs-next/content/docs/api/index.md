@@ -28,6 +28,7 @@ title: agentfootprint
 - [InvalidRunInputError](/docs/api/classes/InvalidRunInputError)
 - [LLMCall](/docs/api/classes/LLMCall)
 - [LLMCallBuilder](/docs/api/classes/LLMCallBuilder)
+- [LocalSessionHandleLostError](/docs/api/classes/LocalSessionHandleLostError)
 - [Loop](/docs/api/classes/Loop)
 - [LoopBuilder](/docs/api/classes/LoopBuilder)
 - [MemberIdentityError](/docs/api/classes/MemberIdentityError)

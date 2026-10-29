@@ -2,7 +2,7 @@
 title: Classes
 ---
 
-53 exported from `agentfootprint`.
+54 exported from `agentfootprint`.
 
 - [`Agent`](/docs/api/classes/Agent)
 - [`AgentBuilder`](/docs/api/classes/AgentBuilder)
@@ -26,6 +26,7 @@ title: Classes
 - [`InvalidRunInputError`](/docs/api/classes/InvalidRunInputError)
 - [`LLMCall`](/docs/api/classes/LLMCall)
 - [`LLMCallBuilder`](/docs/api/classes/LLMCallBuilder)
+- [`LocalSessionHandleLostError`](/docs/api/classes/LocalSessionHandleLostError)
 - [`Loop`](/docs/api/classes/Loop)
 - [`LoopBuilder`](/docs/api/classes/LoopBuilder)
 - [`MemberIdentityError`](/docs/api/classes/MemberIdentityError)

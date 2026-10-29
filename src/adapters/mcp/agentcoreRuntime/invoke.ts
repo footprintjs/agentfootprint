@@ -58,14 +58,25 @@
  *
  * ── What the operation cannot carry ──────────────────────────────────────────
  * Any method but POST. A GET (the optional server-message stream) and a DELETE
- * (ending a session) are answered HERE with 405, which the MCP Streamable HTTP
- * spec defines as "not offered" for both, so the MCP client carries on. And any
- * header the operation does not model — it has no field to put one in.
+ * are answered HERE with 405, which the MCP Streamable HTTP spec defines as "not
+ * offered" for both, so the MCP client carries on. And any header the operation
+ * does not model — it has no field to put one in. A `'reuse'` connection's
+ * DELETE never reaches this far: the session strategy turns it into a stop
+ * (`STOP_RUNTIME_SESSION`), sent as `StopRuntimeSessionCommand`.
+ *
+ * ── The send gate runs after signing ─────────────────────────────────────────
+ * A request the MCP client pool sent carries its send gate (`mcp/requestGuard.ts`).
+ * Signing is asynchronous work inside the AWS SDK's `send`, so the gate is a
+ * step on each COMMAND's own middleware stack, after the request is signed and
+ * before the request handler sends it — never on the client's stack, so an AWS
+ * client the app passed is not changed. A command with no stack (a double) has
+ * the gate asked just before `send`, as every command also does.
  *
  * Pattern: Adapter (fetch ↔ command). Role: outer ring, lazy AWS peer dep.
  */
 
 import { lazyRequire } from '../../../lib/lazyRequire.js';
+import { guardOf, type RequestGuard } from '../../../mcp/requestGuard.js';
 import { sdkLoadFailure } from '../../../mcp/sdkLoadFailure.js';
 import type { ThrottleFetch } from '../../../mcp/throttleRetry.js';
 import { AGENTCORE_RUNTIME_SESSION_HEADER, MCP_SESSION_HEADER } from './session.js';
@@ -85,7 +96,16 @@ export interface BedrockAgentCoreRuntimeSdkModule {
     maxAttempts?: number;
   }) => AgentCoreRuntimeSdkClient;
   readonly InvokeAgentRuntimeCommand?: new (input: unknown) => unknown;
+  /** Needed under `session: 'reuse'`, where ending a client stops its runtime session. */
+  readonly StopRuntimeSessionCommand?: new (input: unknown) => unknown;
 }
+
+/**
+ * @internal The `init` key a `'reuse'` connection's stop rides under: the
+ * runtime session id to stop (`transport.ts` · `stopSession`). A symbol, so no
+ * request the MCP client makes can ever claim it.
+ */
+export const STOP_RUNTIME_SESSION: unique symbol = Symbol('agentcore.stop-runtime-session');
 
 /** Which runtime every request goes to, as the operation names it. */
 export interface InvokeTarget {
@@ -117,6 +137,7 @@ export interface InvokeSdkOptions {
 export function invokeSdk(options: InvokeSdkOptions): {
   readonly client: AgentCoreRuntimeSdkClient;
   readonly InvokeAgentRuntimeCommand: new (input: unknown) => unknown;
+  readonly StopRuntimeSessionCommand?: new (input: unknown) => unknown;
 } {
   const mod = options.sdk ?? loadSdk();
   // Whose module it is decides the advice: an injected one may simply be the
@@ -132,7 +153,12 @@ export function invokeSdk(options: InvokeSdkOptions): {
       `agentCoreRuntimeMcpTransport: ${source} \`InvokeAgentRuntimeCommand\`. ${advice}`,
     );
   }
-  if (options.client) return { client: options.client, InvokeAgentRuntimeCommand: Command };
+  // Ending a `'reuse'` client stops its runtime session with this command. An
+  // SDK module without it still invokes; that ending is then 'failed' (`stopFetch`).
+  const Stop = mod.StopRuntimeSessionCommand;
+  const stop = typeof Stop === 'function' ? { StopRuntimeSessionCommand: Stop } : {};
+  if (options.client)
+    return { client: options.client, InvokeAgentRuntimeCommand: Command, ...stop };
   if (typeof mod.BedrockAgentCoreClient !== 'function') {
     throw new Error(
       `agentCoreRuntimeMcpTransport: ${source} \`BedrockAgentCoreClient\`. ${advice}`,
@@ -142,6 +168,7 @@ export function invokeSdk(options: InvokeSdkOptions): {
     // The SDK's own retry OFF: it would re-send work that may have run.
     client: new mod.BedrockAgentCoreClient({ region: options.region, maxAttempts: 1 }),
     InvokeAgentRuntimeCommand: Command,
+    ...stop,
   };
 }
 
@@ -194,8 +221,13 @@ export function invokeFetch(
   target: InvokeTarget,
   client: AgentCoreRuntimeSdkClient,
   InvokeAgentRuntimeCommand: new (input: unknown) => unknown,
+  StopRuntimeSessionCommand?: new (input: unknown) => unknown,
 ): ThrottleFetch {
   return async (_input, init) => {
+    const stopping = stopOf(init);
+    if (stopping !== undefined) {
+      return stopFetch(target, client, StopRuntimeSessionCommand, stopping, init);
+    }
     const method = (init?.method ?? 'GET').toUpperCase();
     if (method !== 'POST') {
       return new Response(null, { status: 405, statusText: 'Method Not Allowed' });
@@ -214,10 +246,7 @@ export function invokeFetch(
     });
     let answer: InvokeAnswer;
     try {
-      answer = ((await client.send(
-        command,
-        init?.signal ? { abortSignal: init.signal } : undefined,
-      )) ?? {}) as InvokeAnswer;
+      answer = ((await sendGated(client, command, init)) ?? {}) as InvokeAnswer;
     } catch (err) {
       const answered = serviceAnswerOf(err);
       if (answered === undefined) throw err;
@@ -225,6 +254,105 @@ export function invokeFetch(
     }
     return responseOf(answer);
   };
+}
+
+/** The runtime session a stop request names (`STOP_RUNTIME_SESSION`), or `undefined`. */
+function stopOf(init: RequestInit | undefined): string | undefined {
+  const value = (init as { readonly [STOP_RUNTIME_SESSION]?: unknown } | undefined)?.[
+    STOP_RUNTIME_SESSION
+  ];
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
+/**
+ * `StopRuntimeSession` for one runtime session, as the `Response` an HTTPS
+ * caller would read: 200 when the platform stopped it, a service exception as
+ * its status (`ResourceNotFoundException` 404, `RetryableConflictException` 409
+ * — retried by the series — `AccessDeniedException` 403, …).
+ */
+async function stopFetch(
+  target: InvokeTarget,
+  client: AgentCoreRuntimeSdkClient,
+  StopRuntimeSessionCommand: (new (input: unknown) => unknown) | undefined,
+  runtimeSessionId: string,
+  init: RequestInit | undefined,
+): Promise<Response> {
+  if (StopRuntimeSessionCommand === undefined) {
+    throw new Error(
+      'agentCoreRuntimeMcpTransport: the AWS SDK module has no `StopRuntimeSessionCommand`, ' +
+        "so a 'reuse' client's runtime session cannot be stopped. Upgrade the SDK.",
+    );
+  }
+  const command = new StopRuntimeSessionCommand({
+    runtimeSessionId,
+    agentRuntimeArn: target.agentRuntimeArn,
+    ...(target.qualifier !== undefined && { qualifier: target.qualifier }),
+    clientToken: clientTokenOf(init?.body),
+  });
+  try {
+    await sendGated(client, command, init);
+  } catch (err) {
+    const answered = serviceAnswerOf(err);
+    if (answered === undefined) throw err;
+    return answered;
+  }
+  return new Response(null, { status: 200 });
+}
+
+/** The stop's idempotency token, as its body carries it — one per stop, across attempts. */
+function clientTokenOf(body: RequestInit['body'] | undefined): string | undefined {
+  if (typeof body !== 'string') return undefined;
+  try {
+    const token = (JSON.parse(body) as { readonly clientToken?: unknown }).clientToken;
+    return typeof token === 'string' ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `client.send(command)`, with a pooled request's send gate asked before it and
+ * — on a command with its own middleware stack — again after signing, and the
+ * send counted under the request until it settles (`mcp/requestGuard.ts`).
+ */
+function sendGated(
+  client: AgentCoreRuntimeSdkClient,
+  command: unknown,
+  init: RequestInit | undefined,
+): Promise<unknown> {
+  const guard = guardOf(init);
+  if (guard !== undefined) {
+    installGate(command, guard);
+    guard.check();
+  }
+  const sent = client.send(command, init?.signal ? { abortSignal: init.signal } : undefined);
+  guard?.track(sent);
+  return sent;
+}
+
+/** The gate's name on a command's middleware stack. */
+const GATE_STEP = 'agentfootprintSendGate';
+
+/**
+ * Put `guard` on `command`'s OWN middleware stack, after signing and before the
+ * request handler: the AWS SDK signs at the `finalizeRequest` step (its signer
+ * sits right after its retry middleware, at high priority), so a low-priority
+ * `finalizeRequest` step runs after the signature and before the deserializer
+ * hands the request to the handler. The client's stack is never touched.
+ * A command without a stack is left as it is.
+ */
+function installGate(command: unknown, guard: RequestGuard): void {
+  const stack = (command as { readonly middlewareStack?: { add?: unknown } } | null)
+    ?.middlewareStack;
+  if (typeof stack?.add !== 'function') return;
+  (stack.add as (middleware: unknown, options: unknown) => void).call(
+    stack,
+    (next: (args: unknown) => Promise<unknown>) => async (args: unknown) => {
+      guard.check();
+      return next(args);
+    },
+    { step: 'finalizeRequest', priority: 'low', name: GATE_STEP, override: true },
+  );
 }
 
 /**

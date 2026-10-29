@@ -58,6 +58,7 @@ import { isDevMode, UnknownEffectError } from 'footprintjs';
 import { eitherSignal, linkedController } from '../lib/abort.js';
 import { requestEvidenceOf } from '../tools/requestEvidence.js';
 import { markParams } from './callMarker.js';
+import { callGuardOf } from './requestGuard.js';
 import type { CallVerdict } from './replay.js';
 import type { RequestLedger, RequestTicket } from './requestLedger.js';
 
@@ -116,8 +117,10 @@ export function openCall<P extends object>(
   const sentBefore = ledger?.toolCallsSent ?? 0;
   // Every call on a watched connection gets a marker, ticket or not: under
   // 'app-authorized' its request must be matched to it either way. The call
-  // holds its entry, so what it reads survives the connection closing.
-  const issued = ledger?.issue(ticket);
+  // holds its entry, so what it reads survives the connection closing. A call
+  // a pool made carries its send gate too (`requestGuard.ts`), asked at every
+  // boundary its request crosses.
+  const issued = ledger?.issue(ticket, callGuardOf(ctx));
   let mayHaveRun = false;
   return {
     params: issued === undefined ? params : markParams(params, issued.marker),

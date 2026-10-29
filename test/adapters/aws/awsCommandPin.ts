@@ -200,7 +200,12 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
     sources: ['src/adapters/mcp/agentcoreRuntime/invoke.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agentcore',
     client: 'BedrockAgentCoreClient',
-    commands: ['InvokeAgentRuntimeCommand'],
+    // `StopRuntimeSessionCommand` (read out of 3.1159.0): a `'reuse'` client's
+    // DELETE — sent by `terminate()` — stops its runtime session. Its input is
+    // `runtimeSessionId`, `agentRuntimeArn`, `qualifier` and the idempotency
+    // `clientToken`; it answers `runtimeSessionId` and `statusCode`, and throws
+    // `ResourceNotFoundException` for a session already gone.
+    commands: ['InvokeAgentRuntimeCommand', 'StopRuntimeSessionCommand'],
     note:
       'Read out of a real install of 3.1152.0 before this adapter was written. ' +
       '`InvokeAgentRuntimeRequest` carries the MCP Streamable HTTP headers as modelled fields: ' +

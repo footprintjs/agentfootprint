@@ -129,6 +129,14 @@ import { scriptRowFor } from '../src/core/agent/scripts/rows.js';
 import type { ScriptLabel, ScriptRow } from '../src/core/agent/scripts/types.js';
 import { resolveToolWants } from '../src/artifacts/wants.js';
 import { parkCard } from '../src/maps/engagement/parkCard.js';
+import {
+  MCP_POOL_REFUSAL_SENTENCES,
+  McpPoolRefusedError,
+  PoolFullError,
+  type McpPoolRefusal,
+} from '../src/mcp/pool/errors.js';
+import { ServerEndedSessionError } from '../src/mcp/pool/sessionEnded.js';
+import { LocalSessionHandleLostError } from '../src/tools/toolSessions.js';
 import type {
   EngagementPlan,
   MapEngagement,
@@ -1360,7 +1368,46 @@ function emptyDataRefusals(): readonly string[] {
 
 // ─── The registry ────────────────────────────────────────────────────
 
+/**
+ * Every sentence an MCP client pool's refused or failed call reaches the model
+ * as: each refusal, a full pool, a server-ended session and a lost handle — the
+ * errors' real messages, composed by constructing them.
+ */
+async function mcpPoolSentences(): Promise<readonly string[]> {
+  const reasons = Object.keys(MCP_POOL_REFUSAL_SENTENCES) as McpPoolRefusal[];
+  return [
+    ...reasons.map((reason) => new McpPoolRefusedError(reason, 'orders').message),
+    new PoolFullError('orders', 'pool', 64, 64, 0, 3).message,
+    new ServerEndedSessionError('orders', 'a1b2c3d4e5f60718', new Error('404')).message,
+    new LocalSessionHandleLostError().message,
+  ];
+}
+
 const PRODUCERS: readonly ModelFacingProducer[] = [
+  {
+    id: 'mcp client pool — a refused or failed call',
+    module: 'src/mcp/pool/errors.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      "the error's message is the failed tool call's result, which stays in `history` and is " +
+      're-read on every later call of the conversation',
+    drivenBy: [
+      'test/mcp/pool/record.test.ts',
+      'test/mcp/pool/expiry.test.ts',
+      'test/mcp/pool/binding.test.ts',
+    ],
+    reaches: [
+      /none was named/,
+      /listed for another conversation/,
+      /no longer current/,
+      /another configuration/,
+      /did not open in time/,
+      /pool for this server was full/,
+      /had already ended the conversation's session/,
+      /could not be reached from here/,
+    ],
+    compose: mcpPoolSentences,
+  },
   {
     id: 'skill-graph — the read_skill SELF-CALL notice',
     module: 'src/core/agent/selfCallNotice.ts',

@@ -1181,3 +1181,47 @@ describe('the vocabulary agrees with the audit export on what is content', () =>
     });
   });
 });
+
+describe('an MCP client pool’s record is payload-free', () => {
+  // `agentfootprint.tools.mcp_client` carries ids, digests and the library's own
+  // words — no field a policy selects by name. Under the conversation policy
+  // the event is still served, with the same words; nothing of the conversation
+  // was in it to keep out.
+  it('tools.mcp_client is served under conversationRedaction(), its words intact', async () => {
+    const { mcpClientPool } = await import('../../src/doors/providers.js');
+    const { fakeEndpoint } = await import('../mcp/pool/fakeEndpoint.js');
+    const runOnce = async (redact: RedactionPolicy | undefined) => {
+      const endpoint = fakeEndpoint();
+      const pool = mcpClientPool({
+        name: 'orders',
+        transport: () => ({ transport: 'http', url: endpoint.url, fetch: endpoint.fetch }),
+      });
+      const agent = create(
+        mock({
+          chunkDelayMs: 0,
+          respond: (req) =>
+            req.messages.some((m) => m.role === 'tool')
+              ? { content: 'done' }
+              : { toolCalls: [{ id: 'c1', name: 'status', args: { q: 'CANARY-POOL-ARG' } }] },
+        }),
+        redact,
+      )
+        .toolProvider(pool.toolProvider())
+        .build();
+      const seen: Record<string, unknown>[] = [];
+      agent.on('agentfootprint.tools.mcp_client', (event) =>
+        seen.push(event.payload as unknown as Record<string, unknown>),
+      );
+      await agent.run({
+        message: 'look it up',
+        identity: { principal: 'alice', conversationId: 'c1' },
+      });
+      await pool.close();
+      return seen.map(({ at, client, definitions }) => ({ at, client, definitions }));
+    };
+    const control = await runOnce(undefined);
+    const served = await runOnce(conversationRedaction());
+    expect(control.length).toBeGreaterThan(1);
+    expect(served).toEqual(control);
+  });
+});

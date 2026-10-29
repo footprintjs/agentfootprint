@@ -44,6 +44,31 @@ export { McpToolListIncompleteError, type McpToolListIncompleteReason } from './
 // cannot check — no JSON Schema validator reachable — is refused, never answered
 // unchecked.
 export { McpOutputUncheckedError } from './callChecks.js';
+// Ending a client's remote session: a feature-detected capability, never a
+// required member of `McpClient` (`close()` stays local).
+export { canTerminate, type TerminableMcpClient } from './terminate.js';
+// A client per conversation, for one server: bounded, ended remotely, and its
+// tool definitions per client incarnation unless the app declares sharing.
+export { mcpClientPool, type McpClientPool, type McpPoolScope } from './pool/mcpClientPool.js';
+export {
+  MCP_POOL_DEFAULTS,
+  MAX_DEFINITION_ENTRIES,
+  MAX_SHARED_TOOLS,
+  type McpClientPoolOptions,
+  type McpPoolDefinitionSharing,
+  type McpPoolIdentity,
+  type McpPoolShareContext,
+} from './pool/options.js';
+export {
+  McpPoolRefusedError,
+  PoolFullError,
+  type McpPoolLimit,
+  type McpPoolRefusal,
+} from './pool/errors.js';
+export type { McpPoolLease } from './pool/lease.js';
+export type { McpPoolReport } from './pool/record.js';
+export type { McpPoolStats } from './pool/pool.js';
+export type { EndReason as McpPoolEndReason } from './pool/pooledClient.js';
 export type {
   McpCallToolResult,
   McpClient,
@@ -55,7 +80,9 @@ export type {
   McpGatewayTransport,
   McpHttpTransport,
   McpStdioTransport,
+  McpTerminateOutcome,
   McpTransport,
+  McpTransportSettings,
   McpSdkClient,
   McpServeOptions,
   McpServeHandle,

@@ -41,7 +41,7 @@ agent.on('agentfootprint.agent.turn_end', ({ payload }) => {
 });
 ```
 
-The runnable example is `examples/features/120-script-artifact.ts`.
+The runnable example is `examples/features/121-script-artifact.ts`.
 
 ## Declared, never inferred
 
