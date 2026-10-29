@@ -1,0 +1,11 @@
+{
+  "note": "Requests for the current state (\"right now\", \"currently\", \"at the moment\"): a time request of shape current, never \"no time named\". Neither measured profile declares that its tool reads the current state, so these are expected to ASK. Rows where \"now\" only ends a range (\"until now\", \"till now\") or \"latest\" heads a lookback are not here. Written for the third measurement; the held-out file is not edited, its row is named by id.",
+  "existing": [
+    "memory per node right now",
+    "memory per node now",
+    "what is the memory per node currently?"
+  ],
+  "heldout": [
+    "H80"
+  ]
+}

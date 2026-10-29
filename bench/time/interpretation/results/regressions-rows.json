@@ -1,0 +1,5791 @@
+[
+ {
+  "id": "R-plain",
+  "text": "memory per node over the last 2 hours",
+  "meaning": {
+   "reads": 7200
+  },
+  "sampling": false,
+  "current": false,
+  "expected": {
+   "reads": 7200
+  },
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "exact",
+     "structure": "exact",
+     "strict": "exact",
+     "strict+agree": "exact",
+     "complete": "exact",
+     "complete+nouns": "exact"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "exact",
+     "structure": "unnecessary-ask",
+     "strict": "unnecessary-ask",
+     "strict+agree": "unnecessary-ask",
+     "complete": "unnecessary-ask",
+     "complete+nouns": "unnecessary-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "unnecessary-ask",
+     "strict": "unnecessary-ask",
+     "strict+agree": "unnecessary-ask",
+     "complete": "unnecessary-ask",
+     "complete+nouns": "unnecessary-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "exact",
+     "structure": "exact",
+     "strict": "exact",
+     "strict+agree": "exact",
+     "complete": "exact",
+     "complete+nouns": "exact"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "exact",
+     "structure": "exact",
+     "strict": "exact",
+     "strict+agree": "exact",
+     "complete": "exact",
+     "complete+nouns": "exact"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "exact",
+   "verdictWithLabelsAsWritten": "exact"
+  }
+ },
+ {
+  "id": "R-known-H23",
+  "text": "memory per node over the last 2 hours, restricted to backup runs",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: restricted to backup runs"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: restricted to backup runs"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: restricted to backup runs"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: restricted to backup runs"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: restricted to backup runs"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: restricted to backup runs"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-peaks",
+  "text": "memory per node over the last 2 hours at CPU peaks",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-spikes",
+  "text": "memory per node over the last 2 hours with CPU spikes",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: with spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: with spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: with spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: with spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: with spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: with spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-only-peaks",
+  "text": "memory per node over the last 2 hours only at CPU peaks",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: only at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: only at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: only at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: only at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: only at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: only at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-on-spikes",
+  "text": "memory per node over the last 2 hours on CPU spikes",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: on spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: on spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: on spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: on spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: on spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: on spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-during-control",
+  "text": "memory per node over the last 2 hours during CPU spikes",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "during(event)"
+    ]
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "during(event)"
+    ]
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "during(event)"
+    ]
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "during(event)"
+    ]
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "left: during(event)"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "during(event)"
+    ]
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "ask",
+    "why": "left: during"
+   },
+   "verdict": "correct-ask",
+   "verdictWithLabelsAsWritten": "correct-ask"
+  }
+ },
+ {
+  "id": "R-busiest-for",
+  "text": "memory per node over the last 2 hours for the busiest node",
+  "meaning": "inspect",
+  "sampling": false,
+  "current": false,
+  "expected": "inspect",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: for"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: for"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: for"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: for"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: for"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: for"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "inspect",
+   "verdictWithLabelsAsWritten": "inspect"
+  }
+ },
+ {
+  "id": "R-busiest-the",
+  "text": "memory over the last 2 hours, the busiest node",
+  "meaning": "inspect",
+  "sampling": false,
+  "current": false,
+  "expected": "inspect",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       16,
+       28
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       16,
+       28
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       16,
+       28
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       16,
+       28
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       16,
+       28
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "inspect",
+   "verdictWithLabelsAsWritten": "inspect"
+  }
+ },
+ {
+  "id": "R-target-only",
+  "text": "memory per node over the last 2 hours, only node 8",
+  "meaning": "inspect",
+  "sampling": false,
+  "current": false,
+  "expected": "inspect",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "inspect",
+   "verdictWithLabelsAsWritten": "inspect"
+  }
+ },
+ {
+  "id": "R-target-my",
+  "text": "memory per node over the last 2 hours, my node",
+  "meaning": "inspect",
+  "sampling": false,
+  "current": false,
+  "expected": "inspect",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "inspect",
+   "verdictWithLabelsAsWritten": "inspect"
+  }
+ },
+ {
+  "id": "R-target-those",
+  "text": "memory per node over the last 2 hours, those nodes",
+  "meaning": "inspect",
+  "sampling": false,
+  "current": false,
+  "expected": "inspect",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "inspect",
+   "verdictWithLabelsAsWritten": "inspect"
+  }
+ },
+ {
+  "id": "R-current-now",
+  "text": "CPU right now",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "right now",
+      "span": [
+       4,
+       13
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "now",
+      "span": [
+       10,
+       13
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "right now",
+      "span": [
+       4,
+       13
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [],
+    "outcomes": {
+     "value-only": {
+      "kind": "none"
+     },
+     "structure": {
+      "kind": "none"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     }
+    },
+    "verdicts": {
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "now(present)"
+    ]
+   },
+   "library-grammar": {
+    "entities": [],
+    "outcomes": {
+     "value-only": {
+      "kind": "none"
+     },
+     "structure": {
+      "kind": "none"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     }
+    },
+    "verdicts": {
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "now(present)"
+    ]
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "none"
+   },
+   "verdict": "silent-default",
+   "verdictWithLabelsAsWritten": "silent-default"
+  }
+ },
+ {
+  "id": "R-current-just-now",
+  "text": "CPU just now",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "now",
+      "span": [
+       9,
+       12
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "now",
+      "span": [
+       9,
+       12
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "just now",
+      "span": [
+       4,
+       12
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [],
+    "outcomes": {
+     "value-only": {
+      "kind": "none"
+     },
+     "structure": {
+      "kind": "none"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     }
+    },
+    "verdicts": {
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "now(present)"
+    ]
+   },
+   "library-grammar": {
+    "entities": [],
+    "outcomes": {
+     "value-only": {
+      "kind": "none"
+     },
+     "structure": {
+      "kind": "none"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
+     }
+    },
+    "verdicts": {
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "now(present)"
+    ]
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "none"
+   },
+   "verdict": "silent-default",
+   "verdictWithLabelsAsWritten": "silent-default"
+  }
+ },
+ {
+  "id": "R-current-moment",
+  "text": "CPU per node at the moment",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "at the moment",
+      "span": [
+       13,
+       26
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [],
+    "outcomes": {
+     "value-only": {
+      "kind": "none"
+     },
+     "structure": {
+      "kind": "none"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     }
+    },
+    "verdicts": {
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "moment(present)"
+    ]
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "at the moment",
+      "span": [
+       13,
+       26
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793093400000,
+       "to": 1793093400000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [],
+    "outcomes": {
+     "value-only": {
+      "kind": "none"
+     },
+     "structure": {
+      "kind": "none"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     }
+    },
+    "verdicts": {
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "moment(present)"
+    ]
+   },
+   "library-grammar": {
+    "entities": [],
+    "outcomes": {
+     "value-only": {
+      "kind": "none"
+     },
+     "structure": {
+      "kind": "none"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "time words, no reading: moment(present)"
+     }
+    },
+    "verdicts": {
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": true,
+    "uncovered": [
+     "moment(present)"
+    ]
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "none"
+   },
+   "verdict": "silent-default",
+   "verdictWithLabelsAsWritten": "silent-default"
+  }
+ },
+ {
+  "id": "R-scope-gt",
+  "text": "requests over the last 2 hours, requests > errors",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: requests requests > errors"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: >"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: requests requests > errors"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: >"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: requests requests > errors"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: >"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-lt",
+  "text": "requests over the last 2 hours, requests < errors",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: requests requests < errors"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: <"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: requests requests < errors"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: <"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       18,
+       30
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: requests requests < errors"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: <"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-number-id-not-bound",
+  "text": "memory per node over the last 2 hours, node 8",
+  "meaning": "inspect",
+  "sampling": false,
+  "current": false,
+  "expected": "inspect",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete+nouns": {
+      "kind": "read",
+      "seconds": 7200
+     }
+    },
+    "verdicts": {
+     "value-only": "inspect",
+     "structure": "inspect",
+     "strict": "inspect",
+     "strict+agree": "inspect",
+     "complete": "inspect",
+     "complete+nouns": "inspect"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "inspect",
+   "verdictWithLabelsAsWritten": "inspect"
+  }
+ },
+ {
+  "id": "R-scope-conditional-verb",
+  "text": "memory per node over the last 2 hours, CPU spikes",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-at-the-peaks",
+  "text": "memory per node over the last 2 hours at the CPU peaks",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: at peaks"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-if-control",
+  "text": "memory per node over the last 2 hours if CPU spikes",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: if spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: if spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: if spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: if spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: if spikes"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: if spikes"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ },
+ {
+  "id": "R-scope-event-control",
+  "text": "memory per node over the last 2 hours, limited to backup runs",
+  "meaning": "ask",
+  "sampling": false,
+  "current": false,
+  "expected": "ask",
+  "parsers": {
+   "recognizers": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: limited to backup runs"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: limited to backup runs"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "chrono": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "point"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a point, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "duckling": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "range"
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "other": true,
+      "window": {
+       "from": 1793084400000,
+       "to": 1793091600000
+      }
+     },
+     "structure": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "strict+agree": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "a range, not a lookback"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "agentfootprint": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: limited to backup runs"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: limited to backup runs"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   },
+   "library-grammar": {
+    "entities": [
+     {
+      "text": "last 2 hours",
+      "span": [
+       25,
+       37
+      ],
+      "kind": "lookback",
+      "lookbackSeconds": 7200
+     }
+    ],
+    "outcomes": {
+     "value-only": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "structure": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "strict+agree": {
+      "kind": "read",
+      "seconds": 7200
+     },
+     "complete": {
+      "kind": "ask",
+      "why": "unaccounted: limited to backup runs"
+     },
+     "complete+nouns": {
+      "kind": "ask",
+      "why": "unaccounted: limited to backup runs"
+     }
+    },
+    "verdicts": {
+     "value-only": "wrong-window",
+     "structure": "wrong-window",
+     "strict": "wrong-window",
+     "strict+agree": "wrong-window",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
+    },
+    "coverageGap": false,
+    "uncovered": []
+   }
+  },
+  "reference": {
+   "outcome": {
+    "kind": "read",
+    "seconds": 7200
+   },
+   "verdict": "wrong-window",
+   "verdictWithLabelsAsWritten": "wrong-window"
+  }
+ }
+]

@@ -1,0 +1,23 @@
+{
+  "note": "Existing-corpus rows whose request carries a sampling instruction: how finely to read inside the window. Under the reviewer's ruling (PR #230 follow-up, Q2), a tool that does not declare and execute sampling must ASK on these, so their expected outcome under a no-sampling tool profile is 'ask', whatever their meaning label says about the window. Written before the complete-meaning re-run. 'write ops per second per node' is NOT here: 'per second' is part of that metric's name. Rows that keep only part of each period ('of each hour') are restrictions, not sampling, and are labelled ask already. In the held-out set, the class 'sampling-cadence' marks the same thing; that file is not edited.",
+  "texts": [
+    "memory per node per hour over the last 2 hours",
+    "memory per node every 5 minutes",
+    "memory per node per day",
+    "memory per node over the last 2 hours every 5 minutes",
+    "memory per node over the last 2 hours, every 5 minutes",
+    "memory per node over the last 2 hours, sampled hourly",
+    "memory per node per minute",
+    "memory per node per hour",
+    "memory per node over the last 2 hours per hour",
+    "memory per node in the last 15 minutes sampled every minute",
+    "memory per node over the last 2 hours, sampled every other minute",
+    "last 2 hours every 5 minutes",
+    "memory per node over the last 2 hours each 5 minutes",
+    "memory per node over the last 2 hours at 5-minute intervals",
+    "memory per node over the last 2 hours at 5 minute intervals",
+    "memory per node over the last 2 hours every 30s",
+    "memory per node per second over the last 2 hours",
+    "memory per node over the last 2 hours, sampled per second"
+  ]
+}
