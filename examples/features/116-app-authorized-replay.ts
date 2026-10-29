@@ -11,7 +11,9 @@
  * the FIRST call of each tool with HTTP 429. `search_tickets` is declared
  * repeatable on 429, so it is sent again and answers; `create_ticket` makes
  * changes and the call carries no idempotency key, so the side-effect guard
- * returns its 429 instead of risking a second ticket.
+ * never sends it again. A 429 does not prove that nothing ran, so under
+ * 'app-authorized' that call fails as "may have run" (footprintjs's
+ * `UnknownEffectError`, the 429 its cause) — never as a plain "try again".
  *
  * Run:  npm run example examples/features/116-app-authorized-replay.ts
  */
@@ -62,7 +64,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
         replies: [
           { toolCalls: [{ id: 'c1', name: 'search_tickets', args: { q: 'printer' } }] },
           { toolCalls: [{ id: 'c2', name: 'create_ticket', args: { title: 'Printer down' } }] },
-          { content: 'No open ticket was found, and opening one was refused for now.' },
+          { content: 'No open ticket was found, and opening one may or may not have worked.' },
         ],
       }),
     model: 'mock',
@@ -93,9 +95,11 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   assert.equal(search?.attempts[0]?.effect, 'unknown');
   assert.equal(search?.attempts[1]?.effect, 'applied');
   assert.equal(search?.end.effect, 'unknown');
-  // create_ticket: the side-effect guard — no key, so its 429 is returned, never repeated.
+  // create_ticket: the side-effect guard — no key, so it is never sent again,
+  // and the call fails as "may have run": a 429 does not prove nothing ran.
   assert.equal(create?.attempts.length, 1);
   assert.equal(create?.attempts[0]?.reason, 'changes-without-key');
+  assert.equal(create?.end.mayHaveRun, true);
   // #endregion record
   assert.equal(server.callsOf('search_tickets'), 2);
   assert.equal(server.callsOf('create_ticket'), 1);

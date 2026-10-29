@@ -26,15 +26,16 @@
  *      the answer completed — a 200 can carry a tool error. The call leaves its
  *      verdict in the request's shared replay facts (`replay.ts` ·
  *      `RequestReplay`) before it settles the series' wait.
- *   5. "MAY HAVE RUN" IS RAISED HERE. When the series sent the request again
- *      after an attempt whose effect is unknown, on the app's or an adapter's
- *      permission, and the call then does not complete, the call fails with
- *      footprintjs's `UnknownEffectError` — its own error as the `cause` — and
- *      never with the last attempt's error alone, which would read as "this
- *      did not run". The compatibility policy's assumed 429s do not raise it:
- *      that policy keeps today's behaviour, and its record says what it assumed.
- *      Nor does a cancellation: a call its caller cancelled ends with the
- *      caller's reason, as it always did.
+ *   5. "MAY HAVE RUN" IS RAISED HERE — footprintjs's law, under the
+ *      `'app-authorized'` policy. When an attempt ended without an answer and
+ *      its effect is unknown (a single one is enough), and the call then does
+ *      not complete, the call fails with footprintjs's `UnknownEffectError` —
+ *      its own error as the `cause` — never with that error alone, which reads
+ *      as "failed, try again". An answer the server gave (a 5xx, a tool error)
+ *      after no such attempt is delivered as it came. Under `'compatibility'`
+ *      the caller sees the error it always did; the record still says the
+ *      effect is unknown. A cancellation never raises it: a call its caller
+ *      cancelled ends with the caller's reason, as it always did.
  *
  * In dev mode, a ticket that no request was bound to by the time the call
  * settled, when a `tools/call` request DID go out, is named once per connection: the SDK copied
@@ -56,9 +57,9 @@ export interface OpenCall {
   readonly signal?: AbortSignal;
   /**
    * The call failed with `error` (`verdict` says how far it got): the error it
-   * fails with — `error` itself, or footprintjs's `UnknownEffectError` with
-   * `error` as its `cause` when its series asked again after an attempt of
-   * unknown effect and the call did not complete.
+   * fails with — `error` itself, or, under `'app-authorized'`, footprintjs's
+   * `UnknownEffectError` with `error` as its `cause` when an attempt ended
+   * without an answer, its effect unknown, and the call did not complete.
    */
   failed(error: unknown, verdict: CallVerdict): unknown;
   /**

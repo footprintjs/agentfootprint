@@ -306,18 +306,23 @@ the side-effect guard off.
 A generic 429 does not prove that the server ran nothing. RFC 6585 defines it
 as rate limiting, and `Retry-After` says when to ask again, not that asking is
 safe. A vendor's own SDK may retry its own 429s because the vendor documents its
-service; a generic MCP client cannot assume that of any server.
+service; a generic MCP client cannot assume that of any server. No reply proves
+it, either: AgentCore Runtime's session-busy body is matched by its code and
+words, and a server behind the runtime can send the same error after it ran the
+call.
 
 | Situation | Sent again automatically? | The run records |
 |---|---|---|
-| A documented pre-execution refusal from the adapter you chose (AgentCore Runtime's session-busy reply) | Yes, within the budget | `effect: 'none'` and the `guarantee` it rests on |
+| The adapter you chose retries its own refusal (AgentCore Runtime's session-busy reply) | Yes, within the budget: the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
 | Your entry for the tool names `throttle` (or `network`) | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on }` |
 | No entry, `policy: 'app-authorized'` | No: the refusal is returned | `reason: 'not-permitted'` |
 | No entry, `policy: 'compatibility'` (the default in 11.x) | Yes, as before | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
 
 `network` is a request that failed without an answer: a lost connection, or a
 timeout below the retry. It may have run, so it is sent again only when your
-entry names it.
+entry names it. `retryOnThrottle: false` turns off the 429 rule and nothing
+else: a declared `network` repeat keeps its series, its default budget and its
+record, and so does the `'app-authorized'` policy.
 
 **The side-effect guard.** A tool you mark `changes: true` is never sent again
 automatically, under either policy, unless you declare that the server
@@ -337,22 +342,25 @@ notifications) run no tool, so a 429 on one is still asked again.
 **What the run knows.** Each attempt records three separate facts: its
 `failure` category, its `effect` and, when another attempt followed, the
 `permission` that allowed it. It also records `durationMs`. `effect` is
-`none` only on a documented guarantee, `applied` only when the call completed,
-and `unknown` otherwise. `applied` means the server answered without an error,
-not that anything was written. The `end` counts the requests sent (`attempts`)
-and says what is known of the whole series. Uncertainty survives: once an
-attempt's effect is `unknown`, so is the series'. A later proven refusal does
+`unknown` for every attempt that was sent and did not complete, a refusal
+included; `applied` only when the call completed; and `none` only for a request
+that was never sent. `applied` means the server answered without an error. It
+is never proof that anything was written. The `end` counts the requests sent
+(`attempts`) and says what is known of the whole series. Uncertainty survives:
+once an attempt's effect is `unknown`, so is the series'. A later refusal does
 not resolve it, and a later success does not prove the operation happened only
-once. When the library sent a call again after an attempt of unknown effect, on
-your permission or an adapter's, and the call then does not complete, it fails
+once. Under `'app-authorized'`, when an attempt ended without an answer and its
+effect is unknown (a single one is enough), a call that does not complete fails
 as "may have run": footprintjs's `UnknownEffectError`, with the call's own error
-as its `cause`, and `mayHaveRun: true` on the `end`. The compatibility policy's
-assumed 429s do not raise it, so what a caller sees under that policy is
-unchanged.
+as its `cause`, and `mayHaveRun: true` on the `end`. An answer the server gave,
+such as a 5xx or a tool error, with no such attempt before it, is delivered as
+it came. Under `'compatibility'` the caller sees the error it always did, and
+the record still says the effect is unknown.
 
 The example's run, read back from the saved recording: the search was sent
 again on your declaration and its effects stay unknown; the ticket was not sent
-again, because it makes changes and carried no key.
+again, because it makes changes and carried no key, and the call failed as "may
+have run".
 
 <CodeFile path="examples/features/116-app-authorized-replay.ts" region="record" title="examples/features/116-app-authorized-replay.ts (region: record)" />
 

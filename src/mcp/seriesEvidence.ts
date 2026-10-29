@@ -29,12 +29,13 @@
  * it. Its row says so (`remote: 'unknown'`); nothing here records it as not run.
  *
  * THREE FACTS PER ATTEMPT, NONE READ FROM ANOTHER (`replay.ts`): the failure
- * (footprintjs's category), what is known of its effect (`none` only on a
- * documented guarantee, `unknown` for anything that did not complete,
- * `applied` when the call completed), and — on an attempt the series asked
- * again after — what permitted it. Each row also says how long it took. The
- * end says how many requests were sent and what is known of the whole series'
- * effect; uncertainty survives (`SeriesKnowledge`).
+ * (footprintjs's category), what is known of its effect (`unknown` for every
+ * attempt sent that did not complete — a refusal included; `applied` when the
+ * call completed, never proof of a write; `none` only for what was never
+ * sent), and — on an attempt the series asked again after — what permitted it.
+ * Each row also says how long it took. The end says how many requests were
+ * sent and what is known of the whole series' effect; uncertainty survives
+ * (`SeriesKnowledge`).
  *
  * WHEN IT FILES. When the call settles — the series has ended by then, and the
  * call's verdict is what says whether an answered attempt completed (a 200 can
@@ -56,7 +57,6 @@ import type {
   ToolRequestEffect,
   ToolRequestEnd,
   ToolRequestError,
-  ToolRequestGuarantee,
   ToolRequestPermission,
   ToolRequestReason,
 } from '../events/payloads.js';
@@ -93,12 +93,11 @@ export type DeclineReason = Extract<
 /**
  * What the series knows of one attempt beyond the runner's record (`replay.ts`):
  * its effect — absent for an answered attempt, which the call's verdict decides
- * when the record is filed — the guarantee behind a `none`, what permitted the
- * next attempt, and how long it took.
+ * when the record is filed — what permitted the next attempt, and how long it
+ * took.
  */
 export interface AttemptFacts {
   readonly effect?: ToolRequestEffect;
-  readonly guarantee?: ToolRequestGuarantee;
   readonly permission?: ToolRequestPermission;
   readonly durationMs: number;
 }
@@ -338,8 +337,8 @@ export function rowOf(
 
 /**
  * `row` with what the series knows of its attempt beyond the record — its
- * effect, the guarantee behind a `none`, what permitted the next attempt, how
- * long it took. Without `facts`, the row as the record alone says it.
+ * effect, what permitted the next attempt, how long it took. Without `facts`,
+ * the row as the record alone says it.
  */
 export function withFacts(
   row: ToolRequestAttempt,
@@ -349,7 +348,6 @@ export function withFacts(
   return {
     ...row,
     ...(facts.effect !== undefined && { effect: facts.effect }),
-    ...(facts.effect === 'none' && facts.guarantee !== undefined && { guarantee: facts.guarantee }),
     ...(row.reason === 'retryable' &&
       facts.permission !== undefined && { permission: facts.permission }),
     durationMs: facts.durationMs,

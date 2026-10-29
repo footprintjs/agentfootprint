@@ -165,9 +165,6 @@ const EFFECTS: Words<NonNullable<ToolRequestAttempt['effect']>> = {
   unknown: true,
   applied: true,
 };
-const GUARANTEES: Words<NonNullable<ToolRequestAttempt['guarantee']>> = {
-  'agentcore-session-busy': true,
-};
 const PERMITTED_BY: Words<ToolRequestPermission['by']> = {
   declaration: true,
   adapter: true,
@@ -211,7 +208,6 @@ const ATTEMPT_FIELDS = new Set([
   'error',
   'remote',
   'effect',
-  'guarantee',
   'permission',
   'durationMs',
 ]);
@@ -275,7 +271,6 @@ function servedAttempt(raw: unknown): ToolRequestAttempt {
     ...(row.error !== undefined && { error: servedError(row.error) }),
     ...(row.remote !== undefined && { remote: word(REMOTE, row.remote) }),
     ...(row.effect !== undefined && { effect: word(EFFECTS, row.effect) }),
-    ...(row.guarantee !== undefined && { guarantee: word(GUARANTEES, row.guarantee) }),
     ...(row.permission !== undefined && { permission: servedPermission(row.permission) }),
     ...(row.durationMs !== undefined && { durationMs: duration(row.durationMs) }),
   };
@@ -300,14 +295,15 @@ function servedEnd(raw: unknown): ToolRequestEnd {
 
 /**
  * What permitted a repeat: who, and the one detail that belongs to who — the
- * declared kind for `declaration`, the assumption for `compatibility`, nothing
- * for `adapter`. A detail beside the wrong `by` is refused, never dropped.
+ * declared kind for `declaration`, the assumption for `adapter` and
+ * `compatibility` (a policy states what it assumes). A detail beside the wrong
+ * `by`, or a policy without its assumption, is refused, never dropped.
  */
 function servedPermission(raw: unknown): ToolRequestPermission {
   const permission = record(raw, PERMISSION_FIELDS);
   const by = word(PERMITTED_BY, permission.by);
   if ((by === 'declaration') !== (permission.on !== undefined)) throw new Refused();
-  if ((by === 'compatibility') !== (permission.assumes !== undefined)) throw new Refused();
+  if ((by !== 'declaration') !== (permission.assumes !== undefined)) throw new Refused();
   return {
     by,
     ...(permission.on !== undefined && { on: word(REPLAY_KINDS, permission.on) }),

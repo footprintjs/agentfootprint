@@ -508,17 +508,18 @@ begun: the 429 is delivered instead.
 The example above sets a deadline (`maxElapsedMs`) and records each retry's
 `kind` and attempt; everything else there is the default schedule.
 
-The session-busy refusal is the one refusal the library records as having run
-nothing. AgentCore documents it as made while the service is provisioning or
-tearing down the session the request targets: see the
+Retrying the session-busy refusal is this adapter's own policy, based on an
+assumption. AWS describes it as a retryable conflict while the service is
+provisioning or tearing down the session the request targets: see the
 [MCP protocol contract's error handling](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp-protocol-contract.html#mcp-error-handling)
 and the [`InvokeAgentRuntime` errors](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html#API_InvokeAgentRuntime_Errors).
-So each such attempt records `effect: 'none'` with
-`guarantee: 'agentcore-session-busy'`, and choosing this adapter is permission
-enough to send the request again, under either replay policy. A 429 has no such
-guarantee, so its effect stays `unknown`. A tool you declare as making changes
-is not sent again even after this refusal unless the server deduplicates by a
-key the call carries. See
+Neither page says that a matching reply ran nothing, and the HTTP 200 form is
+matched by its code and words, which a server behind the runtime can send after
+it ran the call. So each repeat records
+`permission: { by: 'adapter', assumes: 'refused-before-execution' }`, and every
+attempt's effect stays `unknown`, as a 429's does. A tool you declare as making
+changes is not sent again after this refusal unless the server deduplicates by
+a key the call carries. See
 [Who may send a call again](doc:tools-and-gateways#who-may-send-a-call-again).
 
 <Callout type="warn" title="A 'reuse' client is ONE session">

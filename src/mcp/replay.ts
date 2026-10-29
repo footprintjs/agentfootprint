@@ -18,14 +18,16 @@
  * them. It is configuration, read once when the client is built — never a
  * per-call question.
  *
- * KNOWLEDGE of whether an attempt ran comes only from the record and from a
- * documented service guarantee. `none` needs one: AgentCore Runtime documents
- * its session-busy refusal as made while the session is starting or stopping
- * (`adapters/mcp/agentcoreRuntime/sessionBusy.ts` cites it). A 429 is not one:
- * RFC 6585 §4 defines it as rate limiting, and `Retry-After` says when to ask
- * again, not that asking is safe. A vendor's own SDK may retry its own 429s
- * because the vendor documents its own service; a generic MCP client cannot
- * assume that of an arbitrary server.
+ * KNOWLEDGE of whether an attempt ran comes only from the record and from an
+ * established service guarantee. No reply this library reads is one. A 429 is
+ * not: RFC 6585 §4 defines it as rate limiting, and `Retry-After` says when to
+ * ask again, not that asking is safe. AgentCore Runtime's session-busy body is
+ * not either: AWS documents a retryable conflict while a session starts or
+ * stops, and the body is matched by its code and words, which a server behind
+ * the runtime can send after it ran the call. So every attempt that was sent
+ * and did not complete is `unknown`; `none` is only a request never sent. A
+ * vendor's own SDK may retry its own 429s because the vendor documents its own
+ * service; a generic MCP client cannot assume that of an arbitrary server.
  *
  * Neither is read from the other: a permission never makes an effect known,
  * and an effect never grants a permission.
@@ -40,15 +42,21 @@
  *   'compatibility' — the 11.x default, today's behaviour by name: a 429 is
  *       repeated for every tool, on the ASSUMPTION that the server refused it
  *       before running it. Each such repeat records that assumption; the
- *       attempt's effect stays `unknown`.
+ *       attempt's effect stays `unknown`, and the caller sees the error it
+ *       always did.
  *   'app-authorized' — opt-in now, the default in the next major: a 429 or a
  *       network failure is repeated only when the app's entry for the tool
- *       names it.
+ *       names it. A call that does not complete after ANY attempt that ended
+ *       without an answer, its effect unknown, fails with footprintjs's
+ *       `UnknownEffectError` (`callLifetime.ts`) — never with the attempt's own
+ *       error, which reads as "failed, try again".
  *
- * Under both, a documented pre-execution refusal from the adapter the app chose
- * is repeated within the budget, and THE SIDE-EFFECT GUARD holds: a tool the
- * app declares as making changes is never repeated automatically unless the
- * server is declared to deduplicate by an idempotency key the call carries —
+ * Under both, the adapter the app chose retries its own refusal within the
+ * budget — AgentCore's session-busy reply — as the ADAPTER's policy, on an
+ * assumption it records the same way (`permission: { by: 'adapter', assumes }`),
+ * never as evidence. And THE SIDE-EFFECT GUARD holds: a tool the app declares
+ * as making changes is never repeated automatically unless the server is
+ * declared to deduplicate by an idempotency key the call carries —
  * footprintjs's law, a retry of an effect without a key can apply it twice. A
  * key protects only when the server uses it; the library cannot check that.
  *
@@ -61,7 +69,6 @@ import { errorCategory } from 'footprintjs';
 
 import type {
   ToolRequestEffect,
-  ToolRequestGuarantee,
   ToolRequestPermission,
   ToolRequestReason,
   ToolRequestReplayKind,
@@ -254,6 +261,18 @@ class DeclarationReader {
   }
 }
 
+/**
+ * @internal Whether the declaration needs a retry series even with the 429
+ * rule off (`retryOnThrottle: false`): a tool declared repeatable on
+ * `'network'`, or the `'app-authorized'` policy — its record and its "may have
+ * run" rest on the series.
+ */
+export function needsSeries(declaration: ReplayDeclaration): boolean {
+  if (declaration.policy === 'app-authorized') return true;
+  for (const entry of declaration.tools.values()) if (entry.on.has('network')) return true;
+  return false;
+}
+
 // ─── What a request is, as the declaration reads it ──────────────────
 
 /**
@@ -321,8 +340,11 @@ function isRecord(value: unknown): value is object {
 export interface MetFailure {
   /** A refusal a rule recognised (`throttle`, `session-busy`), or a request that failed in transport. */
   readonly kind: 'throttle' | 'session-busy' | 'network';
-  /** The documented guarantee the refusal rests on — the adapter's, on its rule. */
-  readonly guarantee?: ToolRequestGuarantee;
+  /**
+   * What the adapter that recognised this refusal assumes in retrying it, as
+   * its own policy — set on its rule. Never evidence of the attempt's effect.
+   */
+  readonly assumes?: 'refused-before-execution';
 }
 
 /** @internal Why the series did not ask again, by the rule. */
@@ -363,7 +385,9 @@ export function permit(
     return CHANGES_WITHOUT_KEY;
   }
   const keyed = entry?.changes === true;
-  if (failure.guarantee !== undefined) return repeat({ by: 'adapter' }, keyed);
+  if (failure.assumes !== undefined) {
+    return repeat({ by: 'adapter', assumes: failure.assumes }, keyed);
+  }
   if (failure.kind !== 'session-busy' && entry?.on.has(failure.kind) === true) {
     return repeat({ by: 'declaration', on: failure.kind }, keyed);
   }
@@ -420,13 +444,14 @@ export type CallVerdict = 'completed' | 'tool-error' | 'failed';
 /**
  * @internal One `tools/call` request's replay facts, shared by the series that
  * sends it and the call that waits for it — the ledger hands both the same
- * object (`requestLedger.ts`). The series writes what it sent and whether it
- * asked again after an attempt of unknown effect; the call writes how it
- * settled. Each is written once, in that order.
+ * object (`requestLedger.ts`). The series writes what it sent and whether,
+ * under `'app-authorized'`, an attempt ended without an answer and its effect
+ * is unknown; the call writes how it settled. Each is written once, in that
+ * order.
  */
 export class RequestReplay {
   private requests = 0;
-  private uncertainRepeat = false;
+  private uncertainUnanswered = false;
   private settled: CallVerdict | undefined;
   private failedAsMayHaveRun = false;
 
@@ -435,9 +460,12 @@ export class RequestReplay {
     this.requests += 1;
   }
 
-  /** The series asked again after an attempt of unknown effect, on the app's or an adapter's permission. */
-  repeatedAfterUnknown(): void {
-    this.uncertainRepeat = true;
+  /**
+   * Under `'app-authorized'`: an attempt ended without an answer and its effect
+   * is unknown, so a call that does not complete fails as "may have run".
+   */
+  unansweredUnknown(): void {
+    this.uncertainUnanswered = true;
   }
 
   /** The call settled; `mayHaveRun` when it failed as "may have run". The first word stands. */
@@ -451,8 +479,9 @@ export class RequestReplay {
     return this.requests;
   }
 
+  /** A call that does not complete fails as "may have run" (`unansweredUnknown`). */
   get uncertain(): boolean {
-    return this.uncertainRepeat;
+    return this.uncertainUnanswered;
   }
 
   get verdict(): CallVerdict | undefined {

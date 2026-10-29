@@ -35,8 +35,8 @@
  * refusal a service documents as one to retry — AgentCore Runtime's "session
  * operation in progress" — reuses this loop rather than growing a second one.
  * That decision is applied only by that vendor's own transport, and its rule
- * carries the documented guarantee (`RetryRule.guarantee`): its attempts record
- * effect `none`; a 429's record `unknown`.
+ * carries the adapter's retry assumption (`RetryRule.assumes`) — a policy,
+ * never evidence: its attempts record effect `unknown`, as a 429's do.
  *
  * ── Why it lives at the fetch seam and not around `Tool.execute` ─────────────
  * Because `Retry-After` is only reachable here. The MCP SDK reads the response,
@@ -108,7 +108,7 @@ import {
   type RetryPolicy,
 } from 'footprintjs';
 
-import type { ToolRequestGuarantee, ToolRequestPermission } from '../events/payloads.js';
+import type { ToolRequestPermission } from '../events/payloads.js';
 import { abortErrorOf, eitherSignal, linkedController } from '../lib/abort.js';
 import { exponentialBackoff, statedWaitFirst, type BackoffFunction } from './backoff.js';
 import {
@@ -298,13 +298,14 @@ export interface RetryVerdict {
  * replay rule's (`replay.ts`), never the decision's. It may recognise only a
  * response that is a refusal — never one that could be the record of
  * half-done work. The library holds exactly two: {@link throttled} below, a
- * 429, whose effect stays unknown (it says the request was rate-limited, not
- * that nothing ran), and AgentCore Runtime's documented "session operation in
- * progress" refusal, which lives with that vendor's adapter
- * (`adapters/mcp/agentcoreRuntime/`) and whose rule cites the documentation
- * (`RetryRule.guarantee`). Each stays ONE small function, so a refusal has
- * exactly one place it is recognised — and each attempt is written down as
- * one footprintjs attempt record.
+ * 429, and AgentCore Runtime's "session operation in progress" refusal, which
+ * lives with that vendor's adapter (`adapters/mcp/agentcoreRuntime/`) and whose
+ * rule carries the adapter's retry assumption (`RetryRule.assumes`). Either
+ * one's effect stays unknown: a 429 says the request was rate-limited, and the
+ * busy body is matched by its code and words, which a server behind the
+ * runtime can send after it ran the call. Each stays ONE small function, so a
+ * refusal has exactly one place it is recognised — and each attempt is written
+ * down as one footprintjs attempt record.
  */
 export type RetryDecision = (
   response: Response,
@@ -373,12 +374,12 @@ export interface RetryRule {
   readonly endpointLabel?: string;
   readonly onRetry?: (info: ThrottleRetryInfo) => void;
   /**
-   * The documented guarantee that this refusal is made before the request
-   * reaches the server — set only by an adapter that cites the service's own
-   * documentation for it (`sessionBusy.ts`). With it, a refused attempt's
-   * effect is `none`; without it — a 429 — `unknown`.
+   * Set only by an adapter that retries this refusal as its own policy
+   * (`sessionBusy.ts`): what it assumes in doing so. The assumption is recorded
+   * beside each repeat (`permission: { by: 'adapter', assumes }`) — never as
+   * evidence: the attempt's effect stays `unknown`.
    */
-  readonly guarantee?: ToolRequestGuarantee;
+  readonly assumes?: 'refused-before-execution';
 }
 
 /**
@@ -396,7 +397,7 @@ export function retryRule(
   config: RetryOnThrottle | undefined,
   defaults: RetryDefaults,
   where: string,
-  guarantee?: ToolRequestGuarantee,
+  assumes?: 'refused-before-execution',
 ): RetryRule | undefined {
   if (config === false) return undefined;
   const opts: ThrottleRetryOptions = typeof config === 'object' && config !== null ? config : {};
@@ -416,7 +417,7 @@ export function retryRule(
     jitter: option.jitter(opts.jitter ?? defaults.jitter),
     ...(opts.endpointLabel !== undefined && { endpointLabel: option.label(opts.endpointLabel) }),
     ...(opts.onRetry && { onRetry: opts.onRetry }),
-    ...(guarantee !== undefined && { guarantee }),
+    ...(assumes !== undefined && { assumes }),
   };
   return rule;
 }
@@ -470,6 +471,33 @@ export function retryingFetch(
     ? rebuild({ rule })
     : retryingFetchFor(inner ?? platformFetch, { rules: [rule] });
 }
+
+/**
+ * @internal The series for a transport whose 429 rule is off (`retryOnThrottle:
+ * false`) while the app's replay declaration still needs one (`replay.ts` ·
+ * `needsSeries`): a tool declared repeatable on `'network'`, or the
+ * `'app-authorized'` policy, whose record and "may have run" rest on the series.
+ * `retryOnThrottle: false` turns off the 429 rule and nothing else, so its one
+ * rule is that rule switched off: it recognises no response and holds the
+ * call's budget (`retryOnThrottle`'s defaults). A transport fetch that already
+ * runs a series is joined, as `retryingFetch` joins it.
+ */
+export function seriesWithoutThrottle(inner: ThrottleFetch | undefined): ThrottleFetch {
+  const rule = retryRule(
+    'throttle',
+    recognisesNothing,
+    true,
+    THROTTLE_RETRY_DEFAULTS,
+    'retryOnThrottle',
+  ) as RetryRule;
+  const rebuild = inner === undefined ? undefined : JOINS.get(inner);
+  return rebuild !== undefined
+    ? rebuild({ rule })
+    : retryingFetchFor(inner ?? platformFetch, { rules: [rule] });
+}
+
+/** A decision that recognises no response — a rule kept for its budget alone. */
+const recognisesNothing: RetryDecision = () => undefined;
 
 /**
  * @internal What one call's series is built from: the rules it asks, in order;
@@ -794,8 +822,8 @@ class Series {
 
   /**
    * The runner's `retryOn`: may this request be sent again after this attempt?
-   * First WHO may say so (`replay.ts` · `permit`: the app's declaration, an
-   * adapter's documented guarantee, the compatibility policy's assumption — and
+   * First WHO may say so (`replay.ts` · `permit`: the app's declaration, the
+   * adapter's own retry assumption, the compatibility policy's assumption — and
    * the side-effect guard before all three), then whether the budget allows
    * it. Plans the wait as it answers, because the ceilings need its length, and
    * keeps what it decided, for the record.
@@ -857,16 +885,12 @@ class Series {
     const refused = this.latest;
     if (this.inFlight === record.attempt) this.inFlight = undefined;
     const seen = this.seenOf(record, refused);
-    const facts = this.factsOf(record, seen, refused);
-    const { permission } = facts;
-    // Asked again after an attempt that may have run, on a permission that does
-    // not assume it away: if the call then fails, it fails as "may have run".
-    if (
-      facts.effect === 'unknown' &&
-      permission !== undefined &&
-      permission.by !== 'compatibility'
-    ) {
-      this.shared.repeatedAfterUnknown();
+    const facts = this.factsOf(record);
+    // Under 'app-authorized', an attempt that ended without an answer and may
+    // have run means a call that does not complete fails as "may have run" —
+    // a single such attempt is enough (footprintjs's law).
+    if (facts.effect === 'unknown' && this.declaration.policy === 'app-authorized') {
+      this.shared.unansweredUnknown();
     }
     this.evidence?.attempt(record, seen, this.declined, facts);
     if (record.next !== 'retry') return;
@@ -889,22 +913,16 @@ class Series {
 
   /**
    * What the series knows of the attempt `record` ends beyond the record — the
-   * three facts kept apart (`replay.ts`). Its effect: `none` only for a refusal
-   * its rule documents as made before anything ran; `unknown` for any other
-   * attempt that did not answer; and for an answer, nothing yet — the call's
-   * verdict decides, when the record is filed. What permitted the next attempt,
-   * when there is one. How long it took.
+   * three facts kept apart (`replay.ts`). Its effect: `unknown` for every
+   * attempt that was sent and did not answer — a refusal included, whatever an
+   * adapter assumes of it; for an answer, nothing yet — the call's verdict
+   * decides, when the record is filed. What permitted the next attempt, when
+   * there is one. How long it took.
    */
-  private factsOf(
-    record: AttemptRecord,
-    seen: AttemptSeen | undefined,
-    refused: Refused | undefined,
-  ): AttemptFacts {
-    const guarantee = seen?.refusal !== undefined ? refused?.rule.guarantee : undefined;
+  private factsOf(record: AttemptRecord): AttemptFacts {
     const permission = record.next === 'retry' ? this.permitted : undefined;
     return {
-      ...(record.outcome !== 'ok' && { effect: guarantee !== undefined ? 'none' : 'unknown' }),
-      ...(guarantee !== undefined && { guarantee }),
+      ...(record.outcome !== 'ok' && { effect: 'unknown' as const }),
       ...(permission !== undefined && { permission }),
       durationMs: record.durationMs,
     };
@@ -950,9 +968,9 @@ class Series {
   }
 }
 
-/** A refusal a rule recognised, as the permission rule reads it: its kind, and its documented guarantee. */
+/** A refusal a rule recognised, as the permission rule reads it: its kind, and an adapter's assumption. */
 function refusalOf(rule: BoundRule): MetFailure {
-  return { kind: rule.kind, ...(rule.guarantee !== undefined && { guarantee: rule.guarantee }) };
+  return { kind: rule.kind, ...(rule.assumes !== undefined && { assumes: rule.assumes }) };
 }
 
 /**
@@ -994,18 +1012,11 @@ class RetryableRefusal extends Error {
   }
 }
 
-/**
- * What each refusal says — no more than is known. A 429 says the request was
- * rate-limited (RFC 6585 §4), not that nothing ran. The session-busy refusal is
- * the one AgentCore documents as made while the session is starting or
- * stopping, before the request reaches the MCP server (`sessionBusy.ts` cites
- * the documentation), so its attempts record `effect: 'none'`.
- */
 const REFUSAL_SENTENCES: Readonly<Record<RetryKind, string>> = {
   throttle:
     'The server answered with HTTP 429, a response the retry policy recognises as a refusal. It is recorded as sent, which is not proof that nothing ran.',
   'session-busy':
-    'AgentCore Runtime answered that its session was starting or stopping, a refusal its documentation says is made before the request reaches the MCP server.',
+    'AgentCore Runtime answered that its session was starting or stopping, a response the retry policy recognises as a refusal. It is recorded as sent, which is not proof that nothing ran.',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────

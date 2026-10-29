@@ -2,19 +2,21 @@
  * App-authorized replay (E3) — who may send an MCP tool call again, and what a
  * run's record knows of each attempt. Permission is the APP's, declared per
  * (server, tool); what is known of an attempt's effect comes only from the
- * record and a documented guarantee; the two are recorded apart, with the
- * failure, and none is read from another.
+ * record — no reply proves that nothing ran; the two are recorded apart, with
+ * the failure, and none is read from another.
  *
  * Every scenario goes through the REAL `mcpClient`, the REAL MCP SDK transport
  * and, where a run is read, a REAL `Agent` whose recording is serialised and
  * parsed back; only the server is a stand-in `fetch` in this process.
  *
- *   R1  Scenario — a timeout, then a proven pre-execution refusal: the first
+ *   R1  Scenario — a timeout, then AgentCore's session-busy refusal (retried
+ *                  on the adapter's assumption, never proof): the first
  *                  attempt stays `unknown`; the call fails as "may have run"
  *   R2  Scenario — a timeout, then a success: the series does not claim that
  *                  the operation happened once
  *   R3  Boundary — a generic 429 with no declaration (`app-authorized`): not
- *                  sent again; the refusal is returned, the record says why
+ *                  sent again; the record says why; the call fails as "may
+ *                  have run" with the 429 as its cause
  *   R4  Scenario — a generic 429 the app permitted: sent again, effects
  *                  unknown; when the budget is spent, "may have run"
  *   R5  Scenario — the compatibility policy (the default): every retry records
@@ -29,6 +31,13 @@
  *   R10 Unit     — the permission rule and the series' knowledge, as tables
  *   R11 Boundary — a call its caller cancels ends with the caller's reason,
  *                  even after a repeat that followed an unknown attempt
+ *   R12 Security — a busy-shaped reply is never proof that nothing ran (Codex's
+ *                  probes: a server that ran the call answers with the same
+ *                  error, or with words that only contain it)
+ *   R13 Boundary — `retryOnThrottle: false` turns off the 429 rule only: a
+ *                  declared network repeat keeps its series, budget and record
+ *   R14 Boundary — a single attempt of unknown effect: `app-authorized` fails
+ *                  as "may have run"; `compatibility` keeps today's error
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -187,7 +196,7 @@ function clientOver(endpoint: Endpoint, replay?: McpReplayOptions): Promise<McpC
   });
 }
 
-/** A client over an AgentCore Runtime transport — the adapter with a documented refusal. */
+/** A client over an AgentCore Runtime transport — the adapter that retries its own refusal. */
 function agentCoreClientOver(endpoint: Endpoint, replay?: McpReplayOptions): Promise<McpClient> {
   const transport = agentCoreRuntimeMcpTransport({
     agentRuntimeArn: 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/tickets_mcp-a1b2c3',
@@ -260,16 +269,17 @@ afterEach(() => {
 
 // ─── R1 a timeout, then a proven pre-execution refusal ───────────────
 
-describe('app-authorized replay — R1 a timeout, then a proven refusal', () => {
+describe('app-authorized replay — R1 a timeout, then a session-busy refusal', () => {
   const replay: McpReplayOptions = {
     policy: STRICT,
     tools: { search_tickets: { on: ['network'] } },
   };
   // Attempt 1 times out after it was sent; attempts 2 and 3 are AgentCore's
-  // documented session-busy refusal, which ran nothing.
+  // session-busy refusal, which the adapter retries on an ASSUMPTION — no
+  // reply is proof that nothing ran.
   const reply = ({ id, n }: Received): Response => (n === 1 ? timedOut() : busy(id));
 
-  it('the first attempt stays `unknown`: a later proven refusal does not resolve it', async () => {
+  it('the first attempt stays `unknown`: a later refusal does not resolve it', async () => {
     const endpoint = server(reply);
     const client = await agentCoreClientOver(endpoint, replay);
     try {
@@ -291,9 +301,8 @@ describe('app-authorized replay — R1 a timeout, then a proven refusal', () => 
           outcome: 'refused',
           reason: 'retryable',
           kind: 'session-busy',
-          effect: 'none',
-          guarantee: 'agentcore-session-busy',
-          permission: { by: 'adapter' },
+          effect: 'unknown',
+          permission: { by: 'adapter', assumes: 'refused-before-execution' },
           ...TOOK,
         }),
         expect.objectContaining({
@@ -301,14 +310,14 @@ describe('app-authorized replay — R1 a timeout, then a proven refusal', () => 
           outcome: 'refused',
           reason: 'exhausted',
           kind: 'session-busy',
-          effect: 'none',
-          guarantee: 'agentcore-session-busy',
+          effect: 'unknown',
           ...TOOK,
         }),
       ]);
-      // Three facts per attempt, apart: a proven `none` is never read as
-      // permission, and a permission never makes an effect known.
+      // Three facts per attempt, apart: the adapter's assumption is a policy,
+      // never evidence — no attempt claims to have run nothing.
       expect(evidence.attempts[2]).not.toHaveProperty('permission');
+      for (const row of evidence.attempts) expect(row).not.toHaveProperty('guarantee');
       expect(evidence.end).toMatchObject({
         outcome: 'refused',
         reason: 'exhausted',
@@ -346,7 +355,7 @@ describe('app-authorized replay — R1 a timeout, then a proven refusal', () => 
     }
   });
 
-  it('the adapter cites the documentation its `none` rests on', () => {
+  it('the adapter cites the documentation its retry policy rests on', () => {
     expect(SESSION_BUSY_DOCUMENTATION).toEqual([
       expect.stringMatching(
         /^https:\/\/docs\.aws\.amazon\.com\/bedrock-agentcore\/.*runtime-mcp-protocol-contract/,
@@ -406,7 +415,7 @@ describe('app-authorized replay — R2 a timeout, then a success', () => {
 // ─── R3 a generic 429, no declaration ────────────────────────────────
 
 describe('app-authorized replay — R3 a generic 429 with no declaration', () => {
-  it('is not sent again: the refusal is returned, and the record says why', async () => {
+  it('is not sent again, and the record says why', async () => {
     const endpoint = server(() => throttled());
     const client = await clientOver(endpoint, { policy: STRICT });
     try {
@@ -434,13 +443,14 @@ describe('app-authorized replay — R3 a generic 429 with no declaration', () =>
         failure: 'rate-limited',
         attempts: 1,
         effect: 'unknown',
+        mayHaveRun: true,
       });
     } finally {
       await client.close();
     }
   });
 
-  it('the caller gets the 429 the server sent — not "may have run", nothing was repeated', async () => {
+  it('the refusal is returned as the cause of "may have run" — a 429 does not prove nothing ran', async () => {
     const endpoint = server(() => throttled());
     const client = await clientOver(endpoint, { policy: STRICT });
     try {
@@ -449,8 +459,9 @@ describe('app-authorized replay — R3 a generic 429 with no declaration', () =>
         () => undefined,
         (error: unknown) => error,
       );
-      expect(failure).not.toBeInstanceOf(UnknownEffectError);
-      expect((failure as { code?: unknown }).code).toBe(429);
+      expect(failure).toBeInstanceOf(UnknownEffectError);
+      expect(((failure as UnknownEffectError).cause as { code?: unknown }).code).toBe(429);
+      expect((failure as UnknownEffectError).attempts).toBe(1);
       expect(endpoint.calls()).toBe(1);
     } finally {
       await client.close();
@@ -629,7 +640,7 @@ describe('app-authorized replay — R6 the side-effect guard', () => {
     });
   }
 
-  it('the guard holds against a documented refusal too: a changing tool is not repeated without a key', async () => {
+  it("the guard holds against the adapter's own refusal too: a changing tool is not repeated without a key", async () => {
     const endpoint = server(({ id }) => busy(id), [CREATE]);
     const client = await agentCoreClientOver(endpoint, {
       tools: { create_ticket: { changes: true } },
@@ -637,11 +648,9 @@ describe('app-authorized replay — R6 the side-effect guard', () => {
     try {
       const events = await savedRun(creating(await client.tools(), { title: 'printer' }));
       expect(endpoint.calls()).toBe(1);
-      expect(evidenceIn(events).attempts[0]).toMatchObject({
-        reason: 'changes-without-key',
-        effect: 'none',
-        guarantee: 'agentcore-session-busy',
-      });
+      const [row] = evidenceIn(events).attempts;
+      expect(row).toMatchObject({ reason: 'changes-without-key', effect: 'unknown' });
+      expect(row).not.toHaveProperty('guarantee');
     } finally {
       await client.close();
     }
@@ -832,6 +841,293 @@ describe("app-authorized replay — R11 a cancelled call ends with its caller's 
   });
 });
 
+// ─── R12 a busy-shaped reply is never proof ──────────────────────────
+
+describe('app-authorized replay — R12 a busy-shaped reply is never proof that nothing ran', () => {
+  /** A server that RAN the call, then answered with an error shaped like the platform's refusal. */
+  const ranThenAnswered = (message: string) => {
+    let ran = 0;
+    const endpoint = server(({ id }) => {
+      ran += 1;
+      return json({ jsonrpc: '2.0', id, error: { code: -32005, message } });
+    });
+    return { endpoint, ran: (): number => ran };
+  };
+
+  it('a tool declared as making changes, answered with the exact busy error after it ran: sent once, its effect unknown', async () => {
+    const { endpoint, ran } = ranThenAnswered('Session operation in progress, please retry');
+    const client = await agentCoreClientOver(endpoint, {
+      policy: STRICT,
+      tools: { search_tickets: { changes: true } },
+    });
+    try {
+      const evidence = evidenceIn(
+        await savedRun(agentCalling(await client.tools(), 'tc-write-once')),
+      );
+      expect(ran(), 'the guard held: one send').toBe(1);
+      expect(evidence.attempts).toEqual([
+        expect.objectContaining({ reason: 'changes-without-key', effect: 'unknown' }),
+      ]);
+      expect(evidence.attempts[0]).not.toHaveProperty('guarantee');
+      expect(evidence.end).toMatchObject({ effect: 'unknown', mayHaveRun: true });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("words that only contain the busy phrase: retried on the adapter's assumption, every attempt unknown", async () => {
+    const { endpoint, ran } = ranThenAnswered(
+      'No session operation in progress; the write succeeded but reporting failed',
+    );
+    const client = await agentCoreClientOver(endpoint, { policy: STRICT });
+    try {
+      const events = await savedRun(agentCalling(await client.tools(), 'tc-forged'));
+      const evidence = evidenceIn(events);
+      expect(ran()).toBe(3);
+      for (const row of evidence.attempts) {
+        expect(row.effect).toBe('unknown');
+        expect(row).not.toHaveProperty('guarantee');
+      }
+      // The repeat is the adapter's policy, and it says what it assumed.
+      expect(evidence.attempts[0]?.permission).toEqual({
+        by: 'adapter',
+        assumes: 'refused-before-execution',
+      });
+      expect(evidence.end).toMatchObject({ effect: 'unknown', mayHaveRun: true });
+      expect(String(toolEndOf(events)?.result)).toContain('is unknown');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('under compatibility the caller sees what it always did, and the record still says unknown', async () => {
+    const { endpoint } = ranThenAnswered('Session operation in progress, please retry');
+    const client = await agentCoreClientOver(endpoint);
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-compat')));
+      expect(evidence.end).toMatchObject({ outcome: 'refused', effect: 'unknown' });
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
+      const [tool] = await client.tools();
+      const failure = await (tool as Tool).execute({ q: 'printer' }, BARE).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── R13 retryOnThrottle: false turns off the 429 rule only ──────────
+
+describe('app-authorized replay — R13 `retryOnThrottle: false` turns off the 429 rule only', () => {
+  const replay: McpReplayOptions = {
+    policy: STRICT,
+    tools: { search_tickets: { on: ['network'] } },
+  };
+
+  /** What a declared network repeat leaves in the record, whatever the transport. */
+  const expectDeclaredRepeat = (events: readonly Row[]): void => {
+    const evidence = evidenceIn(events);
+    expect(evidence.attempts[0]).toMatchObject({
+      outcome: 'failed',
+      reason: 'retryable',
+      effect: 'unknown',
+      permission: { by: 'declaration', on: 'network' },
+    });
+    expect(evidence.end).toMatchObject({ outcome: 'answered', attempts: 2, effect: 'unknown' });
+    expect(toolEndOf(events)?.result).toBe('ticket-42');
+  };
+
+  it('plain http: a declared network repeat keeps its series, its budget and its record', async () => {
+    const endpoint = server(({ id, n }) => (n === 1 ? timedOut() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: false,
+      replay,
+    });
+    try {
+      expectDeclaredRepeat(await savedRun(agentCalling(await client.tools(), 'tc-http')));
+      expect(endpoint.calls()).toBe(2);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('gateway: the same, each attempt vended for the same identity', async () => {
+    const endpoint = server(({ id, n }) => (n === 1 ? timedOut() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: gatewayTransport({
+        url: URL_,
+        credentials: staticTokens({ gateway: 'TOKEN-GATEWAY' }),
+        fetch: endpoint.fetch,
+      }),
+      retryOnThrottle: false,
+      replay,
+    });
+    try {
+      expectDeclaredRepeat(await savedRun(agentCalling(await client.tools(), 'tc-gateway')));
+      expect(endpoint.calls()).toBe(2);
+      expect(endpoint.received.map((call) => call.headers.get('authorization'))).toEqual([
+        'Bearer TOKEN-GATEWAY',
+        'Bearer TOKEN-GATEWAY',
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('a 429 is then an answer — never repeated, whatever `on` says', async () => {
+    const endpoint = server(() => throttled());
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: false,
+      replay: { policy: STRICT, tools: { search_tickets: { on: ['throttle', 'network'] } } },
+    });
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-429')));
+      expect(endpoint.calls()).toBe(1);
+      expect(evidence.attempts).toEqual([
+        expect.objectContaining({ outcome: 'answered', status: 429, effect: 'unknown' }),
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('with nothing declared that needs one, there is no series — as before', async () => {
+    const endpoint = server(() => timedOut());
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: false,
+    });
+    try {
+      const events = await savedRun(agentCalling(await client.tools(), 'tc-off'));
+      expect(events.filter((e) => e.type === EVIDENCE)).toHaveLength(0);
+      expect(endpoint.calls()).toBe(1);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── R14 a single attempt of unknown effect ──────────────────────────
+
+describe('app-authorized replay — R14 a single attempt of unknown effect', () => {
+  /** How a direct call with no run fails. */
+  const failureOf = async (client: McpClient): Promise<unknown> => {
+    const [tool] = await client.tools();
+    return (tool as Tool).execute({ q: 'printer' }, BARE).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+  };
+
+  it('app-authorized: one timeout, nothing declared — "may have run", the timeout its cause', async () => {
+    const endpoint = server(() => timedOut());
+    const client = await clientOver(endpoint, { policy: STRICT });
+    try {
+      const events = await savedRun(agentCalling(await client.tools(), 'tc-once'));
+      const evidence = evidenceIn(events);
+      expect(endpoint.calls()).toBe(1);
+      expect(evidence.attempts).toEqual([
+        expect.objectContaining({ outcome: 'failed', reason: 'not-retryable', effect: 'unknown' }),
+      ]);
+      expect(evidence.end).toMatchObject({ attempts: 1, effect: 'unknown', mayHaveRun: true });
+      // The model reads "may have run" — never the bare timeout, which reads as "try again".
+      expect(String(toolEndOf(events)?.result)).toContain('is unknown');
+
+      const failure = await failureOf(client);
+      expect(failure).toBeInstanceOf(UnknownEffectError);
+      expect(((failure as UnknownEffectError).cause as Error).name).toBe('TimeoutError');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('app-authorized: a tool declared as making changes, one timeout — "may have run"', async () => {
+    const endpoint = server(() => timedOut());
+    const client = await clientOver(endpoint, {
+      policy: STRICT,
+      tools: { search_tickets: { changes: true } },
+    });
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-change')));
+      expect(evidence.end).toMatchObject({ effect: 'unknown', mayHaveRun: true });
+      expect(await failureOf(client)).toBeInstanceOf(UnknownEffectError);
+      expect(endpoint.calls(), 'two calls, one request each — never sent again').toBe(2);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('compatibility: the caller sees the timeout it always did; the record still says unknown', async () => {
+    const endpoint = server(() => timedOut());
+    const client = await clientOver(endpoint);
+    try {
+      const events = await savedRun(agentCalling(await client.tools(), 'tc-compat-once'));
+      const evidence = evidenceIn(events);
+      expect(evidence.end).toMatchObject({ attempts: 1, effect: 'unknown' });
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
+      expect(toolEndOf(events)?.result).toBe('The operation was aborted due to timeout');
+
+      const failure = await failureOf(client);
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+      expect((failure as Error).name).toBe('TimeoutError');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("an answer is delivered as it came: a single tool error under app-authorized is the tool's own", async () => {
+    const endpoint = server(({ id }) =>
+      json({
+        jsonrpc: '2.0',
+        id,
+        result: { isError: true, content: [{ type: 'text', text: 'ticket store is read-only' }] },
+      }),
+    );
+    const client = await clientOver(endpoint, { policy: STRICT });
+    try {
+      const evidence = evidenceIn(
+        await savedRun(agentCalling(await client.tools(), 'tc-tool-error')),
+      );
+      expect(evidence.attempts).toEqual([
+        expect.objectContaining({ outcome: 'answered', effect: 'unknown' }),
+      ]);
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
+      const failure = await failureOf(client);
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+      expect((failure as Error).message).toContain('ticket store is read-only');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('`applied` means the call completed — a reply that says it wrote nothing is still applied, never proof of a write', async () => {
+    const endpoint = server(({ id }) =>
+      json({
+        jsonrpc: '2.0',
+        id,
+        result: { content: [{ type: 'text', text: 'No write was made: already in that state.' }] },
+      }),
+    );
+    const client = await clientOver(endpoint, { policy: STRICT });
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-noop')));
+      expect(evidence.end).toMatchObject({ outcome: 'answered', effect: 'applied' });
+    } finally {
+      await client.close();
+    }
+  });
+});
+
 // ─── R9 the declaration, read once ───────────────────────────────────
 
 describe('app-authorized replay — R9 the declaration is read when the client is built', () => {
@@ -929,7 +1225,8 @@ describe('app-authorized replay — R10 the permission rule, as a table', () => 
   });
   const THROTTLE: MetFailure = { kind: 'throttle' };
   const NETWORK: MetFailure = { kind: 'network' };
-  const BUSY: MetFailure = { kind: 'session-busy', guarantee: 'agentcore-session-busy' };
+  const BUSY: MetFailure = { kind: 'session-busy', assumes: 'refused-before-execution' };
+  const ADAPTER = { by: 'adapter', assumes: 'refused-before-execution' } as const;
 
   it.each([
     [
@@ -948,7 +1245,7 @@ describe('app-authorized replay — R10 the permission rule, as a table', () => 
     ],
     ['strict, undeclared tool 429', declared, tool('other'), THROTTLE, 'not-permitted'],
     ['strict, undeclared network', declared, tool('other'), NETWORK, 'not-retryable'],
-    ['strict, documented refusal', declared, tool('other'), BUSY, { by: 'adapter' }],
+    ["strict, the adapter's refusal", declared, tool('other'), BUSY, ADAPTER],
     ['strict, changes, no key', declared, tool('write'), THROTTLE, 'changes-without-key'],
     [
       'strict, changes, key',
@@ -958,11 +1255,11 @@ describe('app-authorized replay — R10 the permission rule, as a table', () => 
       { by: 'declaration', on: 'throttle', deduplicated: true },
     ],
     [
-      'strict, changes, key, refusal',
+      "strict, changes, key, the adapter's refusal",
       declared,
       tool('write', true),
       BUSY,
-      { by: 'adapter', deduplicated: true },
+      { ...ADAPTER, deduplicated: true },
     ],
     [
       'compat, any 429',
@@ -979,7 +1276,7 @@ describe('app-authorized replay — R10 the permission rule, as a table', () => 
       THROTTLE,
       'changes-without-key',
     ],
-    ['compat, changes, documented refusal', compat, tool('write'), BUSY, 'changes-without-key'],
+    ["compat, changes, the adapter's refusal", compat, tool('write'), BUSY, 'changes-without-key'],
     ['protocol request, 429', declared, { kind: 'protocol' }, THROTTLE, 'repeat'],
     ['protocol request, network', declared, { kind: 'protocol' }, NETWORK, 'not-retryable'],
   ] as const)('%s', (_label, declaration, target, failure, expected) => {
@@ -1049,9 +1346,16 @@ describe('app-authorized replay — R10 the record door holds the new facts to t
     ['compatibility with no assumption', { permission: { by: 'compatibility' } }],
     ['a word outside the set', { permission: { by: 'model' } }],
     ['an effect outside the set', { effect: 'probably-fine' }],
-    ['a guarantee nobody documented', { effect: 'none', guarantee: 'vendor-says-so' }],
-    ['a flag that is not `true`', { permission: { by: 'adapter', deduplicated: 'yes' } }],
-    ['an extra field', { permission: { by: 'adapter', key: 'SECRET' } }],
+    ['a guarantee field — no reply is recorded as proof', { effect: 'none', guarantee: 'x' }],
+    ['an adapter repeat that does not say what it assumes', { permission: { by: 'adapter' } }],
+    [
+      'a flag that is not `true`',
+      { permission: { by: 'adapter', assumes: 'refused-before-execution', deduplicated: 'yes' } },
+    ],
+    [
+      'an extra field',
+      { permission: { by: 'adapter', assumes: 'refused-before-execution', key: 'SECRET' } },
+    ],
   ])('%s is refused whole', (_label, extra) => {
     expect(servedRequestEvidence(row(extra))).toBeUndefined();
   });

@@ -682,13 +682,14 @@ describe('saved retry evidence — S8 a transport that retries its own refusal f
         [2, 'refused', 'session-busy', 10],
         [3, 'answered', undefined, undefined],
       ]);
-      // E3: two documented pre-execution refusals (`none`), then an answer: it ran once.
+      // E3: the adapter retried two busy replies on its assumption — never proof
+      // that they ran nothing — so the series' effect stays unknown.
       expect(evidence.end).toEqual({
         outcome: 'answered',
         reason: 'answered',
         status: 200,
         attempts: 3,
-        effect: 'applied',
+        effect: 'unknown',
       });
       expect(JSON.stringify(evidence)).not.toContain('TOKEN-SECRET');
       expectEveryRequestCounted(evidence, endpoint.toolCalls());

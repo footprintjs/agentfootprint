@@ -116,26 +116,34 @@ and its category, never the thrown error's text. See `seriesEvidence.ts`.
 **The rule.** Permission to repeat is the APP's, declared per (server, tool) when
 the client is built — never the model's, a tool description's or a server
 annotation's (`readOnlyHint`). What is known of an attempt's effect comes only
-from the record and a documented service guarantee. Each attempt records three
-facts apart, none read from another: its `failure` (footprintjs's category), its
-`effect` (`none` | `unknown` | `applied`, footprintjs's effect law), and — when
-another attempt followed — the `permission` that allowed it.
+from the record and an established service guarantee — and no reply is one.
+Each attempt records three facts apart, none read from another: its `failure`
+(footprintjs's category), its `effect` (`none` | `unknown` | `applied`,
+footprintjs's effect law), and — when another attempt followed — the
+`permission` that allowed it.
 
 **Why.** A generic 429 does not prove non-execution: RFC 6585 §4 defines it as
 rate limiting, and `Retry-After` says when to ask again, not that asking is safe.
 A vendor's SDK may retry its own 429s because the vendor documents its own
-service; a generic MCP client cannot assume that of an arbitrary server. So:
+service; a generic MCP client cannot assume that of an arbitrary server. Nor is
+AgentCore's session-busy body proof: AWS documents a retryable conflict while a
+session starts or stops, and the body is matched by its code and words, which a
+server behind the runtime can send after it ran the call. So every attempt that
+was sent and did not complete is `unknown`, and `none` is only a request never
+sent:
 
 | Situation | Sent again automatically? | Recorded |
 |---|---|---|
-| A documented pre-execution refusal from the adapter you chose (AgentCore's session-busy) | Yes, within the budget | `effect: 'none'`, `guarantee: 'agentcore-session-busy'`, `permission: { by: 'adapter' }` |
+| The adapter you chose retries its own refusal (AgentCore's session-busy) | Yes, within the budget — the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
 | Any other server, and your declaration names `throttle` for the tool | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on: 'throttle' }` |
 | Any other server, no declaration, `policy: 'app-authorized'` | No — the refusal is returned | `reason: 'not-permitted'` |
 | Any other server, no declaration, `policy: 'compatibility'` (the 11.x default) | Yes — today's behaviour | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
 
 A request that failed in transport without an answer (footprintjs's `network`: a
 lost connection, a timeout below the series) is sent again only when the entry
-names `network`. A 5xx is an answer and never is. **The side-effect guard** holds
+names `network`. A 5xx is an answer and never is. `retryOnThrottle: false` turns
+off the 429 rule and nothing else: a declared `network` repeat (and the strict
+policy's record) keeps its series, with the default budget. **The side-effect guard** holds
 under every policy: a tool declared `changes: true` is never sent again unless the
 server is declared to deduplicate (`deduplicates`) and the call carries the key —
 and a key protects only when the server uses it. A repeat re-sends the SAME
@@ -145,16 +153,18 @@ vended afresh for each attempt, for that identity). The protocol's own requests
 
 **Uncertainty survives** (`SeriesKnowledge`). The `end` says how many requests
 were sent (`attempts`) and what is known of the whole series: once any attempt is
-`unknown`, so is the series — a later proven refusal does not resolve it, and a
-later success does not prove the operation happened once. `applied` means the
-call completed (the server answered, not with an error), never that anything was
+`unknown`, so is the series — a later refusal does not resolve it, and a later
+success does not prove the operation happened once. `applied` means the call
+completed (the server answered, not with an error), never that anything was
 written; an answered attempt's effect comes from the call's verdict, so a ticketed
-request files when its call settles (or at once, when cancelled). After a repeat
-that followed an attempt of unknown effect, on a declaration's or an adapter's
-permission, a call that does not complete fails as "may have run" — footprintjs's
-`UnknownEffectError`, its own error as the `cause` (`callLifetime.ts`), and the
-`end` says `mayHaveRun: true`. The compatibility policy's assumed 429s do not
-raise it: that policy keeps today's behaviour, and its record names the assumption.
+request files when its call settles (or at once, when cancelled). Under
+`'app-authorized'`, footprintjs's law: when an attempt ended without an answer and
+its effect is unknown — a single one is enough — a call that does not complete
+fails as "may have run": `UnknownEffectError`, its own error as the `cause`
+(`callLifetime.ts`), and the `end` says `mayHaveRun: true`. An answer the server
+gave (a 5xx, a tool error) after no such attempt is delivered as it came. Under
+`'compatibility'` the caller sees the error it always did; the record still says
+the effect is unknown and names the policy's assumption.
 
 ```ts
 const orders = await mcpClient({

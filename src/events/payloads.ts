@@ -2507,28 +2507,19 @@ export type ToolRequestRefusalKind = 'throttle' | 'session-busy';
  * What is known about whether an attempt took effect on the server —
  * footprintjs's effect law (`AttemptEffect`), read for an MCP request:
  *
- *   - `'none'` — it ran nothing, and a documented guarantee says so
- *     (`guarantee`). Only a refusal an adapter documents as made before the
- *     request reached the server earns it.
- *   - `'unknown'` — anything else that did not complete: a 429 (it says the
- *     request was rate-limited, not that nothing ran), a lost connection or a
- *     timeout after the request was sent, a cut, a 5xx, a JSON-RPC error, a
- *     tool error (one can follow a write that succeeded).
+ *   - `'none'` — it ran nothing, and that is established: the request was
+ *     never sent (an `end` whose `attempts` is `0`). No reply establishes it.
+ *     A 429 says the request was rate-limited, and AgentCore's session-busy
+ *     body is matched by its code and words — a server behind the runtime can
+ *     answer with the same error after it ran the call.
+ *   - `'unknown'` — anything sent that did not complete: a 429, a session-busy
+ *     reply, a lost connection or a timeout after the request was sent, a cut,
+ *     a 5xx, a JSON-RPC error, a tool error (one can follow a write that
+ *     succeeded).
  *   - `'applied'` — the call completed: the server answered it, and not with
- *     an error. It is not proof that anything was written.
+ *     an error. It is never proof that anything was written.
  */
 export type ToolRequestEffect = 'none' | 'unknown' | 'applied';
-
-/**
- * The documented guarantee an `effect: 'none'` rests on.
- *
- *   - `'agentcore-session-busy'` — AgentCore Runtime refuses a request with
- *     "Session operation in progress" while it is provisioning or tearing down
- *     the session it targets (its MCP protocol contract, "Error handling"; the
- *     API reference's `RetryableConflictException`): the request did not reach
- *     the MCP server.
- */
-export type ToolRequestGuarantee = 'agentcore-session-busy';
 
 /** The failure kinds the app may declare a tool repeatable on (`replay.tools[name].on`). */
 export type ToolRequestReplayKind = 'throttle' | 'network';
@@ -2540,18 +2531,22 @@ export type ToolRequestReplayKind = 'throttle' | 'network';
  *
  *   - `by: 'declaration'` — the app's entry for this tool names the failure
  *     kind (`on`).
- *   - `by: 'adapter'` — a refusal the adapter the app chose documents as made
- *     before anything ran (the row's `guarantee`).
+ *   - `by: 'adapter'` — the adapter the app chose retries this refusal as its
+ *     own policy: AgentCore Runtime's session-busy reply, which AWS documents
+ *     as a retryable conflict while a session starts or stops. It says what
+ *     it assumes in doing so (`assumes`).
  *   - `by: 'compatibility'` — the compatibility policy, today's default: it
- *     repeats a 429 for every tool, and it says what it assumes in doing so
- *     (`assumes`). The assumption is never evidence: the row's `effect` stays
- *     `'unknown'`.
+ *     repeats a 429 for every tool, and says what it assumes in doing so
+ *     (`assumes`).
+ *
+ * An assumption is a policy, never evidence: the row's `effect` stays
+ * `'unknown'`.
  */
 export interface ToolRequestPermission {
   readonly by: 'declaration' | 'adapter' | 'compatibility';
   /** `declaration` only — the failure kind the app's entry names. */
   readonly on?: ToolRequestReplayKind;
-  /** `compatibility` only — what the policy assumes of a 429. */
+  /** `adapter` and `compatibility` only — what the policy assumes of the refusal it repeats. */
   readonly assumes?: 'refused-before-execution';
   /**
    * The app declared this tool as making changes, so it was asked again only
@@ -2626,8 +2621,6 @@ export interface ToolRequestAttempt {
    * {@link ToolRequestEffect}). On every attempt the library files.
    */
   readonly effect?: ToolRequestEffect;
-  /** The documented guarantee behind `effect: 'none'` — present exactly then. */
-  readonly guarantee?: ToolRequestGuarantee;
   /** What allowed the next attempt — present exactly when `reason` is `'retryable'`. */
   readonly permission?: ToolRequestPermission;
   /** How long the attempt took, in ms, from sending to its end. On every attempt the library files. */
@@ -2679,9 +2672,11 @@ export interface ToolRequestEnd {
   readonly effect?: ToolRequestEffect;
   /**
    * The call failed as "may have run" (footprintjs's `UnknownEffectError`, the
-   * call's own error as its `cause`): the series asked again after an attempt
-   * whose effect is unknown, on the app's or an adapter's permission, and the
-   * call did not complete.
+   * call's own error as its `cause`): under the `'app-authorized'` policy, an
+   * attempt ended without an answer and its effect is unknown, and the call
+   * did not complete. A single such attempt is enough. Under
+   * `'compatibility'` the caller sees the error it always did, and this is
+   * absent.
    */
   readonly mayHaveRun?: true;
 }

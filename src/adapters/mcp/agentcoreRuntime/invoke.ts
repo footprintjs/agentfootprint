@@ -33,12 +33,13 @@
  * ── The SDK's own retry is OFF ───────────────────────────────────────────────
  * The client built here has `maxAttempts: 1`. The SDK's standard policy would
  * re-send a `tools/call` after a 5xx or a dropped connection — a call that may
- * already have run, in the same pinned session — which is the one thing a retry
- * here must never do. Every retry goes through the transport's single loop
- * instead, which repeats only the refusals its retry policy recognises: the
- * documented session-busy reply, and a 429 (assumed, not proven, to have run
- * nothing — see `mcp/throttleRetry.ts`). A `client` you pass keeps ITS policy: build it with
- * `maxAttempts: 1` for the same guarantee.
+ * already have run, in the same pinned session — which a retry here must never
+ * do on its own. Every retry goes through the transport's single loop instead,
+ * which repeats only what the replay rule permits (`mcp/replay.ts`): the
+ * refusals its retry policy recognises — the session-busy reply and a 429, each
+ * assumed, not proven, to have run nothing — and a dropped connection only when
+ * the app declared that for the tool. A `client` you pass keeps ITS policy:
+ * build it with `maxAttempts: 1` for the same guarantee.
  *
  * ── A service exception is an ANSWER ─────────────────────────────────────────
  * When the service answers with a non-2xx status, the SDK throws instead of

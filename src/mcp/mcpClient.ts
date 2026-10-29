@@ -59,10 +59,21 @@ import type {
 import { callMetaOf, readToolExtras } from './toolExtras.js';
 import { isToolError, readToolResult, resultModeOf } from './toolResult.js';
 import { createVendingFetch } from './gatewayTransport.js';
-import { ledgeredFetch, retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
+import {
+  ledgeredFetch,
+  retryingFetch,
+  seriesWithoutThrottle,
+  type RetryOnThrottle,
+  type ThrottleFetch,
+} from './throttleRetry.js';
 import { RequestLedger } from './requestLedger.js';
 import { openCall } from './callLifetime.js';
-import { replayDeclarationOf, type CallVerdict, type ReplayDeclaration } from './replay.js';
+import {
+  needsSeries,
+  replayDeclarationOf,
+  type CallVerdict,
+  type ReplayDeclaration,
+} from './replay.js';
 import { refuseConflictingOptions } from './connectionRefusals.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { transportUrl } from './transportUrl.js';
@@ -332,8 +343,16 @@ async function buildTransport(
   // sends files its attempts into that call's run; the transport's `send` is
   // watched to bind each request to its call (`requestLedger.ts`). The app's
   // replay declaration joins with it: the series asks it before sending a tool
-  // call again (`replay.ts`). A fetch that runs no series (retry off) gets
-  // neither: there is nothing to file and nothing is sent again.
+  // call again (`replay.ts`). `retryOnThrottle: false` turns off the 429 rule
+  // and nothing else: when the declaration still needs a series — a tool
+  // declared repeatable on 'network', or the 'app-authorized' policy — the
+  // series stays, with that rule switched off (`seriesWithoutThrottle`).
+  // Otherwise a fetch that runs no series gets neither ledger nor declaration:
+  // there is nothing to file and nothing is sent again.
+  const retried = (inner: ThrottleFetch | undefined): ThrottleFetch | undefined =>
+    retryOnThrottle === false && replay !== undefined && needsSeries(replay)
+      ? seriesWithoutThrottle(inner)
+      : retryingFetch(inner, retryOnThrottle);
   const ledger = new RequestLedger();
   if (t.transport === 'gateway') {
     // The consumer's own `fetch` (9.32.0) goes UNDERNEATH the vending, not
@@ -343,7 +362,7 @@ async function buildTransport(
     // credential is still vended per request. Passing `undefined` is the
     // default global `fetch`, which is byte-identical to every release before
     // the seam existed.
-    const gatewayFetch = retryingFetch(createVendingFetch(t, t.fetch), retryOnThrottle);
+    const gatewayFetch = retried(createVendingFetch(t, t.fetch));
     const ledgered = gatewayFetch && ledgeredFetch(gatewayFetch, ledger, replay);
     return watched(
       new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
@@ -356,7 +375,7 @@ async function buildTransport(
   // are given. The SDK folds `requestInit.headers` into the `init.headers` it
   // hands the custom fetch, so a signer sees the static headers and has the
   // final word over the bytes — see `McpHttpTransport.fetch`.
-  const httpFetch = retryingFetch(t.fetch, retryOnThrottle);
+  const httpFetch = retried(t.fetch);
   const ledgered = httpFetch && ledgeredFetch(httpFetch, ledger, replay);
   const fetch = ledgered ?? httpFetch;
   return watched(

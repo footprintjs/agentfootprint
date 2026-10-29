@@ -17,19 +17,22 @@
  * it reaches the model as a failed tool call, a moment after the session it was
  * waiting for came up.
  *
- * ── Why asking again is safe: the documented guarantee ───────────────────────
+ * ── What asking again relies on ──────────────────────────────────────────────
  * AWS's contract returns this refusal while the service is provisioning or
- * tearing down the session the request targets: the PLATFORM's answer, about
- * the session, not the MCP server's — the request did not reach the server, so
- * nothing ran. That documented guarantee, cited in
- * {@link SESSION_BUSY_DOCUMENTATION}, is what the series records of each such
- * attempt — `effect: 'none'`, `guarantee: 'agentcore-session-busy'`
- * ({@link SESSION_BUSY_GUARANTEE}) — and why the adapter's selection is
- * permission enough to ask again (`mcp/replay.ts`). A 429 has no such
- * guarantee: its effect stays unknown. The HTTP 200 form is matched by code
- * and message, so a server behind the runtime that answered with this same
- * error itself would be read as the platform's refusal; the 409 form carries
- * the platform's own `x-amzn-errortype`.
+ * tearing down the session: the PLATFORM's answer, about the session, not the
+ * MCP server's. The retry series relies on that, as it relies on a 429 being a
+ * rejection before execution: an assumption with a basis, not proof that
+ * nothing ran (see `mcp/throttleRetry.ts` · `RetryDecision`). The adapter
+ * retries it as its OWN policy ({@link SESSION_BUSY_ASSUMES}): each repeat
+ * records that assumption (`permission: { by: 'adapter', assumes }`), and every
+ * attempt's effect stays `unknown` (`mcp/replay.ts`).
+ *
+ * ── The known limit ──────────────────────────────────────────────────────────
+ * The HTTP 200 form is matched by its code and message, so a server behind the
+ * runtime can raise the same error itself — after it ran the call — and the
+ * match cannot tell the two apart. Neither AWS page says a matching body ran
+ * nothing. That is why the record never says so; the 409 form carries the
+ * platform's own `x-amzn-errortype`.
  *
  * ── What it must NOT match ───────────────────────────────────────────────────
  * `ConflictException` shares the code -32005 ("Resource conflict - Resource
@@ -50,18 +53,21 @@
  */
 
 import { bodyChunks } from '../../../lib/abort.js';
-import type { ToolRequestGuarantee } from '../../../events/payloads.js';
 import type { RetryVerdict } from '../../../mcp/throttleRetry.js';
 import { awsErrorType } from './errorType.js';
 
 /**
- * The guarantee this refusal's records name: the request ran nothing.
- * Attached to the session-busy retry rule (`transport.ts`).
+ * What the adapter assumes in retrying this refusal as its own policy: that
+ * the platform refused the request before running it. Attached to the
+ * session-busy retry rule (`transport.ts`) and recorded beside each repeat —
+ * an assumption, never evidence.
  */
-export const SESSION_BUSY_GUARANTEE: ToolRequestGuarantee = 'agentcore-session-busy';
+export const SESSION_BUSY_ASSUMES = 'refused-before-execution' as const;
 
 /**
- * Where AgentCore documents the refusal this file recognises, in both forms:
+ * Where AgentCore documents the refusal this file recognises, in both forms —
+ * the basis of the adapter's retry policy. Neither page says that a matching
+ * reply ran nothing, so the record never does:
  *
  *   1. The AgentCore Runtime MCP protocol contract, "Error handling": the row
  *      `-32005 · RetryableConflictException · HTTP 200 · "Session operation in

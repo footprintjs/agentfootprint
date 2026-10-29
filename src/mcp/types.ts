@@ -228,8 +228,9 @@ export interface McpClientOptions {
    * §4) — and every such repeat records that assumption. A tool you declare as
    * making changes is never repeated without a deduplication key, and
    * `'app-authorized'` repeats only what you declare. `retryOnThrottle: false`
-   * turns 429 retries off for this server. A 5xx is an answer and is never
-   * repeated.
+   * turns 429 retries off for this server, and nothing else: a tool declared
+   * repeatable on `'network'`, and the `'app-authorized'` policy, keep their
+   * series and their record. A 5xx is an answer and is never repeated.
    *
    * **Why this is on by default.** Managed gateways rate-limit per principal by
    * design, and without this a designed, self-clearing condition reached the
@@ -270,14 +271,18 @@ export interface McpClientOptions {
    *     automatically, under either policy, unless `deduplicates` is declared
    *     and the call carries the key. A key protects only when the server uses it.
    *
-   * Under both policies a documented pre-execution refusal from the adapter
-   * you chose — AgentCore Runtime's session-busy reply — is sent again within
-   * the budget. A repeat re-sends the SAME request: the same arguments, server
-   * and session, as the same identity. Each attempt's run record says what is
-   * known of its effect (`none`, `unknown`, `applied`) and what permitted the
-   * next one; a call that does not complete after a repeat that followed an
-   * attempt of unknown effect fails as "may have run" (footprintjs's
-   * `UnknownEffectError`). Ignored for `stdio`, which has no retry series.
+   * Under both policies the adapter you chose retries its own refusal —
+   * AgentCore Runtime's session-busy reply — within the budget, as its policy:
+   * each repeat records what it assumes, never proof that nothing ran. A
+   * repeat re-sends the SAME request: the same arguments, server and session,
+   * as the same identity. Each attempt's run record says what is known of its
+   * effect — `unknown` for anything sent that did not complete, `applied` when
+   * the call completed (never proof of a write) — and what permitted the next
+   * one. Under `'app-authorized'`, a call that does not complete after any
+   * attempt that ended without an answer, its effect unknown, fails as "may
+   * have run" (footprintjs's `UnknownEffectError`); under `'compatibility'`
+   * the caller sees the error it always did. Ignored for `stdio`, which has no
+   * retry series.
    */
   readonly replay?: McpReplayOptions;
 
