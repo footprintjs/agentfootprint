@@ -149,8 +149,10 @@ asks about.
 
 The wrong readings, by phrase:
 
-- H23 "memory per node over the last 2 hours, restricted to backup runs" — every reader with
-  the scan. A condition with no time word in it. No word scan can see it.
+- H23 "memory per node over the last 2 hours, restricted to backup runs" — Recognizers,
+  englishTimeReader and the library grammar, each behind the scan. A condition with no time
+  word in it. No word scan can see it. chrono and Duckling asked, as they do for almost
+  every lookback.
 - H16 "memory per node in the last 2 hours of the outage" — the host app rule. The lookback is
   anchored on an event.
 - H31 "CPU per node over the last 2 hours, maybe a little more" — the host app rule. An

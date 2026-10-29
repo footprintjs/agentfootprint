@@ -77,7 +77,7 @@ That guard cannot be finished:
   wrong. On 80 phrases it had never seen, it read 3 wrong: an event anchor ("of the outage"),
   an approximation after a comma ("maybe a little more"), and a condition with no time word.
 - **No word list sees a condition with no time word.** "restricted to backup runs" has none.
-  Every reader we measured read the 2 hours.
+  Every reader that can read a lookback read the 2 hours, even behind the scan.
 - **A list passes the corpus it was tuned on, by construction.** Its own tests cannot show it
   is right.
 - **Every app writes it again.** Two owners of one grammar drift. That is the time layer's
@@ -166,7 +166,7 @@ a model proves nothing on its own.
   the person's words (verbatim quote, grammar agreement) and the declared shapes (§ 7.4).
 - *Tested by:* a property test that every span slices back to its quote; the shared corpus
   (§ 13) asserting the leftover classes per phrase; a fixture model reader that invents a
-  quote, a value and a missing leftover, each refused.
+  quote, misstates a value, or leaves out a restriction, each one caught.
 
 **R2. Supported shapes.** Tools declare the time shapes they support. An unsupported or
 ambiguous request is clarified before any read.
@@ -518,8 +518,8 @@ What the middleware does today, and where each part goes:
    of the grammar's unnecessary clarifications on the blind set. Recommended: keep asking in
    v1; add a cadence shape when a tool declares a step argument.
 3. **A condition with no time word** ("restricted to backup runs") is read wrong by every
-   reader. Recommended: accept it as a known limit, covered by the window line (§ 9), and
-   measure a model proposal on it later with the owner's go.
+   reader that can read a lookback. Recommended: accept it as a known limit, covered by the
+   window line (§ 9), and measure a model proposal on it later with the owner's go.
 4. **Recognizers-Text as an optional adapter** (§ 7.2)? Recommended: not in v1.
 5. **`shapes` absent:** derive it from `forms`, byte-identical to today? Recommended: yes.
 6. **`how: 'default'` on the `call-window` row** (§ 9)? Recommended: yes. It changes the
