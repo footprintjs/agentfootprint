@@ -19,8 +19,9 @@
  *                  as the server sent it — a received refusal is an answer
  *   R4  Scenario — a generic 429 the app permitted: sent again, effects
  *                  unknown; when the budget is spent, the 429 as it came
- *   R5  Scenario — the compatibility policy (the default): every retry records
- *                  the assumption; what the caller sees is unchanged
+ *   R5  Scenario — the compatibility policy (the default: no `replay`, or a
+ *                  declaration without `policy`): every retry records the
+ *                  assumption; what the caller sees is unchanged
  *   R6  Security — the side-effect guard: a tool that makes changes is never
  *                  sent again without a key the server deduplicates by
  *   R7  Security — permission never comes from a description, annotations, a
@@ -52,6 +53,14 @@
  *                  params is matched by the marker; compatibility is unchanged
  *   R18 Boundary — an unanswered watch never outlives its call: repeated
  *                  timeouts, cancellations and a close leave nothing behind
+ *   R19 Security — the default stays compatibility in 12.0, and an explicit
+ *                  `'app-authorized'` never falls back: with no policy written,
+ *                  every connection strict refuses sends and is answered;
+ *                  with strict written, the same connections refuse every
+ *                  call before sending, a match lost after a matched call is
+ *                  refused and never sent again, and over a real stdio pipe
+ *                  the connection and the tool listing run while no
+ *                  `tools/call` is sent
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -87,6 +96,7 @@ import type {
   ToolRequestEffect,
   ToolsRequestAttemptsPayload,
 } from '../../src/events/payloads.js';
+import { bundleEntry, REAL_TRANSPORT_TIMEOUT, REPO_ROOT } from './realTransportSupport.js';
 
 const URL_ = 'http://mcp.example.test/mcp';
 const EVIDENCE = 'agentfootprint.tools.request_attempts';
@@ -569,6 +579,7 @@ describe('app-authorized replay — R4 a generic 429 the app permitted', () => {
 describe('app-authorized replay — R5 the compatibility policy records its assumption', () => {
   for (const [named, replay] of [
     ['the default (no `replay`)', undefined],
+    ['the default (a declaration without `policy`)', { tools: { search_tickets: {} } }],
     ["`policy: 'compatibility'`, by name", { policy: 'compatibility' }],
   ] as const) {
     it(`${named}: each retry's decision names the assumption, and the effect stays unknown`, async () => {
@@ -1396,12 +1407,22 @@ function over(
   policy: McpReplayPolicy,
   Transport: typeof StreamableHTTPClientTransport = StreamableHTTPClientTransport,
 ): Promise<McpClient> {
+  return overWith(endpoint, SdkClient, { policy }, Transport);
+}
+
+/** The same, with a whole replay declaration — or none at all (`undefined`). */
+function overWith(
+  endpoint: Endpoint,
+  SdkClient: typeof Client,
+  replay: McpReplayOptions | undefined,
+  Transport: typeof StreamableHTTPClientTransport = StreamableHTTPClientTransport,
+): Promise<McpClient> {
   return mcpClient({
     name: 'tickets',
     sdk: { Client: SdkClient, StreamableHTTPClientTransport: Transport } as unknown as McpSdk,
     transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
     retryOnThrottle: { baseDelayMs: 1, jitter: 'none' },
-    replay: { policy },
+    ...(replay !== undefined && { replay }),
   });
 }
 
@@ -1758,6 +1779,200 @@ function answeredLater(answer: (id: unknown) => unknown) {
   };
   return { fetch, calls: (): number => calls };
 }
+
+// ─── R19 the default stays compatibility; explicit strict never falls back ──
+
+/**
+ * Keeps its call's marker on the FIRST call, then rebuilds the params without
+ * `_meta`: the connection initialized and proved the match, then lost it.
+ */
+class LaterRebuildingClient extends QuickClient {
+  #calls = 0;
+
+  override callTool(...[params, schema, options]: CallToolArgs) {
+    this.#calls += 1;
+    if (this.#calls === 1) return super.callTool(params, schema, options);
+    return super.callTool({ name: params.name, arguments: params.arguments }, schema, options);
+  }
+}
+
+/** The real SDK client, noting the method of every request it asks of the server. */
+function notingClient(asked: string[]): typeof Client {
+  return class NotingClient extends Client {
+    override request<T extends Parameters<Client['request']>[1]>(
+      request: Parameters<Client['request']>[0],
+      resultSchema: T,
+      options?: Parameters<Client['request']>[2],
+    ) {
+      asked.push(request.method);
+      return super.request(request, resultSchema, options);
+    }
+  };
+}
+
+/** Each connection an explicit `'app-authorized'` refuses, and the reason it gives. */
+const UNSUPPORTED = [
+  [
+    "an SDK whose connect replaces the transport's handler",
+    ReplacingClient,
+    StreamableHTTPClientTransport,
+    'answers-unobserved',
+  ],
+  [
+    'an SDK that rebuilds the params without `_meta`',
+    RebuildingClient,
+    StreamableHTTPClientTransport,
+    'request-unmatched',
+  ],
+  [
+    'a transport whose requests cannot be watched',
+    QuickClient,
+    SealedTransport,
+    'requests-unwatched',
+  ],
+] as const;
+
+/** Strict, with every repeat this suite can provoke declared for the one tool. */
+const STRICT_REPEATING: McpReplayOptions = {
+  policy: STRICT,
+  tools: { search_tickets: { on: ['throttle', 'network'] } },
+};
+
+describe('app-authorized replay — R19 the default stays compatibility; explicit strict never falls back', () => {
+  it('the reader: no `replay`, and a declaration without `policy`, are compatibility; a written policy is kept', () => {
+    expect(replayDeclarationOf(undefined, 'test')).toBe(COMPATIBILITY);
+    expect(replayDeclarationOf({ tools: { search_tickets: {} } }, 'test').policy).toBe(
+      'compatibility',
+    );
+    expect(replayDeclarationOf({ policy: 'compatibility' }, 'test').policy).toBe('compatibility');
+    expect(replayDeclarationOf(STRICT_REPEATING, 'test').policy).toBe(STRICT);
+  });
+
+  describe.each(UNSUPPORTED)('%s', (_label, SdkClient, Transport, reason) => {
+    it.each([
+      ['no `replay`', undefined],
+      ['a declaration without `policy`', { tools: { search_tickets: { on: ['network'] } } }],
+      ["`policy: 'compatibility'`", { policy: 'compatibility' }],
+    ] as const)('%s: the call is sent and answered, never refused', async (_named, replay) => {
+      const endpoint = server(({ id }) => answered(id));
+      const client = await overWith(endpoint, SdkClient, replay, Transport);
+      try {
+        expect(await outcomeOf(client)).toBe('ticket-42');
+        expect(endpoint.calls()).toBe(1);
+      } finally {
+        await client.close();
+      }
+    });
+
+    it(`explicit 'app-authorized', repeats declared: every call is refused before sending (\`${reason}\`), never sent as compatibility`, async () => {
+      const endpoint = server(({ id }) => answered(id));
+      const client = await overWith(endpoint, SdkClient, STRICT_REPEATING, Transport);
+      try {
+        for (let call = 1; call <= 2; call += 1) {
+          const failure = await outcomeOf(client);
+          expect(failure, `call ${call}`).toBeInstanceOf(McpReplayUnavailableError);
+          expect(failure).toMatchObject({ reason, sent: false, tool: 'search_tickets' });
+        }
+        expect(endpoint.calls(), 'no tool request reached the server').toBe(0);
+      } finally {
+        await client.close();
+      }
+    });
+  });
+
+  it('the match lost after initialization, and after a matched call: refused (`request-unmatched`), never sent as compatibility, never sent again', async () => {
+    const endpoint = server(({ id }) => answered(id));
+    const client = await overWith(endpoint, LaterRebuildingClient, STRICT_REPEATING);
+    try {
+      expect(await outcomeOf(client), 'the first call is matched and answered').toBe('ticket-42');
+      for (let call = 2; call <= 3; call += 1) {
+        const failure = await outcomeOf(client);
+        expect(failure, `call ${call}`).toBeInstanceOf(McpReplayUnavailableError);
+        expect(failure).toMatchObject({
+          reason: 'request-unmatched',
+          sent: false,
+          tool: 'search_tickets',
+        });
+      }
+      expect(endpoint.calls(), 'only the matched request reached the server').toBe(1);
+    } finally {
+      await client.close();
+    }
+    // With no policy written, the same SDK sends every call, matched or not.
+    const lenient = server(({ id }) => answered(id));
+    const compatible = await overWith(lenient, LaterRebuildingClient, undefined);
+    try {
+      for (let call = 1; call <= 3; call += 1) {
+        expect(await outcomeOf(compatible), `call ${call}`).toBe('ticket-42');
+      }
+      expect(lenient.calls()).toBe(3);
+    } finally {
+      await compatible.close();
+    }
+  });
+
+  it(
+    'a real stdio pipe: strict connects and lists the tools, then refuses each tool invocation before its request is sent (`requests-unwatched`); with no policy, or compatibility, the tool is called',
+    async () => {
+      const entry = await bundleEntry(
+        'test/mcp/fixtures/stdioServerEntry.ts',
+        'stdio-server-entry-replay.cjs',
+      );
+      const open = (asked: string[], replay?: McpReplayOptions): Promise<McpClient> =>
+        mcpClient({
+          name: 'support-desk',
+          sdk: { Client: notingClient(asked) } as unknown as McpSdk,
+          transport: {
+            transport: 'stdio',
+            command: process.execPath,
+            args: [entry],
+            cwd: REPO_ROOT,
+          },
+          ...(replay !== undefined && { replay }),
+        });
+
+      for (const replay of [undefined, { policy: 'compatibility' } as const]) {
+        const asked: string[] = [];
+        const client = await open(asked, replay);
+        try {
+          const [echo] = await client.tools();
+          expect(await (echo as Tool).execute({ text: 'round trip' }, BARE)).toBe(
+            'echo: round trip',
+          );
+          expect(asked.filter((method) => method === 'tools/call')).toHaveLength(1);
+        } finally {
+          await client.close();
+        }
+      }
+
+      const asked: string[] = [];
+      const strict = await open(asked, { policy: STRICT });
+      try {
+        const tools = await strict.tools();
+        expect(tools.map((t) => t.schema.name)).toEqual(['echo', 'delete_account']);
+        const failure = await (tools[0] as Tool).execute({ text: 'round trip' }, BARE).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(failure).toBeInstanceOf(McpReplayUnavailableError);
+        expect(failure).toMatchObject({
+          reason: 'requests-unwatched',
+          sent: false,
+          server: 'support-desk',
+          tool: 'echo',
+        });
+        // `sent: false` speaks of that tool request alone: the connection
+        // initialized and listed its tools before it.
+        expect(asked).toContain('initialize');
+        expect(asked).toContain('tools/list');
+        expect(asked, 'no tools/call was sent').not.toContain('tools/call');
+      } finally {
+        await strict.close();
+      }
+    },
+    REAL_TRANSPORT_TIMEOUT,
+  );
+});
 
 // ─── R9 the declaration, read once ───────────────────────────────────
 

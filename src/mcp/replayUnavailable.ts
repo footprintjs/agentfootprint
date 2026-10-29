@@ -1,6 +1,7 @@
 /**
  * replayUnavailable — when a connection cannot keep the `'app-authorized'`
- * contract, a call under it is refused BEFORE it is sent, and the error says why.
+ * contract, a tool call under it is refused BEFORE its request is sent, and the
+ * error says why.
  *
  * Pattern: a readiness rule + one typed refusal.
  * Role:    Under `'app-authorized'`, a call that genuinely lacked an answer and
@@ -14,18 +15,25 @@
  *        `send` at all (stdio, or a transport that refuses the wrap).
  *      - `'request-unmatched'`: a request reached `send` without its call's
  *        marker (an SDK that rebuilt the params and dropped `_meta`), so it
- *        cannot be tied to any call.
+ *        cannot be tied to any call. Checked on every `tools/call`, so a match
+ *        lost after the connection initialized is refused too.
  *   2. ITS ANSWER IS SEEN: the JSON-RPC response to the request's id, read as
  *      it arrives. This is checked once the connection is initialized: the
  *      `initialize` answer must have passed the library's observer.
  *      - `'answers-unobserved'`: it did not. An MCP SDK whose `connect`
  *        REPLACES the transport's `onmessage` handler instead of keeping it
- *        (SDK 1.10's `Protocol.connect` does) leaves the observer out.
+ *        leaves the observer out. SDK 1.10's `Protocol.connect` does, when
+ *        run; reading the source finds the same through 1.13. The rule tests
+ *        the behaviour, never a version number.
  *
  * Without either, a request the server accepted and never answered would reach
  * the caller as a plain timeout: the strict contract, silently weakened. So the
- * call is refused instead, and nothing is sent. `'compatibility'` asks none of
- * this and keeps its behaviour.
+ * tool call is refused instead, and its request is not sent. Only tool
+ * invocations (`tools/call`) are refused: connecting (`initialize`) and listing
+ * tools ran before them and may already have reached the server (on `stdio`,
+ * the server process has started). The policy never falls back to
+ * `'compatibility'`, and a refused request is never sent again to recover its
+ * match. `'compatibility'` asks none of this and keeps its behaviour.
  */
 
 /** Why a call under `'app-authorized'` was refused before it was sent. */
@@ -47,13 +55,18 @@ const BECAUSE: Readonly<Record<McpReplayUnavailableReason, string>> = {
 };
 
 /**
- * A tool call refused before it was sent, because this connection cannot keep
- * the `'app-authorized'` replay contract (`reason`). Nothing reached the server.
+ * A tool call refused before its request was sent, because this connection
+ * cannot keep the `'app-authorized'` replay contract (`reason`). The tool
+ * request never reached the server; connecting and listing tools may have.
  * Names the server and the tool, never an argument.
  */
 export class McpReplayUnavailableError extends Error {
   readonly code = 'ERR_MCP_REPLAY_UNAVAILABLE' as const;
-  /** Nothing was sent: the refusal came before the request left the client. */
+  /**
+   * This tool request was not sent: the refusal came before it left the
+   * client. It says nothing of the connection: `initialize` and `tools/list`
+   * ran before it, and on `stdio` the server process was started.
+   */
   readonly sent = false as const;
 
   constructor(
