@@ -7050,7 +7050,7 @@ New exports (main barrel): `toolContractCheckup`, `formatToolContractCheckup`, t
 `ToolContractCheckup` / `ToolContractProblem` / `ToolContractCode` / `ServerToolEntry`.
 New example `30-tool-contract-checkup.ts`.
 
-Motivation: a real adopter (Neo) hit "tools don't work" against an MCP-ish Python
+Motivation: a real adopter hit "tools don't work" against an MCP-ish Python
 sidecar. Running this against the sidecar's `/tools` catalog proves the schemas are
 **already aligned** (the failures were a deployment `MOCK`/env config issue, not a
 contract drift) — exactly the kind of fast, honest verdict a static check gives.
@@ -7061,7 +7061,7 @@ contract drift) — exactly the kind of fast, honest verdict a static check give
 
 A skill's `body` (prose injected into the system prompt) can quietly contradict the tools
 it actually unlocks — and the model then **refuses a tool that is right there**, or is told
-about one it can't call. This was the core of a real adopter (Neo) tool-visibility report.
+about one it can't call. This was the core of a real adopter's tool-visibility report.
 The library already knows each skill's real tool set, so it now flags the mismatch at
 authoring time.
 
@@ -7615,12 +7615,12 @@ specified-only.
   compresses prose into ~0.85–0.97, so `MOCK_EMBEDDER_CALIBRATION`
   (0.94/0.02) applies with the mock and only RELATIVE ordering is
   trustworthy — acceptance fixtures assert ordering, never absolute
-  scores (the Neo fcns twins are each other's mutual top-1 partner and
+  scores (the fcns twins are each other's mutual top-1 partner and
   flag confusable; a known-false-positive pin documents the mock's floor).
 - **C2 — pluggable structural rule pack** (`defaultStructuralRules` +
   factories `descriptionRule` / `saysWhatNotWhenRule` / `enumInProseRule`
   / `optionalParamRule`; rules are plain `{ id, check }` objects —
-  add/remove/re-tune freely). Four field findings from the Neo catalog:
+  add/remove/re-tune freely). Four field findings from the host app's catalog:
   missing/short description (<40 chars; missing = the only default
   `error`), says-WHAT-not-WHEN (no `for/when/after/first/fallback/only`
   cue), enum-in-prose (`"avg_iops | peak_iops | mbps"` → suggests the
@@ -7678,7 +7678,7 @@ narrow, proxyDisagreement, skipped }`.
 - **Examples (Convention 2)** — all offline/deterministic, pinned by
   `test/lib/tool-lint/examples.test.ts`:
   `examples/observability/02-lint-confusable-catalog.ts` (the real
-  16-tool Neo fixture in `examples/helpers/neoToolCatalog.ts`; the fcns
+  16-tool host-app fixture in `examples/helpers/neoToolCatalog.ts`; the fcns
   twin pair flagged with its hint + the metric/optional structural
   findings), `03-lint-fix-and-pass.ts` (fail → rewrite descriptions to
   lead with WHEN + real enum + documented optionals → `ok` under the
@@ -7686,7 +7686,7 @@ narrow, proxyDisagreement, skipped }`.
   agent walks into the twin trap; margins/flags printed; counting
   embedder proves 0 embeds during `run()`).
 - **Tests:** 85 new (rule fixtures, verdict policy via exact-geometry
-  planted embedders, Neo relative-ordering acceptance, CLI exit codes +
+  planted embedders, host-app relative-ordering acceptance, CLI exit codes +
   shape coercion, property fuzz over report invariants, security
   (hostile/giant descriptions; tool results never reach the embedder),
   performance (100-tool lint < 2 s; record-only hot path), load
@@ -8755,7 +8755,7 @@ engine change; behavior-safe (routing logic is unchanged — we only record it).
   and why" payload for the lens. Absent when no active injection came from a
   `skillGraph()` (non-skill-graph runs are unchanged).
 - **`context.routed` commentary.** A new template narrates the routing in prose —
-  _"Neo routed to the `powermax-performance` skill (matched “array latency /
+  _"Bot routed to the `powermax-performance` skill (matched “array latency /
   cache?”) — 4 tools now available."_ Names the skill, the matched predicate (the
   deciding `yes`; an all-`no` path reads "no specific intent — default"), and the
   tool count. Silent when no skill-graph routing happened (no regression to other
@@ -10652,7 +10652,7 @@ The v2.7.0 subpath shipped without a runnable example. v2.7.2 adds:
 - **`examples/features/06-status-subpath.ts`** — runnable end-to-end
   example. Subscribes to `'*'` (the global wildcard), feeds events to
   `selectThinkingState`, renders via `renderThinkingLine` with
-  per-tool template overrides. Same path Neo's chat-bubble feed uses.
+  per-tool template overrides. Same path the host app's chat-bubble feed uses.
   Now part of the CI sweep — future regressions in the subpath get
   caught before release.
 - **`examples/features/06-status-subpath.md`** — companion guide.
@@ -10693,7 +10693,7 @@ casts (or following these docs verbatim) hit silent zero-match: agent
 runs, no events fire on the listener, chat UIs stay frozen on initial
 state.
 
-This bit a real consumer (Neo's chat-feed status bubble) — the
+This bit a real consumer (the host app's chat-feed status bubble) — the
 listener subscribed via the broken pattern, no events arrived, the
 bubble stayed stuck on "Getting started…" through the entire run even
 though the agent completed successfully and Lens received its events
@@ -10798,7 +10798,7 @@ fails by NAME so the bug is caught before it leaks into Lens.
 
 ### Verified
 
-In the Neo MDS triage browser app (1630/1630 tests passing, lens dist
+In a real MDS triage browser app (1630/1630 tests passing, lens dist
 unchanged):
 
 - 5-iteration run, before fix: 30+ visible step-graph nodes
@@ -10865,7 +10865,7 @@ references.** Two unrelated docs cleanups bundled together:
    noisy benchmark tables are gone.
 
 2. **Removed all application-specific references.** Earlier docs referred
-   to "Neo" (a Cisco MDS Fibre Channel triage agent used internally for
+   to an app (a Cisco MDS Fibre Channel triage agent used internally for
    benchmarking) by name. Generic phrasing now: "production-shaped Skills
    agent (10 skills, 18 tools after dedup)." Affected: README.md,
    CHANGELOG.md (2.6.0 + 2.5.0 entries), docs/guides/caching.md,

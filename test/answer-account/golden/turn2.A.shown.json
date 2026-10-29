@@ -17,7 +17,7 @@
  "event:6:/to": {
   "value": "array-inventory"
  },
- "declaration:skills.array-inventory.label:neo-seo": {
+ "declaration:skills.array-inventory.label:bot-seo": {
   "value": "array estate report"
  },
  "event:6:/by": {
@@ -32,7 +32,7 @@
  "event:16:/sourceId": {
   "value": "array-inventory"
  },
- "declaration:routing.appDecides:neo-seo": {
+ "declaration:routing.appDecides:bot-seo": {
   "value": true
  },
  "event:46:/toolName": {
@@ -75,7 +75,7 @@
   "rows": 0,
   "at": "/content/volumes"
  },
- "declaration:tools.powerstore_get_volumes.rowsAt:neo-seo": {
+ "declaration:tools.powerstore_get_volumes.rowsAt:bot-seo": {
   "value": "volumes"
  },
  "history:6:/toolCallId": {

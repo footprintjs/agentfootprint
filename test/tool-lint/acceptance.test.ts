@@ -1,5 +1,5 @@
 /**
- * RFC-002 §7 acceptance — the Neo catalog under the mock embedder
+ * RFC-002 §7 acceptance — the host-app catalog under the mock embedder
  * (integration tier).
  *
  * THE CALIBRATION DISCIPLINE: the char-frequency mockEmbedder
@@ -34,7 +34,7 @@ async function lintNeo(): Promise<ToolCatalogReport> {
   });
 }
 
-describe('Neo catalog acceptance — relative ordering under mock (C1)', () => {
+describe('Host-app catalog acceptance — relative ordering under mock (C1)', () => {
   it('the fcns twins are EACH OTHER’s top-1 most-similar partner', async () => {
     const report = await lintNeo();
     const { ranked } = report.similarity;
@@ -90,7 +90,7 @@ describe('Neo catalog acceptance — relative ordering under mock (C1)', () => {
     expect(finding!.hint).toContain('WHEN');
   });
 
-  it('structural findings include the Neo field cases (metric enum + silent optionals)', async () => {
+  it('structural findings include the host-app field cases (metric enum + silent optionals)', async () => {
     const report = await lintNeo();
     // The metric case: avg_iops | peak_iops | mbps in prose.
     expect(

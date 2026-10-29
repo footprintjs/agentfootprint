@@ -20,7 +20,7 @@ A naive agent puts **all skills + all tools** in the system prompt every turn �
 
 `skillGraph()` makes the dynamic-loading topology **declarative and drawable**: the consumer declares *"when `get_interface_counters` returns CRC > 0 → load the `sfp-diagnostics` skill,"* and that single line is **the routing rule, the token-saving loader, and the picture.**
 
-This also gives **near-1:1 parity with LangGraph** (declared nodes + conditional edges), so LangGraph-origin agents (e.g. the Neo / Infra_Mon migration) port mechanically.
+This also gives **near-1:1 parity with LangGraph** (declared nodes + conditional edges), so LangGraph-origin agents (e.g. a host app's migration) port mechanically.
 
 ---
 
@@ -139,7 +139,7 @@ The **graph object** (`{ entry, edges: [{ from, to, kind, label }] }`) is what `
 
 ## Addendum — v3: decision-tree routing + interactive renderer (green-lit)
 
-**Status:** v1 + v3 tree/compiler shipped (6.4.0); Neo ported to 11 skills. The
+**Status:** v1 + v3 tree/compiler shipped (6.4.0); the host app ported to 11 skills. The
 `<SkillGraphFlow>` interactive renderer (piece 3) is next.
 
 ### The de-risk: a decision tree compiles to the per-skill triggers we already have
@@ -198,7 +198,7 @@ between skills layer on top (a leaf can route onward when a tool returns).
 ### Build order
 (i) ✅ tree API (`decide` + `.tree`) + compiler + tests (routing model, no engine change) →
 (ii) ✅ `<SkillGraphFlow>` xyflow renderer (clickable nodes → skill) →
-(iii) ✅ point Neo's "Skill Graph" modal at `<SkillGraphFlow>` (replaces the mermaid
+(iii) ✅ point the host app's "Skill Graph" modal at `<SkillGraphFlow>` (replaces the mermaid
 img with the interactive two-panel view).
 
 ## Addendum — routing provenance (6.5.0): capture *why* a skill was reached

@@ -19,7 +19,7 @@
  * after `agent.run()` it reports ZERO calls (event hooks only record);
  * the embeddings happen at `getCalls()` time, off the hot path.
  *
- * The scenario reuses the Neo fcns twins deliberately: an agent fielding
+ * The scenario reuses the fcns twins deliberately: an agent fielding
  * an ambiguous "did it drop recently?" question walks straight into the
  * confusable pair the lint (example 02) flagged at build time — the
  * margins quantify, per call, how close that competition actually was.
@@ -46,7 +46,7 @@ export const meta: ExampleMeta = {
   title: 'Runtime tool-choice margins + flags (RFC-002 C4–C6)',
   group: 'observability',
   description:
-    'toolChoiceRecorder watches a scripted agent walk into the Neo fcns-twin trap: per LLM ' +
+    'toolChoiceRecorder watches a scripted agent walk into the fcns-twin trap: per LLM ' +
     'call it captures the offered menu, the chosen tool and the choice context, then scores ' +
     'margins LAZILY on first read (a counting embedder proves zero embedding calls during ' +
     'the run). Narrow margins and proxy disagreements are flagged; getSummary() gives the ' +

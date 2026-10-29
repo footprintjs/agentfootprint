@@ -27,7 +27,7 @@ const load = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
 
 // ── the app's declarations for fixture A (test/answer-account/helpers.ts · NEO_DECLARATIONS) ──
 const NEO_DECLARATIONS = Object.freeze({
-  id: 'neo-seo',
+  id: 'bot-seo',
   version: '1',
   skills: { 'array-inventory': { label: 'array estate report' } },
   tools: { powerstore_get_volumes: { rowsAt: 'volumes' } },

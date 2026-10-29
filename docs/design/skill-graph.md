@@ -8,7 +8,7 @@
 
 ## 1. Positioning + the market white space
 
-agentfootprint already lets a skill steer an agent: a **skill** is an injection that, when activated, injects a steering **body** into the system prompt AND unlocks its **tools** for the next turn (via `read_skill` / triggers / slots). What is missing is a **declarative way to wire skills into a routed graph** that (a) draws itself, (b) gets time-travel + tracing for free, and (c) is **validated at build time like a type-checker**. Today an author hand-orders regexes (neo's `INTENT_RULES`) and hopes; there is no compile step that catches a dead skill or a mis-wired hop.
+agentfootprint already lets a skill steer an agent: a **skill** is an injection that, when activated, injects a steering **body** into the system prompt AND unlocks its **tools** for the next turn (via `read_skill` / triggers / slots). What is missing is a **declarative way to wire skills into a routed graph** that (a) draws itself, (b) gets time-travel + tracing for free, and (c) is **validated at build time like a type-checker**. Today an author hand-orders regexes (the host app's `INTENT_RULES`) and hopes; there is no compile step that catches a dead skill or a mis-wired hop.
 
 `skillGraph()` is that wrapper. Skills become **nodes**; predicate-on-tool-result edges become **transitions**; the whole thing **compiles to a footprintjs flowchart**, so `toMermaid()`, the commit log, `runtimeStageId` tracing, and the lens time-travel scrubber come for free — with **one** small engine change (below), not a parallel engine.
 
@@ -61,7 +61,7 @@ Exactly one decision site picks the **first** skill. The consumer chooses the pi
 | `'score-match'` | **embed** the message, score vs each entry skill's description → **softmax** → argmax / top-k | **reproducible** (pin the embedder; argmax is deterministic) — but NOT a hand-declared rule | cheap (1 embedding), no extra turn |
 | `'match-text-then-ask'` (or `…then-score`) | run the rules; on the catch-all default, fall through to `'ask-the-model'` (or `'score-match'`) over the entry set | deterministic when confident, picker otherwise | free unless it falls through |
 
-`'match-text-then-ask'` is the recommended default for real deployments: it converts neo's silent mis-route (regex falls to a catch-all triage skill, no recovery) into an **observed** decision over the entry set.
+`'match-text-then-ask'` is the recommended default for real deployments: it converts the host app's silent mis-route (regex falls to a catch-all triage skill, no recovery) into an **observed** decision over the entry set.
 
 **`'score-match'` is a *picker*, not a *predicate* — keep them distinct.** A `match-text` rule (and every mid-run `step`) is a **declared boolean** the build can validate + draw **solid**; `score-match` ranks by similarity, so there is **no hand-written condition** to statically check — it is **observed** (drawn dashed, like `ask-the-model`), even though argmax makes it *reproducible* given a fixed embedder. It needs an **embedder** (`embed: (text) => vector`, **pluggable** — the library bundles none) with a **zero-dependency lexical-softmax fallback** when none is supplied. It is the **LLM-free middle ground**: more flexible than regex, cheaper than a model turn, no second model. Critically, **the same LLM-free scorer powers the Why-panel's relevance display** — one scoring mechanism, two uses (it *picks* here; it *explains* there). So `score-match` does not "bring a predicate"; it **replaces** the need for a hand-written predicate at the cost of being observed-not-validated — the deterministic, build-checked edges remain the boolean `step` predicates (§4A.1 D1).
 
@@ -71,7 +71,7 @@ Determinism is **per-decision**: the entry pick is the single non-deterministic 
 
 ## 3. The API — concrete sketch + worked example
 
-We keep the **shipped fluent builder** (`skillGraph().entry().route().build()` — neo and the lens depend on it) and add an **object-literal façade** that compiles to the same edges. The object form is required anyway for build-time validation to mean anything (skills must be enumerable independently of edges — see §6.1).
+We keep the **shipped fluent builder** (`skillGraph().entry().route().build()` — the host app and the lens depend on it) and add an **object-literal façade** that compiles to the same edges. The object form is required anyway for build-time validation to mean anything (skills must be enumerable independently of edges — see §6.1).
 
 ```ts
 import { skillGraph, defineSkill } from 'agentfootprint/context';
@@ -632,7 +632,7 @@ The fallback "within the allowed set" is a **guarantee only after items 1–4 of
   (d) the 6 build-time checks (object API);
   (e) STAY terminal; `fallback: 'strict'` mode;
   (f) the three-tier drawing grammar;
-  (g) tests: a pure `routeForResult(currentSkill, toolResult) → nextSkill` pin-table (exhaustive, exit-1 on mismatch — extends neo's `routeForQuestion`); a fixed-seed mock harness for entry/fallback `read_skill` picks asserting accuracy ≥ threshold; one unit per validation check. (Per Convention 2, examples are mandatory integration tests.)
+  (g) tests: a pure `routeForResult(currentSkill, toolResult) → nextSkill` pin-table (exhaustive, exit-1 on mismatch — extends the host app's `routeForQuestion`); a fixed-seed mock harness for entry/fallback `read_skill` picks asserting accuracy ≥ threshold; one unit per validation check. (Per Convention 2, examples are mandatory integration tests.)
 - **v1.1:** per-skill `parse` hook for typed predicates; `onMultiMatch: 'parallel'`.
 - **Deferred:** expectField routing type-checker (needs tool output schemas).
 

@@ -4,7 +4,7 @@
  * of the whole account.
  *
  * Test types (Convention 3):
- *   - FUNCTIONAL — A (with neo's declarations), A0 (the record alone) and B
+ *   - FUNCTIONAL — A (with the app's declarations), A0 (the record alone) and B
  *                  (SYNTHETIC: every af-1 field declared) print exactly the
  *                  sentences, vouchers and one-liners the design fixes;
  *   - REGRESSION — the whole account (and its "show me" map) is pinned byte
@@ -22,7 +22,7 @@ const rowOf = (account: AnswerAccount, id: RowId) => account.rows.find((r) => r.
 const said = (account: AnswerAccount, id: RowId) =>
   rowOf(account, id).lines.map((l) => [l.text, l.source] as const);
 
-describe('fixture A — the real run, with neo’s declarations', () => {
+describe('fixture A — the real run, with the app’s declarations', () => {
   const rec = fixtureA();
   const account = accountForAnswer(rec, NEO_DECLARATIONS, { runId: rec.meta.origin.runId });
 

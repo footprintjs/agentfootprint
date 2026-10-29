@@ -645,7 +645,7 @@ describe('answerAccounts — the cache key and the bounds (unit)', () => {
         tools: { powerstore_get_volumes: { rowsAt: 'volumes' } },
         skills: { 'array-inventory': { label: 'array estate report' } },
         version: '1',
-        id: 'neo-seo',
+        id: 'bot-seo',
       },
     });
     expect(reordered.keyFor(scope, ref)).toBe(declared.keyFor(scope, ref));

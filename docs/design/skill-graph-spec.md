@@ -1,6 +1,6 @@
 # Skill Graph + Explainable Routing — Spec & Usage
 
-**Audience:** a developer *or a coding agent* adopting these features (e.g. on neo-agentfootprint). This is the single ready-to-reference doc: what exists, how to use it (with code), where it lives, and what is still a gated proposal.
+**Audience:** a developer *or a coding agent* adopting these features (e.g. in a host app). This is the single ready-to-reference doc: what exists, how to use it (with code), where it lives, and what is still a gated proposal.
 
 > ## ⚠️ Status legend — read this first
 > - ✅ **SHIPPED** — on npm, importable, usable today.
@@ -20,7 +20,7 @@ import 'agentthinkingui/styles.css';
 import { agentThinkingTrace } from 'agentfootprint/observe';
 
 // 1. record a run
-const att = agentThinkingTrace({ agent: 'Neo', model });
+const att = agentThinkingTrace({ agent: 'Bot', model });
 const agent = Agent.create({ provider, model }).recorder(att).tool(...).build();
 await agent.run({ message });
 
@@ -28,7 +28,7 @@ await agent.run({ message });
 <AgentThinkingUI
   trace={att.getTrace()}
   toolMenu="rack"                       // "card" (default) | "rack"
-  labels={{ agent: 'Neo Agent' }}        // renames the brain (default "LLM as Human Brain")
+  labels={{ agent: 'Bot Agent' }}        // renames the brain (default "LLM as Human Brain")
   onExplain={explainToolChoice}          // optional — see below
 />
 ```
@@ -43,7 +43,7 @@ await agent.run({ message });
 - **📋 Copy for LLM** — copies an LLM-ready prompt (task + trajectory + tool menu + scores) to paste into Claude/ChatGPT.
 - **✨ Explain (live)** — calls `onExplain` and renders the reason in place.
 
-**`onExplain` contract** — `ctx = { trace, step, tool, prompt }`; return the explanation string. Worked wiring (neo, one-off `provider.complete`):
+**`onExplain` contract** — `ctx = { trace, step, tool, prompt }`; return the explanation string. Worked wiring (host app, one-off `provider.complete`):
 ```ts
 const explainToolChoice = async ({ prompt }: { prompt: string }) => {
   if (mode !== 'live') return 'Switch to Live to get the real explanation.';

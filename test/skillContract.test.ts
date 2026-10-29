@@ -2,7 +2,7 @@
  * Skill-body ↔ tool-contract check (Proposal 009 Tier 1).
  *
  * Convention-3 tiers: unit (each check in isolation), functional (a clean skill is
- * silent), integration (via graph.checkup(), incl. the real Neo-style cross-skill
+ * silent), integration (via graph.checkup(), incl. the real host-app-style cross-skill
  * handoff), property (clean skills never warn under fuzz), security (no ReDoS).
  */
 import { describe, it, expect } from 'vitest';
@@ -72,7 +72,7 @@ describe('checkSkillContracts — integration via graph.checkup()', () => {
   });
 
   it('surfaces a cross-skill handoff as a body-foreign-tool WARNING (does not fail ok)', () => {
-    // Neo-shaped: esxi's body points at volume-lookup's tool (the real handoff pattern).
+    // Host-app-shaped: esxi's body points at volume-lookup's tool (the real handoff pattern).
     const esxi = skill('esxi-inventory', 'feed each array_wwn to volume_lookup_by_wwn.', [
       tool('rvtools_get_vm_storage'),
     ]);

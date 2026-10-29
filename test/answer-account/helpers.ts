@@ -1,5 +1,5 @@
 /**
- * Shared by the answer-account tests: the fixtures, neo's declarations, the
+ * Shared by the answer-account tests: the fixtures, the app's declarations, the
  * golden compare, and a text dump of an account (what a person reads).
  */
 
@@ -22,9 +22,9 @@ export function fixtureA(): Recording & { meta: { origin: { runId: string } } } 
   return JSON.parse(readFileSync(resolve(HERE, 'fixtures/turn2.recorded.json'), 'utf8'));
 }
 
-/** neo's declarations: a skill label, the wrapper shape of one lookup, "the app decides entries". */
+/** The app's declarations: a skill label, the wrapper shape of one lookup, "the app decides entries". */
 export const NEO_DECLARATIONS: AnswerAccountDeclarations = Object.freeze({
-  id: 'neo-seo',
+  id: 'bot-seo',
   version: '1',
   skills: { 'array-inventory': { label: 'array estate report' } },
   tools: { powerstore_get_volumes: { rowsAt: 'volumes' } },

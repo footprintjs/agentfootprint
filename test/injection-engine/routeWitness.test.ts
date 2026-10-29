@@ -298,7 +298,7 @@ const render = (e: AgentfootprintEvent) => {
   if (!key) return null;
   return renderCommentary(
     defaultCommentaryTemplates[key] ?? '',
-    extractCommentaryVars(e, { appName: 'Neo' }),
+    extractCommentaryVars(e, { appName: 'Bot' }),
   );
 };
 const policy = { nearTieMargin: 0.1, menuSize: 3 };
@@ -361,7 +361,7 @@ const hopEvent = (cursorMove?: unknown, skillId = 'vip'): AgentfootprintEvent =>
   });
 
 /** What the hop said before this key existed — the zero-delta baseline. */
-const PLAIN_ROUTED_LINE = 'Neo routed to the `vip` skill — no new tools now available.';
+const PLAIN_ROUTED_LINE = 'Bot routed to the `vip` skill — no new tools now available.';
 
 describe('commentary: the witness line on the hop (rules-only graphs)', () => {
   it('a witnessed start-rule hop quotes the message', () => {

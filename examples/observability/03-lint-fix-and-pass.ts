@@ -2,7 +2,7 @@
  * 03 — Fix the catalog, pass the gate (RFC-002 C1–C3).
  *
  * The remediation loop the lint exists for, on a focused 3-tool slice of
- * the Neo catalog:
+ * the host-app catalog:
  *
  *   BEFORE  ✗ the fcns twins are confusable (same database, two
  *             backends, nothing says when to pick which)

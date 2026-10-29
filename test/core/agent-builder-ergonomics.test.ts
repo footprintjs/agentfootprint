@@ -1,7 +1,7 @@
 /**
  * AgentBuilder ergonomics — .maxIterations() + .watch() + .instructions()
  *
- * Block-B-tail / Neo follow-up. These three small builder methods round
+ * Block-B-tail / host-app follow-up. These three small builder methods round
  * out the v2.5 fluent API so consumers don't have to mix
  * `Agent.create({ maxIterations })` constructor opts with builder
  * setters or call `agent.attach(rec)` separately.

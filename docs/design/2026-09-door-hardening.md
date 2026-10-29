@@ -164,8 +164,8 @@ browser POST and handshake gets 403. The fix is on the proxy: forward the outer
 proto (`proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto` on the
 inner hop), or list the page's origin in `allowedOrigins`. Separately, and
 older than this packet: nginx's `$host` drops a non-default port, so a door
-reached as `https://neo:8443` behind `Host $host` sees `neo` and refuses the
-page's `neo:8443` Origin. Forward `$http_host`, which keeps the port.
+reached as `https://bot:8443` behind `Host $host` sees `bot` and refuses the
+page's `bot:8443` Origin. Forward `$http_host`, which keeps the port.
 
 **What the default does NOT do: stop DNS rebinding.** Under rebinding the page's
 Origin is `http://rebind.evil.example` and the request's Host is
@@ -212,7 +212,7 @@ probe, and a test keeps it opening.
 
 ### 4. Host must be a configured name: 421
 
-With `allowedHosts: ['neo.corp.example']`, a request whose `Host` names anything
+With `allowedHosts: ['bot.corp.example']`, a request whose `Host` names anything
 else is refused with `HostNotAllowedError`. This is the rebinding defence.
 
 **The loopback default (round-1 BLOCKING fix).** A host that binds its own
@@ -222,7 +222,7 @@ is another one), any port, silently (`doorGuard.ts` · `loopbackAllowedHosts`).
 It closes rebinding on the classic victim, a developer's own machine, but it
 does refuse legitimate traffic in one common case (round-2 correction). A
 reverse proxy on the same machine that forwards the PUBLIC name in `Host`
-(nginx `proxy_set_header Host $host`) delivers `neo.corp.example` on loopback,
+(nginx `proxy_set_header Host $host`) delivers `bot.corp.example` on loopback,
 and the socket cannot tell that from a rebinding page. That is exactly the field
 app's recommended `BE_SERVER_HOST=127.0.0.1` behind nginx setup. A hosts-file
 alias is the other case. Both fail loudly (421) and in the safe direction, and
@@ -245,7 +245,7 @@ it to the name the page used, which under rebinding is the attacker's.
   and is forbidden to this caller. 421 says this server is not that name.
 - **`Host` only, never `X-Forwarded-Host`.** After rebinding, the attacker's
   page is same-origin and may set any non-forbidden header, including
-  `X-Forwarded-Host: neo.corp.example`. Some proxies append to that header
+  `X-Forwarded-Host: bot.corp.example`. Some proxies append to that header
   rather than replace it.
 - **Matching:** case-insensitive, one trailing dot ignored. An entry without a
   port matches any port, and an entry with one matches only that port. IPv6
