@@ -20,7 +20,13 @@
  * EVERY REQUEST SENT IS COUNTED. Each attempt the series started is a row — or,
  * past the cap, one more in `omitted` — so `rows + omitted` is the number of
  * requests the series sent. An attempt a cancellation cuts in flight is a row
- * too (`cancelled`), exactly as an attempt the deadline cuts is (`timed-out`).
+ * too (`cut`), exactly as an attempt the deadline cuts is (`timed-out`). A
+ * request the series never sent — the next one after a cancelled wait — has no
+ * row.
+ *
+ * A CUT IS NOT A "NOT RUN". An attempt that ended without an answer — cut,
+ * timed out, or failed — was sent, and the server may have received it and run
+ * it. Its row says so (`remote: 'unknown'`); nothing here records it as not run.
  *
  * WHEN IT FILES. When the series ends — and, for a cancellation, at the moment the
  * signal fires: a cancelled run stops waiting for its stage at once, so a record
@@ -83,19 +89,21 @@ export class SeriesEvidence {
   }
 
   /**
-   * The caller's cancellation cut attempt `n` in flight: it was sent, so it is a
-   * row — then the request's end.
+   * The caller's cancellation cut attempt `n` in flight. It was sent — the
+   * server may have it, and may have run it — so it is a row, `cut`, with the
+   * remote outcome `unknown`; then the request's end says the same.
    */
   cutInFlight(n: number): void {
     if (this.filed) return;
-    this.add({ attempt: n, outcome: 'cancelled', reason: 'cancelled' });
-    this.file({ outcome: 'cancelled', reason: 'cancelled', during: 'request' });
+    this.add({ attempt: n, outcome: 'cut', reason: 'cancelled', remote: 'unknown' });
+    this.file({ outcome: 'cut', reason: 'cancelled', during: 'request', remote: 'unknown' });
   }
 
   /**
-   * The caller's cancellation landed with no attempt in flight: between two —
-   * `during: 'wait'` — or before the first, when nothing was sent and there is
-   * no `during`. A request that had already ended keeps its own end.
+   * The caller's cancellation landed with NO request in flight: between two —
+   * `during: 'wait'`, the next request never sent — or before the first, when
+   * nothing was sent and there is no `during`. No row is added: there is no
+   * request to account for. A request that had already ended keeps its end.
    */
   cancelled(): void {
     const last = this.last;
@@ -175,12 +183,16 @@ export class SeriesEvidence {
   }
 }
 
-/** An end no attempt accounts for — never seen; kept so a request is never left unfiled. */
+/**
+ * An end no attempt accounts for — never seen; kept so a request is never left
+ * unfiled, and never claiming more than is known.
+ */
 const UNACCOUNTED: ToolRequestEnd = {
   outcome: 'failed',
   reason: 'not-retryable',
   failure: 'unknown',
   error: { message: FAILED, code: 'unknown' },
+  remote: 'unknown',
 };
 
 /** One record as a row — see the module note for what a row may say. */
@@ -200,14 +212,20 @@ export function rowOf(
       seen?.status !== undefined && { status: seen.status }),
     ...(refusal !== undefined && { kind: refusal.kind }),
     ...(outcome !== 'answered' &&
-      outcome !== 'cancelled' &&
+      outcome !== 'cut' &&
       record.category !== undefined && { failure: record.category }),
     ...(reason === 'retryable' && { waitMs: record.delayMs ?? 0 }),
     ...(refusal?.retryAfterMs !== undefined && { retryAfterMs: refusal.retryAfterMs }),
     ...((outcome === 'failed' || outcome === 'timed-out') && {
       error: errorOf(outcome, record.category),
     }),
+    ...(noAnswer(outcome) && { remote: 'unknown' as const }),
   };
+}
+
+/** An attempt that ended without an answer — the server may have run it, or not. */
+function noAnswer(outcome: ToolRequestAttempt['outcome']): boolean {
+  return outcome === 'failed' || outcome === 'timed-out' || outcome === 'cut';
 }
 
 function outcomeOf(
@@ -224,7 +242,7 @@ function outcomeOf(
     case 'aborted':
       // Cut in flight by the series' cancellation. The cancellation itself files
       // this row first (`cutInFlight`), so the record is seen only if it did not.
-      return 'cancelled';
+      return 'cut';
     default:
       // `paused` cannot happen inside a fetch.
       return 'failed';
@@ -260,14 +278,15 @@ function errorOf(
 
 /** How a request ended, when it ended with its last attempt. */
 function endOf(last: ToolRequestAttempt): ToolRequestEnd {
-  const { outcome, reason, status, kind, failure, error } = last;
+  const { outcome, reason, status, kind, failure, error, remote } = last;
   return {
     outcome,
     reason,
     ...(status !== undefined && { status }),
     ...(kind !== undefined && { kind }),
     ...(failure !== undefined && { failure }),
-    ...((outcome === 'timed-out' || outcome === 'cancelled') && { during: 'request' as const }),
+    ...((outcome === 'timed-out' || outcome === 'cut') && { during: 'request' as const }),
     ...(error !== undefined && { error }),
+    ...(remote !== undefined && { remote }),
   };
 }

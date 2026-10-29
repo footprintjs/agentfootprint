@@ -225,25 +225,34 @@ disk and read back still says what each call's retries did:
 
 | Field | What it holds |
 |---|---|
-| `attempts` | Each attempt, in order: its `outcome`, its `reason`, the `status` of a response, the refusal's `kind`, the `failure` category, the `waitMs` before the next attempt and any `retryAfterMs` the server stated. At most 100. |
+| `attempts` | Each attempt, in order: its `outcome`, its `reason`, the `status` of a response, the refusal's `kind`, the `failure` category, the `waitMs` before the next attempt, any `retryAfterMs` the server stated, and `remote: 'unknown'` when no answer arrived. At most 100. |
 | `omitted` | Attempts past the first 100, counted rather than listed. `attempts.length + omitted` is the number of requests the series sent. |
 | `end` | How the request ended, with `during: 'wait'` or `'request'` when it was cut — cancelled, or out of time. |
 | `endpoint` or `origin` | Your `endpointLabel`, or else the endpoint's origin (scheme, host and port). |
 
 An attempt's `outcome` is `answered`, `refused`, `failed`, `timed-out` or
-`cancelled`. A response received is `answered` whatever its status: a 503 is
+`cut`. A response received is `answered` whatever its status: a 503 is
 `answered` with `status: 503`, never a success, and it is still not retried. Its
 `reason` says why the series went on or stopped after it — `retryable` (the only
 one that is not an end), `answered`, `exhausted`, `wait-limit`, `no-time-left`,
-`not-replayable`, `not-retryable` or `cancelled`. Every request the series sent
-is a row or counted in `omitted`, a cancelled one included.
+`not-replayable`, `not-retryable` or `cancelled`.
+
+**A cut is not a "not run".** `cut` means the call was cancelled while the
+request was in flight. That request was sent, so the server may already have
+received it and run it. The row says `remote: 'unknown'`, and so do `failed` and
+`timed-out`: no answer arrived, so nobody knows what the server did. Only a
+request that was never sent is recorded as not sent, and it has no row. That
+covers the next attempt after a cancelled wait, and anything after a signal that
+was already aborted. The request's `end` is then `cancelled`. Every request the
+series sent is a row, or is counted in `omitted`.
 
 An MCP tool call honours its context's `signal`. The run's cancellation reaches
 the request, so the SDK drops it and tells the server with
 `notifications/cancelled`. It also ends the call's retry series, a wait
 included, and the series files `cancelled` the moment it lands. So a run the
 person abandoned during a 30-second `Retry-After` is saved with that wait and
-`end: { outcome: 'cancelled', during: 'wait' }`. A call that settles before its
+`end: { outcome: 'cancelled', during: 'wait' }` — no request was in flight, so
+none is unknown. A call that settles before its
 series, because the SDK's own request timeout fired, takes the series with it.
 The series is cut inside the call, files `cancelled` before the call's result
 is read, and sends nothing more. Two calls, or two runs, sharing one client never

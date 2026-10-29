@@ -137,13 +137,16 @@ export function requestEvidenceOf(ctx: unknown): RequestEvidenceSink | undefined
 
 type Words<W extends string> = { readonly [K in W]: true };
 
-const OUTCOMES: Words<ToolRequestAttempt['outcome'] & ToolRequestEnd['outcome']> = {
+const ATTEMPT_OUTCOMES: Words<ToolRequestAttempt['outcome']> = {
   answered: true,
   refused: true,
   failed: true,
   'timed-out': true,
-  cancelled: true,
+  cut: true,
 };
+/** An end may also be `cancelled`: no request was in flight. A row never is — a sent request is `cut`. */
+const END_OUTCOMES: Words<ToolRequestEnd['outcome']> = { ...ATTEMPT_OUTCOMES, cancelled: true };
+const REMOTE: Words<NonNullable<ToolRequestAttempt['remote']>> = { unknown: true };
 const REASONS: Words<ToolRequestAttempt['reason']> = {
   retryable: true,
   answered: true,
@@ -183,8 +186,18 @@ const ATTEMPT_FIELDS = new Set([
   'waitMs',
   'retryAfterMs',
   'error',
+  'remote',
 ]);
-const END_FIELDS = new Set(['outcome', 'reason', 'status', 'kind', 'failure', 'during', 'error']);
+const END_FIELDS = new Set([
+  'outcome',
+  'reason',
+  'status',
+  'kind',
+  'failure',
+  'during',
+  'error',
+  'remote',
+]);
 const EVIDENCE_FIELDS = new Set(['endpoint', 'origin', 'attempts', 'omitted', 'end']);
 
 /** Thrown inside the walk when a filing leaves the allow-list; caught at its root. */
@@ -221,7 +234,7 @@ function servedAttempt(raw: unknown): ToolRequestAttempt {
   if (attempt < 1) throw new Refused();
   return {
     attempt,
-    outcome: word(OUTCOMES, row.outcome),
+    outcome: word(ATTEMPT_OUTCOMES, row.outcome),
     reason: word(REASONS, row.reason),
     ...(row.status !== undefined && { status: status(row.status) }),
     ...(row.kind !== undefined && { kind: word(KINDS, row.kind) }),
@@ -229,19 +242,21 @@ function servedAttempt(raw: unknown): ToolRequestAttempt {
     ...(row.waitMs !== undefined && { waitMs: duration(row.waitMs) }),
     ...(row.retryAfterMs !== undefined && { retryAfterMs: duration(row.retryAfterMs) }),
     ...(row.error !== undefined && { error: servedError(row.error) }),
+    ...(row.remote !== undefined && { remote: word(REMOTE, row.remote) }),
   };
 }
 
 function servedEnd(raw: unknown): ToolRequestEnd {
   const end = record(raw, END_FIELDS);
   return {
-    outcome: word(OUTCOMES, end.outcome),
+    outcome: word(END_OUTCOMES, end.outcome),
     reason: word(REASONS, end.reason),
     ...(end.status !== undefined && { status: status(end.status) }),
     ...(end.kind !== undefined && { kind: word(KINDS, end.kind) }),
     ...(end.failure !== undefined && { failure: word(CATEGORIES, end.failure) }),
     ...(end.during !== undefined && { during: word(DURING, end.during) }),
     ...(end.error !== undefined && { error: servedError(end.error) }),
+    ...(end.remote !== undefined && { remote: word(REMOTE, end.remote) }),
   };
 }
 

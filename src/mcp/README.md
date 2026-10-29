@@ -78,7 +78,9 @@ Identity at every hop, never content: two calls with the same arguments, or two
 runs on one client, cannot claim each other's request, and nothing is added to
 the wire. The series files ONE `agentfootprint.tools.request_attempts` when the
 request ends — and, for a cancellation, the moment it lands. Every request the
-series sent is a row, or counted in `omitted`, a cancelled one included.
+series sent is a row, or counted in `omitted`. One cut in flight is a `cut` row,
+`remote: 'unknown'`: it was sent, and the server may have run it — a cut is never
+recorded as not run. A request never sent has no row.
 
 Cancellation never waits on attribution (`callLifetime.ts`): the call's
 `ctx.signal` and the client's reach the SDK request while the call runs, and the

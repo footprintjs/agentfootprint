@@ -71,14 +71,16 @@ describe('request evidence door — P1 what passes', () => {
     expect(served?.attempts[0]).not.toBe(WELL_FORMED.attempts[0]);
   });
 
-  it('a cancelled attempt is a row like any other', () => {
+  it('a cut attempt is a row — sent, its remote outcome unknown', () => {
+    const cut = { attempt: 1, outcome: 'cut', reason: 'cancelled', remote: 'unknown' };
     const served = servedRequestEvidence(
       filing((d) => {
-        d.attempts = [{ attempt: 1, outcome: 'cancelled', reason: 'cancelled' }];
-        d.end = { outcome: 'cancelled', reason: 'cancelled', during: 'request' };
+        d.attempts = [cut];
+        d.end = { outcome: 'cut', reason: 'cancelled', during: 'request', remote: 'unknown' };
       }),
     );
-    expect(served?.attempts).toEqual([{ attempt: 1, outcome: 'cancelled', reason: 'cancelled' }]);
+    expect(served?.attempts).toEqual([cut]);
+    expect(served?.end.remote).toBe('unknown');
   });
 
   it('an origin — scheme, host and port — passes in place of a label', () => {
@@ -112,6 +114,14 @@ describe('request evidence door — P5 anything else is refused whole', () => {
     ['an outcome outside its set (success)', filing((d) => (d.attempts[0].outcome = 'succeeded'))],
     ['a reason outside its set', filing((d) => (d.end.reason = 'succeeded'))],
     ['a kind outside its set', filing((d) => (d.attempts[0].kind = 'server-error'))],
+    [
+      'a row that calls a sent request `cancelled` (a sent request is `cut`)',
+      filing((d) => (d.attempts[0] = { attempt: 1, outcome: 'cancelled', reason: 'cancelled' })),
+    ],
+    [
+      'a remote outcome claimed as known (`not-run`)',
+      filing((d) => (d.attempts[1].remote = 'not-run')),
+    ],
     [
       'an error carrying its own text',
       filing((d) => (d.attempts[1].error.message = 'connect ECONNREFUSED 10.0.0.7 token=SECRET')),

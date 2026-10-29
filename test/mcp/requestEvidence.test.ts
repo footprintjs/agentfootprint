@@ -11,8 +11,9 @@
  *
  *   S1  Scenario — every attempt, its reason and its wait, and how it ended
  *   S2  Scenario — a cancellation DURING A WAIT is in the saved run
- *   S3  Scenario — a cancellation in flight: the cut attempt is a row, and the
- *                  request on the wire is cut too
+ *   S3  Scenario — a cancellation in flight: the cut attempt is a row — sent,
+ *                  `remote: 'unknown'`, never "not run" — and the request on
+ *                  the wire is cut too
  *   S4  Boundary — a 503 received is `answered` + 503, never success, never retried
  *   S5  Property — concurrent runs on ONE connection never mix their attempts
  *   S6  Boundary — past 100 attempts, the rest are COUNTED, never dropped
@@ -362,6 +363,8 @@ describe('saved retry evidence — S2/S3 a cancelled run still carries its reque
       const events = await saving;
 
       const evidence = payloadOf(filedIn(events)[0]);
+      // Cut BEFORE the next request started: nothing more was sent, so there
+      // is no row for it — the one row is the request that was sent.
       expect(filedIn(events).map(payloadOf)).toEqual([
         {
           toolCallId: 'tc-wait',
@@ -403,14 +406,17 @@ describe('saved retry evidence — S2/S3 a cancelled run still carries its reque
       const events = await saving;
 
       const evidence = payloadOf(filedIn(events)[0]);
+      // The second request WAS sent and may have run on the server: it is a
+      // row, `cut`, its remote outcome unknown — never recorded as not run.
       expect(evidence.attempts).toEqual([
         { attempt: 1, ...RATE_LIMITED, waitMs: 5 },
-        { attempt: 2, outcome: 'cancelled', reason: 'cancelled' },
+        { attempt: 2, outcome: 'cut', reason: 'cancelled', remote: 'unknown' },
       ]);
       expect(evidence.end).toEqual({
-        outcome: 'cancelled',
+        outcome: 'cut',
         reason: 'cancelled',
         during: 'request',
+        remote: 'unknown',
       });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(wireCut, 'the run cancel must cut the request on the wire').toBe(true);
@@ -550,12 +556,21 @@ describe('saved retry evidence — S7 allow-listed metadata only', () => {
       expect(evidence.origin).toBe('https://mcp.example.test:8443');
       expect(evidence.endpoint).toBeUndefined();
       const [row] = evidence.attempts;
-      expect(row).toMatchObject({ attempt: 1, outcome: 'failed', reason: 'not-retryable' });
+      expect(row).toMatchObject({
+        attempt: 1,
+        outcome: 'failed',
+        reason: 'not-retryable',
+        remote: 'unknown',
+      });
       expect(row?.error).toEqual({
         message: 'The request failed before an answer arrived. Its error is not kept.',
         code: row?.failure,
       });
-      expect(evidence.end).toMatchObject({ outcome: 'failed', reason: 'not-retryable' });
+      expect(evidence.end).toMatchObject({
+        outcome: 'failed',
+        reason: 'not-retryable',
+        remote: 'unknown',
+      });
       const text = JSON.stringify(evidence);
       for (const leaked of [
         'SECRET',
@@ -746,6 +761,7 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
           reason: 'no-time-left',
           failure: 'timeout',
           error: { message: OUT_OF_TIME, code: 'timeout' },
+          remote: 'unknown',
         },
       ]);
       expect(evidence.end).toEqual({
@@ -754,6 +770,7 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
         failure: 'timeout',
         during: 'request',
         error: { message: OUT_OF_TIME, code: 'timeout' },
+        remote: 'unknown',
       });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.toolCalls()).toBe(2);

@@ -2417,8 +2417,7 @@ export interface ToolsCodeRunPayload {
 // ─── tools.request_attempts — an MCP request's retry series ────────────────
 
 /**
- * What one attempt of an MCP request came to — and, on `end`, how the request
- * ended.
+ * What one attempt of an MCP request came to.
  *
  *   - `'answered'` — a response arrived and no retry rule refused it. It is
  *     delivered as it came, WHATEVER its status: a 503 is `answered` with
@@ -2429,19 +2428,37 @@ export interface ToolsCodeRunPayload {
  *     session-busy reply. The only outcome that is ever retried.
  *   - `'failed'` — the request threw before an answer arrived (a dropped
  *     connection, a DNS failure). Never retried: the server may have run it.
- *   - `'timed-out'` — the call's deadline (`maxElapsedMs`) cut the request.
- *   - `'cancelled'` — the call was cancelled while the request was in flight:
- *     the run's or the client's signal, the MCP SDK cancelling it (its own
- *     timeout), or the call settling first. It was sent, so it is counted; the
- *     server may have received it.
+ *   - `'timed-out'` — the call's deadline (`maxElapsedMs`) cut the request
+ *     while it was in flight.
+ *   - `'cut'` — the call was cancelled while the request was in flight: the
+ *     run's or the client's signal, the MCP SDK giving it up (its own timeout),
+ *     or the call settling first. The request WAS sent; the server may already
+ *     have received it and run it. A cut is never a "not run".
  *
- * Every attempt the series started is a row, or is counted in `omitted`: the
- * rows and `omitted` together are the requests the series sent.
+ * The last three never had an answer, so they carry `remote: 'unknown'`.
+ *
+ * Every request the series sent is a row, or is counted in `omitted`: the rows
+ * and `omitted` together are the requests the series sent. A request that was
+ * never sent — the next attempt after a cancelled wait, or anything after a
+ * signal that was already aborted — has no row.
  */
-export type ToolRequestOutcome = 'answered' | 'refused' | 'failed' | 'timed-out' | 'cancelled';
+export type ToolRequestAttemptOutcome = 'answered' | 'refused' | 'failed' | 'timed-out' | 'cut';
 
-/** An attempt's outcome — the same words as the request's (`ToolRequestOutcome`). */
-export type ToolRequestAttemptOutcome = ToolRequestOutcome;
+/**
+ * How an MCP request ended: its last attempt's outcome — or `'cancelled'`, when
+ * the call was cancelled with NO request in flight: while it waited to ask
+ * again, or before its first request. Nothing more was sent; every request
+ * that was sent has its own row and its own outcome.
+ */
+export type ToolRequestOutcome = ToolRequestAttemptOutcome | 'cancelled';
+
+/**
+ * Whether the server received and ran a request, when that is not known: the
+ * attempt ended without an answer (`failed`, `timed-out`, `cut`), so the
+ * request may have reached the server and run there, or not. The library never
+ * records such a request as not run.
+ */
+export type ToolRequestRemote = 'unknown';
 
 /**
  * Why the request went on after an attempt, or ended with it.
@@ -2525,6 +2542,13 @@ export interface ToolRequestAttempt {
   readonly retryAfterMs?: number;
   /** `failed` and `timed-out` only. */
   readonly error?: ToolRequestError;
+  /**
+   * `'unknown'` when the attempt ended without an answer (`failed`,
+   * `timed-out`, `cut`): it was sent, and whether the server received and ran
+   * it is not known. Absent when an answer arrived — the response says what
+   * the server did.
+   */
+  readonly remote?: ToolRequestRemote;
 }
 
 /** How an MCP request ended. */
@@ -2539,17 +2563,23 @@ export interface ToolRequestEnd {
   readonly failure?: ToolRequestFailureCategory;
   /**
    * Present when the request was CUT, and says what it was doing then.
-   * `'request'` — its LAST attempt was in flight (`cancelled`, `timed-out`);
-   * that attempt is the last row, or, past 100 attempts, the last one counted
-   * in `omitted`. `'wait'` — it was waiting to ask again, so no request was in
-   * flight: a cancellation cut the wait (`cancelled`), or the deadline left no
-   * time to finish it and the last refusal was delivered (`refused`,
+   * `'request'` — its LAST attempt was in flight (`cut`, `timed-out`): that
+   * attempt was sent and is the last row, or, past 100 attempts, the last one
+   * counted in `omitted`; whether the server ran it is unknown. `'wait'` — it
+   * was waiting to ask again, so no request was in flight and the next one was
+   * never sent: a cancellation cut the wait (`cancelled`), or the deadline left
+   * no time to finish it and the last refusal was delivered (`refused`,
    * `no-time-left`). Absent when nothing was cut — and when the request was
-   * cancelled before any attempt started, so that nothing was sent.
+   * cancelled before its first attempt, so that nothing was sent.
    */
   readonly during?: 'request' | 'wait';
   /** `failed` and `timed-out` only. */
   readonly error?: ToolRequestError;
+  /**
+   * `'unknown'` when the request ended on an attempt with no answer (`failed`,
+   * `timed-out`, `cut`): whether the server ran that request is not known.
+   */
+  readonly remote?: ToolRequestRemote;
 }
 
 /**
@@ -2583,9 +2613,10 @@ export interface ToolsRequestAttemptsPayload {
   /** Otherwise the endpoint's ORIGIN — scheme, host and port, nothing else. */
   readonly origin?: string;
   /**
-   * The attempts, in order — at most 100. Every attempt the series started is
-   * here or counted in `omitted`, a cancelled one included: `attempts.length +
-   * omitted` is the number of requests the series sent.
+   * The attempts, in order — at most 100. Every request the series sent is
+   * here or counted in `omitted`, a cut one included: `attempts.length +
+   * omitted` is the number of requests the series sent. A request it never
+   * sent has no row.
    */
   readonly attempts: readonly ToolRequestAttempt[];
   /** Attempts made past the first 100, counted and not listed. `0` when every attempt is listed. */

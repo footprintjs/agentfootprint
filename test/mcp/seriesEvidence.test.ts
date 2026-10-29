@@ -62,7 +62,7 @@ describe('series evidence — P2 nothing started, nothing sent', () => {
 });
 
 describe('series evidence — P1 a cut attempt the runner recorded', () => {
-  it('an `aborted` record is a `cancelled` row — it was sent, so it is counted', () => {
+  it('an `aborted` record is a `cut` row — it was sent, so it is counted, and may have run', () => {
     const record = {
       attempt: 2,
       outcome: 'aborted',
@@ -72,8 +72,9 @@ describe('series evidence — P1 a cut attempt the runner recorded', () => {
     } as unknown as AttemptRecord;
     expect(rowOf(record, undefined)).toEqual({
       attempt: 2,
-      outcome: 'cancelled',
+      outcome: 'cut',
       reason: 'cancelled',
+      remote: 'unknown',
     });
   });
 });
