@@ -43,6 +43,12 @@ export type McpToolListIncompleteReason = 'page-limit' | 'cursor-repeated';
 export interface ToolListing {
   readonly tools: readonly McpListedTool[];
   readonly pages: number;
+  /**
+   * Where the last page read begins in `tools`: everything before it came from
+   * an earlier page. 0 for a one-page list. The MCP SDK's `Client` keeps its
+   * per-tool checks for the last page only (`callChecks.ts`).
+   */
+  readonly lastPageStart: number;
   /** Absent when the server's list ended: the last page carried no cursor. */
   readonly incomplete?: McpToolListIncompleteReason;
 }
@@ -62,6 +68,7 @@ export async function listEveryPage(
   const tools: McpListedTool[] = [];
   const sent = new Set<string>();
   let cursor: string | undefined;
+  let lastPageStart = 0;
   for (let pages = 1; ; pages++) {
     // Immediately before EVERY request, the first included: an aborted listing
     // asks for nothing more (`lib/abort.ts`).
@@ -71,12 +78,15 @@ export async function listEveryPage(
     // the abort — the last page too — is never part of a listing, so nothing
     // incomplete is returned and nothing complete is cached.
     throwIfAborted(signal);
+    lastPageStart = tools.length;
     // One push per tool: spreading a very large page into `push` can overflow the stack.
     for (const tool of page.tools) tools.push(tool);
     const next = page.nextCursor;
-    if (next === undefined || next === null) return { tools, pages };
-    if (sent.has(next)) return { tools, pages, incomplete: 'cursor-repeated' };
-    if (pages >= MAX_TOOL_LIST_PAGES) return { tools, pages, incomplete: 'page-limit' };
+    if (next === undefined || next === null) return { tools, pages, lastPageStart };
+    if (sent.has(next)) return { tools, pages, lastPageStart, incomplete: 'cursor-repeated' };
+    if (pages >= MAX_TOOL_LIST_PAGES) {
+      return { tools, pages, lastPageStart, incomplete: 'page-limit' };
+    }
     sent.add(next);
     cursor = next;
   }

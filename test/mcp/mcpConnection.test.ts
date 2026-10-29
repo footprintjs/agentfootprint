@@ -404,7 +404,7 @@ describe('mcpClient({ transport }) — the default arm, argument for argument', 
     }
   }
 
-  it('LAW: http — the same two specifiers, the same client identity, the same transport options', async () => {
+  it('LAW: http — the same two client specifiers, the same client identity, the same transport options', async () => {
     await underRecordingLoader(async (mcp, seen) => {
       const client = await mcp.mcpClient({
         transport: {
@@ -418,6 +418,11 @@ describe('mcpClient({ transport }) — the default arm, argument for argument', 
       expect(seen.specifiers).toEqual([
         '@modelcontextprotocol/sdk/client/index.js',
         '@modelcontextprotocol/sdk/client/streamableHttp.js',
+        // What an earlier page of a paged tool list is checked with, loaded with
+        // the SDK when the client is built (`callChecks.ts`): its error class and
+        // its default validator — modules `client/index.js` already loaded.
+        '@modelcontextprotocol/sdk/types.js',
+        '@modelcontextprotocol/sdk/validation/ajv',
       ]);
       // The version-less identity, unchanged since it was introduced.
       expect(seen.clients).toEqual([
@@ -460,6 +465,8 @@ describe('mcpClient({ transport }) — the default arm, argument for argument', 
       expect(seen.specifiers).toEqual([
         '@modelcontextprotocol/sdk/client/index.js',
         '@modelcontextprotocol/sdk/client/stdio.js',
+        '@modelcontextprotocol/sdk/types.js',
+        '@modelcontextprotocol/sdk/validation/ajv',
       ]);
       expect(seen.stdios).toEqual([{ command: 'npx', args: ['@example/mcp'], cwd: '/tmp' }]);
     });

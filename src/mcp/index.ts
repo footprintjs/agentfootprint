@@ -40,12 +40,16 @@ export { McpReplayUnavailableError, type McpReplayUnavailableReason } from './re
 // A tool list that could not be read to its end (past 100 requests, or a cursor
 // sent twice) is refused with this error and a typed reason, never cut short.
 export { McpToolListIncompleteError, type McpToolListIncompleteReason } from './toolList.js';
+// An earlier page's tool whose output this connection cannot check — no JSON
+// Schema validator reachable — is refused before it is sent.
+export { McpOutputUncheckedError } from './callChecks.js';
 export type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
   McpConnection,
   McpConnectionOptions,
+  McpJsonSchemaValidator,
   McpSdk,
   McpGatewayTransport,
   McpHttpTransport,

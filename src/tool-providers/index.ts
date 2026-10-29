@@ -80,6 +80,9 @@ export {
   // or a cursor it already sent — is refused with this error and a typed
   // reason; what was listed travels on it, never as a list cut short.
   McpToolListIncompleteError,
+  // An earlier page's tool whose output this connection cannot check (no JSON
+  // Schema validator reachable) is refused before it is sent.
+  McpOutputUncheckedError,
   // The `_meta` key agentfootprint's tool declarations travel under, in both
   // directions (9.71.0). Public so a server this library did not write can
   // speak it, and so a client can read a bag it received.
@@ -147,6 +150,8 @@ export type {
   // the Node loader find them.
   McpConnection,
   McpConnectionOptions,
+  // The validator a paged list's earlier-page tools are checked with.
+  McpJsonSchemaValidator,
   McpSdk,
   McpSdkClient,
   ThrottleFetch,

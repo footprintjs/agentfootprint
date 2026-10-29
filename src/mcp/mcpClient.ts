@@ -47,10 +47,12 @@ import { isDevMode } from 'footprintjs';
 
 import type { Tool } from '../tools/tools.js';
 import type {
+  McpCallToolResult,
   McpClient,
   McpClientOptions,
   McpConnection,
   McpConnectionOptions,
+  McpJsonSchemaValidator,
   McpListedTool,
   McpSdk,
   McpSdkClient,
@@ -59,6 +61,16 @@ import type {
 import { callMetaOf, readToolExtras } from './toolExtras.js';
 import { isToolError, readToolResult, resultModeOf } from './toolResult.js';
 import { listEveryPage, McpToolListIncompleteError } from './toolList.js';
+import {
+  callCheckKit,
+  callChecked,
+  checksFor,
+  McpOutputUncheckedError,
+  outputUnchecked,
+  validatorOption,
+  type CallCheckKit,
+  type CallChecks,
+} from './callChecks.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import {
   ledgeredFetch,
@@ -121,7 +133,10 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
   // checked once, here, before anything connects (`replay.ts`).
   const replay = replayDeclarationOf(opts.replay, `mcpClient[${name}]`);
   const strict = replay.policy === 'app-authorized';
-  const { connection, ledger } = await openConnection(opts, replay, name);
+  // The validator a tool's output is checked with on an earlier page of a paged
+  // list (`callChecks.ts`), refused by name now when it is not one.
+  const validator = validatorOption(opts.jsonSchemaValidator, `mcpClient[${name}]`);
+  const { connection, ledger, kit } = await openConnection(opts, replay, name, validator);
   const unlisted = new Set<string>();
 
   // Tool cache so consumers calling `.tools()` more than once don't
@@ -144,8 +159,20 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
     const listing = await listEveryPage(connection, opts.signal);
     // A list that did not end cannot say which entries name nothing.
     if (listing.incomplete === undefined) noteUnlisted(replay, listing.tools, name, unlisted);
-    const tools = listing.tools.map((t) =>
-      wrapMcpTool(name, connection, t, opts.signal, resultMode, ledger, strict),
+    // The SDK's `Client` keeps its per-tool checks for the last page it listed
+    // only; every tool from an earlier page carries them here (`callChecks.ts`).
+    // A one-page list has no earlier page, so nothing changes for it.
+    const tools = listing.tools.map((t, index) =>
+      wrapMcpTool(
+        name,
+        connection,
+        t,
+        opts.signal,
+        resultMode,
+        ledger,
+        strict,
+        index < listing.lastPageStart ? checksFor(t, kit) : undefined,
+      ),
     );
     // Never a list cut short: what was listed travels on the refusal instead.
     if (listing.incomplete !== undefined) {
@@ -186,6 +213,8 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
 interface OpenConnection {
   readonly connection: McpConnection;
   readonly ledger?: RequestLedger;
+  /** What an earlier page's tools are checked with (`callChecks.ts`). */
+  readonly kit: CallCheckKit;
 }
 
 /**
@@ -201,9 +230,14 @@ async function openConnection(
   opts: McpClientOptions | McpConnectionOptions,
   replay: ReplayDeclaration,
   name: string,
+  validator: McpJsonSchemaValidator | undefined,
 ): Promise<OpenConnection> {
-  if (opts.connection !== undefined) return { connection: opts.connection };
-  if (opts._client !== undefined) return { connection: opts._client };
+  // A client built elsewhere: the library loads nothing, so only the caller's
+  // validator can check an earlier page's output, and errors take the SDK's shape.
+  if (opts.connection !== undefined) {
+    return { connection: opts.connection, kit: callCheckKit(validator) };
+  }
+  if (opts._client !== undefined) return { connection: opts._client, kit: callCheckKit(validator) };
   // `refuseConflictingOptions` has already refused the case where this is
   // absent, so the assertion documents that guarantee rather than assuming it.
   const transport = opts.transport as McpTransport;
@@ -215,6 +249,7 @@ async function openConnection(
     opts.sdk,
     replay,
     name,
+    validator,
   );
 }
 
@@ -228,19 +263,72 @@ async function resolveClient(
   sdk?: McpSdk,
   replay?: ReplayDeclaration,
   name = 'mcp',
+  validator?: McpJsonSchemaValidator,
 ): Promise<OpenConnection> {
   if (sdk !== undefined) assertSdk(sdk, transport.transport);
   const mod: McpSdkExports = sdk ?? loadClientModule();
 
-  const client: McpSdkClient = new mod.Client(clientInfo ?? DEFAULT_CLIENT_INFO, {
-    capabilities: {},
-  });
+  // A caller's validator is the client's too, so one validator checks every
+  // page; without one, the options are exactly what they always were.
+  const options: { capabilities: Record<string, unknown>; jsonSchemaValidator?: unknown } =
+    validator === undefined
+      ? { capabilities: {} }
+      : { capabilities: {}, jsonSchemaValidator: validator };
+  const client: McpSdkClient = new mod.Client(clientInfo ?? DEFAULT_CLIENT_INFO, options);
 
   const built = await buildTransport(transport, retryOnThrottle, sdk, replay, name);
+  // With the SDK loaded here, so is what an earlier page's tools are checked
+  // with: its default validator and its own error class. With `sdk`, the loader
+  // is never touched (`callChecks.ts`).
+  const kit =
+    sdk === undefined
+      ? callCheckKit(validator, loadCheckModules(validator))
+      : callCheckKit(validator);
   // Same rule as callTool: options ride beside the transport, never inside it.
   if (signal) await client.connect(built.transport, { signal });
   else await client.connect(built.transport);
-  return { connection: client, ...(built.ledger !== undefined && { ledger: built.ledger }) };
+  return {
+    connection: client,
+    kit,
+    ...(built.ledger !== undefined && { ledger: built.ledger }),
+  };
+}
+
+/**
+ * What the SDK's `Client` checks an earlier page's tools with, loaded with the
+ * SDK on the Node loader path (the bundling law: when the client is built, never
+ * at a later tool call): its own `McpError`, and — unless the caller gave a
+ * validator — its default validator, `AjvJsonSchemaValidator`. Both modules are
+ * the ones `client/index.js` already loaded. An SDK without one of them (older
+ * than its public validator subpath) leaves that slot empty: errors then take
+ * the SDK's shape, and an earlier page's output that no validator can check is
+ * refused before it is sent.
+ */
+function loadCheckModules(validator: McpJsonSchemaValidator | undefined): {
+  readonly McpError?: unknown;
+  readonly Validator?: unknown;
+} {
+  const McpError = loadOptional<{ McpError?: unknown }>(() =>
+    lazyRequire<{ McpError?: unknown }>('@modelcontextprotocol/sdk/types.js'),
+  )?.McpError;
+  const Validator =
+    validator === undefined
+      ? loadOptional<{ AjvJsonSchemaValidator?: unknown }>(() =>
+          lazyRequire<{ AjvJsonSchemaValidator?: unknown }>(
+            '@modelcontextprotocol/sdk/validation/ajv',
+          ),
+        )?.AjvJsonSchemaValidator
+      : undefined;
+  return { McpError, Validator };
+}
+
+/** A module this SDK may not have: `undefined` when it cannot be loaded. */
+function loadOptional<T>(load: () => T): T | undefined {
+  try {
+    return load();
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -476,6 +564,7 @@ function wrapMcpTool(
   resultMode?: McpClientOptions['resultMode'],
   ledger?: RequestLedger,
   strict = false,
+  checks?: CallChecks,
 ): Tool {
   const tool: Tool = {
     schema: {
@@ -539,12 +628,21 @@ function wrapMcpTool(
       if (unavailable !== undefined) {
         throw new McpReplayUnavailableError(unavailable, serverName, mcp.name);
       }
+      // A tool from an earlier page of a paged list whose output nothing here can
+      // check is refused before anything is sent (`callChecks.ts`).
+      if (checks !== undefined && outputUnchecked(checks)) {
+        throw new McpOutputUncheckedError(serverName, mcp.name);
+      }
       const call = openCall(params, ctx, signal, ledger, serverName);
       let verdict: CallVerdict = 'failed';
       try {
-        const result = call.signal
-          ? await connection.callTool(call.params, undefined, { signal: call.signal })
-          : await connection.callTool(call.params);
+        const send = (): Promise<McpCallToolResult> =>
+          call.signal
+            ? connection.callTool(call.params, undefined, { signal: call.signal })
+            : connection.callTool(call.params);
+        // An earlier page's tool runs the SDK's checks exactly where the SDK's
+        // `callTool` runs them, so it fails as it would on a one-page list.
+        const result = checks === undefined ? await send() : await callChecked(checks, send);
         verdict = isToolError(result) ? 'tool-error' : 'completed';
         return readToolResult(result, mcp.name, serverName, resultMode);
       } catch (error) {

@@ -74,12 +74,6 @@ silence: the agent was offered part of it and nothing said so. An agent cannot
 know what it was not offered, so an incomplete list is refused loudly, like any
 discovery failure; a caller that wants the partial list takes it explicitly.
 
-**A limit that is the SDK's.** The MCP SDK's `Client` (1.32) keeps output-schema
-validators for the tools of the LAST `tools/list` answer only, replacing them on
-every page, so on a server that pages it checks `structuredContent` against an
-`outputSchema` only for the last page's tools. This library's own result
-decoding (`toolResult.ts`) is the same for every page.
-
 ```ts
 let tools: readonly Tool[];
 try {
@@ -94,10 +88,69 @@ try {
 const agent = Agent.create({ provider, model }).tools(tools).build();
 ```
 
+## A paged catalogue behaves as a one-page catalogue (`callChecks.ts`)
+
+**The rule.** The MCP SDK's `Client` (1.32) runs three checks inside `callTool`,
+and it keeps them only for the tools of its most recent `tools/list` answer: it
+replaces them on every page.
+
+1. A tool with `execution.taskSupport: 'required'` is refused before a plain
+   `tools/call` is sent.
+2. A tool with an `outputSchema` must answer with `structuredContent`, unless the
+   answer is an error.
+3. That `structuredContent` must match the schema.
+
+So for every tool listed before the last page, the library runs the same three
+checks itself, at the same moments, and raises the same error. A caller handles
+each error the same way, whatever page the tool was on:
+
+- Where the library loaded the SDK (the Node loader arm), the error is the SDK's
+  own `McpError`.
+- On the `sdk` and `connection` arms it is an error with the same name, `code`
+  and message.
+
+The output checks use a validator equal to the client's:
+
+- **The Node loader arm:** the SDK's default, `AjvJsonSchemaValidator`, loaded
+  with the SDK when the client is built.
+- **Any arm, with `jsonSchemaValidator`:** the caller's validator. The client the
+  library builds is handed the same one, so one validator checks every page.
+- **An `sdk` or `connection` arm given none:** no validator is reachable, so a
+  call to an earlier-page tool that declares an `outputSchema` is refused before
+  it is sent, with `McpOutputUncheckedError` (`sent: false`, `reason:
+  'output-unchecked'`). This is the only refusal with no SDK equivalent. An answer
+  is never returned unchecked. A required task gets the SDK's refusal, never this
+  one.
+
+A one-page catalogue gets none of this, because the SDK holds every tool. The
+checks follow the listing a `Tool` came from, so after `refresh()`, use the tools
+it returns.
+
+**Why.** Reading every page used to drop all three checks for every tool outside
+the last page, so those tools behaved as if they had never declared an output
+schema. Paging must never weaken what a tool was checked against.
+
+```ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+
+// A client you built: hand mcpClient the SAME validator your client checks with.
+const jsonSchemaValidator = new AjvJsonSchemaValidator();
+const connection = new Client(info, { capabilities: {}, jsonSchemaValidator });
+await connection.connect(transport);
+const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
+// first page's `count_rows` answers { count: 'x' } against an integer schema →
+// McpError -32602 "Structured content does not match the tool's output schema: …",
+// exactly as if it had been on the last page.
+```
+
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
 - `toolList.ts` — every page of a `tools/list` answer, and the typed refusal
   (`McpToolListIncompleteError`) when a list cannot be read to its end.
+- `callChecks.ts` — the SDK's three per-tool call checks, run again for the
+  tools listed before the last page, and the one refusal with no SDK equivalent
+  (`McpOutputUncheckedError`).
 - `mcpServe.ts` — outbound.
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a

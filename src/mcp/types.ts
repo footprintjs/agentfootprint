@@ -322,6 +322,24 @@ export interface McpClientOptions {
    */
   readonly sdk?: McpSdk;
 
+  /**
+   * The JSON Schema validator a tool's `outputSchema` is checked with — the MCP
+   * SDK's own validator interface (`new AjvJsonSchemaValidator()` from
+   * `@modelcontextprotocol/sdk/validation/ajv`, `new CfWorkerJsonSchemaValidator()`,
+   * or your own).
+   *
+   * Why it exists: the SDK's `Client` checks a tool's output only for the tools
+   * of its most recent `tools/list` answer, so on a server that pages, the
+   * library checks the tools of the earlier pages itself (see
+   * `McpClient.tools()`). The client the library builds is handed this same
+   * validator, so every page is checked by one validator. Omit it and the
+   * library uses the SDK's default, loaded with the SDK itself; with `sdk`,
+   * where the library never touches its Node loader, a call to an earlier-page
+   * tool that declares an `outputSchema` is refused before it is sent
+   * (`McpOutputUncheckedError`) unless you pass one.
+   */
+  readonly jsonSchemaValidator?: McpJsonSchemaValidator;
+
   /** @see McpConnectionOptions — never set on this arm. */
   readonly connection?: undefined;
 
@@ -371,6 +389,19 @@ export interface McpConnectionOptions {
   /** Abort the list / call paths. Rides the SDK's request options. */
   readonly signal?: AbortSignal;
 
+  /**
+   * The JSON Schema validator your client checks tool output with — pass the
+   * SAME one you gave its constructor (`jsonSchemaValidator`), or the SDK's
+   * default, `new AjvJsonSchemaValidator()`.
+   *
+   * The SDK's `Client` checks a tool's output only for the tools of its most
+   * recent `tools/list` answer, so on a server that pages, the library checks
+   * the tools of the earlier pages itself, with this. Without it, a call to an
+   * earlier-page tool that declares an `outputSchema` is refused before it is
+   * sent (`McpOutputUncheckedError`); a one-page catalogue never needs it.
+   */
+  readonly jsonSchemaValidator?: McpJsonSchemaValidator;
+
   /** @see McpClientOptions — never set on this arm. */
   readonly transport?: undefined;
   /** @see McpClientOptions — never set on this arm. */
@@ -411,6 +442,15 @@ export interface McpClient {
    * holds what was listed. `signal` rides every page and is checked before
    * each page is asked for and when each answer arrives: once it has fired,
    * nothing more is asked for and no page is accepted.
+   *
+   * A paged catalogue behaves as a one-page one. The SDK's `Client` checks a
+   * tool's call only for the tools of its last page (a required task refused
+   * before sending; `structuredContent` required by an `outputSchema`, and
+   * matched against it), so every tool from an earlier page runs the same
+   * checks here and fails with the same error. Where no JSON Schema validator
+   * is reachable (`jsonSchemaValidator` on the `sdk` and `connection` arms), a
+   * call to an earlier-page tool that declares an `outputSchema` is refused
+   * before it is sent, with `McpOutputUncheckedError`.
    */
   tools(): Promise<readonly Tool[]>;
 
@@ -565,6 +605,28 @@ export interface McpListedTool {
   readonly inputSchema: Readonly<Record<string, unknown>>;
   /** MCP's extensibility bag. Absent from most servers' tools. */
   readonly _meta?: Readonly<Record<string, unknown>>;
+  /**
+   * What the tool's `structuredContent` must match. Read for the one reason the
+   * SDK's `Client` reads it: a tool that declares one must answer with
+   * matching `structuredContent` (see `McpClient.tools()` for a paged list).
+   */
+  readonly outputSchema?: Readonly<Record<string, unknown>>;
+  /** How the tool may run: `taskSupport: 'required'` means only as a task, never a plain `tools/call`. */
+  readonly execution?: { readonly taskSupport?: string };
+}
+
+/**
+ * A JSON Schema validator, as the MCP SDK's `Client` takes one
+ * (`jsonSchemaValidator`): `getValidator(schema)` compiles a schema once and
+ * returns a function that checks one value against it. Typed STRUCTURALLY so
+ * this declaration never references the optional peer; the SDK's own
+ * `AjvJsonSchemaValidator` and `CfWorkerJsonSchemaValidator` satisfy it.
+ */
+export interface McpJsonSchemaValidator {
+  getValidator(schema: object): (input: unknown) => {
+    readonly valid: boolean;
+    readonly errorMessage?: string;
+  };
 }
 
 /**
