@@ -330,16 +330,18 @@ agent.answerValidation()?.checks.find((c) => c.reason === 'declaration-overclaim
 // { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }
 ```
 
-**A list on a row is read by index — never through its own code.** Every list
-the fold reads off a row — a conflict's readings, a contingent value's carriers,
-an answer check's `tools`, a request's `toolCalls` — goes through ONE reader,
-`sources.ts` · `rowList`: the bounded-copy convention (`lib/boundedJson.ts` ·
-`copyJson`) as a reader that never refuses (`readOwnList`). A plain array only,
-its own `length`, the own data property at each index, at most
-`MAX_ROW_LIST_ENTRIES` (1,000). The record handed to `assessAnswer` may be
-host-built, so a list can be SPARSE, carry its own iterator or put a getter at
-an index; the reader never calls the iterator or the getter. What it cannot read
-is counted, never dropped and never a throw:
+**A list on a row is read by index — never through its own iterator or index
+getters.** Every list the fold reads off a row — a conflict's readings, a
+contingent value's carriers, an answer check's `tools`, a request's `toolCalls`
+— goes through ONE reader, `sources.ts` · `rowList`: the bounded-copy
+convention (`lib/boundedJson.ts` · `copyJson`) as a reader that does not refuse
+an ordinary array (`readOwnList`). A plain array only, its own `length`, the own
+data property at each index, at most `MAX_ROW_LIST_ENTRIES` (1,000). The record
+handed to `assessAnswer` may be host-built, so a list can be SPARSE, carry its
+own iterator or put a getter at an index; the reader never calls the iterator
+or the getter. Unless the value is a Proxy, what it cannot read is counted,
+never dropped and never a throw (a Proxy, and a getter on an entry object, are
+outside this: see Not covered, below):
 
 - a hole, or an entry behind a getter, is one entry that names no call;
 - the entries past the bound are counted, never walked (a `length` is the
@@ -506,6 +508,14 @@ it at the study's freeze (adopted Q12).
   a getter at an index runs, an overridden `forEach` runs, and a very long
   sparse list costs its length. A record the library committed, or a saved
   recording read with `JSON.parse`, holds none of these.
+- **A Proxy, and a getter on an entry object.** `rowList`'s guarantee covers an
+  ordinary (non-Proxy) array and its own index accessors and iterator, nothing
+  more. A Proxy around an array passes `Array.isArray`, and its traps
+  (`getPrototypeOf`, `getOwnPropertyDescriptor`) run code inside the reader and
+  can throw out of it; a revoked Proxy throws from `Array.isArray` itself. An
+  entry is handed on as it is, so a getter on an entry object runs when the
+  fold reads that property. A record the library committed, or a saved
+  recording read with `JSON.parse`, holds neither.
 - **Verdicts that exist only as events.** The `.claims()` dispositions — so
   `claim-contradicted` and a claims-supported "known" — and the integrity
   dispositions are not on the committed record in this version. The fold never
