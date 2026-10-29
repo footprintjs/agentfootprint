@@ -244,6 +244,139 @@ through the same reader, so a rail armed by a remote declaration — and the
 unhappy path where a declaration is malformed — can both be tested before the
 real server exists.
 
+## A paginated tool list: every page, or a refusal
+
+A server may page its tool list: each `tools/list` page carries a `nextCursor`
+while there is more. `tools()` and `refresh()` follow it until a page carries
+none, sending at most **100 `tools/list` requests**. That bound counts requests,
+not the size of the catalogue: a page may hold any number of tools. The first
+page is asked exactly as before, so a server that answers in one page sees no
+change.
+
+A list that cannot be read to its end is never returned cut short — an agent
+cannot know which tools it was not offered. The call rejects with
+`McpToolListIncompleteError` instead. Its `reason` (`McpToolListIncompleteReason`)
+says why: `'page-limit'` when the list did not end within 100 requests,
+`'cursor-repeated'` when a page named a cursor the listing had already sent (a
+loop). `pages` counts the pages read, and `tools` holds what was listed, wrapped
+and callable, for a caller that decides to use an incomplete list on purpose:
+
+```ts
+import { McpToolListIncompleteError } from 'agentfootprint/providers';
+
+let tools;
+try {
+  tools = await catalog.tools();
+} catch (error) {
+  if (!(error instanceof McpToolListIncompleteError)) throw error;
+  console.warn(`using ${error.tools.length} tools of an incomplete list (${error.reason})`);
+  tools = error.tools;
+}
+```
+
+`signal` rides every page. It is checked immediately before each page is asked
+for and again when each answer arrives. Once it has fired, nothing more is asked
+for and no page is accepted, the last one included. The listing rejects with
+the abort, which wins over an incomplete list. A connection that ignores the
+signal still settles its own pending page in its own time.
+
+### A tool keeps its checks, whatever `mcpClient` lists later
+
+The MCP SDK's `Client` checks a tool call against what the server listed, but
+only for the tools of its most recent `tools/list` answer: every answer replaces
+the checks. There are three checks:
+
+- a tool that requires task-based execution is refused before a plain call is
+  sent;
+- a tool with an `outputSchema` must answer with `structuredContent`;
+- that `structuredContent` must match the schema.
+
+So every tool `mcpClient` hands out carries these checks itself, as its list
+declared them. The SDK runs them only for a tool of a one-page list whose answer
+is still the latest, with no list request out when the call starts or ends: the
+usual case, which sees no change at all. Every other call runs the tool's own
+checks and raises the same error: the SDK's own `McpError` when the library
+loaded the SDK, otherwise an error with the same name, `code` and message. That
+covers:
+
+- a paged list's tools, on every page;
+- a tool you kept from before a `refresh()`, whether the refresh succeeded or
+  failed;
+- a call made while a list is being read.
+
+**This holds only while `mcpClient` owns discovery.** The library knows about
+the lists it reads: `tools()` and `refresh()`, on every `mcpClient` over the
+same client. It cannot see any other listing, so it does not cover:
+
+- your own code calling `listTools` on a client you passed as `connection`;
+- the SDK client's automatic discovery: `listChanged.tools` with `autoRefresh`,
+  which is on by default once you configure `listChanged.tools`;
+- anything else that replaces the SDK client's cache.
+
+After one of these, a tool you already hold runs neither its output checks nor
+its required-task refusal, even if you passed `jsonSchemaValidator`. A client
+the library builds (`transport` or `sdk`) never lists by itself. For a client
+you pass as `connection`, turn the SDK's automatic refresh off and send the
+server's notice through `refresh()`, or give `mcpClient` a connection of its
+own:
+
+```ts
+const jsonSchemaValidator = new AjvJsonSchemaValidator();
+let catalog: McpClient | undefined;
+const connection = new Client(info, {
+  capabilities: {},
+  jsonSchemaValidator,
+  listChanged: {
+    // autoRefresh is on by default: without `false`, the SDK lists by itself.
+    tools: { autoRefresh: false, onChanged: () => void catalog?.refresh().catch(console.error) },
+  },
+});
+await connection.connect(transport);
+catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
+```
+
+A failed `refresh()` still rejects, and `tools()` keeps serving the catalogue it
+had. Those tools stay safe to call:
+
+```ts
+const countRows = (await catalog.tools()).find((t) => t.schema.name === 'count_rows')!;
+
+try {
+  await catalog.refresh(); // fails on the new list's second page
+} catch {
+  // tools() still serves the old catalogue
+}
+// An answer that breaks count_rows' outputSchema is still refused:
+// McpError -32602 "Structured content does not match the tool's output schema: …"
+await countRows.execute({}, ctx);
+```
+
+The output checks need a JSON Schema validator, `McpJsonSchemaValidator`:
+
+- **`mcpClient({ transport })`:** uses the SDK's default validator, loaded with
+  the SDK.
+- **`sdk` and `connection` arms:** the library cannot load one, so pass
+  `jsonSchemaValidator`. Pass the validator your client uses, or
+  `new AjvJsonSchemaValidator()`. On the `sdk` arm the client the library builds
+  is handed the same validator, so one validator checks every call.
+- **No validator on those arms:** a call that runs the tool's own checks, to a
+  tool that declares an `outputSchema`, is refused with
+  `McpOutputUncheckedError` (`reason: 'output-unchecked'`), so while `mcpClient`
+  owns discovery an answer is never returned unchecked. Usually it is refused
+  before it is sent (`sent: false`). If a list was read while the call was out,
+  the answer is refused once it arrives, unread (`sent: true`): the tool may have
+  run.
+
+```ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+
+const jsonSchemaValidator = new AjvJsonSchemaValidator();
+const connection = new Client(info, { capabilities: {}, jsonSchemaValidator });
+await connection.connect(transport);
+const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
+```
+
 ## MCP from a browser
 
 The barrier was never the protocol and never the SDK — the SDK's client and
@@ -421,8 +554,11 @@ From `agentfootprint/providers`:
 | `McpHttpTransport` | `{ transport: 'http', url, headers?, fetch? }`. |
 | `McpCallToolResult` | The `tools/call` union: today's `content` arm, or the legacy `toolResult` arm. |
 | `McpSdk` | The two SDK modules you can supply instead of the Node loader: `Client` and `StreamableHTTPClientTransport`. |
-| `McpConnection` | A connected client: `listTools`, `callTool`, `close`. Deliberately no `connect`. |
-| `McpConnectionOptions` | The options for `mcpClient({ connection })` — `name`, `connection`, `signal`. |
+| `McpConnection` | A connected client: `listTools` (one page; `{ cursor }` asks for the next), `callTool`, `close`. Deliberately no `connect`. |
+| `McpToolListIncompleteError` | A tool list that could not be read to its end. `reason` (`McpToolListIncompleteReason`): `'page-limit'` or `'cursor-repeated'`; `pages`; `tools` — what was listed. |
+| `McpOutputUncheckedError` | A call to a tool with an `outputSchema` whose list the SDK no longer holds, refused because no JSON Schema validator is reachable. `reason: 'output-unchecked'`; `sent: false` before sending, `sent: true` when a list was read while the call was out. |
+| `McpJsonSchemaValidator` | The validator option's type, `jsonSchemaValidator`: the MCP SDK's own interface, so `new AjvJsonSchemaValidator()` fits as is. |
+| `McpConnectionOptions` | The options for `mcpClient({ connection })` — `name`, `connection`, `signal`, `jsonSchemaValidator`. |
 | `McpSdkClient` | `McpConnection` plus `connect` — the surface the library uses when IT builds the client, and what `_client` takes in tests. |
 | `ThrottleFetch` | The fetch shape `retryingFetch` takes and returns. |
 | `MCP_TOOL_EXTRAS_KEY` | The `_meta` key declarations travel under — `'agentfootprint'`. |

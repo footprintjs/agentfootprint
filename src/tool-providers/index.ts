@@ -76,6 +76,14 @@ export {
   // cannot honour (its requests unmatched, or its answers unseen) is refused
   // before it is sent, with this error and a typed reason.
   McpReplayUnavailableError,
+  // A server's tool list that could not be read to its end — past 100 requests,
+  // or a cursor it already sent — is refused with this error and a typed
+  // reason; what was listed travels on it, never as a list cut short.
+  McpToolListIncompleteError,
+  // A tool whose list the SDK no longer holds, and whose output this connection
+  // cannot check (no JSON Schema validator reachable), is refused, never
+  // answered unchecked.
+  McpOutputUncheckedError,
   // The `_meta` key agentfootprint's tool declarations travel under, in both
   // directions (9.71.0). Public so a server this library did not write can
   // speak it, and so a client can read a bag it received.
@@ -137,11 +145,14 @@ export type {
   McpReplayPolicy,
   McpReplayTool,
   McpReplayUnavailableReason,
+  McpToolListIncompleteReason,
   // The browser seams (9.81.0): a connection you opened yourself, the options
   // that carry it, and the two SDK modules you can hand over instead of letting
   // the Node loader find them.
   McpConnection,
   McpConnectionOptions,
+  // The validator a tool's own output checks run with.
+  McpJsonSchemaValidator,
   McpSdk,
   McpSdkClient,
   ThrottleFetch,

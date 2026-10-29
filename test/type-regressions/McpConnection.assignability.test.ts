@@ -20,14 +20,23 @@
  *      object the documented two-import snippet produces;
  *   3. `McpConnection` has NO `connect`. That absence is the contract: the
  *      library must never call `connect()` on a client somebody else already
- *      connected, and a type that carried the method would let it.
+ *      connected, and a type that carried the method would let it;
+ *   4. the SDK's own `AjvJsonSchemaValidator` is an `McpJsonSchemaValidator` —
+ *      what `mcpClient({ jsonSchemaValidator })` takes, so the validator a
+ *      caller gives their `Client` can be handed over as it is.
  */
 import { describe, expect, it } from 'vitest';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
 
-import type { McpConnection, McpSdk, McpSdkClient } from '../../src/tool-providers/index';
+import type {
+  McpConnection,
+  McpJsonSchemaValidator,
+  McpSdk,
+  McpSdkClient,
+} from '../../src/tool-providers/index';
 
 // ─── 1. The SDK's client satisfies both ports ─────────────────────
 
@@ -68,6 +77,10 @@ function neverConnects(connection: McpConnection): unknown {
   return connection.connect;
 }
 
+// ─── 4. The SDK's validator is the option's type, unchanged ───────
+
+const sdkValidator: McpJsonSchemaValidator = new AjvJsonSchemaValidator();
+
 /** A fake with the three methods is a connection — no vendor anywhere in it. */
 const handWritten: McpConnection = {
   listTools: () => Promise.resolve({ tools: [] }),
@@ -88,6 +101,12 @@ describe('McpConnection / McpSdk — type regressions against the real SDK', () 
     expect(modules.Client).toBe(Client);
     expect(modules.StreamableHTTPClientTransport).toBe(StreamableHTTPClientTransport);
     expect(buildThroughTheShim(modules)).toBeInstanceOf(StreamableHTTPClientTransport);
+  });
+
+  it("the SDK's default validator is an McpJsonSchemaValidator, and checks", () => {
+    const check = sdkValidator.getValidator({ type: 'object', required: ['count'] });
+    expect(check({ count: 1 }).valid).toBe(true);
+    expect(check({}).valid).toBe(false);
   });
 
   it('a hand-written connection needs no vendor code at all', async () => {

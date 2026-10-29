@@ -322,6 +322,26 @@ export interface McpClientOptions {
    */
   readonly sdk?: McpSdk;
 
+  /**
+   * The JSON Schema validator a tool's `outputSchema` is checked with — the MCP
+   * SDK's own validator interface (`new AjvJsonSchemaValidator()` from
+   * `@modelcontextprotocol/sdk/validation/ajv`, `new CfWorkerJsonSchemaValidator()`,
+   * or your own).
+   *
+   * Why it exists: the SDK's `Client` checks a tool's output only for the tools
+   * of its most recent `tools/list` answer, so every tool the library hands out
+   * carries its own checks, and runs them whenever the SDK no longer holds its
+   * list: a paged list, a list a later answer replaced, a call made while a list
+   * is read — of the lists `tools()` and `refresh()` read (see
+   * `McpClient.tools()`; the client the library builds here never lists by
+   * itself). The client the library builds is handed this same validator, so
+   * one validator checks every call. Omit it and the library uses the SDK's
+   * default, loaded with the SDK itself; with `sdk`, where the library never
+   * touches its Node loader, such a call to a tool that declares an
+   * `outputSchema` is refused (`McpOutputUncheckedError`) unless you pass one.
+   */
+  readonly jsonSchemaValidator?: McpJsonSchemaValidator;
+
   /** @see McpConnectionOptions — never set on this arm. */
   readonly connection?: undefined;
 
@@ -365,11 +385,37 @@ export interface McpConnectionOptions {
   /**
    * A connection you already opened. The library never calls `connect()` on it;
    * `close()` on the returned client closes it exactly once.
+   *
+   * Leave its tool discovery to `mcpClient`: the per-tool checks hold only for
+   * the lists `tools()` and `refresh()` read (see `McpClient.tools()`). Do not
+   * let the SDK client refresh itself (`listChanged.tools` with `autoRefresh`,
+   * which is on by default once `listChanged.tools` is given): set
+   * `autoRefresh: false` and call `refresh()` from `onChanged`, or give
+   * `mcpClient` a connection of its own.
    */
   readonly connection: McpConnection;
 
   /** Abort the list / call paths. Rides the SDK's request options. */
   readonly signal?: AbortSignal;
+
+  /**
+   * The JSON Schema validator your client checks tool output with — pass the
+   * SAME one you gave its constructor (`jsonSchemaValidator`), or the SDK's
+   * default, `new AjvJsonSchemaValidator()`.
+   *
+   * The SDK's `Client` checks a tool's output only for the tools of its most
+   * recent `tools/list` answer, so the library checks a tool itself, with this,
+   * whenever the SDK no longer holds its list: a paged list, a list a later
+   * answer replaced, a call made while a list is read. Without it, such a call
+   * to a tool that declares an `outputSchema` is refused
+   * (`McpOutputUncheckedError`); a one-page catalogue that is still the latest
+   * answer never needs it. It covers only the lists `tools()` and `refresh()`
+   * read: when the SDK client's cache is replaced some other way (its own
+   * automatic refresh, a `listTools` call of yours), the library still leaves
+   * the call to the SDK, and this validator is never asked (see
+   * `McpClient.tools()`).
+   */
+  readonly jsonSchemaValidator?: McpJsonSchemaValidator;
 
   /** @see McpClientOptions — never set on this arm. */
   readonly transport?: undefined;
@@ -401,13 +447,53 @@ export interface McpClient {
    * after `mcpClient(...)` is the snapshot used to register on the
    * agent; subsequent calls re-fetch (cheap, in-memory cached by the
    * SDK between fetches).
+   *
+   * Every page of the server's `tools/list` answer is read: the client
+   * follows `nextCursor` until a page carries none, sending at most 100
+   * `tools/list` requests (a bound on requests, not on the catalogue's size).
+   * A list that does not end within them, or that names a cursor it already
+   * sent (a loop), is never returned cut short: the call rejects with
+   * `McpToolListIncompleteError`, whose `reason` says which and whose `tools`
+   * holds what was listed. `signal` rides every page and is checked before
+   * each page is asked for and when each answer arrives: once it has fired,
+   * nothing more is asked for and no page is accepted.
+   *
+   * Every tool keeps its checks, whatever `tools()` and `refresh()` list later —
+   * those of any `mcpClient` over the same client included. That holds only
+   * while all tool discovery on the client runs through them; see below. The
+   * SDK's `Client` checks a tool's call (a required task refused before
+   * sending; `structuredContent` required by an `outputSchema`, and matched
+   * against it) only for the tools of its most recent `tools/list` answer, so
+   * every tool returned here carries those checks itself. They are left to the
+   * SDK only for a tool of a one-page list whose answer is still the latest,
+   * with no list request out. Every other call runs the tool's own and fails
+   * with the same error: a paged list's tools, a tool held across a later
+   * `refresh()` (failed or not), a call made while a list is read. Where no JSON
+   * Schema validator is reachable (`jsonSchemaValidator` on the `sdk` and
+   * `connection` arms), such a call to a tool that declares an `outputSchema` is
+   * refused with `McpOutputUncheckedError`: before it is sent, or, when a list
+   * was read while it was out, once its answer is in, unread.
+   *
+   * What it does not cover: a listing the library does not send. Your own
+   * `listTools` calls, the SDK client's automatic discovery (`listChanged.tools`
+   * with `autoRefresh`, on by default once `listChanged.tools` is given), or any
+   * other replacement of the SDK client's cache leave a tool handed out here
+   * believing the SDK still holds its checks — so neither its output checks nor
+   * its required-task refusal run, even with `jsonSchemaValidator`. The client
+   * the library builds (the `transport` and `sdk` arms) never lists by itself;
+   * on a client you pass as `connection`, set `autoRefresh: false` and call
+   * `refresh()` from `onChanged`, or give `mcpClient` a connection of its own.
    */
   tools(): Promise<readonly Tool[]>;
 
   /**
    * Force a refresh from the server. Use when you suspect the server
    * has dynamically added/removed tools mid-session (e.g., after the
-   * server processes a config update).
+   * server processes a config update). Reads every page, as `tools()` does.
+   * When it fails it rejects, and `tools()` keeps serving the catalogue it
+   * had: those tools keep their own checks (see `tools()`). Route the server's
+   * list-changed notice here, rather than letting the SDK client refresh
+   * itself: a listing the library does not send is not covered.
    */
   refresh(): Promise<readonly Tool[]>;
 
@@ -442,10 +528,19 @@ export interface McpClient {
  * convenience version of it.
  */
 export interface McpConnection {
+  /**
+   * One page of the server's tool list. The first page is asked with no params;
+   * each later page with the `nextCursor` the page before it returned, as
+   * `{ cursor }`. A connection that never pages returns no `nextCursor`.
+   */
   listTools(
-    params?: undefined,
+    params?: { readonly cursor?: string },
     options?: McpRequestOptions,
-  ): Promise<{ readonly tools: ReadonlyArray<McpListedTool> }>;
+  ): Promise<{
+    readonly tools: ReadonlyArray<McpListedTool>;
+    /** Present while the server has more tools: what to ask for the next page with. */
+    readonly nextCursor?: string;
+  }>;
   callTool(
     params: {
       readonly name: string;
@@ -546,6 +641,28 @@ export interface McpListedTool {
   readonly inputSchema: Readonly<Record<string, unknown>>;
   /** MCP's extensibility bag. Absent from most servers' tools. */
   readonly _meta?: Readonly<Record<string, unknown>>;
+  /**
+   * What the tool's `structuredContent` must match. Read for the one reason the
+   * SDK's `Client` reads it: a tool that declares one must answer with
+   * matching `structuredContent` (see `McpClient.tools()` for a paged list).
+   */
+  readonly outputSchema?: Readonly<Record<string, unknown>>;
+  /** How the tool may run: `taskSupport: 'required'` means only as a task, never a plain `tools/call`. */
+  readonly execution?: { readonly taskSupport?: string };
+}
+
+/**
+ * A JSON Schema validator, as the MCP SDK's `Client` takes one
+ * (`jsonSchemaValidator`): `getValidator(schema)` compiles a schema once and
+ * returns a function that checks one value against it. Typed STRUCTURALLY so
+ * this declaration never references the optional peer; the SDK's own
+ * `AjvJsonSchemaValidator` and `CfWorkerJsonSchemaValidator` satisfy it.
+ */
+export interface McpJsonSchemaValidator {
+  getValidator(schema: object): (input: unknown) => {
+    readonly valid: boolean;
+    readonly errorMessage?: string;
+  };
 }
 
 /**

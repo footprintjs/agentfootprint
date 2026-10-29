@@ -37,12 +37,20 @@ export type {
 // A call under 'app-authorized' that a connection cannot honour is refused
 // before it is sent, with a typed reason.
 export { McpReplayUnavailableError, type McpReplayUnavailableReason } from './replayUnavailable.js';
+// A tool list that could not be read to its end (past 100 requests, or a cursor
+// sent twice) is refused with this error and a typed reason, never cut short.
+export { McpToolListIncompleteError, type McpToolListIncompleteReason } from './toolList.js';
+// A tool whose list the SDK no longer holds, and whose output this connection
+// cannot check — no JSON Schema validator reachable — is refused, never answered
+// unchecked.
+export { McpOutputUncheckedError } from './callChecks.js';
 export type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
   McpConnection,
   McpConnectionOptions,
+  McpJsonSchemaValidator,
   McpSdk,
   McpGatewayTransport,
   McpHttpTransport,

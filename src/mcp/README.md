@@ -47,8 +47,188 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
   handler: async (args, request) => query(args, request._meta?.agentfootprint) }] });
 ```
 
+## A tool list is read to its end, or said to be incomplete (`toolList.ts`)
+
+**The rule.** `tools()` and `refresh()` read every page of the server's
+`tools/list` answer: the first page with no params, exactly as before, then
+each `nextCursor` as `{ cursor }` until a page carries none. They send at most
+100 `tools/list` requests (`MAX_TOOL_LIST_PAGES`). The bound counts requests,
+not the catalogue's size, because one page may hold any number of tools. A list
+that does not end within the bound (`'page-limit'`), or a page that names a
+cursor this listing already sent (`'cursor-repeated'`, a loop), is never
+returned cut short. The call rejects with `McpToolListIncompleteError`, whose
+`reason` says which, whose `pages` counts what was read, and whose `tools`
+holds what was listed, wrapped and callable. The error names the server and the
+counts, never a cursor.
+
+The client's `signal` rides every page in the trailing options, and the library
+checks it twice per page: immediately before the page is asked for, and when its
+answer arrives. Once it has fired, nothing more is asked for and no page is
+accepted, the last one included, so nothing is returned and nothing is cached.
+An abort wins over an incomplete list. The check cannot settle a page that a
+connection ignoring the signal is still holding: that promise settles when the
+connection settles it.
+
+**Why.** Reading one page cut a paginating server's catalogue short in
+silence: the agent was offered part of it and nothing said so. An agent cannot
+know what it was not offered, so an incomplete list is refused loudly, like any
+discovery failure; a caller that wants the partial list takes it explicitly.
+
+```ts
+let tools: readonly Tool[];
+try {
+  tools = await catalog.tools();
+} catch (error) {
+  if (!(error instanceof McpToolListIncompleteError)) throw error;
+  // error.reason: 'page-limit' | 'cursor-repeated'; error.pages: the pages read.
+  // Use the partial list only on purpose, and say so:
+  log.warn(`catalog: ${error.tools.length} tools of an incomplete list (${error.reason})`);
+  tools = error.tools;
+}
+const agent = Agent.create({ provider, model }).tools(tools).build();
+```
+
+## A listing never makes a callable tool lose its checks (`callChecks.ts`)
+
+**The rule.** The MCP SDK's `Client` (1.32) runs three checks inside `callTool`,
+and it keeps them only for the tools of its most recent `tools/list` answer:
+every answer replaces them.
+
+1. A tool with `execution.taskSupport: 'required'` is refused before a plain
+   `tools/call` is sent.
+2. A tool with an `outputSchema` must answer with `structuredContent`, unless the
+   answer is an error.
+3. That `structuredContent` must match the schema.
+
+So every `Tool` the library hands out carries these checks itself, as the list
+it came from declared them. The library counts each `tools/list` request it
+sends, from the moment it is sent until it settles, answered or failed
+(`listingGenerations.ts`). It leaves a call to the SDK only when the tool came
+from a one-page list whose answer is still the latest and no list request is
+out, both when the call starts and when its answer comes in. That is the
+one-page normal case, and it runs exactly as it always did. Every other call
+runs the tool's own checks, at the SDK's moments, and raises the same error:
+
+- a tool of a paged list, on any page: no one answer holds them all;
+- a tool whose list a later answer replaced, after a `refresh()` that succeeded
+  or failed, including a reference held across it;
+- any call made while a list is being read.
+
+**Where it holds: only while `mcpClient` owns discovery.** The library counts
+the lists it reads: `tools()` and `refresh()`, on every `mcpClient` over the
+same client. It cannot see any other listing, so it does not cover:
+
+- your own code calling `listTools` on a client passed as `connection`;
+- the SDK client's automatic discovery: `listChanged.tools` with `autoRefresh`,
+  which is on by default once `listChanged.tools` is given;
+- any other replacement of the SDK client's cache.
+
+Each of these replaces the SDK's checks while a tool the library handed out
+still believes the SDK holds them. That tool then runs neither its output checks
+nor its required-task refusal, even with a `jsonSchemaValidator`: the library
+leaves the call to the SDK. The client the library builds (the `transport` and
+`sdk` arms) never lists by itself. On a client you pass as `connection`, turn
+the SDK's automatic refresh off and route the server's list-changed notice
+through `refresh()` (example below), or give `mcpClient` a connection of its
+own. `listingKeepsChecks.limits.test.ts` pins this limit as it stands.
+
+A failed list request counts too: the SDK caches an answer before it returns
+it, and caching can throw after the old checks are cleared. So a failed
+`refresh()` still rejects, `tools()` still serves the old catalogue, and those
+tools are safe to call: they check themselves.
+
+A tool's own checks raise the SDK's errors, so a caller handles them the same
+way:
+
+- Where the library loaded the SDK (the Node loader arm), the error is the SDK's
+  own `McpError`.
+- On the `sdk` and `connection` arms it is an error with the same name, `code`,
+  `data` and message.
+
+The output checks use a validator equal to the client's:
+
+- **The Node loader arm:** the SDK's default, `AjvJsonSchemaValidator`, loaded
+  with the SDK when the client is built.
+- **Any arm, with `jsonSchemaValidator`:** the caller's validator. The client the
+  library builds is handed the same one, so one validator checks every call.
+- **An `sdk` or `connection` arm given none:** while `mcpClient` owns discovery,
+  an answer is never returned unchecked. `McpOutputUncheckedError` (`reason:
+  'output-unchecked'`) says which way:
+  - `sent: false`: the call runs under the tool's own checks from the start and
+    the tool declares an `outputSchema`, so it is refused before it is sent;
+  - `sent: true`: the call started under the SDK's checks, and a `tools/list`
+    request went out before its answer came in, so the SDK may have checked the
+    answer against the other list. The answer is refused unread; the tool may
+    have run.
+
+  A required task gets the SDK's refusal, never this one.
+
+A schema is compiled when a tool's own checks first need it, so the one-page
+normal case compiles nothing twice. The count is kept per client object, because
+the SDK keeps one set of checks per client: every `mcpClient` over the same
+`connection` shares it.
+
+**Why.** Each listing replaces the SDK's checks, so a tool handed out earlier —
+from an earlier page, from a list a refresh replaced, or from the old catalogue
+a failed refresh left in place — behaved as if it had never declared an output
+schema or a required task. A listing must never make a callable tool silently
+lose its checks.
+
+```ts
+const countRows = (await catalog.tools()).find((t) => t.schema.name === 'count_rows')!;
+// count_rows declares an outputSchema: { count: integer }
+
+try {
+  await catalog.refresh(); // the new list's second page fails, so refresh() rejects
+} catch {
+  // tools() still serves the old catalogue, and countRows is still callable
+}
+await countRows.execute({}, ctx);
+// the server answers { count: 'x' } → McpError -32602 "Structured content does
+// not match the tool's output schema: …", exactly as before the refresh.
+```
+
+On a client you built yourself, hand `mcpClient` the same validator your client
+checks with:
+
+```ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+
+const jsonSchemaValidator = new AjvJsonSchemaValidator();
+const connection = new Client(info, { capabilities: {}, jsonSchemaValidator });
+await connection.connect(transport);
+const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
+```
+
+The safe setup when that client should follow the server's list-changed notice:
+the SDK's automatic refresh is off, and the notice goes through `refresh()`, so
+every listing is one the library counts:
+
+```ts
+let catalog: McpClient | undefined;
+const connection = new Client(info, {
+  capabilities: {},
+  jsonSchemaValidator,
+  listChanged: {
+    // autoRefresh is on by default: without `false`, the SDK lists by itself.
+    tools: { autoRefresh: false, onChanged: () => void catalog?.refresh().catch(console.error) },
+  },
+});
+await connection.connect(transport);
+catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
+```
+
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
+- `toolList.ts` — every page of a `tools/list` answer, and the typed refusal
+  (`McpToolListIncompleteError`) when a list cannot be read to its end.
+- `callChecks.ts` — the SDK's three per-tool call checks, carried by every tool
+  and run whenever the SDK no longer holds its list, and the one refusal with no
+  SDK equivalent (`McpOutputUncheckedError`).
+- `listingGenerations.ts` — which `tools/list` answer the SDK holds its checks
+  for: each list request counted from the moment it is sent until it settles,
+  one count per client object.
 - `mcpServe.ts` — outbound.
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a
