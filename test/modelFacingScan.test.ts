@@ -236,6 +236,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the step-advance suffix appended to a tool result ('Now on step 3 of 5'), the skip-advance sentence beside it, and skip_step's 'no step procedure is active' — persistent surfaces pointing at the moment of reading; correctly flagged, and owned by the steps feature rather than by this packet",
     },
   ],
+  'src/mcp/callChecks.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: "the MCP SDK's own task refusal ('Tool \"x\" requires task-based execution. Use client.experimental.tasks.callToolStream() instead.'), copied verbatim so a tool from an earlier page of a paged list fails exactly as on a one-page list, where the SDK delivers the identical sentence as the call's error result. Correctly flagged — it tells the model to use an SDK method it cannot call — and owned upstream: rewording it here would make the two pages' errors differ",
+    },
+  ],
   'src/trace-toolpack/debugPrompt.ts': [
     {
       kind: 'ephemeral',
@@ -1231,13 +1238,18 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Typed negatives: the always-active citation schema and one-use correction
         // are system frames, never persistent tool results. Two new files/literals;
         // the persistent and unrepaired budgets are unchanged.
-        files: 104,
-        total: 203,
+        // Paged MCP tool lists: an earlier page's tool re-runs the SDK's call
+        // checks and raises the SDK's own sentences (mcp/callChecks.ts, one new
+        // file). The task refusal's "Use …" is the SDK's text, kept verbatim so
+        // both pages fail alike: files 104 → 105, total 203 → 204, unrepaired
+        // 34 → 35 (entries 14 → 15).
+        files: 105,
+        total: 204,
         registry: 8,
         ephemeral: 26,
-        unrepaired: 34,
+        unrepaired: 35,
         notModelFacing: 135,
-        unrepairedEntries: 14,
+        unrepairedEntries: 15,
       });
       // And the ledger's own total is the number of literals the scan flagged —
       // the two halves of the same census, which is what makes the bucket a work
