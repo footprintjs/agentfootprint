@@ -244,6 +244,37 @@ through the same reader, so a rail armed by a remote declaration — and the
 unhappy path where a declaration is malformed — can both be tested before the
 real server exists.
 
+## A paginated tool list: every page, or a refusal
+
+A server may page its tool list: each `tools/list` page carries a `nextCursor`
+while there is more. `tools()` and `refresh()` follow it until a page carries
+none, for at most **100 pages**. The first page is asked exactly as before, so
+a server that answers in one page sees no change.
+
+A list that cannot be read to its end is never returned cut short — an agent
+cannot know which tools it was not offered. The call rejects with
+`McpToolListIncompleteError` instead. Its `reason` (`McpToolListIncompleteReason`)
+says why: `'page-limit'` when the list did not end within 100 pages,
+`'cursor-repeated'` when a page named a cursor the listing had already sent (a
+loop). `pages` counts the pages read, and `tools` holds what was listed, wrapped
+and callable, for a caller that decides to use an incomplete list on purpose:
+
+```ts
+import { McpToolListIncompleteError } from 'agentfootprint/providers';
+
+let tools;
+try {
+  tools = await catalog.tools();
+} catch (error) {
+  if (!(error instanceof McpToolListIncompleteError)) throw error;
+  console.warn(`using ${error.tools.length} tools of an incomplete list (${error.reason})`);
+  tools = error.tools;
+}
+```
+
+`signal` rides every page, and once it fires no further page is asked for: the
+listing rejects with the abort, which wins over an incomplete list.
+
 ## MCP from a browser
 
 The barrier was never the protocol and never the SDK — the SDK's client and
@@ -421,7 +452,8 @@ From `agentfootprint/providers`:
 | `McpHttpTransport` | `{ transport: 'http', url, headers?, fetch? }`. |
 | `McpCallToolResult` | The `tools/call` union: today's `content` arm, or the legacy `toolResult` arm. |
 | `McpSdk` | The two SDK modules you can supply instead of the Node loader: `Client` and `StreamableHTTPClientTransport`. |
-| `McpConnection` | A connected client: `listTools`, `callTool`, `close`. Deliberately no `connect`. |
+| `McpConnection` | A connected client: `listTools` (one page; `{ cursor }` asks for the next), `callTool`, `close`. Deliberately no `connect`. |
+| `McpToolListIncompleteError` | A tool list that could not be read to its end. `reason` (`McpToolListIncompleteReason`): `'page-limit'` or `'cursor-repeated'`; `pages`; `tools` — what was listed. |
 | `McpConnectionOptions` | The options for `mcpClient({ connection })` — `name`, `connection`, `signal`. |
 | `McpSdkClient` | `McpConnection` plus `connect` — the surface the library uses when IT builds the client, and what `_client` takes in tests. |
 | `ThrottleFetch` | The fetch shape `retryingFetch` takes and returns. |

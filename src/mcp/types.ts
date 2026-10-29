@@ -398,13 +398,21 @@ export interface McpClient {
    * after `mcpClient(...)` is the snapshot used to register on the
    * agent; subsequent calls re-fetch (cheap, in-memory cached by the
    * SDK between fetches).
+   *
+   * Every page of the server's `tools/list` answer is read: the client
+   * follows `nextCursor` until a page carries none, for at most 100 pages.
+   * A list that does not end within them, or that names a cursor it already
+   * sent (a loop), is never returned cut short: the call rejects with
+   * `McpToolListIncompleteError`, whose `reason` says which and whose `tools`
+   * holds what was listed. `signal` rides every page, and no page is asked
+   * for once it has fired.
    */
   tools(): Promise<readonly Tool[]>;
 
   /**
    * Force a refresh from the server. Use when you suspect the server
    * has dynamically added/removed tools mid-session (e.g., after the
-   * server processes a config update).
+   * server processes a config update). Reads every page, as `tools()` does.
    */
   refresh(): Promise<readonly Tool[]>;
 
@@ -439,10 +447,19 @@ export interface McpClient {
  * convenience version of it.
  */
 export interface McpConnection {
+  /**
+   * One page of the server's tool list. The first page is asked with no params;
+   * each later page with the `nextCursor` the page before it returned, as
+   * `{ cursor }`. A connection that never pages returns no `nextCursor`.
+   */
   listTools(
-    params?: undefined,
+    params?: { readonly cursor?: string },
     options?: McpRequestOptions,
-  ): Promise<{ readonly tools: ReadonlyArray<McpListedTool> }>;
+  ): Promise<{
+    readonly tools: ReadonlyArray<McpListedTool>;
+    /** Present while the server has more tools: what to ask for the next page with. */
+    readonly nextCursor?: string;
+  }>;
   callTool(
     params: {
       readonly name: string;

@@ -47,8 +47,49 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
   handler: async (args, request) => query(args, request._meta?.agentfootprint) }] });
 ```
 
+## A tool list is read to its end, or said to be incomplete (`toolList.ts`)
+
+**The rule.** `tools()` and `refresh()` read every page of the server's
+`tools/list` answer: the first page with no params, exactly as before, then
+each `nextCursor` as `{ cursor }` until a page carries none. They read at most
+100 pages (`MAX_TOOL_LIST_PAGES`). A list that does not end within them
+(`'page-limit'`), or a page that names a cursor this listing already sent
+(`'cursor-repeated'`, a loop), is never returned cut short: the call rejects
+with `McpToolListIncompleteError`, whose `reason` says which, whose `pages`
+counts what was read, and whose `tools` holds what was listed, wrapped and
+callable. The client's `signal` rides every page in the trailing options, and
+no page is asked for once it has fired; an abort wins over an incomplete list.
+The error names the server and the counts, never a cursor.
+
+**Why.** Reading one page cut a paginating server's catalogue short in
+silence: the agent was offered part of it and nothing said so. An agent cannot
+know what it was not offered, so an incomplete list is refused loudly, like any
+discovery failure; a caller that wants the partial list takes it explicitly.
+
+**A limit that is the SDK's.** The MCP SDK's `Client` (1.32) keeps output-schema
+validators for the tools of the LAST `tools/list` answer only, replacing them on
+every page, so on a server that pages it checks `structuredContent` against an
+`outputSchema` only for the last page's tools. This library's own result
+decoding (`toolResult.ts`) is the same for every page.
+
+```ts
+let tools: readonly Tool[];
+try {
+  tools = await catalog.tools();
+} catch (error) {
+  if (!(error instanceof McpToolListIncompleteError)) throw error;
+  // error.reason: 'page-limit' | 'cursor-repeated'; error.pages: the pages read.
+  // Use the partial list only on purpose, and say so:
+  log.warn(`catalog: ${error.tools.length} tools of an incomplete list (${error.reason})`);
+  tools = error.tools;
+}
+const agent = Agent.create({ provider, model }).tools(tools).build();
+```
+
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
+- `toolList.ts` — every page of a `tools/list` answer, and the typed refusal
+  (`McpToolListIncompleteError`) when a list cannot be read to its end.
 - `mcpServe.ts` — outbound.
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a

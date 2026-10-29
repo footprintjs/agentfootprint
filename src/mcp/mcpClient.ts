@@ -58,6 +58,7 @@ import type {
 } from './types.js';
 import { callMetaOf, readToolExtras } from './toolExtras.js';
 import { isToolError, readToolResult, resultModeOf } from './toolResult.js';
+import { listEveryPage, McpToolListIncompleteError } from './toolList.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import {
   ledgeredFetch,
@@ -137,15 +138,20 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
   };
 
   const buildTools = async (): Promise<readonly Tool[]> => {
-    // `signal` rides in the SDK's THIRD argument (RequestOptions), not in
-    // the request params — see `wrapMcpTool`.
-    const listed = opts.signal
-      ? await connection.listTools(undefined, { signal: opts.signal })
-      : await connection.listTools();
-    noteUnlisted(replay, listed.tools, name, unlisted);
-    return listed.tools.map((t) =>
+    // Every page of the server's list (`toolList.ts`). `signal` rides each
+    // page in the SDK's trailing options argument, never in the params — see
+    // `wrapMcpTool`.
+    const listing = await listEveryPage(connection, opts.signal);
+    // A list that did not end cannot say which entries name nothing.
+    if (listing.incomplete === undefined) noteUnlisted(replay, listing.tools, name, unlisted);
+    const tools = listing.tools.map((t) =>
       wrapMcpTool(name, connection, t, opts.signal, resultMode, ledger, strict),
     );
+    // Never a list cut short: what was listed travels on the refusal instead.
+    if (listing.incomplete !== undefined) {
+      throw new McpToolListIncompleteError(listing.incomplete, name, listing.pages, tools);
+    }
+    return tools;
   };
 
   return {
