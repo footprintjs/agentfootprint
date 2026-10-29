@@ -55,76 +55,85 @@ const textBytes = (ledger: FindingsLedger): number =>
   }, 0);
 
 describe('40 turns × 16 calls of 32,768 bytes, 32 blocks per answer', () => {
-  it('(a) eligible text ≤ 512 KiB; (b) ≤ 512 comparisons, earlier rows never matched; (c) metadata one row per call, no text', () => {
-    const scope: { findingsLedger?: FindingsLedger; scriptsDropped?: number } = {};
-    let maxText = 0;
-    let previousTurnPrograms: string[] = [];
-    for (let turn = 1; turn <= 40; turn++) {
-      // The seed restore at the turn boundary: earlier turns' rows lose their text.
-      if (scope.findingsLedger !== undefined) {
-        scope.findingsLedger = [...withoutEarlierScriptText(scope.findingsLedger, turn)];
-      }
-      const programs: string[] = [];
-      // 16 calls keep a row; the 17th is dropped and counted.
-      for (let call = 1; call <= MAX_SCRIPT_ROWS + 1; call++) {
-        const program = programFor(turn, call);
-        programs.push(program);
-        const row = scriptRowFor({
-          script: { argument: 'code', language: 'python' },
-          tool: 'run_code',
-          toolCallId: `c${call}`,
-          iteration: 1,
-          turn,
-          proposed: { code: program },
-          settlement: 'returned',
-          facts: { exitCode: 0 },
-        })!;
-        expect(row.bytes).toBe(MAX_SCRIPT_BYTES);
-        expect(row.text).toBe(program);
-        recordScriptRow(scope, row);
-        maxText = Math.max(maxText, textBytes(scope.findingsLedger ?? []));
-      }
-      expect(scope.scriptsDropped).toBe(turn);
-
-      // (a) at every moment, the text the ledger holds is one turn's worth at most.
-      expect(textBytes(scope.findingsLedger ?? [])).toBeLessThanOrEqual(BOUND);
-
-      // (b) an answer with 32 blocks: this turn's programs and the previous turn's.
-      const shown = [...programs.slice(0, MAX_SCRIPT_ROWS), ...previousTurnPrograms].slice(
-        0,
-        MAX_CODE_REGIONS + 4,
-      );
-      const answerText = shown.map((p) => wrapProgram(p, 'python')).join('\n\n');
-      const rows = scriptRowsOfTurn(scope.findingsLedger, turn);
-      expect(rows.current.length).toBeLessThanOrEqual(MAX_SCRIPT_ROWS);
-      const { verdict } = readShownScripts(answerText, rows, scope.scriptsDropped);
-      expect(verdict.blocks.length).toBeLessThanOrEqual(MAX_CODE_REGIONS);
-      expect(verdict.blocks.length * rows.current.length).toBeLessThanOrEqual(512);
-      // This turn's programs match; an EARLIER turn's never does — counted instead.
-      for (const block of verdict.blocks) {
-        const program = shown[block.block - 1]!;
-        if (programs.slice(0, MAX_SCRIPT_ROWS).includes(program)) {
-          expect(block.label).toBe('completed');
-        } else {
-          expect(block).toMatchObject({ label: 'unmatched' });
+  // 40 turns of 17 programs of 32 KiB each: seconds under coverage instrumentation.
+  it(
+    '(a) eligible text ≤ 512 KiB; (b) ≤ 512 comparisons, earlier rows never matched; (c) metadata one row per call, no text',
+    { timeout: 60_000 },
+    () => {
+      const scope: { findingsLedger?: FindingsLedger; scriptsDropped?: number } = {};
+      let maxText = 0;
+      let previousTurnPrograms: string[] = [];
+      for (let turn = 1; turn <= 40; turn++) {
+        // The seed restore at the turn boundary: earlier turns' rows lose their text.
+        if (scope.findingsLedger !== undefined) {
+          scope.findingsLedger = [...withoutEarlierScriptText(scope.findingsLedger, turn)];
+          // Nothing an earlier turn submitted is eligible any more.
+          expect(textBytes(scope.findingsLedger)).toBe(0);
         }
-      }
-      expect(verdict.earlierTurnRows).toBe((turn - 1) * MAX_SCRIPT_ROWS);
-      previousTurnPrograms = programs.slice(0, MAX_SCRIPT_ROWS);
-    }
-    expect(maxText).toBeLessThanOrEqual(BOUND);
+        const programs: string[] = [];
+        // 16 calls keep a row; the 17th is dropped and counted.
+        for (let call = 1; call <= MAX_SCRIPT_ROWS + 1; call++) {
+          const program = programFor(turn, call);
+          programs.push(program);
+          const row = scriptRowFor({
+            script: { argument: 'code', language: 'python' },
+            tool: 'run_code',
+            toolCallId: `c${call}`,
+            iteration: 1,
+            turn,
+            proposed: { code: program },
+            settlement: 'returned',
+            facts: { exitCode: 0 },
+          })!;
+          expect(row.bytes).toBe(MAX_SCRIPT_BYTES);
+          expect(row.text).toBe(program);
+          recordScriptRow(scope, row);
+        }
+        // Within a turn the text only grows (rows are appended), so the turn's
+        // end is its high-water mark; the restore above empties it again.
+        maxText = Math.max(maxText, textBytes(scope.findingsLedger ?? []));
+        expect(scope.scriptsDropped).toBe(turn);
 
-    // (c) prior-turn metadata: one fixed-shape row per kept call, and no text.
-    const ledger = scope.findingsLedger ?? [];
-    expect(ledger).toHaveLength(40 * MAX_SCRIPT_ROWS);
-    const prior = ledger.filter((row) => (row as ScriptRow).turn < 40) as ScriptRow[];
-    expect(prior).toHaveLength(39 * MAX_SCRIPT_ROWS);
-    const keys = new Set(prior.map((row) => Object.keys(row).sort().join(',')));
-    expect(keys.size).toBe(1);
-    expect(prior.every((row) => row.text === undefined && row.bytes === MAX_SCRIPT_BYTES)).toBe(
-      true,
-    );
-  });
+        // (a) at every moment, the text the ledger holds is one turn's worth at most.
+        expect(textBytes(scope.findingsLedger ?? [])).toBeLessThanOrEqual(BOUND);
+
+        // (b) an answer with 32 blocks: this turn's programs and the previous turn's.
+        const shown = [...programs.slice(0, MAX_SCRIPT_ROWS), ...previousTurnPrograms].slice(
+          0,
+          MAX_CODE_REGIONS + 4,
+        );
+        const answerText = shown.map((p) => wrapProgram(p, 'python')).join('\n\n');
+        const rows = scriptRowsOfTurn(scope.findingsLedger, turn);
+        expect(rows.current.length).toBeLessThanOrEqual(MAX_SCRIPT_ROWS);
+        const { verdict } = readShownScripts(answerText, rows, scope.scriptsDropped);
+        expect(verdict.blocks.length).toBeLessThanOrEqual(MAX_CODE_REGIONS);
+        expect(verdict.blocks.length * rows.current.length).toBeLessThanOrEqual(512);
+        // This turn's programs match; an EARLIER turn's never does — counted instead.
+        for (const block of verdict.blocks) {
+          const program = shown[block.block - 1]!;
+          if (programs.slice(0, MAX_SCRIPT_ROWS).includes(program)) {
+            expect(block.label).toBe('completed');
+          } else {
+            expect(block).toMatchObject({ label: 'unmatched' });
+          }
+        }
+        expect(verdict.earlierTurnRows).toBe((turn - 1) * MAX_SCRIPT_ROWS);
+        previousTurnPrograms = programs.slice(0, MAX_SCRIPT_ROWS);
+      }
+      expect(maxText).toBeLessThanOrEqual(BOUND);
+
+      // (c) prior-turn metadata: one fixed-shape row per kept call, and no text.
+      const ledger = scope.findingsLedger ?? [];
+      expect(ledger).toHaveLength(40 * MAX_SCRIPT_ROWS);
+      const prior = ledger.filter((row) => (row as ScriptRow).turn < 40) as ScriptRow[];
+      expect(prior).toHaveLength(39 * MAX_SCRIPT_ROWS);
+      const keys = new Set(prior.map((row) => Object.keys(row).sort().join(',')));
+      expect(keys.size).toBe(1);
+      expect(prior.every((row) => row.text === undefined && row.bytes === MAX_SCRIPT_BYTES)).toBe(
+        true,
+      );
+    },
+  );
 });
 
 describe('end to end — the agent loop keeps the same bounds across turns', () => {
