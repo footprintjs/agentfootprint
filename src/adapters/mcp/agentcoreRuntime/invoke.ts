@@ -35,8 +35,9 @@
  * re-send a `tools/call` after a 5xx or a dropped connection — a call that may
  * already have run, in the same pinned session — which is the one thing a retry
  * here must never do. Every retry goes through the transport's single loop
- * instead, which repeats only refusals the service made before running
- * anything. A `client` you pass keeps ITS policy: build it with
+ * instead, which repeats only the refusals its retry policy recognises: the
+ * documented session-busy reply, and a 429 (assumed, not proven, to have run
+ * nothing — see `mcp/throttleRetry.ts`). A `client` you pass keeps ITS policy: build it with
  * `maxAttempts: 1` for the same guarantee.
  *
  * ── A service exception is an ANSWER ─────────────────────────────────────────
