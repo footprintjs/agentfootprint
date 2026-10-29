@@ -291,8 +291,9 @@ describe('large integers, exactly', () => {
     ['3358.0', 'n = 3.358e+03', 'grounded'],
     ['3,359', 'n = 3.358e+03', 'flagged'],
     ['3.358e+03', 'n = 3,358', 'grounded'],
-    // A whole number is matched exactly, never rounded: 3.36e+03 is 3360,
-    // and 3.358e+03 is not 3358.04 to the nearest unit — as plain 3358 is not.
+    // A value with no fractional places after expansion is matched exactly, never
+    // rounded: 3.36e+03 is 3360, and 3.358e+03 is not 3358.04 to the nearest unit —
+    // as plain 3358 is not.
     ['3.36e+03', 'n = 3,358', 'flagged'],
     ['3.358e+03', 'n = 3358.04', 'flagged'],
     ['3358', 'n = 3358.04', 'flagged'],

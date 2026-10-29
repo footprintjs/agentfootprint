@@ -45,8 +45,9 @@ export interface ScientificDecimal {
    *  `1.12e-02` → `0.0112`, `3.358e+03` → `3358`. */
   readonly exact: string;
   /** The value at the precision the spelling was written with, only when
-   *  that is a fraction: `1.120e-2` → `0.01120`. A whole number
-   *  (`3.358e+03`) has none — it is matched exactly, never rounded. */
+   *  that is a fraction: `1.120e-2` → `0.01120`. A spelling with no
+   *  fractional places after expansion (`3.358e+03`) has none — it is
+   *  matched exactly, never rounded. */
   readonly written?: string;
 }
 
