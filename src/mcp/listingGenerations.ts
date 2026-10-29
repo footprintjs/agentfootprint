@@ -20,7 +20,11 @@
  * set of checks per client, so there is one count per connection object: every
  * `mcpClient` over the same client shares it (`listingsOf`). A `tools/list`
  * request the library did not send — your own code calling `listTools` on a
- * client passed as `connection` — is not counted: the library cannot see it.
+ * client passed as `connection`, or that client's own automatic refresh
+ * (`listChanged.tools` with `autoRefresh`) — is not counted: the library cannot
+ * see it, and a tool it handed out goes on leaving its checks to an SDK that no
+ * longer holds them. That limit is documented, and pinned by
+ * `test/mcp/listingKeepsChecks.limits.test.ts`.
  */
 
 /** One settled `tools/list` request's answer, and the generation it settled at. */

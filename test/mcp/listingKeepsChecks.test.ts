@@ -22,6 +22,10 @@
  *   - a call made while a list request is out;
  *   - a listing by another mcpClient over the same connection;
  *   - one-page controls: the same requests, nothing checked twice.
+ *
+ * What it does not cover — a listing the library does not send (the SDK
+ * client's own automatic refresh, a caller's `listTools`) — is a documented
+ * limit, pinned in `listingKeepsChecks.limits.test.ts`.
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';

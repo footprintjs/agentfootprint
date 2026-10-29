@@ -332,12 +332,13 @@ export interface McpClientOptions {
    * of its most recent `tools/list` answer, so every tool the library hands out
    * carries its own checks, and runs them whenever the SDK no longer holds its
    * list: a paged list, a list a later answer replaced, a call made while a list
-   * is read (see `McpClient.tools()`). The client the library builds is handed
-   * this same validator, so one validator checks every call. Omit it and the
-   * library uses the SDK's default, loaded with the SDK itself; with `sdk`,
-   * where the library never touches its Node loader, such a call to a tool that
-   * declares an `outputSchema` is refused (`McpOutputUncheckedError`) unless you
-   * pass one.
+   * is read — of the lists `tools()` and `refresh()` read (see
+   * `McpClient.tools()`; the client the library builds here never lists by
+   * itself). The client the library builds is handed this same validator, so
+   * one validator checks every call. Omit it and the library uses the SDK's
+   * default, loaded with the SDK itself; with `sdk`, where the library never
+   * touches its Node loader, such a call to a tool that declares an
+   * `outputSchema` is refused (`McpOutputUncheckedError`) unless you pass one.
    */
   readonly jsonSchemaValidator?: McpJsonSchemaValidator;
 
@@ -384,6 +385,13 @@ export interface McpConnectionOptions {
   /**
    * A connection you already opened. The library never calls `connect()` on it;
    * `close()` on the returned client closes it exactly once.
+   *
+   * Leave its tool discovery to `mcpClient`: the per-tool checks hold only for
+   * the lists `tools()` and `refresh()` read (see `McpClient.tools()`). Do not
+   * let the SDK client refresh itself (`listChanged.tools` with `autoRefresh`,
+   * which is on by default once `listChanged.tools` is given): set
+   * `autoRefresh: false` and call `refresh()` from `onChanged`, or give
+   * `mcpClient` a connection of its own.
    */
   readonly connection: McpConnection;
 
@@ -401,7 +409,11 @@ export interface McpConnectionOptions {
    * answer replaced, a call made while a list is read. Without it, such a call
    * to a tool that declares an `outputSchema` is refused
    * (`McpOutputUncheckedError`); a one-page catalogue that is still the latest
-   * answer never needs it.
+   * answer never needs it. It covers only the lists `tools()` and `refresh()`
+   * read: when the SDK client's cache is replaced some other way (its own
+   * automatic refresh, a `listTools` call of yours), the library still leaves
+   * the call to the SDK, and this validator is never asked (see
+   * `McpClient.tools()`).
    */
   readonly jsonSchemaValidator?: McpJsonSchemaValidator;
 
@@ -446,19 +458,31 @@ export interface McpClient {
    * each page is asked for and when each answer arrives: once it has fired,
    * nothing more is asked for and no page is accepted.
    *
-   * Every tool keeps its checks, whatever is listed later. The SDK's `Client`
-   * checks a tool's call (a required task refused before sending;
-   * `structuredContent` required by an `outputSchema`, and matched against it)
-   * only for the tools of its most recent `tools/list` answer, so every tool
-   * returned here carries those checks itself. They are left to the SDK only
-   * for a tool of a one-page list whose answer is still the latest, with no
-   * list request out. Every other call runs the tool's own and fails with the
-   * same error: a paged list's tools, a tool held across a later `refresh()`
-   * (failed or not), a call made while a list is read. Where no JSON Schema
-   * validator is reachable (`jsonSchemaValidator` on the `sdk` and `connection`
-   * arms), such a call to a tool that declares an `outputSchema` is refused
-   * with `McpOutputUncheckedError`: before it is sent, or, when a list was read
-   * while it was out, once its answer is in, unread.
+   * Every tool keeps its checks, whatever `tools()` and `refresh()` list later —
+   * those of any `mcpClient` over the same client included. That holds only
+   * while all tool discovery on the client runs through them; see below. The
+   * SDK's `Client` checks a tool's call (a required task refused before
+   * sending; `structuredContent` required by an `outputSchema`, and matched
+   * against it) only for the tools of its most recent `tools/list` answer, so
+   * every tool returned here carries those checks itself. They are left to the
+   * SDK only for a tool of a one-page list whose answer is still the latest,
+   * with no list request out. Every other call runs the tool's own and fails
+   * with the same error: a paged list's tools, a tool held across a later
+   * `refresh()` (failed or not), a call made while a list is read. Where no JSON
+   * Schema validator is reachable (`jsonSchemaValidator` on the `sdk` and
+   * `connection` arms), such a call to a tool that declares an `outputSchema` is
+   * refused with `McpOutputUncheckedError`: before it is sent, or, when a list
+   * was read while it was out, once its answer is in, unread.
+   *
+   * What it does not cover: a listing the library does not send. Your own
+   * `listTools` calls, the SDK client's automatic discovery (`listChanged.tools`
+   * with `autoRefresh`, on by default once `listChanged.tools` is given), or any
+   * other replacement of the SDK client's cache leave a tool handed out here
+   * believing the SDK still holds its checks — so neither its output checks nor
+   * its required-task refusal run, even with `jsonSchemaValidator`. The client
+   * the library builds (the `transport` and `sdk` arms) never lists by itself;
+   * on a client you pass as `connection`, set `autoRefresh: false` and call
+   * `refresh()` from `onChanged`, or give `mcpClient` a connection of its own.
    */
   tools(): Promise<readonly Tool[]>;
 
@@ -467,7 +491,9 @@ export interface McpClient {
    * has dynamically added/removed tools mid-session (e.g., after the
    * server processes a config update). Reads every page, as `tools()` does.
    * When it fails it rejects, and `tools()` keeps serving the catalogue it
-   * had: those tools keep their own checks (see `tools()`).
+   * had: those tools keep their own checks (see `tools()`). Route the server's
+   * list-changed notice here, rather than letting the SDK client refresh
+   * itself: a listing the library does not send is not covered.
    */
   refresh(): Promise<readonly Tool[]>;
 

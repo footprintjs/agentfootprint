@@ -114,6 +114,24 @@ runs the tool's own checks, at the SDK's moments, and raises the same error:
   or failed, including a reference held across it;
 - any call made while a list is being read.
 
+**Where it holds: only while `mcpClient` owns discovery.** The library counts
+the lists it reads: `tools()` and `refresh()`, on every `mcpClient` over the
+same client. It cannot see any other listing, so it does not cover:
+
+- your own code calling `listTools` on a client passed as `connection`;
+- the SDK client's automatic discovery: `listChanged.tools` with `autoRefresh`,
+  which is on by default once `listChanged.tools` is given;
+- any other replacement of the SDK client's cache.
+
+Each of these replaces the SDK's checks while a tool the library handed out
+still believes the SDK holds them. That tool then runs neither its output checks
+nor its required-task refusal, even with a `jsonSchemaValidator`: the library
+leaves the call to the SDK. The client the library builds (the `transport` and
+`sdk` arms) never lists by itself. On a client you pass as `connection`, turn
+the SDK's automatic refresh off and route the server's list-changed notice
+through `refresh()` (example below), or give `mcpClient` a connection of its
+own. `listingKeepsChecks.limits.test.ts` pins this limit as it stands.
+
 A failed list request counts too: the SDK caches an answer before it returns
 it, and caching can throw after the old checks are cleared. So a failed
 `refresh()` still rejects, `tools()` still serves the old catalogue, and those
@@ -133,9 +151,9 @@ The output checks use a validator equal to the client's:
   with the SDK when the client is built.
 - **Any arm, with `jsonSchemaValidator`:** the caller's validator. The client the
   library builds is handed the same one, so one validator checks every call.
-- **An `sdk` or `connection` arm given none:** an answer is never returned
-  unchecked. `McpOutputUncheckedError` (`reason: 'output-unchecked'`) says which
-  way:
+- **An `sdk` or `connection` arm given none:** while `mcpClient` owns discovery,
+  an answer is never returned unchecked. `McpOutputUncheckedError` (`reason:
+  'output-unchecked'`) says which way:
   - `sent: false`: the call runs under the tool's own checks from the start and
     the tool declares an `outputSchema`, so it is refused before it is sent;
   - `sent: true`: the call started under the SDK's checks, and a `tools/list`
@@ -148,9 +166,7 @@ The output checks use a validator equal to the client's:
 A schema is compiled when a tool's own checks first need it, so the one-page
 normal case compiles nothing twice. The count is kept per client object, because
 the SDK keeps one set of checks per client: every `mcpClient` over the same
-`connection` shares it. The library sees only the list requests it sends: your
-own code calling `listTools` on a client passed as `connection` replaces the
-SDK's checks without the library knowing.
+`connection` shares it.
 
 **Why.** Each listing replaces the SDK's checks, so a tool handed out earlier —
 from an earlier page, from a list a refresh replaced, or from the old catalogue
@@ -183,6 +199,24 @@ const jsonSchemaValidator = new AjvJsonSchemaValidator();
 const connection = new Client(info, { capabilities: {}, jsonSchemaValidator });
 await connection.connect(transport);
 const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
+```
+
+The safe setup when that client should follow the server's list-changed notice:
+the SDK's automatic refresh is off, and the notice goes through `refresh()`, so
+every listing is one the library counts:
+
+```ts
+let catalog: McpClient | undefined;
+const connection = new Client(info, {
+  capabilities: {},
+  jsonSchemaValidator,
+  listChanged: {
+    // autoRefresh is on by default: without `false`, the SDK lists by itself.
+    tools: { autoRefresh: false, onChanged: () => void catalog?.refresh().catch(console.error) },
+  },
+});
+await connection.connect(transport);
+catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
 ```
 
 ## Files

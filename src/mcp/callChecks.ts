@@ -26,11 +26,15 @@
  * refresh that failed or succeeded; a reference held across it), and any call
  * made while a list is being read.
  *
+ * All of this covers the lists the library reads (`tools()`, `refresh()`); a
+ * listing it does not send — the SDK client's own automatic refresh, a
+ * `listTools` call of the caller's — is not seen (`listingGenerations.ts`).
+ *
  * The output checks need a JSON Schema validator equal to the client's: the
  * SDK's default (`AjvJsonSchemaValidator`, loaded with the SDK on the Node
  * loader arm), or the caller's `jsonSchemaValidator`. Where neither exists — an
- * `sdk` or `connection` arm given none — an answer is never returned unchecked
- * (`McpOutputUncheckedError`):
+ * `sdk` or `connection` arm given none — an answer under these rules is never
+ * returned unchecked (`McpOutputUncheckedError`):
  *
  *   - a call under the tool's own checks from the start, to a tool that
  *     declares an `outputSchema`, is refused before it is sent (`sent: false`);

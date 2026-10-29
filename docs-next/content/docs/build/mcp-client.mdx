@@ -280,7 +280,7 @@ for and no page is accepted, the last one included. The listing rejects with
 the abort, which wins over an incomplete list. A connection that ignores the
 signal still settles its own pending page in its own time.
 
-### A tool keeps its checks, whatever is listed later
+### A tool keeps its checks, whatever `mcpClient` lists later
 
 The MCP SDK's `Client` checks a tool call against what the server listed, but
 only for the tools of its most recent `tools/list` answer: every answer replaces
@@ -303,6 +303,37 @@ covers:
 - a tool you kept from before a `refresh()`, whether the refresh succeeded or
   failed;
 - a call made while a list is being read.
+
+**This holds only while `mcpClient` owns discovery.** The library knows about
+the lists it reads: `tools()` and `refresh()`, on every `mcpClient` over the
+same client. It cannot see any other listing, so it does not cover:
+
+- your own code calling `listTools` on a client you passed as `connection`;
+- the SDK client's automatic discovery: `listChanged.tools` with `autoRefresh`,
+  which is on by default once you configure `listChanged.tools`;
+- anything else that replaces the SDK client's cache.
+
+After one of these, a tool you already hold runs neither its output checks nor
+its required-task refusal, even if you passed `jsonSchemaValidator`. A client
+the library builds (`transport` or `sdk`) never lists by itself. For a client
+you pass as `connection`, turn the SDK's automatic refresh off and send the
+server's notice through `refresh()`, or give `mcpClient` a connection of its
+own:
+
+```ts
+const jsonSchemaValidator = new AjvJsonSchemaValidator();
+let catalog: McpClient | undefined;
+const connection = new Client(info, {
+  capabilities: {},
+  jsonSchemaValidator,
+  listChanged: {
+    // autoRefresh is on by default: without `false`, the SDK lists by itself.
+    tools: { autoRefresh: false, onChanged: () => void catalog?.refresh().catch(console.error) },
+  },
+});
+await connection.connect(transport);
+catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
+```
 
 A failed `refresh()` still rejects, and `tools()` keeps serving the catalogue it
 had. Those tools stay safe to call:
@@ -330,10 +361,11 @@ The output checks need a JSON Schema validator, `McpJsonSchemaValidator`:
   is handed the same validator, so one validator checks every call.
 - **No validator on those arms:** a call that runs the tool's own checks, to a
   tool that declares an `outputSchema`, is refused with
-  `McpOutputUncheckedError` (`reason: 'output-unchecked'`), so an answer is never
-  returned unchecked. Usually it is refused before it is sent (`sent: false`). If
-  a list was read while the call was out, the answer is refused once it arrives,
-  unread (`sent: true`): the tool may have run.
+  `McpOutputUncheckedError` (`reason: 'output-unchecked'`), so while `mcpClient`
+  owns discovery an answer is never returned unchecked. Usually it is refused
+  before it is sent (`sent: false`). If a list was read while the call was out,
+  the answer is refused once it arrives, unread (`sent: true`): the tool may have
+  run.
 
 ```ts
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -344,10 +376,6 @@ const connection = new Client(info, { capabilities: {}, jsonSchemaValidator });
 await connection.connect(transport);
 const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
 ```
-
-The library only knows about the lists it reads, from every `mcpClient` over the
-same client. If your own code calls `listTools` on a client you passed as
-`connection`, the SDK replaces its checks without the library knowing.
 
 ## MCP from a browser
 
