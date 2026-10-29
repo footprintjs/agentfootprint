@@ -9,8 +9,10 @@ every tool re-checks its binding after each wait and at the send boundary; endin
 a bounded set, and a local cap is no longer claimed to bound remote sessions; a handle this
 process lost is no longer reported as a server expiry. Revised again the same day after the
 second review: an abort no longer frees capacity before the work under it settles, and a
-per-client list belongs to one client incarnation, so a replacement client lists again. The
-build follows in its own PR, after the owner's and Codex's review.
+per-client list belongs to one client incarnation, so a replacement client lists again.
+After the third review, a pool-wide operation budget bounds outstanding work on any
+client, and no release returns capacity before that work settles. The build follows in
+its own PR, after the owner's and Codex's review.
 
 Code is cited as `file` · `symbol`, under `src/`. A name marked † does not exist yet: it
 is this page's proposal, and the build may rename it. Facts about the MCP SDK were read
@@ -40,8 +42,9 @@ read 2026-10-29.
    - One open per key at a time, with a timeout. A failure is not cached.
    - A client in use holds a lease and is never evicted or closed. A full pool moves its
      least recently used idle client into a bounded set of endings, or refuses at once with
-     `PoolFullError`†. Local work stays charged to its budget until it has settled, not
-     merely until it was aborted.
+     `PoolFullError`†. A pool-wide operation budget bounds every open, listing, call and
+     ending outstanding on any client, and each stays charged until its work has settled,
+     not merely until it was aborted.
    - Tool definitions are per client by default, and belong to one client incarnation: a
      replacement client lists again. They are shared only when the app names the
      configuration and the authorization they depend on, and the pool has checked, before
@@ -113,7 +116,7 @@ whether conversations may share a tool list. Each is easy to get wrong.
 | Each listed tool wrapped with an `execute` that closes over the connection; provenance in `source`; declarations read from `_meta`; the client's construction-time `signal` passed to every call, never the run's | `mcp/mcpClient.ts` · `wrapMcpTool`; `mcp/toolExtras.ts` · `readToolExtras` | One wrapper for both; a pool-bound tool closes over its binding, not a connection, and passes the run's signal (§ 6.3). |
 | One retry series per request; a rule joins it instead of wrapping it | `mcp/throttleRetry.ts` · `retryingFetchFor`, `joinableRetry` | The send gate joins the series (§ 6.3). |
 | `'per-call'` and `'reuse'`; a random handle per client; 256 connections remembered, the least recently used forgotten; a forgotten handle answered with a 404 the transport makes itself; GET and `DELETE` answered 405 on SigV4 | `adapters/mcp/agentcoreRuntime/session.ts` · `sessionStrategy`, `MAX_CONNECTIONS`, `sessionNotFound`; `adapters/mcp/agentcoreRuntime/invoke.ts` · `invokeFetch` | A forgotten handle becomes `LocalSessionHandleLostError` (§ 5.5); under `'reuse'` a `DELETE` becomes `StopRuntimeSession` (§ 7). |
-| The SDK's `close()` aborts and fires `onclose`; `terminateSession()` sends `DELETE` and treats 405 as success; a request times out after 60 s by default (`DEFAULT_REQUEST_TIMEOUT_MSEC`); a `listChanged` handler is installed only when the server advertises `tools.listChanged`; `send()` awaits its own headers before `fetch` | `@modelcontextprotocol/sdk` 1.32.1 | `terminate()` reads the status itself (§ 7); leases are bounded by the timeout (§ 5.2); pool clients subscribe (§ 6.2); the last check is at the send boundary (§ 6.3). |
+| The SDK's `close()` aborts and fires `onclose`; `terminateSession()` sends `DELETE` and treats 405 as success; a request times out after 60 s by default (`DEFAULT_REQUEST_TIMEOUT_MSEC`); a `listChanged` handler is installed only when the server advertises `tools.listChanged`; `send()` awaits its own headers before `fetch` | `@modelcontextprotocol/sdk` 1.32.1 | `terminate()` reads the status itself (§ 7); the caller's wait is bounded by the timeout, while the lease lives until the work settles (§ 5.2); pool clients subscribe (§ 6.2); the last check is at the send boundary (§ 6.3). |
 | `StopRuntimeSessionCommand`: `POST /runtimes/{agentRuntimeArn}/stopruntimesession`, the runtime session id in its header; idle timeout 900 s and lifetime 28,800 s by default; a stopped session resumes on new compute under the same id | `@aws-sdk/client-bedrock-agentcore`, `-control` 3.1159.0; AWS's runtime pages | Termination (§ 7) and the platform's lifecycle (§ 5.4). |
 | The identity tuple and its injective encoding, "the TENANT BOUNDARY" | `memory/identity/types.ts` · `MemoryIdentity`, `identityNamespace`; `memory/identity/encode.ts` · `encodeIdentityField` | The client key (§ 4). |
 | Session keys from the same encoder; a short digest for the wire (SHA-256, 12 hex characters, where `node:crypto` resolves); the teardown tier and its seven laws | `tools/toolSessions.ts` · `toolSessionKey`, `hashSessionKey`, `ToolSessionTier`, `TOOL_TEARDOWN_TIMEOUT_MS` | `keyHash` on the record (§ 8); the laws for ending a client (§ 7). |
@@ -139,6 +142,7 @@ const orders = mcpClientPool({        // † one pool per MCP server
   maxClients: 64,                // open clients, busy or idle
   maxClientsPerPrincipal: 8,     // one principal cannot take the pool
   maxEnding: 8,                  // clients being ended at once; when full, room is refused
+  maxOperations: 256,            // opens, listings, calls and endings outstanding, until each settles
   initTimeoutMs: 30_000,         // one open per key, under this ceiling
   idleMs: 600_000,               // end a client idle this long (the platform's default is 900 s)
   definitions: 'per-client',     // the default; sharing is declared (§ 6.1)
@@ -287,8 +291,10 @@ per key. A second caller for the same key joins it (the `starting` map of
 - holds a lease while it runs and counts toward `maxClients`.
 - on timeout, is aborted, and every waiter gets `McpPoolRefusedError` (`init-timeout`) at
   once. The open stays charged to the open set until its own work settles: an abort is a
-  signal, not proof that the work stopped (§ 5.3). If, once settled, it turns out to have
-  opened a session, that client moves to the ending set.
+  signal, not proof that the work stopped (§ 5.3). Until it settles, the key cannot open
+  again: an acquire for it meanwhile is refused at once with the same reason, so one key
+  never has two opens. If, once settled, the open turns out to have opened a session, that
+  client moves to the ending set.
 - on failure, hands the same refusal (`init-failed`, the original error kept as `cause`
   for the app and never composed into the message) to every current waiter. The failure
   is not cached: the next acquire opens again.
@@ -303,9 +309,13 @@ A client is **busy** while any lease is open and **idle** otherwise. Two kinds o
 - **The library's**, for exactly one operation (an open, a `tools/list`, a `tools/call`).
   Each answers its caller in bounded time: an open by `initTimeoutMs`; a list or a call by
   the run's `ctx.signal` and by the SDK's request timeout (60 s by default). Today
-  `wrapMcpTool` never passes the run's signal; a bound tool does. The lease itself is
-  released when the operation's own work settles, which the pool's `send()` wrapper
-  observes, not merely when the caller got its answer (§ 5.3).
+  `wrapMcpTool` never passes the run's signal; a bound tool does. Each lease is one
+  operation admitted against `maxOperations` (§ 5.3), and it is released only when the
+  operation has settled: its logical request has its response or its error, and every
+  piece of work under it (the wrapped `send()`, a credential vend, the `fetch`) has
+  settled too. `send()` completing is not a protocol response: for a streamed answer it
+  returns once the stream starts, and the response arrives later. A caller's timeout is
+  not settlement either.
 - **The app's**, through `acquire`, held until `release()`. Bounded by `maxLeaseMs`† (15
   minutes by default). Past it, the lease is revoked at the next pool interaction and
   reported. Its next use throws (`lease-expired`), and calls already in flight keep their
@@ -314,20 +324,29 @@ A client is **busy** while any lease is open and **idle** otherwise. Two kinds o
 A busy client is never evicted, closed for idleness, or terminated. `terminate` and
 `close` wait for in-flight work (§ 7).
 
-### 5.3 A full pool, and the ending budget
+### 5.3 A full pool: clients, endings and operations
 
-The pool holds clients in two sets, each bounded:
+The pool keeps three budgets:
 
-- **Open** — opening, busy or idle — at most `maxClients`, and at most
+- **Open** clients — opening, busy or idle — at most `maxClients`, and at most
   `maxClientsPerPrincipal` for one principal.
-- **Ending** — from the decision to end a client until the work of ending it has
+- **Ending** clients — from the decision to end a client until the work of ending it has
   settled — at most `maxEnding`†.
+- **Operations** — every open, listing, call and ending, on any client, from its
+  admission until its work has settled (§ 5.2) — at most `maxOperations`†, pool-wide.
+  A later call on a client that already exists is admitted against this budget too.
 
 A client leaves the open set only into the ending set, and only when it holds no lease.
 The one exception is a lost handle (§ 5.5): there is nothing to send, so it leaves at once
 and its ending is recorded unresolved.
 
-When a key with no client needs one:
+**Admission.** Every operation is admitted against `maxOperations` before anything is
+sent. When that budget is full: `PoolFullError`, `limit: 'operations'`, and the open, the
+listing or the `tools/call` never starts. That holds for the tenth call on one existing
+client as much as for a new conversation. With `maxClients: 1` and `maxOperations: 20`,
+one conversation whose calls keep timing out in a stalled credential vend has at most
+twenty outstanding; the twenty-first is refused before it is sent. Then, when a key with no
+client needs one:
 
 1. If the principal already holds `maxClientsPerPrincipal` clients, its least recently
    used idle client moves to the ending set. If none of them is idle: `PoolFullError`†,
@@ -354,10 +373,12 @@ own work settles, because an abort only asks: `mcp/gatewayTransport.ts` ·
 `createVendingFetch` awaits `getCredential` with no signal, and an app's own `fetch` may
 ignore one. The same rule covers an abandoned open (§ 5.1) and calls: a client whose call
 has not settled stays busy, so it can be neither evicted nor ended, even after the SDK's
-own timeout has failed the call. Work that never settles keeps its charge, and the pool
-refuses new work rather than pretend the room exists; `stats().unsettled`† counts such
-work by kind, and a late settlement is reported. That is what makes the bound real for
-this process. It does not bound the remote side (§ 7).
+own timeout has failed the call. Work that never settles keeps its charge against
+`maxOperations`, and against its client or ending slot; once a budget is full, new work is
+refused rather than admitted against room that does not exist. `stats().unsettled`†
+reports the charged work past its deadline, by kind, and a late settlement is reported;
+the report is not the limit, the budgets are. That is what makes the bound real for this
+process. It does not bound the remote side (§ 7).
 
 **No request after its deadline.** The send gate (§ 6.3) also refuses any request whose
 operation was aborted or timed out. On the vending path it runs after the credential
@@ -368,7 +389,8 @@ settles.
 
 `PoolFullError` reaches the model as the call's error, so its message is one fixed
 sentence: "The connection pool for this server was full, so nothing was sent." The counts
-(`limit`, `max`, `busy`, `ending`) ride typed fields the app reads, never the message.
+(`limit`, `max`, `busy`, `ending`, `operations`) ride typed fields the app reads, never the
+message.
 
 One consequence, named: when the pool is saturated, an idle client can be ended between
 two calls of one turn. Its next call opens a new client, and the record says `previous:
@@ -597,8 +619,10 @@ and the build factors that wrapper into one function both use. Its `execute`:
 5. sends through the send gate below, classifies the outcome (§ 5.5), files its facts
    (§ 8), and releases the lease once the request's own work has settled (§ 5.2).
 
-Every refusal happens before anything is sent, and says so (`sent: false`†) for E3's
-record of what an attempt did.
+Every refusal happens before the `tools/call` is sent, and says so (`sent: false`†) for
+E3's record of what that attempt did. `sent: false` describes the `tools/call` attempt
+only: control requests made on the way, such as the `initialize` that opened a replacement
+client or the `tools/list` that revalidated it, may already have reached the server.
 
 **The send gate.** The SDK itself waits between `callTool` and the network: `send()` awaits
 its own headers, and a gateway transport awaits the credential it vends inside `fetch`. So
@@ -743,7 +767,7 @@ interface ToolsMcpClientPayload {   // † events/payloads.ts
   readonly refusal?:
     | 'pool-full' | 'principal-full' | 'ending-full' | 'init-timeout' | 'init-failed'
     | 'no-identity' | 'incomplete-identity' | 'identity-mismatch' | 'stale-tools'
-    | 'binding-changed' | 'lease-expired' | 'closed';
+    | 'binding-changed' | 'lease-expired' | 'operations-full' | 'closed';
   readonly initMs?: number;             // opened or joined: how long the open took
   readonly definitions?: 'shared' | 'listed';  // at 'list'
   readonly definitionsAgeMs?: number;   // when shared
@@ -760,10 +784,11 @@ work that settled after its deadline happen when no run exists. They reach `onEv
 errorClass?, durationMs }`, where a late settlement is `kind: 'settled-late'`. The
 precedent is the tier's `report` option (`tools/toolSessions.ts` ·
 `ToolSessionTierOptions`). A throwing `onEvent` is swallowed and changes nothing.
-`pool.stats()` returns counts, never keys: open, busy, idle, opening, ending, entries;
-`unsettled`, the charged work past its deadline that has not settled, by kind (open,
-ending, call); and `unresolvedEndings`, the endings whose remote outcome was not
-confirmed. The two are different facts: an ending can settle locally and stay unresolved
+`pool.stats()` returns counts, never keys: open, busy, idle, opening, ending, operations,
+entries; `unsettled`, the charged work past its deadline that has not settled, by kind
+(open, listing, call, ending); and `unresolvedEndings`, the endings whose remote outcome
+was not confirmed. They report; the budgets of § 5.3 enforce. Local settlement and remote
+resolution are different facts: an ending can settle locally and stay unresolved
 remotely, and neither implies the other.
 
 The new payloads carry no field a redaction policy selects by name. They join the
@@ -777,7 +802,7 @@ vocabulary canary (`test/redaction/agent-redaction.vocabulary.test.ts`) as paylo
 | 2 | **A confused deputy.** The pool or a tool acts with one conversation's client for another caller, or a credential is vended for whoever is calling. | The provider keys only on the identity the caller named. Every `execute` checks the calling run's identity against its key before anything is sent, so a cached or handed-on tool cannot run under another conversation. A replacement client is checked against the tool's binding. A transport factory is called with the identity its client is for. The runtime transport already refuses a user-delegated bearer it would send for whoever calls. | On a shared machine credential (SigV4's role), every client acts with the process's authority, and the server can tell users apart only by session. Per-user authority needs per-user credentials; the pool cannot add it. |
 | 3 | **A key derived from model input.** | Two doors only: `callerIdentity`, from `run({ identity })`, and the identity app code passes to `acquire` and `terminate`. There is no key function. Arguments, model output, the message, a request body and a `sessionId` alone are never read. A derived identity is refused, and so is a missing principal by default. No caller flag claims verification. | The pool cannot tell a verified principal from a claimed one; the host door verifies (`hosting/identityVerification.ts`). An app that builds `run({ identity })` from a request body has moved the problem, not solved it. |
 | 4 | **Stale or poisoned definitions.** One conversation's listing changes what another conversation's model sees, or a tool listed before a revocation, a reconfiguration or a replacement is still sent. | Per client by default. Sharing needs the app's two names and a `configHash` computed from the plan before anything opens, with the tenant always in the context. Lists are written by one listing at a time, as frozen plain-data copies, with declarations judged field by field by `readToolExtras`; a listing that races an invalidation is discarded; a notice can only invalidate. Every tool re-checks its binding after each wait and at the send gate, before every attempt and last after credential and signing work. A per-client list belongs to one client incarnation: a replacement lists again, and an old tool is sent only if the fresh list holds the same definition; generations never carry across incarnations. | A server that serves a malicious list serves it to every client anyway: sharing adds no new source. Wrong names (a server whose list follows the session, declared shared) let one session's list reach the rest of its context; the docs name it, and per client is the fix. A request already handed on, to the network or to the app's own `fetch`, cannot be recalled. |
-| 5 | **Pool exhaustion as a denial of service.** Many conversations, slow calls, slow endings or work that ignores its abort fill the pool, or leave work and remote sessions behind. | Open clients are capped globally and per principal; endings are capped by `maxEnding`. Every open, call and ending stays charged until its own work settles, not until its abort, so at most `maxClients + maxEnding` clients are held and `maxEnding` endings are charged, however fast conversations churn and whatever ignores an abort. Callers get their answer by the deadline; the gate sends nothing after it, and the vending path checks again after the credential arrives. There is no queue: `PoolFullError` (`pool`, `principal` or `ending`) comes at once. A failed open frees its slot once it has settled. | Work that never settles (a credential provider that never answers, a `fetch` that ignores its abort) holds its charge until the process restarts; the pool refuses new work rather than pretend, and `stats().unsettled` shows it. A local cap is not a remote cap. A remote session whose ending was not confirmed (`not-offered`, `failed`, `timed-out`, `handle-lost`) lives until the platform's own timeout; the pool counts these as `unresolvedEndings` and cannot bound them. A principal can fill its own share, and many principals of one tenant can fill the pool: there is no per-tenant share. Per-caller limits belong at the door (`hosting/admission.ts` · `AdmissionPolicy`). With no negative cache, a failing server is opened again at each acquire, one open per key at a time. |
+| 5 | **Pool exhaustion as a denial of service.** Many conversations, slow calls, slow endings or work that ignores its abort fill the pool, or leave work and remote sessions behind. | Open clients are capped globally and per principal; endings by `maxEnding`; and every outstanding open, listing, call and ending, on any client, by `maxOperations`, so repeated calls on one existing client are bounded too. Each stays charged until its work settles, not until its abort, so at most `maxClients + maxEnding` clients are held and at most `maxEnding` endings and `maxOperations` operations are charged, however fast conversations churn and whatever ignores an abort. Callers get their answer by the deadline; the gate sends nothing after it, and the vending path checks again after the credential arrives. There is no queue: `PoolFullError` (`pool`, `principal`, `ending` or `operations`) comes at once, before anything is sent. A failed open frees its slot once it has settled. | Work that never settles (a credential provider that never answers, a `fetch` that ignores its abort) holds its charge until it settles, or until the process, or an isolated worker running it, ends. There is no release that returns capacity sooner; once a budget is full, new work is refused. `stats().unsettled` reports it; the budgets enforce. A local cap is not a remote cap. A remote session whose ending was not confirmed (`not-offered`, `failed`, `timed-out`, `handle-lost`) lives until the platform's own timeout; the pool counts these as `unresolvedEndings` and cannot bound them. A principal can fill its own share, and many principals of one tenant can fill the pool: there is no per-tenant share. Per-caller limits belong at the door (`hosting/admission.ts` · `AdmissionPolicy`). With no negative cache, a failing server is opened again at each acquire, one open per key at a time. |
 | 6 | **A leaked lease.** App code acquires and never releases, or a call never settles. | Library leases are `try`/`finally` around one operation. An app lease is revoked after `maxLeaseMs` and reported; its next use throws, and its in-flight calls keep their own leases. `release()` is idempotent, and `Symbol.asyncDispose` makes `await using` work. | A call whose request never settles keeps its client busy until it does. The SDK's request timeout (60 s by default) and the run's signal answer the caller sooner; the charge stays until settlement. |
 | 7 | **Remote session ids as capabilities, and what outlives an ending.** A runtime session id, plus permission to invoke the runtime, lands a request in that session; a stopped session can be resumed. | The runtime session id and the server's `Mcp-Session-Id` stay inside the transport; the client sees a random handle (`session.ts`). Neither appears in the record, a report, an error or `stats()`. The pool never resumes a session id it ended. | A stopped AgentCore session's id stays valid until the runtime is deleted, and configured session storage persists: anyone holding the id and the permission can resume it, and its stored files outlive `terminated`. Deleting stored data is the runtime's configuration, not the pool's. |
 
@@ -798,10 +823,12 @@ conversation's session.
   refused under `requireTenant: true`; canary identity strings appear in no error, event
   or report.
 - **`open-once.test.ts`** — ten concurrent first calls under one key open once (counted at
-  the transport); an open past `initTimeoutMs`, and a failed open, refuse every waiter at
-  once, cache nothing, and the next acquire opens again; an abandoned open whose work has
-  not settled still counts toward `maxClients`, and frees its slot only when it settles;
-  one waiter's abort detaches only that waiter.
+  the transport); a failed open refuses every waiter, caches nothing, and the next acquire
+  opens again; an open past `initTimeoutMs` refuses every waiter at once and caches
+  nothing, and until its work settles it still counts toward `maxClients` and an acquire
+  for the same key is refused at once, so one key never has two opens; the next acquire
+  opens again only after the prior open's work has settled; one waiter's abort detaches
+  only that waiter.
 - **`capacity.test.ts`** — a leased client is never evicted, idle-closed or terminated,
   even when it is the oldest; a full pool moves its least recently used idle client to the
   ending set, and that key's next open says `previous: 'evicted'`; all busy gives
@@ -822,6 +849,15 @@ conversation's session.
   fake network sees no request after any timeout. The slot frees only at settlement, and a
   late settlement is reported. `unresolvedEndings` equals the number of slow, failing,
   405 and stalled endings exactly; resolved ones are not counted.
+- **`operations.test.ts`** — repeated same-key timeouts: `maxClients: 1`,
+  `maxOperations: 20`. Call A stalls in a credential vend and its caller times out; calls
+  B, C, and on, on the same existing client, stall and time out the same way. Twenty are
+  admitted; the twenty-first call, and a listing after it, get `PoolFullError` (`limit:
+  'operations'`) before anything is sent, and the fake network sees no request for them.
+  `stats()` shows twenty operations, all unsettled, with `open: 1` and `ending: 0`. When
+  A's credential is released after its deadline, A sends nothing and settles, and exactly
+  one new call is admitted. A streamed answer whose `send()` has returned keeps its
+  operation charged until the response itself has arrived.
 - **`binding.test.ts`** — (a) two conversations of one principal, with `share` returning
   the same names, whose factory chooses another `qualifier` for the second: the hashes
   differ, the second lists on its own client and never sees the first's list; (b)
@@ -876,7 +912,8 @@ conversation's session.
   strings), distinct tuples never share a client. For random interleavings of acquire,
   release, call, evict, sweep, terminate and invalidation: a busy client is never ended;
   held clients never exceed `maxClients + maxEnding`; running endings never exceed
-  `maxEnding`; no charge is released before its work settles; no request is handed on
+  `maxEnding`; outstanding operations never exceed `maxOperations`, including calls on an
+  existing client; no charge is released before its work settles; no request is handed on
   after its deadline; no `tools/call` is sent under a binding that was stale when it was
   sent; and every lease is released exactly once.
 
@@ -906,7 +943,7 @@ budget, and the termination outcomes.
 - Digests of remote session ids on the record.
 - Tools-changed handling for a standalone `mcpClient`: a separate follow-up.
 - Any change to what `close()` does.
-- Releasing the charge of work that never settled (§ 12, still open).
+- Any release that returns capacity before the work under it has settled (§ 12).
 
 ## 12. Answers to the open questions
 
@@ -927,10 +964,11 @@ adopted here as the design's proposed answers, **adopted from review, owner to c
 8. **`terminate` is an explicit, feature-detected capability** (`canTerminate`), not a new
    required member of `McpClient` (§ 7).
 9. **Tools-changed handling for a standalone `mcpClient`** is a separate follow-up.
-10. **The numeric defaults are provisional**: 64 clients, 8 per principal, 8 endings, a
-    30 s open, a 5 s deadline for an ending's answer, 600 s idle, a 15-minute app lease, a
-    600 s definitions limit, 256 entries and 512 shared tools. The ending budget, charged
-    until settlement (§ 5.3), is in place before any claim of bounded local resource use.
+10. **The numeric defaults are provisional**: 64 clients, 8 per principal, 8 endings, 256
+    outstanding operations, a 30 s open, a 5 s deadline for an ending's answer, 600 s
+    idle, a 15-minute app lease, a 600 s definitions limit, 256 entries and 512 shared
+    tools. The ending and operation budgets, charged until settlement (§ 5.3), are in place
+    before any claim of bounded local resource use.
 
 The second review answered the two questions this draft left open. Its proposals are
 adopted the same way, **proposed, owner to confirm**:
@@ -946,13 +984,16 @@ adopted the same way, **proposed, owner to confirm**:
     SigV4, a step on each command's own AWS SDK middleware stack after signing (§ 6.3). The
     window after the handoff stays named: a request already sent cannot be recalled.
 
-Still open:
+The third review decided the question this draft still left open, **decided by review,
+owner to confirm**:
 
-1. **Work that never settles.** A credential provider that never answers, or an app
-   `fetch` that ignores its abort, holds its charge until the process restarts. Is a hard
-   budget with `stats().unsettled` and a late-settlement report enough, or should the pool
-   offer an explicit, recorded release of a stuck charge, which would let capacity return
-   while the work may still be running?
+13. **No `release(id, reason)` in v1.** Recording a reason makes a bypass visible; it does
+    not make the resource bound true, and a released charge whose work is still running is
+    the unbounded backlog the budgets exist to prevent. Capacity returns only after proven
+    local settlement, or after the isolated worker or process running the work is
+    terminated. A future administrative detach may move an operation into a quarantined
+    set, but only if that set sits inside a separate hard total budget that eventually
+    refuses admission. Local and remote outcomes stay distinct throughout.
 
 ## 13. Decisions
 
@@ -966,13 +1007,15 @@ Still open:
    `initTimeoutMs`. A failure reaches every waiter and is not cached.
 4. A lease covers one operation (the library's) or a bounded hold (the app's). A busy client
    is never evicted, closed for idleness, or terminated.
-5. Two bounded sets: open clients (`maxClients`, per principal) and endings (`maxEnding`).
-   Making room needs an idle client and a free ending slot; otherwise `PoolFullError` comes
-   at once. There is no queue.
-6. An abort is not settlement. Every open, call and ending stays charged until its own work
-   settles; its caller gets the answer by the deadline. Work that never settles keeps its
-   charge, and new work is refused. The gate sends nothing after a deadline, and the
-   vending path checks again after the credential arrives.
+5. Three budgets: open clients (`maxClients`, per principal), endings (`maxEnding`), and
+   outstanding operations (`maxOperations`: every open, listing, call and ending, on any
+   client). Every operation is admitted against the operation budget before anything is
+   sent, and making room for a new client needs an idle client and a free ending slot.
+   Otherwise `PoolFullError` comes at once, naming the budget. There is no queue.
+6. An abort is not settlement. Every operation stays charged until its logical request and
+   all work under it have settled; its caller gets the answer by the deadline. Work that
+   never settles keeps its charge, and there is no release in v1. The gate sends nothing
+   after a deadline, and the vending path checks again after the credential arrives.
 7. Definitions are per client by default, and a per-client list belongs to one client
    incarnation. Sharing needs the app's `configuration` and `authorization` names and a
    `configHash` computed from the plan before anything opens; the tenant is always in the
