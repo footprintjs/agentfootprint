@@ -35,12 +35,14 @@ field-tests the library).
      relation the tool can execute, or the person is asked before any read. It does not prove that a
      meaning is complete.
    - The confirmation stays in v1. It shows the whole executable scope, and it is **bound** to the
-     call that runs: if anything changes before dispatch, the person is asked again.
+     call that runs: if anything changes before dispatch, the person is asked again. Reading the
+     next page of the same scope is proposed not to count as a change (§ 8.4, § 15).
    - The **requested** window and the **executed** window are separate fields everywhere. The answer
      shows the executed bounds from the record, and says when they differ from the request.
    - The host app's phrases become the library's shared test corpus. The harness is in this PR.
 5. **Decisions.** § 15 lists what the reviews decided, what the third review settled, the owner's
-   proposed answers to the rest, and what the build must keep.
+   proposed answers to the rest, a `continuation` role proposed for review, and what the build must
+   keep.
 
 ---
 
@@ -298,7 +300,9 @@ executed bounds and zone, its sampling. If anything changes before dispatch, the
 again, or the call is refused. It never proceeds silently.
 - *Met by:* the scope digest (§ 8.4), filed on the existing `time-answer` row and checked at dispatch
   in `timeLayer.ts · timeAtDispatch`. **Every argument is scope-bearing by default:** the digest
-  covers every argument the call sends, except those a declaration explicitly marks `inert`. A tool
+  covers every argument the call sends, except those the app's local declaration marks `inert`, or
+  `continuation` (a page number, cursor or offset that selects a slice of the same scope; proposed,
+  for review). A tool
   with no `Tool.search` binds all of its arguments, and an argument a declaration leaves out stays
   bound. That does not relax today's validation: `tools/searchOf.ts · searchOf` still refuses a
   partial declaration (§ 8.4, requirements for the build). Retry and resume reuse a confirmation
@@ -310,7 +314,10 @@ again, or the call is refused. It never proceeds silently.
   leaves an argument out → that argument still binds; a changed sampling step, a different tool, a
   new declaration version, moved bounds, a call added to a confirmed batch, an identical retry, a
   changed call with no one to ask (refused), and an argument named `__proto__`, parsed from JSON,
-  whose change asks again. **Batch membership is tested only as a digest change:** the real batch
+  whose change asks again. With a page argument the app's local declaration marks `continuation`:
+  page 2 of a confirmed call runs; page 2 with a changed customer asks again; the same mark from a
+  remote declaration is ignored, not refused, so a page change asks again; and without the role, a
+  page change asks again. **Batch membership is tested only as a digest change:** the real batch
   ask and its resume are future implementation work, not measured behaviour. In the library, the
   same cases through the batch ask, plus a resume and the long-pause test (§ 8.4).
 
@@ -522,11 +529,12 @@ independently written held-out set and field use.
   hours'");
 - the **executed** window: the bounds and zone the call will send ("07:30–09:30 UTC");
 - every argument the call sends, in the tool's declared words where it has them, plus the sampling
-  step. **Every argument is scope-bearing by default.** Only an argument the declaration explicitly
-  marks `inert` (`Tool.search` · `role: 'inert'`: it changes the bytes, not the ground) is left out.
-  A tool with no `Tool.search` binds all of its arguments, and an argument a declaration leaves out
-  stays bound. The default makes a missing declaration safe; it does not make a partial one
-  acceptable (requirements for the build, below);
+  step. **Every argument is scope-bearing by default.** Only an argument the app's local declaration
+  marks `inert` (`Tool.search` · `role: 'inert'`: it changes the bytes, not the ground) or
+  `continuation` (a page of the same scope, below) is left out. A tool with no `Tool.search` binds
+  all of its arguments, and an argument a declaration leaves out stays bound. The default makes a
+  missing declaration safe; it does not make a partial one acceptable (requirements for the build,
+  below);
 - "no other condition".
 
 > I will read **memory per node** on **node 8**, sent as **07:30–09:30 UTC** (your words: "the last
@@ -535,21 +543,37 @@ independently written held-out set and field use.
 The text is rendered from the planned call and the tool's declared words, never from the model's
 prose. It rides the existing batch ask (`arguments/ask.ts · planAskFields`, `requestInput`) and its
 resume door (`tools/inputRequest.ts · applyInputResponse`). There is no second approval system.
+The confirmation names the scope. It never promises that every page will be read: that stays a
+coverage fact, which the answer reports.
 
 **How it is bound.** Each confirmed call gets a **scope digest**: SHA-256 over a canonical JSON of
 the tool name, the tool's declaration version (a hash of its `period` and `search` declarations),
-every bound argument as it will be sent (all but the explicitly `inert` ones), the executed bounds and
-zone, the sampling step (whatever role its argument carries), and the requested mention. The
-arguments are read from the call's own enumerable keys, each value from its own data property, into a
-null-prototype record: an argument named `__proto__` is valid JSON and is bound like any other. Only
-JSON data is bound: a call carrying anything else (an accessor, a function, a `Date`, a non-finite
-number) is refused, never bound by a stand-in another value would share. The executed bounds in the
-digest are the asked range at the confirmation's clock: the turn's clock for the first
-confirmation, the moment of the person's answer for a re-ask after a pause. A dispatch
-within the tool's step of that clock keeps the digest; past the step, the bounds are recomputed and
-the digest changes (the time design's drift law decides which). A batch's digest also covers its list
-of call digests, in order. The person's answer is filed on the existing `time-answer` row, which
-gains the confirmed digests and the clock each is anchored at (`time/rows.ts · TimeAnswerRow`).
+every bound argument as it will be sent (all but those the app's local declaration marks `inert` or
+`continuation`), the executed bounds and zone, the sampling step (whatever role its argument
+carries), and the requested mention. The arguments are read from the call's own enumerable keys,
+each value from its own data property, into a null-prototype record: an argument named `__proto__`
+is valid JSON and is bound like any other. Only JSON data is bound: a call carrying anything else
+(an accessor, a function, a `Date`, a non-finite number) is refused, never bound by a stand-in
+another value would share. The executed bounds in the digest are the asked range at the
+confirmation's clock: the turn's clock for the first confirmation, the moment of the person's answer
+for a re-ask after a pause. A dispatch within the tool's step of that clock keeps the digest; past
+the step, the bounds are recomputed and the digest changes (the time design's drift law decides
+which). A batch's digest also covers its list of call digests, in order. The person's answer is
+filed on the existing `time-answer` row, which gains the confirmed digests and the clock each is
+anchored at (`time/rows.ts · TimeAnswerRow`).
+
+**A page of the same scope keeps the confirmation (proposed, for review).** An argument the app's
+local declaration marks `continuation` (a page number, a cursor or an offset) selects a slice of the
+same confirmed scope, so it is left out of the digest: page 2 of a confirmed call runs without a new
+question. The exclusion holds only while every other bound argument is identical, which the digest
+itself enforces: a changed page together with any other change is a new digest, and asks again.
+Following a cursor the tool returned is the expected use. A page number the model chose runs under
+the same rule, since the scope is unchanged. Only a local declaration can mark it, as with `inert`:
+a remote declaration's `continuation` is ignored by the binding, not refused, so that argument stays
+bound and a page change asks again. The confirmation covers the scope, never completeness. Whether
+every page was read stays a coverage fact, filed by the results layer (coverage reads
+`continuation` as `page`, with its `paged` gaps), and the confirmation never implies it. A tool
+whose page argument the app cannot vouch for declares it `page`, which stays bound.
 
 **Checked at dispatch.** In `core/agent/stages/timeLayer.ts · timeAtDispatch`, before each call
 runs, the library recomputes the digest from the call it is about to send:
@@ -557,7 +581,8 @@ runs, the library recomputes the digest from the call it is about to send:
 | At dispatch | What happens |
 |---|---|
 | the digest equals a confirmed digest | the call runs |
-| a different tool, a new declaration version, an argument added, removed or changed, a different sampling step, a different zone | the call does not run. It goes back to the batch ask with the new scope, and the person confirms again. |
+| only an argument the app's local declaration marks `continuation` changed (page 2, a cursor the tool returned, an offset) | the call runs: it reads a slice of the confirmed scope. Whether every page was read stays a coverage fact. |
+| a different tool, a new declaration version, an argument added, removed or changed (any but a local `continuation`), a different sampling step, a different zone | the call does not run. It goes back to the batch ask with the new scope, and the person confirms again. |
 | a call added to or removed from a confirmed batch | the whole batch is asked again |
 | the executed bounds moved past the tool's step since the confirmation (a lookback-only tool after a pause) | asked again, once, showing the new bounds; the dispatch that follows the answer runs (requirement 3 below). Today this runs and is recorded `shifted`; under this design it asks. A tool with an absolute form keeps the confirmed bounds (today's drift law), so its digest does not change. |
 | nobody can be asked (a composed run, a host with no ask surface) | the call is refused, naming what changed |
@@ -571,28 +596,34 @@ whose customer or node argument changes before dispatch asks again; the same arg
 declaration version or bounds asks again; a call added to a batch is a new batch; an identical
 retry runs; with no one to ask, a changed call is refused; an argument named `__proto__`, parsed
 from JSON, is bound, so a changed value asks again (a review found the first prototype dropped it);
-a call carrying anything but JSON data is refused, and no getter runs.
+a call carrying anything but JSON data is refused, and no getter runs. With a local `continuation`:
+page 2 of a confirmed call runs, as does a cursor the tool returned; page 2 with a changed customer,
+node or bounds asks again; a remote declaration's `continuation` (or `inert`) is ignored, not
+refused, so the argument stays bound; and a page argument declared `page`, or not declared, asks
+again on a page change.
 **Batch membership is tested only as a digest change.** The real batch ask and its resume
 (`planAskFields`, `applyInputResponse`) are future implementation work, not measured behaviour; so
 are the hidden inputs and the long-pause re-ask below.
 
-**Reuse.** A confirmation is reused only for a call whose digest equals a confirmed one: the same call
-retried after an error (`resumeOnError`), the same call after a resume (`Agent.resume` keeps the
-turn's frozen clock), or a later call of the same turn with the identical scope. A changed call is a
-new question. A confirmation never carries into the next turn. `answersOf` and `turnWindowsOf` reuse
-answers by digest, not by mention alone.
+**Reuse.** A confirmation is reused only for a call whose digest equals a confirmed one: the same
+call retried after an error (`resumeOnError`), the same call after a resume (`Agent.resume` keeps
+the turn's frozen clock), or a later call of the same turn with the identical scope, the next page
+of a local `continuation` included. A changed call is a new question. A confirmation never carries
+into the next turn. `answersOf` and `turnWindowsOf` reuse answers by digest, not by mention alone.
 
 **Requirements for the build.** The review of the binding prototype names boundaries the
-implementation must keep. None is built or measured here.
+implementation must keep (1–4); the fifth comes with the proposed `continuation` role. None is built
+or measured here.
 
 1. **`Tool.search` validation is not relaxed.** The digest's default makes a tool with no
    declaration safe to confirm; it is not a fallback that accepts a partial one. `defineTool`, the
    MCP ingest and `tools/searchOf.ts · searchOf` keep refusing a declaration that leaves an input
    property unclassified (`semantics/coverage/search/declaration.ts · assertToolSearch`,
    `unclassified-argument`), because every coverage claim is built from it. No coverage claim rests
-   on the binding's default. And `inert` is honoured only from a declaration `searchOf` accepted for
-   a local tool: a remote one (over MCP, or from a `ToolProvider`) establishes nothing for coverage,
-   so it cannot take an argument out of the binding either.
+   on the binding's default. And `inert` and `continuation` are honoured only from a declaration
+   `searchOf` accepted for a local tool: a remote one (over MCP, or from a `ToolProvider`)
+   establishes nothing for coverage, so it cannot take an argument out of the binding either. Its
+   marks are ignored, not refused.
 2. **Hidden scope-bearing inputs stay bound; their values are never shown.** An argument the host
    fills (`tools/hostFilled.ts`: `fromIdentity`, `fromCredential`) is filled inside `execute`, after
    `timeAtDispatch`, so the model's arguments alone leave it out. The digest binds what the fill
@@ -615,6 +646,12 @@ implementation must keep. None is built or measured here.
    carrying anything but JSON data is refused. The model's arguments are parsed JSON; the build must
    check that every value the library itself writes into a call (a redrawn window, a filled answer)
    is JSON data too.
+5. **`continuation` reads as `page` everywhere else** (if § 15 item 18 is accepted). The role joins
+   the closed set (`semantics/coverage/search/types.ts · SearchRole`, and
+   `declaration.ts · SEARCH_ROLES`), and every reader of `page` reads it the same way: the facet
+   composer (it names no ground), `semantics/coverage/search/gaps.ts · pagingGaps` (the `paged`
+   completeness gaps) and the negative-claim reading key (`integrity/negative-claim/readings.ts`,
+   where the page is part of a reading). Declaring `continuation` never removes a coverage fact.
 
 ### 8.5 Sampling: only when the tool executes it
 
@@ -767,7 +804,8 @@ model's choice of arguments between the confirmation and the call.
 | The model changes a call after the person confirmed it | The scope digest is checked at dispatch; a changed call asks again or is refused (§ 8.4). |
 | A tool with no `Tool.search`, or a partial one, leaving a customer or node argument out of the confirmation | Every argument the call sends is in the digest by default; only an explicit `inert` opts out. The binding refuses no tool for its declaration, and `searchOf` still refuses a partial one, as today (§ 8.4, R15). |
 | An argument named `__proto__` (valid JSON) slipping out of the digest, or a value that is not data (a getter) changing after the check | The digest reads own enumerable keys into a null-prototype record, so such an argument is bound like any other; anything but JSON data is refused. Acceptance cases pin both (§ 8.4). |
-| A remote declaration marking a scope-bearing argument `inert` | `inert` counts only from a local declaration `searchOf` accepted; a remote one binds every argument (§ 8.4). |
+| A remote declaration marking a scope-bearing argument `inert` or `continuation` | Both count only from a local declaration `searchOf` accepted. A remote one's marks are ignored, not refused, so it binds every argument (§ 8.4). |
+| A page argument used to change the scope: a tool whose page argument really selects other rows, or a cursor made up to encode another query | Local declarations only. `continuation` is the app's own statement that the argument selects a slice of the same scope (for an opaque cursor: that the tool ties it to the request it came from). A remote declaration cannot make that statement, and an app that cannot vouch declares `page`, which stays bound. Any other change still asks (§ 8.4). |
 | A host-filled tenant or credential changing unseen, or shown in the confirmation | Bound by what it stands for, never the secret; shown by a safe label, never its value (§ 8.4). |
 | A wrong reading that passes every check | The bound confirmation shows the executable scope before the read; the answer shows requested, sent and declared periods apart (§ 9). The corpus grows with each found case. |
 | A tool declaring words or shapes it does not honour | A declaration is a fact the tool owns, as `direction` is. Over-declaring words can only turn questions into reads for that tool; the result checks still compare what was read with what was sent. |
@@ -905,16 +943,30 @@ remain the owner's proposals, not approvals.
 16. **The clause** is the whole message in v1, at the measured cost in questions (§ 8.6).
 17. **A lookback after a long pause** is asked again, not run and recorded `shifted` (§ 8.4).
 
-**Requirements for the eventual build,** from the review of the binding prototype (§ 8.4):
+**Proposed, for review** (added after the review of the binding prototype; not yet reviewed):
 
-18. **`Tool.search` validation is not relaxed** by the binding's default. A partial declaration is
+18. **A `continuation` role.** An argument the app's local declaration marks `continuation` (a page
+    number, cursor or offset) selects a slice of the same confirmed scope, so it is left out of the
+    scope digest. The exclusion holds only while every other bound argument is identical; any other
+    change asks again as usual. Following a cursor the tool returned is the expected use; a page
+    number the model chose runs under the same rule. Only a local declaration can mark it: a remote
+    declaration's mark is ignored by the binding, not refused. Coverage reads it as `page`.
+    "Confirmed" covers the scope, never completeness: whether every page was read stays a coverage
+    fact, filed by the results layer, and is never implied by the confirmation (§ 8.4).
+
+**Requirements for the eventual build** (§ 8.4), from the review of the binding prototype and, for
+24, from item 18:
+
+19. **`Tool.search` validation is not relaxed** by the binding's default. A partial declaration is
     still refused, coverage claims rest on accepted declarations only, and a remote declaration
-    cannot mark an argument `inert`.
-19. **Hidden scope-bearing inputs stay bound** (host-filled identity and credential arguments, by
+    cannot mark an argument `inert` or `continuation`.
+20. **Hidden scope-bearing inputs stay bound** (host-filled identity and credential arguments, by
     what they stand for, never the secret); the confirmation shows safe labels, never their values.
-20. **A long pause asks once, then runs.** A test pins it: confirm, pause past the step, re-ask,
+21. **A long pause asks once, then runs.** A test pins it: confirm, pause past the step, re-ask,
     confirm the new bounds, dispatch exactly once. Reusing the turn's frozen clock must not loop.
-21. **The digest reads own keys and JSON data only**, into a null-prototype record; `__proto__` is
+22. **The digest reads own keys and JSON data only**, into a null-prototype record; `__proto__` is
     an argument, and anything that is not JSON data is refused.
-22. **The batch ask and its resume are built and tested in the library.** The bench tested batch
+23. **The batch ask and its resume are built and tested in the library.** The bench tested batch
     membership only as a digest change; that is not measured runtime behaviour.
+24. **`continuation` reads as `page` everywhere else**: the facet composer, the `paged` gaps and the
+    negative-claim reading key. Declaring it never removes a coverage fact.
