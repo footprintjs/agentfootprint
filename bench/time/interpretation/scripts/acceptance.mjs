@@ -158,3 +158,68 @@ test('without the role, a page change asks again: a page the app does not vouch 
   const undeclared = { origin: 'local', period }; // no Tool.search at all
   assert.equal(atDispatch(confirm(undeclared, page(1)), page(2), undeclared).outcome, 'ask-again');
 });
+
+// Validate first: a role waives membership in the digest, never the data contract (found in review
+// at fc1a1840). Every argument is checked as JSON data, the exempt one included, without running a
+// getter; what runs is the checked copy, never the caller's object.
+const exempt = (role) => ({
+  origin: 'local',
+  period,
+  search: { arguments: [{ name: 'page', role }, { name: 'customer', role: 'population' }, { name: 'window', role: 'period' }] },
+});
+const pageCall = (args) => ({ tool: 'readings', args, executed, mention: 0 });
+const confirmedPage = (declaration) => confirm(declaration, pageCall({ page: 1, customer: 'A', window: '2h' }));
+
+for (const role of ['inert', 'continuation']) {
+  test(`${role}: a getter on the exempt argument never runs, so it cannot change a bound field`, () => {
+    const declaration = exempt(role);
+    const ok = confirmedPage(declaration);
+    let ran = 0;
+    const args = { page: 1, customer: 'A', window: '2h' };
+    Object.defineProperty(args, 'page', { enumerable: true, get() { ran += 1; args.customer = 'B'; return 2; } });
+    assert.equal(atDispatch(ok, pageCall(args), declaration).outcome, 'refused');
+    const nested = { page: { cursor: 'c1' }, customer: 'A', window: '2h' };
+    Object.defineProperty(nested.page, 'next', { enumerable: true, get() { ran += 1; return 'c2'; } });
+    assert.equal(atDispatch(ok, pageCall(nested), declaration).outcome, 'refused', 'nested in the exempt value too');
+    assert.equal(ran, 0, 'no getter ran');
+    assert.equal(args.customer, 'A', 'the bound customer is unchanged');
+  });
+
+  test(`${role}: an exempt argument that is not JSON data is refused, a cycle too`, () => {
+    const declaration = exempt(role);
+    const ok = confirmedPage(declaration);
+    for (const value of [new Date(0), () => 2, undefined, Number.NaN, { toJSON: () => 2 }]) {
+      assert.equal(atDispatch(ok, pageCall({ page: value, customer: 'A', window: '2h' }), declaration).outcome, 'refused');
+    }
+    const looped = { cursor: 'c1' };
+    looped.self = looped;
+    assert.equal(atDispatch(ok, pageCall({ page: looped, customer: 'A', window: '2h' }), declaration).outcome, 'refused');
+  });
+
+  test(`${role}: what runs is the checked copy, never the caller's object`, () => {
+    const declaration = exempt(role);
+    const original = { page: 2, customer: 'A', window: '2h' };
+    const out = atDispatch(confirmedPage(declaration), pageCall(original), declaration);
+    assert.equal(out.outcome, 'run');
+    original.customer = 'B'; // a change after the check reaches nothing that runs
+    assert.deepEqual(out.args, { page: 2, customer: 'A', window: '2h' });
+    assert.ok(Object.values(Object.getOwnPropertyDescriptors(out.args)).every((d) => 'value' in d), 'plain data, no accessor');
+  });
+}
+
+test('a cycle, or data past the bounds, is refused, never a thrown RangeError', () => {
+  const declaration = { period };
+  const cycle = { tag: 'x' };
+  cycle.self = cycle;
+  const listCycle = [];
+  listCycle.push(listCycle);
+  let deep = 'leaf';
+  for (let i = 0; i < 100_000; i++) deep = [deep];
+  let wide = 'leaf';
+  for (let i = 0; i < 17; i++) wide = { a: wide, b: wide }; // no cycle, but 2^18 values to read
+  for (const value of [cycle, listCycle, deep, wide]) {
+    assert.equal(atDispatch(new Set(), withArgs(call, { customer: value }), declaration).outcome, 'refused');
+  }
+  const shared = { tag: 'x' };
+  assert.equal(atDispatch(new Set(), withArgs(call, { filter: [shared, shared] }), declaration).outcome, 'ask-again', 'a shared value is not a cycle');
+});
