@@ -505,7 +505,7 @@
     "@types/node": "^25.5.2",
     "@typescript-eslint/eslint-plugin": "^8.71.2",
     "@typescript-eslint/parser": "^8.71.2",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "@yarflam/potion-base-8m": "^1.0.4",
     "esbuild": "^0.28.0",
     "eslint": "^8.57.1",
@@ -516,7 +516,7 @@
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
     "ldapts": "^9.2.0",
-    "markdown-it": "14.3.2",
+    "markdown-it": "14.3.3",
     "openai": "^7.4.0",
     "openid-client": "^6.8.8",
     "playwright-core": "^1.63.0",
@@ -526,7 +526,7 @@
     "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "~5.4.5",
     "unpdf": "^1.8.0",
-    "vitest": "^4.1.11",
+    "vitest": "^4.1.12",
     "zod": "^3.25.76"
   },
   "dependencies": {
