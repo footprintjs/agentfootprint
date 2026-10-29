@@ -327,6 +327,7 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
                   `localCodeRunner: could not run '${file as string}' (${code}). ` +
                     'Install the interpreter, or pass `command` pointing at one.',
                 ),
+              failedAfterStart: (reason) => erroredAfterStart('the code', reason),
             },
           );
           // The child's own streams only. The runtime's message for a failed
@@ -407,6 +408,7 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
                     `localCodeRunner: could not run 'sh' (${code}); runCommand needs a POSIX ` +
                       'shell on PATH.',
                   ),
+                failedAfterStart: (reason) => erroredAfterStart('the command', reason),
               },
             );
             // The child's own streams and exit status, nothing added: a
@@ -650,12 +652,31 @@ interface ChildOutcome {
   readonly overflowed?: 'stdout' | 'stderr';
 }
 
-/** The two refusals whose words depend on what was run. */
+/** The refusals whose words depend on what was run. */
 interface ChildRefusals {
   /** The child outlived its ceiling and was ended. */
   readonly timedOut: (ms: number) => Error;
-  /** The program itself could not be started (ENOENT and friends). */
+  /** The program itself could not be started (ENOENT and friends): nothing ran. */
   readonly notRunnable: (code: string) => Error;
+  /** The process DID start, then the runtime reported an error for it. It was
+   *  stopped, and what it did before that is unknown. */
+  readonly failedAfterStart: (reason: string) => Error;
+}
+
+/**
+ * The answer for a process that started and then had an error reported for
+ * it: stopped, its outcome unknown. Never "could not run" — that says nothing
+ * ran, and this one may have done some or all of its work. The reason is the
+ * runtime's error code, a name; never its message, which can quote the
+ * command line.
+ */
+function erroredAfterStart(what: 'the code' | 'the command', reason: string): CodeSandboxError {
+  return new CodeSandboxError(
+    'error-after-start',
+    `localCodeRunner: ${what} started, then the runtime reported an error for its process ` +
+      `(${reason}), and ${STOPPED}. Its outcome is unknown: it may have done some or all of ` +
+      'its work.',
+  );
 }
 
 /** How much one child's stdout or stderr may hold before it is ended. The CUT
@@ -739,6 +760,19 @@ function endChild(child: ChildLike | undefined): void {
   }
 }
 
+/**
+ * A child `error` EVENT as the callback is handed it: its string code when it
+ * has one, and nothing else. Never a numeric code or a signal — those are what
+ * an EXIT reports (`childFailure`), so the two cannot be taken for each other —
+ * and never the runtime's own error, which carries the arguments
+ * (`spawnargs`), and so the code itself.
+ */
+function childEventError(error: Error & { code?: unknown }): Error & { code?: string } {
+  return Object.assign(new Error('the runtime reported an error for the child process'), {
+    ...(typeof error.code === 'string' && { code: error.code }),
+  });
+}
+
 /** The error a child that exited non-zero, or was ended by a signal, reports:
  *  the fields `execFile` carries, and a message that never quotes the
  *  command line (the runtime's own does — it is the code). */
@@ -757,12 +791,13 @@ function childFailure(
  * `execFile`'s callback contract, built on `spawn` — because only `spawn`
  * passes `detached` on, and a child in a process group of its own is what
  * lets the runner stop the group it owns. Same results: stdout and stderr as
- * text, a failure carrying the exit `code` or the `signal`, a spawn error
- * (ENOENT …) carrying its string code, and `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`
- * when a stream passes `maxBuffer` bytes, with what was collected up to the
- * ceiling. At that ceiling the owned group is stopped AT ONCE and the call
- * answered then (`endChild`), not when the pipes close. stdin is not
- * connected: nothing can block waiting for input that never comes.
+ * text, an exit failure carrying the exit `code` or the `signal`, a child
+ * `error` event carrying its string code at most (`childEventError`), and
+ * `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` when a stream passes `maxBuffer` bytes,
+ * with what was collected up to the ceiling. At that ceiling, and on any child
+ * `error` event, the owned group is stopped AT ONCE and the call answered then
+ * (`endChild`), not when the pipes close. stdin is not connected: nothing can
+ * block waiting for input that never comes.
  */
 function execFileOn(spawn: SpawnLike): NonNullable<ChildProcessModuleLike['execFile']> {
   return (file, args, options, callback) => {
@@ -805,7 +840,14 @@ function execFileOn(spawn: SpawnLike): NonNullable<ChildProcessModuleLike['execF
     };
     child.stdout?.on('data', collect('stdout'));
     child.stderr?.on('data', collect('stderr'));
-    child.on('error', (error) => reply(error));
+    // A child `error` EVENT is not an exit, and is handed on apart from one.
+    // Whatever it carries — a code or none — the runner stops what it owns
+    // NOW: a child that started may still be running, and nothing more will be
+    // heard from it here. (Before a start there is no group; this is a no-op.)
+    child.on('error', (error) => {
+      endChild(child);
+      reply(childEventError(error));
+    });
     child.on('close', (code, signal) => {
       if (overflow !== undefined) reply(overflow);
       else if (code === 0 && signal === null) reply(null);
@@ -821,8 +863,10 @@ function execFileOn(spawn: SpawnLike): NonNullable<ChildProcessModuleLike['execF
  * A NON-ZERO EXIT IS NOT A REJECTION. Code that fails is a normal answer here —
  * the model wrote it, it needs to read the traceback, and turning that into a
  * thrown tool error would replace the one thing that teaches the next attempt
- * with `error: true`. What DOES reject is the runner failing to run at all
- * (interpreter missing, timeout, abort), because that is not the code's answer.
+ * with `error: true`. What DOES reject is the runner failing to run it at all
+ * (interpreter missing), stopping it (timeout, abort), or losing it — the
+ * runtime reported an error for a process that had started, which is stopped
+ * and whose outcome is unknown — because none of those is the code's answer.
  *
  * THE DEADLINE IS OURS (`lib/abort.ts`), not the runtime's `timeout`: that one
  * sends SIGTERM and then waits for the child to exit, so a child that ignored
@@ -913,24 +957,34 @@ async function runChild(
             });
             return;
           }
-          if (typeof error.code === 'string') {
-            // ENOENT and friends — the interpreter itself is not here. Naming it
-            // beats handing the model a traceback it cannot act on. A process
-            // that did start before the error is stopped too, never left on.
-            endChild(child);
-            reject(refusals.notRunnable(error.code));
+          if (typeof error.code === 'number' || typeof error.signal === 'string') {
+            // An EXIT — a real non-zero one, or a child the operating system
+            // ended: the code ran and failed. That IS the result. The exit
+            // status is the child's own, or absent — never a stand-in; the
+            // signal says how a child without one was ended.
+            resolve({
+              stdout: out,
+              stderr: err,
+              ...(typeof error.code === 'number' && { exitCode: error.code }),
+              ...(typeof error.signal === 'string' && { signal: error.signal }),
+            });
             return;
           }
-          // A real non-zero exit, or a child the operating system ended: the
-          // code ran and failed. That IS the result. The exit status is the
-          // child's own, or absent — never a stand-in; the signal says how a
-          // child without one was ended.
-          resolve({
-            stdout: out,
-            stderr: err,
-            ...(typeof error.code === 'number' && { exitCode: error.code }),
-            ...(typeof error.signal === 'string' && { signal: error.signal }),
-          });
+          // Not an exit: the runtime's `error` event, with a code or without.
+          // What the runner owns is stopped whatever it carries (a no-op when
+          // `execFileOn` already did), and the answer says whether anything
+          // ran. A child the runtime gave a process id STARTED, and may have
+          // done some or all of its work: its outcome is unknown. One it did
+          // not never ran — ENOENT and friends, the interpreter is not here;
+          // naming it beats a traceback the model cannot act on.
+          endChild(child);
+          const reason =
+            typeof error.code === 'string' && error.code !== '' ? error.code : 'no error code';
+          reject(
+            typeof child?.pid === 'number'
+              ? refusals.failedAfterStart(reason)
+              : refusals.notRunnable(reason),
+          );
         },
       ) as ChildLike | undefined;
     } catch (err) {

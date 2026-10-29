@@ -6,7 +6,7 @@ title: sandboxPath
 
 > **sandboxPath**(`path`): `string`
 
-Defined in: [src/provider-contract/codeSandbox.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L107)
+Defined in: [src/provider-contract/codeSandbox.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L110)
 
 One session path, checked and put in canonical form — THE path rule every
 adapter applies before it reads a file.

@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, codeRunnerTool, codeRunsOf } from '../../src/index.js';
+import { Agent, CodeSandboxError, codeRunnerTool, codeRunsOf } from '../../src/index.js';
 import { agentCoreCodeRunner } from '../../src/adapters/code/agentcore.js';
 import { localCodeRunner } from '../../src/adapters/code/local.js';
 import { mock } from '../../src/llm-providers.js';
@@ -19,6 +19,7 @@ import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
 import type { CodeResult, CodeRunner } from '../../src/provider-contract/types.js';
 import type { ToolExecutionContext } from '../../src/tools/tools.js';
 import { AWS_COMMAND_PINS, fakeSdk } from '../adapters/aws/awsCommandPin.js';
+import { spawnErroringAfterStart } from '../adapters/code/childSeam.js';
 
 function runnerAnswering(result: CodeResult): CodeRunner {
   return {
@@ -298,4 +299,29 @@ describe('no exit status is ever written as one — the whole path, adapter to t
     expect(three).toContain('[exit 3]');
     expect(three).not.toContain('reported neither');
   });
+});
+
+describe('a run the runtime lost after it started — the whole path, adapter to tool', () => {
+  it.skipIf(process.platform === 'win32')(
+    'the model reads that the code STARTED and its outcome is unknown — never "install the interpreter"',
+    async () => {
+      const tool = codeRunnerTool({
+        runner: localCodeRunner({ _childProcess: { spawn: spawnErroringAfterStart('EIO') } }),
+        language: 'javascript',
+      });
+      let err: unknown;
+      try {
+        await tool.execute({ code: 'console.log("ready"); setTimeout(() => {}, 5000);' }, ctx);
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(CodeSandboxError);
+      expect((err as CodeSandboxError).reason).toBe('error-after-start');
+      expect((err as Error).message).toContain(
+        'the code started, then the runtime reported an error for its process (EIO)',
+      );
+      expect((err as Error).message).toContain('Its outcome is unknown');
+      expect((err as Error).message).not.toMatch(/could not run|install/i);
+    },
+  );
 });

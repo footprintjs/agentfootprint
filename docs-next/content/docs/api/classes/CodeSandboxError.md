@@ -4,7 +4,7 @@ title: CodeSandboxError
 
 # Class: CodeSandboxError
 
-Defined in: [src/provider-contract/codeSandbox.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L43)
+Defined in: [src/provider-contract/codeSandbox.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L46)
 
 A code-session operation refused — before anything was sent, or because
 what came back could not be trusted as the answer.
@@ -24,7 +24,7 @@ and the model.
 
 > **new CodeSandboxError**(`reason`, `message`, `details?`): `CodeSandboxError`
 
-Defined in: [src/provider-contract/codeSandbox.ts:54](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L54)
+Defined in: [src/provider-contract/codeSandbox.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L57)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/provider-contract/codeSandbox.ts:54](https://github.com/footpri
 
 > `readonly` `optional` **bytes?**: `number`
 
-Defined in: [src/provider-contract/codeSandbox.ts:50](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L50)
+Defined in: [src/provider-contract/codeSandbox.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L53)
 
 The size that was measured, in bytes, when the refusal is about size.
 
@@ -86,7 +86,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_CODE_SANDBOX"`
 
-Defined in: [src/provider-contract/codeSandbox.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L44)
+Defined in: [src/provider-contract/codeSandbox.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L47)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [src/provider-contract/codeSandbox.ts:44](https://github.com/footpri
 
 > `readonly` `optional` **limit?**: `number`
 
-Defined in: [src/provider-contract/codeSandbox.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L52)
+Defined in: [src/provider-contract/codeSandbox.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L55)
 
 The limit that size was held to, in bytes.
 
@@ -128,7 +128,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` `optional` **path?**: `string`
 
-Defined in: [src/provider-contract/codeSandbox.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L48)
+Defined in: [src/provider-contract/codeSandbox.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L51)
 
 The session path involved, when there was one.
 
@@ -138,7 +138,7 @@ The session path involved, when there was one.
 
 > `readonly` **reason**: [`CodeSandboxRefusal`](/docs/api/type-aliases/CodeSandboxRefusal)
 
-Defined in: [src/provider-contract/codeSandbox.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L46)
+Defined in: [src/provider-contract/codeSandbox.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/codeSandbox.ts#L49)
 
 What was refused.
 

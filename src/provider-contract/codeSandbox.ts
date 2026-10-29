@@ -28,6 +28,9 @@ export type CodeSandboxRefusal =
   | 'write-failed'
   /** The caller's `timeoutMs` passed before the backend answered. */
   | 'timed-out'
+  /** A process started, then the runtime reported an error for it. It was
+   *  stopped; whether it finished, and what it changed, is unknown. */
+  | 'error-after-start'
   /** The staged-input manifest could not be set where the next run reads it. */
   | 'staged-inputs-unset';
 

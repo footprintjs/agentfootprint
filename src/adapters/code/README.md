@@ -55,18 +55,22 @@ it is sent (`request-too-large`), measured exactly as the SDK serializes it. A
 deadline is a real bound: one per verb (AgentCore's setup call and the code share
 it). On POSIX `localCodeRunner` runs each command and each code run in a process
 group of its own, and whenever IT ends a run — at the deadline, on an abort, at
-the output ceiling, on an error reported after the start — it stops that owned
-group with SIGKILL, which cannot be ignored, at that moment (never after the pipes close), and never reports a run
-it stopped as a success. That is cleanup, not containment: a descendant that
-starts a session or group of its own is outside the owned group, and a host
-killed without running its exit handlers stops nothing — the local runner is
-not a sandbox. On Windows only the process itself can be stopped, and the error
-says work it started may still run. Output past the local runner's 32 MiB buffer
-is a stated cut with no exit status. A local read never opens anything that
-could make it wait: a named pipe is refused, not read. *Why:* review probes
-showed a command's Node child writing a file 300 ms after the caller was told
-the command had been killed, and a child holding the inherited pipes writing one
-while an over-the-ceiling run waited for those pipes to close.
+the output ceiling, on any child `error` event — it stops that owned group with
+SIGKILL, which cannot be ignored, at that moment (never after the pipes close),
+and never reports a run it stopped as a success. That is cleanup, not
+containment: a descendant that starts a session or group of its own is outside
+the owned group, and a host killed without running its exit handlers stops
+nothing — the local runner is not a sandbox. On Windows only the process itself
+can be stopped, and the error says work it started may still run. An `error`
+event for a process that STARTED is `CodeSandboxError` (`'error-after-start'`):
+it ran, and its outcome is unknown — never "could not run", which says nothing
+ran. Output past the local runner's 32 MiB buffer is a stated cut with no exit
+status. A local read never opens anything that could make it wait: a named pipe
+is refused, not read. *Why:* review probes showed a command's Node child writing
+a file 300 ms after the caller was told the command had been killed, a child
+holding the inherited pipes writing one while an over-the-ceiling run waited for
+those pipes to close, and a runtime error for a process that had already run
+reported as "could not run … install the interpreter".
 
 **5. Commands are opt-in.** `runCommand` runs arbitrary shell, so a session has
 it only when the runner is built with `commands: true` (`canRunCodeCommands`).

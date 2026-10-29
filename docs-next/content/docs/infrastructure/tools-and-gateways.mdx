@@ -671,14 +671,16 @@ only what the backend reported.
   inferred from AgentCore's `isError` (reported separately, as `isError`); a
   process ended before it exited names the signal on `terminatedBy`. On POSIX
   `localCodeRunner` runs each command, and each code run, in a process group of
-  its own, and when it ends a run — a timeout, an abort, the output ceiling, an
-  error reported after the start — the owned process group is stopped with
-  SIGKILL at that moment. That is
-  cleanup, not containment: a descendant that starts its own session or group
-  is outside it, and a host killed before its exit handlers run cannot clean
-  up. The local runner is not a sandbox. On Windows only the process itself can
-  be stopped, and the timeout error says work it started may still be
-  running.
+  its own, and when it ends a run — a timeout, an abort, the output ceiling, a
+  child `error` event — the owned process group is stopped with SIGKILL at that
+  moment. That is cleanup, not containment: a descendant that starts its own
+  session or group is outside it, and a host killed before its exit handlers
+  run cannot clean up. The local runner is not a sandbox. On Windows only the
+  process itself can be stopped, and the timeout error says work it started may
+  still be running. An `error` event for a process that had started is a
+  `CodeSandboxError` with `reason: 'error-after-start'`: the process ran, and
+  its outcome is unknown. It never reads "could not run", which would say
+  nothing ran.
   A `checkpoint` line is looked for in the **whole** stdout, before the cut, and
   `checkpointSeen` proves only that the command got that far.
 - **Paths.** Both runners apply one rule, `sandboxPath`: relative to the working

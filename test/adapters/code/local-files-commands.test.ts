@@ -11,17 +11,14 @@
  */
 
 import { existsSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { execFileSync, spawn as realSpawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import * as realFs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  localCodeRunner,
-  type ChildProcessModuleLike,
-  type FsModuleLike,
-} from '../../../src/adapters/code/local.js';
+import { localCodeRunner, type FsModuleLike } from '../../../src/adapters/code/local.js';
+import { spawnErroringAfterStart } from './childSeam.js';
 import {
   canReadCodeFiles,
   canRunCodeCommands,
@@ -316,34 +313,51 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
     },
   );
 
-  it.skipIf(process.platform === 'win32')(
-    'an ERROR after the start stops the owned group too — the refusal never leaves a descendant writing',
-    async () => {
-      // A real child in its own group, for which the runtime then reports an
-      // error with a string code: what a real machine will not produce on
-      // demand, so the seam wraps the REAL `spawn` and adds only the event.
-      const late = join(root, 'after-error.txt');
-      type Spawn = NonNullable<ChildProcessModuleLike['spawn']>;
-      const spawnThenError = (...[file, args, options]: Parameters<Spawn>): ReturnType<Spawn> => {
-        const child = realSpawn(file, [...args], { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
-        setTimeout(() => {
-          child.emit('error', Object.assign(new Error('injected'), { code: 'EIO' }));
-        }, 100);
-        // The real child, typed as the seam's slice of it: Node's `kill` takes
-        // its own signal names, the slice a plain string.
-        return child as unknown as ReturnType<Spawn>;
-      };
-      const s = await session({ commands: true, _childProcess: { spawn: spawnThenError } });
-      const err = await s
-        .runCommand?.(`(sleep 0.4; echo late > ${JSON.stringify(late)}) & sleep 5`, {
-          timeoutMs: 5_000,
-        })
-        .catch((e: unknown) => e);
-      expect((err as Error).message).toMatch(/could not run 'sh' \(EIO\)/);
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      expect(existsSync(late)).toBe(false);
-    },
-  );
+  for (const [label, code, reason] of [
+    ['with an error code', 'EIO', 'EIO'],
+    ['with NO error code', undefined, 'no error code'],
+  ] as const) {
+    it.skipIf(process.platform === 'win32')(
+      `an ERROR after the start (${label}) is a STARTED process, outcome unknown — and its group is stopped`,
+      async () => {
+        // The command provably runs (it writes `started`), then the runtime
+        // reports an error for it when it first prints. A descendant holding
+        // the pipe would write `late` after 400 ms if anything were left on.
+        const started = join(root, 'started.txt');
+        const late = join(root, 'after-error.txt');
+        const s = await session({
+          commands: true,
+          _childProcess: { spawn: spawnErroringAfterStart(code) },
+        });
+        const err = await s
+          .runCommand?.(
+            `echo yes > ${JSON.stringify(started)}; ` +
+              `(sleep 0.4; echo late > ${JSON.stringify(late)}) & echo ready; sleep 5`,
+            { timeoutMs: 5_000 },
+          )
+          .catch((e: unknown) => e);
+        expect(existsSync(started)).toBe(true);
+        expect(err).toBeInstanceOf(CodeSandboxError);
+        expect((err as CodeSandboxError).reason).toBe('error-after-start');
+        expect((err as Error).message).toBe(
+          'localCodeRunner: the command started, then the runtime reported an error for its ' +
+            `process (${reason}), and its process group was killed. Its outcome is unknown: ` +
+            'it may have done some or all of its work.',
+        );
+        // Nothing that says it never ran, or that a missing shell is to blame.
+        expect((err as Error).message).not.toMatch(/could not run|POSIX shell|install/i);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        expect(existsSync(late)).toBe(false);
+      },
+    );
+  }
+
+  it('a shell that never STARTED is still "could not run" — nothing ran', async () => {
+    const s = await session({ commands: true, env: { PATH: join(root, 'no-such-bin') } });
+    await expect(s.runCommand?.('echo hi')).rejects.toThrow(
+      "localCodeRunner: could not run 'sh' (ENOENT); runCommand needs a POSIX shell on PATH.",
+    );
+  });
 
   it('ABORT comes back as the caller’s own reason', async () => {
     const s = await session({ commands: true });
@@ -379,6 +393,56 @@ describe('localCodeRunner.execute — the same group handling on the code path',
       expect(existsSync(late)).toBe(false);
     },
   );
+});
+
+describe('localCodeRunner.execute — an error after the start is a started run, outcome unknown', () => {
+  for (const [label, code, reason] of [
+    ['with an error code', 'EIO', 'EIO'],
+    ['with NO error code', undefined, 'no error code'],
+  ] as const) {
+    it.skipIf(process.platform === 'win32')(
+      `${label}: never "install the interpreter", and the code's own child never writes`,
+      async () => {
+        const started = join(root, 'started.txt');
+        const late = join(root, 'after-error.txt');
+        const writer = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(
+          late,
+        )}, "late"), 400)`;
+        const s = await session({ _childProcess: { spawn: spawnErroringAfterStart(code) } });
+        const err = await s
+          .execute({
+            code:
+              `require("fs").writeFileSync(${JSON.stringify(started)}, "yes"); ` +
+              `require("child_process").spawn(process.execPath, ["-e", ${JSON.stringify(
+                writer,
+              )}], { stdio: "ignore" }); ` +
+              'console.log("ready"); setTimeout(() => {}, 5000);',
+            language: 'javascript',
+            timeoutMs: 5_000,
+          })
+          .catch((e: unknown) => e);
+        expect(existsSync(started)).toBe(true);
+        expect(err).toBeInstanceOf(CodeSandboxError);
+        expect((err as CodeSandboxError).reason).toBe('error-after-start');
+        expect((err as Error).message).toBe(
+          'localCodeRunner: the code started, then the runtime reported an error for its ' +
+            `process (${reason}), and its process group was killed. Its outcome is unknown: ` +
+            'it may have done some or all of its work.',
+        );
+        expect((err as Error).message).not.toMatch(/could not run|install/i);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        expect(existsSync(late)).toBe(false);
+      },
+    );
+  }
+
+  it('an interpreter that never STARTED is still "could not run" — nothing ran', async () => {
+    const s = await session({ command: ['af-no-such-interpreter-e2'] });
+    await expect(s.execute({ code: 'x', language: 'javascript' })).rejects.toThrow(
+      "localCodeRunner: could not run 'af-no-such-interpreter-e2' (ENOENT). Install the " +
+        'interpreter, or pass `command` pointing at one.',
+    );
+  });
 });
 
 describe('localCodeRunner.execute — the output ceiling stops the owned group too', () => {
