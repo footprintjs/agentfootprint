@@ -136,10 +136,12 @@ loading method from the owner’s handoff. Never read, copy or print that file o
 its values. The CLI additionally requires `--execute` and
 `--approve-manifest <exact SHA256 of manifest.json>` with the same consumer and
 a new private output file. From the repository root, use this exact loader (replace
-only the consumer and output paths with the admitted install and a new private file):
+only the three paths: `<approved env file>` with the environment file the handoff
+approves, and the consumer and output paths with the admitted install and a new
+private file):
 
 ```sh
-node --env-file=/Users/sanjay/github/footprintjs/neo-seo-local/.env bench/cache/pilot/run.mjs \
+node --env-file=<approved env file> bench/cache/pilot/run.mjs \
   --consumer /path/to/reviewed-pilot-consumer \
   --out /path/to/new-private-summary.json \
   --approve-manifest 8dac9b8c4135f5bbc27c9dab2a2257b8b1b38b198f24b7b38508ffa9dc30a681 \
