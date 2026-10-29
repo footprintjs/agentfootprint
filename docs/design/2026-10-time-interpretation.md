@@ -1,10 +1,10 @@
 # Time interpretation — the whole meaning of a person's time words, before any read
 
 **Design under review — not approved for implementation.** Nothing in this page is built.
-Approval to review it is not approval to implement it. First written 2026-10-28; revised twice on
-2026-10-29 to answer the reviews of PR #230 (each verdict: changes required). It extends the time
-layer ([time/README.md](time/README.md), [src/time/](../../src/time/README.md)); it is not a second
-one. The measurement behind it is
+Approval to review it is not approval to implement it. First written 2026-10-28; revised three
+times on 2026-10-29 to answer the reviews of PR #230 (each verdict: changes required). It extends
+the time layer ([time/README.md](time/README.md), [src/time/](../../src/time/README.md)); it is not
+a second one. The measurement behind it is
 [2026-10-time-interpretation-measurement.md](2026-10-time-interpretation-measurement.md), and its
 harness, labels, hashes and raw results are in
 [bench/time/interpretation/](../../bench/time/interpretation/README.md).
@@ -39,8 +39,8 @@ field-tests the library).
    - The **requested** window and the **executed** window are separate fields everywhere. The answer
      shows the executed bounds from the record, and says when they differ from the request.
    - The host app's phrases become the library's shared test corpus. The harness is in this PR.
-5. **Decisions.** § 15 lists what the reviews decided, what the third review settled, and the
-   owner's proposed answers to the rest.
+5. **Decisions.** § 15 lists what the reviews decided, what the third review settled, the owner's
+   proposed answers to the rest, and what the build must keep.
 
 ---
 
@@ -299,17 +299,20 @@ again, or the call is refused. It never proceeds silently.
 - *Met by:* the scope digest (§ 8.4), filed on the existing `time-answer` row and checked at dispatch
   in `timeLayer.ts · timeAtDispatch`. **Every argument is scope-bearing by default:** the digest
   covers every argument the call sends, except those a declaration explicitly marks `inert`. A tool
-  with no `Tool.search`, or a partial one, binds all of its arguments; no incomplete declaration is
-  refused, because the default makes it safe. Retry and resume reuse a confirmation only for an
-  identical digest.
+  with no `Tool.search` binds all of its arguments, and an argument a declaration leaves out stays
+  bound. That does not relax today's validation: `tools/searchOf.ts · searchOf` still refuses a
+  partial declaration (§ 8.4, requirements for the build). Retry and resume reuse a confirmation
+  only for an identical digest.
 - *Tested by:* the bench's acceptance set, run as code
   (`bench/time/interpretation/scripts/acceptance.mjs`, `npm run acceptance`): a tool with no
   `Tool.search`, a confirmed call, then its customer or node argument changes before dispatch → the
   batch ask fires again; the same argument marked `inert` → no re-ask; a partial declaration that
   leaves an argument out → that argument still binds; a changed sampling step, a different tool, a
-  new declaration version, moved bounds, a call added to a confirmed batch, an identical retry, and a
-  changed call with no one to ask (refused). In the library, the same cases through the batch ask,
-  plus a resume.
+  new declaration version, moved bounds, a call added to a confirmed batch, an identical retry, a
+  changed call with no one to ask (refused), and an argument named `__proto__`, parsed from JSON,
+  whose change asks again. **Batch membership is tested only as a digest change:** the real batch
+  ask and its resume are future implementation work, not measured behaviour. In the library, the
+  same cases through the batch ask, plus a resume and the long-pause test (§ 8.4).
 
 **R16. The requested window and the executed window are separate, everywhere.** In the
 interpretation, the record, the confirmation and the answer.
@@ -521,8 +524,9 @@ independently written held-out set and field use.
 - every argument the call sends, in the tool's declared words where it has them, plus the sampling
   step. **Every argument is scope-bearing by default.** Only an argument the declaration explicitly
   marks `inert` (`Tool.search` · `role: 'inert'`: it changes the bytes, not the ground) is left out.
-  A tool with no `Tool.search`, or a partial one, binds all of its arguments: the default makes an
-  incomplete declaration safe, and none is refused;
+  A tool with no `Tool.search` binds all of its arguments, and an argument a declaration leaves out
+  stays bound. The default makes a missing declaration safe; it does not make a partial one
+  acceptable (requirements for the build, below);
 - "no other condition".
 
 > I will read **memory per node** on **node 8**, sent as **07:30–09:30 UTC** (your words: "the last
@@ -535,11 +539,15 @@ resume door (`tools/inputRequest.ts · applyInputResponse`). There is no second 
 **How it is bound.** Each confirmed call gets a **scope digest**: SHA-256 over a canonical JSON of
 the tool name, the tool's declaration version (a hash of its `period` and `search` declarations),
 every bound argument as it will be sent (all but the explicitly `inert` ones), the executed bounds and
-zone, the sampling step (whatever role its argument carries), and the requested mention. The executed bounds in the digest are the asked range at the turn's clock, so a
-dispatch within the tool's step of that clock keeps the digest; past the step, the bounds are
-recomputed and the digest changes (the time design's drift law decides which). A batch's digest also
-covers its list of call digests, in order. The person's answer is filed on the existing `time-answer`
-row, which gains the confirmed digests (`time/rows.ts · TimeAnswerRow`).
+zone, the sampling step (whatever role its argument carries), and the requested mention. The
+arguments are read from the call's own enumerable keys, each value from its own data property, into a
+null-prototype record: an argument named `__proto__` is valid JSON and is bound like any other. The
+executed bounds in the digest are the asked range at the confirmation's clock: the turn's clock for
+the first confirmation, the moment of the person's answer for a re-ask after a pause. A dispatch
+within the tool's step of that clock keeps the digest; past the step, the bounds are recomputed and
+the digest changes (the time design's drift law decides which). A batch's digest also covers its list
+of call digests, in order. The person's answer is filed on the existing `time-answer` row, which
+gains the confirmed digests and the clock each is anchored at (`time/rows.ts · TimeAnswerRow`).
 
 **Checked at dispatch.** In `core/agent/stages/timeLayer.ts · timeAtDispatch`, before each call
 runs, the library recomputes the digest from the call it is about to send:
@@ -549,7 +557,7 @@ runs, the library recomputes the digest from the call it is about to send:
 | the digest equals a confirmed digest | the call runs |
 | a different tool, a new declaration version, an argument added, removed or changed, a different sampling step, a different zone | the call does not run. It goes back to the batch ask with the new scope, and the person confirms again. |
 | a call added to or removed from a confirmed batch | the whole batch is asked again |
-| the executed bounds moved past the tool's step since the confirmation (a lookback-only tool after a pause) | asked again, showing the new bounds. Today this runs and is recorded `shifted`; under this design it asks. A tool with an absolute form keeps the confirmed bounds (today's drift law), so its digest does not change. |
+| the executed bounds moved past the tool's step since the confirmation (a lookback-only tool after a pause) | asked again, once, showing the new bounds; the dispatch that follows the answer runs (requirement 3 below). Today this runs and is recorded `shifted`; under this design it asks. A tool with an absolute form keeps the confirmed bounds (today's drift law), so its digest does not change. |
 | nobody can be asked (a composed run, a host with no ask surface) | the call is refused, naming what changed |
 
 Nothing proceeds silently.
@@ -559,13 +567,48 @@ Nothing proceeds silently.
 whose customer or node argument changes before dispatch asks again; the same argument marked
 `inert` does not; a partial declaration still binds what it left out; a changed sampling step, tool,
 declaration version or bounds asks again; a call added to a batch is a new batch; an identical
-retry runs; with no one to ask, a changed call is refused.
+retry runs; with no one to ask, a changed call is refused; an argument named `__proto__`, parsed
+from JSON, is bound, so a changed value asks again (a review found the first prototype dropped it).
+**Batch membership is tested only as a digest change.** The real batch ask and its resume
+(`planAskFields`, `applyInputResponse`) are future implementation work, not measured behaviour; so
+are the hidden inputs and the long-pause re-ask below.
 
 **Reuse.** A confirmation is reused only for a call whose digest equals a confirmed one: the same call
 retried after an error (`resumeOnError`), the same call after a resume (`Agent.resume` keeps the
 turn's frozen clock), or a later call of the same turn with the identical scope. A changed call is a
 new question. A confirmation never carries into the next turn. `answersOf` and `turnWindowsOf` reuse
 answers by digest, not by mention alone.
+
+**Requirements for the build.** The review of the binding prototype names boundaries the
+implementation must keep. None is built or measured here.
+
+1. **`Tool.search` validation is not relaxed.** The digest's default makes a tool with no
+   declaration safe to confirm; it is not a fallback that accepts a partial one. `defineTool`, the
+   MCP ingest and `tools/searchOf.ts · searchOf` keep refusing a declaration that leaves an input
+   property unclassified (`semantics/coverage/search/declaration.ts · assertToolSearch`,
+   `unclassified-argument`), because every coverage claim is built from it. No coverage claim rests
+   on the binding's default. And `inert` is honoured only from a declaration `searchOf` accepted for
+   a local tool: a remote one (over MCP, or from a `ToolProvider`) establishes nothing for coverage,
+   so it cannot take an argument out of the binding either.
+2. **Hidden scope-bearing inputs stay bound; their values are never shown.** An argument the host
+   fills (`tools/hostFilled.ts`: `fromIdentity`, `fromCredential`) is filled inside `execute`, after
+   `timeAtDispatch`, so the model's arguments alone leave it out. The digest binds what the fill
+   stands for: the identity value (the tenant, the principal) and, for a credential, the declaration
+   it is filled from (service, scopes, mode). Never the secret, so a refreshed token is not a new
+   scope. The confirmation names such an input by a safe label ("your organisation's account, from
+   your sign-in"), never by its value.
+3. **A long pause asks once, then runs.** The re-ask shows the person's words with the time they
+   were said, and the bounds the call would now send: "the 2 hours before the call runs, about
+   12:10–14:10 UTC (your words at 09:30: 'the last 2 hours')". Its confirmation is anchored at the
+   moment of the person's answer and filed with the digest on its `time-answer` row. At dispatch,
+   drift is measured from the newest confirmation of that call, never from the turn's frozen clock,
+   which would put a re-confirmed lookback past the step at every dispatch and ask the person
+   without end. Each pause costs at most one question. Pinned by a test: confirm, pause past the
+   step, re-ask, confirm the new bounds (once promptly, once slower than the step), and the call
+   dispatches exactly once, with those bounds.
+4. **Own keys only.** The digest reads the call's own enumerable arguments, values from own data
+   properties, into a null-prototype record, as the bench's prototype now does
+   (`scripts/binding.mjs · scopeOf`). An argument named `__proto__` is bound like any other.
 
 ### 8.5 Sampling: only when the tool executes it
 
@@ -716,7 +759,10 @@ model's choice of arguments between the confirmation and the call.
 | A model proposal that invents a quote, a value, or hides a restriction | Verbatim quote check; the grammar's agreement; spans, leftovers and unaccounted words computed by the library; never `said` (§ 7.4). |
 | A restriction made of known words ("at CPU peaks", "requests > errors") | Bounded relations: a word or operator in no supported relation asks (§ 8.6). |
 | The model changes a call after the person confirmed it | The scope digest is checked at dispatch; a changed call asks again or is refused (§ 8.4). |
-| A tool with no `Tool.search`, or a partial one, leaving a customer or node argument out of the confirmation | Every argument the call sends is in the digest by default; only an explicit `inert` opts out. An incomplete declaration is not refused; the default makes it safe (§ 8.4, R15). |
+| A tool with no `Tool.search`, or a partial one, leaving a customer or node argument out of the confirmation | Every argument the call sends is in the digest by default; only an explicit `inert` opts out. The binding refuses no tool for its declaration, and `searchOf` still refuses a partial one, as today (§ 8.4, R15). |
+| An argument named `__proto__` (valid JSON) slipping out of the digest | The digest reads own enumerable keys into a null-prototype record; such an argument is bound like any other. An acceptance case pins it (§ 8.4). |
+| A remote declaration marking a scope-bearing argument `inert` | `inert` counts only from a local declaration `searchOf` accepted; a remote one binds every argument (§ 8.4). |
+| A host-filled tenant or credential changing unseen, or shown in the confirmation | Bound by what it stands for, never the secret; shown by a safe label, never its value (§ 8.4). |
 | A wrong reading that passes every check | The bound confirmation shows the executable scope before the read; the answer shows requested, sent and declared periods apart (§ 9). The corpus grows with each found case. |
 | A tool declaring words or shapes it does not honour | A declaration is a fact the tool owns, as `direction` is. Over-declaring words can only turn questions into reads for that tool; the result checks still compare what was read with what was sent. |
 | Long or hostile text (slow regular expressions, huge input) | The scan and the rule are linear, with no backtracking pattern; the reader keeps `MAX_MENTIONS`; text past a fixed length is not interpreted and asks. To be pinned by a timing test. |
@@ -790,7 +836,9 @@ again, not shifted (§ 8.4). That is the price of v1.
   scan or the grammar (a fresh agent given only the task description; the reviewers have seen them,
   so not a reviewer) before the run, fixed by hash and time, and never tuned against after its run.
 - **The acceptance set.** The binding law of § 8.4 runs as code in the bench
-  (`scripts/acceptance.mjs`), beside the corpus.
+  (`scripts/acceptance.mjs`), beside the corpus. It runs a prototype of the digest: batch membership
+  is tested only as a digest change. The batch ask, its resume, the hidden inputs and the long-pause
+  re-ask are tested when they are built.
 - **What the score cannot judge.** It compares windows only. Which target a call binds needs the
   call's arguments; those cases are marked `inspect`, and the bound confirmation carries them.
 
@@ -823,7 +871,7 @@ again, not shifted (§ 8.4). That is the price of v1.
    lookback-only tool read clock or calendar ranges (§ 8.1, § 12).
 8. **The harness:** in this PR, before approval (§ 13).
 9. **The confirmation is bound** to the call that runs, by a scope digest over every argument the
-   call sends (an explicit `inert` opts out; a missing or partial `Tool.search` binds everything),
+   call sends (an explicit `inert` opts out; a tool with no `Tool.search` binds everything),
    checked at dispatch; any change asks again or refuses (§ 8.4).
 10. **Requested and executed windows** are separate fields in the interpretation, the record, the
     confirmation and the answer (§ 6, § 8.4, § 9).
@@ -840,7 +888,9 @@ again, not shifted (§ 8.4). That is the price of v1.
     grammar: a fresh agent given only the task description. The reviewers have seen them, so not a
     reviewer (§ 13).
 
-**The owner's proposed answers, still under review:**
+**The owner's proposed answers, still under review:** the review of the binding prototype supports
+14–17 as design recommendations (14 with fresh tests reported apart from the frozen sets). They
+remain the owner's proposals, not approvals.
 
 14. **The closed classes and the relation table** change only by a PR the independent reviewer
     reviews, and such a PR must add no wrong readings on the frozen sets.
@@ -848,3 +898,16 @@ again, not shifted (§ 8.4). That is the price of v1.
     `identifiers` on population arguments (§ 8.6).
 16. **The clause** is the whole message in v1, at the measured cost in questions (§ 8.6).
 17. **A lookback after a long pause** is asked again, not run and recorded `shifted` (§ 8.4).
+
+**Requirements for the eventual build,** from the review of the binding prototype (§ 8.4):
+
+18. **`Tool.search` validation is not relaxed** by the binding's default. A partial declaration is
+    still refused, coverage claims rest on accepted declarations only, and a remote declaration
+    cannot mark an argument `inert`.
+19. **Hidden scope-bearing inputs stay bound** (host-filled identity and credential arguments, by
+    what they stand for, never the secret); the confirmation shows safe labels, never their values.
+20. **A long pause asks once, then runs.** A test pins it: confirm, pause past the step, re-ask,
+    confirm the new bounds, dispatch exactly once. Reusing the turn's frozen clock must not loop.
+21. **The digest reads own keys only**, into a null-prototype record; `__proto__` is an argument.
+22. **The batch ask and its resume are built and tested in the library.** The bench tested batch
+    membership only as a digest change; that is not measured runtime behaviour.
