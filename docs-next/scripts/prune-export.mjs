@@ -2,9 +2,9 @@
 //
 // Runs as docs-next's `postbuild`, so it is part of the build rather than a step
 // somebody has to remember to add: every place that builds this export —
-// .github/workflows/docs.yml (deploy), ci.yml (per-push gate), publish.yml
-// (release gate), and `npm run build` on a laptop — gets the same pruned tree,
-// and therefore the same numbers out of `npm run check:site-budget`.
+// .github/workflows/docs.yml (deploy), ci.yml (per-PR and per-push gate), and
+// `npm run build` on a laptop — gets the same pruned tree, and therefore the
+// same numbers out of `npm run check:site-budget`.
 //
 // WHAT IT REMOVES. Next writes one `__next._full.txt` per exported route,
 // byte-identical to that route's `index.txt`. It is the whole page's RSC payload
