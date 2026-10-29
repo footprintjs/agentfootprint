@@ -1,0 +1,21 @@
+{
+  "note": "What the measured tool DECLARES, as the complete-meaning rule reads it: the terms a person may use for what the tool reads (subjects, metrics, targets), the shapes it reads, and whether it executes sampling. Neither profile declares sampling. 'declared-from-existing' was derived from the existing corpus only: every content word of its rows labelled reads or none had to be accounted for, and the words that name what a node-metrics tool reads became its terms. The held-out phrases were known when this file was written, so 'plus-held-out-nouns' exists to show the rule's cost when the tool also declares the metric and target nouns those phrases use. It adds nouns only, never a word that restricts a read. Adding terms can only turn asks into reads, so wrong readings are checked under the richer profile too.",
+  "declared-from-existing": {
+    "shapes": ["rolling-lookback"],
+    "sampling": "none",
+    "terms": {
+      "subjects": [],
+      "metrics": ["memory", "cpu", "write ops per second", "write ops", "data"],
+      "targets": ["node", "nodes", "drive", "drives", "bay", "bays", "cluster", "clusters"]
+    }
+  },
+  "plus-held-out-nouns": {
+    "shapes": ["rolling-lookback"],
+    "sampling": "none",
+    "terms": {
+      "subjects": [],
+      "metrics": ["memory", "cpu", "write ops per second", "write ops", "data", "error rate", "error count", "errors", "requests", "disk latency", "disk usage"],
+      "targets": ["node", "nodes", "drive", "drives", "bay", "bays", "cluster", "clusters", "port", "ports", "controller", "controllers", "version", "versions"]
+    }
+  }
+}

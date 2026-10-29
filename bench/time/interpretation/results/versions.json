@@ -1,0 +1,26 @@
+{
+ "node": "v24.21.0",
+ "clock": "2026-10-27T09:30:00Z",
+ "zone": "UTC",
+ "readers": {
+  "@microsoft/recognizers-text-date-time": "1.3.2",
+  "chrono-node": "2.10.3",
+  "duckling": {
+   "image": "rasa/duckling:latest",
+   "id": "sha256:459e6033f87b0f3f525ed0d0066ae89cfe31d512f32ac1d469431fa6ce1bdef5",
+   "built": "2022-04-21T13:51:29Z",
+   "runs": "as a local container, linux/amd64 under emulation"
+  },
+  "englishTimeReader": {
+   "source": "src/time/readers/english.ts",
+   "lastCommitTouchingReader": "c8e2049e5f9fef79800068465e71fd4f04cd45fd",
+   "readerVersion": "1.2.0"
+  },
+  "library-grammar": "scripts/adapters.mjs · libraryGrammar over scripts/signals.mjs · readLookbackQuote"
+ },
+ "rules": {
+  "leftoverScan": "1.0.0",
+  "completeMeaning": "1.0.0"
+ },
+ "esbuild": "0.28.2"
+}
