@@ -49,6 +49,10 @@ export {
   agentCoreCodeRunner,
   type AgentCoreCodeRunnerOptions,
   type AgentCoreCodeClientLike,
+  type AgentCoreFileContent,
   type AgentCoreInvokeAnswer,
+  type AgentCoreInvokeInput,
+  type AgentCoreInvokeTarget,
+  type AgentCoreResource,
   type BedrockAgentCoreCodeSdkModule,
 } from '../adapters/code/agentcore.js';
