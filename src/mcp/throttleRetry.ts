@@ -996,13 +996,16 @@ class RetryableRefusal extends Error {
 
 /**
  * What each refusal says — no more than is known. A 429 says the request was
- * rate-limited (RFC 6585 §4), not that nothing ran; the session-busy refusal is
- * documented as made while the session is starting or stopping.
+ * rate-limited (RFC 6585 §4), not that nothing ran. The session-busy refusal is
+ * the one AgentCore documents as made while the session is starting or
+ * stopping, before the request reaches the MCP server (`sessionBusy.ts` cites
+ * the documentation), so its attempts record `effect: 'none'`.
  */
 const REFUSAL_SENTENCES: Readonly<Record<RetryKind, string>> = {
-  throttle: 'The server refused the request with HTTP 429. It does not say whether anything ran.',
+  throttle:
+    'The server answered with HTTP 429, a response the retry policy recognises as a refusal. It is recorded as sent, which is not proof that nothing ran.',
   'session-busy':
-    'AgentCore Runtime refused the request while its session was starting or stopping, before running it.',
+    'AgentCore Runtime answered that its session was starting or stopping, a refusal its documentation says is made before the request reaches the MCP server.',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────

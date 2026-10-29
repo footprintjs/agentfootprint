@@ -79,10 +79,10 @@ function lcg(seed: number): () => number {
 describe('oidcIdentity — construction refuses what it cannot honour', () => {
   const base = {
     issuer: 'https://idp.example.test',
-    audience: 'api://neo',
+    audience: 'api://bot',
     userIdClaim: 'oid',
     requiredScope: 'access_as_user',
-    allowedClients: ['neo-web'],
+    allowedClients: ['bot-web'],
   } as OidcIdentityOptions;
 
   it.each([
@@ -124,9 +124,9 @@ describe('oidcIdentity — construction refuses what it cannot honour', () => {
     expect(() =>
       oidcIdentity({
         ...base,
-        issuer: 'neo.corp.example',
+        issuer: 'bot.corp.example',
         discovery: 'off',
-        jwksUrl: 'https://neo.corp.example/.well-known/pomerium/jwks.json',
+        jwksUrl: 'https://bot.corp.example/.well-known/pomerium/jwks.json',
       }),
     ).not.toThrow();
   });
@@ -134,7 +134,7 @@ describe('oidcIdentity — construction refuses what it cannot honour', () => {
 
 describe('the claim readers — unit', () => {
   it('a roles STRING is one role; an array is one role per string entry', () => {
-    expect(rolesOf('Not neo-users', 'list')).toEqual(['Not neo-users']);
+    expect(rolesOf('Not bot-users', 'list')).toEqual(['Not bot-users']);
     expect(rolesOf(['a', 'b c', 7, ''], 'list')).toEqual(['a', 'b c']);
     expect(rolesOf('', 'list')).toBeUndefined();
     expect(rolesOf(undefined, 'list')).toBeUndefined();
@@ -149,12 +149,12 @@ describe('the claim readers — unit', () => {
 
   it('a claim NAME is never split; a PATH walks nested objects', () => {
     const claims = {
-      'urn:neo:objectguid': 'g',
+      'urn:bot:objectguid': 'g',
       'a.b': 'dotted',
       a: { b: 'nested' },
       realm_access: { roles: ['r'] },
     };
-    expect(claimAt(claims, 'urn:neo:objectguid')).toBe('g');
+    expect(claimAt(claims, 'urn:bot:objectguid')).toBe('g');
     expect(claimAt(claims, 'a.b')).toBe('dotted');
     expect(claimAt(claims, ['a', 'b'])).toBe('nested');
     expect(claimAt(claims, ['realm_access', 'roles'])).toEqual(['r']);
@@ -167,7 +167,7 @@ describe('the claim readers — unit', () => {
     expect(clientOf({ client_id: 'rfc9068' })).toBe('rfc9068');
     // A present-but-wrong azp names nobody; it does not let the token choose
     // which of its claims is read.
-    expect(clientOf({ azp: 42, appid: 'neo-web' })).toBeUndefined();
+    expect(clientOf({ azp: 42, appid: 'bot-web' })).toBeUndefined();
     expect(clientOf({})).toBeUndefined();
   });
 
@@ -205,7 +205,7 @@ describe('oidcIdentity — scenarios', () => {
     );
     // Even an app-only token that a misconfigured tenant stamped with the
     // required scope is refused by its shape.
-    const stamped = appOnlyClaims(shapeOf(idp), { scp: 'access_as_user', azp: 'neo-web' });
+    const stamped = appOnlyClaims(shapeOf(idp), { scp: 'access_as_user', azp: 'bot-web' });
     expect(await outcome(verifier.verify, await idp.sign(stamped))).toBe('not-a-user-token');
   });
 
@@ -215,7 +215,7 @@ describe('oidcIdentity — scenarios', () => {
     const roleClaim = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
     const verifier = oidcIdentity(
       optionsFor(idp, {
-        userIdClaim: 'urn:neo:objectguid',
+        userIdClaim: 'urn:bot:objectguid',
         rolesClaim: roleClaim,
         allowedClients: ['5f1c'],
       }),
@@ -226,16 +226,16 @@ describe('oidcIdentity — scenarios', () => {
         azp: undefined,
         appid: '5f1c',
         oid: undefined,
-        'urn:neo:objectguid': 'T2Jq+ZkA0UqF3mQn8c1bBg==',
-        [roleClaim]: 'Neo Users (Prod)',
+        'urn:bot:objectguid': 'T2Jq+ZkA0UqF3mQn8c1bBg==',
+        [roleClaim]: 'Bot Users (Prod)',
       }),
     );
     const who = await verifier.verify(token);
     expect(who.userId).toBe('T2Jq+ZkA0UqF3mQn8c1bBg==');
-    expect(who.roles).toEqual(['Neo Users (Prod)']);
+    expect(who.roles).toEqual(['Bot Users (Prod)']);
     // The discovery issuer is accepted too.
     const direct = await idp.sign(
-      personClaims(shapeOf(idp), 'y', { 'urn:neo:objectguid': 'g2', azp: '5f1c' }),
+      personClaims(shapeOf(idp), 'y', { 'urn:bot:objectguid': 'g2', azp: '5f1c' }),
     );
     expect((await verifier.verify(direct)).userId).toBe('g2');
   });
@@ -254,14 +254,14 @@ describe('oidcIdentity — scenarios', () => {
         userIdClaim: 'objectguid',
         scopeClaim: 'scope',
         rolesClaim: ['realm_access', 'roles'],
-        requiredScope: 'neo-api',
+        requiredScope: 'bot-api',
       }),
     );
     const token = await idp.sign(
       personClaims(shapeOf(idp), 'x', {
         oid: undefined,
         scp: undefined,
-        scope: 'openid profile email neo-api',
+        scope: 'openid profile email bot-api',
         objectguid: '9948164f-65f0-4ac0-8bb0-4a3d1103fcd7',
         realm_access: { roles: ['SAN-Ops', 'offline_access'] },
       }),
@@ -442,7 +442,7 @@ describe('oidcIdentity — integration over a socket', () => {
 describe('oidcIdentity — properties', () => {
   it('no roles string containing a space ever yields a role without that space', () => {
     const next = lcg(9);
-    const alphabet = 'ab -_Neo users\t';
+    const alphabet = 'ab -_Bot users\t';
     for (let i = 0; i < 500; i += 1) {
       let s = '';
       const len = 1 + Math.floor(next() * 20);
@@ -467,7 +467,7 @@ describe('oidcIdentity — properties', () => {
       const picked = scopes.filter(() => next() < 0.5);
       const claims = {
         scp: next() < 0.5 ? picked.join(' ') : picked,
-        azp: 'neo-web',
+        azp: 'bot-web',
         oid: `o${i}`,
         sub: `s${i}`,
         ...(next() < 0.3 && { roles: ['x'] }),
@@ -476,7 +476,7 @@ describe('oidcIdentity — properties', () => {
         personTestFailure(claims, {
           requiredScope: 'access_as_user',
           scopeClaim: 'scp',
-          allowedClients: ['neo-web'],
+          allowedClients: ['bot-web'],
           rolesClaim: 'roles',
         }),
       ).toBe('not-a-user-token');
@@ -566,7 +566,7 @@ describe('oidcIdentity — ROI', () => {
     const configs: Partial<OidcIdentityOptions>[] = [
       { userIdClaim: 'oid' },
       {
-        userIdClaim: 'urn:neo:objectguid',
+        userIdClaim: 'urn:bot:objectguid',
         rolesClaim: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
       },
       { userIdClaim: 'objectguid', scopeClaim: 'scope', rolesClaim: ['realm_access', 'roles'] },
@@ -576,7 +576,7 @@ describe('oidcIdentity — ROI', () => {
       const verifier = oidcIdentity(optionsFor(idp, extra));
       const token = await idp.sign(
         personClaims(shapeOf(idp), IDS.a, {
-          'urn:neo:objectguid': IDS.a,
+          'urn:bot:objectguid': IDS.a,
           objectguid: IDS.a,
           scope: SHAPE_DEFAULTS.scope,
         }),

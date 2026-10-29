@@ -104,7 +104,7 @@ export async function tokenFor(
     case 'no-client':
       return idp.sign(person({ azp: undefined }));
     case 'roles-string-with-space':
-      return idp.sign(person({ roles: 'x neo-users' }));
+      return idp.sign(person({ roles: 'x bot-users' }));
     case 'roles-overage':
       return idp.sign(
         person({
@@ -115,7 +115,7 @@ export async function tokenFor(
   }
 }
 
-export const SHAPE_DEFAULTS = { audience: 'api://neo', scope: 'access_as_user', client: 'neo-web' };
+export const SHAPE_DEFAULTS = { audience: 'api://bot', scope: 'access_as_user', client: 'bot-web' };
 
 /** `oidcIdentity` configured the way `identityFromConfig` builds it for Entra ID. */
 export async function oidcHarness(): Promise<IdentityStrategyHarness & { idp: FakeIdp }> {

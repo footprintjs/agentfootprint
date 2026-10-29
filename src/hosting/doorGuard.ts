@@ -1,7 +1,7 @@
 /**
  * hosting/doorGuard — what a request has to be before any handler sees it.
  *
- *   const guard = doorGuard({ name: 'auth', allowedHosts: ['neo.corp.example'] });
+ *   const guard = doorGuard({ name: 'auth', allowedHosts: ['bot.corp.example'] });
  *   const refusal = guard.check(req);          // an IncomingMessage works as-is
  *   if (refusal) return answer(refusal.status, refusal.message, refusal.code);
  *
@@ -118,7 +118,7 @@ export interface CrossSiteOptions {
    */
   readonly allowedOrigins?: readonly string[] | 'any';
   /**
-   * The names this door answers for — `['neo.corp.example']`. A request whose
+   * The names this door answers for — `['bot.corp.example']`. A request whose
    * `Host` names anything else is refused with 421, which is what stops DNS
    * rebinding. Matched case-insensitively; an entry without a port matches any
    * port, an entry with one matches only it; IPv6 in brackets (`'[::1]'`).
@@ -335,7 +335,7 @@ export function checkSessionId(
  *  - **A reverse proxy on the same machine that forwards the PUBLIC name** in
  *    `Host` (nginx `proxy_set_header Host $host`) — the common case, and the
  *    recommended "bind 127.0.0.1 behind nginx" setup. The proxy's requests
- *    arrive on loopback carrying `neo.corp.example`, which the socket cannot
+ *    arrive on loopback carrying `bot.corp.example`, which the socket cannot
  *    tell from a rebinding page. List that name in `allowedHosts`; the 421
  *    says so, naming this default (`HostNotAllowedError` · `rule`).
  *  - A hosts-file alias for a loopback address — the same fix.

@@ -20,7 +20,7 @@ const passwords = directoryPasswords({
   domain: 'corp.example',
   netbiosDomain: 'CORP',
   baseDn: 'DC=corp,DC=example',
-  requiredGroup: 'CN=Neo Users,OU=Groups,DC=corp,DC=example',
+  requiredGroup: 'CN=Bot Users,OU=Groups,DC=corp,DC=example',
 });
 ```
 

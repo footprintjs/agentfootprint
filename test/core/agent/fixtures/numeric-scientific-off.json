@@ -1,0 +1,416 @@
+{
+  "note": "Captured from the unmodified main commit d39cdebc633134970109746bcf3b3a356a55f3f8, decimalRounding off.",
+  "history": [
+    {
+      "role": "user",
+      "content": "Run the analysis."
+    },
+    {
+      "role": "tool",
+      "toolCallId": "s1",
+      "content": "t = 2.54, p = 1.12e-02, n = 3.358e+03, big = 1.2E+21, tiny = -5e-7, edge 1.125e-02 past 1.12500000000000001e-02"
+    },
+    {
+      "role": "tool",
+      "toolCallId": "s2",
+      "content": "commit 9f3e10ab, build 1.2e3-rc, id 123456e7, host-1e5, 0x1e5, overflow 1e401 under 1e-401, huge 1e300, dotted 1.2e3.4"
+    },
+    {
+      "role": "tool",
+      "toolCallId": "j1",
+      "content": "{\"p_value\":1.12e-2,\"label\":\"3.5e-3\",\"rows\":[{\"tb\":4.2e1},{\"tb\":1.5e1}]}"
+    },
+    {
+      "role": "tool",
+      "toolCallId": "m1",
+      "content": "{\"ok\":true}\nNote: q = 7.5E-04"
+    },
+    {
+      "role": "tool",
+      "toolCallId": "d1",
+      "content": "decimal readings 0.01121 3358 1200000000000000000000 12.5%"
+    }
+  ],
+  "corpus": "{\"values\":[[\"t\",1],[\"2.54\",1],[\"p\",1],[\"1.12e-02\",1],[\"n\",1],[\"3.358e+03\",1],[\"big\",1],[\"1.2e+21\",1],[\"tiny\",1],[\"-5e-7\",1],[\"edge\",1],[\"1.125e-02\",1],[\"past\",1],[\"1.12500000000000001e-02\",1],[\"commit\",1],[\"9f3e10ab\",1],[\"build\",1],[\"1.2e3-rc\",1],[\"id\",1],[\"123456e7\",1],[\"host-1e5\",1],[\"0x1e5\",1],[\"1e5\",1],[\"overflow\",1],[\"1e401\",1],[\"under\",1],[\"1e-401\",1],[\"huge\",1],[\"1e300\",1],[\"dotted\",1],[\"1.2e3.4\",1],[\"p_value\",1],[\"0.0112\",1],[\"label\",1],[\"3.5e-3\",1],[\"rows\",1],[\"tb\",1],[\"42\",1],[\"15\",1],[\"ok\",1],[\"true\",1],[\"note\",1],[\"q\",1],[\"7.5e-04\",1],[\"decimal\",1],[\"readings\",1],[\"0.01121\",1],[\"3358\",1],[\"1200000000000000000000\",1],[\"12.5\",1]],\"carriers\":[[\"t\",{\"toolCallIds\":[\"s1\"]}],[\"2.54\",{\"toolCallIds\":[\"s1\"]}],[\"p\",{\"toolCallIds\":[\"s1\"]}],[\"1.12e-02\",{\"toolCallIds\":[\"s1\"]}],[\"n\",{\"toolCallIds\":[\"s1\"]}],[\"3.358e+03\",{\"toolCallIds\":[\"s1\"]}],[\"big\",{\"toolCallIds\":[\"s1\"]}],[\"1.2e+21\",{\"toolCallIds\":[\"s1\"]}],[\"tiny\",{\"toolCallIds\":[\"s1\"]}],[\"-5e-7\",{\"toolCallIds\":[\"s1\"]}],[\"edge\",{\"toolCallIds\":[\"s1\"]}],[\"1.125e-02\",{\"toolCallIds\":[\"s1\"]}],[\"past\",{\"toolCallIds\":[\"s1\"]}],[\"1.12500000000000001e-02\",{\"toolCallIds\":[\"s1\"]}],[\"commit\",{\"toolCallIds\":[\"s2\"]}],[\"9f3e10ab\",{\"toolCallIds\":[\"s2\"]}],[\"build\",{\"toolCallIds\":[\"s2\"]}],[\"1.2e3-rc\",{\"toolCallIds\":[\"s2\"]}],[\"id\",{\"toolCallIds\":[\"s2\"]}],[\"123456e7\",{\"toolCallIds\":[\"s2\"]}],[\"host-1e5\",{\"toolCallIds\":[\"s2\"]}],[\"0x1e5\",{\"toolCallIds\":[\"s2\"]}],[\"1e5\",{\"toolCallIds\":[\"s2\"]}],[\"overflow\",{\"toolCallIds\":[\"s2\"]}],[\"1e401\",{\"toolCallIds\":[\"s2\"]}],[\"under\",{\"toolCallIds\":[\"s2\"]}],[\"1e-401\",{\"toolCallIds\":[\"s2\"]}],[\"huge\",{\"toolCallIds\":[\"s2\"]}],[\"1e300\",{\"toolCallIds\":[\"s2\"]}],[\"dotted\",{\"toolCallIds\":[\"s2\"]}],[\"1.2e3.4\",{\"toolCallIds\":[\"s2\"]}],[\"p_value\",{\"toolCallIds\":[\"j1\"]}],[\"0.0112\",{\"toolCallIds\":[\"j1\"]}],[\"label\",{\"toolCallIds\":[\"j1\"]}],[\"3.5e-3\",{\"toolCallIds\":[\"j1\"]}],[\"rows\",{\"toolCallIds\":[\"j1\"]}],[\"tb\",{\"toolCallIds\":[\"j1\"]}],[\"42\",{\"toolCallIds\":[\"j1\"]}],[\"15\",{\"toolCallIds\":[\"j1\"]}],[\"ok\",{\"toolCallIds\":[\"m1\"]}],[\"true\",{\"toolCallIds\":[\"m1\"]}],[\"note\",{\"toolCallIds\":[\"m1\"]}],[\"q\",{\"toolCallIds\":[\"m1\"]}],[\"7.5e-04\",{\"toolCallIds\":[\"m1\"]}],[\"decimal\",{\"toolCallIds\":[\"d1\"]}],[\"readings\",{\"toolCallIds\":[\"d1\"]}],[\"0.01121\",{\"toolCallIds\":[\"d1\"]}],[\"3358\",{\"toolCallIds\":[\"d1\"]}],[\"1200000000000000000000\",{\"toolCallIds\":[\"d1\"]}],[\"12.5\",{\"toolCallIds\":[\"d1\"]}]],\"truncated\":false,\"currentTurn\":1,\"toolResultsThisTurn\":5}",
+  "basis": "{\"carried\":[{\"x\":2.54,\"at\":\"\"},{\"x\":0.0112,\"at\":\"p_value\",\"key\":\"p_value\"},{\"x\":42,\"at\":\"rows[0].tb\",\"key\":\"tb\"},{\"x\":15,\"at\":\"rows[1].tb\",\"key\":\"tb\"},{\"x\":0.01121,\"at\":\"\"},{\"x\":3358,\"at\":\"\"},{\"x\":1.2e+21,\"at\":\"\"},{\"x\":12.5,\"at\":\"\"}],\"derived\":[{\"x\":57,\"derivation\":\"column-sum\",\"from\":\"sum of rows[].tb\"}],\"truncated\":false}",
+  "cases": [
+    {
+      "answer": "p = 0.0112, n = 3,358 and big 1200000000000000000000.",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]},{\"value\":\"3358\",\"forms\":[\"3358\"]},{\"value\":\"1200000000000000000000\",\"forms\":[\"1200000000000000000000\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 0.0112, n = 3,358 and big 1200000000000000000000.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]},{\"value\":\"3358\",\"forms\":[\"3358\"]},{\"value\":\"1200000000000000000000\",\"forms\":[\"1200000000000000000000\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 0.0112, n = 3,358 and big 1200000000000000000000.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]},{\"value\":\"3358\",\"forms\":[\"3358\"]},{\"value\":\"1200000000000000000000\",\"forms\":[\"1200000000000000000000\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 0.0112, n = 3,358 and big 1200000000000000000000.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]},{\"value\":\"3358\",\"forms\":[\"3358\"]},{\"value\":\"1200000000000000000000\",\"forms\":[\"1200000000000000000000\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 0.011 and 0.012; tiny -0.0000005.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"0.011\",\"shape\":\"number\"},{\"value\":\"0.012\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"-5e-7\",\"forms\":[\"-5e-7\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 0.011 and 0.012; tiny -0.0000005.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.012\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"-5e-7\",\"forms\":[\"-5e-7\"]}],\"computed\":[{\"value\":\"0.011\",\"shape\":\"number\",\"derivation\":\"rounded\",\"from\":\"0.0112 at p_value\"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 0.011 and 0.012; tiny -0.0000005.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.011\",\"shape\":\"number\"},{\"value\":\"0.012\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"-5e-7\",\"forms\":[\"-5e-7\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 0.011 and 0.012; tiny -0.0000005.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.012\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"-5e-7\",\"forms\":[\"-5e-7\"]}],\"computed\":[{\"value\":\"0.011\",\"shape\":\"number\",\"derivation\":\"rounded\",\"from\":\"0.0112 at p_value\"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 1.12e-2 and 1.12E-02 and 1.120e-02.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"1.12e-2\",\"shape\":\"identifier\"},{\"value\":\"1.120e-02\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 1.12e-2 and 1.12E-02 and 1.120e-02.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.12e-2\",\"shape\":\"identifier\"},{\"value\":\"1.120e-02\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 1.12e-2 and 1.12E-02 and 1.120e-02.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.12e-2\",\"shape\":\"identifier\"},{\"value\":\"1.120e-02\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "p = 1.12e-2 and 1.12E-02 and 1.120e-02.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.12e-2\",\"shape\":\"identifier\"},{\"value\":\"1.120e-02\",\"shape\":\"identifier\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "3.358e+03 and 1.2e+21 and 1200000000000000000001.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"1200000000000000000001\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"3.358e+03\",\"forms\":[\"3.358e+03\"]},{\"value\":\"1.2e+21\",\"forms\":[\"1.2e+21\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "3.358e+03 and 1.2e+21 and 1200000000000000000001.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"3.358e+03\",\"forms\":[\"3.358e+03\"]},{\"value\":\"1.2e+21\",\"forms\":[\"1.2e+21\"]}],\"computed\":[{\"value\":\"1200000000000000000001\",\"shape\":\"number\",\"derivation\":\"rounded\",\"from\":\"1.2e+21 at \"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "3.358e+03 and 1.2e+21 and 1200000000000000000001.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1200000000000000000001\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"3.358e+03\",\"forms\":[\"3.358e+03\"]},{\"value\":\"1.2e+21\",\"forms\":[\"1.2e+21\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "3.358e+03 and 1.2e+21 and 1200000000000000000001.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"3.358e+03\",\"forms\":[\"3.358e+03\"]},{\"value\":\"1.2e+21\",\"forms\":[\"1.2e+21\"]}],\"computed\":[{\"value\":\"1200000000000000000001\",\"shape\":\"number\",\"derivation\":\"rounded\",\"from\":\"1.2e+21 at \"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "commit 9f3e10ab and 1.2e3-rc and 123456e7 and 1234560000000.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"1234560000000\",\"shape\":\"number\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"9f3e10ab\",\"forms\":[\"9f3e10ab\"]},{\"value\":\"1.2e3-rc\",\"forms\":[\"1.2e3-rc\"]},{\"value\":\"123456e7\",\"forms\":[\"123456e7\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "commit 9f3e10ab and 1.2e3-rc and 123456e7 and 1234560000000.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1234560000000\",\"shape\":\"number\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"9f3e10ab\",\"forms\":[\"9f3e10ab\"]},{\"value\":\"1.2e3-rc\",\"forms\":[\"1.2e3-rc\"]},{\"value\":\"123456e7\",\"forms\":[\"123456e7\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "commit 9f3e10ab and 1.2e3-rc and 123456e7 and 1234560000000.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1234560000000\",\"shape\":\"number\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"9f3e10ab\",\"forms\":[\"9f3e10ab\"]},{\"value\":\"1.2e3-rc\",\"forms\":[\"1.2e3-rc\"]},{\"value\":\"123456e7\",\"forms\":[\"123456e7\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "commit 9f3e10ab and 1.2e3-rc and 123456e7 and 1234560000000.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1234560000000\",\"shape\":\"number\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"9f3e10ab\",\"forms\":[\"9f3e10ab\"]},{\"value\":\"1.2e3-rc\",\"forms\":[\"1.2e3-rc\"]},{\"value\":\"123456e7\",\"forms\":[\"123456e7\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":3,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1e5 and 100000 and 1e401 and 1e300.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"100000\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1e401\",\"forms\":[\"1e401\"]},{\"value\":\"1e300\",\"forms\":[\"1e300\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1e5 and 100000 and 1e401 and 1e300.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"100000\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1e401\",\"forms\":[\"1e401\"]},{\"value\":\"1e300\",\"forms\":[\"1e300\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1e5 and 100000 and 1e401 and 1e300.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"100000\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1e401\",\"forms\":[\"1e401\"]},{\"value\":\"1e300\",\"forms\":[\"1e300\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1e5 and 100000 and 1e401 and 1e300.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"100000\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"1e401\",\"forms\":[\"1e401\"]},{\"value\":\"1e300\",\"forms\":[\"1e300\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "label 0.0035 and 3.5e-3; q 0.00075 and 7.5e-4.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"0.0035\",\"shape\":\"number\"},{\"value\":\"0.00075\",\"shape\":\"number\"},{\"value\":\"7.5e-4\",\"shape\":\"identifier\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"3.5e-3\",\"forms\":[\"3.5e-3\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "label 0.0035 and 3.5e-3; q 0.00075 and 7.5e-4.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.0035\",\"shape\":\"number\"},{\"value\":\"0.00075\",\"shape\":\"number\"},{\"value\":\"7.5e-4\",\"shape\":\"identifier\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"3.5e-3\",\"forms\":[\"3.5e-3\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "label 0.0035 and 3.5e-3; q 0.00075 and 7.5e-4.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.0035\",\"shape\":\"number\"},{\"value\":\"0.00075\",\"shape\":\"number\"},{\"value\":\"7.5e-4\",\"shape\":\"identifier\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"3.5e-3\",\"forms\":[\"3.5e-3\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "label 0.0035 and 3.5e-3; q 0.00075 and 7.5e-4.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.0035\",\"shape\":\"number\"},{\"value\":\"0.00075\",\"shape\":\"number\"},{\"value\":\"7.5e-4\",\"shape\":\"identifier\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"3.5e-3\",\"forms\":[\"3.5e-3\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The p-value is 1.12% and 1.12.",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The p-value is 1.12% and 1.12.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.12\",\"shape\":\"figure\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The p-value is 1.12% and 1.12.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.12\",\"shape\":\"number\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The p-value is 1.12% and 1.12.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.12\",\"shape\":\"number\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "0.0113 0.0112 0.01125 sit on the boundary.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"0.0113\",\"shape\":\"number\"},{\"value\":\"0.01125\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "0.0113 0.0112 0.01125 sit on the boundary.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.0113\",\"shape\":\"number\"},{\"value\":\"0.01125\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "0.0113 0.0112 0.01125 sit on the boundary.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.0113\",\"shape\":\"number\"},{\"value\":\"0.01125\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "0.0113 0.0112 0.01125 sit on the boundary.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"0.0113\",\"shape\":\"number\"},{\"value\":\"0.01125\",\"shape\":\"number\"}],\"candidates\":3,\"lookedUp\":3,\"grounded\":[{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "42 TB and 15 TB, 57 TB in total, 4.2e1 TB.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"4.2e1\",\"shape\":\"identifier\"}],\"candidates\":1,\"lookedUp\":1,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "42 TB and 15 TB, 57 TB in total, 4.2e1 TB.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"4.2e1\",\"shape\":\"identifier\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"42\",\"forms\":[\"42\"]},{\"value\":\"15\",\"forms\":[\"15\"]}],\"computed\":[{\"value\":\"57\",\"shape\":\"figure\",\"derivation\":\"column-sum\",\"from\":\"sum of rows[].tb\"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "42 TB and 15 TB, 57 TB in total, 4.2e1 TB.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"57\",\"shape\":\"number\"},{\"value\":\"4.2e1\",\"shape\":\"identifier\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"42\",\"forms\":[\"42\"]},{\"value\":\"15\",\"forms\":[\"15\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "42 TB and 15 TB, 57 TB in total, 4.2e1 TB.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"4.2e1\",\"shape\":\"identifier\"}],\"candidates\":4,\"lookedUp\":4,\"grounded\":[{\"value\":\"42\",\"forms\":[\"42\"]},{\"value\":\"15\",\"forms\":[\"15\"]}],\"computed\":[{\"value\":\"57\",\"shape\":\"number\",\"derivation\":\"column-sum\",\"from\":\"sum of rows[].tb\"}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1.12e-02% and 0.0112%",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]},{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1.12e-02% and 0.0112%",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]},{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1.12e-02% and 0.0112%",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]},{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "1.12e-02% and 0.0112%",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"1.12e-02\",\"forms\":[\"1.12e-02\"]},{\"value\":\"0.0112\",\"forms\":[\"0.0112\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":2,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "-1.12e-02 and -0.0112",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"-1.12e-02\",\"shape\":\"identifier\"},{\"value\":\"-0.0112\",\"shape\":\"number\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "-1.12e-02 and -0.0112",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"-1.12e-02\",\"shape\":\"identifier\"},{\"value\":\"-0.0112\",\"shape\":\"number\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "-1.12e-02 and -0.0112",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"-1.12e-02\",\"shape\":\"identifier\"},{\"value\":\"-0.0112\",\"shape\":\"number\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "-1.12e-02 and -0.0112",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"-1.12e-02\",\"shape\":\"identifier\"},{\"value\":\"-0.0112\",\"shape\":\"number\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The value 0.01121 is 1.121e-2.",
+      "options": {},
+      "expected": "{\"unsupported\":[{\"value\":\"1.121e-2\",\"shape\":\"identifier\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"0.01121\",\"forms\":[\"0.01121\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The value 0.01121 is 1.121e-2.",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.121e-2\",\"shape\":\"identifier\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"0.01121\",\"forms\":[\"0.01121\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The value 0.01121 is 1.121e-2.",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.121e-2\",\"shape\":\"identifier\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"0.01121\",\"forms\":[\"0.01121\"]}],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "The value 0.01121 is 1.121e-2.",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[{\"value\":\"1.121e-2\",\"shape\":\"identifier\"}],\"candidates\":2,\"lookedUp\":2,\"grounded\":[{\"value\":\"0.01121\",\"forms\":[\"0.01121\"]}],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":1,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "",
+      "options": {},
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "",
+      "options": {
+        "figures": true
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "",
+      "options": {
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    },
+    {
+      "answer": "",
+      "options": {
+        "figures": true,
+        "minDigits": 1
+      },
+      "expected": "{\"unsupported\":[],\"candidates\":0,\"lookedUp\":0,\"grounded\":[],\"computed\":[],\"evidenceTruncated\":false,\"grounding\":{\"fromThisTurn\":0,\"fromPriorTurns\":0,\"currentTurn\":1,\"toolResultsThisTurn\":5,\"indexTruncated\":false}}"
+    }
+  ]
+}

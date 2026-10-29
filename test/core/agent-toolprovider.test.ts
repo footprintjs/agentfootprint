@@ -1,5 +1,5 @@
 /**
- * Agent.toolProvider() builder method — Block A5/Neo follow-up (v2.5).
+ * Agent.toolProvider() builder method — Block A5/host-app follow-up (v2.5).
  *
  * 7-pattern matrix-lite (unit · scenario · integration · property ·
  * security · performance · ROI). Pins:

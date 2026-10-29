@@ -68,9 +68,9 @@ export async function fakeBrowserIdp(
   const client = await jose.generateKeyPair('RS256', { extractable: true });
   const clientKeyPem = await jose.exportPKCS8(client.privateKey);
   const kid = 'idp-1';
-  const clientId = 'neo-web';
+  const clientId = 'bot-web';
   const clientSecret = randomBytes(18).toString('base64url');
-  const audience = 'api://neo';
+  const audience = 'api://bot';
   const scope = 'access_as_user';
   const users = options.users ?? {
     alice: { oid: '0a11ce00-0000-4000-8000-00000000a11c', name: 'Alice Archer' },

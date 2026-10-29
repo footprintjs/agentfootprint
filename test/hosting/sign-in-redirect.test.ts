@@ -45,14 +45,14 @@ const me = (m: MountedRedirect, jar: Jar) =>
 // ─── 1. UNIT — returnTo, the seal ────────────────────────────────────
 
 describe('safeReturnTo — unit (design §5.5, pinned)', () => {
-  const base = new URL('https://neo.corp.example');
+  const base = new URL('https://bot.corp.example');
   it.each([
     ['//evil.example', '/'],
     ['/\\evil.example', '/'],
     ['/\t/evil.example', '/'],
     ['/%09/evil.example', '/%09/evil.example'],
     ['https://evil.example', '/'],
-    ['https://neo.corp.example/x', '/'],
+    ['https://bot.corp.example/x', '/'],
     ['javascript:alert(1)', '/'],
     ['', '/'],
     [undefined, '/'],
@@ -125,13 +125,13 @@ describe('redirect sign-in — scenarios', () => {
   });
 
   it('a private-key client (private_key_jwt) signs in; a key the IdP never registered is refused', async () => {
-    const m = await mounted({ privateKey: true, signIn: { resource: 'urn:neo:api' } });
+    const m = await mounted({ privateKey: true, signIn: { resource: 'urn:bot:api' } });
     const flow = await browserSignIn(m, 'alice');
     expect(flow.status).toBe(303);
     expect(flow.location).toBe('/');
     expect(m.idp.lastClientAuth).toBe('private-key');
     // AD FS: the Web API identifier travels as `resource`.
-    expect(flow.authorize?.get('resource')).toBe('urn:neo:api');
+    expect(flow.authorize?.get('resource')).toBe('urn:bot:api');
     const stranger = await fakeBrowserIdp();
     open.push(stranger);
     const wrongKey = await mounted({
@@ -288,7 +288,7 @@ describe('redirect sign-in — integration', () => {
 
 describe('redirect sign-in — properties', () => {
   it('no returnTo, however built, leaves the public origin', () => {
-    const base = new URL('https://neo.corp.example');
+    const base = new URL('https://bot.corp.example');
     const parts = [
       '/',
       '//',

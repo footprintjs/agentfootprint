@@ -27,7 +27,11 @@ import { describe, expect, it } from 'vitest';
 
 import { assessAnswer } from '../../../../src/core/agent/assessment/assess.js';
 import { accountForAnswer } from '../../../../src/answer-account/account.js';
-import { fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from '../../../answer-account/helpers.js';
+import {
+  fixtureA,
+  FLAGSHIP_RUN_ID,
+  HOST_APP_DECLARATIONS,
+} from '../../../answer-account/helpers.js';
 
 type Ev = { type: string; payload: Record<string, unknown> };
 
@@ -56,7 +60,7 @@ function withCoverageRow() {
 
 describe('fixture A — the real recording, reduced', () => {
   it('its row is gone, its envelope is not: not sure, a gap and a declared absence (never rebuilt from events)', () => {
-    const a = assessAnswer(fixtureA(), NEO_DECLARATIONS);
+    const a = assessAnswer(fixtureA(), HOST_APP_DECLARATIONS);
     expect(a.standing).toBe('not-sure');
     expect(a.reasons.map((r) => r.reason)).toEqual(['coverage-gap', 'declared-absent']);
     // Each read off the one result of this turn — get_array_inventory's, not turn 1's.
@@ -71,14 +75,14 @@ describe('fixture A — the real recording, reduced', () => {
 
   it('SYNTHETIC — its coverage row restored: the same standing and reasons, read from the row', () => {
     const recording = withCoverageRow();
-    const a = assessAnswer(recording, NEO_DECLARATIONS);
+    const a = assessAnswer(recording, HOST_APP_DECLARATIONS);
     expect(a.standing).toBe('not-sure');
     expect(a.reasons.map((r) => r.reason)).toEqual(['coverage-gap', 'declared-absent']);
-    const reduced = assessAnswer(fixtureA(), NEO_DECLARATIONS);
+    const reduced = assessAnswer(fixtureA(), HOST_APP_DECLARATIONS);
     expect(a.reasons.map((r) => r.reason)).toEqual(reduced.reasons.map((r) => r.reason));
     expect(a.checked.find((c) => c.check === 'result-shape')).toMatchObject({ ran: 1, of: 1 });
     // The account renders the same fold.
-    const account = accountForAnswer(recording as never, NEO_DECLARATIONS, {
+    const account = accountForAnswer(recording as never, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(account.facts.standing.value).toBe('not-sure');

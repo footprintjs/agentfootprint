@@ -82,7 +82,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
       usedHeader = ctx.credential
         ? `${ctx.credential.kind} (${Object.keys(ctx.credential.toHeaders())[0]})`
         : '(none)';
-      return 'repos: agentfootprint, neo-agentfootprint';
+      return 'repos: agentfootprint, my-agent-app';
     },
   });
 
@@ -91,7 +91,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
     mock({
       replies: [
         { content: 'fetching repos', toolCalls: [{ id: 'c1', name: 'list_repos', args: {} }] },
-        { content: 'You have 2 repos: agentfootprint, neo-agentfootprint.', toolCalls: [] },
+        { content: 'You have 2 repos: agentfootprint, my-agent-app.', toolCalls: [] },
       ],
     });
 

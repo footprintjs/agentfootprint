@@ -39,7 +39,7 @@ function event(type: string, payload: unknown): AgentfootprintEvent {
 }
 
 const policy = { nearTieMargin: 0.1, menuSize: 3 };
-const ctx = { appName: 'Neo' };
+const ctx = { appName: 'Bot' };
 const render = (e: AgentfootprintEvent) => {
   const key = selectCommentaryKey(e);
   if (!key) return null;
@@ -89,7 +89,7 @@ describe('commentary — skill.turn_routed verdicts', () => {
     });
     expect(selectCommentaryKey(e)).toBe('skill.turn_routed.continuity.nearTie');
     expect(render(e)).toBe(
-      'Near-tie between `shipping` (44%) and `billing` (41%) — Neo stayed put, continuing in `billing`.',
+      'Near-tie between `shipping` (44%) and `billing` (41%) — Bot stayed put, continuing in `billing`.',
     );
   });
 
@@ -100,7 +100,7 @@ describe('commentary — skill.turn_routed verdicts', () => {
       policy,
     });
     expect(selectCommentaryKey(e)).toBe('skill.turn_routed.continuity');
-    expect(render(e)).toBe('Neo picked up where the conversation left off — still in `billing`.');
+    expect(render(e)).toBe('Bot picked up where the conversation left off — still in `billing`.');
   });
 
   it("era tolerance: by='rule' reads as the tier-1 entry verdict", () => {
@@ -222,7 +222,7 @@ describe('commentary — skill.rejected posture refusals', () => {
     expect(selectCommentaryKey(e)).toBe('skill.rejected.guard');
     expect(render(e)).toBe(
       'The model asked for the `help-desk` skill, but that choice was not on the menu ' +
-        'it was offered — Neo refused the jump and re-prompted with the allowed options.',
+        'it was offered — Bot refused the jump and re-prompted with the allowed options.',
     );
   });
 
@@ -231,7 +231,7 @@ describe('commentary — skill.rejected posture refusals', () => {
     expect(selectCommentaryKey(e)).toBe('skill.rejected.rails');
     expect(render(e)).toBe(
       'The model asked for the `help-desk` skill, but this graph does not let the model ' +
-        'route — Neo refused the jump; start rules and declared routes decide moves.',
+        'route — Bot refused the jump; start rules and declared routes decide moves.',
     );
   });
 

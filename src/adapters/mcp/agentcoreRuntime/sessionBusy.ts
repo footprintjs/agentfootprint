@@ -18,14 +18,18 @@
  * waiting for came up.
  *
  * ── Why asking again is safe: the documented guarantee ───────────────────────
- * The refusal is the PLATFORM's, about the session, made while the service is
- * provisioning or tearing down the session the request targets — before the
- * request reached the MCP server: nothing ran. That is what the series records
- * of each such attempt — `effect: 'none'`, `guarantee: 'agentcore-session-busy'`
+ * AWS's contract returns this refusal while the service is provisioning or
+ * tearing down the session the request targets: the PLATFORM's answer, about
+ * the session, not the MCP server's — the request did not reach the server, so
+ * nothing ran. That documented guarantee, cited in
+ * {@link SESSION_BUSY_DOCUMENTATION}, is what the series records of each such
+ * attempt — `effect: 'none'`, `guarantee: 'agentcore-session-busy'`
  * ({@link SESSION_BUSY_GUARANTEE}) — and why the adapter's selection is
- * permission enough to ask again (`mcp/replay.ts`). The documentation it rests
- * on is cited in {@link SESSION_BUSY_DOCUMENTATION}. A 429 has no such
- * guarantee: its effect stays unknown.
+ * permission enough to ask again (`mcp/replay.ts`). A 429 has no such
+ * guarantee: its effect stays unknown. The HTTP 200 form is matched by code
+ * and message, so a server behind the runtime that answered with this same
+ * error itself would be read as the platform's refusal; the 409 form carries
+ * the platform's own `x-amzn-errortype`.
  *
  * ── What it must NOT match ───────────────────────────────────────────────────
  * `ConflictException` shares the code -32005 ("Resource conflict - Resource

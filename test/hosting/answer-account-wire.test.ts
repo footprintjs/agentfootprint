@@ -35,7 +35,7 @@ import {
   deniedLeaves,
   fixtureA,
   FLAGSHIP_RUN_ID,
-  NEO_DECLARATIONS,
+  HOST_APP_DECLARATIONS,
 } from '../answer-account/helpers.js';
 
 /** The archived field recording (4–5 MB). Outside the repo, so its cases skip where it is absent. */
@@ -75,7 +75,7 @@ async function door(store: ArtifactStore, guard: CrossSiteOptions = {}) {
     agent: Agent.create({ provider: mock({ reply: 'ok' }), model: 'm', artifacts: store }).build(),
     sessions: memorySessions(),
     host: nodeHost({ port: 0, hostname: '127.0.0.1', ...guard }),
-    answerAccounts: { declarations: NEO_DECLARATIONS },
+    answerAccounts: { declarations: HOST_APP_DECLARATIONS },
   });
   open.push(handle);
   return handle;
@@ -326,7 +326,7 @@ describe('answer-account over HTTP — the recording from the field', () => {
     });
     expect(got.status).toBe(200);
     const body = JSON.parse(got.body) as { account: unknown; shown: unknown };
-    const expected = accountForAnswer(recording as unknown as Recording, NEO_DECLARATIONS, {
+    const expected = accountForAnswer(recording as unknown as Recording, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(body.account).toEqual(JSON.parse(JSON.stringify(expected)));
@@ -347,7 +347,9 @@ describe('answer-account over HTTP — the recording from the field', () => {
       });
       expect(got.status).toBe(200);
       const body = JSON.parse(got.body) as { account: { summary: { tone: string } } };
-      const expected = accountForAnswer(recording, NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+      const expected = accountForAnswer(recording, HOST_APP_DECLARATIONS, {
+        runId: FLAGSHIP_RUN_ID,
+      });
       expect(body.account).toEqual(JSON.parse(JSON.stringify(expected)));
       expect(body.account.summary.tone).toBe('warn');
       expect(JSON.stringify(body.account).length).toBeLessThanOrEqual(128 * 1024);
@@ -366,7 +368,7 @@ describe('answer-account over HTTP — the recording from the field', () => {
       // Against every string VALUE of the response (a key such as `toolCallId`
       // is the account's own vocabulary, not content from the record).
       const values = stringValues(JSON.parse(got.body)).join('\u0000');
-      for (const leaf of deniedLeaves(recording, NEO_DECLARATIONS)) {
+      for (const leaf of deniedLeaves(recording, HOST_APP_DECLARATIONS)) {
         expect(values.includes(leaf), leaf.slice(0, 80)).toBe(false);
       }
     },
@@ -382,9 +384,11 @@ describe('answer-account over HTTP — the recording from the field', () => {
         const t0 = performance.now();
         const recording = JSON.parse(text) as Recording;
         const t1 = performance.now();
-        const account = accountForAnswer(recording, NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+        const account = accountForAnswer(recording, HOST_APP_DECLARATIONS, {
+          runId: FLAGSHIP_RUN_ID,
+        });
         const t2 = performance.now();
-        showLeaves(account, recording, NEO_DECLARATIONS);
+        showLeaves(account, recording, HOST_APP_DECLARATIONS);
         const t3 = performance.now();
         runs.push({ parse: t1 - t0, fold: t2 - t1, shown: t3 - t2 });
       }

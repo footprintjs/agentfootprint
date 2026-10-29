@@ -10,7 +10,7 @@ import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
 import { EmbeddingCache, pairwiseSimilarity } from '../../src/influence-core';
 
 const CATALOG = [
-  // The Neo twin pair RFC-002 names as the canonical confusable case.
+  // The host-app twin pair RFC-002 names as the canonical confusable case.
   {
     id: 'get_fcns_database',
     text: 'Get FC name server database registrations for the fabric.',
@@ -59,7 +59,7 @@ describe('pairwiseSimilarity — C1 acceptance properties', () => {
 });
 
 describe('pairwiseSimilarity — scenario', () => {
-  it('the Neo twin descriptions rank as the top pair', async () => {
+  it('the host-app twin descriptions rank as the top pair', async () => {
     const { pairs } = await pairwiseSimilarity({ items: CATALOG, embedder: mockEmbedder() });
     expect([pairs[0].a, pairs[0].b].sort()).toEqual([
       'get_fcns_database',

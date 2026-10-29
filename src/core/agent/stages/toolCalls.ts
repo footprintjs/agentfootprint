@@ -1584,7 +1584,8 @@ function towersFor(
   const { standingOf } = foldLedger(rows);
   if (!hasSetAsideStanding(standingOf)) return undefined;
   const history = [...((scope.history as readonly LLMMessage[] | undefined) ?? [])];
-  const corpus = evidenceFromHistory(history);
+  // The same corpus the answer moment builds: one gate, one fold.
+  const corpus = evidenceFromHistory(history, gate);
   // The index hit its ceiling: a result past the cut carried nothing into
   // it, so a fact carrier there is invisible and a row read off the prefix
   // would be false. The gate downgrades itself under the same flag; the

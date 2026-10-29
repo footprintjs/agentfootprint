@@ -76,7 +76,7 @@ import type { ConversationLimits } from './types.js';
  * never redirects a short name to a canonical one; that is the proxy's job.
  *
  * @example  A door on a company network, reached by one name
- *   nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'] });
+ *   nodeHost({ port: 8080, allowedHosts: ['bot.corp.example'] });
  */
 export interface NodeHostOptions extends CrossSiteOptions {
   /** Port to bind. Default `8080`. Pass `0` for an ephemeral port. Refused alongside `server`. */

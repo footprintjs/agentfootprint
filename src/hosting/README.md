@@ -71,10 +71,10 @@ opens.
   record through the host's `onRefusal`.
 
 ```ts
-nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'] });
+nodeHost({ port: 8080, allowedHosts: ['bot.corp.example'] });
 
 // An application route beside the door (on `onUnhandled`) keeps the same rule:
-const guard = doorGuard({ name: 'sign-in', allowedHosts: ['neo.corp.example'] });
+const guard = doorGuard({ name: 'sign-in', allowedHosts: ['bot.corp.example'] });
 const refusal = guard.check(req); // IncomingMessage works as-is
 if (refusal) return reply(refusal.status, { error: refusal.message, code: refusal.code });
 ```
@@ -178,7 +178,7 @@ const identity = { signIn: signIns };          // or { verify, signIn } for both
 await standingAgent({
   agent,
   sessions,
-  host: nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'], signIn: { identity } }),
+  host: nodeHost({ port: 8080, allowedHosts: ['bot.corp.example'], signIn: { identity } }),
   identity,
 });
 await signIns.end(key); // sign-out: every socket carrying it closes
