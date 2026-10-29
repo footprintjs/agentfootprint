@@ -541,9 +541,11 @@ the tool name, the tool's declaration version (a hash of its `period` and `searc
 every bound argument as it will be sent (all but the explicitly `inert` ones), the executed bounds and
 zone, the sampling step (whatever role its argument carries), and the requested mention. The
 arguments are read from the call's own enumerable keys, each value from its own data property, into a
-null-prototype record: an argument named `__proto__` is valid JSON and is bound like any other. The
-executed bounds in the digest are the asked range at the confirmation's clock: the turn's clock for
-the first confirmation, the moment of the person's answer for a re-ask after a pause. A dispatch
+null-prototype record: an argument named `__proto__` is valid JSON and is bound like any other. Only
+JSON data is bound: a call carrying anything else (an accessor, a function, a `Date`, a non-finite
+number) is refused, never bound by a stand-in another value would share. The executed bounds in the
+digest are the asked range at the confirmation's clock: the turn's clock for the first
+confirmation, the moment of the person's answer for a re-ask after a pause. A dispatch
 within the tool's step of that clock keeps the digest; past the step, the bounds are recomputed and
 the digest changes (the time design's drift law decides which). A batch's digest also covers its list
 of call digests, in order. The person's answer is filed on the existing `time-answer` row, which
@@ -568,7 +570,8 @@ whose customer or node argument changes before dispatch asks again; the same arg
 `inert` does not; a partial declaration still binds what it left out; a changed sampling step, tool,
 declaration version or bounds asks again; a call added to a batch is a new batch; an identical
 retry runs; with no one to ask, a changed call is refused; an argument named `__proto__`, parsed
-from JSON, is bound, so a changed value asks again (a review found the first prototype dropped it).
+from JSON, is bound, so a changed value asks again (a review found the first prototype dropped it);
+a call carrying anything but JSON data is refused, and no getter runs.
 **Batch membership is tested only as a digest change.** The real batch ask and its resume
 (`planAskFields`, `applyInputResponse`) are future implementation work, not measured behaviour; so
 are the hidden inputs and the long-pause re-ask below.
@@ -606,9 +609,12 @@ implementation must keep. None is built or measured here.
    without end. Each pause costs at most one question. Pinned by a test: confirm, pause past the
    step, re-ask, confirm the new bounds (once promptly, once slower than the step), and the call
    dispatches exactly once, with those bounds.
-4. **Own keys only.** The digest reads the call's own enumerable arguments, values from own data
-   properties, into a null-prototype record, as the bench's prototype now does
-   (`scripts/binding.mjs · scopeOf`). An argument named `__proto__` is bound like any other.
+4. **Own keys, JSON data only.** The digest reads the call's own enumerable arguments, values from
+   own data properties, into a null-prototype record, as the bench's prototype now does
+   (`scripts/binding.mjs · scopeOf`). An argument named `__proto__` is bound like any other. A call
+   carrying anything but JSON data is refused. The model's arguments are parsed JSON; the build must
+   check that every value the library itself writes into a call (a redrawn window, a filled answer)
+   is JSON data too.
 
 ### 8.5 Sampling: only when the tool executes it
 
@@ -760,7 +766,7 @@ model's choice of arguments between the confirmation and the call.
 | A restriction made of known words ("at CPU peaks", "requests > errors") | Bounded relations: a word or operator in no supported relation asks (§ 8.6). |
 | The model changes a call after the person confirmed it | The scope digest is checked at dispatch; a changed call asks again or is refused (§ 8.4). |
 | A tool with no `Tool.search`, or a partial one, leaving a customer or node argument out of the confirmation | Every argument the call sends is in the digest by default; only an explicit `inert` opts out. The binding refuses no tool for its declaration, and `searchOf` still refuses a partial one, as today (§ 8.4, R15). |
-| An argument named `__proto__` (valid JSON) slipping out of the digest | The digest reads own enumerable keys into a null-prototype record; such an argument is bound like any other. An acceptance case pins it (§ 8.4). |
+| An argument named `__proto__` (valid JSON) slipping out of the digest, or a value that is not data (a getter) changing after the check | The digest reads own enumerable keys into a null-prototype record, so such an argument is bound like any other; anything but JSON data is refused. Acceptance cases pin both (§ 8.4). |
 | A remote declaration marking a scope-bearing argument `inert` | `inert` counts only from a local declaration `searchOf` accepted; a remote one binds every argument (§ 8.4). |
 | A host-filled tenant or credential changing unseen, or shown in the confirmation | Bound by what it stands for, never the secret; shown by a safe label, never its value (§ 8.4). |
 | A wrong reading that passes every check | The bound confirmation shows the executable scope before the read; the answer shows requested, sent and declared periods apart (§ 9). The corpus grows with each found case. |
@@ -908,6 +914,7 @@ remain the owner's proposals, not approvals.
     what they stand for, never the secret); the confirmation shows safe labels, never their values.
 20. **A long pause asks once, then runs.** A test pins it: confirm, pause past the step, re-ask,
     confirm the new bounds, dispatch exactly once. Reusing the turn's frozen clock must not loop.
-21. **The digest reads own keys only**, into a null-prototype record; `__proto__` is an argument.
+21. **The digest reads own keys and JSON data only**, into a null-prototype record; `__proto__` is
+    an argument, and anything that is not JSON data is refused.
 22. **The batch ask and its resume are built and tested in the library.** The bench tested batch
     membership only as a digest change; that is not measured runtime behaviour.

@@ -2,7 +2,7 @@
 // (design § 8.4, R15). They run the prototype in binding.mjs, not the library.  Run: npm run acceptance
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { atDispatch, batchDigest, canonical, scopeDigest, scopeOf } from './binding.mjs';
+import { atDispatch, batchDigest, canonical, NotBindable, scopeDigest, scopeOf } from './binding.mjs';
 
 const executed = { from: '2026-10-27T07:30:00Z', to: '2026-10-27T09:30:00Z', zone: 'UTC' };
 const period = { forms: [{ kind: 'lookback', argument: 'window', signed: false }], direction: 'past', shapes: ['rolling-lookback'] };
@@ -102,11 +102,17 @@ test('parsed JSON: __proto__ nested in an argument value is in the digest; marke
   assert.equal(atDispatch(confirm(inert, parsed('A')), parsed('B'), inert).outcome, 'run');
 });
 
-test('only own data is bound: no getter runs, and an inherited property is not an argument', () => {
+test('only JSON data is bound: anything else is refused at dispatch, and no getter runs', () => {
   const declaration = { period };
+  let ran = false;
   const args = { window: '2h' };
-  Object.defineProperty(args, 'customer', { enumerable: true, get() { throw new Error('a getter ran'); } });
-  assert.doesNotThrow(() => scopeDigest({ ...call, args }, declaration));
+  Object.defineProperty(args, 'customer', { enumerable: true, get() { ran = true; return 'acme'; } });
+  assert.equal(atDispatch(new Set(), { ...call, args }, declaration).outcome, 'refused');
+  assert.throws(() => scopeDigest({ ...call, args }, declaration), NotBindable, 'nor can it be confirmed');
+  assert.equal(ran, false, 'no getter ran');
+  for (const value of [new Date(0), new Map([['k', 1]]), () => 'acme', Number.NaN, undefined]) {
+    assert.equal(atDispatch(new Set(), withArgs(call, { customer: value }), declaration).outcome, 'refused');
+  }
   const inherited = Object.assign(Object.create({ customer: 'acme' }), { window: '2h' });
-  assert.deepEqual(Object.keys(scopeOf({ ...call, args: inherited }, declaration).args), ['window']);
+  assert.equal(atDispatch(new Set(), { ...call, args: inherited }, declaration).outcome, 'refused');
 });

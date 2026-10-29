@@ -21,7 +21,7 @@
  "rules": {
   "leftoverScan": "1.1.0",
   "completeMeaning": "2.0.0",
-  "binding": "1.1.0"
+  "binding": "1.2.0"
  },
  "hostRuleReference": {
   "commit": "0d52b9b",

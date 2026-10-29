@@ -3,37 +3,49 @@
 //
 // EVERY ARGUMENT IS SCOPE-BEARING BY DEFAULT. The digest covers every argument the call sends,
 // except those the tool's declaration explicitly marks `inert` (Tool.search · role: 'inert'). A tool
-// with no Tool.search, or a partial one, binds all of its arguments: the default makes an incomplete
-// declaration safe, and none is refused. The sampling step is in the digest whatever role its
-// argument carries. The digest is a SHA-256 over canonical JSON (sorted keys, no whitespace), so it
-// holds no text of the request, and equal scopes give equal digests.
+// with no Tool.search binds all of its arguments, and an argument a declaration leaves out stays
+// bound (defence in depth: the library refuses a partial declaration today). The sampling step is in
+// the digest whatever role its argument carries. The digest is a SHA-256 over canonical JSON (sorted
+// keys, no whitespace), so it holds no text of the request, and equal scopes give equal digests.
 //
 // OWN KEYS ONLY, NO PROTOTYPE SETTER. Arguments are read from the call's OWN enumerable keys, each
 // value from its own data descriptor (no getter runs), into a null-prototype record. An argument
 // named "__proto__" (valid JSON) is an argument like any other: on an ordinary object,
 // `bound['__proto__'] = value` would run the inherited setter and drop it from the digest.
+//
+// JSON DATA ONLY. A value that is not JSON data (an accessor, a function, a Date or a Map, a
+// non-finite number, undefined, a hole, arguments with an inherited prototype) is refused, never
+// bound by a stand-in that another value would share. Asking again would not make it bindable.
 import { createHash } from 'node:crypto';
 
-export const BINDING_VERSION = '1.1.0';
+export const BINDING_VERSION = '1.2.0';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const own = (o, k) => o !== null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
 
-/** The value of an own data property, never a getter's result. An accessor is bound as a marker. */
+/** A value the digest cannot bind: it is not JSON data, so the digest could not say what is sent. */
+export class NotBindable extends Error {}
+
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v));
+
+/** The value of an own data property. An accessor is refused: its getter could return anything. */
 function ownValue(o, k) {
   const d = Object.getOwnPropertyDescriptor(o, k);
-  return d === undefined ? undefined : 'value' in d ? d.value : { '[accessor]': true };
+  if (d !== undefined && !('value' in d)) throw new NotBindable(`'${k}' is an accessor, not data`);
+  return d?.value;
 }
 
-/** Canonical JSON: own enumerable keys only, sorted at every depth, no whitespace, no getter run. */
+/** Canonical JSON over JSON data only: own enumerable keys, sorted at every depth, no whitespace. */
 export function canonical(value) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
   if (Array.isArray(value)) {
-    return '[' + Array.from({ length: value.length }, (_, i) => canonical(ownValue(value, i))).join(',') + ']';
+    return '[' + Array.from({ length: value.length }, (_, i) => canonical(ownValue(value, String(i)))).join(',') + ']';
   }
-  if (value !== null && typeof value === 'object') {
+  if (isPlainObject(value)) {
     return '{' + Object.keys(value).sort().map((k) => JSON.stringify(k) + ':' + canonical(ownValue(value, k))).join(',') + '}';
   }
-  return JSON.stringify(value === undefined ? null : value);
+  throw new NotBindable(`${value === undefined ? 'undefined' : typeof value === 'object' ? 'an object that is not plain' : `a ${typeof value}`} is not JSON data`);
 }
 
 /** The arguments a declaration marks `inert`: the only ones left out of the digest. */
@@ -51,6 +63,7 @@ export function declarationVersion(declaration) {
 export function scopeOf(call, declaration) {
   const inert = inertArguments(declaration);
   const args = call.args ?? {};
+  if (!isPlainObject(args)) throw new NotBindable('the arguments are not a plain object');
   const bound = Object.create(null); // no inherited "__proto__" setter
   for (const name of Object.keys(args)) if (!inert.has(name)) bound[name] = ownValue(args, name);
   return {
@@ -74,10 +87,17 @@ export function batchDigest(calls, declarations) {
 
 /**
  * At dispatch: the call runs only when its digest equals a confirmed one. Otherwise it is asked
- * again through the batch ask, or refused when nobody can be asked. Nothing proceeds silently.
+ * again through the batch ask, or refused when nobody can be asked, or when it cannot be bound at
+ * all. Nothing proceeds silently.
  */
 export function atDispatch(confirmed, call, declaration, { canAsk = true } = {}) {
-  const digest = scopeDigest(call, declaration);
+  let digest;
+  try {
+    digest = scopeDigest(call, declaration);
+  } catch (error) {
+    if (error instanceof NotBindable) return { outcome: 'refused', digest: null, why: error.message };
+    throw error;
+  }
   if (confirmed.has(digest)) return { outcome: 'run', digest };
   return { outcome: canAsk ? 'ask-again' : 'refused', digest };
 }
