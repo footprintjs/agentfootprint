@@ -20,11 +20,14 @@
  *   3. a local close, whatever happened.
  *
  * ONE DEADLINE ANSWERS THE CALLER: the remote answer and the local close are
- * waited for together for at most `TOOL_TEARDOWN_TIMEOUT_MS` from the start. A
- * close that finishes in time is finished before the caller hears; one that
- * hangs does not hold the answer. The work's own settlement — the `DELETE`, a
- * `fetch` that ignores its abort, the close — may come later, and is returned
- * apart (`settled`): the MCP client pool keeps an ending charged until then.
+ * waited for together for at most `TOOL_TEARDOWN_TIMEOUT_MS` of ELAPSED time,
+ * measured by timers started together at the start — never by reading the wall
+ * clock, so a clock stepped back cannot stretch it. A close that finishes in
+ * time is finished before the caller hears; one that hangs does not hold the
+ * answer. The work's own settlement — the `DELETE`, a `fetch` that ignores its
+ * abort, the close — may come later, and is returned apart (`settled`): the MCP
+ * client pool keeps an ending charged until then. The clock (`now`) only
+ * measures `durationMs`.
  *
  * Never vendor-aware: the one port is the Streamable HTTP `DELETE`. A transport
  * that turns it into something else (AgentCore Runtime's `StopRuntimeSession`)
@@ -172,12 +175,11 @@ export function endSession(
       return failedWith(error, watch.answered, startedAt, now);
     },
   );
-  // Closed locally once the remote side has its answer, whatever it is. The
-  // caller waits for that close only within what is left of the one deadline.
+  // Closed locally once the remote side has its answer, whatever it is.
   const closing = remote.then(() => settle(close));
-  const outcome = remote.then((answer) =>
-    within(closing, Math.max(0, timeoutMs - (now() - startedAt))).then(() => answer),
-  );
+  // The caller's wait for that close starts NOW, beside the remote one: both
+  // end at the same elapsed deadline, whatever the wall clock does meanwhile.
+  const outcome = within(closing, timeoutMs).then(() => remote);
   return {
     outcome,
     settled: Promise.allSettled([work, closing]).then(() => undefined),
@@ -194,9 +196,8 @@ function settle(close: () => Promise<void>): Promise<void> {
     );
 }
 
-/** `work`, or `ms` — whichever comes first; at once when no time is left. Never rejects; the work goes on. */
+/** `work`, or `ms` of elapsed time from now — whichever comes first. Never rejects; the work goes on. */
 function within(work: Promise<void>, ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
   return withTimeout(() => work, ms, 'MCP local close').then(
     () => undefined,
     () => undefined,

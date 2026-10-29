@@ -13,6 +13,11 @@
  *     client (`client: 'not-needed'`); a listing already under way for it is
  *     joined; otherwise the listing runs on THIS conversation's own client —
  *     never in another conversation's session.
+ *   - THE CALLER'S CONTEXT AFTER EVERY WAIT: the app's names are asked again
+ *     after a joined listing and after this one's own (`Pool.ensureListed`); a
+ *     list is served only under the context the caller has at that moment, and
+ *     a moved context is resolved again — at most three rounds, then refused
+ *     (`binding-changed`).
  *
  * A refused listing never reaches the model as a tool result: it fails that
  * iteration's tool discovery (`agentfootprint.tools.discovery_failed`), as any
@@ -27,7 +32,7 @@ import { isLocalSessionHandleLost, LocalSessionHandleLostError } from '../../too
 import { ServerEndedSessionError } from './sessionEnded.js';
 import { boundTool } from './boundTool.js';
 import type { PoolKey } from './identityKey.js';
-import { resolvePlan, type ClientPlan } from './plan.js';
+import { contextFor, resolvePlan, type ClientPlan } from './plan.js';
 import type { Pool, ServedList } from './pool.js';
 import type { PooledClient } from './pooledClient.js';
 import type { UseFacts } from './record.js';
@@ -43,41 +48,69 @@ export async function listTools(
   pool.interact();
   const operation = pool.admit('listing', 'listing', signal);
   try {
-    const current = pool.clients.currentFor(key.key);
-    let plan: ClientPlan | undefined;
-    if (current === undefined) {
+    for (let round = 0; round < 3; round += 1) {
+      const current = pool.clients.currentFor(key.key);
+      let plan: ClientPlan | undefined;
+      if (current === undefined) {
+        try {
+          plan = resolvePlan(pool.settings, key);
+        } catch (cause) {
+          throw pool.refused('init-failed', cause);
+        }
+      }
+      // A key with a client: the app's names asked again, so a changed
+      // authorization reaches this conversation as it would a new one.
+      const definitions =
+        current === undefined ? (plan as ClientPlan) : pool.refreshContext(current);
+      if (definitions.shared) {
+        const served = await sharedWithoutClient(pool, key, definitions.context, operation.signal);
+        if (served !== undefined) {
+          // After that wait, the caller's names once more: served only under
+          // the context they give now — otherwise resolved again.
+          if (!callerStillIn(pool, key, plan, served.context)) continue;
+          facts.client = 'not-needed';
+          facts.definitions = 'shared';
+          facts.definitionsAgeMs = Math.max(0, pool.now() - served.list.listedAt);
+          return bindAll(pool, key, served, undefined);
+        }
+      }
+      const client = await pool.leaseClient(key, operation, facts, plan);
+      let served: ServedList;
       try {
-        plan = resolvePlan(pool.settings, key);
-      } catch (cause) {
-        throw pool.refused('init-failed', cause);
+        // Under the client's context of now, checked with no wait since.
+        served = await pool.ensureListed(client, operation);
+      } catch (error) {
+        throw classifiedListing(pool, client, facts, error);
       }
+      facts.definitions = served.shared ? 'shared' : 'listed';
+      if (served.shared) facts.definitionsAgeMs = Math.max(0, pool.now() - served.list.listedAt);
+      return bindAll(pool, key, served, client);
     }
-    // A key with a client: the app's names asked again, so a changed
-    // authorization reaches this conversation as it would a new one.
-    const definitions = current === undefined ? (plan as ClientPlan) : pool.refreshContext(current);
-    if (definitions.shared) {
-      const served = await sharedWithoutClient(pool, key, definitions.context, operation.signal);
-      if (served !== undefined) {
-        facts.client = 'not-needed';
-        facts.definitions = 'shared';
-        facts.definitionsAgeMs = Math.max(0, pool.now() - served.list.listedAt);
-        return bindAll(pool, key, served, undefined);
-      }
-    }
-    const client = await pool.leaseClient(key, operation, facts, plan);
-    // After that wait, the names once more: the list is served under what they say now.
-    pool.refreshContext(client);
-    let served: ServedList;
-    try {
-      served = await pool.ensureListed(client, pool.servedListOf(client), operation);
-    } catch (error) {
-      throw classifiedListing(pool, client, facts, error);
-    }
-    facts.definitions = served.shared ? 'shared' : 'listed';
-    if (served.shared) facts.definitionsAgeMs = Math.max(0, pool.now() - served.list.listedAt);
-    return bindAll(pool, key, served, client);
+    // The app's names kept moving under this listing.
+    throw pool.refused('binding-changed');
   } finally {
     operation.finish();
+  }
+}
+
+/**
+ * Do the caller's names still give `context` — asked now? Through the key's
+ * client when it has one by now, else over the plan's configuration. False
+ * when `share` cannot answer: the next round says why.
+ */
+function callerStillIn(
+  pool: Pool,
+  key: PoolKey,
+  plan: ClientPlan | undefined,
+  context: string,
+): boolean {
+  const current = pool.clients.currentFor(key.key);
+  if (current !== undefined) return pool.contextHolds(current, context);
+  if (plan === undefined) return false;
+  try {
+    return contextFor(pool.settings, key, plan.configHash).context === context;
+  } catch {
+    return false;
   }
 }
 

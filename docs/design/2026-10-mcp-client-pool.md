@@ -1143,8 +1143,14 @@ section, what it said, and what holds now.
   policy. When the gate stops a retry, the series' record ends `not-permitted` on the last
   answer the server sent, with no row for the attempt that was not sent.
 - **§ 7 — the bounded answer.** One deadline answers the caller: the remote answer and the
-  local close together. A close that hangs never holds the answer. The ending stays
-  charged until the close settles.
+  local close together, measured as elapsed time by timers started together, so a clock
+  stepped back cannot stretch it. A close that hangs never holds the answer. The ending
+  stays charged until the close settles.
+- **§ 6.1–6.2 — where a listing's answer is kept.** A listing is for the context it began
+  under; its requests are sent only while that context holds, and its answer is kept
+  only if the context still holds when it arrives. An answer the app's names moved under
+  is dropped, and the next round lists under the new context. A caller that joined
+  someone else's listing is asked again after the join.
 - **§ 3.1 — what is passed to every client.** `replay` and `jsonSchemaValidator` are passed
   as well (the second for #248's per-tool checks).
 - **§ 10 — "Properties (fast-check)".** The repo's seeded `mulberry32` generators are used

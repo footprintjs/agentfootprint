@@ -234,10 +234,11 @@ carries (the SDK treats a 405 as success), and closes locally whatever happened.
 The wait is bounded by `TOOL_TEARDOWN_TIMEOUT_MS` (the tool-session tier's
 `withTimeout`, shared): at the deadline the request is aborted and the outcome is
 `'timed-out'`. ONE deadline answers the caller — the remote answer and the local
-close together: a close that hangs never holds the answer (after a confirmed
-`DELETE`, after the remote deadline, with no session at all), and is reported
-apart as the ending's settlement, which a pool keeps charged until it really
-finishes. At most once per client. `resolved` is true only for `'terminated'`,
+close together, measured as ELAPSED time by timers started together, never by
+reading the wall clock, so a clock stepped back cannot stretch it: a close that
+hangs never holds the answer (after a confirmed `DELETE`, after the remote
+deadline, with no session at all), and is reported apart as the ending's
+settlement, which a pool keeps charged until it really finishes. At most once per client. `resolved` is true only for `'terminated'`,
 `'already-gone'` and `'no-session'`; a local settlement and a remote resolution
 are reported apart. The pass-through `fetch` changes no request: a transport
 with no retry series hands the platform `fetch` the same URL and the same
@@ -290,7 +291,12 @@ so each incarnation has a list and a listing count of its own.
   context. `share` is asked again at every listing, call and send gate, so a
   versioned `authorization` name reaches a conversation that already has a
   client: its tools are listed again, and one bound under the old name is
-  refused (`binding-changed`). Every bound tool re-checks its binding after each
+  refused (`binding-changed`). A list is KEPT only under the context it was
+  listed for: a listing's requests are sent only while that context holds, and
+  its answer is asked about again before it is written — one that arrives after
+  the names moved is dropped, never filed under the old context, and the next
+  round lists under the new one. A caller joined to someone else's listing is
+  asked again after the join. Every bound tool re-checks its binding after each
   wait and at the send gate — before every attempt, after a credential arrives,
   after signing.
 - **Nothing pooled is sent unchecked.** A pooled client's transport must let its
@@ -318,7 +324,9 @@ await agent.run({ message, identity: { tenant, principal, conversationId } });
 await orders.terminate({ tenant, principal, conversationId }); // the conversation ended
 ```
 
-What the budgets do not bound: response bytes, a caller's own allocations,
+The app's names are pulled, never pushed: they are asked at each send and
+again before an answer is kept, so a change undone between those two asks is
+not seen. What the budgets do not bound: response bytes, a caller's own allocations,
 waiters joined on admitted work, or total memory; and no number here bounds a
 remote session whose ending was not confirmed. An open aborted at its deadline
 whose `initialize` answer never reached the client (a retry series gives the

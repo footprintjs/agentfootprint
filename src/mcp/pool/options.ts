@@ -44,7 +44,8 @@ export interface McpPoolShareContext {
  * the pool. `share` is asked for every conversation before anything opens, and
  * again at every listing, every call and every send gate after that, so a
  * changed answer takes effect at the next one; it must be synchronous and
- * cheap. Return both names, or `undefined` to keep that conversation's list to
+ * cheap. A listing's answer is kept only if the names still give the context it
+ * was listed for when it arrives — otherwise it is dropped and listed again. Return both names, or `undefined` to keep that conversation's list to
  * itself. Conversations share a list only when the transport's comparable
  * data, both names and the tenant are all equal. A `share` that throws refuses
  * the open (`init-failed`) or, for a conversation that already has a client,

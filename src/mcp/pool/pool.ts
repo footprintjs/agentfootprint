@@ -792,39 +792,73 @@ export class Pool {
   }
 
   /**
-   * `served`'s list, listed again on `client` when it cannot be served as it
-   * stands — one listing at a time per list; a second caller joins it inside its
-   * own slot. A listing raced by an invalidation is discarded and listed once
-   * more; refused (`stale-tools`) if that is discarded too.
+   * The list `client` serves under NOW, listed again on it when it cannot be
+   * served as it stands — one listing at a time per list; a second caller joins
+   * it inside its own slot. Every attempt asks the app's names again
+   * (`refreshContext`), so a listing that a moved context discarded or refused
+   * at its send is listed once more under the context of now, never written
+   * into the one it began under. A listing raced by an invalidation is
+   * discarded too. Refused (`stale-tools`) when three attempts serve nothing.
+   * What it returns was checked against the context with no wait since.
    */
-  async ensureListed(
-    client: PooledClient,
-    served: ServedList,
-    operation: Operation,
-  ): Promise<ServedList> {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      if (served.list.servable(this.now(), this.settings.definitionTtlMs)) return served;
-      if (served.list.listing === undefined) this.startListing(client, served, operation);
+  async ensureListed(client: PooledClient, operation: Operation): Promise<ServedList> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const served = this.servableNow(client);
+      if (served.ready !== undefined) return served.ready;
+      const { list } = served.wanted;
+      if (list.listing === undefined) this.startListing(client, served.wanted, operation);
       operation.phase = 'listing';
-      await untilAborted(served.list.listing as Promise<void>, operation.signal);
-      operation.check();
-      // Too long to share: this conversation's own client keeps it.
-      if (served.shared && !served.list.servable(this.now(), this.settings.definitionTtlMs)) {
-        if (client.list.servable(this.now(), this.settings.definitionTtlMs)) {
-          return { list: client.list, shared: false, context: served.context };
-        }
+      try {
+        await untilAborted(list.listing as Promise<void>, operation.signal);
+      } catch (error) {
+        operation.check();
+        // Refused at its send because the context moved: asked again next round.
+        if (!isContextMoved(error)) throw error;
       }
+      operation.check();
     }
-    if (served.list.servable(this.now(), this.settings.definitionTtlMs)) return served;
+    const served = this.servableNow(client);
+    if (served.ready !== undefined) return served.ready;
     throw this.refused('stale-tools');
   }
 
-  /** One listing on `client`, written into `served`'s list if its generation held. */
+  /**
+   * What `client` can serve under the context of now — asked of the app's names
+   * here — or, when nothing can, the list it should list. Too long to share:
+   * the conversation's own client keeps that list, under the same context.
+   */
+  private servableNow(client: PooledClient): {
+    readonly ready?: ServedList;
+    readonly wanted: ServedList;
+  } {
+    this.refreshContext(client);
+    const wanted = this.servedListOf(client);
+    const now = this.now();
+    const ttl = this.settings.definitionTtlMs;
+    if (wanted.list.servable(now, ttl)) return { ready: wanted, wanted };
+    // A context change invalidates the client's own list, so a servable one
+    // was written under the context of now.
+    if (wanted.shared && client.list.servable(now, ttl)) {
+      return { ready: { list: client.list, shared: false, context: wanted.context }, wanted };
+    }
+    return { wanted };
+  }
+
+  /**
+   * One listing on `client` for `served`'s context. Its requests are sent only
+   * while that context holds — asked at every boundary they cross — and its
+   * answer is written only if the context still holds when it arrives and the
+   * list's generation held: an answer the app's names moved under belongs to
+   * no context, and is dropped.
+   */
   private startListing(client: PooledClient, served: ServedList, operation: Operation): void {
     const { list } = served;
     const began = list.generation;
     const beganOwn = client.list.generation;
     const work = new Work('listing', [this.lifetime.signal]);
+    work.guardWith(() => {
+      if (!this.contextHolds(client, served.context)) throw this.refused('binding-changed');
+    });
     operation.track(work.whenSettled());
     const port = client.port;
     if (port === undefined) throw this.refused('init-failed');
@@ -833,6 +867,9 @@ export class Pool {
     work.track(pending);
     list.listing = pending
       .then((listing) => {
+        // Asked again before anything is kept: listed under one context,
+        // answered under another, it is no one's.
+        if (!this.contextHolds(client, served.context)) return;
         const definitions = listing.listed
           .map((listed) => definitionOf(listed))
           .filter((d): d is Definition => d !== undefined);
@@ -1107,6 +1144,11 @@ function passesUnguarded(body: RequestInit['body'] | undefined): boolean {
   };
   if (typeof fields.method === 'string') return fields.id === undefined;
   return fields.method === undefined && ('result' in fields || 'error' in fields);
+}
+
+/** A listing refused at its send because the app's names moved: listed again under the new context. */
+function isContextMoved(error: unknown): boolean {
+  return error instanceof McpPoolRefusedError && error.reason === 'binding-changed';
 }
 
 /** A `tools/call` request: a pooled one always brings its own call's guard. */

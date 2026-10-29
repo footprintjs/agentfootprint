@@ -362,3 +362,172 @@ describe('a versioned authorization name reaches conversations that already have
     await pool.close();
   });
 });
+
+describe('a discovered list is kept and served only under the authorization it was listed for', () => {
+  const alice = id('alice', 'a');
+  const bob = id('bob', 'b');
+  const names = (tools: readonly Tool[]) => tools.map((t) => t.schema.name);
+  const toolLists = (endpoint: ReturnType<typeof fakeEndpoint>) =>
+    endpoint.requests.filter((r) => r.rpc === 'tools/list');
+
+  /**
+   * Alice and Bob share a declared context while both are readers. The server
+   * shows Alice's session `refund` only while she is an admin — decided when it
+   * answers. `share` names each principal's role.
+   */
+  function roles() {
+    const state = { alice: 'reader', bob: 'reader' };
+    let aliceSession: string | undefined;
+    const endpoint = fakeEndpoint({
+      toolsFor: (session) => {
+        aliceSession ??= session;
+        const role = session === aliceSession ? state.alice : state.bob;
+        return role === 'admin' ? [{ name: 'status' }, { name: 'refund' }] : [{ name: 'status' }];
+      },
+    });
+    const { pool } = poolOver(endpoint, {
+      definitions: {
+        share: (identity) => ({
+          configuration: 'stable-endpoint',
+          authorization: identity.principal === 'alice' ? state.alice : state.bob,
+        }),
+      },
+    });
+    return { state, endpoint, pool };
+  }
+
+  it('the control — a stable role: Alice, an admin before her discovery, lists as admin; Bob, a reader, gets only status', async () => {
+    const { state, endpoint, pool } = roles();
+    state.alice = 'admin';
+    expect(names(await pool.toolProvider().list(listCtx(alice)))).toEqual(['status', 'refund']);
+    expect(names(await pool.toolProvider().list(listCtx(bob)))).toEqual(['status']);
+    expect(toolLists(endpoint)).toHaveLength(2);
+    await pool.close();
+  });
+
+  it.each([
+    ['', false],
+    [' and the app sends permissionsChanged', true],
+  ] as const)(
+    'Alice becomes an admin while her discovery waits%s: the answer is not kept under reader, so Bob — still a reader — never receives refund',
+    async (_also, invalidate) => {
+      const { state, endpoint, pool } = roles();
+      const held = endpoint.hold((r) => r.rpc === 'tools/list');
+      const discovery = pool.toolProvider().list(listCtx(alice));
+      for (let i = 0; i < 50 && held.held === 0; i += 1) await flush(1);
+      expect(held.held).toBe(1);
+      state.alice = 'admin';
+      if (invalidate) pool.permissionsChanged({ principal: 'alice' });
+      held.release();
+      // Alice is served under what she is now.
+      expect(names(await discovery)).toEqual(['status', 'refund']);
+      // Bob is served under reader — never Alice's admin answer.
+      expect(names(await pool.toolProvider().list(listCtx(bob)))).toEqual(['status']);
+      await pool.close();
+    },
+  );
+
+  it('Alice is demoted while her client opens, and the admin list is kept meanwhile: she is served under reader, never that list', async () => {
+    const state = { alice: 'admin', carol: 'admin' };
+    const sessionOf = new Map<string, 'alice' | 'carol'>();
+    const endpoint = fakeEndpoint({
+      toolsFor: (session) => {
+        const role = sessionOf.get(session) === 'alice' ? state.alice : state.carol;
+        return role === 'admin' ? [{ name: 'status' }, { name: 'refund' }] : [{ name: 'status' }];
+      },
+    });
+    const { pool } = poolOver(endpoint, {
+      transport: (identity) => ({
+        transport: 'http',
+        url: endpoint.url,
+        fetch: async (input: string | URL | Request, init?: RequestInit) => {
+          const response = await endpoint.fetch(input, init);
+          const session = response.headers.get('mcp-session-id');
+          if (session !== null) sessionOf.set(session, identity.principal as 'alice' | 'carol');
+          return response;
+        },
+      }),
+      definitions: {
+        share: (identity) => ({
+          configuration: 'stable-endpoint',
+          authorization: identity.principal === 'alice' ? state.alice : state.carol,
+        }),
+      },
+    });
+    // Alice, an admin when she starts, finds nothing kept: her client opens,
+    // and its open is held.
+    let opens = 0;
+    const opening = endpoint.hold((r) => r.rpc === 'initialize' && (opens += 1) === 1);
+    const discovery = pool.toolProvider().list(listCtx(alice));
+    for (let i = 0; i < 50 && opening.held === 0; i += 1) await flush(1);
+    expect(opening.held).toBe(1);
+    // Meanwhile Carol, an admin, has the admin list kept — and Alice is demoted.
+    expect(names(await pool.toolProvider().list(listCtx(id('carol', 'c'))))).toEqual([
+      'status',
+      'refund',
+    ]);
+    state.alice = 'reader';
+    opening.release();
+    expect(names(await discovery)).toEqual(['status']);
+    await pool.close();
+  });
+
+  it('Bob, joined to a listing under way, is demoted while he waits: checked again after the join, he is served under reader', async () => {
+    const { state, endpoint, pool } = roles();
+    state.alice = 'admin';
+    state.bob = 'admin';
+    const held = endpoint.hold((r) => r.rpc === 'tools/list');
+    const aliceDiscovery = pool.toolProvider().list(listCtx(alice));
+    for (let i = 0; i < 50 && held.held === 0; i += 1) await flush(1);
+    // Bob shares Alice's context: he joins her listing rather than list himself.
+    const bobDiscovery = pool.toolProvider().list(listCtx(bob));
+    await flush();
+    state.bob = 'reader';
+    held.release();
+    expect(names(await aliceDiscovery)).toEqual(['status', 'refund']);
+    expect(names(await bobDiscovery)).toEqual(['status']);
+    await pool.close();
+  });
+
+  it('Alice becomes an admin while her listing waits for its credential: the tools/list is refused at the send gate, never sent under reader; the next is sent under admin, and reader keeps nothing of it', async () => {
+    const state = { alice: 'reader', bob: 'reader' };
+    const seen: { aliceSession?: string } = {};
+    const endpoint = fakeEndpoint({
+      toolsFor: (session) => {
+        const role = session === seen.aliceSession ? state.alice : state.bob;
+        return role === 'admin' ? [{ name: 'status' }, { name: 'refund' }] : [{ name: 'status' }];
+      },
+    });
+    const vend = stallingProvider();
+    const { pool } = poolOver(endpoint, {
+      transport: () => ({
+        transport: 'gateway',
+        url: endpoint.url,
+        credentials: vend.provider,
+        service: 'orders',
+        fetch: endpoint.fetch,
+      }),
+      definitions: {
+        share: (identity) => ({
+          configuration: 'stable-endpoint',
+          authorization: identity.principal === 'alice' ? state.alice : state.bob,
+        }),
+      },
+    });
+    (await pool.acquire(alice)).release();
+    seen.aliceSession = endpoint.sessions()[0];
+    vend.stall();
+    const discovery = pool.toolProvider().list(listCtx(alice));
+    for (let i = 0; i < 50 && vend.waiting === 0; i += 1) await flush(1);
+    expect(vend.waiting).toBe(1);
+    state.alice = 'admin';
+    vend.releaseAll();
+    expect(names(await discovery)).toEqual(['status', 'refund']);
+    // Only the listing under admin reached the server.
+    expect(toolLists(endpoint)).toHaveLength(1);
+    // Reader holds nothing of it: Bob lists for himself, and gets only status.
+    expect(names(await pool.toolProvider().list(listCtx(bob)))).toEqual(['status']);
+    expect(toolLists(endpoint)).toHaveLength(2);
+    await pool.close();
+  });
+});

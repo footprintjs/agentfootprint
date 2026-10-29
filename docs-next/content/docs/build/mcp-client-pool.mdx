@@ -62,6 +62,11 @@ When the name changes, the next listing lists again under the new name. A tool
 bound under the old name is refused (`binding-changed`) before it is sent, even
 if nothing was listed since. Keep `share` synchronous and cheap.
 
+A list is kept only under the names it was listed for. The pool asks again
+when the listing is sent and when its answer arrives. If the names changed in
+between, the answer is dropped and the pool lists again under the new names,
+so one role's tools are never kept, or served, under another's.
+
 ## Full means refused, never queued
 
 Three budgets apply: open clients (`maxClients`, and `maxClientsPerPrincipal`),
@@ -95,7 +100,8 @@ session lives until the server's own timeout; `stats().unresolvedEndings` counts
 those. On AgentCore Runtime under `'reuse'`, an ending is `StopRuntimeSession`.
 
 `terminate()` answers within its deadline even when a client's local close
-hangs. The ending keeps its ending slot and its operation slot until that close
+hangs, and the deadline is elapsed time: a clock change does not stretch it.
+The ending keeps its ending slot and its operation slot until that close
 really finishes, and `settled()` waits for it.
 
 ## What the record says

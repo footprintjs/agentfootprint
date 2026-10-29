@@ -143,9 +143,10 @@ async function toolOn(
     if (own === undefined) throw pool.refused('stale-tools');
     return { inner: own, effective: binding };
   }
-  // A replacement: its own fresh list, then the same definition or nothing.
-  const served = pool.servedListOf(client);
-  const listed = await pool.ensureListed(client, served, operation);
+  // A replacement: its own fresh list, under the context of now, then the
+  // same definition or nothing.
+  const listed = await pool.ensureListed(client, operation);
+  if (listed.context !== binding.context) throw pool.refused('binding-changed');
   const fresh = listed.list.definition(name);
   const own = listed.list.tool(name);
   if (

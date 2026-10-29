@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenedClient } from '../../../src/mcp/pool/plan.js';
+import type { McpPoolReport } from '../../../src/mcp/pool/record.js';
 import {
   mcpClientPool,
   McpPoolRefusedError,
@@ -328,6 +329,49 @@ describe('the client is checked again after every wait', () => {
     expect(opened).toBe(2);
     await terminating;
     expect(ended).toEqual(['first']);
+    await pool.close();
+  });
+});
+
+describe('a client is never ended while a waiter holds its reservation', () => {
+  it('an open that completes as its deadline aborts it: the waiter is refused (init-timeout), and the client — still reserved by that waiter — is reported deferred, then ended once it lets go', async () => {
+    const reports: McpPoolReport[] = [];
+    let ends = 0;
+    const pool = mcpClientPool({
+      name: 'abandoned',
+      transport: NO_NETWORK,
+      initTimeoutMs: 10,
+      onEvent: (report) => reports.push(report),
+      // The open completes exactly when its deadline aborts it.
+      _open: (_options, seam) =>
+        new Promise<OpenedClient>((resolve) =>
+          seam.connectSignal.addEventListener('abort', () =>
+            resolve(
+              stubClient('late', {
+                end: () => {
+                  ends += 1;
+                  return {
+                    outcome: Promise.resolve({
+                      remote: 'terminated',
+                      resolved: true,
+                      durationMs: 0,
+                    }),
+                    settled: Promise.resolve(),
+                  };
+                },
+              }),
+            ),
+          ),
+        ),
+    });
+    await expect(pool.acquire(id('alice', 'a'))).rejects.toMatchObject({ reason: 'init-timeout' });
+    await pool.settled();
+    expect(ends).toBe(1);
+    expect(reports.map((r) => ({ kind: r.kind, reason: r.reason }))).toEqual([
+      { kind: 'deferred', reason: 'abandoned-open' },
+      { kind: 'ended', reason: 'abandoned-open' },
+    ]);
+    expect(pool.stats()).toMatchObject({ open: 0, busy: 0, ending: 0, operations: 0 });
     await pool.close();
   });
 });
