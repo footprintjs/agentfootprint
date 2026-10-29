@@ -494,7 +494,7 @@ for. A word is accounted for when it is:
    last 2 hours");
 5. a word of a closed class, owned and versioned by the library:
    - function words that cannot narrow a read: articles and determiners, pronouns, auxiliaries,
-     question words, "and";
+     the question words "what", "which", "who", "whose" and "how", and "and";
    - the request frame: "show", "give", "list", "chart", "please", "look", "like", a greeting;
    - operations on the rows read, not on what is read: "peak", "highest", "average", "busiest",
      "top";
@@ -619,7 +619,7 @@ What the middleware does today, and where each part goes:
 |---|---|
 | the host's window control sets the bounds | `run({ time: { window } })` (exists) |
 | one clean lookback the person wrote replaces the model's window | the fill (exists), after the confirmation (§ 8.4) |
-| no time named: the app's window | the `askOrAssume` default, filed `default` (§ 9) |
+| no time found: the app's window | the `askOrAssume` default, filed `default` (§ 9) |
 | any other time: the call is refused | asked before any read (§ 8.2) |
 | a sampling instruction beside the lookback is read | asked, unless the tool declares `sampling` (§ 8.5) |
 | the model's own bounds beside the person's lookback: refused | recorded `model-chosen` today; refusing it needs the planned opt-in `mismatch: 'refuse'` (TQ6, not built) |
