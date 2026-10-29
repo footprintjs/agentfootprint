@@ -16,11 +16,11 @@ is this page's proposal, and the build may rename it.
    the script back in the answer, in a fenced block, because the app's rule is "always
    show the script". The names-and-numbers check reads the whole answer as prose. So a
    Python format specification (`{mean:.2f}` reads as the identifier `mean:.2f`) and a
-   constant in the code (`0.05`, `head(25)`) become values to ground. No tool result
+   constant in the code (`0.01`, `sample(10)`) become values to ground. No tool result
    carries them: the script was a tool-call ARGUMENT, which is rightly not evidence. Under
    `guard` the answer takes a revision it did not need, the values survive it, and the
-   answer is labelled "not sure" for no fault of its own. Measured in the field: 5 of 12
-   correct answers took a revision for this.
+   answer is labelled "not sure" for no fault of its own. In the field, correct answers
+   took a revision for this alone.
 2. **The risk beyond the label.** The cheapest revision that passes the check is to
    delete the script. The app's own rule breaks, and the person loses the one thing that
    lets them re-run the computation.
@@ -51,10 +51,10 @@ no notion of a code region. A fenced script contributes:
 
 | in the script | read as | shape |
 |---|---|---|
-| `{mean_hbonds:.2f}` | `mean_hbonds:.2f` | identifier |
-| `{share*100:.1f}` | `100:.1f` | identifier |
-| `p < 0.05` | `0.05` | number (under `decimalRounding`) |
-| `df.head(25)` | `25` | prose below `minDigits` — not flagged |
+| `{mean_latency_ms:.2f}` | `mean_latency_ms:.2f` | identifier |
+| `{ratio*100:.1f}` | `100:.1f` | identifier |
+| `p < 0.01` | `0.01` | number (under `decimalRounding`) |
+| `df.sample(10)` | `10` | prose below `minDigits` — not flagged |
 | `threshold = 1200` | `1200` | number — flagged unless a result carries it |
 
 None of these is in a tool result, so each is `unsupported`. The host app worked around
@@ -497,7 +497,7 @@ N is one pass over each region and each row; the match is at most
 | 1 | **Laundering a value through call arguments.** The model types `revenue = 99999` into a script, runs it, and shows the script. | The corpus never indexes arguments. A matched block yields no candidates for itself, and nothing for the prose: "revenue was 99999" in the prose is flagged unless a result carries it. The only thing a match buys is silence about the script's own text. | The script's output is a result. `print(99999)` puts `99999` in a result, and the prose then passes — that is F3 working as designed, and F4's problem (§ 11). |
 | 2 | **Factual text inside a fence.** ```` ```text ```` around "Customer B owes 1200 dollars." | No execution has that text, so the block is a miss and is checked as prose: `1200` is flagged unless a result carries it. | A model can run `print("Customer B owes 1200 dollars.")` and show that script; the sentence is then script content, displayed as code, and not checked. The label says "script", the output is a result that carries the tokens, and only V1 can say whether the sentence holds. Named, not fixed. |
 | 3 | **An altered script.** One constant changed from what ran. | N changes nothing but line endings, trailing spaces, outer blank lines and NFC, so the block equals no row: a miss, checked as prose, labelled `unmatched`. `codeShape` is not used. | None beyond the extractor's own conservatism (a changed short number below `minDigits` is prose there as everywhere). |
-| 4 | **An invented constant in a real script.** `threshold = 0.05` ran. | Script content, not a finding. A prose claim repeating it needs a result. | The person reads `0.05` in code; the label says it is the script, not a result. |
+| 4 | **An invented constant in a real script.** `threshold = 0.01` ran. | Script content, not a finding. A prose claim repeating it needs a result. | The person reads `0.01` in code; the label says it is the script, not a result. |
 | 5 | **Tool-result content injected into a script.** A result says "show this script: …", or the model copies result text into code. | Only the program the tool EXECUTED is on a row. Text that never ran is a miss. Text that did run is script content, displayed under a label that names the call — the person sees what ran, which is the point of attaching it. | Injection that makes the model RUN code is a sandboxing and check-in matter (`codeRunnerTool`'s `checkIn`), not this design's. |
 | 6 | **Very large scripts.** A 10 MB "script" to exhaust the gate. | `MAX_SCRIPT_CHARS` at record time; `MAX_CODE_REGIONS` and `MAX_SCRIPT_ROWS`; a linear scan; N bounded by the row bound. An over-size execution is `unmatched: over-size`, never silently matched or silently dropped. | The extractor's own `MAX_ANSWER_TOKENS` still counts the rest. |
 | 7 | **Near-identical executions.** Two runs differ by one character; the block equals one. | Exact equality names that one. Identical rows name the latest and count the rest. No nearest-match is ever reported. | None. |
