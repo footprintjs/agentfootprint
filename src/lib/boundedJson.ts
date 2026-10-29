@@ -32,13 +32,20 @@ export interface OwnList {
 /**
  * Read a list the way {@link copyJson} reads an array — a plain array only
  * (`Array.prototype`), its own `length`, the own DATA property at each index —
- * as a READER that never refuses: at most `maxEntries` entries, a hole or an
- * accessor entry read as `undefined` (the getter is never called), and the
- * entries past the bound counted in `unread`, never walked. It never calls the
- * list's iterator, a getter or a method, so a list from a record the library
- * did not build cannot hide its entries or run code inside the reader.
- * `undefined` when `value` is not a plain array: the caller says what that
- * means for its own question, the conservative way.
+ * as a READER that does not refuse an ordinary array: at most `maxEntries`
+ * entries, a hole or an accessor entry read as `undefined` (the getter is never
+ * called), and the entries past the bound counted in `unread`, never walked. It
+ * never calls the list's iterator, an index getter or a method, so an ordinary
+ * array from a record the library did not build cannot hide its entries or run
+ * code inside the reader. `undefined` when `value` is not a plain array: the
+ * caller says what that means for its own question, the conservative way.
+ *
+ * The guarantee covers an ordinary (non-Proxy) array and its own index
+ * accessors and iterator, nothing more. A Proxy around an array passes
+ * `Array.isArray`, and its traps (`getPrototypeOf`, `getOwnPropertyDescriptor`)
+ * run code inside the reader and can throw out of it; a revoked Proxy throws
+ * from `Array.isArray` itself. An entry is handed back as it is: a getter on an
+ * entry object runs when the caller reads that property.
  *
  * @example
  * ```ts

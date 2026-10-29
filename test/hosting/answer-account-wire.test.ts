@@ -16,7 +16,7 @@
  *   • Measured, not claimed: parse + fold + show-me on the field recording.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { performance } from 'node:perf_hooks';
 
@@ -38,10 +38,15 @@ import {
   HOST_APP_DECLARATIONS,
 } from '../answer-account/helpers.js';
 
-/** The archived field recording (4–5 MB). Outside the repo, so its cases skip where it is absent. */
-const FIELD_RECORDING =
-  '/Users/sanjay/github/footprintjs/session-archive/2026-09-25-multiuser-eval/turn-account/recording-turn2.json';
-const haveField = existsSync(FIELD_RECORDING);
+/**
+ * The archived field recording (4–5 MB; the repo keeps only its reduced copy,
+ * `fixtureA`). It lives outside the repo, so its two cases run only when
+ * `AF_ANSWER_ACCOUNT_RECORDING` names a local copy, and skip when it is unset.
+ * A path that does not exist fails them rather than skipping: a run that asked
+ * for them is told it did not get them.
+ */
+const FIELD_RECORDING = process.env.AF_ANSWER_ACCOUNT_RECORDING ?? '';
+const haveField = FIELD_RECORDING !== '';
 
 const open: HostHandle[] = [];
 afterEach(async () => {

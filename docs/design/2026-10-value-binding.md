@@ -539,12 +539,17 @@ minutes BEFORE 08:15, and twelve such buckets stamped 08:15 to 09:10 cover `[08:
 not the hour asked. The operand set must come from reads whose `held` covers W.
 Duplicates from retried or overlapping reads collapse when equal and refuse when not.
 Nothing is tried in turn: a `max` claim is compared to the maximum, and a `max` fold of 87
-never supports `cpu_pct: 87` when `cpu_pct` claims a mean. **A mean is never composed**: the
-mean of equal-width bucket means is the window's mean only when every bucket averaged the
-same number of observations, and no declaration says so, so a `mean` is supported only by
-the tool's own whole-window `avg` (§ 6, `mean-unmergeable`). The figures dial's multi-column
-arithmetic (sums, ratios, differences, complements) is NOT admitted for a claim in v1: each
-needs every operand and its order declared, and that binding is deferred (§ 14). The
+never supports `cpu_pct: 87` when `cpu_pct` claims a mean. **A mean is never composed**:
+equal observation counts in every bucket are a SUFFICIENT condition for the mean of
+equal-width bucket means to be the window's mean, not a necessary one, and without such a
+condition equality is not guaranteed. Unequal counts can give another number (one sample of
+0 and nine of 100: 50 against 90) or, by coincidence, the same one (one sample of 7 and nine
+of 7: 7 both ways; counts 1, 2 and 3 with means 0, 1 and 0: 1/3 both ways). No declaration
+in v1 establishes such a condition, so a `mean` is supported only by the tool's own
+whole-window `avg` (§ 6, `mean-unmergeable`), whatever the composed number is. The figures
+dial's multi-column arithmetic (sums, ratios, differences, complements) is NOT admitted for a
+claim in v1: each needs every operand and its order declared, and that binding is deferred
+(§ 14). The
 coincidence window the figures dial names (±0.5 for a whole number) remains for a calculated
 value and is reported, not hidden; with the operands fixed by binding it is no longer a
 search over the results.
@@ -693,7 +698,7 @@ it would be 13, which is why the convention travels with the window.
 |---|---|
 | `cpu_pct: 87`, node-9's hourly average | the operand is node-7's fold over W, 71.3: **contradicted**, `value-differs`. The account adds: "87 appears only under node-9." |
 | `cpu_pct: 64`, node-7's average for the hour before | that fold is wholly outside W and set aside; the W fold is 71.3: **contradicted**. The account adds: "64 is node-7's average for 07:15–08:15, outside the window." |
-| `cpu_pct: 71`, from `node_metrics_5m_avg` (twelve five-minute averages tiling W) instead of the hourly tool | no whole-window fold, and a `mean` meets only buckets: `mean-unmergeable`, kind **missing**, not checked — although the twelve averages happen to average 71.3. An average of averages is not the window's average. The library's own statement names the twelve buckets and their range. |
+| `cpu_pct: 71`, from `node_metrics_5m_avg` (twelve five-minute averages tiling W) instead of the hourly tool | no whole-window fold, and a `mean` meets only buckets: `mean-unmergeable`, kind **missing**, not checked — although the twelve averages happen to average 71.3. An average of averages is not guaranteed to be the window's average. The library's own statement names the twelve buckets and their range. |
 | Codex's case: W = `[09:00, 09:10)`; `node_metrics_5m_avg` returns two averages, 0 (over one sample) and 100 (over nine); the answer says `cpu_pct: 50` | `mean-unmergeable`, kind **missing**, never supported. The same for an answer of `90`: the bucket route neither supports nor contradicts a mean. With the hourly tool's whole-window `avg` over the same ten samples (90): `90` is **observed** and `50` is **contradicted**. |
 | `cpu_peak: 87` (claim `max`), from `node_metrics_5m` (`max` buckets) tiling W | every expected span supplied, the aggregation the claimed one, the maximum of the 12 maxima is 87: **calculated**, `max`, 12 five-minute buckets. |
 | `cpu_peak: 87`, from `node_metrics_5m_avg` (`avg` buckets) | `fold-incompatible`, kind **missing**: the maximum of averages is not the hour's maximum. |
@@ -819,18 +824,26 @@ beyond them.
   projection, and `rows-disagree` on a shared span; a later failure invalidating one key with
   the positions it leaves missing; `result-unbound`; declined; the interpretation label;
   node-9's rows never candidates.
-- **Means (the third review's pins)**: unequal-count truthful averages — two five-minute
-  `avg` buckets, 0 over one sample and 100 over nine, tiling `[09:00, 09:10)` — under a `mean`
-  claim of 50 → `mean-unmergeable`, never supported; of 90 → `mean-unmergeable`, never
-  contradicted; the equal-count control (five samples in each bucket) → still
-  `mean-unmergeable` in v1, since no declaration establishes the counts; the whole-window
-  tool `avg` over the same ten samples → 90 observed, 50 contradicted; `min`/`max` bucket
-  controls over the same two buckets → calculated, equal to the whole-window `min`/`max`
-  fold; agreement between the two admitted routes: over generated sample sets and every
-  tiling bucketing, the composed `max` and `min` equal the whole-window fold over the same
-  samples, and the composed mean of `avg` buckets differs from the whole-window `avg`
-  whenever the counts differ (the generator pins both, which is the reason the mean is
-  deferred); raw samples under a `mean`, `min` or `max` claim → `grain-undeclared`.
+- **Means (the third and fourth reviews' pins)**: the divergence witness, unequal-count
+  truthful averages — two five-minute `avg` buckets, 0 over one sample and 100 over nine,
+  tiling `[09:00, 09:10)` — under a `mean` claim of 50 → `mean-unmergeable`, never
+  supported; of 90 → `mean-unmergeable`, never contradicted; the whole-window tool `avg` over
+  the same ten samples → 90 observed, 50 contradicted; `min`/`max` bucket controls over the
+  same two buckets → calculated, equal to the whole-window `min`/`max` fold. The controls
+  where the composed mean equals the whole-window average: the equal-count control (five
+  samples in each bucket), equal by the sufficient condition; and two coincidences, equal
+  averages over unequal counts (7 over one sample and 7 over nine: 7 both ways) and unequal
+  averages over unequal counts (three five-minute buckets tiling `[09:00, 09:15)`, over 1, 2
+  and 3 samples, averaging 0, 1 and 0: 1/3 both ways). Each, under a `mean` claim of that
+  value → still `mean-unmergeable` in v1, never supported, since no declaration establishes
+  a mergeability condition. Agreement between the two admitted routes: over generated
+  sample sets and every tiling bucketing, the composed `max` and `min` equal the
+  whole-window fold over the same samples. For the mean the generator pins the arithmetic,
+  not a route: equal counts in every bucket are SUFFICIENT for the composed mean of `avg`
+  buckets to equal the whole-window `avg`, and without them equality is not guaranteed,
+  which is the reason the mean is deferred. The generated sets hold both divergent and
+  coincident cases, and every composed mean stays `mean-unmergeable` whichever way its
+  number falls. Raw samples under a `mean`, `min` or `max` claim → `grain-undeclared`.
 - **Projection**: a read wider than W whose outside buckets are set aside → calculated when
   the inside buckets tile W; a bucket that meets W and straddles its start →
   `operands-misaligned`; a bucket wider than the interval → `operands-misaligned`; two reads

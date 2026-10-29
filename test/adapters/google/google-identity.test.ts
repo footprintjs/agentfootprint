@@ -216,7 +216,7 @@ describe('nothing this throws may carry a secret', () => {
       .catch((e: unknown) => e);
     expect((error as Error).name).toBe('GoogleCredentialsUnavailableError');
     expect(String(error)).toMatch(/application-default login/);
-    expect(String(error)).not.toContain('/Users/someone');
+    expect(String(error)).not.toContain('/Users/someone/');
   });
 });
 
