@@ -815,7 +815,8 @@ function judgeEvidence(
   }
 
   const history = scope.history as readonly LLMMessage[];
-  const evidence = evidenceFromHistory(history);
+  // Under `decimalRounding`, a scientific token in a result's text also files its decimal.
+  const evidence = evidenceFromHistory(history, gate);
   // Under `.time()` (step T7): the turn's time spellings by lineage.
   const time = timeLineage?.(scope);
   const derived = time !== undefined ? derivedFormsOf(time.derived) : undefined;

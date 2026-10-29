@@ -48,7 +48,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `types.ts` | the public vocabulary: posture, shape, options, verdict |
 | `../../../lib/normalize.ts` | one spelling per value, on BOTH sides (`41,200` ≡ `41200`). The other spellings of a date or clock time are NOT here: since time step T7 they are asked of `time/forms.ts` · `timeFormsOf` (its `said` list, by the exempt corpus only) |
 | `numericRanges.ts` | pure recognition of exactly two numeric endpoints, after app-owned identifier shapes |
-| `numberPrecision.ts` | the single precision and half-unit rounding rule used by both numeric dials |
+| `numberPrecision.ts` | the single precision and half-unit rounding rule used by both numeric dials, and the one exact reading of a number in scientific notation (`scientificDecimalOf`) |
 | `figureUnits.ts` | the one measurement-unit vocabulary, shared by figures and ranges |
 | `extract.ts` | which tokens in an answer are DATA — the conservative rule |
 | `evidenceIndex.ts` | the structural walk of tool results, and the exempt corpus; `readResult` is the ONE reading of a result |
@@ -246,6 +246,79 @@ narrow correction to identifier classification, independent of the opt-in
 rounding dial. Ordinary non-range answers keep their previous off-dial bytes.
 
 Run the zero-cost [numeric evidence example](../../../../examples/features/103-evidence-rounding-ranges.ts).
+
+## The same number in scientific notation (`decimalRounding: true`)
+
+**The law: under the decimal dial, a value is grounded when a result holds
+the same number, whatever its spelling, at the answer's precision. A
+standalone token in scientific notation is that number, read exactly.**
+
+Why: a script printed a p-value as `1.12e-02`, the default formatting of
+common numeric libraries for small values, and the answer wrote `0.0112`. The
+value was right; only the spelling differed, and the gate flagged it. The
+same value returned as a JSON number already passed (`JSON.parse` makes it
+`0.0112`), so the gap was a result's TEXT: stdout, a string leaf, a note
+after the JSON.
+
+The rule, under the dial only. With it off, the corpus, the figures basis and
+every verdict are byte-identical, pinned against the commit before:
+
+1. A whole token matching `[-+]?\d+(\.\d+)?[eE][-+]?\d+` in a result's text
+   also files the exact decimal it states (`1.12e-02` → `0.0112`) beside its
+   spelling, with the same turn and carrier. The spelling still grounds
+   itself. `scientificDecimalOf` reads it through `decimalOf`: BigInt, never
+   a double.
+2. An answer decimal is grounded by it under the one rounding rule
+   (`roundsTo`), at the answer's written precision.
+3. The reverse: an answer in scientific notation is the number it states,
+   rounded at the precision it was written with (`1.12e-2` is four places).
+   It is reported as that decimal (`0.0113` for `1.13e-2`).
+4. Never across magnitude. A whole number (`3.358e+03`, `1.2e+21`) matches
+   digit for digit and never rounds, like every whole number under the dial.
+5. The existing bounds: the token at most 256 characters, its exponent within
+   ±400, and the decimal it states within the same 256 characters. Outside
+   them a token stays a spelling only. The decimal takes one entry of the
+   index's token budget.
+6. An identifier is not a measurement. Only a whole token qualifies, so a
+   lookalike glued to letters or structure (`9f3e10ab`, `1.2e3-rc`,
+   `host-1e5`) is never read, and a declared ID shape wins. A hash that is
+   only digits and one `e` (`123456e7`) is a standalone token: declare a shape
+   for it. A JSON key is a name and is not read.
+7. A percentage written for a fraction (`1.12%` for `0.0112`) stays a
+   derivation; no ×100 is added. An answer's `1.12e-2%` is not read as a
+   fraction.
+
+| the result prints | the answer writes | verdict |
+|---|---|---|
+| `1.12e-02` | `0.0112` | grounded |
+| `1.12e-02` | `0.011` | `computed`, `rounded`, `from: '1.12e-02 at '` |
+| `1.12e-02` | `0.012`, `1.12` | flagged |
+| `0.01121` | `1.12e-2` | `computed`, `rounded` |
+| `3.358e+03` | `3,358` | grounded |
+| `3,358` | `3.36e+03` | flagged: a whole number never rounds |
+| `1.2e+21` | `1200000000000000000000` / `…001` | grounded / flagged (a double cannot tell them apart) |
+| `1.12e-02` | `1.12%` | flagged under `figures`: a derivation |
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(runScript) // prints "t = 2.54, p = 1.12e-02"
+  .namesAndNumbersFromEvidence({ posture: 'guard', decimalRounding: true })
+  .build();
+// "p = 0.0112" is grounded; "p = 0.011" is computed: rounded from '1.12e-02 at '.
+```
+
+What it is not. The figures dial's own arithmetic (unit conversions, sums,
+ratios) compares doubles and does not read a scientific spelling; such a
+value grounds a figure only by its exact decimal. The exempt corpus is not
+widened. A JSON number is read as before, through the double `JSON.parse`
+makes of it. One side effect, in the same direction: a plain decimal below
+1e-6 in text, which the shared spelling rule writes in exponent form
+(`0.0000001121` → `1.121e-7`), is now a rounding source too.
+
+Pinned by `test/core/agent/evidence/numeric-rounding-scientific.test.ts`,
+`numeric-rounding-scientific.property.test.ts` (seeded, against an
+independent oracle) and `numeric-scientific-identity.test.ts` (the option
+off, byte for byte).
 
 ## Why `guard` is a Route branch and not a loop of its own
 

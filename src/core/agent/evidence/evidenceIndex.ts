@@ -16,7 +16,9 @@
  * indexed both whole and tokenized; so is the JSON a result OPENS with when a
  * framework note follows it (`readResult`, over `servedJson.ts`). A result
  * that is not JSON is tokenized as text. Either way the comparison is
- * token-exact, never substring.
+ * token-exact, never substring. Under `decimalRounding` a whole token of
+ * text in scientific notation also files the exact decimal it states
+ * (`1.12e-02` → `0.0112`, {@link addDecimalOf}); the spelling stays.
  *
  * ## What counts as evidence, and what deliberately does not
  *
@@ -108,7 +110,9 @@ import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
 import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
+import { scientificDecimalOf } from './numberPrecision.js';
 import { jsonPrefixOf, leadingJsonValues } from './servedJson.js';
+import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
 
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
@@ -212,6 +216,13 @@ interface Sink {
    * — nothing is then recorded as a carrier.
    */
   toolCallId: string | undefined;
+  /**
+   * Under `decimalRounding` only: the declared ID shapes, present as the sign
+   * that a standalone scientific token in a result's TEXT also files the
+   * exact decimal it states ({@link addDecimalOf}). Absent → the index it
+   * always was; the exempt corpus never sets it.
+   */
+  readonly decimalShapes?: readonly EvidenceShape[];
 }
 
 /**
@@ -258,7 +269,23 @@ function addText(sink: Sink, text: string): void {
   for (const token of tokenize(text)) {
     if (sink.budget <= 0) return;
     add(sink, token);
+    if (sink.decimalShapes !== undefined) addDecimalOf(sink, token, sink.decimalShapes);
   }
+}
+
+/**
+ * Under `decimalRounding`: a standalone scientific token (`1.12e-02`) also
+ * files the exact decimal it states (`0.0112`, `numberPrecision.ts` ·
+ * `scientificDecimalOf`) — beside its spelling, never instead of it, and
+ * from the same result, so it carries the same turn and the same carrier.
+ * A token that matches a declared ID shape is an identifier, not a
+ * measurement, and files nothing more. The decimal takes one entry of the
+ * same budget as any form.
+ */
+function addDecimalOf(sink: Sink, token: string, shapes: readonly EvidenceShape[]): void {
+  const decimal = scientificDecimalOf(token);
+  if (decimal === undefined || shapes.some((shape) => shape.match.test(token))) return;
+  add(sink, decimal.exact);
 }
 
 /** Walk a parsed JSON value, indexing keys and leaves. */
@@ -385,13 +412,23 @@ function indexResult(content: string, sink: Sink): void {
  * one a fabrication in turn two would be false. Which earlier turns are still
  * here is the WINDOW's decision, not this function's — see the header.
  */
-export function evidenceFromHistory(history: readonly LLMMessage[]): EvidenceCorpus {
+export function evidenceFromHistory(
+  history: readonly LLMMessage[],
+  /**
+   * The gate this corpus is judged by. Under its `decimalRounding`, a
+   * standalone scientific token in a result's text also files the exact
+   * decimal it states, unless it matches one of its declared `shapes`.
+   * Absent, or the dial off → the corpus it always was.
+   */
+  gate?: Pick<ResolvedEvidenceGate, 'decimalRounding' | 'shapes'>,
+): EvidenceCorpus {
   const sink: Sink = {
     values: new Map<string, number>(),
     carriers: new Map(),
     budget: MAX_INDEX_TOKENS,
     turn: 0,
     toolCallId: undefined,
+    ...(gate?.decimalRounding === true && { decimalShapes: gate.shapes }),
   };
   let toolResultsThisTurn = 0;
   for (const msg of history) {
