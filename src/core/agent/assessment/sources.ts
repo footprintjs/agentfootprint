@@ -42,7 +42,8 @@
  * hold, and every entry of a list (a conflict's readings, a contingent value's
  * carriers, an answer check's tools) that names no call — beside the entries
  * that do — is COUNTED in `unnamed`, never dropped and never guessed. Only a
- * known call id is said once.
+ * known call id is said once. A list is read by index (`entriesOf`), so a hole
+ * in a sparse list is such an entry: counted, never skipped, never a throw.
  */
 
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
@@ -73,14 +74,25 @@ function rowAt(state: Readonly<Record<string, unknown>>, key: string, path: stri
 }
 
 /**
+ * A list's entries BY INDEX — the one way this module reads a list on a row.
+ * An in-memory record (a live snapshot, a host-built one) can be SPARSE: an
+ * index no value was ever assigned to, which `map`, `filter` and `flatMap`
+ * skip — `map` keeping the hole in its result. Read by index, a hole is
+ * `undefined`: an entry like any other, which names no call.
+ */
+function entriesOf(list: readonly unknown[]): unknown[] {
+  return Array.from(list);
+}
+
+/**
  * One reference per entry of a list of `{ toolCallId }` entries, in order. An
  * entry that names no call is an ANONYMOUS reference — counted in `unnamed`,
  * never dropped: a conflict whose one reading names its call and whose other
- * does not still rests on both.
+ * does not still rests on both. A hole is such an entry (`entriesOf`).
  */
 function refsIn(list: unknown): CallRef[] {
   if (!Array.isArray(list)) return [];
-  return list.map((entry: unknown) => {
+  return entriesOf(list).map((entry) => {
     const id = isRecord(entry) ? str(entry.toolCallId) : undefined;
     return id === undefined ? {} : { id };
   });
@@ -105,17 +117,15 @@ function callsOfRow(reason: AssessmentReason, row: unknown): CallRef[] {
 /**
  * An answer check that names the TOOLS it is about (`tools`) and no call —
  * every call of each named tool among this turn's results. A tool no call of
- * this turn ran, and an entry that is not a tool name, is an ANONYMOUS
- * reference each: counted, never dropped beside the tools that matched.
+ * this turn ran, and an entry that is not a tool name (a hole included,
+ * `entriesOf`), is an ANONYMOUS reference each: counted, never dropped beside
+ * the tools that matched.
  */
 function callsOfCheck(check: unknown, read: SourceRead): CallRef[] {
   if (!isRecord(check) || !Array.isArray(check.tools)) return [];
-  const names = [
-    ...new Set(check.tools.flatMap((t: unknown) => (str(t) === undefined ? [] : [t as string]))),
-  ];
-  const malformed: CallRef[] = check.tools
-    .filter((t: unknown) => str(t) === undefined)
-    .map(() => ({}));
+  const tools = entriesOf(check.tools);
+  const names = [...new Set(tools.flatMap((t) => (str(t) === undefined ? [] : [t as string])))];
+  const malformed: CallRef[] = tools.filter((t) => str(t) === undefined).map(() => ({}));
   const matched = names.flatMap((name): CallRef[] => {
     const calls = read.turnResults.filter((r) => r.toolName === name);
     return calls.length === 0

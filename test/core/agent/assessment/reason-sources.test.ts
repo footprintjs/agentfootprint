@@ -468,6 +468,70 @@ describe('UNIT — a list that names some calls and not others never loses one',
     expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
   });
 
+  // A SPARSE list (L-48): an in-memory record — a live snapshot, a host-built one — can hold an
+  // index no value was ever assigned to. A saved recording spells it `null`; in memory it is no
+  // entry at all, and `Array.prototype.map` / `filter` skip it. Before the fix the projection
+  // mapped a carrier or witness list with `map`, kept the hole, and read `ref.id` off it — a
+  // TypeError out of `assessAnswer` — and `filter` dropped a hole in an answer check's `tools`.
+  // Read by index, a hole is one entry that names no call: counted in `unnamed`.
+  const HOLE = Symbol('hole');
+  const sparse = (...entries: readonly unknown[]): unknown[] => {
+    const list: unknown[] = new Array(entries.length);
+    entries.forEach((entry, i) => {
+      if (entry !== HOLE) list[i] = entry;
+    });
+    return list;
+  };
+
+  it('a sparse carrier list never throws: the hole is one call the record cannot name (L-48)', () => {
+    const carriers = sparse(carrier('c1'), HOLE);
+    expect(1 in carriers).toBe(false); // a real hole — not `undefined` written at index 1
+    const a = fold({ history, findingsLedger: [contingent(carriers)] });
+    expect(sourceOf(a, 'value-contingent')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 1,
+    });
+    expect(lineOf(a)).toBe(
+      'Not sure — a value came from checking inventory and 1 other call, whose results the model itself had set aside.',
+    );
+  });
+
+  it('a sparse conflict witness list never throws: the hole is counted beside the named reading (L-48)', () => {
+    const a = fold({
+      history,
+      findingsLedger: [conflict(sparse(reading('c1'), HOLE, reading('c1')))],
+    });
+    expect(sourceOf(a, 'sources-conflict')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 1,
+    });
+  });
+
+  it('a sparse tools list on an answer check: the hole is counted, never dropped (L-48)', () => {
+    const a = fold({
+      history,
+      answerValidation: {
+        mode: 'observe',
+        status: 'passed',
+        checks: [
+          {
+            id: 'agent:negative-claims:declaration:0',
+            disposition: 'not-applicable',
+            reason: 'declaration-overclaimed',
+            tools: sparse('inventory', HOLE),
+          },
+        ],
+      },
+    });
+    expect(sourceOf(a, 'declaration-overclaimed')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 1,
+    });
+  });
+
   it('contingent, all unnamed: every carrier counted, and the line keeps its own words', () => {
     const a = fold({ history, findingsLedger: [contingent([carrier(), carrier()])] });
     expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 2 });

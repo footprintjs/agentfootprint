@@ -286,6 +286,22 @@ agent.answerValidation()?.checks.find((c) => c.reason === 'declaration-overclaim
 // { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }
 ```
 
+**A hole is an entry.** Every list a source reads — a conflict's readings, a
+contingent value's carriers, an answer check's `tools` — is read by index
+(`sources.ts` · `entriesOf`). An in-memory record (a live snapshot, a host-built
+one) can be SPARSE: a hole is no entry at all, which `map` and `filter` skip,
+where a saved recording would spell it `null`. Read by index, a hole is one
+entry that names no call — counted in `unnamed`, never skipped, and never a
+throw out of the fold:
+
+```ts
+const carriers = [{ toolCallId: 'c1', standing: 'noise' }];
+carriers.length = 2; // index 1 is a hole
+const contingent = { kind: 'contingent', declaredOn: 'answer', value: 'x-1', carriers };
+assessAnswer({ snapshot: { sharedState: { history, findingsLedger: [contingent] } } }).reasons[0]
+  .source; // { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'inventory' }], unnamed: 1 }
+```
+
 **The app's words for a reason's calls.** A tool may declare `displayName`
 (`defineTool({ displayName })` — one plain line, at most 60 characters,
 `lib/displayName.ts`). The line names a reason's calls ONLY by it — the declared
