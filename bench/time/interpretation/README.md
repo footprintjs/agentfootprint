@@ -17,6 +17,7 @@ npm run build-reader                         # bundles englishTimeReader from th
 TZ=UTC node scripts/run.mjs existing --duckling-replay   # re-score from Duckling's recorded answers
 TZ=UTC node scripts/run.mjs heldout  --duckling-replay
 TZ=UTC node scripts/run.mjs regressions --duckling-replay
+npm run acceptance                           # the scope digest's acceptance cases (design § 8.4, R15)
 # a live run asks a local Duckling server instead:
 #   docker run -d --name time-eval-duckling -p 127.0.0.1:18000:8000 rasa/duckling
 #   TZ=UTC node scripts/run.mjs existing
@@ -37,6 +38,8 @@ TZ=UTC node scripts/run.mjs regressions --duckling-replay
 | `scripts/adapters.mjs` | one adapter per reader, mapping its own output to one shape, with no word list of its own |
 | `scripts/signals.mjs` | the leftover scan and the closed lookback grammar (a prototype) |
 | `scripts/meaning-rule.mjs` | the complete-meaning rule: bounded interpretation over a closed set of relations (a prototype) |
+| `scripts/binding.mjs` | the scope digest: every argument the call sends is bound unless the declaration marks it `inert` (a prototype) |
+| `scripts/acceptance.mjs` | the digest's acceptance cases: a tool with no `Tool.search`, an `inert` argument, a partial declaration, sampling, batches, refusal |
 | `scripts/run.mjs` | the runner and the scoring |
 | `scripts/build-reader.mjs`, `scripts/versions.mjs`, `scripts/bundle-sizes.sh`, `scripts/probe.mjs` | the reader build, the version record, the bundle sizes, a probe of native output |
 | `scripts/extract-corpus.mjs` | how the host app's corpus was read out of its test file (that file is not public) |
@@ -73,8 +76,11 @@ quote agreement; and the complete-meaning rule under each tool profile. `run.mjs
 
 ## The reference row
 
-The host app's own rule is a reference row: its word scan with the library's reader. Its module
-is the host app's private code, so it is not in this folder. When `--reference <module>` points at
+The host app's own rule is a reference row: its word scan with the library's reader, **as it stood
+at the host app's commit `0d52b9b` (2026-10-28)**. It is a historical baseline. The reviewer reports
+that the host app's current rule refuses the three held-out cases counted against the measured rule
+(H16, H23, H31); this bench did not rerun against the current rule, which is the host app's side. Its
+module is the host app's private code, so it is not in this folder. When `--reference <module>` points at
 a copy, the row is added. Its job is to reproduce the host app's own labels (0 wrong readings and 0
 unnecessary clarifications against them, which checks this harness) and to compare. The committed
 results include that row, measured locally. A run without the module drops the row; everything

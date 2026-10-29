@@ -20,7 +20,13 @@
  },
  "rules": {
   "leftoverScan": "1.1.0",
-  "completeMeaning": "2.0.0"
+  "completeMeaning": "2.0.0",
+  "binding": "1.0.0"
+ },
+ "hostRuleReference": {
+  "commit": "0d52b9b",
+  "measured": "2026-10-28",
+  "note": "the host app's rule in the reference row, as it stood at that commit: a historical baseline. The reviewer reports that its current rule refuses H16, H23 and H31; it was not rerun here."
  },
  "esbuild": "0.28.2"
 }

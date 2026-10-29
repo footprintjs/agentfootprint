@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { SCAN_VERSION } from './signals.mjs';
 import { MEANING_RULE_VERSION } from './meaning-rule.mjs';
+import { BINDING_VERSION } from './binding.mjs';
 
 // Read from disk: some packages do not export their package.json.
 const version = (name) => JSON.parse(readFileSync(new URL(`../node_modules/${name}/package.json`, import.meta.url), 'utf8')).version;
@@ -16,7 +17,11 @@ const versions = {
     englishTimeReader: JSON.parse(readFileSync(new URL('../.build/af-english.json', import.meta.url), 'utf8')),
     'library-grammar': 'scripts/adapters.mjs · libraryGrammar over scripts/signals.mjs · readLookbackQuote',
   },
-  rules: { leftoverScan: SCAN_VERSION, completeMeaning: MEANING_RULE_VERSION },
+  rules: { leftoverScan: SCAN_VERSION, completeMeaning: MEANING_RULE_VERSION, binding: BINDING_VERSION },
+  hostRuleReference: {
+    commit: '0d52b9b', measured: '2026-10-28',
+    note: "the host app's rule in the reference row, as it stood at that commit: a historical baseline. The reviewer reports that its current rule refuses H16, H23 and H31; it was not rerun here.",
+  },
   esbuild: version('esbuild'),
 };
 writeFileSync(new URL('../results/versions.json', import.meta.url), JSON.stringify(versions, null, 1) + '\n');
