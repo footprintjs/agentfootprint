@@ -4,7 +4,7 @@ title: CodeRunFacts
 
 # Interface: CodeRunFacts
 
-Defined in: [src/core/codeRunnerTool.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L162)
+Defined in: [src/core/codeRunnerTool.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L163)
 
 What one finished code run is worth reporting, minus the code itself.
 
@@ -14,15 +14,18 @@ What one finished code run is worth reporting, minus the code itself.
 
 > `readonly` **language**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L164)
+Defined in: [src/core/codeRunnerTool.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L165)
 
 ***
 
-### ok
+### ok?
 
-> `readonly` **ok**: `boolean`
+> `readonly` `optional` **ok?**: `boolean`
 
-Defined in: [src/core/codeRunnerTool.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L168)
+Defined in: [src/core/codeRunnerTool.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L171)
+
+The runner's reported outcome (`CodeResult.ok`). ABSENT when the runner
+ reported none — unknown, never recorded as success.
 
 ***
 
@@ -30,7 +33,7 @@ Defined in: [src/core/codeRunnerTool.ts:168](https://github.com/footprintjs/agen
 
 > `readonly` **outputChars**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L166)
+Defined in: [src/core/codeRunnerTool.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L167)
 
 ***
 
@@ -38,7 +41,7 @@ Defined in: [src/core/codeRunnerTool.ts:166](https://github.com/footprintjs/agen
 
 > `readonly` **shapeHash**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L169)
+Defined in: [src/core/codeRunnerTool.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L172)
 
 ***
 
@@ -46,7 +49,7 @@ Defined in: [src/core/codeRunnerTool.ts:169](https://github.com/footprintjs/agen
 
 > `readonly` **stagedInputs**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L165)
+Defined in: [src/core/codeRunnerTool.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L166)
 
 ***
 
@@ -54,7 +57,7 @@ Defined in: [src/core/codeRunnerTool.ts:165](https://github.com/footprintjs/agen
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L163)
+Defined in: [src/core/codeRunnerTool.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L164)
 
 ***
 
@@ -62,4 +65,4 @@ Defined in: [src/core/codeRunnerTool.ts:163](https://github.com/footprintjs/agen
 
 > `readonly` **truncated**: `boolean`
 
-Defined in: [src/core/codeRunnerTool.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L167)
+Defined in: [src/core/codeRunnerTool.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L168)

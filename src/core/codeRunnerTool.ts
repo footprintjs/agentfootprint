@@ -120,8 +120,9 @@ export interface CodeRunnerToolOptions {
    *
    * ── Refused rather than degraded ────────────────────────────────────────
    * Declaring `wants` on a runner whose sessions cannot accept staged inputs
-   * (`stageInputs` absent — `agentCoreCodeRunner` today) refuses BY NAME at
-   * dispatch. Running the code without the data it declared would leave the
+   * (`stageInputs` absent — a backend that cannot write into its own session)
+   * refuses BY NAME at dispatch. `localCodeRunner` and `agentCoreCodeRunner`
+   * both stage. Running the code without the data it declared would leave the
    * model reasoning about a file that is not there, which is the exact silent
    * failure this library refuses to ship.
    *
@@ -165,7 +166,9 @@ export interface CodeRunFacts {
   readonly stagedInputs: number;
   readonly outputChars: number;
   readonly truncated: boolean;
-  readonly ok: boolean;
+  /** The runner's reported outcome (`CodeResult.ok`). ABSENT when the runner
+   *  reported none — unknown, never recorded as success. */
+  readonly ok?: boolean;
   readonly shapeHash: string;
 }
 
@@ -411,7 +414,10 @@ export function codeRunnerTool(
         stagedInputs: stagedNames.length,
         outputChars: rendered.length,
         truncated: rendered.length >= maxOutputChars,
-        ok: result.ok !== false,
+        // The runner's own verdict, or nothing: a runner that reported no
+        // outcome leaves no `ok` here, so the record never says "ran clean"
+        // on the strength of silence.
+        ...(result.ok !== undefined && { ok: result.ok }),
         shapeHash: fnv1a(codeShape(args.code)),
       });
       return rendered;
@@ -586,8 +592,8 @@ async function stageDeclaredInputs(
       `${toolName}: this tool declares artifact arguments (${wantNames.join(', ')}), and the ` +
         `code runner behind it cannot put data into its own session — its CodeSession has no ` +
         `stageInputs. The code would run against files that are not there, so it is not run. ` +
-        `Use a runner that stages (localCodeRunner does), or drop \`wants\` and have the model ` +
-        `fetch the data inside the code.`,
+        `Use a runner that stages (localCodeRunner and agentCoreCodeRunner do), or drop ` +
+        `\`wants\` and have the model fetch the data inside the code.`,
     );
   }
   const landed = await session.stageInputs(inputs);
@@ -814,10 +820,18 @@ function render(
   const stderr = clip(result.stderr, maxOutputChars, result.truncated?.stderr === true);
   if (stdout.text.length > 0) parts.push(stdout.text);
   if (stderr.text.length > 0) parts.push(`stderr:\n${stderr.text}`);
-  if (!result.ok) {
+  if (result.ok === false) {
     parts.push(
       `[exit ${result.exitCode ?? 'non-zero'}] the code did not complete successfully — read ` +
         'stderr above and fix it.',
+    );
+  } else if (result.ok === undefined) {
+    // UNKNOWN IS STATED, like a cut. A runner that reported neither an exit
+    // status nor an error has not said the code finished, and output alone
+    // cannot say it either — a script can print its answer and then fail.
+    parts.push(
+      `[exit status unknown: the code runner reported neither an exit status nor an error for ` +
+        `the ${toolName} call this result answers, so whether that code finished is not known]`,
     );
   }
   for (const artifact of result.artifacts ?? []) {

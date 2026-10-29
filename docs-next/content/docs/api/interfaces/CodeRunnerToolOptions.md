@@ -115,7 +115,7 @@ Per-execution ceiling handed to the runner.
 
 > `readonly` `optional` **wants?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/codeRunnerTool.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L132)
+Defined in: [src/core/codeRunnerTool.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L133)
 
 Artifact arguments, declared exactly as any other tool declares them
 (9.26.0): `wants: { dataset: 'dataset/rows' }`.
@@ -136,8 +136,9 @@ nothing beyond the description to use it.
 
 ── Refused rather than degraded ────────────────────────────────────────
 Declaring `wants` on a runner whose sessions cannot accept staged inputs
-(`stageInputs` absent — `agentCoreCodeRunner` today) refuses BY NAME at
-dispatch. Running the code without the data it declared would leave the
+(`stageInputs` absent — a backend that cannot write into its own session)
+refuses BY NAME at dispatch. `localCodeRunner` and `agentCoreCodeRunner`
+both stage. Running the code without the data it declared would leave the
 model reasoning about a file that is not there, which is the exact silent
 failure this library refuses to ship.
 

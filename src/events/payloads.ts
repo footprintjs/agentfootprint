@@ -2408,8 +2408,12 @@ export interface ToolsCodeRunPayload {
   readonly outputChars: number;
   /** True when the output hit `maxOutputChars` and was cut. */
   readonly truncated: boolean;
-  /** Whether the program ran to completion. */
-  readonly ok: boolean;
+  /**
+   * Whether the program ran to completion, as the code runner REPORTED it.
+   * ABSENT when the runner reported neither an exit status nor an error —
+   * the outcome is unknown, and an absent `ok` is never success.
+   */
+  readonly ok?: boolean;
   /** A stable hash of the normalized call shape. Never the code. */
   readonly shapeHash: string;
 }

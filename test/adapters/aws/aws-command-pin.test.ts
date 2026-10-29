@@ -578,6 +578,38 @@ describe('the pinned names against the real SDK, where it is installed', () => {
     },
   );
 
+  it.skipIf(realSdk('@aws-sdk/client-bedrock-agentcore') === undefined)(
+    'agentCoreCodeRunner → the real SDK models the file and command tools it sends and reads',
+    () => {
+      const sdk = realSdk('@aws-sdk/client-bedrock-agentcore') as Record<string, unknown>;
+      // The tool names the adapter sends.
+      expect(Object.values(sdk['ToolName'] as Record<string, string>)).toEqual(
+        expect.arrayContaining(['executeCode', 'executeCommand', 'readFiles', 'writeFiles']),
+      );
+      // A schema is `[kind, namespace, name, traits, memberNames, memberSchemas]`;
+      // the member names are the one all-string array in it.
+      const members = (schema: string): unknown[] | undefined =>
+        (sdk[schema] as unknown[] | undefined)?.find(
+          (part): part is unknown[] =>
+            Array.isArray(part) && part.length > 0 && part.every((m) => typeof m === 'string'),
+        );
+      expect(members('ToolArguments$')).toEqual(
+        expect.arrayContaining(['code', 'language', 'command', 'paths', 'content']),
+      );
+      expect(members('InputContentBlock$')).toEqual(['path', 'text', 'blob']);
+      // What a read answers with, and what a command or code run reports.
+      expect(members('ResourceContent$')).toEqual(
+        expect.arrayContaining(['uri', 'mimeType', 'text', 'blob']),
+      );
+      expect(members('ToolResultStructuredContent$')).toEqual(
+        expect.arrayContaining(['stdout', 'stderr', 'exitCode']),
+      );
+      expect(members('CodeInterpreterResult$')).toEqual(
+        expect.arrayContaining(['content', 'structuredContent', 'isError']),
+      );
+    },
+  );
+
   it('EvaluatePolicyCommand is not a command anybody may pin again', () => {
     const sdk = realSdk('@aws-sdk/client-bedrock-agentcore');
     const pinned = AWS_COMMAND_PINS.flatMap((p) => p.commands);

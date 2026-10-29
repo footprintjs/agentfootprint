@@ -330,15 +330,26 @@ interface CodeRunner {
 interface CodeSession {
   readonly id: string;
   execute(req: { code: string; language?: string; timeoutMs?: number }): Promise<CodeResult>;
+  // Optional verbs — feature-detect each one; an adapter that cannot do it leaves it out.
+  stageInputs?(inputs: CodeInput[]): Promise<StagedCodeInput[]>;
+  readFile?(path: string, options: { maxBytes: number }): Promise<CodeFile>;
+  runCommand?(command: string, options?: CodeCommandOptions): Promise<CodeCommandResult>;
   stop(): Promise<void>;
 }
 ```
 
-`CodeResult` is `{ ok, stdout, stderr, exitCode?, artifacts?, truncated? }`.
+`CodeResult` is `{ ok?, stdout, stderr, exitCode?, artifacts?, truncated? }`.
 `truncated` is the load-bearing field: **an unstated slice is a silent success.**
 A runner that quietly cuts its own output to fit is the same context-window bug
 wearing a different hat, and the model would reason over a fragment of a table
 believing it had the table.
+
+`ok` is `true` or `false` only when the backend said which — an exit status, or
+its own error verdict. When it reported neither, `ok` is **absent**: the outcome
+is unknown, and an absent `ok` is never success. `codeRunnerTool` says so in the
+result the model reads (`[exit status unknown: …]`), and the `tools.code_run`
+record carries no `ok` either. Check `result.ok === true` where you mean "it
+worked".
 
 `start({ key })` takes the ISOLATION key the caller derived. An adapter may use
 it to name the remote session; it must never widen it.
@@ -368,16 +379,22 @@ that are merely *limited*.
 
 A `CodeSession` is what `start()` hands back — `execute()` and `stop()`, where
 `stop()` must tolerate a session the far side already reaped, because an idle
-timeout is the reality on every managed backend. Each adapter's options bag is
+timeout is the reality on every managed backend — plus the optional verbs below,
+each feature-detected (`canStageCodeInputs`, `canReadCodeFiles`,
+`canRunCodeCommands`). Each adapter's options bag is
 `LocalCodeRunnerOptions` and `AgentCoreCodeRunnerOptions` respectively; the AWS
 one also exports `AgentCoreCodeClientLike` (the operation-semantic seam you can
-inject a whole client through, via `_client`), `AgentCoreInvokeAnswer` (one
-invocation already drained of its event stream) and
+inject a whole client through, via `_client`), `AgentCoreInvokeInput` (one
+`InvokeCodeInterpreter` request: an `AgentCoreInvokeTarget` plus one arm per
+service tool), `AgentCoreFileContent` (one `writeFiles` entry, text or bytes),
+`AgentCoreInvokeAnswer` (one invocation already drained of its event stream),
+`AgentCoreResource` (a file a `readFiles` answer carried) and
 `BedrockAgentCoreCodeSdkModule` (the `_sdk` test seam every AWS adapter here
 carries).
 
 `agentCoreCodeRunner` dispatches `StartCodeInterpreterSessionCommand`,
-`InvokeCodeInterpreterCommand` and `StopCodeInterpreterSessionCommand` through
+`InvokeCodeInterpreterCommand` (the service tools `executeCode`, `writeFiles`,
+`readFiles` and `executeCommand`) and `StopCodeInterpreterSessionCommand` through
 `client.send(new Command(...))` — never a method on the client, which is the
 9.4.0 law. Two shapes worth knowing because guessing them is how this class of
 bug ships: `Invoke` answers with an **event stream** (`response.stream`), and
@@ -411,6 +428,63 @@ narrowing multiplies start-up cost with nothing to show for it.
 
 Worked end to end, with the payoff, the isolation and the events printed:
 `examples/features/52-run-code.ts`.
+
+### Files in and out, and commands
+
+A session moves data in and out **exactly and bounded**, and every result says
+only what the backend reported.
+
+- **In — `stageInputs`.** Text goes in as text, bytes as bytes (on AgentCore, a
+  `writeFiles` `blob` — never base64 inside text). The code finds each file
+  through the `AF_STAGED_INPUTS` manifest on both runners. On AgentCore one
+  staging call is one request, refused before it is sent when it would pass
+  AgentCore's 100 MB per-call limit (`CodeSandboxError`, `reason:
+  'request-too-large'`).
+- **Out — `readFile(path, { maxBytes })`.** One file, whole, or refused. The bound
+  is required, and a file over it is refused (`'file-too-large'`), never cut. On
+  AgentCore the file is paired with the path by the URI the service put on it; a
+  missing or different URI fails closed (`'uri-missing'`, `'uri-mismatch'`). Text
+  or bytes is whichever the backend returned — never decided by the extension;
+  `localCodeRunner` returns bytes, because a file on disk is bytes.
+- **Commands — `runCommand(command, { timeoutMs, signal, maxOutputChars,
+  checkpoint })`.** It runs arbitrary shell, so it is **off by default**: a session
+  has it only when the runner is built with `commands: true` (one runner per agent
+  that should have it). stdout and stderr are bounded and the cut stated on
+  `truncated`. `exitCode` is the one the backend reported, or absent — never
+  inferred from AgentCore's `isError` (reported separately, as `isError`).
+  A `checkpoint` line is looked for in the **whole** stdout, before the cut, and
+  `checkpointSeen` proves only that the command got that far.
+- **Paths.** Both runners apply one rule, `sandboxPath`: relative to the working
+  directory and never above it. An absolute path, a `..` that climbs out, a
+  backslash, a leading `~` or a NUL is refused (`'path-refused'`) before anything
+  is read or sent. `localCodeRunner` also refuses a symbolic link that leads out.
+- **A gone session.** On AgentCore a `ResourceNotFoundException`, or a service
+  error saying the session is "not active", is one `SessionExpiredError` on every
+  verb. Start a new session: nothing reconnects, because a session name is not an
+  address.
+
+The shapes: `readFile` takes `CodeReadOptions` (`maxBytes`, `signal`) and
+returns a `CodeFile`; `runCommand` takes `CodeCommandOptions` and returns a
+`CodeCommandResult`; a cut on either result is a `CodeTruncation`; and every
+refusal is a `CodeSandboxError` whose `reason` is one `CodeSandboxRefusal`.
+
+<CodeFile path="examples/features/116-code-files-and-commands.ts" region="files-in-out" title="examples/features/116-code-files-and-commands.ts (region: files-in-out)" />
+
+An outcome nobody reported stays unknown:
+
+<CodeFile path="examples/features/116-code-files-and-commands.ts" region="unknown-stays-unknown" title="examples/features/116-code-files-and-commands.ts (region: unknown-stays-unknown)" />
+
+**Network.** A command reaches whatever the sandbox's network reaches, and the
+runner does not choose it. On AgentCore the network mode is set on the code
+interpreter resource: the built-in `aws.codeinterpreter.v1` runs with AWS's most
+restrictive defaults — Sandbox mode, documented as limited external network
+access that includes Amazon S3 — while a custom interpreter may be created in
+Public mode (internet access) or VPC mode. `localCodeRunner` has no network
+isolation at all: a command reaches everything this machine reaches.
+
+Neither the command text nor a file's contents ever appears in an error. A
+modelled AgentCore error from a file or command call names the exception and
+leaves out the service's message, which can quote what was sent.
 
 ### Turn repeated code into a tool backlog
 

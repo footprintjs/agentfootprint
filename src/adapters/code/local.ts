@@ -34,11 +34,21 @@
  * is not a set this adapter can identify without guessing which of a developer's
  * files were meant, and a dev-loop runner that quietly uploaded whatever
  * appeared beside your source would be the worse failure. Producing outputs
- * needs three things this adapter does not have yet: a declared output
- * directory the model is told about, a bounded read-back of what landed in it,
- * and a size policy for what is too big to carry in-band. A runner that has
- * them (a managed sandbox that returns file contents) fills the field, and
- * `codeRunnerTool` mints every data-carrying entry with no further wiring.
+ * needs a declared output directory the model is told about and a size policy
+ * for what is too big to carry in-band; `readFile` below is the bounded
+ * read-back, for a caller that names the file. A runner that has all three
+ * fills the field, and `codeRunnerTool` mints every data-carrying entry with
+ * no further wiring.
+ *
+ * ── Files and commands ─────────────────────────────────────────────────────
+ * `readFile(path, { maxBytes })` reads ONE file back from the working
+ * directory — the path checked by the port's one rule (`sandboxPath`), then
+ * by its REAL location, so a symbolic link cannot lead it outside; a file over
+ * `maxBytes` is refused, never cut; a file on disk is bytes, so bytes come
+ * back and no encoding is guessed. `runCommand(command)` runs ONE `sh -c`
+ * command with the same environment allowlist as the code, and exists only on
+ * a runner built with `commands: true`. Neither is a network or filesystem
+ * jail: a command reaches whatever this machine reaches.
  *
  * So: a development loop, a trusted-input pipeline, a machine you would be
  * relaxed about a shell script running on. NOT arbitrary model-written code
@@ -62,14 +72,22 @@
  */
 
 import type {
+  CodeCommandOptions,
+  CodeCommandResult,
+  CodeFile,
   CodeInput,
+  CodeReadOptions,
   CodeResult,
   CodeRunner,
   CodeSession,
   StagedCodeInput,
 } from '../../provider-contract/types.js';
 import { STAGED_INPUTS_ENV } from '../../provider-contract/types.js';
+import { CodeSandboxError, readBound, sandboxPath } from '../../provider-contract/codeSandbox.js';
+import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
+import { safeFileName } from './fileName.js';
+import { boundOutput, commandBounds, commandResult, payloadBytes } from './output.js';
 
 export interface LocalCodeRunnerOptions {
   /**
@@ -103,24 +121,46 @@ export interface LocalCodeRunnerOptions {
    * reason over is a fragment.
    */
   readonly maxOutputChars?: number;
+  /**
+   * Give each session `runCommand` — one `sh -c` command in the working
+   * directory, with the same environment allowlist as the code. Default
+   * `false`, and then the member is ABSENT (`canRunCodeCommands` says no):
+   * it runs arbitrary shell, so a runner offers it only when built to. Build
+   * one runner per agent that should have it.
+   *
+   * Not a jail: the command reaches this machine's filesystem and network, as
+   * the code already does.
+   */
+  readonly commands?: boolean;
   /** Stable id (default `'local-code-runner'`). Rides the session events. */
   readonly id?: string;
   /** @internal Test seam — the `node:child_process` module. */
   readonly _childProcess?: ChildProcessModuleLike;
-  /** @internal Test seam — the `node:fs` slice staging uses. */
+  /** @internal Test seam — the `node:fs` slice staging and reading use. */
   readonly _fs?: FsModuleLike;
   /** @internal Test seam — where staging directories are created. Defaults to
    *  the OS temp directory. */
   readonly _stagingRoot?: string;
 }
 
-/** The slice of `node:fs` staging touches. Loaded lazily, and ONLY when a
- *  caller actually stages something — a session that never stages never asks
- *  this runtime for a filesystem. */
+/** The slice of `node:fs` staging and reading touch. Loaded lazily, and ONLY
+ *  when a caller actually stages or reads something — a session that does
+ *  neither never asks this runtime for a filesystem. */
 export interface FsModuleLike {
   readonly mkdtempSync?: (prefix: string) => string;
   readonly writeFileSync?: (path: string, data: string | Uint8Array) => void;
   readonly rmSync?: (path: string, options?: { recursive?: boolean; force?: boolean }) => void;
+  readonly realpathSync?: (path: string) => string;
+  readonly openSync?: (path: string, flags: string) => number;
+  readonly fstatSync?: (fd: number) => { isFile(): boolean; readonly size: number };
+  readonly readSync?: (
+    fd: number,
+    buffer: Uint8Array,
+    offset: number,
+    length: number,
+    position: number | null,
+  ) => number;
+  readonly closeSync?: (fd: number) => void;
 }
 
 /** The slice of `node:child_process` this adapter touches. */
@@ -180,14 +220,32 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
       let stagingDir: string | undefined;
       /** name → path, exactly as the manifest carries it. */
       const staged = new Map<string, string>();
-      return Promise.resolve({
+      /** The child's environment, for code and commands alike. */
+      const childEnv = (): Record<string, string> => ({
+        // ALLOWLIST. `process.env` is deliberately NOT spread in — only
+        // PATH, so the OS can find the interpreter, and it is overridable.
+        PATH: process.env.PATH ?? '',
+        ...(options.env ?? {}),
+        // The staged-input manifest joins it LAST and is not overridable:
+        // it is not configuration, it is a fact about this execution, and
+        // an operator `env` that happened to define the same name would
+        // otherwise hand the model paths to files that are not there.
+        // Absent entirely when nothing was staged.
+        ...(staged.size > 0 && {
+          [STAGED_INPUTS_ENV]: JSON.stringify(Object.fromEntries(staged)),
+        }),
+      });
+      const refuseIfStopped = (toDo: string): void => {
+        if (stopped) {
+          throw new Error(
+            `localCodeRunner: session ${sessionId} was stopped; open a new one to ${toDo}.`,
+          );
+        }
+      };
+      const session: CodeSession = {
         id: sessionId,
         async execute(exec): Promise<CodeResult> {
-          if (stopped) {
-            throw new Error(
-              `localCodeRunner: session ${sessionId} was stopped; open a new one to run more code.`,
-            );
-          }
+          refuseIfStopped('run more code');
           const language = exec.language ?? req.language ?? 'javascript';
           const command = options.command ?? DEFAULT_COMMANDS[language.toLowerCase()];
           if (!command || command.length === 0) {
@@ -204,52 +262,44 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
             [...args, exec.code],
             {
               cwd: options.cwd ?? process.cwd(),
-              // ALLOWLIST. `process.env` is deliberately NOT spread in — only
-              // PATH, so the OS can find the interpreter, and it is overridable.
-              //
-              // The staged-input manifest joins it LAST and is not overridable:
-              // it is not configuration, it is a fact about this execution, and
-              // an operator `env` that happened to define the same name would
-              // otherwise hand the model paths to files that are not there.
-              // Absent entirely when nothing was staged.
-              env: {
-                PATH: process.env.PATH ?? '',
-                ...(options.env ?? {}),
-                ...(staged.size > 0 && {
-                  [STAGED_INPUTS_ENV]: JSON.stringify(Object.fromEntries(staged)),
-                }),
-              },
+              env: childEnv(),
               timeoutMs: exec.timeoutMs ?? timeoutMs,
               ...(exec.signal && { signal: exec.signal }),
             },
+            {
+              timedOut: (ms) =>
+                new Error(
+                  `localCodeRunner: the code did not finish within ${ms}ms and the ` +
+                    'process was killed. Raise `timeoutMs`, or have the code do less per call.',
+                ),
+              notRunnable: (code) =>
+                new Error(
+                  `localCodeRunner: could not run '${file as string}' (${code}). ` +
+                    'Install the interpreter, or pass `command` pointing at one.',
+                ),
+            },
           );
-          const stdout = cut(raw.stdout, maxOutputChars);
-          const stderr = cut(raw.stderr, maxOutputChars);
-          const truncated = {
-            ...(stdout.cut && { stdout: true }),
-            ...(stderr.cut && { stderr: true }),
-            ...((stdout.cut || stderr.cut) && {
-              ofChars: Math.max(raw.stdout.length, raw.stderr.length),
-            }),
-          };
+          // A failed run with nothing on stderr still says why: the runtime's
+          // own message stands in for the empty stream, as it always has.
+          const bounded = boundOutput(
+            raw.stdout,
+            raw.failure !== undefined && raw.stderr.length === 0 ? raw.failure : raw.stderr,
+            maxOutputChars,
+          );
           return {
+            // Known either way: an exit status, or a process the operating
+            // system ended (no exit status at all — never a made-up one).
             ok: raw.exitCode === 0,
-            stdout: stdout.text,
-            stderr: stderr.text,
+            stdout: bounded.stdout,
+            stderr: bounded.stderr,
             ...(raw.exitCode !== undefined && { exitCode: raw.exitCode }),
-            // Present IFF something was actually cut — an empty object here
-            // would read as "truncation happened, magnitude unknown".
-            ...(Object.keys(truncated).length > 0 && { truncated }),
+            ...(bounded.truncated !== undefined && { truncated: bounded.truncated }),
           };
         },
         // eslint-disable-next-line @typescript-eslint/require-await
         async stageInputs(inputs: readonly CodeInput[]): Promise<readonly StagedCodeInput[]> {
-          if (stopped) {
-            throw new Error(
-              `localCodeRunner: session ${sessionId} was stopped; open a new one to stage inputs.`,
-            );
-          }
-          const fs = resolveFs(options);
+          refuseIfStopped('stage inputs');
+          const fs = resolveFs(options, 'staging inputs');
           const landed: StagedCodeInput[] = [];
           stagingDir ??= makeStagingDir(fs, options._stagingRoot);
           for (const input of inputs) {
@@ -260,16 +310,70 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
             // keys it by what was asked for.
             const fileName = safeFileName(input.fileName ?? input.name);
             const path = `${stagingDir}/${fileName}`;
-            const bytes =
-              typeof input.data === 'string'
-                ? Buffer.byteLength(input.data, 'utf8')
-                : input.data.byteLength;
+            const bytes = payloadBytes(input.data);
             writeFile(fs, path, input.data);
             staged.set(input.name, path);
             landed.push({ name: input.name, path, bytes });
           }
           return landed;
         },
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async readFile(path: string, readOptions: CodeReadOptions): Promise<CodeFile> {
+          refuseIfStopped('read files');
+          const maxBytes = readBound(readOptions);
+          throwIfAborted(readOptions.signal);
+          const relative = sandboxPath(path);
+          return readWithin(
+            resolveFs(options, 'reading files'),
+            options.cwd ?? process.cwd(),
+            relative,
+            maxBytes,
+          );
+        },
+        ...(options.commands === true && {
+          async runCommand(
+            command: string,
+            commandOptions?: CodeCommandOptions,
+          ): Promise<CodeCommandResult> {
+            refuseIfStopped('run commands');
+            const bounds = commandBounds(command, commandOptions, maxOutputChars);
+            const raw = await runChild(
+              resolveChildProcess(options),
+              'sh',
+              ['-c', command],
+              {
+                cwd: options.cwd ?? process.cwd(),
+                env: childEnv(),
+                timeoutMs: bounds.timeoutMs ?? timeoutMs,
+                ...(bounds.signal && { signal: bounds.signal }),
+              },
+              {
+                timedOut: (ms) =>
+                  new CodeSandboxError(
+                    'timed-out',
+                    `localCodeRunner: the command did not finish within ${ms}ms and its ` +
+                      'process was killed.',
+                  ),
+                notRunnable: (code) =>
+                  new Error(
+                    `localCodeRunner: could not run 'sh' (${code}); runCommand needs a POSIX ` +
+                      'shell on PATH.',
+                  ),
+              },
+            );
+            // The child's own streams and exit status, nothing added: a
+            // process the operating system ended has no exit status, and the
+            // result says so by leaving it out.
+            return commandResult(
+              {
+                stdout: raw.stdout,
+                stderr: raw.stderr,
+                ...(raw.exitCode !== undefined && { exitCode: raw.exitCode }),
+              },
+              bounds,
+            );
+          },
+        }),
         stop(): Promise<void> {
           // Idempotent, and it refuses later executions rather than silently
           // starting a fresh process under a session the caller closed.
@@ -280,7 +384,10 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
           // teardown would fail a turn that already succeeded.
           if (stagingDir !== undefined) {
             try {
-              resolveFs(options).rmSync?.(stagingDir, { recursive: true, force: true });
+              resolveFs(options, 'staging inputs').rmSync?.(stagingDir, {
+                recursive: true,
+                force: true,
+              });
             } catch {
               // See above.
             }
@@ -289,23 +396,31 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
           }
           return Promise.resolve();
         },
-      });
+      };
+      return Promise.resolve(session);
     },
   };
 }
 
-/** `node:fs`, or a refusal naming what staging needs. Lazy for the same reason
- *  `node:child_process` is: a browser bundle that never stages must not pay
- *  for a module it cannot have. */
-function resolveFs(options: LocalCodeRunnerOptions): FsModuleLike {
+/** `node:fs`, or a refusal naming what `purpose` needs. Lazy for the same
+ *  reason `node:child_process` is: a browser bundle that never stages or
+ *  reads must not pay for a module it cannot have. */
+function resolveFs(
+  options: LocalCodeRunnerOptions,
+  purpose: 'staging inputs' | 'reading files',
+): FsModuleLike {
   if (options._fs) return options._fs;
   try {
     return lazyRequire<FsModuleLike>('node:fs');
   } catch {
     throw new Error(
-      'localCodeRunner: staging inputs needs `node:fs`, which this runtime does not provide ' +
-        '(a browser bundle, or a restricted worker). Use a runner whose backend can write ' +
-        'into its own session, or drop the tool’s `wants` declaration.',
+      purpose === 'staging inputs'
+        ? 'localCodeRunner: staging inputs needs `node:fs`, which this runtime does not provide ' +
+          '(a browser bundle, or a restricted worker). Use a runner whose backend can write ' +
+          'into its own session, or drop the tool’s `wants` declaration.'
+        : 'localCodeRunner: reading files needs `node:fs`, which this runtime does not provide ' +
+          '(a browser bundle, or a restricted worker); a runner whose backend reads its own ' +
+          'session can.',
     );
   }
 }
@@ -328,105 +443,121 @@ function writeFile(fs: FsModuleLike, path: string, data: string | Uint8Array): v
   writeFileSync(path, data);
 }
 
-/** Longest file name this adapter will write. Well inside every POSIX
- *  `NAME_MAX`, and the cap this adapter has always used. */
-const FILE_NAME_MAX = 120;
-
-/** Marks a name this adapter had to rewrite. Nothing arm A returns may start
- *  with it. */
-const ENCODED_FILE_PREFIX = '_enc_';
-
-/** Already one inert segment: no separator, no escape-looking bytes. */
-const FILE_NAME_ALREADY_LEGAL = /^[A-Za-z0-9._-]+$/;
-
-/** `.`, `..`, `...` — a name that is nothing but dots. Not a hop once the
- *  separators are gone, but not a name either, so it goes to arm B. */
-const DOTS_ONLY = /^\.+$/;
-
-/** Legal AND not the escape character — the set {@link encodeFileName} passes
- *  through untouched. */
-const FILE_CHAR_PASSES_THROUGH = /[A-Za-z0-9.-]/;
+/** How much of a file one `readSync` asks for. */
+const READ_CHUNK_BYTES = 64 * 1024;
 
 /**
- * One caller-supplied name → one inert file-name segment, **without ever
- * folding two names into one file**.
+ * Read ONE file under `root`, whole or not at all.
  *
- * Separators cannot survive as a parent hop and `a/b` cannot become two
- * segments — the same law `artifacts/scopePath` states for scope tuples,
- * applied to the one other place caller strings become file names in this
- * package. But the old version got there by REPLACING every illegal character
- * with `_`, which meant `a/b.csv` and `a_b.csv` became the same file: the
- * second write clobbered the first's bytes, `stageInputs` answered two manifest
- * entries pointing at one path, and the model's code opened `a/b.csv` and read
- * whatever `a_b.csv` contained. Nothing failed. The computation was simply run
- * against the wrong dataset — which is the worst shape a data bug can take,
- * because the answer still looks like an answer. `.slice(0, 120)` folded the
- * same way for any two names agreeing on their first 120 characters.
+ * `relative` has already passed the port's lexical rule; this adds the one
+ * check only the caller's own machine can make — the file's REAL location,
+ * after every symbolic link, must still be inside the real working directory.
+ * (A sandbox has no such check to make: its whole disk is its own.) The check
+ * and the open are two calls, not one atomic step; this is a development-loop
+ * runner, and its module header says what it is not.
  *
- * So this ENCODES instead of sanitising, in two arms whose outputs cannot meet
- * (the shape `safeSessionId` uses in `adapters/hosting/agentcore.ts`):
- *
- *   A. already one legal segment, not claiming to be an encoded name, and not
- *      dots-only → returned BYTE FOR BYTE. This is what keeps the fix from
- *      renaming anything that works today: `dataset.json`, `a_b.json`, every
- *      name `codeRunnerTool` derives from a declared argument, all land at
- *      exactly the path they landed at before.
- *   B. anything else → `_enc_` + an escaped form, where `_` is the escape
- *      character (`_` → `__`, any other illegal UTF-16 unit → `_uXXXX`). A
- *      decoder is a left inverse of that, which is what makes it injective.
- *
- * Arm A never starts with `_enc_` (excluded by construction) and every arm B
- * output does, so no name from one arm can collide with a name from the other.
- * Both arms produce ASCII with no `/`, no `\` and no NUL, so the path-hop law
- * the old version enforced is unchanged.
+ * Bounded twice: the size the file reports is checked before a byte is read,
+ * and the read itself stops one chunk past `maxBytes` — a file that grew in
+ * between is refused too, never handed back cut.
  */
-function safeFileName(raw: string): string {
-  if (
-    raw.length <= FILE_NAME_MAX &&
-    FILE_NAME_ALREADY_LEGAL.test(raw) &&
-    !raw.startsWith(ENCODED_FILE_PREFIX) &&
-    !DOTS_ONLY.test(raw)
-  ) {
-    return raw;
+function readWithin(fs: FsModuleLike, root: string, relative: string, maxBytes: number): CodeFile {
+  const realpath = fsMember(fs, 'realpathSync');
+  const open = fsMember(fs, 'openSync');
+  const fstat = fsMember(fs, 'fstatSync');
+  const read = fsMember(fs, 'readSync');
+  const close = fsMember(fs, 'closeSync');
+  let real: string;
+  let realRoot: string;
+  try {
+    realRoot = realpath(root);
+    real = realpath(`${root}/${relative}`);
+  } catch (err) {
+    throw notReturned(relative, errnoOf(err));
   }
-  const encoded = ENCODED_FILE_PREFIX + encodeFileName(raw);
-  // Strictly less, so the two shapes below are told apart by LENGTH alone: a
-  // digested name is always exactly FILE_NAME_MAX and an escaped one never is.
-  if (encoded.length < FILE_NAME_MAX) return encoded;
-  // Past the cap no mapping can stay injective — there are more names than
-  // there are file names — so the tail becomes a digest of the WHOLE raw name.
-  // SHA-256 rather than the package's 32-bit FNV-1a: a name reaching this
-  // adapter is caller data, and a 32-bit digest is a collision somebody can go
-  // and find, which for a file the model then reads as data is the same defect
-  // this function exists to close.
-  const digest = sha256Hex(raw).slice(0, 32);
-  return `${encoded.slice(0, FILE_NAME_MAX - digest.length - 2)}_z${digest}`;
-}
-
-/** `_` → `__`, anything else illegal → `_uXXXX`. Injective by construction. */
-function encodeFileName(raw: string): string {
-  let out = '';
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i] as string;
-    if (ch === '_') out += '__';
-    else if (FILE_CHAR_PASSES_THROUGH.test(ch)) out += ch;
-    else out += `_u${raw.charCodeAt(i).toString(16).padStart(4, '0')}`;
+  if (!isBelow(realRoot, real)) {
+    throw new CodeSandboxError(
+      'path-refused',
+      `localCodeRunner: '${relative}' leads outside the working directory through a link, ` +
+        'so it is not read.',
+      { path: relative },
+    );
   }
-  return out;
+  let fd: number;
+  try {
+    fd = open(real, 'r');
+  } catch (err) {
+    throw notReturned(relative, errnoOf(err));
+  }
+  try {
+    const stat = fstat(fd);
+    if (!stat.isFile()) throw notReturned(relative, 'not a regular file');
+    if (stat.size > maxBytes) throw tooLarge(relative, stat.size, maxBytes);
+    const chunks: Uint8Array[] = [];
+    const chunk = new Uint8Array(Math.min(READ_CHUNK_BYTES, maxBytes + 1));
+    let total = 0;
+    for (;;) {
+      const n = read(fd, chunk, 0, chunk.length, null);
+      if (n === 0) break;
+      total += n;
+      if (total > maxBytes) throw tooLarge(relative, total, maxBytes);
+      chunks.push(chunk.slice(0, n));
+    }
+    const data = new Uint8Array(total);
+    let at = 0;
+    for (const part of chunks) {
+      data.set(part, at);
+      at += part.byteLength;
+    }
+    return { path: relative, data, bytes: total };
+  } finally {
+    close(fd);
+  }
 }
 
 /**
- * SHA-256, hex.
- *
- * `node:crypto` rather than a fallback: this is only ever reached from
- * `stageInputs`, which has already required `node:fs` and written to a
- * temp directory. A runtime with a filesystem but no crypto is not a shape
- * this adapter can be in, and pretending otherwise with a weaker digest would
- * quietly widen the very collision the digest is here to close.
+ * Is `candidate` strictly below `root`? Both are real paths from the same
+ * `realpathSync`, so they share one spelling of the root and one separator
+ * style. String work rather than `node:path`, so reading files adds no Node
+ * module to the browser-safe door's call-time graph.
  */
-function sha256Hex(text: string): string {
-  const crypto = lazyRequire<typeof import('node:crypto')>('node:crypto');
-  return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+function isBelow(root: string, candidate: string): boolean {
+  const separator = root.includes('\\') && !root.includes('/') ? '\\' : '/';
+  const base = root.endsWith(separator) ? root : `${root}${separator}`;
+  return candidate.startsWith(base) && candidate.length > base.length;
+}
+
+function fsMember<K extends keyof FsModuleLike>(
+  fs: FsModuleLike,
+  name: K,
+): NonNullable<FsModuleLike[K]> {
+  const member = fs[name];
+  if (typeof member !== 'function') {
+    throw new Error(`localCodeRunner: \`node:fs\` resolved but \`${name}\` is missing.`);
+  }
+  return member as NonNullable<FsModuleLike[K]>;
+}
+
+function errnoOf(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : 'unreadable';
+}
+
+function notReturned(relative: string, why: string): CodeSandboxError {
+  return new CodeSandboxError(
+    'file-not-returned',
+    `localCodeRunner: no file could be read at '${relative}' (${why}).`,
+    { path: relative },
+  );
+}
+
+function tooLarge(relative: string, bytes: number, maxBytes: number): CodeSandboxError {
+  return new CodeSandboxError(
+    'file-too-large',
+    `localCodeRunner: '${relative}' is at least ${bytes} bytes and this read allows ` +
+      `${maxBytes}. Nothing was returned — a file is never handed back cut. Raise \`maxBytes\`, ` +
+      'or have the code write something smaller.',
+    { path: relative, bytes, limit: maxBytes },
+  );
 }
 
 function resolveChildProcess(options: LocalCodeRunnerOptions): ChildProcessModuleLike {
@@ -445,7 +576,20 @@ function resolveChildProcess(options: LocalCodeRunnerOptions): ChildProcessModul
 interface ChildOutcome {
   readonly stdout: string;
   readonly stderr: string;
+  /** The child's exit status. Absent when the operating system ended it with
+   *  a signal: there is no exit status then, and none is made up. */
   readonly exitCode?: number;
+  /** The runtime's own description of a failed run (non-zero exit, or a
+   *  signal), for a caller that wants one when stderr is empty. */
+  readonly failure?: string;
+}
+
+/** The two refusals whose words depend on what was run. */
+interface ChildRefusals {
+  /** The child outlived its ceiling and was killed. */
+  readonly timedOut: (ms: number) => Error;
+  /** The program itself could not be started (ENOENT and friends). */
+  readonly notRunnable: (code: string) => Error;
 }
 
 /**
@@ -456,6 +600,10 @@ interface ChildOutcome {
  * thrown tool error would replace the one thing that teaches the next attempt
  * with `error: true`. What DOES reject is the runner failing to run at all
  * (interpreter missing, timeout, abort), because that is not the code's answer.
+ *
+ * An abort rejects with the caller's own reason (`lib/abort.ts`), checked
+ * FIRST: the runtime reports an aborted child with a string code
+ * (`ABORT_ERR`), which used to be read as a missing interpreter.
  */
 async function runChild(
   mod: ChildProcessModuleLike,
@@ -467,11 +615,13 @@ async function runChild(
     timeoutMs: number;
     signal?: AbortSignal;
   },
+  refusals: ChildRefusals,
 ): Promise<ChildOutcome> {
   const execFile = mod.execFile;
   if (typeof execFile !== 'function') {
     throw new Error('localCodeRunner: `node:child_process` resolved but `execFile` is missing.');
   }
+  throwIfAborted(opts.signal);
   return new Promise<ChildOutcome>((resolve, reject) => {
     execFile(
       file,
@@ -491,39 +641,30 @@ async function runChild(
           resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? ''), exitCode: 0 });
           return;
         }
+        if (opts.signal?.aborted) {
+          reject(abortErrorOf(opts.signal));
+          return;
+        }
         if (error.killed === true) {
-          reject(
-            new Error(
-              `localCodeRunner: the code did not finish within ${opts.timeoutMs}ms and the ` +
-                'process was killed. Raise `timeoutMs`, or have the code do less per call.',
-            ),
-          );
+          reject(refusals.timedOut(opts.timeoutMs));
           return;
         }
         if (typeof error.code === 'string') {
           // ENOENT and friends — the interpreter itself is not here. Naming it
           // beats handing the model a traceback it cannot act on.
-          reject(
-            new Error(
-              `localCodeRunner: could not run '${file}' (${error.code}). ` +
-                'Install the interpreter, or pass `command` pointing at one.',
-            ),
-          );
+          reject(refusals.notRunnable(error.code));
           return;
         }
-        // A real non-zero exit: the code ran and failed. That IS the result.
+        // A real non-zero exit, or a child the operating system ended: the
+        // code ran and failed. That IS the result. The exit status is the
+        // child's own, or absent — never a stand-in.
         resolve({
           stdout: String(stdout ?? ''),
-          stderr: String(stderr ?? '') || error.message,
-          exitCode: typeof error.code === 'number' ? error.code : 1,
+          stderr: String(stderr ?? ''),
+          ...(typeof error.code === 'number' && { exitCode: error.code }),
+          failure: error.message,
         });
       },
     );
   });
-}
-
-/** Cut to `max` characters, saying whether it cut. */
-function cut(text: string, max: number): { text: string; cut: boolean } {
-  if (text.length <= max) return { text, cut: false };
-  return { text: text.slice(0, max), cut: true };
 }

@@ -298,21 +298,27 @@ const parkCards = (): readonly string[] => {
 };
 
 /**
- * The code runner's rendered result — BOTH preamble arms of `render`.
+ * The code runner's rendered result — BOTH preamble arms of `render`, and the
+ * line that states an outcome the runner did not report.
  *
  * The registry drove only the ref-less call, so the arm that speaks when data
  * WAS staged had no row reading it and no marker pinning it; it was registered
  * and unchecked, which is the same green badge as unregistered. So the run
- * makes two calls: one passing a live ref (staged), one passing none.
+ * makes three calls: one passing a live ref (staged), one passing none, and
+ * one whose runner reports no outcome at all (`ok` absent).
  */
 const codeRunnerResults = async (): Promise<readonly string[]> => {
+  let executions = 0;
   const runner: CodeRunner = {
     id: 'inventory-runner',
     start: async () => ({
       id: 'session-1',
       stageInputs: async (inputs) =>
         inputs.map((input) => ({ name: input.name, path: `/session/${input.name}`, bytes: 1 })),
-      execute: async () => ({ ok: true, stdout: 'ran', stderr: '', artifacts: [] }),
+      execute: async () =>
+        ++executions === 3
+          ? { stdout: 'ran', stderr: '' }
+          : { ok: true, stdout: 'ran', stderr: '', artifacts: [] },
       stop: async () => undefined,
     }),
   };
@@ -338,11 +344,16 @@ const codeRunnerResults = async (): Promise<readonly string[]> => {
           toolCalls: [{ id: 't2', name: 'run_code', args: { code: 'print(2)' } }],
           stopReason: 'tool_use',
         },
+        {
+          content: '',
+          toolCalls: [{ id: 't3', name: 'run_code', args: { code: 'print(3)' } }],
+          stopReason: 'tool_use',
+        },
         { content: 'done', toolCalls: [], stopReason: 'stop' },
       ] as never,
     }),
     model: 'mock',
-    maxIterations: 4,
+    maxIterations: 5,
     artifacts: { store },
   })
     .system('s')
@@ -1419,13 +1430,17 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     module: 'src/core/codeRunnerTool.ts',
     surface: TOOL_RESULT,
     lifetimeBecause: "it is the return value of the tool's `execute` — a tool result outright",
-    drivenBy: ['test/core/code-staging.test.ts', 'test/artifacts/code-artifacts.test.ts'],
+    drivenBy: [
+      'test/core/code-staging.test.ts',
+      'test/artifacts/code-artifacts.test.ts',
+      'test/core/codeRunnerTool-unknown-outcome.test.ts',
+    ],
     // Both preamble arms. `paths` is the discriminator: only the STAGED arm
     // tells the model where its data landed, and every rewording of "here is
     // what went in" will still say it — whereas the two arms share the word
     // `staged`, the tool name and the argument name, so none of those can pin
-    // one arm against the other.
-    reaches: [/no artifact inputs were passed/, /\bpaths\b/],
+    // one arm against the other. The third marker is the unknown-outcome line.
+    reaches: [/no artifact inputs were passed/, /\bpaths\b/, /exit status unknown/],
     compose: codeRunnerResults,
   },
   {

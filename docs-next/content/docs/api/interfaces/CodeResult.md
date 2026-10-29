@@ -4,7 +4,7 @@ title: CodeResult
 
 # Interface: CodeResult
 
-Defined in: [src/provider-contract/types.ts:1235](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1235)
+Defined in: [src/provider-contract/types.ts:1381](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1381)
 
 What one execution produced.
 
@@ -14,7 +14,7 @@ What one execution produced.
 
 > `readonly` `optional` **artifacts?**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:1270](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1270)
+Defined in: [src/provider-contract/types.ts:1424](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1424)
 
 Files the run produced, described rather than inlined — the whole point is
  that big data does not enter the window. All fields beyond the original
@@ -52,17 +52,23 @@ Files the run produced, described rather than inlined — the whole point is
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1240](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1240)
+Defined in: [src/provider-contract/types.ts:1394](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1394)
 
 ***
 
-### ok
+### ok?
 
-> `readonly` **ok**: `boolean`
+> `readonly` `optional` **ok?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1237](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1237)
+Defined in: [src/provider-contract/types.ts:1391](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1391)
 
-Did the code run to completion without an error exit?
+Did the code run to completion without an error exit — as the BACKEND
+reported it?
+
+`true` or `false` only when the backend said so: an exit status, or its
+own error verdict. ABSENT when it reported neither — the outcome is
+unknown, and an absent `ok` is never success. (Before this was optional,
+`agentCoreCodeRunner` filled `true` from silence.)
 
 ***
 
@@ -70,7 +76,7 @@ Did the code run to completion without an error exit?
 
 > `readonly` **stderr**: `string`
 
-Defined in: [src/provider-contract/types.ts:1239](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1239)
+Defined in: [src/provider-contract/types.ts:1393](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1393)
 
 ***
 
@@ -78,34 +84,15 @@ Defined in: [src/provider-contract/types.ts:1239](https://github.com/footprintjs
 
 > `readonly` **stdout**: `string`
 
-Defined in: [src/provider-contract/types.ts:1238](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1238)
+Defined in: [src/provider-contract/types.ts:1392](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1392)
 
 ***
 
 ### truncated?
 
-> `readonly` `optional` **truncated?**: `object`
+> `readonly` `optional` **truncated?**: [`CodeTruncation`](/docs/api/interfaces/CodeTruncation)
 
-Defined in: [src/provider-contract/types.ts:1287](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1287)
+Defined in: [src/provider-contract/types.ts:1434](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1434)
 
-Present IFF output was cut, and then it says by how much.
-
-Load-bearing, not politeness. A runner exists so big data is computed
-outside the context window instead of pasted into it; a runner that
-quietly slices its own output to fit is the same bug wearing a different
-hat, and the model would go on to reason over a truncated table it was
-never told was truncated. An unstated slice is a silent success.
-
-#### ofChars?
-
-> `readonly` `optional` **ofChars?**: `number`
-
-The pre-truncation length, in characters, of whichever stream was cut.
-
-#### stderr?
-
-> `readonly` `optional` **stderr?**: `boolean`
-
-#### stdout?
-
-> `readonly` `optional` **stdout?**: `boolean`
+Present IFF output was cut — see [CodeTruncation](/docs/api/interfaces/CodeTruncation). An unstated
+ slice is a silent success.
