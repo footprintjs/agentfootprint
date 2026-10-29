@@ -410,7 +410,9 @@ export interface McpConnectionOptions {
    * let the SDK client refresh itself (`listChanged.tools` with `autoRefresh`,
    * which is on by default once `listChanged.tools` is given): set
    * `autoRefresh: false` and call `refresh()` from `onChanged`, or give
-   * `mcpClient` a connection of its own.
+   * `mcpClient` a connection of its own. A connection of its own still needs
+   * the SDK's automatic discovery off: no `listChanged.tools`, or
+   * `autoRefresh: false` on it.
    */
   readonly connection: McpConnection;
 
@@ -497,11 +499,13 @@ export interface McpClient {
    * `listTools` calls, the SDK client's automatic discovery (`listChanged.tools`
    * with `autoRefresh`, on by default once `listChanged.tools` is given), or any
    * other replacement of the SDK client's cache leave a tool handed out here
-   * believing the SDK still holds its checks — so neither its output checks nor
-   * its required-task refusal run, even with `jsonSchemaValidator`. The client
-   * the library builds (the `transport` and `sdk` arms) never lists by itself;
-   * on a client you pass as `connection`, set `autoRefresh: false` and call
-   * `refresh()` from `onChanged`, or give `mcpClient` a connection of its own.
+   * believing the SDK still holds its checks — so a call to it can bypass both
+   * checks, its output checks and its required-task refusal, even with
+   * `jsonSchemaValidator`. The client the library builds (the `transport` and
+   * `sdk` arms) never lists by itself; on a client you pass as `connection`,
+   * set `autoRefresh: false` and call `refresh()` from `onChanged`, or give
+   * `mcpClient` a connection of its own, which still needs the SDK's automatic
+   * discovery off (no `listChanged.tools`, or `autoRefresh: false` on it).
    */
   tools(): Promise<readonly Tool[]>;
 

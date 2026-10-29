@@ -321,16 +321,16 @@ Invariants:
 
 Tests that pin:
 
-- /Users/sanjay/github/footprintjs/agentfootprint/test/core/tools/byte-identity.test.ts — whole commitLog + servedAt(k) for 15 fixtures (references under test/core/tools/reference/); any unconditional new key, receipt field or chart node fails it
-- /Users/sanjay/github/footprintjs/agentfootprint/test/lib/time-travel/gap-sentences.test.ts — one real run per SERVED_GAPS entry and an assertion per claim its sentence makes; pins the closed gap set and the evicted-turn hash pairing
-- /Users/sanjay/github/footprintjs/agentfootprint/test/lib/injection-engine/userTurnProducers.test.ts — walks src for every `role: 'user'` construction site; fails on one not registered in saidByPerson.ts, not a person's words, and not request-only
-- /Users/sanjay/github/footprintjs/agentfootprint/test/modelFacingScan.test.ts + test/modelFacingSurfaces.test.ts — every model-facing composer needs a registered row with `lifetimeBecause`
-- /Users/sanjay/github/footprintjs/agentfootprint/test/core/agent-wrap-up.test.ts, test/core/agent-stopped-early.test.ts — the pre-known answer-call pattern (latch, withheld tools, one extra iteration)
-- /Users/sanjay/github/footprintjs/agentfootprint/test/core/agent/grounded-numbers.test.ts — the evidence gate's corpus/exempt behaviour and the recheck loop
-- /Users/sanjay/github/footprintjs/agentfootprint/test/core/window-last-tool-result.test.ts, test/core/agent-window-strategies.test.ts, test/core/window-turns.test.ts — window refusals, pins and strategy contract
-- /Users/sanjay/github/footprintjs/agentfootprint/test/skillGraphSelfCallGrouped.test.ts — the two chart shapes (flat vs dynamic-grouped) must tell the model the same thing; a ledger piece composed in callLLM must survive the grouped boundary's outputMapper
-- /Users/sanjay/github/footprintjs/agentfootprint-lens/src/core/served/verify* and servedGraphAt tests (lens repo) — 'verified' only when hashes agree; extra rebuilt rows are damage
-- /Users/sanjay/github/footprintjs/agentfootprint/bench/findings-context.mjs (`npm run bench:findings`) — today's baseline; reads history, not servedAt
+- test/core/tools/byte-identity.test.ts — whole commitLog + servedAt(k) for 15 fixtures (references under test/core/tools/reference/); any unconditional new key, receipt field or chart node fails it
+- test/lib/time-travel/gap-sentences.test.ts — one real run per SERVED_GAPS entry and an assertion per claim its sentence makes; pins the closed gap set and the evicted-turn hash pairing
+- test/lib/injection-engine/userTurnProducers.test.ts — walks src for every `role: 'user'` construction site; fails on one not registered in saidByPerson.ts, not a person's words, and not request-only
+- test/modelFacingScan.test.ts + test/modelFacingSurfaces.test.ts — every model-facing composer needs a registered row with `lifetimeBecause`
+- test/core/agent-wrap-up.test.ts, test/core/agent-stopped-early.test.ts — the pre-known answer-call pattern (latch, withheld tools, one extra iteration)
+- test/core/agent/grounded-numbers.test.ts — the evidence gate's corpus/exempt behaviour and the recheck loop
+- test/core/window-last-tool-result.test.ts, test/core/agent-window-strategies.test.ts, test/core/window-turns.test.ts — window refusals, pins and strategy contract
+- test/skillGraphSelfCallGrouped.test.ts — the two chart shapes (flat vs dynamic-grouped) must tell the model the same thing; a ledger piece composed in callLLM must survive the grouped boundary's outputMapper
+- the agentfootprint-lens repo: src/core/served/verify* and the servedGraphAt tests — 'verified' only when hashes agree; extra rebuilt rows are damage
+- bench/findings-context.mjs (`npm run bench:findings`) — today's baseline; reads history, not servedAt
 
 Open questions:
 

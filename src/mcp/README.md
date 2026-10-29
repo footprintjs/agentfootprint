@@ -124,13 +124,16 @@ same client. It cannot see any other listing, so it does not cover:
 - any other replacement of the SDK client's cache.
 
 Each of these replaces the SDK's checks while a tool the library handed out
-still believes the SDK holds them. That tool then runs neither its output checks
-nor its required-task refusal, even with a `jsonSchemaValidator`: the library
-leaves the call to the SDK. The client the library builds (the `transport` and
-`sdk` arms) never lists by itself. On a client you pass as `connection`, turn
-the SDK's automatic refresh off and route the server's list-changed notice
-through `refresh()` (example below), or give `mcpClient` a connection of its
-own. `listingKeepsChecks.limits.test.ts` pins this limit as it stands.
+still believes the SDK holds them. A call to that tool can then bypass both
+checks, its output checks and its required-task refusal, even with a
+`jsonSchemaValidator`: the library leaves the call to the SDK. The client the
+library builds (the `transport` and `sdk` arms) never lists by itself. On a
+client you pass as `connection`, turn the SDK's automatic refresh off and route
+the server's list-changed notice through `refresh()` (example below), or give
+`mcpClient` a connection of its own. A connection of its own still needs the
+SDK's automatic discovery off: give it no `listChanged.tools`, or set that
+entry's `autoRefresh: false`. `listingKeepsChecks.limits.test.ts` pins this
+limit as it stands.
 
 A failed list request counts too: the SDK caches an answer before it returns
 it, and caching can throw after the old checks are cleared. So a failed

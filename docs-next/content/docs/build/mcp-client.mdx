@@ -313,12 +313,14 @@ same client. It cannot see any other listing, so it does not cover:
   which is on by default once you configure `listChanged.tools`;
 - anything else that replaces the SDK client's cache.
 
-After one of these, a tool you already hold runs neither its output checks nor
-its required-task refusal, even if you passed `jsonSchemaValidator`. A client
-the library builds (`transport` or `sdk`) never lists by itself. For a client
-you pass as `connection`, turn the SDK's automatic refresh off and send the
-server's notice through `refresh()`, or give `mcpClient` a connection of its
-own:
+After one of these, a call to a tool you already hold can bypass both checks,
+its output checks and its required-task refusal, even if you passed
+`jsonSchemaValidator`. A client the library builds (`transport` or `sdk`) never
+lists by itself. For a client you pass as `connection`, turn the SDK's
+automatic refresh off and send the server's notice through `refresh()`, or give
+`mcpClient` a connection of its own. A connection of its own still needs the
+SDK's automatic discovery off: give it no `listChanged.tools`, or set that
+entry's `autoRefresh: false`, as here:
 
 ```ts
 const jsonSchemaValidator = new AjvJsonSchemaValidator();
