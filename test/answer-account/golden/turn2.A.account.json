@@ -3,7 +3,7 @@
  "shape": 1,
  "templates": {
   "set": "answer-account",
-  "version": 12
+  "version": 13
  },
  "run": {
   "value": {
@@ -1532,15 +1532,15 @@
      ]
     },
     {
-     "text": "The call found nothing.",
+     "text": "The call reported no matching results.",
      "parts": [
       {
-       "text": "The call found nothing."
+       "text": "The call reported no matching results."
       }
      ],
      "template": {
       "id": "howSure.outcome.nothing",
-      "version": 1
+      "version": 2
      },
      "vars": {
       "tool": {

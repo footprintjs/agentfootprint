@@ -114,7 +114,9 @@ describe('fixture A — the real run, with the app’s declarations', () => {
         'Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.',
         'model',
       ],
-      ['The call found nothing.', 'tool:get_array_inventory'],
+      // The tool's declaration, attributed as the standing line attributes it — never "found
+      // nothing", which reads as established absence (L-50).
+      ['The call reported no matching results.', 'tool:get_array_inventory'],
       [
         "The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included).",
         'library',

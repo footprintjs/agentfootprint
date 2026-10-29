@@ -24,7 +24,7 @@ How sure:
     • 1 call declared ground it did not check or can never cover.  ⟨howSure.reason.coverageGap@1 · library · recorded⟩
     • 1 call declared that nothing matched.  ⟨howSure.reason.declaredAbsent@1 · library · recorded⟩
   Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.  ⟨howSure.expected.direct@1 · model · recorded⟩
-  The call found nothing.  ⟨howSure.outcome.nothing@1 · tool:get_array_inventory · recorded⟩
+  The call reported no matching results.  ⟨howSure.outcome.nothing@2 · tool:get_array_inventory · recorded⟩
   The library looked up 1 value from the answer in what the tools returned and found it.  ⟨howSure.evidence.lookedUp@1 · library · recorded⟩
 Anything wrong:
   get_array_inventory says it did not check whether that name is a storage array.  ⟨signal.existenceNotChecked@1 · tool:get_array_inventory · recorded⟩

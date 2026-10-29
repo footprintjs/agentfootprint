@@ -1963,11 +1963,11 @@
   ],
   "source": "library"
  },
- "howSure.outcome.nothing@1": {
-  "text": "The call found nothing.",
+ "howSure.outcome.nothing@2": {
+  "text": "The call reported no matching results.",
   "parts": [
    {
-    "text": "The call found nothing."
+    "text": "The call reported no matching results."
    }
   ],
   "source": "tool:lookup_volumes"

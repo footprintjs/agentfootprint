@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 12;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 13;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -411,7 +411,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.expected.more': t(
     "…and {{count:n,'more call','more calls'}} the model declared an expectation for, not listed here.",
   ),
-  'howSure.outcome.nothing': t('The call found nothing.', 'tool'),
+  // v2, set 13: a declared absence is what the TOOL reported — the attribution the standing
+  // line uses ("{who} reported no matching results"); "found nothing" read as established
+  // absence. The voucher stays the tool's.
+  'howSure.outcome.nothing': t('The call reported no matching results.', 'tool', 2),
   'howSure.outcome.empty': t('The call returned an empty result.'),
   'howSure.evidence.lookedUp': t(
     "The library looked up {{count:lookedUp,'value','values'}} from the answer in what the tools returned and found {{allOf:lookedUp}}.",

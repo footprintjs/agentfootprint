@@ -237,3 +237,14 @@ Change a template's text → bump its `version` AND
 (`AF_ANSWER_ACCOUNT_GOLDEN=update npx vitest run test/answer-account`). The
 pinned digest fails a word change without a bump. English-only surfaces for the
 later locale map: the table itself, `joinAnd`'s ", " / " and ".
+
+**A declared absence is what the tool REPORTED.** "How sure" attributes a call's
+declared absence the way the standing line does ("{who} reported no matching
+results"): `howSure.outcome.nothing@2` reads "The call reported no matching
+results." (set 13), never "The call found nothing." A declaration is the tool's
+claim, vouched by the tool — whether the thing exists is not on the record, and
+"found nothing" reads as if it were. Fixture A's row, pinned in `turn2.A.txt`:
+
+```text
+  The call reported no matching results.  ⟨howSure.outcome.nothing@2 · tool:get_array_inventory · recorded⟩
+```
