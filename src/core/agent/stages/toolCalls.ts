@@ -166,6 +166,7 @@ import type {
 import type { InjectionRecord } from '../../../recorders/core/types.js';
 import type { MiddlewareDecision, ToolMiddleware } from '../middleware/types.js';
 import { runToolChain, runToolAfterChain, type ToolArgs } from '../../../tools/runChain.js';
+import { requestEvidenceFor } from '../../../tools/requestEvidence.js';
 import { recordDecisions } from '../middleware/ledger.js';
 import { ownsReservedArgument, splitFindings, type SplitFindings } from '../findings/reserved.js';
 import { carriesRules } from '../../../tools/declare.js';
@@ -3260,6 +3261,11 @@ export function buildToolCallsHandler(
             toolCallId: innerId,
             iteration: call.iteration,
           }),
+          ...requestEvidenceFor(
+            scope,
+            { toolName: name, toolCallId: innerId, iteration: call.iteration },
+            signal,
+          ),
         };
       },
     }),
@@ -4207,6 +4213,7 @@ export function buildToolCallsHandler(
         ...toolArtifacts(scope, toolName, toolCallId),
         ...(wantedMeta !== undefined && { wanted: wantedMeta }),
         ...toolProgress(scope, { toolName, toolCallId, iteration }),
+        ...requestEvidenceFor(scope, { toolName, toolCallId, iteration }, env.signal),
         ...sessionContext(scope, toolName, toolCallId),
         ...toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
       };
@@ -5617,6 +5624,11 @@ export function buildToolCallsHandler(
                 ...toolArtifacts(scope, tc.name, tc.id),
                 ...(wantedMeta !== undefined && { wanted: wantedMeta }),
                 ...toolProgress(scope, { toolName: tc.name, toolCallId: tc.id, iteration }),
+                ...requestEvidenceFor(
+                  scope,
+                  { toolName: tc.name, toolCallId: tc.id, iteration },
+                  env.signal,
+                ),
                 ...sessionContext(scope, tc.name, tc.id),
                 ...toolDispatchCtx(
                   scope,

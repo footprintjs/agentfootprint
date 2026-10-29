@@ -2414,6 +2414,168 @@ export interface ToolsCodeRunPayload {
   readonly shapeHash: string;
 }
 
+// ─── tools.request_attempts — an MCP request's retry series ────────────────
+
+/**
+ * What one attempt of an MCP request came to.
+ *
+ *   - `'answered'` — a response arrived and no retry rule refused it. It is
+ *     delivered as it came, WHATEVER its status: a 503 is `answered` with
+ *     `status: 503`. A response received is not an operation that succeeded,
+ *     so nothing here is called success; read `status`.
+ *   - `'refused'` — the server refused BEFORE running anything, in a way a
+ *     retry rule recognises (`kind`): HTTP 429, or AgentCore Runtime's
+ *     session-busy reply. The only outcome that is ever retried.
+ *   - `'failed'` — the request threw before an answer arrived (a dropped
+ *     connection, a DNS failure). Never retried: the server may have run it.
+ *   - `'timed-out'` — the call's deadline (`maxElapsedMs`) cut the request.
+ */
+export type ToolRequestAttemptOutcome = 'answered' | 'refused' | 'failed' | 'timed-out';
+
+/**
+ * How an MCP request ended: its last attempt's outcome — or `'cancelled'`, when
+ * the caller's signal (the run's, or the client's) ended it.
+ */
+export type ToolRequestOutcome = ToolRequestAttemptOutcome | 'cancelled';
+
+/**
+ * Why the request went on after an attempt, or ended with it.
+ *
+ *   - `'retryable'` — refused; another attempt follows after `waitMs`. The
+ *     only reason that is not an end.
+ *   - `'answered'` — answered; the response is delivered.
+ *   - `'exhausted'` — refused, and the request has made every attempt it may.
+ *   - `'wait-limit'` — refused, and the wait would pass the call's total
+ *     waiting budget (`maxWaitMs`). A stated `Retry-After` is never shortened
+ *     to fit: the refusal is delivered instead.
+ *   - `'no-time-left'` — refused, and the wait would pass the call's deadline;
+ *     or the deadline cut a request or a wait.
+ *   - `'not-replayable'` — refused, but the request's body cannot be sent twice.
+ *   - `'not-retryable'` — the attempt failed in a way this retry never
+ *     repeats: only a refusal made before the server ran anything is retried.
+ *   - `'cancelled'` — the caller's signal ended the request.
+ */
+export type ToolRequestReason =
+  | 'retryable'
+  | 'answered'
+  | 'exhausted'
+  | 'wait-limit'
+  | 'no-time-left'
+  | 'not-replayable'
+  | 'not-retryable'
+  | 'cancelled';
+
+/** The refusals a retry rule recognises: HTTP 429, and AgentCore Runtime's session-busy reply. */
+export type ToolRequestRefusalKind = 'throttle' | 'session-busy';
+
+/**
+ * footprintjs's failure categories (`AttemptCategory`) — the one fixed set
+ * every attempt record uses, so a saved request groups with every other.
+ */
+export type ToolRequestFailureCategory =
+  | 'timeout'
+  | 'rate-limited'
+  | 'server'
+  | 'network'
+  | 'auth'
+  | 'permanent'
+  | 'unknown';
+
+/**
+ * A failure as the record keeps it: a fixed sentence and a code. The thrown
+ * error's own message, name and fields are NEVER kept — a network or SDK
+ * error's text can carry a URL with a token in it, a host's internal name or
+ * a server's reply, and none of that is the library's to store.
+ */
+export interface ToolRequestError {
+  readonly message:
+    | 'The request failed before an answer arrived. Its error is not kept.'
+    | 'The call ran out of time before an answer arrived.';
+  /** The failure's category — the same word as `failure`. */
+  readonly code: ToolRequestFailureCategory;
+}
+
+/** One attempt of an MCP request, as its retry series recorded it. */
+export interface ToolRequestAttempt {
+  /** 1-based. */
+  readonly attempt: number;
+  readonly outcome: ToolRequestAttemptOutcome;
+  readonly reason: ToolRequestReason;
+  /** The response's HTTP status — present when one arrived (`answered`, `refused`). */
+  readonly status?: number;
+  /** Which refusal a retry rule recognised — `refused` only. */
+  readonly kind?: ToolRequestRefusalKind;
+  /**
+   * The failure's category (footprintjs's `AttemptCategory`) — absent for
+   * `answered`. Named `failure`, not `category`: that key belongs to a retired
+   * contract the redaction rule no longer treats as the library's own.
+   */
+  readonly failure?: ToolRequestFailureCategory;
+  /** The wait before the next attempt, in ms — present exactly when `reason` is `'retryable'`. */
+  readonly waitMs?: number;
+  /**
+   * The wait the server stated in `Retry-After`, in ms — when it stated one.
+   * Absent beside a `waitMs` means that wait was the library's own backoff.
+   */
+  readonly retryAfterMs?: number;
+  /** `failed` and `timed-out` only. */
+  readonly error?: ToolRequestError;
+}
+
+/** How an MCP request ended. */
+export interface ToolRequestEnd {
+  readonly outcome: ToolRequestOutcome;
+  readonly reason: ToolRequestReason;
+  /** The delivered response's HTTP status — `answered` and `refused`. */
+  readonly status?: number;
+  /** The refusal that was delivered — `refused` only. */
+  readonly kind?: ToolRequestRefusalKind;
+  /** The failure's category, as on an attempt. */
+  readonly failure?: ToolRequestFailureCategory;
+  /**
+   * `cancelled` and `timed-out`: what the request was doing when it was cut —
+   * an attempt in flight (`'request'`; the attempt after the last one listed),
+   * or a wait before asking again (`'wait'`).
+   */
+  readonly during?: 'request' | 'wait';
+  /** `failed` and `timed-out` only. */
+  readonly error?: ToolRequestError;
+}
+
+/**
+ * What one MCP request's retry series did: every attempt it made, why it went
+ * on or stopped after each, how long it waited, and how the request ended.
+ *
+ * Filed by `mcpClient`'s retry series for a call the agent dispatched, ONCE per
+ * request, when the request ends — and at the moment of a cancellation, so a
+ * run cancelled during a wait still carries it when it is saved. The framework
+ * stamps `toolCallId`, `toolName` and `iteration` from the dispatch, so two
+ * calls, or two runs, sharing one MCP connection never mix their attempts.
+ *
+ * ALLOW-LISTED, field by field: numbers, the library's own words, the
+ * endpoint label the app declared, or else the endpoint's origin. Never the
+ * URL's path, query or credentials, the call's arguments, the server's answer
+ * or an error's text.
+ *
+ * Only a transport `mcpClient` builds runs a series that files this; with
+ * retry off (`retryOnThrottle: false` on a plain transport) there is no series
+ * and no event.
+ */
+export interface ToolsRequestAttemptsPayload {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly iteration: number;
+  /** The `endpointLabel` the app declared for this endpoint, when it declared one. */
+  readonly endpoint?: string;
+  /** Otherwise the endpoint's ORIGIN — scheme, host and port, nothing else. */
+  readonly origin?: string;
+  /** The attempts, in order — at most 100. */
+  readonly attempts: readonly ToolRequestAttempt[];
+  /** Attempts made past the first 100, counted and not listed. `0` when every attempt is listed. */
+  readonly omitted: number;
+  readonly end: ToolRequestEnd;
+}
+
 export interface ToolCoverageDeclaredPayload {
   readonly toolName: string;
   readonly toolCallId: string;

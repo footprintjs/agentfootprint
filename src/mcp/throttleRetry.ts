@@ -46,10 +46,13 @@
  *
  * ── The loop is footprintjs's attempt runner, one series per call ────────────
  * Each call runs ONE `attempt()` series (footprintjs, used as it ships). Its
- * runner makes an attempt record per try; they stay inside this module for
- * now — only `onRetry`, before each wait, reaches a caller. An attempt sends
- * the request once, and an attempt that got a RESPONSE is not an operation
- * that succeeded: a 503 is delivered as the answer it was, never retried.
+ * runner makes an attempt record per try. `onRetry`, before each wait, is what
+ * reaches a caller; the RUN gets the records: for a call the agent dispatched,
+ * the series files every attempt and how the request ended into that call's
+ * run (`seriesEvidence.ts`, through the connection's `requestLedger.ts`). An
+ * attempt sends the request once, and an attempt that got a RESPONSE is not an
+ * operation that succeeded: a 503 is delivered as the answer it was, never
+ * retried — and written down as `answered` with its status, never success.
  * A response a rule's decision recognises is thrown as a refusal that names
  * its kind, and the policy's `retryOn` accepts those refusals and nothing
  * else — so a 5xx, a dropped connection or a timeout ends the series on the
@@ -94,6 +97,14 @@ import {
 
 import { abortErrorOf, eitherSignal, linkedController } from '../lib/abort.js';
 import { exponentialBackoff, statedWaitFirst, type BackoffFunction } from './backoff.js';
+import type { RequestLedger } from './requestLedger.js';
+import {
+  SeriesEvidence,
+  type AttemptSeen,
+  type DeclineReason,
+  type RequestWhere,
+  type SeriesPhase,
+} from './seriesEvidence.js';
 
 /**
  * The fetch shape the MCP SDK's `fetch` hook uses — deliberately NARROWER
@@ -201,21 +212,24 @@ export interface ThrottleRetryOptions {
   /**
    * A name for this endpoint, declared by you, that `onRetry` reports as
    * `endpoint` — so a log line can say which server was retried without
-   * carrying any part of its URL past the origin. 1–128 characters, none of
-   * them control characters. Absent, `onRetry` has no `endpoint` field; the
-   * library never makes one up from the URL.
+   * carrying any part of its URL past the origin. A dispatched call's saved
+   * attempts name the endpoint by it too, in place of the origin. 1–128
+   * characters, none of them control characters. Absent, `onRetry` has no
+   * `endpoint` field; the library never makes one up from the URL.
    */
   readonly endpointLabel?: string;
   /**
-   * A notification before each wait — and, today, the ONLY retry report a
-   * caller gets. It is told the refusal's kind, the attempt about to start,
-   * the wait, the endpoint's origin and the label you declared for it
-   * (`endpointLabel`) — never the URL's path, the request's
-   * arguments or the server's answer. The series' final outcome and the
-   * attempt records footprintjs's runner makes for each try are NOT passed on
-   * yet. The contract matches what `withRetry` and `withCredentialRetry`
-   * already use: a decorator at a transport boundary reports to its consumer,
-   * and emits no events of its own.
+   * A notification before each wait. It is told the refusal's kind, the
+   * attempt about to start, the wait, the endpoint's origin and the label you
+   * declared for it (`endpointLabel`) — never the URL's path, the request's
+   * arguments or the server's answer. It is not told how the call ended. The
+   * contract matches what `withRetry` and `withCredentialRetry` already use: a
+   * decorator at a transport boundary reports to its consumer.
+   *
+   * What the RUN keeps is separate and needs no hook: for a call the agent
+   * dispatched, the series files every attempt — its outcome, its reason, its
+   * wait — and how the request ended, as `agentfootprint.tools.request_attempts`
+   * (the label is reported there as `endpoint`).
    *
    * A retried call is not invisible without this: the wait lands inside the
    * tool's `stream.tool_end` `durationMs`, and an exhausted retry still
@@ -411,44 +425,79 @@ export function retryingFetch(
 ): ThrottleFetch | undefined {
   const rule = retryRule('throttle', throttled, config, THROTTLE_RETRY_DEFAULTS, 'retryOnThrottle');
   if (rule === undefined) return inner;
-  const join = inner === undefined ? undefined : JOINS.get(inner);
-  return join !== undefined ? join(rule) : retryingFetchFor(inner ?? platformFetch, [rule]);
+  const rebuild = inner === undefined ? undefined : JOINS.get(inner);
+  return rebuild !== undefined
+    ? rebuild({ rule })
+    : retryingFetchFor(inner ?? platformFetch, { rules: [rule] });
+}
+
+/**
+ * @internal What one call's series is built from: the rules it asks, in order,
+ * and the connection's ledger — which tool call each request belongs to, so the
+ * series can file its attempts into that call's run (`requestLedger.ts`).
+ */
+export interface SeriesSpec {
+  readonly rules: readonly RetryRule[];
+  readonly ledger?: RequestLedger;
+}
+
+/** @internal What a joinable fetch's series can be rebuilt with: one more rule, or a ledger. */
+export type SeriesJoin = { readonly rule: RetryRule } | { readonly ledger: RequestLedger };
+
+/** @internal `spec` with `join` in it. */
+export function joinedSpec(spec: SeriesSpec, join: SeriesJoin): SeriesSpec {
+  return 'rule' in join
+    ? { ...spec, rules: [...spec.rules, join.rule] }
+    : { ...spec, ledger: join.ledger };
 }
 
 /**
  * Fetches that run their retries in one series, each with the way to rebuild
- * it with one more rule. Module-private: only `joinableRetry` adds to it, so a
- * caller cannot make a fetch claim a series it does not run.
+ * it with one more rule or a ledger. Module-private: only `joinableRetry` adds
+ * to it, so a caller cannot make a fetch claim a series it does not run.
  */
-const JOINS = new WeakMap<ThrottleFetch, (rule: RetryRule) => ThrottleFetch>();
+const JOINS = new WeakMap<ThrottleFetch, (join: SeriesJoin) => ThrottleFetch>();
 
 /**
  * @internal Declare that `fetch` runs its retries in ONE series, and how to
- * rebuild it with one more rule in that same series. `retryingFetch` joins such
- * a fetch instead of wrapping it. A transport whose public fetch wraps its
- * series (a session applied around it, its answers rewritten after it) uses
- * this so the rule lands INSIDE that wrapping.
+ * rebuild it with one more rule — or with a ledger — in that same series.
+ * `retryingFetch` joins such a fetch instead of wrapping it. A transport whose
+ * public fetch wraps its series (a session applied around it, its answers
+ * rewritten after it) uses this so the rule lands INSIDE that wrapping.
  */
 export function joinableRetry(
   fetch: ThrottleFetch,
-  join: (rule: RetryRule) => ThrottleFetch,
+  rebuild: (join: SeriesJoin) => ThrottleFetch,
 ): ThrottleFetch {
-  JOINS.set(fetch, join);
+  JOINS.set(fetch, rebuild);
   return fetch;
 }
 
 /**
- * @internal The one series per call over `inner`, asking `rules` in order —
+ * @internal `fetch` rebuilt so its series files each request's attempts through
+ * `ledger` — or `undefined` when `fetch` runs no series (retry off), so there
+ * is nothing to file and the caller keeps `fetch` as it is.
+ */
+export function ledgeredFetch(
+  fetch: ThrottleFetch,
+  ledger: RequestLedger,
+): ThrottleFetch | undefined {
+  return JOINS.get(fetch)?.({ ledger });
+}
+
+/**
+ * @internal The one series per call over `inner`, asking `spec.rules` in order —
  * `inner` itself when there are none. The first rule holds the call's budget;
  * see the module note. The result is joinable.
  */
-export function retryingFetchFor(inner: ThrottleFetch, rules: readonly RetryRule[]): ThrottleFetch {
+export function retryingFetchFor(inner: ThrottleFetch, spec: SeriesSpec): ThrottleFetch {
+  const { rules, ledger } = spec;
   const [owner] = rules;
   if (owner === undefined) return inner;
   const bound = rules.map((rule) => boundRule(rule, owner));
   return joinableRetry(
-    (input, init) => new Series(bound, input, init).run(inner),
-    (rule) => retryingFetchFor(inner, [...rules, rule]),
+    (input, init) => new Series(bound, input, init, ledger).run(inner),
+    (join) => retryingFetchFor(inner, joinedSpec(spec, join)),
   );
 }
 
@@ -500,37 +549,79 @@ const SERIES_TARGET = 'mcp-request';
 
 /**
  * One call: one `attempt()` series, and what its policy's functions share while
- * it runs — the waiting so far, and the latest refusal.
+ * it runs — the waiting so far, the latest refusal, and, for a call the agent
+ * dispatched, where its attempts are filed.
  */
 class Series {
   private readonly owner: BoundRule;
   private readonly startedAt = Date.now();
   private readonly deadline: number | undefined;
+  /** The transport's own signal — what the request carried before this series existed. */
   private readonly signal: AbortSignal | undefined;
+  /**
+   * What ends the series as a CANCELLATION: the transport's signal, or the
+   * call's (the run's, the client's) when a dispatched call sent this request.
+   */
+  private readonly cancel: AbortSignal | undefined;
+  /** Whether a request in flight is cut by more than the transport's own signal. */
+  private readonly cutsInFlight: boolean;
+  /** Where this request's attempts are filed — a call the agent dispatched. */
+  private readonly evidence: SeriesEvidence | undefined;
   private readonly replayable: boolean;
   private attemptNo = 0;
   private waitedMs = 0;
   private plannedWaitMs = 0;
   private latest: Refused | undefined;
+  /** The current attempt's response status, before the runner records it. */
+  private seen: { readonly attempt: number; readonly status: number } | undefined;
+  /** Why `retryOn` last said no. */
+  private declined: DeclineReason | undefined;
+  /** Sending, or waiting to send again — what a cancellation cuts. */
+  private phase: SeriesPhase = 'request';
 
   constructor(
     private readonly rules: readonly BoundRule[],
     private readonly input: string | URL,
     private readonly init: RequestInit | undefined,
+    ledger?: RequestLedger,
   ) {
     this.owner = rules[0] as BoundRule;
     this.signal = init?.signal ?? undefined;
     this.replayable = isReplayable(input, init);
     const { maxElapsedMs } = this.owner;
     this.deadline = Number.isFinite(maxElapsedMs) ? this.startedAt + maxElapsedMs : undefined;
+    const ticket = ledger?.claim(init?.body);
+    this.cancel = eitherSignal(this.signal, ticket?.signal);
+    this.cutsInFlight = this.deadline !== undefined || ticket?.signal !== undefined;
+    this.evidence =
+      ticket === undefined ? undefined : new SeriesEvidence(ticket.sink, whereOf(rules, input));
   }
 
   async run(inner: ThrottleFetch): Promise<Response> {
+    const unwatch = this.watchCancel();
     try {
-      return await attempt((t) => this.send(inner, t), this.policy(), this.options());
+      const response = await attempt((t) => this.send(inner, t), this.policy(), this.options());
+      this.evidence?.ended(this.phase);
+      return response;
     } catch (error) {
       return this.settle(error);
+    } finally {
+      unwatch();
     }
+  }
+
+  /**
+   * File a cancellation the MOMENT it lands. A cancelled run stops waiting for
+   * its stage at once; a record filed when this series later unwinds would land
+   * after the run was saved. The runner records nothing for a wait it was cut
+   * out of, so this is also the only place a cut wait is written down.
+   */
+  private watchCancel(): () => void {
+    const { cancel, evidence } = this;
+    if (cancel === undefined || evidence === undefined || cancel.aborted) return () => undefined;
+    const onAbort = (): void => evidence.cancelled(this.phase);
+    cancel.addEventListener('abort', onAbort, { once: true });
+    return () => cancel.removeEventListener('abort', onAbort);
   }
 
   /**
@@ -552,7 +643,7 @@ class Series {
   private options(): AttemptOptions {
     return {
       target: SERIES_TARGET,
-      ...(this.signal !== undefined && { signal: this.signal }),
+      ...(this.cancel !== undefined && { signal: this.cancel }),
       ...(this.deadline !== undefined && { deadline: this.deadline }),
       onAttempt: (record) => this.report(record),
     };
@@ -562,25 +653,29 @@ class Series {
    * One attempt: the request, sent once, and its answer classified. A refusal
    * a rule recognises is thrown for the runner to decide on.
    *
-   * With no deadline of ours the request carries the caller's own `init`,
-   * exactly as before this series existed. Under a deadline the runner can cut
-   * the attempt before it is ANSWERED — and an answer is not in until it has
-   * been classified, which can mean reading its body (a session-busy reply is
-   * JSON in a 200). So the cut stays connected through the classification: a
-   * stall in the request or in that body stops the request and releases the
-   * body. Only then does it let go: an answer handed back to the caller keeps
+   * With no deadline of ours and no call to answer to, the request carries the
+   * caller's own `init`, exactly as before this series existed. Otherwise the
+   * runner can cut the attempt before it is ANSWERED — the deadline, or the
+   * dispatched call's cancellation — and an answer is not in until it has been
+   * classified, which can mean reading its body (a session-busy reply is JSON
+   * in a 200). So the cut stays connected through the classification: a stall
+   * in the request or in that body stops the request and releases the body.
+   * Only then does it let go: an answer handed back to the caller keeps
    * streaming for as long as the caller's own signal allows.
    */
   private async send(inner: ThrottleFetch, t: AttemptContext): Promise<Response> {
     this.attemptNo = t.attempt;
+    this.phase = 'request';
+    this.seen = undefined;
     // The previous attempt's refusal will not be delivered: release its body, so
     // a keep-alive connection is not pinned by an unread stream.
     this.supersede();
-    const cut = this.deadline === undefined ? undefined : linkedController(t.signal);
+    const cut = this.cutsInFlight ? linkedController(t.signal) : undefined;
     const signal = eitherSignal(this.signal, cut?.controller.signal);
     try {
       const init = cut === undefined ? this.init : { ...this.init, ...(signal && { signal }) };
       const response = await inner(this.input, init);
+      this.seen = { attempt: t.attempt, status: response.status };
       const refused = await this.recognise(response, signal);
       if (refused === undefined) return response;
       this.latest = refused;
@@ -614,45 +709,60 @@ class Series {
 
   /**
    * The runner's `retryOn`: is this attempt's error a refusal worth another
-   * attempt? Plans the wait as it answers, because the ceilings need its length.
+   * attempt? Plans the wait as it answers, because the ceilings need its length,
+   * and keeps why it said no, for the record.
    */
   private retryOn(error: unknown): boolean {
     this.plannedWaitMs = 0;
     const refused = this.latest;
     // The license: only a refusal made before the server ran anything. A 5xx, a
     // dropped connection or a timeout may be the record of work that ran.
-    if (refused === undefined || error !== refused.refusal) return false;
+    if (refused === undefined || error !== refused.refusal) return this.decline('not-retryable');
     // A body we cannot send twice makes a retry a different request. Rare for
     // MCP (JSON strings), but silently replaying half a stream would be worse
     // than surfacing the refusal.
-    if (!this.replayable) return false;
+    if (!this.replayable) return this.decline('not-replayable');
     const { rule } = refused;
-    if (this.attemptNo >= rule.maxAttempts) return false;
+    if (this.attemptNo >= rule.maxAttempts) return this.decline('exhausted');
     // The stated wait whole, else the schedule under `maxDelayMs`.
     const waitMs = rule.backoffMs(this.attemptNo, error);
     // The rail on Retry-After: never let a server talk us into a wait that
     // breaks the caller's budget. It stops the series; it never shortens the
     // wait. Past the deadline, the runner stops it the same way (`no-time-left`).
-    if (this.waitedMs + waitMs > rule.maxWaitMs) return false;
+    if (this.waitedMs + waitMs > rule.maxWaitMs) return this.decline('wait-limit');
     // A joined rule's own, sooner deadline. The owner's is the runner's to hold.
     if (
       rule.maxElapsedMs < this.owner.maxElapsedMs &&
       this.elapsedAfter(waitMs) > rule.maxElapsedMs
     ) {
-      return false;
+      return this.decline('no-time-left');
     }
+    this.declined = undefined;
     this.plannedWaitMs = waitMs;
     return true;
+  }
+
+  private decline(reason: DeclineReason): false {
+    this.declined = reason;
+    return false;
   }
 
   private elapsedAfter(waitMs: number): number {
     return Date.now() - this.startedAt + waitMs;
   }
 
-  /** Each record as the runner ends an attempt: a retry is counted and reported to its rule. */
+  /**
+   * Each record as the runner ends an attempt: written down for the call's run
+   * first, then — for a retry — counted and reported to its rule. The record
+   * goes first because `onRetry` is the caller's, and a throw from it must not
+   * cost the run its evidence.
+   */
   private report(record: AttemptRecord): void {
     const refused = this.latest;
-    if (record.next !== 'retry' || refused === undefined) return;
+    this.evidence?.attempt(record, this.seenOf(record, refused), this.declined);
+    if (record.next !== 'retry') return;
+    this.phase = 'wait';
+    if (refused === undefined) return;
     const waitMs = record.delayMs ?? 0;
     this.waitedMs += waitMs;
     const { rule, verdict } = refused;
@@ -667,17 +777,37 @@ class Series {
     });
   }
 
+  /** What this series saw of the attempt `record` ends: its status, and the refusal it threw. */
+  private seenOf(record: AttemptRecord, refused: Refused | undefined): AttemptSeen | undefined {
+    const seen = this.seen;
+    if (seen === undefined || seen.attempt !== record.attempt) return undefined;
+    // `latest` is cleared as each attempt starts, so a refusal here is this attempt's.
+    const { kind } = refused?.rule ?? {};
+    const retryAfterMs = refused?.verdict.retryAfterMs;
+    return {
+      status: seen.status,
+      ...(kind !== undefined && {
+        refusal: { kind, ...(retryAfterMs !== undefined && { retryAfterMs }) },
+      }),
+    };
+  }
+
   /** How the call ends when the series did not answer. */
   private settle(error: unknown): Response {
     // The caller's cancellation wins: the call ends with their reason, and the
     // refusal nobody is waiting for any more is released.
-    if (this.signal?.aborted) {
+    if (this.cancel?.aborted) {
+      this.evidence?.cancelled(this.phase);
       this.supersede();
-      throw abortErrorOf(this.signal);
+      throw abortErrorOf(this.cancel);
     }
     // The series ended on a refusal — attempts spent, a ceiling reached, no
     // time left. The server's answer is delivered as it sent it.
-    if (this.latest !== undefined && error === this.latest.refusal) return this.latest.response;
+    if (this.latest !== undefined && error === this.latest.refusal) {
+      this.evidence?.ended(this.phase);
+      return this.latest.response;
+    }
+    this.evidence?.ended(this.phase, this.deadline !== undefined && Date.now() >= this.deadline);
     throw error;
   }
 
@@ -685,6 +815,14 @@ class Series {
     if (this.latest !== undefined) discardBody(this.latest.response);
     this.latest = undefined;
   }
+}
+
+/** Where a series' requests go, as its evidence may say it: a label the app declared, or the origin. */
+function whereOf(rules: readonly BoundRule[], input: string | URL): RequestWhere {
+  const label = rules.find((rule) => rule.endpointLabel !== undefined)?.endpointLabel;
+  if (label !== undefined) return { endpoint: label };
+  const origin = originOf(input);
+  return origin === '' ? {} : { origin };
 }
 
 /**

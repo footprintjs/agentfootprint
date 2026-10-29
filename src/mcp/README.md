@@ -53,6 +53,8 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a
   transport fetch that already retries is joined, never wrapped.
+- `requestLedger.ts`, `seriesEvidence.ts` — which dispatched call a request
+  belongs to, and that request's series written down for the call's run.
 - `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
   footprintjs's own helpers (same names and laws) until a release ships them.
 - `toolExtras.ts` — our own declarations, carried over MCP.
@@ -62,6 +64,34 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
   `answerFromElicitation`); a time range travels as two `date-time` properties.
 - `connectionRefusals.ts`, `sdkLoadFailure.ts` — the two refusals, authored once.
 - `types.ts`, `index.ts`.
+
+## A retried call is in the run that made it
+
+The retry series is the one retry owner, and it runs inside the transport's
+`fetch` — built before any run, handed only a serialized body. A call the agent
+dispatched still gets its request's attempts in its own run: the dispatcher puts
+an internal port on the call's context (`tools/requestEvidence.ts`), the MCP tool
+keys a ticket by the request's params OBJECT, the watched transport binds it to
+the JSON-RPC id the SDK assigned, and the series claims it from its own body.
+Identity at every hop, never content: two calls with the same arguments, or two
+runs on one client, cannot claim each other's request, and nothing is added to
+the wire. The series files ONE `agentfootprint.tools.request_attempts` when the
+request ends — and, for a cancellation, the moment the run's signal fires.
+
+```ts
+// what a saved run gives back for a call throttled once, then answered
+{ toolCallId: 'tc-1', toolName: 'search_tickets', iteration: 1, endpoint: 'tickets-gateway',
+  attempts: [
+    { attempt: 1, outcome: 'refused', reason: 'retryable', status: 429, kind: 'throttle',
+      failure: 'rate-limited', waitMs: 1000, retryAfterMs: 1000 },
+    { attempt: 2, outcome: 'answered', reason: 'answered', status: 200 } ],
+  omitted: 0,
+  end: { outcome: 'answered', reason: 'answered', status: 200 } }
+```
+
+A response received is `answered` with its status — a 503 is never success.
+A row holds numbers and the library's own words; a failure is a fixed sentence
+and its category, never the thrown error's text. See `seriesEvidence.ts`.
 
 ## Structured results for execution adapters
 

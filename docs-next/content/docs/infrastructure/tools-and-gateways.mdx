@@ -209,12 +209,60 @@ wait. It gets the refusal's `kind`, the attempt about to start, the wait, the
 endpoint's origin (scheme, host and port), and, if you declared one, your
 `endpointLabel` as `endpoint`. It never gets the URL's path, user info, query or
 fragment, the call's arguments or the server's answer. It is not told how the
-call ended.
+call ended; the run keeps that, below.
 
 A transport that retries a refusal of its own — an MCP server hosted on
 AgentCore Runtime — gets one retry per call, not two: the 429 retry joins the
 transport's, so they share one attempt count and one deadline. See
 [MCP servers hosted on Runtime](doc:agentcore-adapters).
+
+### A retried call is in the saved run
+
+When the agent dispatches a tool from `mcpClient`, the call's retry series files
+one `agentfootprint.tools.request_attempts` event into that run when the request
+ends. It rides `recordRun` recordings like every other event, so a run saved to
+disk and read back still says what each call's retries did:
+
+| Field | What it holds |
+|---|---|
+| `attempts` | Each attempt, in order: its `outcome`, its `reason`, the `status` of a response, the refusal's `kind`, the `failure` category, the `waitMs` before the next attempt and any `retryAfterMs` the server stated. At most 100. |
+| `omitted` | Attempts past the first 100, counted rather than listed. |
+| `end` | How the request ended, with `during: 'wait'` or `'request'` when it was cancelled or ran out of time. |
+| `endpoint` or `origin` | Your `endpointLabel`, or else the endpoint's origin (scheme, host and port). |
+
+An attempt's `outcome` is `answered`, `refused`, `failed` or `timed-out`. A
+response received is `answered` whatever its status: a 503 is `answered` with
+`status: 503`, never a success, and it is still not retried. Its `reason` says
+why the series went on or stopped after it — `retryable` (the only one that is
+not an end), `answered`, `exhausted`, `wait-limit`, `no-time-left`,
+`not-replayable` or `not-retryable`.
+
+The run's cancellation ends the call's retry series too, a wait included, and
+the series files `cancelled` the moment it lands — so a run the person
+abandoned during a 30-second `Retry-After` is saved with that wait and
+`end: { outcome: 'cancelled', during: 'wait' }`. Two calls, or two runs,
+sharing one client never mix their attempts: the framework stamps each record
+with the call it belongs to.
+
+```ts
+const recorder = recordRun(agent);
+await agent.run({ message });
+const saved = JSON.parse(JSON.stringify(recorder.toRecording()));
+
+for (const event of saved.events) {
+  if (event.type !== 'agentfootprint.tools.request_attempts') continue;
+  const { toolCallId, attempts, omitted, end } = event.payload;
+  // e.g. 'tc-1' · refused 429 (waited 1000 ms), answered 200 · answered
+}
+```
+
+The record holds allow-listed metadata only: numbers, the library's own words,
+and the label or the origin. It never holds the URL's path or query, the call's
+arguments, the server's answer or a thrown error's text — a failure is a fixed
+sentence and its category. Under a run's redaction policy the label and the
+origin are served as the placeholder. A call made outside an agent run, a
+client built on your own `connection`, and a transport with retry off file
+nothing.
 
 ## Axis 2 — the provider: what the model is *shown*
 
