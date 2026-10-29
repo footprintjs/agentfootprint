@@ -87,6 +87,14 @@
  *     `rawOutput`)          → `'[N chars]'` (messages can echo values)
  *   - free-form Records (`questionPayload`, `resumeInput`, risk/eval
  *     `evidence`, memory `scoreEvidence`) → `'[keys: …]'`
+ *   - a typed answer's limits and negatives on `turn_end` (`answerCoverage`,
+ *     `answerNegatives`) → the same shape, every sentence and value a
+ *     `'[N chars]'` marker: a coverage item's `what` / `why` / `short`, a
+ *     declared period's instants, an in-progress item's prose, an assumed
+ *     `value`, a negative's `statement` and `about`. The tool and argument
+ *     names, call ids, counts, kinds, codes and verdicts stay; a field the
+ *     shape does not name is a marker too, so one added later is bounded
+ *     until it is classified
  *
  * Everything else is embedded as the registry payload (sanitized:
  * strings capped at 256 chars, lists at 32 items, cycles broken) —
@@ -147,11 +155,20 @@
  * ```
  */
 
+import type { RuntimeNegativeRow } from '../../core/agent/negativeClaims/delivery.js';
+import type {
+  AgentTurnEndPayload,
+  AnswerNegativesPayload,
+  CoverageItemPayload,
+  DeliveredNegative,
+} from '../../events/payloads.js';
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { canonicalJson, CANONICAL_JSON_VERSION } from '../../lib/canonicalJson.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { libraryVersion } from '../../lib/libraryVersion.js';
 import { isErrorValue, wireError } from '../../lib/wireJson.js';
+import type { AnswerCoverage, AnswerInProgress } from '../../semantics/coverage/answer.js';
+import type { InProgressItem } from '../../semantics/coverage/types.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 // ─── Public types ─────────────────────────────────────────────────────
@@ -371,6 +388,156 @@ function typeofOf(value: unknown): string {
   return value === null ? 'null' : typeof value;
 }
 
+// ─── Shapes that hold the record's own words beside content ──────────
+
+/** How the bounded mode writes one value. */
+type BoundRule = (value: unknown) => unknown;
+
+/** The record's own words (ids, names, counts, kinds, codes): kept, sanitized. */
+const kept: BoundRule = (value) => sanitizeJson(value);
+
+/**
+ * An object of a known shape, every field ruled (exhaustive by type, so a field
+ * added to `T` does not compile until it is). A field the rules do not name is
+ * a marker: whatever the shape gains at runtime is bounded until someone decides
+ * it is the record's own words. Anything but an object is a marker too.
+ */
+function shapeOf<T>(rules: { readonly [K in keyof T]-?: BoundRule }): BoundRule {
+  const byField = rules as Readonly<Record<string, BoundRule>>;
+  return (value) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return charsMarker(value);
+    }
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry === undefined) continue; // absent, as JSON has it
+      const rule = Object.hasOwn(byField, key) ? byField[key] : undefined;
+      const bounded = (rule ?? charsMarker)(entry);
+      if (bounded !== undefined) out[key] = bounded;
+    }
+    return out;
+  };
+}
+
+/** A list of one shape: each entry by `rule`, capped like every list (`sanitizeJson`). */
+function listOf(rule: BoundRule): BoundRule {
+  return (value) => {
+    if (!Array.isArray(value)) return charsMarker(value);
+    const out: unknown[] = [];
+    for (let i = 0; i < Math.min(value.length, MAX_LIST_ITEMS); i++) {
+      out.push(rule(value[i]) ?? null);
+    }
+    if (value.length > MAX_LIST_ITEMS) out.push(`…+${value.length - MAX_LIST_ITEMS} more`);
+    return out;
+  };
+}
+
+/** `turn_end.answerCoverage` — what the payload type declares, and what the runtime value carries. */
+type TurnEndCoverage = NonNullable<AgentTurnEndPayload['answerCoverage']> & AnswerCoverage;
+type CoveragePeriod = NonNullable<TurnEndCoverage['periods']>[number];
+type AssumedValue = NonNullable<TurnEndCoverage['assumed']>[number];
+/** One negative check row — the payload's fields and the runtime row's (`staleSince`). */
+type NegativeCheckRow = AnswerNegativesPayload['checks'][number] & RuntimeNegativeRow;
+
+/** One coverage item: the tool author's prose (`what`, `why`, `short`), and its `kind`. */
+const boundCoverageItem = shapeOf<CoverageItemPayload>({
+  what: charsMarker,
+  why: charsMarker,
+  short: charsMarker,
+  kind: kept,
+});
+
+/** A declared window: both instants are the tool's own values. */
+const boundInstants = shapeOf<{ readonly from: string; readonly to: string }>({
+  from: charsMarker,
+  to: charsMarker,
+});
+
+/**
+ * A typed answer's limits: the three lists, the declared periods, what a read
+ * found still running and the values an `assume` rule filled. Every sentence
+ * and value is a marker; the tool and argument NAMES, the call ids, counts,
+ * kinds and the library's `'unknown'` stay.
+ */
+const boundAnswerCoverage = shapeOf<TurnEndCoverage>({
+  checked: listOf(boundCoverageItem),
+  notChecked: listOf(boundCoverageItem),
+  cannotCover: listOf(boundCoverageItem),
+  periods: listOf(
+    shapeOf<CoveragePeriod>({
+      toolName: kept,
+      toolCallId: kept,
+      queried: boundInstants,
+      // `'unknown'` is the library's word: the tool said it cannot vouch for the store.
+      held: (value) => (value === 'unknown' ? value : boundInstants(value)),
+      readAt: charsMarker,
+    }),
+  ),
+  inProgress: listOf(
+    shapeOf<AnswerInProgress>({
+      toolName: kept,
+      toolCallId: kept,
+      items: listOf(
+        shapeOf<InProgressItem>({
+          what: charsMarker,
+          why: charsMarker,
+          short: charsMarker,
+          count: kept,
+        }),
+      ),
+    }),
+  ),
+  assumed: listOf(
+    shapeOf<AssumedValue>({
+      toolName: kept,
+      argument: kept,
+      value: charsMarker,
+      hidden: kept,
+    }),
+  ),
+});
+
+/**
+ * A typed answer's negatives: each statement and the population it is about
+ * are markers; the answer field's declared name, the codes, verdicts, ids,
+ * tool names and counts stay.
+ */
+const boundAnswerNegatives = shapeOf<AnswerNegativesPayload>({
+  field: kept,
+  version: kept,
+  delivery: kept,
+  claims: listOf(
+    shapeOf<DeliveredNegative>({
+      kind: kept,
+      about: charsMarker,
+      restsOn: kept,
+      statement: charsMarker,
+      delivery: kept,
+      version: kept,
+    }),
+  ),
+  checks: listOf(
+    shapeOf<NegativeCheckRow>({
+      id: kept,
+      path: kept,
+      index: kept,
+      kind: kept,
+      notes: kept,
+      code: kept,
+      disposition: kept,
+      tools: kept,
+      results: kept,
+      staleSince: kept,
+    }),
+  ),
+  coverage: listOf(
+    shapeOf<AnswerNegativesPayload['coverage'][number]>({ tool: kept, checked: kept }),
+  ),
+  actions: listOf(
+    shapeOf<AnswerNegativesPayload['actions'][number]>({ tool: kept, outcome: kept }),
+  ),
+});
+
 /**
  * Content-bearing fields per event type → bounded replacement.
  * Only fields that can echo raw runtime values appear here; everything
@@ -381,7 +548,14 @@ const BOUND_FIELDS: Readonly<
   Record<string, Readonly<Record<string, (value: unknown) => unknown>>>
 > = {
   'agentfootprint.agent.turn_start': { userPrompt: charsMarker },
-  'agentfootprint.agent.turn_end': { finalContent: charsMarker },
+  // A typed answer's limits and negatives hold tool-written sentences, assumed
+  // values and the populations a search covered BESIDE the record's own words:
+  // each is bounded at its content leaves and keeps its shape.
+  'agentfootprint.agent.turn_end': {
+    finalContent: charsMarker,
+    answerCoverage: boundAnswerCoverage,
+    answerNegatives: boundAnswerNegatives,
+  },
   'agentfootprint.agent.iteration_end': {
     history: (v) => (Array.isArray(v) ? `[${v.length} messages]` : charsMarker(v)),
   },

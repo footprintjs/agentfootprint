@@ -23,6 +23,7 @@
 
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   AUDIT_BUNDLE_FORMAT,
   AUDIT_GENESIS_EVENT_TYPE,
@@ -35,7 +36,16 @@ import {
 import { canonicalJson } from '../../src/lib/canonicalJson.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
-import { Agent } from '../../src/index.js';
+import {
+  Agent,
+  absent,
+  coverage,
+  defineTool,
+  fromIdentity,
+  hostFilled,
+  type AnswerCoverage,
+  type AnswerNegatives,
+} from '../../src/index.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -620,6 +630,322 @@ describe('auditExport — security', () => {
   });
 });
 
+// ─── SECURITY — a typed answer's limits and negatives (turn_end) ─────
+
+/** The payload of a bundle's `turn_end` record, as chained. */
+function turnEndOf(bundle: AuditBundle): Record<string, unknown> {
+  const record = bundle.records.find((r) => r.eventType === 'agentfootprint.agent.turn_end');
+  expect(record, 'the bundle holds the turn_end record').toBeDefined();
+  return record?.payload as Record<string, unknown>;
+}
+
+const CHARS = /^\[\d+ chars\]$/;
+
+/** A typed agent whose one tool declares every kind of limit and has a value assumed. */
+async function runTypedLimitsAgent(opts?: { payloadMode?: 'bounded' | 'verbatim' }) {
+  const audit = auditExport(opts);
+  const ordersTool = defineTool({
+    name: 'orders_search',
+    description: 'Open orders for one region.',
+    inputSchema: {
+      type: 'object',
+      properties: { region: { type: 'string', description: 'Region code.' } },
+      required: ['region'],
+    },
+    // The model leaves `region` out; the tool's rule fills it — an assumed value.
+    askOrAssume: { region: { assume: 'LIMITS-ASSUMED-REGION' } },
+    execute: () =>
+      coverage(
+        { open: 3 },
+        {
+          checked: ['LIMITS-CHECKED orders of the customer'],
+          notChecked: [{ what: 'LIMITS-NOT-CHECKED archive', why: 'LIMITS-WHY timed out' }],
+          cannotCover: [
+            {
+              what: 'LIMITS-CANNOT-COVER orders placed by phone',
+              why: 'LIMITS-WHY no phone collector',
+              short: 'LIMITS-SHORT phone',
+              kind: 'scope',
+            },
+          ],
+          inProgress: [
+            { what: 'LIMITS-IN-PROGRESS refunds', why: 'LIMITS-WHY still settling', count: 2 },
+          ],
+          period: {
+            queried: { from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' },
+            held: 'unknown',
+            readAt: '2026-10-02T00:00:05Z',
+          },
+        },
+      ),
+  });
+  const agent = Agent.create({
+    provider: new MockProvider({
+      replies: [
+        { toolCalls: [{ id: 'tc-1', name: 'orders_search', args: {} }] },
+        JSON.stringify({ open: 3 }),
+      ],
+    }),
+    model: 'mock-model',
+  })
+    .tool(ordersTool)
+    .outputSchema(z.object({ open: z.number() }).strict())
+    .limitsTravelWithTheAnswer()
+    .build();
+  const emitted: AnswerCoverage[] = [];
+  agent.on('agentfootprint.agent.turn_end', (e) => {
+    if (e.payload.answerCoverage !== undefined) emitted.push(e.payload.answerCoverage as never);
+  });
+  const stop = agent.enable.observability({ strategy: audit });
+  try {
+    await agent.run({ message: 'how many open orders?' });
+  } finally {
+    stop();
+  }
+  return { audit, emitted };
+}
+
+const LIMITS_CONTENT = [
+  'LIMITS-ASSUMED-REGION',
+  'LIMITS-CHECKED',
+  'LIMITS-NOT-CHECKED',
+  'LIMITS-CANNOT-COVER',
+  'LIMITS-SHORT',
+  'LIMITS-IN-PROGRESS',
+  'LIMITS-WHY',
+  '2026-10-01T00:00:00Z',
+  '2026-10-02T00:00:05Z',
+];
+
+/** A typed agent whose answer carries one negative the library composes from a recorded read. */
+async function runNegativesAgent() {
+  const audit = auditExport();
+  const readTool = hostFilled(
+    defineTool({
+      name: 'read_incidents',
+      description: 'Read incidents for the service in the authenticated tenant.',
+      inputSchema: {
+        type: 'object',
+        properties: { service: { type: 'string' }, tenant: { type: 'string' } },
+        required: ['service', 'tenant'],
+      },
+      effects: 'read',
+      search: {
+        source: { what: 'the incident store', said: ['incident store'] },
+        subject: { what: 'incidents', said: ['incidents'] },
+        arguments: [
+          { name: 'service', role: 'population' },
+          { name: 'tenant', role: 'filter' },
+        ],
+        complete: 'within-arguments',
+      },
+      execute: () => absent({ what: 'incidents', checked: 'declared' }),
+    }),
+    { tenant: fromIdentity('tenant') },
+  );
+  const parser = {
+    parse(input: unknown): { negatives: unknown[] } {
+      const value = input as { negatives?: unknown[] } | null;
+      if (!value || !Array.isArray(value.negatives)) throw new Error('missing citations');
+      return { negatives: value.negatives };
+    },
+  };
+  const jsonSchema = {
+    type: 'object',
+    properties: {
+      negatives: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['none', 'not-found', 'complete'] },
+            restsOn: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['kind', 'restsOn'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['negatives'],
+    additionalProperties: false,
+  };
+  const agent = Agent.create({
+    provider: new MockProvider({
+      replies: [
+        {
+          toolCalls: [{ id: 'a', name: 'read_incidents', args: { service: 'NEGATIVES-SERVICE' } }],
+        },
+        JSON.stringify({ negatives: [{ kind: 'none', restsOn: ['r1'] }] }),
+      ],
+    }),
+    model: 'mock-model',
+  })
+    .tool(readTool)
+    .outputSchema(parser, { jsonSchema })
+    .negativeClaims({ field: 'negatives', tools: ['read_incidents'] })
+    .build();
+  const emitted: AnswerNegatives[] = [];
+  agent.on('agentfootprint.agent.turn_end', (e) => {
+    if (e.payload.answerNegatives !== undefined) emitted.push(e.payload.answerNegatives);
+  });
+  const stop = agent.enable.observability({ strategy: audit });
+  try {
+    await agent.run({
+      message: 'Any incidents for that service?',
+      identity: {
+        tenant: 'tenant-fixture',
+        principal: 'tester',
+        conversationId: 'audit-negatives',
+      },
+    });
+  } finally {
+    stop();
+  }
+  return { audit, emitted };
+}
+
+describe("auditExport — security: a typed answer's limits and negatives (turn_end)", () => {
+  it('SECURITY: a real run’s limits reach a bounded bundle as their shape, never their sentences, instants or assumed values', async () => {
+    const { audit, emitted } = await runTypedLimitsAgent();
+    // The run really carried every kind of limit on its turn_end…
+    expect(emitted).toHaveLength(1);
+    const live = emitted[0]!;
+    const liveText = JSON.stringify(live);
+    for (const content of LIMITS_CONTENT) expect(liveText).toContain(content);
+
+    // …and the chained record holds none of it.
+    const recorded = turnEndOf(audit.bundle()).answerCoverage as AnswerCoverage;
+    const recordedText = JSON.stringify(recorded);
+    for (const content of LIMITS_CONTENT) expect(recordedText, content).not.toContain(content);
+
+    // The shape survives: every list, its length, the names, ids, counts and kinds.
+    expect(recorded.checked).toHaveLength(live.checked.length);
+    expect(recorded.notChecked).toHaveLength(live.notChecked.length);
+    expect(recorded.cannotCover).toEqual(
+      live.cannotCover.map((item) => ({
+        what: `[${item.what.length} chars]`,
+        why: `[${item.why!.length} chars]`,
+        short: `[${item.short!.length} chars]`,
+        kind: 'scope',
+      })),
+    );
+    expect(recorded.assumed).toEqual([
+      {
+        toolName: 'orders_search',
+        argument: 'region',
+        value: '[21 chars]',
+        hidden: false,
+      },
+    ]);
+    expect(recorded.inProgress?.[0]).toMatchObject({
+      toolName: 'orders_search',
+      toolCallId: 'tc-1',
+    });
+    expect(recorded.inProgress?.[0]?.items[0]).toEqual({
+      what: `[${live.inProgress![0]!.items[0]!.what.length} chars]`,
+      why: `[${live.inProgress![0]!.items[0]!.why!.length} chars]`,
+      count: 2,
+    });
+    expect(recorded.periods?.[0]).toEqual({
+      toolName: 'orders_search',
+      toolCallId: 'tc-1',
+      queried: { from: '[20 chars]', to: '[20 chars]' },
+      // The library's own word — the tool said it cannot vouch for the store.
+      held: 'unknown',
+      readAt: '[20 chars]',
+    });
+    expect(verifyAuditBundle(audit.bundle()).valid).toBe(true);
+  });
+
+  it('SECURITY: a real run’s negatives reach a bounded bundle with codes and ids, never the statement or the population', async () => {
+    const { audit, emitted } = await runNegativesAgent();
+    expect(emitted).toHaveLength(1);
+    const live = emitted[0]!;
+    // The library's statement names the population the read covered.
+    expect(live.claims[0]?.statement).toContain('NEGATIVES-SERVICE');
+    expect(live.claims[0]?.about).toBe('NEGATIVES-SERVICE');
+
+    const recorded = turnEndOf(audit.bundle()).answerNegatives as AnswerNegatives;
+    expect(JSON.stringify(recorded)).not.toContain('NEGATIVES-SERVICE');
+    expect(recorded.claims[0]?.statement).toMatch(CHARS);
+    expect(recorded.claims[0]?.about).toMatch(CHARS);
+    // Everything the check decided rides as it was.
+    const { claims: liveClaims, ...liveRecord } = live;
+    const { claims: recordedClaims, ...recordedRecord } = recorded;
+    expect(recordedRecord).toEqual(liveRecord);
+    expect(recordedClaims).toEqual(
+      liveClaims.map((claim) => ({
+        ...claim,
+        about: `[${String(claim.about).length} chars]`,
+        statement: `[${claim.statement.length} chars]`,
+      })),
+    );
+    expect(verifyAuditBundle(audit.bundle()).valid).toBe(true);
+  });
+
+  it("SECURITY: payloadMode 'verbatim' still carries the limits whole (documented opt-in)", async () => {
+    const { audit } = await runTypedLimitsAgent({ payloadMode: 'verbatim' });
+    const recordedText = JSON.stringify(turnEndOf(audit.bundle()).answerCoverage);
+    for (const content of LIMITS_CONTENT) expect(recordedText).toContain(content);
+  });
+
+  it('EDGE: a field the shape does not name, and a value that is not the shape, is a marker', () => {
+    const audit = auditExport();
+    audit.exportEvent(
+      envelope('agentfootprint.agent.turn_end', {
+        turnIndex: 0,
+        finalContent: '{}',
+        answerCoverage: {
+          // An own field set to `undefined` is absent, as JSON has it.
+          checked: [{ what: 'EDGE-WHAT', why: undefined, futureProse: 'EDGE-FUTURE-ITEM' }],
+          notChecked: 'EDGE-NOT-A-LIST',
+          cannotCover: [null, 7, 'EDGE-BARE-STRING'],
+          periods: [{ toolName: 't', queried: 'EDGE-NOT-A-WINDOW', held: { from: 'EDGE-FROM' } }],
+          futureList: [{ what: 'EDGE-FUTURE-FIELD' }],
+        },
+        answerNegatives: {
+          field: 'negatives',
+          claims: [{ kind: 'none', about: 42, statement: 'EDGE-STATEMENT', note: 'EDGE-NOTE' }],
+          checks: [{ id: 'c', future: { quote: 'EDGE-FUTURE-CHECK' } }],
+        },
+      }),
+    );
+    const payload = turnEndOf(audit.bundle());
+    expect(JSON.stringify(payload)).not.toMatch(/EDGE-/);
+    expect(payload.answerCoverage).toEqual({
+      checked: [{ what: '[9 chars]', futureProse: '[16 chars]' }],
+      notChecked: '[15 chars]',
+      cannotCover: ['[type: null]', '[type: number]', '[16 chars]'],
+      periods: [{ toolName: 't', queried: '[17 chars]', held: { from: '[9 chars]' } }],
+      futureList: '[type: object]',
+    });
+    expect(payload.answerNegatives).toEqual({
+      field: 'negatives',
+      claims: [
+        { kind: 'none', about: '[type: number]', statement: '[14 chars]', note: '[9 chars]' },
+      ],
+      checks: [{ id: 'c', future: '[type: object]' }],
+    });
+    expect(verifyAuditBundle(audit.bundle()).valid).toBe(true);
+  });
+
+  it('EDGE: a long list is capped like every list, each kept entry bounded', () => {
+    const audit = auditExport();
+    const checked = Array.from({ length: 40 }, (_, i) => ({ what: `EDGE-ITEM-${i}` }));
+    audit.exportEvent(
+      envelope('agentfootprint.agent.turn_end', {
+        turnIndex: 0,
+        finalContent: '{}',
+        answerCoverage: { checked, notChecked: [], cannotCover: [] },
+      }),
+    );
+    const limits = turnEndOf(audit.bundle()).answerCoverage as { checked: unknown[] };
+    expect(limits.checked).toHaveLength(33);
+    expect(limits.checked[32]).toBe('…+8 more');
+    expect(JSON.stringify(limits)).not.toMatch(/EDGE-/);
+  });
+});
+
 // ─── PROPERTY — random sequences + random mutations ──────────────────
 
 /** Deterministic LCG so failures are reproducible from the seed. */
@@ -683,6 +1009,123 @@ describe('auditExport — property: chains over random event streams', () => {
       const result = verifyAuditBundle(tampered as unknown as AuditBundle);
       expect(result.valid, `trial ${trial}: mutated ${field}@${idx}`).toBe(false);
       expect(result.brokenAt, `trial ${trial}: brokenAt missing`).toBeTypeOf('number');
+    }
+  });
+});
+
+/**
+ * Random limits and negatives: every content leaf is a `PROP-` string, every
+ * record leaf is not, so the bounded record must be the input with exactly
+ * those strings replaced by their `'[N chars]'` marker — an oracle that never
+ * reads the exporter's own shape tables.
+ */
+function randomLimitsAndNegatives(rand: () => number, trial: number) {
+  let n = 0;
+  const text = () => `PROP-${trial}-${n++}-${Math.floor(rand() * 1e9).toString(36)}`;
+  const some = <T>(make: () => T): T[] => Array.from({ length: Math.floor(rand() * 4) }, make);
+  const maybe = <T extends object>(value: T): T | Record<string, never> =>
+    rand() < 0.5 ? value : {};
+  const pick = <T>(values: readonly T[]): T => values[Math.floor(rand() * values.length)]!;
+  const item = () => ({
+    what: text(),
+    ...maybe({ why: text() }),
+    ...maybe({ short: text() }),
+    ...maybe({ kind: pick(['existence', 'scope'] as const) }),
+  });
+  const window = () => ({ from: text(), to: text() });
+  const answerCoverage = {
+    checked: some(item),
+    notChecked: some(item),
+    cannotCover: some(item),
+    ...maybe({
+      periods: some(() => ({
+        toolName: pick(['orders', 'refunds']),
+        ...maybe({ toolCallId: `call-${n}` }),
+        queried: window(),
+        held: rand() < 0.3 ? 'unknown' : window(),
+        ...maybe({ readAt: text() }),
+      })),
+    }),
+    ...maybe({
+      inProgress: some(() => ({
+        toolName: 'orders',
+        ...maybe({ toolCallId: `call-${n}` }),
+        items: some(() => ({
+          what: text(),
+          ...maybe({ why: text() }),
+          ...maybe({ short: text() }),
+          ...maybe({ count: 1 + Math.floor(rand() * 9) }),
+        })),
+      })),
+    }),
+    ...maybe({
+      assumed: some(() => ({
+        toolName: 'orders',
+        argument: pick(['region', 'window']),
+        value: text(),
+        hidden: rand() < 0.5,
+      })),
+    }),
+  };
+  const answerNegatives = {
+    field: 'negatives',
+    version: '2',
+    delivery: pick(['as-checked', 'recorded', 'fallback'] as const),
+    claims: some(() => ({
+      kind: pick(['none', 'not-found', 'complete', 'unknown'] as const),
+      ...maybe({ about: text() }),
+      restsOn: some(() => `r${1 + Math.floor(rand() * 9)}`),
+      statement: text(),
+      delivery: 'record-composed',
+      version: '2',
+    })),
+    checks: some(() => ({
+      id: `agent:negative-claims:negatives#${n}`,
+      path: `negatives[${n}]`,
+      index: n,
+      kind: 'none',
+      code: pick(['established', 'stale-turn', 'search-incomplete']),
+      disposition: pick(['checked-fail', 'not-applicable', 'unreachable']),
+      tools: ['orders'],
+      results: [`claim-result/ns/run-1/${n}`],
+      ...maybe({ staleSince: { turn: 1, readAt: '2026-10-29T09:00:00.000Z' } }),
+    })),
+    coverage: some(() => ({ tool: 'orders', checked: Math.floor(rand() * 5) })),
+    actions: some(() => ({ tool: 'refund', outcome: pick(['ok', 'error', 'not-run'] as const) })),
+  };
+  return { answerCoverage, answerNegatives };
+}
+
+/** `value` with every `PROP-` string replaced by its `'[N chars]'` marker. */
+function withContentMarked(value: unknown): unknown {
+  if (typeof value === 'string')
+    return value.startsWith('PROP-') ? `[${value.length} chars]` : value;
+  if (Array.isArray(value)) return value.map(withContentMarked);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withContentMarked(v)]));
+  }
+  return value;
+}
+
+describe("auditExport — property: a typed answer's limits and negatives in a bounded bundle", () => {
+  it('every content leaf is its marker, every record leaf and list length is kept (100 trials)', () => {
+    for (let trial = 0; trial < 100; trial++) {
+      const rand = lcg(4200 + trial);
+      const content = randomLimitsAndNegatives(rand, trial);
+      const audit = auditExport();
+      audit.exportEvent(
+        envelope('agentfootprint.agent.turn_end', { turnIndex: 0, finalContent: '{}', ...content }),
+      );
+      const bundle = audit.bundle();
+      expect(JSON.stringify(bundle), `trial ${trial}`).not.toContain('PROP-');
+      const payload = turnEndOf(bundle);
+      expect(payload.answerCoverage, `trial ${trial}`).toEqual(
+        withContentMarked(content.answerCoverage),
+      );
+      expect(payload.answerNegatives, `trial ${trial}`).toEqual(
+        withContentMarked(content.answerNegatives),
+      );
+      expect(verifyAuditBundle(roundTrip(bundle)).valid, `trial ${trial}`).toBe(true);
     }
   });
 });

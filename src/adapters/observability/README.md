@@ -118,8 +118,9 @@ const line = toWireJson(event); // not JSON.stringify(event)
 ```
 
 ## What a span-MAPPING exporter may carry (`otel.ts`)
-`file` / `cloudwatch` / `agentcore` / `audit` serialize the whole envelope and
-inherit every field. `otelObservability` MAPS selected signals onto spans, so
+`file` / `cloudwatch` / `agentcore` serialize the whole envelope and inherit
+every field, and so does `audit` under `payloadMode: 'verbatim'` (its default
+bounded mode is below). `otelObservability` MAPS selected signals onto spans, so
 each thing it carries is placed on purpose, and the rule for placing one is:
 
 - **Structure is exported, content is not.** Ids, enums, counts, check names
@@ -186,6 +187,41 @@ await agent.run({ message }, { sessionId });   // → gen_ai.conversation.id = s
 agent.emit('agentfootprint.eval.score', {
   metricId: 'groundedness', value: 0.4, label: 'fail', target: 'run', targetRef: runId,
 });
+```
+
+## What the audit chain's bounded mode keeps (`audit.ts`)
+`auditExport()` chains every event. In its default `payloadMode: 'bounded'` the
+fields it bounds follow the span exporter's rule: **structure is kept, content
+is a marker.**
+
+- A content field is replaced whole, per event type (`BOUND_FIELDS`): a prompt
+  or an answer becomes `'[N chars]'`, tool arguments their key names, a result
+  its type.
+- A field that holds the record's own words beside content keeps its shape
+  and is bounded at each content leaf (`shapeOf`, `listOf`). A typed answer's
+  limits (`turn_end.answerCoverage`) keep their lists and lengths, tool and
+  argument names, call ids, counts, `kind`, `hidden` and `held: 'unknown'`;
+  every `what` / `why` / `short`, period instant and assumed `value` is a
+  marker. Its negatives (`turn_end.answerNegatives`) keep the field name,
+  codes, verdicts, `restsOn` handles, checks, coverage and actions; each
+  `statement` and `about` is a marker.
+- A shape fails closed. A field it does not name, or a value that is not the
+  declared shape, is a marker. Its rules are exhaustive by type, so a field
+  added to the payload type does not compile until it is classified, and
+  `test/type-regressions/TurnEndContent.completeness.test.ts` runs a canary in
+  every content leaf through every exporter that passes `turn_end` on.
+- Not bounded yet (a known gap, outside `turn_end`): the prose and values on
+  `tools.absent`, `tools.coverage_declared`, `tools.semantics_declared`,
+  `agent.evidence_checked`, `integrity.external_ground_used`, `map.engaged`
+  and `skill.turn_routed` are only sanitized (strings capped at 256
+  characters).
+
+```ts
+const audit = auditExport(); // bounded
+// a typed answer's limits in a turn_end record, as chained:
+// { checked: [{ what: '[38 chars]' }], notChecked: [],
+//   cannotCover: [{ what: '[24 chars]', why: '[29 chars]', kind: 'scope' }],
+//   assumed: [{ toolName: 'orders_search', argument: 'region', value: '[2 chars]', hidden: false }] }
 ```
 
 ## Files

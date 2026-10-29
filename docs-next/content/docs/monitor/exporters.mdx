@@ -228,7 +228,9 @@ const check = verifyAuditBundle(bundle); // offline: no agent needed
   the exact record a change broke. The serialization rules are exported as
   `canonicalJson`, so an auditor can write an independent verifier.
 - **Bounded payloads by default.** Tool arguments are recorded as key names, results
-  as a type, prompts and content as `[N chars]`. `payloadMode: 'verbatim'` records
+  as a type, prompts and content as `[N chars]`. A typed answer's limits and
+  negatives on `turn_end` keep their shape (lists, names, ids, counts, codes), with
+  each sentence and value as `[N chars]`. `payloadMode: 'verbatim'` records
   everything, for access-controlled stores.
 - **Long runs.** `audit.drain()` returns the records since the last drain; pass the
   segments together (`verifyAuditBundle([seg1, seg2])`) and they verify end to end.
