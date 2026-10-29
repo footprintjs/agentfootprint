@@ -319,7 +319,7 @@ call.
 | The adapter you chose retries its own refusal (AgentCore Runtime's session-busy reply) | Yes, within the budget: the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
 | Your entry for the tool names `throttle` (or `network`) | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on }` |
 | No entry, `policy: 'app-authorized'` | No: the 429 is returned as the server sent it | `reason: 'not-permitted'`, `effect: 'unknown'` |
-| No entry, `policy: 'compatibility'` (the default in 11.x) | Yes, as before | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
+| No entry, `policy: 'compatibility'` (the default, kept in 12.0) | Yes, as before | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
 
 `network` is a request that failed without an answer: a lost connection, or a
 timeout below the retry. It may have run, so it is sent again only when your
@@ -382,22 +382,31 @@ marker in its request's `_meta`, which the transport takes out before sending,
 so the server receives the request it always did and an MCP SDK that copies the
 params is still matched. The answers are watched on the connection, and the
 library confirms the watch works when the `initialize` answer passes it. When
-either fact is missing, the call is refused before it is sent, with an
-`McpReplayUnavailableError` (`sent: false`) whose `reason` is an
-`McpReplayUnavailableReason`:
+either fact is missing, the tool call is refused before its request is sent,
+with an `McpReplayUnavailableError` (`sent: false`) whose `reason` is an
+`McpReplayUnavailableReason`. Only tool invocations are refused. Connecting and
+listing tools run first and may already have reached the server (on `stdio`,
+the server process has started), so `sent: false` speaks of that tool request
+alone.
 
 | `reason` | What is missing | When |
 |---|---|---|
-| `'answers-unobserved'` | The `initialize` answer never reached the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it, as SDK 1.10 does |
-| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta` |
+| `'answers-unobserved'` | The `initialize` answer never reached the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it, as SDK 1.10 does when run (reading the source finds the same through 1.13) |
+| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta`, on any call, including after the connection initialized |
 | `'requests-unwatched'` | The library cannot watch the transport's requests | `stdio`, or a transport whose `send` cannot be wrapped |
+
+The check tests what the connection does, never an SDK version number or a
+transport's name.
 
 Without these facts, a request the server accepted and never answered would
 reach the caller as a plain timeout, and the strict contract would be weaker
-than it says. `'compatibility'` needs neither, and behaves as before. A watch on
-an answer ends when the answer arrives, when the SDK cancels the request, when
-the call settles or when the client closes, so a long-lived client keeps
-nothing for calls that are over.
+than it says. An explicit `'app-authorized'` never falls back to
+`'compatibility'`: not when a connection cannot give these facts, and not when a
+request loses its match after the connection initialized. A refused request is
+never sent again to recover the match. `'compatibility'` needs neither fact, and
+behaves as before. A watch on an answer ends when the answer arrives, when the
+SDK cancels the request, when the call settles or when the client closes, so a
+long-lived client keeps nothing for calls that are over.
 
 The example's run, read back from the saved recording: the search was sent
 again on your declaration and its effects stay unknown; the ticket was not sent
@@ -406,12 +415,22 @@ model as the server sent it.
 
 <CodeFile path="examples/features/118-app-authorized-replay.ts" region="record" title="examples/features/118-app-authorized-replay.ts (region: record)" />
 
-**Moving to the next major.** `'app-authorized'` becomes the default. To keep
-today's behaviour, write `replay: { policy: 'compatibility' }`; its records go on
-naming the assumption. To move now, add an entry with `on: ['throttle']` for
-each tool you want sent again on a 429, mark the tools that make changes, and
-declare `deduplicates` only for a server that honours the key. `replay` is
-refused beside `connection` and ignored for `stdio`.
+**The default stays `'compatibility'` in 12.0.** 11.5.0 said `'app-authorized'`
+would become the default in the next major. That is superseded: 12.0.0 keeps
+`'compatibility'` as the default, as an interim policy rather than a permanent
+one. Strict refuses a tool call it cannot observe and correlate, so as a default
+it would refuse every tool invocation over `stdio`, and every one through an MCP
+SDK that replaces the transport's handler. `'compatibility'` keeps its stated
+retry assumption, and its records go on naming it; it does not gain the strict
+policy's observation or correlation guarantees. A strict default may come in a
+later major, after the supported transport and SDK combinations are measured,
+with migration notes; none is scheduled. A `policy` you write is the one used: a
+default never replaces it, and nothing picks it from the transport. To choose
+`'app-authorized'` now, add an entry with `on: ['throttle']` for each tool you
+want sent again on a 429, mark the tools that make changes, and declare
+`deduplicates` only for a server that honours the key. `replay` is refused
+beside `connection`. On `stdio` it is ignored under `'compatibility'`, and under
+`'app-authorized'` each tool call is refused (`'requests-unwatched'`).
 
 ## Axis 2 — the provider: what the model is *shown*
 
