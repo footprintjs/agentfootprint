@@ -4,14 +4,14 @@
  * Three readings, and the difference between them is the whole file:
  *
  *   • **A roles claim is a LIST.** An array contributes each string entry as
- *     one role; a single string is ONE role. `"Not neo-users"` is the role
- *     `Not neo-users` — never the two roles `Not` and `neo-users`, which is how
+ *     one role; a single string is ONE role. `"Not bot-users"` is the role
+ *     `Not bot-users` — never the two roles `Not` and `bot-users`, which is how
  *     a space-splitting reader lets a group name satisfy a role gate it does
  *     not name. (`'space-delimited'` keeps the old reading, by request only.)
  *   • **A scope claim is space-delimited** — RFC 8693 §4.2 / RFC 9068 §2.2.3
  *     define `scope` that way, and Entra's `scp` follows it. An array is also
  *     read, entry by entry.
- *   • **A claim NAME is never split.** `urn:neo:objectguid` and
+ *   • **A claim NAME is never split.** `urn:bot:objectguid` and
  *     `http://schemas.microsoft.com/…/role` contain dots and colons and are one
  *     name each. A nested claim is named by a PATH — an array of names
  *     (`['realm_access', 'roles']` for Keycloak) — never by a dotted string.

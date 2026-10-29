@@ -8,7 +8,7 @@
  *          rendered status update.
  *
  * Use when:
- *   - Building a chat UI (Neo, Lens, embedded widget) where the
+ *   - Building a chat UI (the host app, Lens, embedded widget) where the
  *     consumer owns rendering but not state derivation
  *   - Tier-1 of compose chains (`compose([chatBubble(setLine), stdout()])`
  *     so dev console mirrors what the user sees)

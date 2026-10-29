@@ -408,7 +408,7 @@ export function buildToolRegistry(
       });
       // Check EVERY skill tool — including autoActivate ones, which `continue`
       // below and never reach the static registry's gate. (This is the common
-      // case: all of Neo's skills are autoActivate, so their scoped tools would
+      // case: all of the host app's skills are autoActivate, so their scoped tools would
       // otherwise skip the check entirely.) Dev-mode warn only — non-breaking.
       warnIfInvalidToolName(name);
       const existing = sharedSkillTools.get(name);

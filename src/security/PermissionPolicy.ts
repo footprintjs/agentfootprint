@@ -1,7 +1,7 @@
 /**
  * PermissionPolicy — data-driven role-based authorization for tool dispatch.
  *
- * Closes Neo gap #2 (of 8). Permissions are CROSS-CUTTING — they're not
+ * Closes host-app gap #2 (of 8). Permissions are CROSS-CUTTING — they're not
  * context engineering, they're a guard ON context-engineering operations
  * (tool dispatch, skill activation, memory writes, output emission).
  * That's why this lives in `agentfootprint/security`, parallel to the

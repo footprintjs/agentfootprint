@@ -117,8 +117,8 @@ export interface JwksIdentityOptions {
   /**
    * How a roles claim holding a single STRING is read.
    *
-   *  - `'list'` (default): the string is ONE role. `"Not neo-users"` is the
-   *    role `Not neo-users`, so it can never satisfy a check for `neo-users`.
+   *  - `'list'` (default): the string is ONE role. `"Not bot-users"` is the
+   *    role `Not bot-users`, so it can never satisfy a check for `bot-users`.
    *    An array contributes each string entry as one role.
    *  - `'space-delimited'`: the string is split on whitespace — the reading
    *    every release before this one used. Choose it only for a claim that
