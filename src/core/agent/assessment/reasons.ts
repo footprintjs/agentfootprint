@@ -180,7 +180,8 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     layer: 3,
     class: 'not-sure',
     source: 'calls',
-    reads: 'findingsLedger: a conflict row whose witnesses name a call of this turn',
+    reads:
+      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and its witnesses do not all name a call (assess.ts · conflictOfThisTurn)',
   },
   {
     reason: 'value-unsupported',

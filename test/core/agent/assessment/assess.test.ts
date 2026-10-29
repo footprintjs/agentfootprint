@@ -389,6 +389,85 @@ describe('UNIT — a conflict row stamped with its turn counts in that turn only
   });
 });
 
+describe('UNIT — a conflict whose readings the record cannot name: the incomplete-record policy (L-49)', () => {
+  // A conflict row's readings name their calls (`witnesses[].toolCallId`) — when the record
+  // holds the ids. A row STAMPED with this turn whose readings do not all name a call stays
+  // this turn's: the stamp filed it here, and a missing id must not make the doubt vanish
+  // (before: `consistent`, no reason). An UNSTAMPED row is never placed by a missing id, so an
+  // earlier turn's conflict whose ids are gone is never attached to this one.
+  const reading = (toolCallId?: string) => ({
+    ...(toolCallId !== undefined && { toolCallId }),
+    subject: { kind: 'host', id: 'h1' },
+    predicate: 'state',
+  });
+  const conflict = (witnesses: readonly unknown[], turn?: number) => ({
+    kind: 'conflict',
+    key: 'host h1 · state',
+    witnesses,
+    iteration: 1,
+    ...(turn !== undefined && { turn }),
+  });
+  const history = [user('t1'), tool('old1', [{ id: 1 }]), user('t2'), tool('c2', [{ id: 1 }])];
+  const sourceOf = (a: AnswerAssessment) =>
+    a.reasons.find((r) => r.reason === 'sources-conflict')?.source;
+
+  it('stamped with this turn, no reading names a call → not sure, both readings counted', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict([reading(), reading()], 2)],
+    });
+    expect(a.standing).toBe('not-sure');
+    expect(reasonsOf(a)).toEqual(['sources-conflict']);
+    expect(a.reasons[0]!.witness).toEqual([
+      { kind: 'state', key: 'findingsLedger', path: '/0/kind' },
+    ]);
+    expect(sourceOf(a)).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
+  });
+
+  it('stamped with this turn, one reading of an earlier call and one unnamed → still this turn’s', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict([reading('old1'), reading()], 2)],
+    });
+    expect(reasonsOf(a)).toEqual(['sources-conflict']);
+    expect(sourceOf(a)).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'old1', toolName: 'lookup' }],
+      unnamed: 1,
+    });
+  });
+
+  it('stamped with this turn, no readings at all → still this turn’s, one unnamed call', () => {
+    const a = run({ turnNumber: 2, history, findingsLedger: [conflict([], 2)] });
+    expect(reasonsOf(a)).toEqual(['sources-conflict']);
+    expect(sourceOf(a)).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
+  });
+
+  it('stamped with this turn, every reading names an earlier call → the record places it there', () => {
+    const a = run({ turnNumber: 2, history, findingsLedger: [conflict([reading('old1')], 2)] });
+    expect(reasonsOf(a)).toEqual([]);
+  });
+
+  it('UNSTAMPED, no reading names a call → never attached to this turn by a missing id', () => {
+    for (const record of [{ turnNumber: 2 }, {}]) {
+      const a = run({ ...record, history, findingsLedger: [conflict([reading(), reading()])] });
+      expect(reasonsOf(a)).toEqual([]);
+      expect(a.standing).toBe('consistent');
+    }
+  });
+
+  it('stamped with an EARLIER turn, no reading names a call → not this turn’s', () => {
+    const a = run({
+      turnNumber: 2,
+      history,
+      findingsLedger: [conflict([reading(), reading()], 1)],
+    });
+    expect(reasonsOf(a)).toEqual([]);
+  });
+});
+
 describe('UNIT — this turn only', () => {
   it('reads after the last message a PERSON said; earlier turns’ results are not this answer’s', () => {
     const a = run({ history: [user('t1'), tool('c0', []), user('t2'), tool('c2', [{ id: 1 }])] });

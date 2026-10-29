@@ -425,12 +425,21 @@ describe('UNIT — a list that names some calls and not others never loses one',
     );
   });
 
-  it('conflict, all unnamed: the fold places no such row in this turn — and its readings are still counted', () => {
-    // A conflict counts for this turn only when one of its readings names a call of the
-    // turn (`assess.ts` · `readConflicts`), so a row naming none fires nothing at all…
+  it('conflict, all unnamed: unstamped, the fold places no such row in this turn — stamped with it, both readings are counted', () => {
+    // An UNSTAMPED conflict counts for this turn only when one of its readings names a call
+    // of the turn — a missing id never places it (`assess.ts` · `conflictOfThisTurn`, the
+    // incomplete-record policy) — so a row naming none fires nothing at all…
     const a = fold({ history, findingsLedger: [conflict([reading(), reading()])] });
     expect(a.reasons.map((r) => r.reason)).toEqual([]);
-    // …and the projection, asked of that row directly, counts both readings.
+    // …while a row STAMPED with this turn stays this turn's, its readings counted (L-49)…
+    const stamped = fold({
+      history,
+      turnNumber: 1,
+      findingsLedger: [{ ...conflict([reading(), reading()]), turn: 1 }],
+    });
+    expect(sourceOf(stamped, 'sources-conflict')).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
+    expect(lineOf(stamped)).toBe('Not sure — two results the answer stood on disagree.');
+    // …and the projection, asked of the unstamped row directly, counts both readings too.
     const source = reasonSourceOf(
       'sources-conflict',
       'calls',

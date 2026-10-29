@@ -31,9 +31,11 @@
  * continued conversation carries earlier turns' results in `history`, and a
  * library frame (a correction, a nudge) is not a person's turn. The fold reads
  * the tool results after that message, every coverage row of the run
- * (`coverageDeclared` is never carried into a next turn), the conflict rows that
- * name one of those calls (the ledger IS carried, so rows about earlier turns'
- * calls are left out), and the answer's own rows (`unsupportedValues`,
+ * (`coverageDeclared` is never carried into a next turn), the conflict rows of
+ * this turn — one that names one of those calls, or one stamped with this turn
+ * whose readings the record cannot all name (`conflictOfThisTurn`; the ledger
+ * IS carried, so rows about earlier turns' calls are left out), and the
+ * answer's own rows (`unsupportedValues`,
  * `stoppedEarly`, `answerValidation`). "Rests on" is every call of the turn: it
  * may over-report, it never hides.
  *
@@ -734,11 +736,11 @@ function readTurnCalls(
 }
 
 /**
- * Layer 3, the model's readings: a conflict row that names a call of THIS turn.
- * A row the one writer stamped with its `turn` (the honesty layers' turn stamp,
- * filed while a layer is armed) is this turn's only when the stamp says so —
- * a provider that reuses call ids across turns no longer makes an earlier
- * turn's conflict read as this one's. An unstamped row keeps the call-id rule.
+ * Layer 3, the model's readings: a conflict row of THIS turn
+ * (`conflictOfThisTurn`). A row the one writer stamped with its `turn` (the
+ * honesty layers' turn stamp, filed while a layer is armed) is this turn's
+ * only when the stamp says so — a provider that reuses call ids across turns
+ * no longer makes an earlier turn's conflict read as this one's.
  */
 function readConflicts(
   state: Readonly<Record<string, unknown>>,
@@ -749,12 +751,42 @@ function readConflicts(
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   ledger.forEach((row: unknown, index) => {
     if (!isRecord(row) || row.kind !== 'conflict' || !Array.isArray(row.witnesses)) return;
-    if (typeof row.turn === 'number' && turn !== undefined && row.turn !== turn) return;
-    const ofThisTurn = row.witnesses.some(
-      (w: unknown) => isRecord(w) && typeof w.toolCallId === 'string' && calls.has(w.toolCallId),
-    );
-    if (ofThisTurn) fire(g, 'sources-conflict', statePointer('findingsLedger', index, 'kind'));
+    if (conflictOfThisTurn(row, row.witnesses, turn, calls)) {
+      fire(g, 'sources-conflict', statePointer('findingsLedger', index, 'kind'));
+    }
   });
+}
+
+/**
+ * Whether a conflict row is this turn's — THE INCOMPLETE-RECORD POLICY. Its
+ * readings (`witnesses`) name the calls they read, when the record holds the
+ * ids:
+ *
+ * - a row stamped with ANOTHER turn is never this turn's;
+ * - a reading that names a call of this turn places the row here (stamped or
+ *   not — the call-id rule);
+ * - a row stamped with THIS turn stays this turn's unless every reading names
+ *   a call and none is a call of this turn: a reading with no call id (a
+ *   hole, or no readings at all) is one the record cannot place in an earlier
+ *   turn, and the doubt the stamp filed here must not vanish for a missing
+ *   id. Its source counts those readings in `unnamed` (`sources.ts`);
+ * - an UNSTAMPED row is never placed by a missing id: an earlier turn's
+ *   conflict whose ids are gone stays that turn's. Nor is any row of a record
+ *   with no `turnNumber`, where no stamp can be read against the turn.
+ */
+function conflictOfThisTurn(
+  row: Readonly<Record<string, unknown>>,
+  witnesses: readonly unknown[],
+  turn: number | undefined,
+  calls: ReadonlySet<string>,
+): boolean {
+  const stamped = typeof row.turn === 'number' && turn !== undefined;
+  if (stamped && row.turn !== turn) return false;
+  // By index: a hole is a reading too — one that names no call.
+  const ids = Array.from(witnesses, (w) => (isRecord(w) ? w.toolCallId : undefined));
+  if (ids.some((id) => typeof id === 'string' && calls.has(id))) return true;
+  const namesACall = (id: unknown): boolean => typeof id === 'string' && id.length > 0;
+  return stamped && !(ids.length > 0 && ids.every(namesACall));
 }
 
 /** One answer-layer witness row of this turn, where it sits on the ledger. */

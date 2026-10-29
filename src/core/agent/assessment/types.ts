@@ -60,7 +60,9 @@ export type AssessmentPointer =
  * - `empty-undeclared` — an empty rowset that said nothing about what it
  *   searched: silence recorded as silence;
  * - `sources-conflict` — two readings the model stood on disagree (a
- *   `ConflictRow` naming a call of this turn);
+ *   `ConflictRow` naming a call of this turn, or stamped with this turn while
+ *   its readings do not all name a call — those count in the source's
+ *   `unnamed`);
  * - `value-unsupported` — names or numbers in the answer appear in no tool
  *   result (`unsupportedValues`);
  * - `value-survived-revision` — the same, after the one revision the gate
