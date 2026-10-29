@@ -398,6 +398,10 @@ export function codeRunnerTool(
     ...(options.checkIn !== undefined && { checkIn: options.checkIn }),
     ...(options.needs && { needs: options.needs }),
     ...(wants !== undefined && { wants }),
+    // This tool RUNS what the model passes as `code` — declared, so the record
+    // can say which program a call submitted (`tools/script.ts`). The language
+    // is the fence's info string when the library shows the program.
+    script: { argument: 'code', language },
     execute: async (args, ctx): Promise<string> => {
       const key = requireKey(ctx, scope, name);
       const session = await acquire(key, ctx);

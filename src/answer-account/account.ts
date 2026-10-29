@@ -20,6 +20,9 @@ import {
   standingNamesFrom,
 } from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
+import { scriptRowsOfTurn } from '../core/agent/scripts/rows.js';
+import { scriptsBlock } from '../core/agent/scripts/attachment.js';
+import type { ScriptRow, ShownScript } from '../core/agent/scripts/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION, type TemplateId } from './templates.js';
@@ -178,9 +181,51 @@ function appendedStandingLine(
   );
 }
 
-/** Whether `text` opens the framework's appended section: the run's own line, or a block's heading. */
-function opensAppended(text: string, line: string | undefined): boolean {
+/**
+ * The opening of the scripts block THIS run attached
+ * (`.scriptTravelsWithTheAnswer()`), rebuilt from its record — never matched
+ * by words. The block is one function of `turn_end.scripts` (the shown
+ * scripts and the omitted count) and, for a program over the bound, of that
+ * call's committed `script` row (`core/agent/scripts/attachment.ts` ·
+ * `scriptsBlock`). With a script shown, its label line opens the block; with
+ * none shown, the omission lines do — rebuilt for the last call that reached
+ * the tool and for every one (the record does not keep `which`). Anything the
+ * record does not hold in full, and the block is not claimed.
+ */
+function appendedScriptsOpenings(
+  end: ViewEvent,
+  state: Readonly<Record<string, unknown>> | undefined,
+): readonly string[] {
+  const scripts = end.payload.scripts;
+  if (!isRecord(scripts) || !Array.isArray(scripts.shown)) return [];
+  const omitted = num(scripts.omitted) ?? 0;
+  if (scripts.shown.length > 0) {
+    const first = scripts.shown[0];
+    if (!isRecord(first) || typeof first.text !== 'string') return [];
+    const only = { shown: [first as unknown as ShownScript], omitted: 0 };
+    return [scriptsBlock(only).split('\n')[0] as string];
+  }
+  if (omitted === 0 || state === undefined) return [];
+  const turn = num(state.turnNumber);
+  if (turn === undefined) return [];
+  const reached = scriptRowsOfTurn(
+    Array.isArray(state.findingsLedger) ? state.findingsLedger : [],
+    turn,
+  ).current.filter((row) => row.outcome !== 'submitted');
+  const overSizeOf = (rows: readonly ScriptRow[]) => rows.filter((row) => row.text === undefined);
+  return [overSizeOf(reached.slice(-1)), overSizeOf(reached)].map((overSize) =>
+    scriptsBlock({ shown: [], omitted, overSize }),
+  );
+}
+
+/** Whether `text` opens the framework's appended section: the run's own line, a block's heading, or its scripts. */
+function opensAppended(
+  text: string,
+  line: string | undefined,
+  scripts: readonly string[] = [],
+): boolean {
   if (line !== undefined && (text === line || text.startsWith(`${line}\n\n`))) return true;
+  if (scripts.some((opening) => opening !== '' && text.startsWith(opening))) return true;
   return BLOCK_HEADINGS.some((heading) => text.startsWith(heading));
 }
 
@@ -195,14 +240,17 @@ function opensAppended(text: string, line: string | undefined): boolean {
 function splitAppended(
   content: string,
   line: string | undefined,
+  scripts: readonly string[] = [],
 ): { readonly model: string; readonly appended?: string } {
   let at = content.lastIndexOf(APPENDED_SEPARATOR);
   while (at >= 0) {
     const rest = content.slice(at + APPENDED_SEPARATOR.length);
-    if (opensAppended(rest, line)) return { model: content.slice(0, at), appended: rest };
+    if (opensAppended(rest, line, scripts)) return { model: content.slice(0, at), appended: rest };
     at = at === 0 ? -1 : content.lastIndexOf(APPENDED_SEPARATOR, at - 1);
   }
-  return opensAppended(content, line) ? { model: '', appended: content } : { model: content };
+  return opensAppended(content, line, scripts)
+    ? { model: '', appended: content }
+    : { model: content };
 }
 
 /** How many items one of the data's lists holds — `0` for a list the record does not carry. */
@@ -315,7 +363,11 @@ function readAnswer(view: RecordingView): {
   }
   const pointer = at(end, 'finalContent');
   const data = readLimitsData(end);
-  const { model, appended } = splitAppended(content, appendedStandingLine(end, view.state));
+  const { model, appended } = splitAppended(
+    content,
+    appendedStandingLine(end, view.state),
+    appendedScriptsOpenings(end, view.state),
+  );
   const answer: AccountFact<string> = {
     ...clipFact(model, MAX_ANSWER_CHARS),
     source: 'model',

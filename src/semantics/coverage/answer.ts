@@ -430,6 +430,13 @@ function copyItem(item: CoverageItem): CoverageItem {
  * declared names named and the rest counted; and a `Period:` or "In progress"
  * line names its call by the declared words instead of the registered name.
  * An item no declaring call names stays the bytes it always was.
+ *
+ * `scripts` (`.scriptTravelsWithTheAnswer()`) is a third, already-composed
+ * block — the programs this turn's calls SUBMITTED to a declared code-running
+ * tool, each in the library's own fence under a label line read from its
+ * execution record (`core/agent/scripts/attachment.ts` · `scriptsBlock`) —
+ * appended LAST, after the standing line and the limits block, under the same
+ * separator. Absent → the bytes it always was.
  */
 export function composeAnswerWithCoverage(
   answer: string,
@@ -439,6 +446,7 @@ export function composeAnswerWithCoverage(
   presentation?: BoundPresentation,
   time?: TimeLimitLines,
   displayNameOf?: (toolName: string) => string | undefined,
+  scripts = '',
 ): string {
   const blocks: string[] = [];
   // The answer layer's standing line (honesty layer 4, its own opt-in arm)
@@ -449,6 +457,8 @@ export function composeAnswerWithCoverage(
   const coverage = coverageBlock(declared, presentation, time, displayNameOf);
   if (coverage !== '') blocks.push(coverage);
   if (assumed !== '') blocks.push(assumed);
+  // The scripts the library attached from the record, after everything else.
+  if (scripts !== '') blocks.push(scripts);
   if (blocks.length === 0) return answer;
   // The model's answer: trimmed in one pass, never `/\s+$/` (lib/linearText.ts).
   const body = trimTrailing(answer, isRegExpWhitespace);

@@ -31,6 +31,7 @@ import {
   allow,
   askHuman,
   checkInApproved,
+  codeRunnerTool,
   coverage,
   defineRAG,
   defineTool,
@@ -322,6 +323,49 @@ const CASES: readonly FeatureCase[] = [
         .namesAndNumbersFromEvidence()
         .build(),
     drive: (agent) => agent.run({ message: 'count them' }),
+  },
+  {
+    // A code-running call's program rides `script` rows (`findingsLedger`), the
+    // matched block on the answer, and the attached copy on `turn_end.scripts`
+    // and in the answer itself.
+    feature: 'code in an answer (a script submitted, shown and attached)',
+    canaries: ['CANARY-SCRIPT-CODE'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            {
+              toolCalls: [
+                { id: 'c1', name: 'run_code', args: { code: 'print("CANARY-SCRIPT-CODE")' } },
+              ],
+            },
+            {
+              content: 'It printed the value.\n\n```python\nprint("CANARY-SCRIPT-CODE")\n```',
+            },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          codeRunnerTool({
+            runner: {
+              id: 'answering',
+              start: () =>
+                Promise.resolve({
+                  id: 's1',
+                  execute: () =>
+                    Promise.resolve({ ok: true, exitCode: 0, stdout: 'done', stderr: '' }),
+                  stop: () => Promise.resolve(),
+                }),
+            },
+          }),
+        )
+        .namesAndNumbersFromEvidence({ code: 'match' })
+        .scriptTravelsWithTheAnswer()
+        .answerLayer()
+        .build(),
+    drive: (agent) => agent.run({ message: 'print it' }),
   },
   {
     // A GUARDING gate keeps the draft's unsupported values (`evidenceUnsupported`).

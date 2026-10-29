@@ -33,6 +33,7 @@ import {
   Agent,
   allow,
   askHuman,
+  codeRunnerTool,
   coverage,
   defineTool,
   type Tool,
@@ -321,6 +322,75 @@ describe('SCENARIO — the law across the evidence gate’s one revision', () =>
     const l = await leg(agent, () => agent.run({ message: 'which port?' }));
     const s = await holdsTheLaw(agent, l);
     expect(s.reasons).toEqual(['value-survived-revision']);
+  });
+});
+
+describe("SCENARIO — the law with code in an answer (`code: 'match'`)", () => {
+  const PROGRAM = 'print(sum([1200, 2400]))';
+  const codeTool = (): Tool =>
+    codeRunnerTool({
+      runner: {
+        id: 'answering',
+        start: () =>
+          Promise.resolve({
+            id: 's1',
+            execute: () => Promise.resolve({ ok: true, exitCode: 0, stdout: '3600', stderr: '' }),
+            stop: () => Promise.resolve(),
+          }),
+      },
+    }) as unknown as Tool;
+  const fenced = (program: string) => `\`\`\`python\n${program}\n\`\`\``;
+  const scriptAgent = (answers: readonly string[], posture: 'assist' | 'guard' = 'assist') =>
+    Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: PROGRAM } }] },
+          ...answers.map((content) => ({ content })),
+        ] as never,
+      }),
+      model: 'mock',
+    })
+      .tool(codeTool())
+      .namesAndNumbersFromEvidence({ posture, code: 'match' })
+      .scriptTravelsWithTheAnswer()
+      .answerLayer()
+      .build();
+  /** The script-shown rows are filed for the ONE answer that stands. */
+  const shownRowsOfOneAnswer = (agent: Agent): Record<string, unknown>[] => {
+    const ledger = ((agent.getLastSnapshot()?.sharedState as { findingsLedger?: unknown[] })
+      .findingsLedger ?? []) as Record<string, unknown>[];
+    const rows = ledger.filter((r) => r.kind === 'script-shown');
+    expect(new Set(rows.map((r) => r.iteration)).size).toBeLessThanOrEqual(1);
+    return rows;
+  };
+
+  it('a matched block: the check ran, nothing fired — consistent, and the law holds', async () => {
+    const agent = scriptAgent([`Total 3600.\n\n${fenced(PROGRAM)}`]);
+    const l = await leg(agent, () => agent.run({ message: 'total?' }));
+    const s = await holdsTheLaw(agent, l);
+    expect(s.standing).toBe('consistent');
+    expect(s.checked.map((c) => c.check)).toContain('script-match');
+    expect(shownRowsOfOneAnswer(agent)).toHaveLength(1);
+  });
+
+  it('an unmatched block: script-unmatched, not sure — and the law holds', async () => {
+    const agent = scriptAgent([`Total 3600.\n\n${fenced('print(3600)')}`]);
+    const l = await leg(agent, () => agent.run({ message: 'total?' }));
+    const s = await holdsTheLaw(agent, l);
+    expect(s.reasons).toContain('script-unmatched');
+  });
+
+  it('a draft whose block missed is sent back; only the revision that stands files its rows', async () => {
+    const agent = scriptAgent(
+      [`Total 3600.\n\n${fenced('print(1200 + 2500)')}`, `Total 3600.\n\n${fenced(PROGRAM)}`],
+      'guard',
+    );
+    const l = await leg(agent, () => agent.run({ message: 'total?' }));
+    const s = await holdsTheLaw(agent, l);
+    expect(s.reasons).not.toContain('script-unmatched');
+    expect(shownRowsOfOneAnswer(agent)).toEqual([
+      expect.objectContaining({ label: 'completed', toolCallId: 'c1' }),
+    ]);
   });
 });
 

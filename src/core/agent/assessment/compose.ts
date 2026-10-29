@@ -49,8 +49,10 @@ import type {
  * Bumped whenever any word of the tables below changes. 2: the named clauses
  * (`NAMED_REASON_WORDS`) and the assumed clause's named form — said only for a
  * call whose tool declares a `displayName`; every version-1 line is unchanged.
+ * 3: the `script-unmatched` clause and the `script-match` check's word; every
+ * version-2 line is unchanged.
  */
-export const STANDING_LINE_VERSION = 2;
+export const STANDING_LINE_VERSION = 3;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -273,6 +275,7 @@ const CHECK_WORDS: Readonly<Record<AssessmentCheck, string>> = {
   'result-shape': 'what came back',
   'result-period': 'the time each result covered',
   'names-and-numbers': 'names and numbers',
+  'script-match': 'scripts shown',
   'answer-checks': "the app's answer checks",
 };
 
@@ -300,6 +303,8 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
     'names or numbers in the answer appear in no tool result, even after one revision',
   'derived-from-reading':
     "a time in the answer is the library's own spelling of your words, not something you said or a tool returned",
+  'script-unmatched':
+    'a script shown in the answer matches no submission of this turn on the record',
   'stopped-early': 'the run stopped before the model finished',
   'steps-unfinished': "the answer came before the skill's declared steps finished",
   'negative-prose-unverified': 'model prose was not verified for negative claims',

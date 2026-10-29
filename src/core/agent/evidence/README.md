@@ -58,6 +58,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `answerCarriers.ts` | which of THIS turn's results the answer's values were read from (`answerCarriersOf`) — identities and counts, the whole list or none; rides `evidence_checked` as `carriedBy` |
 | `gate.ts` | resolve options, judge an answer, write the sentences |
 | `recovery.ts` | resolve bounded recovery guidance and compose the internal repair instruction |
+| `codeRegions.ts` | the fenced code blocks of an answer, in one linear pass — read only under `code: 'match'` (`../scripts/`) |
 | `errors.ts` | `UnsupportedValuesError` — the `rails` refusal at the boundary |
 | `index.ts` | the door: what the main barrel publishes |
 
@@ -320,6 +321,37 @@ Pinned by `test/core/agent/evidence/numeric-rounding-scientific.test.ts`,
 `numeric-rounding-scientific.property.test.ts` (seeded, against an
 independent oracle) and `numeric-scientific-identity.test.ts` (the option
 off, byte for byte).
+
+## Code in an answer (`code: 'match'`)
+
+**The law: a fenced block is script content only when it equals, byte for byte
+after removing the Markdown wrapper, a program ONE call of THIS turn submitted
+to a tool that declares it runs one (`Tool.script`). A match yields no value
+candidates and grounds nothing; a miss is prose, checked as today.** Code is
+never evidence: the corpus and the exempt corpus are untouched.
+
+Why: an app that requires "always show the script" had its correct answers
+flagged for the script's own constants and format specifications
+(`{mean_latency_ms:.2f}` reads as an identifier), and the cheapest revision
+that passes is to delete the script.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(codeRunnerTool({ runner }))                // declares script: { argument: 'code' }
+  .namesAndNumbersFromEvidence({ posture: 'guard', code: 'match' })
+  .build();
+// The answer shows the program it ran, byte for byte:
+//   evidence_checked.scripts.blocks → [{ block: 1, label: 'completed', exitCode: 0, toolCallId: 'c1', tool: 'run_code' }]
+// One constant changed in the shown copy:
+//   → [{ block: 1, label: 'unmatched', reason: 'no-submission-this-turn' }], its values flagged with region: 'code'
+```
+
+`code: 'check'` (the default) is the gate as it was, byte for byte. The match
+runs inside the one judge closure (`../stages/route.ts` · `judgeEvidence`,
+through `../scripts/judge.ts`), so the draft and the delivered candidate are
+read alike; a typed answer is not scanned. The grammar, the labels, the
+attachment (`.scriptTravelsWithTheAnswer()`) and the bounds are in
+[`../scripts/README.md`](../scripts/README.md).
 
 ## Why `guard` is a Route branch and not a loop of its own
 

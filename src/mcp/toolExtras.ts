@@ -66,6 +66,7 @@ import {
 } from '../tools/tools.js';
 import type { ToolResultClass } from '../semantics/types.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from '../tools/declare.js';
+import { assertToolScript, copyToolScript, type ToolScript } from '../tools/script.js';
 import {
   assertToolSearch,
   freezeSearch,
@@ -160,6 +161,14 @@ export interface McpToolExtras {
    * establish nothing: the server's words are untrusted.
    */
   readonly search?: ToolSearch;
+  /**
+   * This tool RUNS a program, carried by its one string argument `argument`
+   * — see {@link Tool.script}. It passes this file's bar: a consumer-side
+   * record reads it (which program a call submitted, matched against what the
+   * answer shows) and it governs nothing about how the server runs the tool.
+   * Judged against the listed tool's own `inputSchema`.
+   */
+  readonly script?: ToolScript;
 }
 
 // ─── A call's own metadata: the time layer's `ctx.time` ──────────────
@@ -207,6 +216,7 @@ export function toolExtrasOf(tool: Tool): McpToolExtras | undefined {
     ...(tool.askOrAssume !== undefined && { askOrAssume: tool.askOrAssume }),
     ...(tool.period !== undefined && { period: tool.period }),
     ...(tool.search !== undefined && { search: tool.search }),
+    ...(tool.script !== undefined && { script: tool.script }),
   };
   return Object.keys(extras).length > 0 ? extras : undefined;
 }
@@ -294,6 +304,11 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
       ...(periodArguments !== undefined && { periodArguments }),
     }),
   ) as ToolSearch | undefined;
+  // The program's argument, judged against the listed schema — the same rule
+  // `defineTool` runs (`tools/script.ts`), stored as a frozen copy.
+  const script = kept('script', (v) => assertToolScript(origin.tool, v, schema)) as
+    | ToolScript
+    | undefined;
 
   return {
     ...(argumentsFrom !== undefined && { argumentsFrom }),
@@ -309,6 +324,7 @@ export function readToolExtras(meta: unknown, origin: McpToolExtrasOrigin): McpT
     // Stored frozen, its value words a null-prototype map — a remote server's
     // words never index anything through an inherited key.
     ...(search !== undefined && { search: freezeSearch(search) }),
+    ...(script !== undefined && { script: copyToolScript(script) }),
   };
 }
 

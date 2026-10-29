@@ -465,6 +465,21 @@
  * nothing); and the final answer's `Period:` lines render in Los Angeles time
  * with the zone named.
  *
+ * Code in an answer (the script record): one new reference,
+ * `agent-script-artifact` — `codeRunnerTool` (which now declares `script`)
+ * under `.namesAndNumbersFromEvidence({ code: 'match' })` and
+ * `.scriptTravelsWithTheAnswer()`, the answer showing the submitted program
+ * byte for byte. None of the earlier references moved: no earlier scenario
+ * arms either, so no `script` row is filed, no new key is read and no line
+ * changes. What it holds: the dispatching `tool-calls` bundle appends ONE
+ * `script` row (`text` the program submitted, `outcome: 'completed'`,
+ * `exitCode: 0`, `turn: 1`); the served view of the code tool's schema is the
+ * unarmed tool's (the declaration rides the Tool, never the wire); the Route
+ * decider reads `findingsLedger` and `turnNumber` for the match; and the
+ * matched block files no value candidate. The attachment rides the Final
+ * subflow, whose own log this projection does not read; its bytes are pinned
+ * by `test/core/agent/evidence/script-artifact.test.ts`.
+ *
  * The time follow-ups G15/G16 (the run clock served): `agent-time-clock` ONLY
  * was regenerated (`-t agent-time-clock` under `AF_TOOLS_REFERENCE=update`);
  * every unarmed reference is untouched. The delta, path by path: the Tools
@@ -532,6 +547,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
+  codeRunnerTool,
   absent,
   Agent,
   defineTool,
@@ -1417,6 +1433,37 @@ const SCENARIOS: Record<string, () => Promise<Snapshot>> = {
           }),
         )
         .answerLayer(),
+    ),
+  // Code in an answer: a code-running call, its program shown back byte for
+  // byte under `code: 'match'`, and the attachment armed. See the header.
+  'agent-script-artifact': () =>
+    agentRun(
+      'dynamic',
+      [
+        // `compute`, not `run_code`: the normaliser reads `run_…` as a run id.
+        call('c1', 'compute', { code: 'print(41 + 1)' }),
+        answer('It printed 42.\n\n```python\nprint(41 + 1)\n```'),
+      ],
+      (a) =>
+        a
+          .system('bot')
+          .tool(
+            codeRunnerTool({
+              name: 'compute',
+              runner: {
+                id: 'fixed',
+                start: () =>
+                  Promise.resolve({
+                    id: 's1',
+                    execute: () =>
+                      Promise.resolve({ ok: true, exitCode: 0, stdout: '42', stderr: '' }),
+                    stop: () => Promise.resolve(),
+                  }),
+              },
+            }),
+          )
+          .namesAndNumbersFromEvidence({ code: 'match' })
+          .scriptTravelsWithTheAnswer(),
     ),
   // The time layer's clock (step T3): the results-layer scenario's tool under
   // `.time()` and `.limitsTravelWithTheAnswer()`, with the run's `now` passed

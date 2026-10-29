@@ -122,6 +122,82 @@ Spelling differences are normalised on both sides, which is where a naive
 implementation produces its worst false positives: `41,200` in prose matches the
 JSON number `41200`, `2048.0` matches `2048`, and `0xef0101` matches `ef0101`.
 
+## Show the script the answer was computed with
+
+A data agent often hands the script it ran back in the answer, because the app
+says "always show the script". Read as prose, the script's constants and format
+specifications (`{mean:.2f}`) become values to ground — and the cheapest
+revision that passes the check is to delete the script.
+
+Two opt-ins fix that, and both rest on one declaration: a tool that runs a
+program says so (`script: { argument: 'code', language }` on `defineTool`;
+`codeRunnerTool` declares it). Each call of such a tool records the program it
+was handed and what its runner reported.
+
+* **`.scriptTravelsWithTheAnswer()`** — the library attaches the recorded
+  program itself, under the answer, labelled from the run record. The model
+  never retypes it, so there is nothing to check. A prose answer gets it as text
+  after the `---` separator; every answer gets it as data on
+  `turn_end.scripts`; a typed answer gets the data only.
+* **`code: 'match'`** — a fenced block the model wrote anyway is compared, byte
+  for byte after removing only the Markdown wrapper, with the programs this
+  turn's calls submitted. A match is script content: it yields no values to
+  check and is labelled with that call's outcome. Anything else stays prose,
+  checked as before, labelled `unmatched`.
+
+<CodeFile path="examples/features/120-script-artifact.ts" region="script-artifact" title="The script travels with the answer (local runner, mock model)" />
+
+The label says only what the record proves:
+
+| Label | Means |
+|---|---|
+| `completed, exit 0` | the runner reported exit code 0 |
+| `completed with failure, exit 7` | the runner reported that non-zero exit code |
+| `runner reported success; no exit code` | a bare verdict, no exit code — not proof the program ran to an exit |
+| `runner reported failure; no exit code` | the same, for failure (a stopped process included) |
+| `outcome unknown` | a timeout, a cancellation or an error with no runner facts, or a service error with no exit code |
+| `tool call returned; execution not confirmed` | the tool returned, and no runner said how the program ended |
+| `submitted` | the call never reached the tool (refused, never dispatched, or still open) |
+
+What the record holds, by type:
+
+* A tool declares its program argument with a `ToolScript`
+  (`{ argument, language? }`). The argument must be a declared string property.
+* Each call of a declaring tool files one `ScriptRow` on the findings ledger:
+  the program the tool was handed, its UTF-8 `bytes` and `lines`, its
+  `ScriptLabel`, and `exitCode` only when the runner gave one.
+* `evidence_checked.scripts` is a `ScriptsVerdict`, with one
+  `ScriptBlockVerdict` per fenced block. Each verdict holds either the matched
+  call with its label, or `unmatched` with an `UnmatchedReason`:
+  `no-submission-this-turn`, `over-size`, or `kept-out`. Only a reader of a
+  redacted record produces `kept-out`; a live run never does.
+* `turn_end.scripts` is a `TurnEndScripts`: one `ShownScript` per attached
+  program, plus how many were left out.
+* `.scriptTravelsWithTheAnswer()` takes `ScriptTravelOptions`. `which` is
+  `'last'` (the default) or `'all'`; `maxBytes` defaults to 4,000.
+* The answer that stands files one `ScriptShownRow` per block, for the
+  standing record.
+
+Gotchas:
+
+* **Code is never evidence.** A matched script grounds nothing: a value in the
+  prose that also sits in the script still needs a tool result, and a script
+  that printed `99999` proves it printed `99999`, not that revenue was `99999`.
+* **Nothing is normalized.** A copy that differs by one byte — a trailing space,
+  CRLF for LF, a combining accent — is a different program, so it is a miss.
+* **Formatting exempts nothing.** Inline code, indented code, a fence with
+  leading spaces and a fence that never closes are prose.
+* **Only this turn.** A block is compared with this turn's calls only; a
+  program from an earlier turn is a miss.
+* **Bounded.** A program over 32,768 UTF-8 bytes keeps its facts but no text
+  (never matched, never attached); 16 calls a turn keep a row; 32 blocks an
+  answer are read; an attached program over `maxBytes` (default 4,000 bytes) is
+  cut and says it is incomplete.
+* **A redaction policy** keeps the program out of every record; the label and
+  the counts stay. The attached text is part of the answer `run()` returns,
+  which no policy covers — an app that attaches scripts shows what its own tool
+  was handed.
+
 ## Round a plain decimal without inventing evidence
 
 Use `decimalRounding: true` when an answer should report a carried measurement

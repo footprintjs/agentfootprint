@@ -315,6 +315,18 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       count: 1,
       why: 'the decimalRounding option refusal thrown to the developer at setup; it cannot become a model message or a trusted result',
     },
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: "the `code` option refusal ('check' | 'match') thrown to the developer at setup; it cannot become a model message or a trusted result",
+    },
+  ],
+  'src/core/agent/scripts/attachment.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: '.scriptTravelsWithTheAnswer() option refusal (`which`) thrown to the developer at setup; no model reads it',
+    },
   ],
   'src/core/agent/evidence/recovery.ts': [
     {
@@ -1243,12 +1255,18 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // (mcp/callChecks.ts, one new file). The task refusal's "Use …" is the SDK's text, kept verbatim so
         // both pages fail alike: files 104 → 105, total 203 → 204, unrepaired
         // 34 → 35 (entries 14 → 15).
-        files: 105,
-        total: 204,
+        // Code in an answer (the script record): two host-only option refusals —
+        // `code` in evidence/gate.ts (6 → 7) and `which` in the new
+        // scripts/attachment.ts — thrown to the developer at setup. The recovery
+        // clause (scripts/recovery.ts) is request-only and registered in
+        // modelFacingSurfaces; it matches no persistent rule. files 105 → 106,
+        // total 204 → 206, notModelFacing 135 → 137.
+        files: 106,
+        total: 206,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 135,
+        notModelFacing: 137,
         unrepairedEntries: 15,
       });
       // And the ledger's own total is the number of literals the scan flagged —

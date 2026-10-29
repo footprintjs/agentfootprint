@@ -1,6 +1,6 @@
 **Mixed** — the answer's standing, folded from the run's committed record: known · consistent with the record · not sure (with the reasons) · ask · not assessed — read after the run, and (honesty layer 4, the answer layer) inside it.
 Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `sources.ts` (what each reason rests on, and `rowList`, the one way a list on a row is read).
-Map: `witness.ts` (the answer layer's two committed witness rows, filed by the Route decider).
+Map: `witness.ts` (the answer layer's committed witness rows — `grounded`, `steps-unfinished`, `script-shown` — filed by the Route decider).
 Walker: `stage.ts` (the answer layer's one stage, at the head of the final branch).
 Lens: `compose.ts` (the standing as data, and as one line for the person under its own arm).
 
@@ -170,6 +170,7 @@ grows as later honesty steps commit new rows.
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
 | `derived-from-reading` | 4 | `findingsLedger`: a `time-derived` row of this turn — the answer states a time value no tool result carried that the library itself spelled from a reading of the person's words (an implied year, an offset, the end-of-grain minute, the served time line; the time layer, step T7 — `time/forms.ts` · `timeFormsOf`). Folded like `argument-assumed`: "not sure", never "known" |
+| `script-unmatched` | 4 | `findingsLedger`: a `script-shown` witness row of this turn with `label: 'unmatched'` — a fenced block the answer showed equals no program this turn's calls submitted to a declared code-running tool (`.namesAndNumbersFromEvidence({ code: 'match' })`, filed while the answer layer is armed — `../scripts/README.md`). Its own reason: a script can miss while every number is in a result. A matched block fires nothing and supports nothing; every block files the `script-match` check |
 | `stopped-early` | 4 | `stoppedEarly` |
 | `steps-unfinished` | 4 | `findingsLedger`: a `steps-unfinished` witness row of this turn — the answer came before the active skill's declared steps finished (filed while the answer layer is armed) |
 | `negative-prose-unverified` | 4 | `findingsLedger`: a `negative-claim` or `negative-claim-note` row of this turn. Model prose is observe-only; detected negatives and skipped scans remain not-sure, never verified or blocking. |
@@ -299,7 +300,7 @@ or a value.
 | Rests on | Reasons |
 |---|---|
 | `calls` | `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
-| `answer` | `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
+| `answer` | `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
 | `run` | `asked`, `argument-asked`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
 
 **Why.** "Not sure — a tool said nothing matched" did not say which tool: when an

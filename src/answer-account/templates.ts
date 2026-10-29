@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 13;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 14;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -327,6 +327,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "Names and numbers: the answer's were looked up in what the tools returned.",
   ),
   'howSure.check.answerChecks': t("The app's answer checks: they ran on this answer."),
+  // Code in an answer (`code: 'match'`) — set 14.
+  'howSure.check.scriptMatch': t(
+    "Scripts shown: {{ran}} of {{count:of,'fenced block','fenced blocks'}} were compared with this turn's submitted programs.",
+  ),
   // The inputs layer (honesty layer 2) — set 3.
   'howSure.check.argumentRules': t(
     "Argument rules: {{ran}} of {{count:of,'ruled argument','ruled arguments'}} had a verdict on the record.",
@@ -396,6 +400,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.derivedFromReading': t(
     "A time in the answer is the library's own spelling of your words — an implied year, an offset or a converted form — not something you said or a tool returned.",
   ),
+  // Code in an answer (`code: 'match'`) — set 14.
+  'howSure.reason.scriptUnmatched': t(
+    'A script shown in the answer matches no submission of this turn on the record.',
+  ),
   'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
   // The answer layer's witness (honesty layer 4) — set 5.
   'howSure.reason.stepsUnfinished': t(
@@ -458,6 +466,70 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'howSure.evidence.notRecorded': t(
     "Whether the answer's names and numbers were checked is not recorded.",
+  ),
+  // Code in an answer — set 14. One line per script the answer SHOWED (`code: 'match'`) and per
+  // script the library ATTACHED (`.scriptTravelsWithTheAnswer()`). The match is the library's
+  // fact, the outcome the tool's runner's: a sentence takes the weaker, the library's. An exit
+  // number is printed only from a recorded exit code; no line joins a script to a value.
+  'howSure.script.shown.submitted': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; it was submitted, and the call has not returned.',
+  ),
+  'howSure.script.shown.returned': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; the tool call returned; execution is not confirmed.',
+  ),
+  'howSure.script.shown.reportedSuccess': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; the runner reported success; no exit code was recorded.',
+  ),
+  'howSure.script.shown.reportedFailure': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; the runner reported failure; no exit code was recorded.',
+  ),
+  'howSure.script.shown.completed': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; it completed, exit 0.',
+  ),
+  'howSure.script.shown.completedWithFailure': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; it completed with failure, exit {{exit}}.',
+  ),
+  'howSure.script.shown.unknown': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; its outcome is unknown: the call ended before the runner reported.',
+  ),
+  'howSure.script.shown.unknownService': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; its outcome is unknown: the service reported an error, and whether the program ran is not known.',
+  ),
+  'howSure.script.shown.withheld': t(
+    "The script shown is the one submitted to {{tool:code}} on call {{call:code}}; its result was withheld over the tool's ceiling; the execution itself completed, exit 0.",
+  ),
+  'howSure.script.withheld': t(
+    "The result of call {{call:code}} was withheld over the tool's ceiling; that does not change what its execution record says.",
+  ),
+  'howSure.script.rewritten': t(
+    'A before-tool rule changed the script of call {{call:code}} before dispatch; the script shown is the one submitted to the tool.',
+  ),
+  'howSure.script.unmatched': t(
+    'A script shown matches no submission of this turn on the record; its contents were checked as prose.',
+  ),
+  'howSure.script.attached.returned': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (tool call returned; execution not confirmed; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.reportedSuccess': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (runner reported success; no exit code; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.reportedFailure': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (runner reported failure; no exit code; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.completed': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (completed, exit 0; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.completedWithFailure': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (completed with failure, exit {{exit}}; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.unknown': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (outcome unknown; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.cut': t(
+    'The attached script of call {{call:code}} shows {{shown}} of its {{bytes}} bytes — not the whole program.',
+  ),
+  'howSure.script.attached.omitted': t(
+    "{{count:n,'more script of this turn was','more scripts of this turn were'}} not attached: over the bound or past the cap.",
   ),
 
   // ── Anything wrong: signals ──────────────────────────────────────────

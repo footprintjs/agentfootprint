@@ -121,6 +121,8 @@ describe('IMPORT-GRAPH FENCE', () => {
       'core/agent/assessment/compose.ts', // standingLineOf + its inputs — the ONE composer of the standing line
       'core/agent/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader
       'core/agent/evidence/limits.ts', // MAX_REPORTED_VALUES — the event's cap, a leaf
+      'core/agent/scripts/attachment.ts', // scriptsBlock — the ONE composer of the attached scripts, rebuilt to find the block
+      'core/agent/scripts/rows.ts', // scriptRowsOfTurn — the ONE reader of a turn's script rows
       'lib/plainLine.ts', // plainLineProblem — the one "plain visible line" rule for labels
       'lib/saidByPerson.ts', // isSaidByPerson — the ONE rule for which history entry a person wrote (G17)
       'lib/toolBytes.ts', // toolBytesOf — the ONE owner of where a tool's own words end in a result

@@ -1648,6 +1648,15 @@
   ],
   "source": "library"
  },
+ "howSure.check.scriptMatch@1": {
+  "text": "Scripts shown: ran value of 2 fenced blocks were compared with this turn's submitted programs.",
+  "parts": [
+   {
+    "text": "Scripts shown: ran value of 2 fenced blocks were compared with this turn's submitted programs."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.check.argumentRules@1": {
   "text": "Argument rules: ran value of 2 ruled arguments had a verdict on the record.",
   "parts": [
@@ -1842,6 +1851,15 @@
   "parts": [
    {
     "text": "A time in the answer is the library's own spelling of your words — an implied year, an offset or a converted form — not something you said or a tool returned."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.scriptUnmatched@1": {
+  "text": "A script shown in the answer matches no submission of this turn on the record.",
+  "parts": [
+   {
+    "text": "A script shown in the answer matches no submission of this turn on the record."
    }
   ],
   "source": "library"
@@ -2094,6 +2112,384 @@
   "parts": [
    {
     "text": "Whether the answer's names and numbers were checked is not recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.submitted@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; it was submitted, and the call has not returned.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; it was submitted, and the call has not returned."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.returned@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; the tool call returned; execution is not confirmed.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; the tool call returned; execution is not confirmed."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.reportedSuccess@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; the runner reported success; no exit code was recorded.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; the runner reported success; no exit code was recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.reportedFailure@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; the runner reported failure; no exit code was recorded.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; the runner reported failure; no exit code was recorded."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.completed@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; it completed, exit 0.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; it completed, exit 0."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.completedWithFailure@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; it completed with failure, exit exit value.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; it completed with failure, exit exit value."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.unknown@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; its outcome is unknown: the call ended before the runner reported.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; its outcome is unknown: the call ended before the runner reported."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.unknownService@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; its outcome is unknown: the service reported an error, and whether the program ran is not known.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; its outcome is unknown: the service reported an error, and whether the program ran is not known."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.shown.withheld@1": {
+  "text": "The script shown is the one submitted to lookup_volumes on call call value; its result was withheld over the tool's ceiling; the execution itself completed, exit 0.",
+  "parts": [
+   {
+    "text": "The script shown is the one submitted to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " on call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": "; its result was withheld over the tool's ceiling; the execution itself completed, exit 0."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.withheld@1": {
+  "text": "The result of call call value was withheld over the tool's ceiling; that does not change what its execution record says.",
+  "parts": [
+   {
+    "text": "The result of call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " was withheld over the tool's ceiling; that does not change what its execution record says."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.rewritten@1": {
+  "text": "A before-tool rule changed the script of call call value before dispatch; the script shown is the one submitted to the tool.",
+  "parts": [
+   {
+    "text": "A before-tool rule changed the script of call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " before dispatch; the script shown is the one submitted to the tool."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.unmatched@1": {
+  "text": "A script shown matches no submission of this turn on the record; its contents were checked as prose.",
+  "parts": [
+   {
+    "text": "A script shown matches no submission of this turn on the record; its contents were checked as prose."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.returned@1": {
+  "text": "The script under the answer was attached by the library from the record of lookup_volumes's call call value (tool call returned; execution not confirmed; bytes value bytes).",
+  "parts": [
+   {
+    "text": "The script under the answer was attached by the library from the record of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "'s call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " (tool call returned; execution not confirmed; bytes value bytes)."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.reportedSuccess@1": {
+  "text": "The script under the answer was attached by the library from the record of lookup_volumes's call call value (runner reported success; no exit code; bytes value bytes).",
+  "parts": [
+   {
+    "text": "The script under the answer was attached by the library from the record of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "'s call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " (runner reported success; no exit code; bytes value bytes)."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.reportedFailure@1": {
+  "text": "The script under the answer was attached by the library from the record of lookup_volumes's call call value (runner reported failure; no exit code; bytes value bytes).",
+  "parts": [
+   {
+    "text": "The script under the answer was attached by the library from the record of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "'s call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " (runner reported failure; no exit code; bytes value bytes)."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.completed@1": {
+  "text": "The script under the answer was attached by the library from the record of lookup_volumes's call call value (completed, exit 0; bytes value bytes).",
+  "parts": [
+   {
+    "text": "The script under the answer was attached by the library from the record of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "'s call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " (completed, exit 0; bytes value bytes)."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.completedWithFailure@1": {
+  "text": "The script under the answer was attached by the library from the record of lookup_volumes's call call value (completed with failure, exit exit value; bytes value bytes).",
+  "parts": [
+   {
+    "text": "The script under the answer was attached by the library from the record of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "'s call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " (completed with failure, exit exit value; bytes value bytes)."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.unknown@1": {
+  "text": "The script under the answer was attached by the library from the record of lookup_volumes's call call value (outcome unknown; bytes value bytes).",
+  "parts": [
+   {
+    "text": "The script under the answer was attached by the library from the record of "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "'s call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " (outcome unknown; bytes value bytes)."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.cut@1": {
+  "text": "The attached script of call call value shows shown value of its bytes value bytes — not the whole program.",
+  "parts": [
+   {
+    "text": "The attached script of call "
+   },
+   {
+    "code": "call value"
+   },
+   {
+    "text": " shows shown value of its bytes value bytes — not the whole program."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.omitted@1": {
+  "text": "2 more scripts of this turn were not attached: over the bound or past the cap.",
+  "parts": [
+   {
+    "text": "2 more scripts of this turn were not attached: over the bound or past the cap."
    }
   ],
   "source": "library"

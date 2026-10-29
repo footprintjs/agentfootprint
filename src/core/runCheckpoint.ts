@@ -72,6 +72,7 @@ import { argumentRowIsWellFormed } from './agent/arguments/rows.js';
 import { referenceRefusalRowIsWellFormed } from './agent/findings/refusal.js';
 import { periodRowIsWellFormed } from '../semantics/coverage/period.js';
 import { witnessRowIsWellFormed } from './agent/assessment/witness.js';
+import { scriptRowIsWellFormed } from './agent/scripts/rows.js';
 import { isTimeRowKind, timeRowIsWellFormed } from '../time/rows.js';
 import {
   BASIS_VALUES,
@@ -785,13 +786,21 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     case 'period':
       return periodRowIsWellFormed(r);
     // The answer layer's witness rows (honesty layer 4): the evidence gate's
-    // clean verdict and an answer given before its declared steps finished.
-    // The arms ship in the SAME change as the kinds; one owner of their shape
+    // clean verdict, an answer given before its declared steps finished, and
+    // the script match's verdict on a shown block (`script-shown`). The arms
+    // ship in the SAME change as the kinds; one owner of their shape
     // (`assessment/witness.ts`). An older runtime refuses a checkpoint that
-    // carries either kind.
+    // carries any of them.
     case 'grounded':
     case 'steps-unfinished':
+    case 'script-shown':
       return witnessRowIsWellFormed(r);
+    // The script record (`core/agent/scripts/`): one row per call of a
+    // declared code-running tool. The arm ships in the SAME change as the
+    // kind; one owner of its shape (`scripts/rows.ts`). An older runtime
+    // refuses a checkpoint that carries it.
+    case 'script':
+      return scriptRowIsWellFormed(r);
     default:
       return false;
   }
@@ -920,6 +929,10 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "'grounded' (with turn, iteration, posture, candidates, lookedUp) or " +
           "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
           'total, action: accepted | cut-short) or ' +
+          "'script-shown' (with turn, iteration, block, a script label or 'unmatched' with a " +
+          'reason) or ' +
+          "'script' (with toolCallId, tool, argument, bytes, lines, a script outcome, turn, " +
+          'iteration, and text only as long as bytes says, within the bound) or ' +
           "'clock' (with turn, iteration, now, nowSource, zone, zoneSource) or " +
           "'clock-on-resume' (with turn, iteration, passed, kept) or " +
           "'call' (with turn, iteration, toolCallId, toolName, dispatchedAt) or " +

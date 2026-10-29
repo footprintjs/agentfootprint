@@ -26,6 +26,7 @@ import type { ArtifactOrigin, ArtifactSweepReason } from '../artifacts/types.js'
 import type { DatasetTimeAxis } from '../time/axis.js';
 import type { ThinkingBlock } from '../thinking/types.js';
 import type { LoopMoment } from '../lib/moments.js';
+import type { ScriptsVerdict, TurnEndScripts } from '../lib/scriptRecord.js';
 import type { InstructionDeliveryLease, ToolResultStatus } from '../semantics/toolEffects.js';
 import type { ToolSemantics } from '../semantics/types.js';
 import type { Basis, Expect, Standing } from '../core/agent/findings/types.js';
@@ -215,6 +216,20 @@ export interface AgentTurnEndPayload {
   readonly standingLineNames?: Readonly<Record<string, string>>;
   /** Runtime-composed typed negatives, with verification and delivery kept separate. */
   readonly answerNegatives?: AnswerNegativesPayload;
+  /**
+   * The scripts the library attached to the answer — present ONLY under
+   * `.scriptTravelsWithTheAnswer()`, on every answer. Each `shown` entry is
+   * the program a call SUBMITTED to a declared code-running tool, read from
+   * the run record (never retyped by the model), with the call's label read
+   * from its execution record: `exitCode` only when the runner supplied one,
+   * `truncated` when the text is cut at `maxBytes`. `omitted` counts the
+   * calls not attached (the cap, a program over the bound, a call past the
+   * per-turn rows). A prose answer also carries them as text after its `---`
+   * separator; a typed answer carries them here only. `text` is a
+   * model-written string: under any redaction policy it is served as the
+   * placeholder, and the label and the counts survive.
+   */
+  readonly scripts?: TurnEndScripts;
   /**
    * The answer was REFUSED — present ONLY then. Under the evidence gate's
    * `'rails'` posture (`.namesAndNumbersFromEvidence()`), an answer stating
@@ -3157,8 +3172,14 @@ export interface AgentEvidenceCheckedPayload {
    */
   readonly lookedUp?: number;
   /** The values that appear in no tool result, truncated to a readable list.
-   *  Empty when `action` is `'grounded'`. */
-  readonly unsupported: readonly { readonly value: string; readonly shape: string }[];
+   *  Empty when `action` is `'grounded'`. Under `code: 'match'` each says
+   *  where it sat: `'code'` when every occurrence was inside a fenced block
+   *  that matched no submission, `'prose'` otherwise. */
+  readonly unsupported: readonly {
+    readonly value: string;
+    readonly shape: string;
+    readonly region?: 'prose' | 'code';
+  }[];
   /**
    *   • `'grounded'`       — every value was found; the answer stands.
    *   • `'revision-asked'` — the values went back to the model for one more
@@ -3225,6 +3246,17 @@ export interface AgentEvidenceCheckedPayload {
     readonly derivation: string;
     readonly from: string;
   }[];
+  /**
+   * Under `.namesAndNumbersFromEvidence({ code: 'match' })`, on a prose
+   * answer: one verdict per fenced block the answer showed — a block equal,
+   * byte for byte after removing only the Markdown wrapper, to a program a
+   * call of THIS turn submitted to a declared code-running tool carries that
+   * call's id, tool and label (`completed`, `outcome-unknown`, …) and was not
+   * read for values; any other block is `unmatched` with a reason and was
+   * read as prose. `earlierTurnRows` counts earlier turns' script rows (never
+   * compared); `regionsDropped` the blocks past the cap. Never the code.
+   */
+  readonly scripts?: ScriptsVerdict;
 }
 
 /**

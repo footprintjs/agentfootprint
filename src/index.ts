@@ -637,7 +637,24 @@ export type { ArgumentRow } from './core/agent/arguments/rows.js';
 // The answer layer (honesty layer 4, `.answerLayer()`): the two witness rows
 // the Route decider files for it — the evidence gate's clean pass and an
 // answer given before its declared steps finished. Members of `FindingsRow`.
-export type { GroundedRow, StepsUnfinishedRow } from './core/agent/assessment/witness.js';
+export type {
+  GroundedRow,
+  ScriptShownRow,
+  StepsUnfinishedRow,
+} from './core/agent/assessment/witness.js';
+// Code in an answer (`core/agent/scripts/`): the row a call of a code-running
+// tool files — a member of `FindingsRow` — its label, the match's verdict on a
+// shown block, and what `.scriptTravelsWithTheAnswer()` attaches.
+export type {
+  ScriptBlockVerdict,
+  ScriptLabel,
+  ScriptRow,
+  ScriptsVerdict,
+  ScriptTravelOptions,
+  ShownScript,
+  TurnEndScripts,
+  UnmatchedReason,
+} from './core/agent/scripts/types.js';
 // 9.105.0 — tool choice by classifier (`.toolChoice()`): the row shapes
 // `AgentState.toolChoices` carries (a pick before every model call, the
 // outcome after it), the reasons a narrowing was skipped, and the two
@@ -820,6 +837,9 @@ export type {
 // `Tool.askOrAssume` (the library fills an `assume` default and files it) —
 // and which argument sets the period the answer covers (`Tool.period`).
 export type { AskOrAssume, ToolPeriod } from './tools/declare.js';
+// Code in an answer: a tool's declaration that it RUNS a program (`Tool.script`)
+// — the one string argument that carries it, and its language.
+export type { ToolScript } from './tools/script.js';
 export {
   defineTool,
   assertResultCeiling,

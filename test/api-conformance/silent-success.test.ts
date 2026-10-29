@@ -703,6 +703,9 @@ const REFUSES_A_SECOND_CALL = [
   // would let a later fallback zone silently win.
   'time',
   'limitsTravelWithTheAnswer',
+  // One attachment per answer (`which` and `maxBytes` in the one call); a second
+  // call would let a later `which` silently win.
+  'scriptTravelsWithTheAnswer',
   'maps',
   'namesAndNumbersFromEvidence',
   'outputFallback',
@@ -861,6 +864,8 @@ describe('silent success — the doctrine sweep', () => {
       time: () => base().time().time({ zone: 'UTC' }),
       limitsTravelWithTheAnswer: () =>
         base().limitsTravelWithTheAnswer().limitsTravelWithTheAnswer(),
+      scriptTravelsWithTheAnswer: () =>
+        base().scriptTravelsWithTheAnswer().scriptTravelsWithTheAnswer({ which: 'all' }),
       maps: () => base().maps().maps(),
       namesAndNumbersFromEvidence: () =>
         base().namesAndNumbersFromEvidence().namesAndNumbersFromEvidence({ posture: 'guard' }),
