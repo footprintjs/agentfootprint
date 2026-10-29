@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.3.0] - 2026-10-29
+
+### Added
+
+- **A retried MCP call is in the saved run: every attempt, its wait, and how it ended.** When the agent dispatches a tool from `mcpClient`, that call's retry series now files one `agentfootprint.tools.request_attempts` event into the run. It lists each attempt with its outcome (`answered`, `refused`, `failed`, `timed-out` or `cut`), why the series went on or stopped after it (`retryable`, `exhausted`, `wait-limit`, `no-time-left`, `not-replayable`, `not-retryable`, `cancelled`), the wait before the next attempt and any `Retry-After` the server stated, and then how the request ended. Every request the series sent is a row, or is counted in `omitted` past 100 rows, so the rows and `omitted` add up to the requests sent.
+
+  A cut is never recorded as "not run". An attempt cut while its request was in flight is a `cut` row: it was sent, the server may already have received it and run it, and the row says `remote: 'unknown'`. So do `failed` and `timed-out`, where no answer arrived. Only a request that was never sent is recorded as not sent, and it has no row: the next attempt after a cancelled wait, or anything after a signal that was already aborted. The request's `end` is then `cancelled`. It rides `recordRun` recordings, so a saved and re-read run gives it back.
+
+  **An MCP tool call now honours its context's `signal`, and a call never outlives itself.** The call's `ctx.signal` (the run's, for a call the agent dispatched) and the client's own `signal` cancel the MCP request: the SDK rejects the call, drops its response handler and sends the server `notifications/cancelled`. The call's retry series stops too, a wait included, and files at that moment: `cancelled` during `'wait'`, or `cut` during `'request'` with the cut attempt as a row whose remote outcome is `unknown`. A run cancelled during a wait therefore still carries it when saved. When the call settles before its series (the MCP SDK's own request timeout, say), the series is cut there and then, inside the call: it is never filed after the run, and it sends no further request. Before, both cases left the series waiting and asking again after the run had ended.
+
+  Receiving a response is not success: a 503 is `answered` with `status: 503`, and it is still never retried. `refused` is a response the retry policy recognises as a refusal (HTTP 429, or AgentCore Runtime's session-busy reply), recorded as the server sent it.
+
+  Automatic 429 retries assume the server rejected the request before executing it. The saved response records that assumption's basis (the server's 429), not proof that nothing ran. A tool with side effects is retried on 429 like any other today, because the retry has no side-effect guard and sends no deduplication key. `retryOnThrottle: false` turns that off per server. Two calls, or two runs, sharing one MCP client never mix their attempts: each request is matched to its call by the identity of its params object, never by content.
+
+  The record is allow-listed metadata only: numbers, the library's own words, and your `endpointLabel` or else the endpoint's origin (scheme, host and port). It never holds the URL's path or query, the call's arguments, the server's answer or a thrown error's text; a failure is a fixed sentence and its category. A filing is read as plain data, and anything else, an array subclass or a sparse array included, is refused whole. Under a run's redaction policy, the label and the origin are served as the placeholder, like any name you declared. AgentCore Runtime's session-busy retries file the same way.
+
+  A call made outside an agent run (a direct `execute`, `mcpServe`), a client built on your own `connection`, and a transport with retry off (no series runs) file nothing. The transport `mcpClient` builds has its `send` watched in place on the same object, so a transport class with `#private` fields keeps working; assigning its `send` again throws. In dev mode, a request that went out but could not be matched to its call (an SDK that copies the params) is named once per client.
+
+### Fixed
+
+- **A number printed in scientific notation now grounds the same decimal under `decimalRounding`.** With `namesAndNumbersFromEvidence({ decimalRounding: true })`, a script that printed a p-value as `1.12e-02` no longer gets a correct answer's `0.0112` flagged as invented. A whole token in scientific notation in a tool result's text (stdout, a JSON string, a note after the JSON) is read as the exact decimal it states, beside its own spelling: `0.0112` is grounded, `0.011` is recorded as a rounding, and `0.012` is still flagged. The reverse holds too: an answer's `1.12e-2` is grounded by a printed `0.01121` at the precision it was written with. The comparison is exact decimal arithmetic and never crosses magnitude (`1.12e-02` never grounds `1.12`); whole numbers match digit for digit, so `1.2e+21` grounds its 22-digit integer and not one a unit off. The existing bounds apply (256 characters, exponents within ±400). Identifiers such as `9f3e10ab` or `1.2e3-rc` are never read as numbers, and a percentage (`1.12%` for `0.0112`) is still not read as the fraction. With the option off, nothing changes.
+
 ## [11.2.0] - 2026-10-29
 
 ### Added
