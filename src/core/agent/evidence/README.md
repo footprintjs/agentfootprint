@@ -273,8 +273,9 @@ every verdict are byte-identical, pinned against the commit before:
 3. The reverse: an answer in scientific notation is the number it states,
    rounded at the precision it was written with (`1.12e-2` is four places).
    It is reported as that decimal (`0.0113` for `1.13e-2`).
-4. Never across magnitude. A whole number (`3.358e+03`, `1.2e+21`) matches
-   digit for digit and never rounds, like every whole number under the dial.
+4. Never across magnitude. A value with no fractional places after expansion
+   (`3.358e+03`, `1.2e+21`) matches digit for digit and never rounds, like
+   every whole number under the dial.
 5. The existing bounds: the token at most 256 characters, its exponent within
    ±400, and the decimal it states within the same 256 characters. Outside
    them a token stays a spelling only. The decimal takes one entry of the
@@ -295,7 +296,7 @@ every verdict are byte-identical, pinned against the commit before:
 | `1.12e-02` | `0.012`, `1.12` | flagged |
 | `0.01121` | `1.12e-2` | `computed`, `rounded` |
 | `3.358e+03` | `3,358` | grounded |
-| `3,358` | `3.36e+03` | flagged: a whole number never rounds |
+| `3,358` | `3.36e+03` | flagged: no fractional places after expansion, so it never rounds |
 | `1.2e+21` | `1200000000000000000000` / `…001` | grounded / flagged (a double cannot tell them apart) |
 | `1.12e-02` | `1.12%` | flagged under `figures`: a derivation |
 
