@@ -1,10 +1,12 @@
 // Run every reader over one set and score it.
 //
-//   TZ=UTC node scripts/run.mjs existing|heldout [--duckling-replay] [--reference <module>]
+//   TZ=UTC node scripts/run.mjs existing|heldout|regressions [--duckling-replay] [--reference <module>]
 //
 // Outcome per phrase: read N seconds | ask | none (no time named → the tool's default window).
 // Expected outcome: the phrase's meaning label, except that a request carrying a sampling
-// instruction ASKS under these profiles, because neither declares that it executes sampling.
+// instruction, or asking for the current state ("right now"), ASKS under these profiles: neither
+// declares that its tool executes sampling or reads the current state. The regression set carries
+// its reviewer's expectations; its "inspect" rows are reported, not scored.
 // Verdict (never merged into one accuracy):
 //   exact            read the window meant
 //   wrong-window     read a window or scope not meant (another length, a dropped part, or a read where it should ask / name no time)
@@ -33,7 +35,7 @@ import { unaccounted, MEANING_RULE_VERSION } from './meaning-rule.mjs';
 const NOW = new Date('2026-10-27T09:30:00Z');
 const args = process.argv.slice(2);
 const which = args[0];
-if (which !== 'existing' && which !== 'heldout') throw new Error('usage: run.mjs existing|heldout [--duckling-replay] [--reference <module>]');
+if (!['existing', 'heldout', 'regressions'].includes(which)) throw new Error('usage: run.mjs existing|heldout|regressions [--duckling-replay] [--reference <module>]');
 const replayDuckling = args.includes('--duckling-replay');
 const referencePath = args.includes('--reference') ? args[args.indexOf('--reference') + 1] : process.env.HOST_REFERENCE;
 const read_ = (f) => JSON.parse(readFileSync(f, 'utf8'));
@@ -41,7 +43,11 @@ const profiles = read_('corpus/tool-profiles.json');
 
 const label = (x) => (x === 'ask' || x === 'none' ? x : x.readsSeconds !== undefined ? { reads: x.readsSeconds } : x.readsMinutes !== undefined ? { reads: x.readsMinutes * 60 } : { reads: x.reads * 60 });
 
+const current = read_('corpus/current.json');
 function loadCorpus() {
+  if (which === 'regressions') {
+    return read_('corpus/regressions.json').phrases.map((p) => ({ id: p.id, text: p.text, meaning: p.expectation === 'inspect' ? 'inspect' : label(p.expectation), sampling: false, current: false }));
+  }
   if (which === 'existing') {
     const rows = read_('corpus/app-corpus.json');
     const m = read_('corpus/meaning.json');
@@ -50,16 +56,16 @@ function loadCorpus() {
     const out = rows.map((r, i) => {
       const app = typeof r.app === 'string' ? r.app : label(r.app);
       const o = overrides.get(r.text);
-      return { id: `E${String(i + 1).padStart(3, '0')}`, text: r.text, source: 'host app corpus', app, meaning: o ? label(o) : app, sampling: sampling.has(r.text) };
+      return { id: `E${String(i + 1).padStart(3, '0')}`, text: r.text, source: 'host app corpus', app, meaning: o ? label(o) : app, sampling: sampling.has(r.text), current: current.existing.includes(r.text) };
     });
-    m.additions.forEach((a, i) => out.push({ id: `A${i + 1}`, text: a.text, source: a.source, app: label(a.app), meaning: label(a.meaning), sampling: sampling.has(a.text) }));
-    const missing = [...sampling].filter((t) => !out.some((r) => r.text === t));
-    if (missing.length) throw new Error('sampling.json names rows not in the corpus: ' + missing.join(' | '));
+    m.additions.forEach((a, i) => out.push({ id: `A${i + 1}`, text: a.text, source: a.source, app: label(a.app), meaning: label(a.meaning), sampling: sampling.has(a.text), current: current.existing.includes(a.text) }));
+    const missing = [...sampling, ...current.existing].filter((t) => !out.some((r) => r.text === t));
+    if (missing.length) throw new Error('sampling.json or current.json names rows not in the corpus: ' + missing.join(' | '));
     return out;
   }
-  return read_('corpus/heldout.json').phrases.map((p) => ({ id: p.id, text: p.text, cls: p.class, meaning: label(p.meaning), sampling: p.class === 'sampling-cadence' }));
+  return read_('corpus/heldout.json').phrases.map((p) => ({ id: p.id, text: p.text, cls: p.class, meaning: label(p.meaning), sampling: p.class === 'sampling-cadence', current: current.heldout.includes(p.id) }));
 }
-const expectedOf = (item) => (item.sampling ? 'ask' : item.meaning);
+const expectedOf = (item) => (item.meaning === 'inspect' ? 'inspect' : item.sampling || item.current ? 'ask' : item.meaning);
 
 const endsNow = (to) => Math.abs(to - NOW.getTime()) < 60_000;
 const read = (seconds) => ({ kind: 'read', seconds });
@@ -110,6 +116,7 @@ function strictRule(text, entities, { leftovers, agree, profile }) {
 }
 
 function verdict(outcome, expected) {
+  if (expected === 'inspect') return 'inspect';
   if (outcome.kind === 'read') {
     if (!outcome.other && typeof expected === 'object' && Math.abs(expected.reads - outcome.seconds) <= 1) return 'exact';
     return 'wrong-window';
@@ -163,11 +170,12 @@ for (const item of corpus) {
 const KEYS = ['exact', 'wrong-window', 'silent-default', 'correct-ask', 'unnecessary-ask', 'correct-none'];
 const tally = (verdicts) => {
   const t = Object.fromEntries(KEYS.map((k) => [k, 0]));
-  for (const v of verdicts) t[v]++;
-  return { n: verdicts.length, wrongReadings: t['wrong-window'] + t['silent-default'], unnecessaryClarifications: t['unnecessary-ask'], ...t };
+  const scored = verdicts.filter((v) => v !== 'inspect');
+  for (const v of scored) t[v]++;
+  return { n: scored.length, inspected: verdicts.length - scored.length, wrongReadings: t['wrong-window'] + t['silent-default'], unnecessaryClarifications: t['unnecessary-ask'], ...t };
 };
-const expectedCounts = { reads: rows.filter((r) => typeof r.expected === 'object').length, ask: rows.filter((r) => r.expected === 'ask').length, none: rows.filter((r) => r.expected === 'none').length };
-const summary = { set: which, n: rows.length, clock: NOW.toISOString(), expected: expectedCounts, sampling: rows.filter((r) => r.sampling).length, versions: { scan: SCAN_VERSION, meaningRule: MEANING_RULE_VERSION }, parsers: {} };
+const expectedCounts = { reads: rows.filter((r) => typeof r.expected === 'object').length, ask: rows.filter((r) => r.expected === 'ask').length, none: rows.filter((r) => r.expected === 'none').length, inspect: rows.filter((r) => r.expected === 'inspect').length };
+const summary = { set: which, n: rows.length, clock: NOW.toISOString(), expected: expectedCounts, sampling: rows.filter((r) => r.sampling).length, current: rows.filter((r) => r.current).length, versions: { scan: SCAN_VERSION, meaningRule: MEANING_RULE_VERSION }, parsers: {} };
 for (const parser of PARSERS) {
   summary.parsers[parser] = { coverageGaps: rows.filter((r) => r.parsers[parser].coverageGap).length };
   for (const mode of MODES) summary.parsers[parser][mode] = tally(rows.map((r) => r.parsers[parser].verdicts[mode]));
@@ -194,7 +202,8 @@ for (const parser of PARSERS) {
 }
 
 const line = (name, t) => `| ${name} | ${t.wrongReadings} (${t['wrong-window']} + ${t['silent-default']}) | ${t.unnecessaryClarifications} | ${t.exact} | ${t['correct-ask']} | ${t['correct-none']} |`;
-const md = [`### ${which === 'existing' ? 'Existing corpus' : 'Held-out set'} (n = ${rows.length}; expected ${expectedCounts.reads} reads, ${expectedCounts.ask} asks, ${expectedCounts.none} no-time; clock ${NOW.toISOString()})`, '',
+const title = { existing: 'Existing corpus', heldout: 'Held-out set', regressions: 'Regression cases from an independent review' }[which];
+const md = [`### ${title} (n = ${rows.length}; expected ${expectedCounts.reads} reads, ${expectedCounts.ask} asks, ${expectedCounts.none} no-time${expectedCounts.inspect ? `, ${expectedCounts.inspect} to inspect (not scored)` : ''}; clock ${NOW.toISOString()})`, '',
   '| Reader · mode | Wrong readings (window or scope + silent default) | Unnecessary clarifications | Exact reads | Correct asks | Correct no-time |',
   '|---|---|---|---|---|---|'];
 for (const parser of PARSERS) for (const mode of MODES) md.push(line(`${parser} · ${mode}`, summary.parsers[parser][mode]));
@@ -202,5 +211,13 @@ if (reference) md.push(line('host app rule (reference)', summary.reference.vsExp
 md.push('', '| Reader | Coverage gaps (time words its spans miss, or no mention) |', '|---|---|');
 for (const parser of PARSERS) md.push(`| ${parser} | ${summary.parsers[parser].coverageGaps} |`);
 if (summary.reference?.vsAppLabels) md.push('', `Host app rule against the host app's own labels: ${summary.reference.vsAppLabels.wrongReadings} wrong readings, ${summary.reference.vsAppLabels.unnecessaryClarifications} unnecessary clarifications, of ${summary.reference.vsAppLabels.n}.`);
+if (which === 'regressions') {
+  const short = (o) => (o.kind === 'read' ? (o.other ? 'read other' : `read ${o.seconds / 60} min`) : o.kind);
+  md.push('', '| id | phrase | expected | grammar · strict + agree | grammar · complete + nouns | englishTimeReader · complete + nouns | Recognizers · complete + nouns |', '|---|---|---|---|---|---|---|');
+  for (const r of rows) {
+    const exp = r.expected === 'inspect' ? 'inspect' : typeof r.expected === 'object' ? `read ${r.expected.reads / 60} min` : r.expected;
+    md.push(`| ${r.id} | ${r.text.replace(/\|/g, '\\|')} | ${exp} | ${short(r.parsers['library-grammar'].outcomes['strict+agree'])} | ${short(r.parsers['library-grammar'].outcomes['complete+nouns'])} | ${short(r.parsers.agentfootprint.outcomes['complete+nouns'])} | ${short(r.parsers.recognizers.outcomes['complete+nouns'])} |`);
+  }
+}
 writeFileSync(`results/${which}-table.md`, md.join('\n') + '\n');
 console.log(md.join('\n'));

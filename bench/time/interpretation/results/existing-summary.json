@@ -4,375 +4,409 @@
  "clock": "2026-10-27T09:30:00.000Z",
  "expected": {
   "reads": 91,
-  "ask": 162,
-  "none": 21
+  "ask": 165,
+  "none": 18,
+  "inspect": 0
  },
  "sampling": 18,
+ "current": 3,
  "versions": {
-  "scan": "1.0.0",
-  "meaningRule": "1.0.0"
+  "scan": "1.1.0",
+  "meaningRule": "2.0.0"
  },
  "parsers": {
   "recognizers": {
    "coverageGaps": 121,
    "value-only": {
     "n": 274,
-    "wrongReadings": 193,
+    "inspected": 0,
+    "wrongReadings": 194,
     "unnecessaryClarifications": 0,
     "exact": 65,
     "wrong-window": 145,
-    "silent-default": 48,
+    "silent-default": 49,
     "correct-ask": 0,
     "unnecessary-ask": 0,
-    "correct-none": 16
+    "correct-none": 15
    },
    "structure": {
     "n": 274,
-    "wrongReadings": 107,
-    "unnecessaryClarifications": 21,
+    "inspected": 0,
+    "wrongReadings": 108,
+    "unnecessaryClarifications": 19,
     "exact": 63,
     "wrong-window": 74,
-    "silent-default": 33,
-    "correct-ask": 67,
-    "unnecessary-ask": 21,
-    "correct-none": 16
+    "silent-default": 34,
+    "correct-ask": 69,
+    "unnecessary-ask": 19,
+    "correct-none": 15
    },
    "strict": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 7,
-    "unnecessaryClarifications": 42,
+    "unnecessaryClarifications": 40,
     "exact": 52,
     "wrong-window": 7,
     "silent-default": 0,
-    "correct-ask": 158,
-    "unnecessary-ask": 42,
-    "correct-none": 15
+    "correct-ask": 161,
+    "unnecessary-ask": 40,
+    "correct-none": 14
    },
    "strict+agree": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 45,
+    "unnecessaryClarifications": 43,
     "exact": 52,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 45,
-    "correct-none": 15
+    "correct-ask": 165,
+    "unnecessary-ask": 43,
+    "correct-none": 14
    },
    "complete": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 53,
-    "exact": 44,
+    "unnecessaryClarifications": 50,
+    "exact": 45,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 53,
-    "correct-none": 15
+    "correct-ask": 165,
+    "unnecessary-ask": 50,
+    "correct-none": 14
    },
    "complete+nouns": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 53,
-    "exact": 44,
+    "unnecessaryClarifications": 50,
+    "exact": 45,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 53,
-    "correct-none": 15
+    "correct-ask": 165,
+    "unnecessary-ask": 50,
+    "correct-none": 14
    }
   },
   "chrono": {
    "coverageGaps": 159,
    "value-only": {
     "n": 274,
-    "wrongReadings": 189,
+    "inspected": 0,
+    "wrongReadings": 190,
     "unnecessaryClarifications": 0,
     "exact": 69,
     "wrong-window": 129,
-    "silent-default": 60,
+    "silent-default": 61,
     "correct-ask": 0,
     "unnecessary-ask": 0,
-    "correct-none": 16
+    "correct-none": 15
    },
    "structure": {
     "n": 274,
-    "wrongReadings": 60,
-    "unnecessaryClarifications": 81,
+    "inspected": 0,
+    "wrongReadings": 61,
+    "unnecessaryClarifications": 79,
     "exact": 1,
     "wrong-window": 0,
-    "silent-default": 60,
-    "correct-ask": 116,
-    "unnecessary-ask": 81,
-    "correct-none": 16
+    "silent-default": 61,
+    "correct-ask": 118,
+    "unnecessary-ask": 79,
+    "correct-none": 15
    },
    "strict": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 96,
+    "unnecessaryClarifications": 94,
     "exact": 1,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 96,
-    "correct-none": 15
+    "correct-ask": 165,
+    "unnecessary-ask": 94,
+    "correct-none": 14
    },
    "strict+agree": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 97,
+    "unnecessaryClarifications": 95,
     "exact": 0,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 97,
-    "correct-none": 15
+    "correct-ask": 165,
+    "unnecessary-ask": 95,
+    "correct-none": 14
    },
    "complete": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 97,
+    "unnecessaryClarifications": 95,
     "exact": 0,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 97,
-    "correct-none": 15
+    "correct-ask": 165,
+    "unnecessary-ask": 95,
+    "correct-none": 14
    },
    "complete+nouns": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 97,
+    "unnecessaryClarifications": 95,
     "exact": 0,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 97,
-    "correct-none": 15
+    "correct-ask": 165,
+    "unnecessary-ask": 95,
+    "correct-none": 14
    }
   },
   "duckling": {
    "coverageGaps": 137,
    "value-only": {
     "n": 274,
-    "wrongReadings": 235,
+    "inspected": 0,
+    "wrongReadings": 236,
     "unnecessaryClarifications": 0,
     "exact": 24,
     "wrong-window": 192,
-    "silent-default": 43,
+    "silent-default": 44,
     "correct-ask": 0,
     "unnecessary-ask": 0,
-    "correct-none": 15
+    "correct-none": 14
    },
    "structure": {
     "n": 274,
-    "wrongReadings": 48,
-    "unnecessaryClarifications": 69,
+    "inspected": 0,
+    "wrongReadings": 49,
+    "unnecessaryClarifications": 67,
     "exact": 19,
     "wrong-window": 5,
-    "silent-default": 43,
-    "correct-ask": 123,
-    "unnecessary-ask": 69,
-    "correct-none": 15
+    "silent-default": 44,
+    "correct-ask": 125,
+    "unnecessary-ask": 67,
+    "correct-none": 14
    },
    "strict": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 1,
-    "unnecessaryClarifications": 79,
+    "unnecessaryClarifications": 77,
     "exact": 18,
     "wrong-window": 1,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 79,
-    "correct-none": 14
+    "correct-ask": 165,
+    "unnecessary-ask": 77,
+    "correct-none": 13
    },
    "strict+agree": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 80,
+    "unnecessaryClarifications": 78,
     "exact": 18,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 80,
-    "correct-none": 14
+    "correct-ask": 165,
+    "unnecessary-ask": 78,
+    "correct-none": 13
    },
    "complete": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 81,
+    "unnecessaryClarifications": 79,
     "exact": 17,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 81,
-    "correct-none": 14
+    "correct-ask": 165,
+    "unnecessary-ask": 79,
+    "correct-none": 13
    },
    "complete+nouns": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 81,
+    "unnecessaryClarifications": 79,
     "exact": 17,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 81,
-    "correct-none": 14
+    "correct-ask": 165,
+    "unnecessary-ask": 79,
+    "correct-none": 13
    }
   },
   "agentfootprint": {
    "coverageGaps": 171,
    "value-only": {
     "n": 274,
-    "wrongReadings": 187,
+    "inspected": 0,
+    "wrongReadings": 190,
     "unnecessaryClarifications": 1,
     "exact": 63,
     "wrong-window": 94,
-    "silent-default": 93,
+    "silent-default": 96,
     "correct-ask": 2,
     "unnecessary-ask": 1,
-    "correct-none": 21
+    "correct-none": 18
    },
    "structure": {
     "n": 274,
-    "wrongReadings": 167,
+    "inspected": 0,
+    "wrongReadings": 170,
     "unnecessaryClarifications": 5,
     "exact": 63,
     "wrong-window": 92,
-    "silent-default": 75,
+    "silent-default": 78,
     "correct-ask": 18,
     "unnecessary-ask": 5,
-    "correct-none": 21
+    "correct-none": 18
    },
    "strict": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
     "unnecessaryClarifications": 42,
     "exact": 50,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
+    "correct-ask": 165,
     "unnecessary-ask": 42,
-    "correct-none": 20
+    "correct-none": 17
    },
    "strict+agree": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
     "unnecessaryClarifications": 42,
     "exact": 50,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
+    "correct-ask": 165,
     "unnecessary-ask": 42,
-    "correct-none": 20
+    "correct-none": 17
    },
    "complete": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 50,
-    "exact": 42,
+    "unnecessaryClarifications": 49,
+    "exact": 43,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 50,
-    "correct-none": 20
+    "correct-ask": 165,
+    "unnecessary-ask": 49,
+    "correct-none": 17
    },
    "complete+nouns": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 50,
-    "exact": 42,
+    "unnecessaryClarifications": 49,
+    "exact": 43,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 50,
-    "correct-none": 20
+    "correct-ask": 165,
+    "unnecessary-ask": 49,
+    "correct-none": 17
    }
   },
   "library-grammar": {
    "coverageGaps": 158,
    "value-only": {
     "n": 274,
-    "wrongReadings": 162,
+    "inspected": 0,
+    "wrongReadings": 165,
     "unnecessaryClarifications": 0,
     "exact": 91,
     "wrong-window": 90,
-    "silent-default": 72,
+    "silent-default": 75,
     "correct-ask": 0,
     "unnecessary-ask": 0,
-    "correct-none": 21
+    "correct-none": 18
    },
    "structure": {
     "n": 274,
-    "wrongReadings": 162,
+    "inspected": 0,
+    "wrongReadings": 165,
     "unnecessaryClarifications": 0,
     "exact": 91,
     "wrong-window": 90,
-    "silent-default": 72,
+    "silent-default": 75,
     "correct-ask": 0,
     "unnecessary-ask": 0,
-    "correct-none": 21
+    "correct-none": 18
    },
    "strict": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
     "unnecessaryClarifications": 15,
     "exact": 77,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
+    "correct-ask": 165,
     "unnecessary-ask": 15,
-    "correct-none": 20
+    "correct-none": 17
    },
    "strict+agree": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
     "unnecessaryClarifications": 15,
     "exact": 77,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
+    "correct-ask": 165,
     "unnecessary-ask": 15,
-    "correct-none": 20
+    "correct-none": 17
    },
    "complete": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 23,
-    "exact": 69,
+    "unnecessaryClarifications": 22,
+    "exact": 70,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 23,
-    "correct-none": 20
+    "correct-ask": 165,
+    "unnecessary-ask": 22,
+    "correct-none": 17
    },
    "complete+nouns": {
     "n": 274,
+    "inspected": 0,
     "wrongReadings": 0,
-    "unnecessaryClarifications": 23,
-    "exact": 69,
+    "unnecessaryClarifications": 22,
+    "exact": 70,
     "wrong-window": 0,
     "silent-default": 0,
-    "correct-ask": 162,
-    "unnecessary-ask": 23,
-    "correct-none": 20
+    "correct-ask": 165,
+    "unnecessary-ask": 22,
+    "correct-none": 17
    }
   }
  },
  "reference": {
   "vsExpected": {
    "n": 274,
-   "wrongReadings": 14,
+   "inspected": 0,
+   "wrongReadings": 17,
    "unnecessaryClarifications": 43,
    "exact": 48,
    "wrong-window": 11,
-   "silent-default": 3,
+   "silent-default": 6,
    "correct-ask": 148,
    "unnecessary-ask": 43,
-   "correct-none": 21
+   "correct-none": 18
   },
   "vsLabelsAsWritten": {
    "n": 274,
+   "inspected": 0,
    "wrongReadings": 0,
    "unnecessaryClarifications": 46,
    "exact": 59,
@@ -384,6 +418,7 @@
   },
   "vsAppLabels": {
    "n": 274,
+   "inspected": 0,
    "wrongReadings": 0,
    "unnecessaryClarifications": 0,
    "exact": 59,

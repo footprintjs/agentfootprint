@@ -19,8 +19,8 @@
   "library-grammar": "scripts/adapters.mjs · libraryGrammar over scripts/signals.mjs · readLookbackQuote"
  },
  "rules": {
-  "leftoverScan": "1.0.0",
-  "completeMeaning": "1.0.0"
+  "leftoverScan": "1.1.0",
+  "completeMeaning": "2.0.0"
  },
  "esbuild": "0.28.2"
 }

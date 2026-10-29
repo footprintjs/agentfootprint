@@ -12,7 +12,7 @@
 // Generic English only, no product nouns. Written before the held-out run; developed on the
 // existing corpus (so its numbers there are optimistic; the held-out numbers are the honest ones).
 
-export const SCAN_VERSION = '1.0.0';
+export const SCAN_VERSION = '1.1.0';
 
 const FRACTION_CLASS = '¼½¾⅐-⅞↉';
 const FRACTIONS = { '¼': 0.25, '½': 0.5, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 };
@@ -28,6 +28,7 @@ const TOKEN = new RegExp([
   String.raw`[a-z]+(?:['’][a-z]+)*`,
   String.raw`[-–—\/&#~]`,
   String.raw`[,;.!?:()\[\]{}"“”\n]`,
+  String.raw`\S`, // every other symbol is kept as a token of its own: an operator such as ">" never vanishes
 ].join('|'), 'gi');
 
 const set = (s) => new Set(s.trim().split(/\s+/));
@@ -52,6 +53,8 @@ const CALENDAR_IF_NAMED = set('may mon wed sat sun jan feb mar apr jun jul aug s
 const MONTH_AFTER = set('in during since until till before after last this next early mid late of from through by');
 const YEAR_AFTER = set('in during since until till before after through throughout from by of');
 const GREETED = set('morning afternoon evening night');
+/** The present: a request for the current state ("right now", "currently"), shape 'current' — never "no time". */
+const PRESENT = set('now currently current presently');
 const RELATIONS = set('ago since until till til before after prior preceding previous earlier later next upcoming coming ending starting beginning recently lately past');
 const POSITION = set('last first final early late mid middle beginning start end rest latest recent most');
 const EVENTS = set('while whilst when whenever once unless provided upon');
@@ -170,6 +173,7 @@ export function scan(text, spans = []) {
       if (named || isDigits(tokens[i - 1]) || isDigits(tokens[i + 1]) || (word === 'may' && MONTH_AFTER.has(prev))) cls[i] = 'calendar';
       continue;
     }
+    if (PRESENT.has(word)) { cls[i] = 'present'; continue; }
     if (RELATIONS.has(word)) { cls[i] = 'relation'; continue; }
     if (EVENTS.has(word)) { cls[i] = 'event'; continue; }
     if (COMPARISON.has(word)) { cls[i] = 'comparison'; continue; }
@@ -207,6 +211,9 @@ export function scan(text, spans = []) {
     if ((word === 'long' || word === 'soon') && prev === 'as' && next === 'as') cls[i] = 'event';
     if (word === 'time' && (next === 'of' || prev === 'what' || next === 'when')) cls[i] = 'event';
     if (word === 'leading' && next === 'up') cls[i] = 'event';
+    if (word === 'moment' && prev === 'the' && ['at', 'for'].includes(w(i - 2))) cls[i] = 'present';
+    if (word === 'present' && prev === 'at') cls[i] = 'present';
+    if (word === 'latest' && cls[i] === undefined && !covered[i]) cls[i] = 'present';
     if (word === 'during' && !covered[i]) cls[i] = 'event';
     if (word === 'through' && !covered[i] && !(isDigits(tokens[i - 1]) && isDigits(tokens[i + 1]))) cls[i] = 'relation';
     // negation and complement count when they govern a time outside the reading (the slot check takes the adjacent case)

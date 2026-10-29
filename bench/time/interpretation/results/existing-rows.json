@@ -8,6 +8,7 @@
    "reads": 1800
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1800
   },
@@ -245,6 +246,7 @@
    "reads": 1800
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1800
   },
@@ -480,6 +482,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -702,6 +705,7 @@
    "reads": 1800
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1800
   },
@@ -960,6 +964,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -1210,6 +1215,7 @@
    "reads": 1800
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1800
   },
@@ -1468,6 +1474,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -1721,6 +1728,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -2000,6 +2008,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -2277,6 +2286,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -2497,6 +2507,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -2735,6 +2746,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -2988,6 +3000,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -3250,6 +3263,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -3490,6 +3504,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -3778,6 +3793,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -4049,6 +4065,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -4299,6 +4316,7 @@
    "reads": 900
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 900
   },
@@ -4582,6 +4600,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -4835,6 +4854,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -5083,6 +5103,7 @@
    "reads": 4500
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 4500
   },
@@ -5369,6 +5390,7 @@
    "reads": 129600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 129600
   },
@@ -5645,6 +5667,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -5896,6 +5919,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -6126,6 +6150,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -6356,6 +6381,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -6614,6 +6640,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -6871,6 +6898,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -7119,6 +7147,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -7376,6 +7405,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -7624,6 +7654,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -7870,6 +7901,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -8112,6 +8144,7 @@
    "reads": 4200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 4200
   },
@@ -8365,6 +8398,7 @@
    "reads": 86400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 86400
   },
@@ -8623,6 +8657,7 @@
    "reads": 100
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 100
   },
@@ -8868,6 +8903,7 @@
    "reads": 1209600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1209600
   },
@@ -9130,6 +9166,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -9363,6 +9400,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -9593,6 +9631,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -9815,6 +9854,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -10042,6 +10082,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -10319,6 +10360,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -10592,6 +10634,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -10856,6 +10899,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -11117,6 +11161,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -11365,6 +11410,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -11655,6 +11701,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -11942,6 +11989,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -12229,6 +12277,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -12538,6 +12587,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -12850,6 +12900,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -13096,6 +13147,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -13348,6 +13400,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -13588,6 +13641,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -13825,6 +13879,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -14054,6 +14109,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -14282,6 +14338,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -14530,6 +14587,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -14768,6 +14826,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -15021,6 +15080,7 @@
    "reads": 900
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 900
   },
@@ -15291,6 +15351,7 @@
    "reads": 1800
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1800
   },
@@ -15561,6 +15622,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -15830,6 +15892,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -16099,6 +16162,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -16369,6 +16433,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -16639,6 +16704,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -16912,6 +16978,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -17185,6 +17252,7 @@
    "reads": 86400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 86400
   },
@@ -17458,6 +17526,7 @@
    "reads": 604800
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 604800
   },
@@ -17734,6 +17803,7 @@
    "reads": 1209600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1209600
   },
@@ -18010,6 +18080,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -18279,6 +18350,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -18548,6 +18620,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -18817,6 +18890,7 @@
    "reads": 900
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 900
   },
@@ -19096,6 +19170,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -19382,6 +19457,7 @@
    "reads": 900
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 900
   },
@@ -19656,6 +19732,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -19840,7 +19917,8 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
-  "expected": "none",
+  "current": true,
+  "expected": "ask",
   "parsers": {
    "recognizers": {
     "entities": [
@@ -19885,11 +19963,11 @@
     },
     "verdicts": {
      "value-only": "wrong-window",
-     "structure": "unnecessary-ask",
-     "strict": "unnecessary-ask",
-     "strict+agree": "unnecessary-ask",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
     "uncovered": []
@@ -19937,11 +20015,11 @@
     },
     "verdicts": {
      "value-only": "wrong-window",
-     "structure": "unnecessary-ask",
-     "strict": "unnecessary-ask",
-     "strict+agree": "unnecessary-ask",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
     "uncovered": []
@@ -19989,11 +20067,11 @@
     },
     "verdicts": {
      "value-only": "wrong-window",
-     "structure": "unnecessary-ask",
-     "strict": "unnecessary-ask",
-     "strict+agree": "unnecessary-ask",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
     "uncovered": []
@@ -20008,28 +20086,34 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "now(present)"
+    ]
    },
    "library-grammar": {
     "entities": [],
@@ -20041,35 +20125,41 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "now(present)"
+    ]
    }
   },
   "reference": {
    "outcome": {
     "kind": "none"
    },
-   "verdict": "correct-none",
+   "verdict": "silent-default",
    "verdictWithLabelsAsWritten": "correct-none",
    "verdictVsAppLabel": "correct-none"
   }
@@ -20081,7 +20171,8 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
-  "expected": "none",
+  "current": true,
+  "expected": "ask",
   "parsers": {
    "recognizers": {
     "entities": [
@@ -20126,11 +20217,11 @@
     },
     "verdicts": {
      "value-only": "wrong-window",
-     "structure": "unnecessary-ask",
-     "strict": "unnecessary-ask",
-     "strict+agree": "unnecessary-ask",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
     "uncovered": []
@@ -20178,11 +20269,11 @@
     },
     "verdicts": {
      "value-only": "wrong-window",
-     "structure": "unnecessary-ask",
-     "strict": "unnecessary-ask",
-     "strict+agree": "unnecessary-ask",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
     "uncovered": []
@@ -20230,11 +20321,11 @@
     },
     "verdicts": {
      "value-only": "wrong-window",
-     "structure": "unnecessary-ask",
-     "strict": "unnecessary-ask",
-     "strict+agree": "unnecessary-ask",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "structure": "correct-ask",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
     "uncovered": []
@@ -20249,28 +20340,34 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "now(present)"
+    ]
    },
    "library-grammar": {
     "entities": [],
@@ -20282,35 +20379,41 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: now(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "now(present)"
+    ]
    }
   },
   "reference": {
    "outcome": {
     "kind": "none"
    },
-   "verdict": "correct-none",
+   "verdict": "silent-default",
    "verdictWithLabelsAsWritten": "correct-none",
    "verdictVsAppLabel": "correct-none"
   }
@@ -20322,7 +20425,8 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
-  "expected": "none",
+  "current": true,
+  "expected": "ask",
   "parsers": {
    "recognizers": {
     "entities": [],
@@ -20334,28 +20438,34 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "currently(present)"
+    ]
    },
    "chrono": {
     "entities": [],
@@ -20367,28 +20477,34 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "currently(present)"
+    ]
    },
    "duckling": {
     "entities": [],
@@ -20400,28 +20516,34 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "currently(present)"
+    ]
    },
    "agentfootprint": {
     "entities": [],
@@ -20433,28 +20555,34 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "currently(present)"
+    ]
    },
    "library-grammar": {
     "entities": [],
@@ -20466,35 +20594,41 @@
       "kind": "none"
      },
      "strict": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "strict+agree": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      },
      "complete+nouns": {
-      "kind": "none"
+      "kind": "ask",
+      "why": "time words, no reading: currently(present)"
      }
     },
     "verdicts": {
-     "value-only": "correct-none",
-     "structure": "correct-none",
-     "strict": "correct-none",
-     "strict+agree": "correct-none",
-     "complete": "correct-none",
-     "complete+nouns": "correct-none"
+     "value-only": "silent-default",
+     "structure": "silent-default",
+     "strict": "correct-ask",
+     "strict+agree": "correct-ask",
+     "complete": "correct-ask",
+     "complete+nouns": "correct-ask"
     },
     "coverageGap": false,
-    "uncovered": []
+    "uncovered": [
+     "currently(present)"
+    ]
    }
   },
   "reference": {
    "outcome": {
     "kind": "none"
    },
-   "verdict": "correct-none",
+   "verdict": "silent-default",
    "verdictWithLabelsAsWritten": "correct-none",
    "verdictVsAppLabel": "correct-none"
   }
@@ -20506,6 +20640,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -20709,6 +20844,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -20893,6 +21029,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -21077,6 +21214,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -21291,6 +21429,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -21530,6 +21669,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -21714,6 +21854,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -21928,6 +22069,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -22112,6 +22254,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -22311,6 +22454,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -22601,6 +22745,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -22891,6 +23036,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -23184,6 +23330,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -23473,6 +23620,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -23771,6 +23919,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -24013,6 +24162,7 @@
    "reads": 9000
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 9000
   },
@@ -24253,6 +24403,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -24475,6 +24626,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -24734,6 +24886,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -25009,6 +25162,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -25285,6 +25439,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -25562,6 +25717,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -25839,6 +25995,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -26116,6 +26273,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -26393,6 +26551,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -26670,6 +26829,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -26947,6 +27107,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -27224,6 +27385,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -27506,6 +27668,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -27788,6 +27951,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -28075,6 +28239,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -28387,6 +28552,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -28697,6 +28863,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -29007,6 +29174,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -29297,6 +29465,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -29587,6 +29756,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -29835,6 +30005,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -30072,6 +30243,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -30335,6 +30507,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -30582,6 +30755,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -30797,6 +30971,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -31012,6 +31187,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -31227,6 +31403,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -31454,6 +31631,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -31700,6 +31878,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -31923,6 +32102,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -32143,6 +32323,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -32358,6 +32539,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -32613,6 +32795,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -32864,6 +33047,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -33115,6 +33299,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -33369,6 +33554,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -33646,6 +33832,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -33878,19 +34065,19 @@
      },
      "strict": {
       "kind": "ask",
-      "why": "left: until(relation)"
+      "why": "left: until(relation) now(present)"
      },
      "strict+agree": {
       "kind": "ask",
-      "why": "left: until(relation)"
+      "why": "left: until(relation) now(present)"
      },
      "complete": {
       "kind": "ask",
-      "why": "left: until(relation)"
+      "why": "left: until(relation) now(present)"
      },
      "complete+nouns": {
       "kind": "ask",
-      "why": "left: until(relation)"
+      "why": "left: until(relation) now(present)"
      }
     },
     "verdicts": {
@@ -33903,7 +34090,8 @@
     },
     "coverageGap": true,
     "uncovered": [
-     "until(relation)"
+     "until(relation)",
+     "now(present)"
     ]
    }
   },
@@ -33926,6 +34114,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -34203,6 +34392,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -34480,6 +34670,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -34749,6 +34940,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -35050,6 +35242,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -35351,6 +35544,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -35632,6 +35826,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -35901,6 +36096,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -36174,6 +36370,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -36443,6 +36640,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -36712,6 +36910,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -36977,6 +37176,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -37161,6 +37361,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -37365,6 +37566,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -37588,6 +37790,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -37814,6 +38017,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -37998,6 +38202,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -38182,6 +38387,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -38366,6 +38572,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -38550,6 +38757,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": false,
+  "current": false,
   "expected": "none",
   "parsers": {
    "recognizers": {
@@ -38753,6 +38961,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -38972,6 +39181,7 @@
   "app": "none",
   "meaning": "none",
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -39195,6 +39405,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -39468,6 +39679,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -39741,6 +39953,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -40011,6 +40224,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -40284,6 +40498,7 @@
    "reads": 1814400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 1814400
   },
@@ -40529,6 +40744,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -40796,6 +41012,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -41046,6 +41263,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -41297,6 +41515,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -41524,6 +41743,7 @@
    "reads": 9000
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 9000
   },
@@ -41804,6 +42024,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -42086,6 +42307,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -42301,6 +42523,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -42516,6 +42739,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -42731,6 +42955,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -42946,6 +43171,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -43161,6 +43387,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -43376,6 +43603,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -43591,6 +43819,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -43811,6 +44040,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -44026,6 +44256,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -44241,6 +44472,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -44456,6 +44688,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -44733,6 +44966,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -45010,6 +45244,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -45283,6 +45518,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -45560,6 +45796,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -45833,6 +46070,7 @@
    "reads": 86400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 86400
   },
@@ -46106,6 +46344,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -46375,6 +46614,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
@@ -46645,6 +46885,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -46918,6 +47159,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -47187,6 +47429,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -47456,6 +47699,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -47723,6 +47967,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -47990,6 +48235,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -48257,6 +48503,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -48524,6 +48771,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -48801,6 +49049,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -49078,6 +49327,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -49355,6 +49605,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -49622,6 +49873,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -49889,6 +50141,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -50156,6 +50409,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -50423,6 +50677,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -50699,6 +50954,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -50975,6 +51231,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -51208,6 +51465,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -51466,6 +51724,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -51756,6 +52015,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -52046,6 +52306,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -52319,6 +52580,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -52603,6 +52865,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -52885,6 +53148,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -53172,6 +53436,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -53461,6 +53726,7 @@
    "reads": 900
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -53747,6 +54013,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -54034,6 +54301,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -54311,6 +54579,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -54588,6 +54857,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -54803,6 +55073,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -55080,6 +55351,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -55353,6 +55625,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -55630,6 +55903,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -55907,6 +56181,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -56184,6 +56459,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -56461,6 +56737,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -56738,6 +57015,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -57015,6 +57293,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -57292,6 +57571,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -57571,6 +57851,7 @@
    "reads": 2700
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 2700
   },
@@ -57837,6 +58118,7 @@
    "reads": 259200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 259200
   },
@@ -58099,6 +58381,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -58380,6 +58663,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -58651,6 +58935,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -58922,6 +59207,7 @@
    "reads": 86400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 86400
   },
@@ -59190,6 +59476,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -59463,6 +59750,7 @@
    "reads": 86400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 86400
   },
@@ -59731,6 +60019,7 @@
    "reads": 900
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 900
   },
@@ -60001,6 +60290,7 @@
    "reads": 172800
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 172800
   },
@@ -60277,6 +60567,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -60546,6 +60837,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -60819,6 +61111,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -61120,6 +61413,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -61389,6 +61683,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -61662,6 +61957,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -61933,6 +62229,7 @@
    "reads": 7200
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 7200
   },
@@ -62204,6 +62501,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -62471,6 +62769,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -62748,6 +63047,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -63027,6 +63327,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -63296,6 +63597,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -63330,12 +63632,12 @@
       "seconds": 3600
      },
      "complete": {
-      "kind": "ask",
-      "why": "unaccounted: for"
+      "kind": "read",
+      "seconds": 3600
      },
      "complete+nouns": {
-      "kind": "ask",
-      "why": "unaccounted: for"
+      "kind": "read",
+      "seconds": 3600
      }
     },
     "verdicts": {
@@ -63343,8 +63645,8 @@
      "structure": "exact",
      "strict": "exact",
      "strict+agree": "exact",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "complete": "exact",
+     "complete+nouns": "exact"
     },
     "coverageGap": false,
     "uncovered": []
@@ -63475,12 +63777,12 @@
       "seconds": 3600
      },
      "complete": {
-      "kind": "ask",
-      "why": "unaccounted: for"
+      "kind": "read",
+      "seconds": 3600
      },
      "complete+nouns": {
-      "kind": "ask",
-      "why": "unaccounted: for"
+      "kind": "read",
+      "seconds": 3600
      }
     },
     "verdicts": {
@@ -63488,8 +63790,8 @@
      "structure": "exact",
      "strict": "exact",
      "strict+agree": "exact",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "complete": "exact",
+     "complete+nouns": "exact"
     },
     "coverageGap": false,
     "uncovered": []
@@ -63524,12 +63826,12 @@
       "seconds": 3600
      },
      "complete": {
-      "kind": "ask",
-      "why": "unaccounted: for"
+      "kind": "read",
+      "seconds": 3600
      },
      "complete+nouns": {
-      "kind": "ask",
-      "why": "unaccounted: for"
+      "kind": "read",
+      "seconds": 3600
      }
     },
     "verdicts": {
@@ -63537,8 +63839,8 @@
      "structure": "exact",
      "strict": "exact",
      "strict+agree": "exact",
-     "complete": "unnecessary-ask",
-     "complete+nouns": "unnecessary-ask"
+     "complete": "exact",
+     "complete+nouns": "exact"
     },
     "coverageGap": false,
     "uncovered": []
@@ -63565,6 +63867,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -63840,6 +64143,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -64115,6 +64419,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -64392,6 +64697,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -64682,6 +64988,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -64992,6 +65299,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -65297,6 +65605,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -65526,6 +65835,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -65795,6 +66105,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -66064,6 +66375,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -66333,6 +66645,7 @@
    "reads": 3600
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 3600
   },
@@ -66598,6 +66911,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -66875,6 +67189,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -67152,6 +67467,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -67433,6 +67749,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -67734,6 +68051,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -68042,6 +68360,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -68354,6 +68673,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -68640,6 +68960,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -68921,6 +69242,7 @@
    "reads": 7200
   },
   "sampling": true,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -69198,6 +69520,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -69498,6 +69821,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -69795,6 +70119,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -70062,6 +70387,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -70339,6 +70665,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -70629,6 +70956,7 @@
   "app": "ask",
   "meaning": "ask",
   "sampling": false,
+  "current": false,
   "expected": "ask",
   "parsers": {
    "recognizers": {
@@ -70908,6 +71236,7 @@
    "reads": 5400
   },
   "sampling": false,
+  "current": false,
   "expected": {
    "reads": 5400
   },
