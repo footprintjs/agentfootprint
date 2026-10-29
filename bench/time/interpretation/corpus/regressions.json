@@ -1,0 +1,119 @@
+{
+ "name": "regression cases from an independent review",
+ "note": "The 22 probes an independent review of PR #230 ran against the prototype at 78301e2 (2026-10-28), with that review's expectation for each: read (the plain lookback, 120 minutes), ask, or inspect. inspect means the outcome depends on which target the call binds, which a window-only score cannot judge; those rows are reported, not scored. These phrases were written by the reviewer, not by the author of the prototype. They are reported apart from the frozen sets and never merged into them.",
+ "source": "independent review of PR #230 at 78301e2, 2026-10-28",
+ "phrases": [
+  {
+   "id": "R-plain",
+   "text": "memory per node over the last 2 hours",
+   "expectation": {
+    "readsMinutes": 120
+   }
+  },
+  {
+   "id": "R-known-H23",
+   "text": "memory per node over the last 2 hours, restricted to backup runs",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-peaks",
+   "text": "memory per node over the last 2 hours at CPU peaks",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-spikes",
+   "text": "memory per node over the last 2 hours with CPU spikes",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-only-peaks",
+   "text": "memory per node over the last 2 hours only at CPU peaks",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-on-spikes",
+   "text": "memory per node over the last 2 hours on CPU spikes",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-during-control",
+   "text": "memory per node over the last 2 hours during CPU spikes",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-busiest-for",
+   "text": "memory per node over the last 2 hours for the busiest node",
+   "expectation": "inspect"
+  },
+  {
+   "id": "R-busiest-the",
+   "text": "memory over the last 2 hours, the busiest node",
+   "expectation": "inspect"
+  },
+  {
+   "id": "R-target-only",
+   "text": "memory per node over the last 2 hours, only node 8",
+   "expectation": "inspect"
+  },
+  {
+   "id": "R-target-my",
+   "text": "memory per node over the last 2 hours, my node",
+   "expectation": "inspect"
+  },
+  {
+   "id": "R-target-those",
+   "text": "memory per node over the last 2 hours, those nodes",
+   "expectation": "inspect"
+  },
+  {
+   "id": "R-current-now",
+   "text": "CPU right now",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-current-just-now",
+   "text": "CPU just now",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-current-moment",
+   "text": "CPU per node at the moment",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-gt",
+   "text": "requests over the last 2 hours, requests > errors",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-lt",
+   "text": "requests over the last 2 hours, requests < errors",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-number-id-not-bound",
+   "text": "memory per node over the last 2 hours, node 8",
+   "expectation": "inspect"
+  },
+  {
+   "id": "R-scope-conditional-verb",
+   "text": "memory per node over the last 2 hours, CPU spikes",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-at-the-peaks",
+   "text": "memory per node over the last 2 hours at the CPU peaks",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-if-control",
+   "text": "memory per node over the last 2 hours if CPU spikes",
+   "expectation": "ask"
+  },
+  {
+   "id": "R-scope-event-control",
+   "text": "memory per node over the last 2 hours, limited to backup runs",
+   "expectation": "ask"
+  }
+ ]
+}

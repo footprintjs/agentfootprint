@@ -1,0 +1,277 @@
+{
+  "note": "Meaning labels for the existing corpus. Rule: the label is the MEANING of the whole request, not the app's policy. reads = exactly one rolling lookback ending now, of that many minutes, nothing else changing the window or its scope (a sampling cadence does not); ask = a time is named but not exactly one such window; none = no time named. Default: the app's own label (its READS and NO_TIME rows all meet the rule). Overrides: rows the app REFUSES for its grammar although the whole request names one exact lookback. A bare duration with no last/past anchor ('for 90 minutes') stays ask: nothing anchors it to now. 'previous' and 'preceding' stay ask: they may name the clock hour before, or a window before another one. Written before any full run.",
+  "additions": [
+    {
+      "text": "outside the last 2 hours",
+      "source": "reviewer case",
+      "app": "ask",
+      "meaning": "ask"
+    },
+    {
+      "text": "not in the last 2 hours",
+      "source": "reviewer case",
+      "app": "ask",
+      "meaning": "ask"
+    },
+    {
+      "text": "the last 15 minutes of each hour",
+      "source": "reviewer case",
+      "app": "ask",
+      "meaning": "ask"
+    },
+    {
+      "text": "last 2 hours, only while backups were running",
+      "source": "reviewer case",
+      "app": "ask",
+      "meaning": "ask"
+    },
+    {
+      "text": "last 1½h",
+      "source": "the brief's failure list",
+      "app": "ask",
+      "meaning": {
+        "readsMinutes": 90
+      }
+    }
+  ],
+  "overrides": [
+    {
+      "text": "memory per node for the last half-hour",
+      "readsMinutes": 30,
+      "why": "anchored half hour"
+    },
+    {
+      "text": "memory per node over the past half-hour",
+      "readsMinutes": 30,
+      "why": "anchored half hour"
+    },
+    {
+      "text": "memory per node over the last half an hour",
+      "readsMinutes": 30,
+      "why": "anchored half hour"
+    },
+    {
+      "text": "memory per node over the past half hour",
+      "readsMinutes": 30,
+      "why": "anchored half hour"
+    },
+    {
+      "text": "memory per node over the last hour and a half",
+      "readsMinutes": 90,
+      "why": "anchored fraction"
+    },
+    {
+      "text": "memory per node over the past hour and a half",
+      "readsMinutes": 90,
+      "why": "anchored fraction"
+    },
+    {
+      "text": "memory per node over the last one and a half hours",
+      "readsMinutes": 90,
+      "why": "anchored fraction"
+    },
+    {
+      "text": "memory per node over the last 1h30",
+      "readsMinutes": 90,
+      "why": "anchored compact amount"
+    },
+    {
+      "text": "memory per node over the last 1:30 hours",
+      "readsMinutes": 90,
+      "why": "anchored h:mm amount"
+    },
+    {
+      "text": "memory per node over the last quarter of an hour",
+      "readsMinutes": 15,
+      "why": "anchored fraction"
+    },
+    {
+      "text": "memory per node over the past hour and a quarter",
+      "readsMinutes": 75,
+      "why": "anchored fraction"
+    },
+    {
+      "text": "memory per node over the last day and a half",
+      "readsMinutes": 2160,
+      "why": "anchored fraction"
+    },
+    {
+      "text": "memory per node over the last 1.5 hours",
+      "readsMinutes": 90,
+      "why": "anchored decimal"
+    },
+    {
+      "text": "memory per node over the past seventy minutes",
+      "readsMinutes": 70,
+      "why": "anchored number word"
+    },
+    {
+      "text": "memory per node over the past twenty-four hours",
+      "readsMinutes": 1440,
+      "why": "anchored number word"
+    },
+    {
+      "text": "memory per node over the last hundred seconds",
+      "readsSeconds": 100,
+      "why": "anchored number word, seconds"
+    },
+    {
+      "text": "memory per node over the past fortnight",
+      "readsMinutes": 20160,
+      "why": "anchored unit"
+    },
+    {
+      "text": "memory per node over the trailing hour",
+      "readsMinutes": 60,
+      "why": "trailing = rolling, ending now"
+    },
+    {
+      "text": "memory per node over the last 1½h",
+      "readsMinutes": 90,
+      "why": "anchored vulgar fraction"
+    },
+    {
+      "text": "memory per node over the last 2½h",
+      "readsMinutes": 150,
+      "why": "anchored vulgar fraction"
+    },
+    {
+      "text": "memory per node over the last 1.5h",
+      "readsMinutes": 90,
+      "why": "anchored decimal, compact"
+    },
+    {
+      "text": "memory per node over the last hour-and-a-half",
+      "readsMinutes": 90,
+      "why": "anchored fraction"
+    },
+    {
+      "text": "memory per node over the last 1 hour 30 minutes",
+      "readsMinutes": 90,
+      "why": "anchored compound amount"
+    },
+    {
+      "text": "memory per node over the last 2 hours and 30 minutes",
+      "readsMinutes": 150,
+      "why": "anchored compound amount"
+    },
+    {
+      "text": "memory per node over the last two hours",
+      "readsMinutes": 120,
+      "why": "anchored number word"
+    },
+    {
+      "text": "memory per node over the latest 2 hours",
+      "readsMinutes": 120,
+      "why": "latest = most recent, ending now"
+    },
+    {
+      "text": "memory per node in the last hour before you answer",
+      "readsMinutes": 60,
+      "why": "'before you answer' is not about the window"
+    },
+    {
+      "text": "memory per node in the last hour until now",
+      "readsMinutes": 60,
+      "why": "'until now' restates the end"
+    },
+    {
+      "text": "as I said earlier, memory per node in the last hour",
+      "readsMinutes": 60,
+      "why": "'earlier' is about the conversation"
+    },
+    {
+      "text": "since you asked, memory per node in the last hour",
+      "readsMinutes": 60,
+      "why": "'since' is causal here"
+    },
+    {
+      "text": "which one is busiest in the last hour?",
+      "readsMinutes": 60,
+      "why": "'one' is a pronoun"
+    },
+    {
+      "text": "memory per node in the last hour, but not CPU",
+      "readsMinutes": 60,
+      "why": "the negation governs a metric"
+    },
+    {
+      "text": "memory per node over the last 2 hours at 5-minute intervals",
+      "readsMinutes": 120,
+      "why": "sampling cadence"
+    },
+    {
+      "text": "memory per node over the last 2 hours per hour",
+      "readsMinutes": 120,
+      "why": "an hourly breakdown of one window"
+    },
+    {
+      "text": "memory per node in the last 15 minutes sampled every minute",
+      "readsMinutes": 15,
+      "why": "sampling cadence"
+    },
+    {
+      "text": "memory per node over the last 2 hours, sampled every other minute",
+      "readsMinutes": 120,
+      "why": "sampling cadence"
+    },
+    {
+      "text": "memory per node last 45m",
+      "readsMinutes": 45,
+      "why": "compact lookback"
+    },
+    {
+      "text": "memory per node past 3d",
+      "readsMinutes": 4320,
+      "why": "compact lookback"
+    },
+    {
+      "text": "show the last 2 hours of memory per node",
+      "readsMinutes": 120,
+      "why": "the lookback, then what to read"
+    },
+    {
+      "text": "the average of the last 2 hours",
+      "readsMinutes": 120,
+      "why": "an aggregate over one window"
+    },
+    {
+      "text": "memory per node from the last 2 hours",
+      "readsMinutes": 120,
+      "why": "'from' = taken from that window"
+    },
+    {
+      "text": "memory per node throughout the last day",
+      "readsMinutes": 1440,
+      "why": "anchored unit"
+    },
+    {
+      "text": "memory per node the last 2 hours",
+      "readsMinutes": 120,
+      "why": "no preposition, same window"
+    },
+    {
+      "text": "what was memory like the last hour?",
+      "readsMinutes": 60,
+      "why": "no preposition, same window"
+    },
+    {
+      "text": "once more, memory per node in the last hour",
+      "readsMinutes": 60,
+      "why": "'once more' = again"
+    },
+    {
+      "text": "while you are at it, memory per node in the last hour",
+      "readsMinutes": 60,
+      "why": "'while you are at it' is not about the window"
+    },
+    {
+      "text": "which nodes were not reporting in the last hour?",
+      "readsMinutes": 60,
+      "why": "the negation governs the verb, not the window (amended after run 1: the app changed this row from a read to an ask at its head 0d52b9b; the overrides were first written against 9bb416d)"
+    }
+  ],
+  "amendments": [
+    "after run 1: one override added for a row whose app label changed at the app head 0d52b9b; the 18 rows new at that head were reviewed and their app labels kept as their meaning"
+  ]
+}

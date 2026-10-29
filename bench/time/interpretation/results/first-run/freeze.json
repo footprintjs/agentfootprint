@@ -1,0 +1,11 @@
+{
+ "frozenAt": "2026-10-28T23:45:58.163Z",
+ "commit": "9a6555e",
+ "sha256": {
+  "scripts/signals.mjs": "46cc6b687c3c906c3b34d5e07959b0516d4f6196855c59a4e252648756294dcd",
+  "scripts/adapters.mjs": "a4617a00b50a5d6c06d9713e46596d32ea48f5bc55063ad117756feb2029d5df",
+  "scripts/run.mjs": "fb43b4f2d2ae7a7f4bf97712e61ebd53562b5801a03caa638f9579c4a1c6f100",
+  "scripts/app-reference.mjs": "064be79029f9a09027f2c89736ce76f1f44b85654ca04725665c92b240e6446f",
+  "corpus/heldout.json": "caec788a51fe2340375e286ffabeb959bcdf23198074943e47b8ddc6d8a21b34"
+ }
+}

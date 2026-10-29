@@ -1,0 +1,1196 @@
+[
+ {
+  "text": "memory per node for the last half-hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past half-hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for a half-hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last half an hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for half an hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past half hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for an hour and a half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last hour and a half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past hour and a half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for hour and a half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for one and a half hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last one and a half hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 1h30",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for 1h30",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 1:30 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for 1:30 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for 90 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last quarter of an hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for a quarter of an hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for a quarter-hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past hour and a quarter",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last day and a half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for a day and a half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for 1½ hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for ½ hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 1.5 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past couple of hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for a couple of hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last few hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for a few hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past several hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for several hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past seventy minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past twenty-four hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last hundred seconds",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the past fortnight",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for a fortnight",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node during a half-hour period",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the preceding hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the trailing hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over roughly the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours or so",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the next 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2-3 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 30 to 45 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours excluding the first half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours compared with the preceding period",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours versus the prior period",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours compared with the 2 hours before",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours ending 3 hours ago",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node during May",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in may",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node last May",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in 2025",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in Q1",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node year to date",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node on Mon",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node at eight o'clock",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node on 10.27.2026",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 15 minutes",
+  "app": {
+   "reads": 15
+  }
+ },
+ {
+  "text": "memory per node over the last 30 min",
+  "app": {
+   "reads": 30
+  }
+ },
+ {
+  "text": "memory per node in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node over the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node over the last 90 minutes",
+  "app": {
+   "reads": 90
+  }
+ },
+ {
+  "text": "memory per node over the past 90 minutes",
+  "app": {
+   "reads": 90
+  }
+ },
+ {
+  "text": "memory per node over the last 2h",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the past 24 hours",
+  "app": {
+   "reads": 1440
+  }
+ },
+ {
+  "text": "memory per node over the last 7 days",
+  "app": {
+   "reads": 10080
+  }
+ },
+ {
+  "text": "memory per node over the last 2 weeks",
+  "app": {
+   "reads": 20160
+  }
+ },
+ {
+  "text": "memory per node in the last hour on node 40",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory on node 40 in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node in the last hour, excluding node 5",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node over the last 15 minutes for nodes 1-4",
+  "app": {
+   "reads": 15
+  }
+ },
+ {
+  "text": "memory per node per hour over the last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "Good morning! Memory per node over the last 15 minutes, please.",
+  "app": {
+   "reads": 15
+  }
+ },
+ {
+  "text": "memory per node",
+  "app": "none"
+ },
+ {
+  "text": "memory per node right now",
+  "app": "none"
+ },
+ {
+  "text": "memory per node now",
+  "app": "none"
+ },
+ {
+  "text": "what is the memory per node currently?",
+  "app": "none"
+ },
+ {
+  "text": "memory on node 40 of cluster 2024",
+  "app": "none"
+ },
+ {
+  "text": "memory per node, release 9.5",
+  "app": "none"
+ },
+ {
+  "text": "memory for drive 7 in bay 12",
+  "app": "none"
+ },
+ {
+  "text": "write ops per second per node",
+  "app": "none"
+ },
+ {
+  "text": "memory per node every 5 minutes",
+  "app": "none"
+ },
+ {
+  "text": "which nodes may be low on memory?",
+  "app": "none"
+ },
+ {
+  "text": "a second chart of memory per node",
+  "app": "none"
+ },
+ {
+  "text": "memory per node for half the nodes",
+  "app": "none"
+ },
+ {
+  "text": "Good morning, what is the memory per node?",
+  "app": "none"
+ },
+ {
+  "text": "memory per node over the last 2 hours, excluding the first half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours (excluding the first half)",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for the last 2 hours of each day",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for the last hour of every day",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 3 days of each week",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 1½h",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2½h",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for 1¾ hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 1.5h",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last hour-and-a-half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 1 hour 30 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours approximately",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours at least",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours at most",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours minimum",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours or more",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours or longer",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours and a bit",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours compared with the previous ones",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours compared with the previous two",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, compared with the preceding period",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, ending 30 minutes ago",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours excluding the first 15 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours except the first 30 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, but not the first half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours without the first half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node from 8 to 9",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node between 8 and 9",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node from 8am to 9am",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node at 8",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node before the outage",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node after the reboot",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node since the upgrade",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node during business hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node every morning",
+  "app": "ask"
+ },
+ {
+  "text": "daily memory per node",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node per day",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node on weekdays",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node around 9am",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node an hour ago",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node 3 hours ago",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node as of 2 days ago",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in the last hour before you answer",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in the last hour until now",
+  "app": "ask"
+ },
+ {
+  "text": "as I said earlier, memory per node in the last hour",
+  "app": "ask"
+ },
+ {
+  "text": "since you asked, memory per node in the last hour",
+  "app": "ask"
+ },
+ {
+  "text": "which one is busiest in the last hour?",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours every 5 minutes",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours, every 5 minutes",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours, sampled hourly",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node during the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours, excluding node 5",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node between node 3 and node 4 in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "the top two nodes by memory in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory on a couple of nodes in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory on node 8",
+  "app": "none"
+ },
+ {
+  "text": "memory on nodes 1-4",
+  "app": "none"
+ },
+ {
+  "text": "memory on nodes 8 to 9",
+  "app": "none"
+ },
+ {
+  "text": "memory on drives 3 through 5",
+  "app": "none"
+ },
+ {
+  "text": "memory for bay 12",
+  "app": "none"
+ },
+ {
+  "text": "memory per node on release 9.5",
+  "app": "none"
+ },
+ {
+  "text": "memory per node on firmware 9.7",
+  "app": "none"
+ },
+ {
+  "text": "memory on node id 3",
+  "app": "none"
+ },
+ {
+  "text": "memory on cluster 2024",
+  "app": "none"
+ },
+ {
+  "text": "memory per node per minute",
+  "app": "none"
+ },
+ {
+  "text": "memory per node per hour",
+  "app": "none"
+ },
+ {
+  "text": "memory per node over the past 1 hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node within the last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 120 minutes",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hrs",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 3 wks",
+  "app": {
+   "reads": 30240
+  }
+ },
+ {
+  "text": "memory per node over the last two hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the previous 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the latest 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 business days",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours and 30 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours or 3",
+  "app": "ask"
+ },
+ {
+  "text": "when did memory spike?",
+  "app": "ask"
+ },
+ {
+  "text": "when did memory per node spike?",
+  "app": "ask"
+ },
+ {
+  "text": "what time did memory per node peak?",
+  "app": "ask"
+ },
+ {
+  "text": "CPU when the alert fired",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node when the alert fired",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node when the job started",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node when the failover happened",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node around when the alert fired",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node at the time of the outage",
+  "app": "ask"
+ },
+ {
+  "text": "what was memory per node at the time of the reboot?",
+  "app": "ask"
+ },
+ {
+  "text": "the time of the outage: memory per node",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node at the time of the alert in the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "CPU when the alert fired in the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "When the alert fired, what was memory per node in the last hour?",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node whenever CPU is high in the last hour",
+  "app": "ask"
+ },
+ {
+  "text": "when did memory spike in the last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "When did memory per node peak over the past 24 hours?",
+  "app": {
+   "reads": 1440
+  }
+ },
+ {
+  "text": "what time did memory per node peak in the last hour?",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "At what time did memory per node peak over the last 90 minutes?",
+  "app": {
+   "reads": 90
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours: when did it spike?",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node in the last hour, and when was it highest?",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "When's the peak of memory per node in the last 2 hours?",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node outside the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node, not the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node, exclude the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "show memory per node, not just the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "show memory per node, perhaps the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node not in the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node not just in the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node beyond the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node apart from the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node other than the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node besides the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node prior to the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node earlier than the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node older than a day",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node more than 2 hours ago",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in the last 15 minutes of each hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in the last 15 minutes of every hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node for the first 15 minutes of every hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours per day",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours per hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours each hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours in each hour",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in the last 15 minutes sampled every minute",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, sampled every other minute",
+  "app": "ask"
+ },
+ {
+  "text": "show memory per node in the last 2 hours only while backups were running",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, only during the backup window",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node while the backup ran",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours whilst the scrub ran",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last hour if the job was running",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, only if the job was running",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours as long as the job ran",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours once the job started",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours as soon as the alert fired",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours unless the job was running",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours provided the backup ran",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours with backups running",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours in which backups ran",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node last 45m",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node past 3d",
+  "app": "ask"
+ },
+ {
+  "text": "show the last 2 hours of memory per node",
+  "app": "ask"
+ },
+ {
+  "text": "the average of the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node from the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node throughout the last day",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in the last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the past day",
+  "app": {
+   "reads": 1440
+  }
+ },
+ {
+  "text": "memory per node for the last 15 minutes",
+  "app": {
+   "reads": 15
+  }
+ },
+ {
+  "text": "memory per node across the last 2 days",
+  "app": {
+   "reads": 2880
+  }
+ },
+ {
+  "text": "memory per node through the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node, last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "last 2 hours every 5 minutes",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "The last hour: memory per node",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "Last 2 hours: memory per node",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "show me memory per node for the last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node the last 2 hours",
+  "app": "ask"
+ },
+ {
+  "text": "what was memory like the last hour?",
+  "app": "ask"
+ },
+ {
+  "text": "once more, memory per node in the last hour",
+  "app": "ask"
+ },
+ {
+  "text": "while you are at it, memory per node in the last hour",
+  "app": "ask"
+ },
+ {
+  "text": "only CPU in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory for only node 8 in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "in which cluster is memory highest in the last hour?",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node not in the last two hours",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours; not during the backup",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, and not the first half",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, not counting the first 30 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node, excluding the weekend, over the last 7 days",
+  "app": "ask"
+ },
+ {
+  "text": "never mind CPU; memory per node outside business hours",
+  "app": "ask"
+ },
+ {
+  "text": "which nodes were not reporting in the last hour?",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node in the last hour, but not CPU",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node without the cache in the last hour",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "no data per node in the last hour?",
+  "app": {
+   "reads": 60
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours (only while backups were running)",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours. Only while backups ran.",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours, but only if the job was running",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours each 5 minutes",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours at 5-minute intervals",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours at 5 minute intervals",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours every 30s",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node per second over the last 2 hours",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node over the last 2 hours, sampled per second",
+  "app": {
+   "reads": 120
+  }
+ },
+ {
+  "text": "memory per node in the last 15 minutes of every 5 minutes",
+  "app": "ask"
+ },
+ {
+  "text": "memory per node over the last 2 hours in each 5 minutes",
+  "app": "ask"
+ }
+]
