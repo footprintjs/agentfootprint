@@ -421,8 +421,14 @@ export interface FinalStageArms {
   readonly attachCoverageLimits?: boolean;
   /** The inputs layer is armed; `rewrites` — a before-tool chain can rewrite a filled value. */
   readonly inputsLayer?: { readonly rewrites?: true };
-  /** The answer layer is armed; `standingLine` — its one line travels with a prose answer. */
-  readonly answerLayer?: { readonly standingLine?: true };
+  /**
+   * The answer layer is armed; `standingLine` — its one line travels with a
+   * prose answer, in the answers its mode says it for (`'always'` for
+   * `standingLine: true`).
+   */
+  readonly answerLayer?: {
+    readonly standingLine?: import('../assessment/compose.js').StandingLineWhen;
+  };
   /** The time layer is armed — the limits block's `Period:` lines render in the clock's zone. */
   readonly timeLayer?: true;
   /** The evidence gate's `'rails'` posture — a refused answer is recorded flagged and ends the branch. */
@@ -512,7 +518,7 @@ function finalStageFor(arms: FinalStageArms): FinalStage {
         ...(arms.inputsLayer !== undefined && {
           assumed: { readsRewrites: arms.inputsLayer.rewrites === true },
         }),
-        standingLine: arms.answerLayer.standingLine === true,
+        standingLine: arms.answerLayer.standingLine !== undefined,
         ...(arms.timeLayer === true && { inZone: true }),
         ...(displayNameOf !== undefined && { displayNameOf }),
       },
@@ -609,7 +615,10 @@ export function prepareFinalWithAnswerLayerStage(
     const names = o.standingLine ? scope.answerStandingNames : undefined;
     const declared = o.limits ? scope.coverageDeclared ?? [] : [];
     let assumed = '';
-    if (o.limits && o.assumed !== undefined && !o.standingLine) {
+    // The "Assumed" block when no line names the assumed values: the line arm is
+    // off, or its mode left the line off this answer (one composer for one fact,
+    // and an assumed value is never dropped from the limits).
+    if (o.limits && o.assumed !== undefined && line === '') {
       const { assumedBlockOf } = await import('../arguments/serve.js');
       const readsRewrites = o.assumed.readsRewrites;
       assumed = assumedBlockOf(

@@ -15,7 +15,7 @@
  * received refusal is an answer, though not proof that nothing ran, so the
  * record keeps its effect `unknown`.
  *
- * Run:  npm run example examples/features/117-app-authorized-replay.ts
+ * Run:  npm run example examples/features/118-app-authorized-replay.ts
  */
 import assert from 'node:assert/strict';
 import { Agent, type LLMProvider } from '../../src/index.js';
@@ -25,7 +25,7 @@ import type { Payloads } from '../../src/events.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/117-app-authorized-replay',
+  id: 'features/118-app-authorized-replay',
   title: 'App-authorized replay — you decide which MCP calls are sent again',
   group: 'features',
   description:

@@ -53,6 +53,51 @@ import type {
 export const STANDING_LINE_VERSION = 2;
 
 /**
+ * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
+ *
+ * - `'always'` — on every prose answer (`standingLine: true` is this);
+ * - `'unless-consistent'` — every standing but `consistent`;
+ * - `'not-sure-or-ask'` — only `not-sure` and `ask`.
+ *
+ * `ask` is said in every mode. The mode decides only whether the LINE is
+ * appended: the standing travels as data in every mode
+ * (`turn_end.answerAssessment`, `agentfootprint.answer.assessed`), the limits
+ * block is appended whether or not the line is, and the answer the run
+ * returns, saves and emits is one string — so memory keeps exactly what was
+ * delivered. No line is never a verdict: under `'not-sure-or-ask'` it means
+ * no reason fired, which includes "nothing could be checked".
+ */
+export type StandingLineWhen = 'always' | 'unless-consistent' | 'not-sure-or-ask';
+
+/** The standings each mode leaves the line off for — `ask` is in none of them. */
+const LEFT_UNSAID: Readonly<Record<StandingLineWhen, readonly AnswerAssessment['standing'][]>> =
+  Object.freeze({
+    always: [],
+    'unless-consistent': ['consistent'],
+    'not-sure-or-ask': ['consistent', 'not-assessed', 'known'],
+  });
+
+// FOLD · the one choice of whether the line is appended for a standing
+// consumers read this and never re-derive it: assessment/stage.ts · assessAnswerStage
+/**
+ * Whether `when` appends the line for an answer of `standing`. Never decides
+ * anything else: the standing, its data and the limits block are the same in
+ * every mode.
+ *
+ * @example
+ * ```ts
+ * standingLineSaid('not-sure-or-ask', 'consistent'); // false — no line; the data still travels
+ * standingLineSaid('not-sure-or-ask', 'ask');        // true — `ask` is said in every mode
+ * ```
+ */
+export function standingLineSaid(
+  when: StandingLineWhen,
+  standing: AnswerAssessment['standing'],
+): boolean {
+  return !LEFT_UNSAID[when].includes(standing);
+}
+
+/**
  * The line's first words, one per standing — the owner's words. They are
  * plain words a model can write too, so a reader of the answer text never
  * matches on them alone: the answer account finds the line by rebuilding the

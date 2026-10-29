@@ -297,7 +297,7 @@ Permission to send a tool call again is yours. You declare it per server, for
 that server's tools, when you build the client. The model, a tool's description
 and a server's annotations (`readOnlyHint`) never grant it.
 
-<CodeFile path="examples/features/117-app-authorized-replay.ts" region="replay" title="examples/features/117-app-authorized-replay.ts (region: replay)" />
+<CodeFile path="examples/features/118-app-authorized-replay.ts" region="replay" title="examples/features/118-app-authorized-replay.ts (region: replay)" />
 
 The declaration is an `McpReplayOptions`, from `agentfootprint/providers`: a
 `McpReplayPolicy`, one `McpReplayTool` entry per tool, whose `on` lists
@@ -404,7 +404,7 @@ again on your declaration and its effects stay unknown; the ticket was not sent
 again, because it makes changes and carried no key, and its 429 reached the
 model as the server sent it.
 
-<CodeFile path="examples/features/117-app-authorized-replay.ts" region="record" title="examples/features/117-app-authorized-replay.ts (region: record)" />
+<CodeFile path="examples/features/118-app-authorized-replay.ts" region="record" title="examples/features/118-app-authorized-replay.ts (region: record)" />
 
 **Moving to the next major.** `'app-authorized'` becomes the default. To keep
 today's behaviour, write `replay: { policy: 'compatibility' }`; its records go on
