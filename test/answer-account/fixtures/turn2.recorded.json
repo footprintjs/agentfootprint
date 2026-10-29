@@ -85,7 +85,7 @@
    "payload": {
     "agentId": "agent",
     "llm": {
-     "provider": "neo-explicit-analysis/neo-time-input/seo-routing/anthropic",
+     "provider": "bot-explicit-analysis/bot-time-input/host-app-routing/anthropic",
      "model": "claude-haiku-4-5-20251001",
      "modelOverrides": [
       "configure"
@@ -97,7 +97,7 @@
     "skillGraph": {
      "routing": "assist",
      "continuity": "conversation",
-     "scorer": "neo-declared-capability-ranking"
+     "scorer": "bot-declared-capability-ranking"
     },
     "evidenceGate": "guard",
     "artifacts": {
@@ -426,7 +426,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "neo:explicit-analysis-renderer",
+    "middleware": "bot:explicit-analysis-renderer",
     "moment": "input",
     "at": "message",
     "phase": "input",
@@ -470,7 +470,7 @@
     "by": "intent",
     "from": "powerstore",
     "to": "array-inventory",
-    "scorer": "neo-declared-capability-ranking",
+    "scorer": "bot-declared-capability-ranking",
     "scores": [
      {
       "id": "array-inventory",
@@ -812,7 +812,7 @@
   {
    "type": "agentfootprint.tools.discovery_started",
    "payload": {
-    "providerId": "seo:host-and-product+skill-scoped:self-explain",
+    "providerId": "host-app:host-and-product+skill-scoped:self-explain",
     "iteration": 1
    },
    "meta": {
@@ -1147,7 +1147,7 @@
   {
    "type": "agentfootprint.tools.discovery_completed",
    "payload": {
-    "providerId": "seo:host-and-product+skill-scoped:self-explain",
+    "providerId": "host-app:host-and-product+skill-scoped:self-explain",
     "iteration": 1,
     "durationMs": 1,
     "toolCount": 5
@@ -1535,7 +1535,7 @@
    "type": "agentfootprint.stream.llm_start",
    "payload": {
     "iteration": 1,
-    "provider": "neo-explicit-analysis/neo-time-input/seo-routing/anthropic",
+    "provider": "bot-explicit-analysis/bot-time-input/host-app-routing/anthropic",
     "model": "claude-haiku-4-5-20251001",
     "systemPromptChars": 42730,
     "messagesCount": 5,
@@ -1702,7 +1702,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "neo:explicit-analysis-admission",
+    "middleware": "bot:explicit-analysis-admission",
     "moment": "before-tool",
     "at": "tool",
     "toolName": "get_array_inventory",
@@ -1726,7 +1726,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "neo:query-window-inputs",
+    "middleware": "bot:query-window-inputs",
     "moment": "before-tool",
     "at": "tool",
     "toolName": "get_array_inventory",
@@ -1750,7 +1750,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "seo:ordered-route-plan",
+    "middleware": "host-app:ordered-route-plan",
     "moment": "before-tool",
     "at": "tool",
     "toolName": "get_array_inventory",
@@ -1823,7 +1823,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "seo:subject-carry",
+    "middleware": "host-app:subject-carry",
     "moment": "after-tool",
     "at": "tool",
     "toolName": "get_array_inventory",
@@ -1847,7 +1847,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "seo:investigation-context",
+    "middleware": "host-app:investigation-context",
     "moment": "after-tool",
     "at": "tool",
     "toolName": "get_array_inventory",
@@ -1871,7 +1871,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "neo:query-window-inputs",
+    "middleware": "bot:query-window-inputs",
     "moment": "after-tool",
     "at": "tool",
     "toolName": "get_array_inventory",
@@ -2386,7 +2386,7 @@
   {
    "type": "agentfootprint.tools.discovery_started",
    "payload": {
-    "providerId": "seo:host-and-product+skill-scoped:self-explain",
+    "providerId": "host-app:host-and-product+skill-scoped:self-explain",
     "iteration": 2
    },
    "meta": {
@@ -2721,7 +2721,7 @@
   {
    "type": "agentfootprint.tools.discovery_completed",
    "payload": {
-    "providerId": "seo:host-and-product+skill-scoped:self-explain",
+    "providerId": "host-app:host-and-product+skill-scoped:self-explain",
     "iteration": 2,
     "durationMs": 1,
     "toolCount": 5
@@ -3109,7 +3109,7 @@
    "type": "agentfootprint.stream.llm_start",
    "payload": {
     "iteration": 2,
-    "provider": "neo-explicit-analysis/neo-time-input/seo-routing/anthropic",
+    "provider": "bot-explicit-analysis/bot-time-input/host-app-routing/anthropic",
     "model": "claude-haiku-4-5-20251001",
     "systemPromptChars": 42730,
     "messagesCount": 7,
@@ -4872,7 +4872,7 @@
   {
    "type": "agentfootprint.middleware.decision",
    "payload": {
-    "middleware": "neo:explicit-analysis-renderer",
+    "middleware": "bot:explicit-analysis-renderer",
     "moment": "output",
     "at": "message",
     "phase": "output",

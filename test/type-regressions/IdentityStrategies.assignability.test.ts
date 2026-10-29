@@ -102,7 +102,7 @@ describe('identity strategies — public types', () => {
   it('oidcIdentity is an IdentityVerifier, and env maps onto IdentityConfig', () => {
     const verifier: OidcIdentity = oidcIdentity({
       issuer: 'https://idp.example.test',
-      audience: 'api://neo',
+      audience: 'api://bot',
       userIdClaim: 'oid',
       requiredScope: 'access_as_user',
       allowedClients: 'any',

@@ -539,7 +539,7 @@ describe('review idI57 N-5 — the door runs at the origin root', () => {
         publicUrl,
         production: false,
       });
-    expect(build('http://127.0.0.1:8080/neo/')).toThrow(
+    expect(build('http://127.0.0.1:8080/bot/')).toThrow(
       expect.objectContaining({ option: 'publicUrl' }),
     );
     expect(build('http://127.0.0.1:8080/?x=1')).toThrow(

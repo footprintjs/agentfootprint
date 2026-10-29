@@ -263,13 +263,13 @@ export const identityStrategyConformance: readonly IdentityCase[] = [
   },
   {
     name: 'a-roles-string-is-one-role',
-    law: 'A roles claim holding one string is ONE role: "x neo-users" never grants neo-users (rule 14).',
+    law: 'A roles claim holding one string is ONE role: "x bot-users" never grants bot-users (rule 14).',
     async run(h) {
       const who = await verified(h, 'roles-string-with-space');
       if (who === undefined) return 'not-applicable';
-      if (who.roles?.includes('neo-users')) fail(`roles read as ${JSON.stringify(who.roles)}`);
-      if (JSON.stringify(who.roles) !== JSON.stringify(['x neo-users'])) {
-        fail(`roles read as ${JSON.stringify(who.roles)}, expected ["x neo-users"]`);
+      if (who.roles?.includes('bot-users')) fail(`roles read as ${JSON.stringify(who.roles)}`);
+      if (JSON.stringify(who.roles) !== JSON.stringify(['x bot-users'])) {
+        fail(`roles read as ${JSON.stringify(who.roles)}, expected ["x bot-users"]`);
       }
       return 'passed';
     },

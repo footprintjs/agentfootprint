@@ -7,7 +7,7 @@
  * model reads (name + description) plus a pluggable structural rule
  * pack.
  *
- * The catalog is REAL: a 16-tool subset of the Neo SAN-operations
+ * The catalog is REAL: a 16-tool subset of the host-app SAN-operations
  * agent's sidecar (py-tools/server.py), which deliberately carries
  * NX-API/InfluxDB twins. The lint surfaces:
  *
@@ -39,12 +39,12 @@ import {
   type ToolCatalogReport,
 } from '../../src/doors/observe.js';
 import { mockEmbedder } from '../../src/doors/memory.js';
-import { neoToolCatalog } from '../helpers/neoToolCatalog.js';
+import { hostAppToolCatalog } from '../helpers/hostAppToolCatalog.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
   id: 'observability/02-lint-confusable-catalog',
-  title: 'Tool-catalog confusability lint — the Neo twins (RFC-002 C1/C2)',
+  title: 'Tool-catalog confusability lint — the host-app twins (RFC-002 C1/C2)',
   group: 'observability',
   description:
     'analyzeToolCatalog lints a real 16-tool SAN catalog (zero stack buy-in: plain ' +
@@ -66,7 +66,7 @@ export interface LintConfusableResult {
 export async function run(_input?: string | null): Promise<LintConfusableResult> {
   const out: string[] = [];
 
-  out.push('═══ TOOL-CATALOG LINT — the Neo SAN catalog (16 tools) ═══', '');
+  out.push('═══ TOOL-CATALOG LINT — the host-app SAN catalog (16 tools) ═══', '');
   out.push(
     '⚠ demo embedder is the deterministic mock (offline). Verdicts use',
     `  MOCK_EMBEDDER_CALIBRATION (threshold ${MOCK_EMBEDDER_CALIBRATION.confusabilityThreshold}); trust the RELATIVE ordering.`,
@@ -74,7 +74,7 @@ export async function run(_input?: string | null): Promise<LintConfusableResult>
     '',
   );
 
-  const report = await analyzeToolCatalog(neoToolCatalog, {
+  const report = await analyzeToolCatalog(hostAppToolCatalog, {
     embedder: mockEmbedder(),
     ...MOCK_EMBEDDER_CALIBRATION,
   });

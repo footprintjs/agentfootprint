@@ -247,8 +247,8 @@ describe('signInDoor construction — unit', () => {
   it('https: the __Host-Http- cookie; plain-http localhost: af-signin without Secure, said in the banner', async () => {
     const secure = signInDoor({
       ...(await base()),
-      publicUrl: 'https://neo.corp.example',
-      guard: { allowedHosts: ['neo.corp.example'] },
+      publicUrl: 'https://bot.corp.example',
+      guard: { allowedHosts: ['bot.corp.example'] },
     });
     expect(secure.cookieName).toBe('__Host-Http-af-signin');
     const local = signInDoor({ ...(await base()), publicUrl: 'http://localhost:5350' });
@@ -259,22 +259,22 @@ describe('signInDoor construction — unit', () => {
 
   it('refuses: plain http off loopback, plain http in production, no allowedHosts off loopback, "any", a public URL its own lists refuse', async () => {
     const b = await base();
-    expect(() => signInDoor({ ...b, publicUrl: 'http://neo.corp.example' })).toThrow(
+    expect(() => signInDoor({ ...b, publicUrl: 'http://bot.corp.example' })).toThrow(
       /must be https/,
     );
     expect(() => signInDoor({ ...b, production: true, publicUrl: 'http://localhost:1' })).toThrow(
       /production/,
     );
-    expect(() => signInDoor({ ...b, publicUrl: 'https://neo.corp.example' })).toThrow(
+    expect(() => signInDoor({ ...b, publicUrl: 'https://bot.corp.example' })).toThrow(
       /allowedHosts/,
     );
     expect(() =>
-      signInDoor({ ...b, publicUrl: 'https://neo.corp.example', guard: { allowedHosts: 'any' } }),
+      signInDoor({ ...b, publicUrl: 'https://bot.corp.example', guard: { allowedHosts: 'any' } }),
     ).toThrow(/'any'/);
     expect(() =>
       signInDoor({
         ...b,
-        publicUrl: 'https://neo.corp.example',
+        publicUrl: 'https://bot.corp.example',
         guard: { allowedHosts: ['other.corp.example'] },
       }),
     ).toThrow(/refused by the door's own lists/);
@@ -288,9 +288,9 @@ describe('the https cookie — unit (review idI34 S-8, M18)', () => {
     const door = signInDoor({
       passwords: localPasswords(await testUsers()),
       store: memorySignIns(),
-      publicUrl: 'https://neo.corp.example',
+      publicUrl: 'https://bot.corp.example',
       production: true,
-      guard: { allowedHosts: ['neo.corp.example'] },
+      guard: { allowedHosts: ['bot.corp.example'] },
       minimumResponseMs: 0,
     });
     const server = createServer((req, res) => void door.handle(req, res));
@@ -306,8 +306,8 @@ describe('the https cookie — unit (review idI34 S-8, M18)', () => {
             path: '/auth/login',
             method: 'POST',
             headers: {
-              host: 'neo.corp.example',
-              origin: 'https://neo.corp.example',
+              host: 'bot.corp.example',
+              origin: 'https://bot.corp.example',
               'content-type': 'application/json',
               'content-length': String(body.length),
             },

@@ -1,8 +1,8 @@
 /**
- * Neo SAN-operations tool catalog — the RFC-002 acceptance fixture.
+ * Host-app SAN-operations tool catalog — the RFC-002 acceptance fixture.
  *
  * A representative subset (16 of 29) of the real catalog served by
- * neo-agentfootprint's `py-tools/server.py` (`GET /tools`). Kept verbatim
+ * a host app's `py-tools/server.py` (`GET /tools`). Kept verbatim
  * (names, descriptions, inputSchemas) so the lint exercises REAL field
  * conditions, including:
  *
@@ -20,7 +20,7 @@
 
 import type { CatalogTool } from '../../src/doors/observe.js';
 
-export const neoToolCatalog: readonly CatalogTool[] = [
+export const hostAppToolCatalog: readonly CatalogTool[] = [
   // ── Interface-triage spine (NX-API, live switch state) ──────────────
   {
     name: 'get_interface_status',

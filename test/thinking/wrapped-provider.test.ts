@@ -128,7 +128,7 @@ describe('thinking handler — declared, so a wrapper keeps it', () => {
   it("regression: an app's renaming wrapper that forwards the field keeps it", async () => {
     const inner = anthropic({ _client: thinkingClient() });
     const routed: LLMProvider = {
-      name: `seo-routing/${inner.name}`,
+      name: `host-app-routing/${inner.name}`,
       ...(inner.thinkingHandler !== undefined && { thinkingHandler: inner.thinkingHandler }),
       complete: (req, hooks) => inner.complete(req, hooks),
     };

@@ -664,7 +664,7 @@ describe('skillGraph — routing provenance (metadata.skillGraph)', () => {
 });
 
 describe('tree() — the same skill as MULTIPLE leaves (shared-leaf merge)', () => {
-  // Neo's regression: an intent tree routed BOTH "ESXi questions" and "io
+  // The host app's regression: an intent tree routed BOTH "ESXi questions" and "io
   // questions" to the same io-profile skill — two leaves, one injection id.
   // The compiler must merge them (OR'd predicates), not emit a duplicate that
   // explodes in Agent.injection()'s duplicate-id guard.

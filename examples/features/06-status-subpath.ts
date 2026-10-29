@@ -38,7 +38,7 @@ export const meta: ExampleMeta = {
   tags: ['feature', 'status', 'thinking', 'chat-bubble', 'subpath'],
 };
 
-// Per-tool overrides — the same shape Neo's chat-bubble uses.
+// Per-tool overrides — the same shape a host app's chat-bubble uses.
 // Keys MUST match the registered tool names.
 //
 // Built-in template vars (filled by selectStatus):
@@ -50,7 +50,7 @@ export const meta: ExampleMeta = {
 //
 // For arg-aware templates (e.g. "Looking up weather in {{city}}"), the
 // consumer takes the AgentfootprintEvent stream directly and substitutes
-// from `event.payload.args`. See `neo-mds-triage` ChatFeed.tsx for the
+// from `event.payload.args`. See the host app's ChatFeed.tsx for the
 // reference implementation.
 const myTemplates: StatusTemplates = {
   ...defaultStatusTemplates,

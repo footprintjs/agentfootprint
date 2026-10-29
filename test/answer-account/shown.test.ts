@@ -28,7 +28,7 @@ import {
 } from '../../src/answer-account/shown.js';
 import type { AnswerAccount, RecordPointer } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-import { assertP7, fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from './helpers.js';
+import { assertP7, fixtureA, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS } from './helpers.js';
 
 const ev = (type: string, path: string, index = 0): RecordPointer => ({
   kind: 'event',
@@ -104,8 +104,8 @@ describe('the leaves', () => {
   });
 
   it('an emptiness leaf is a derived count, never the rows', () => {
-    const account = accountForAnswer(fixtureA(), NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
-    const shown = showLeaves(account, fixtureA(), NEO_DECLARATIONS);
+    const account = accountForAnswer(fixtureA(), HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+    const shown = showLeaves(account, fixtureA(), HOST_APP_DECLARATIONS);
     expect(shown['history:2:#emptiness']).toEqual({ rows: 0, at: '/content/volumes' });
     expect(JSON.stringify(shown)).not.toContain('af_provenance');
   });

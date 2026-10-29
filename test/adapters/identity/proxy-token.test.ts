@@ -59,12 +59,12 @@ function proxyConfig(extra: Partial<IdentityConfig> = {}): IdentityConfig {
     userIdClaim: 'oid',
     requiredScope: SHAPE_DEFAULTS.scope,
     allowedClients: [SHAPE_DEFAULTS.client],
-    publicUrl: 'https://neo.corp.example',
+    publicUrl: 'https://bot.corp.example',
     ...extra,
   };
 }
 
-const LISTS = { allowedHosts: ['neo.corp.example', '127.0.0.1'] as const };
+const LISTS = { allowedHosts: ['bot.corp.example', '127.0.0.1'] as const };
 
 async function refusal(run: () => Promise<unknown>): Promise<{ key?: string; message: string }> {
   try {
@@ -108,7 +108,7 @@ async function appBehindProxy(idp: FakeIdp, extra: Partial<IdentityConfig> = {})
       const token = user === undefined ? undefined : await tokenFor(user);
       if (token === undefined)
         return void res.writeHead(302, { location: '/oauth2/sign_in' }).end();
-      const headers = { ...req.headers, host: 'neo.corp.example' };
+      const headers = { ...req.headers, host: 'bot.corp.example' };
       delete headers[header];
       delete headers.cookie;
       headers[header] = header === 'authorization' ? `Bearer ${token}` : token;
@@ -221,7 +221,7 @@ describe('proxy-token — boot refusals', () => {
       ).key,
     ).toBe('IDENTITY_PROXY_HEADER');
     expect(
-      (await refusal(() => identityFromConfig(proxyConfig({ clientId: 'neo-web' }), boot))).message,
+      (await refusal(() => identityFromConfig(proxyConfig({ clientId: 'bot-web' }), boot))).message,
     ).toMatch(/belongs to oidc-token, not proxy-token/);
   });
 
@@ -266,9 +266,9 @@ describe('proxy-token — boot refusals', () => {
       crossSite: { allowedHosts: [...LISTS.allowedHosts] },
     };
     for (const bad of [
-      'https://neo.corp.example/app/',
-      'https://neo.corp.example/?x=1',
-      'https://neo.corp.example/#top',
+      'https://bot.corp.example/app/',
+      'https://bot.corp.example/?x=1',
+      'https://bot.corp.example/#top',
     ]) {
       expect(
         (await refusal(() => identityFromConfig(proxyConfig({ publicUrl: bad }), boot))).key,
@@ -328,7 +328,7 @@ describe('proxy-token — scenarios', () => {
     for (const [label, token, failure] of cases) {
       const res = await invoke(app.handle.url, {
         authorization: `Bearer ${token}`,
-        host: 'neo.corp.example',
+        host: 'bot.corp.example',
       });
       expect(res.status, label).toBe(401);
       expect(app.records.at(-1)?.identityFailure, label).toBe(failure);
@@ -345,7 +345,7 @@ describe('proxy-token — the app port, reached directly', () => {
     const spoof = await invoke(app.handle.url, {
       'x-forwarded-user': 'alice',
       'x-forwarded-email': 'alice@corp.example',
-      host: 'neo.corp.example',
+      host: 'bot.corp.example',
     });
     expect(spoof.status).toBe(401);
     expect(app.records.at(-1)?.identityFailure).toBe('no-token');
@@ -356,7 +356,7 @@ describe('proxy-token — the app port, reached directly', () => {
       (
         await invoke(app.handle.url, {
           authorization: `Bearer ${forged}`,
-          host: 'neo.corp.example',
+          host: 'bot.corp.example',
         })
       ).status,
     ).toBe(401);
@@ -393,7 +393,7 @@ describe('proxy-token — properties', () => {
     ]) {
       const value = header === 'authorization' ? `Bearer ${token}` : token;
       expect(
-        (await invoke(app.handle.url, { [header]: value, host: 'neo.corp.example' })).status,
+        (await invoke(app.handle.url, { [header]: value, host: 'bot.corp.example' })).status,
         header,
       ).toBe(401);
     }
@@ -459,9 +459,9 @@ describe('proxy-token — ROI', () => {
         IDENTITY_USER_ID_CLAIM: 'oid',
         IDENTITY_REQUIRED_SCOPE: SHAPE_DEFAULTS.scope,
         IDENTITY_ALLOWED_CLIENTS: SHAPE_DEFAULTS.client,
-        IDENTITY_PUBLIC_URL: 'https://neo.corp.example',
+        IDENTITY_PUBLIC_URL: 'https://bot.corp.example',
       }),
-      { production: true, backend: idp.backend, crossSite: { allowedHosts: ['neo.corp.example'] } },
+      { production: true, backend: idp.backend, crossSite: { allowedHosts: ['bot.corp.example'] } },
     );
     expect(choice.strategy).toBe('proxy-token');
     expect(choice.banner.join('\n')).toMatch(/reachable ONLY from the proxy/);
