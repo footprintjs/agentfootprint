@@ -7,6 +7,10 @@ downstream service.
   framework sets from the run a call belongs to — the agent's own run or the
   run a composition opened for its members (`core/memberRun.ts`). A call no
   run reaches carries none.
+- Reads the abort signal of the request a credential is for
+  (`CredentialRequest.signal`) when the caller passes one, as `gatewayTransport`
+  does. It is the provider's cue to stop. `withCredentialRetry` passes it through,
+  ends its backoff on it, and never retries a request whose signal has fired.
 - Writes NOTHING into tracked scope. That is the standing invariant here:
   tracked writes flow into the record, and a vended token must never become
   evidence.
