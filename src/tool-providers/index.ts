@@ -72,6 +72,10 @@ export {
   mockMcpClient,
   gatewayTransport,
   GatewayAuthorizationRequiredError,
+  // A call under `replay: { policy: 'app-authorized' }` that the connection
+  // cannot honour (its requests unmatched, or its answers unseen) is refused
+  // before it is sent, with this error and a typed reason.
+  McpReplayUnavailableError,
   // The `_meta` key agentfootprint's tool declarations travel under, in both
   // directions (9.71.0). Public so a server this library did not write can
   // speak it, and so a client can read a bag it received.
@@ -125,6 +129,14 @@ export type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
+  // Who may send a tool call again (`mcpClient({ replay })`): the policy, the
+  // per-tool entries, and how the server deduplicates.
+  McpReplayDeduplication,
+  McpReplayKind,
+  McpReplayOptions,
+  McpReplayPolicy,
+  McpReplayTool,
+  McpReplayUnavailableReason,
   // The browser seams (9.81.0): a connection you opened yourself, the options
   // that carry it, and the two SDK modules you can hand over instead of letting
   // the Node loader find them.

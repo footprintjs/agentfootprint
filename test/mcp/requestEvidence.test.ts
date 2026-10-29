@@ -30,7 +30,9 @@
  *   S14 Scenario — a call that settles some other way first: its series is cut
  *                  inside the call, and nothing is re-sent
  *   S15 Security — cancellation does not depend on attribution: an SDK that
- *                  copies params still has its request cancelled, never re-sent
+ *                  rebuilds the params without their `_meta` still has its
+ *                  request cancelled, never re-sent; an SDK that only COPIES
+ *                  them is matched, by the call's marker
  *   S16 Unit     — dev mode names a request that could not be matched, once
  *   S17 ROI      — a transport class with `#private` fields connects and files
  *   S18 Scenario — a call approved on RESUME files into the resumed run
@@ -119,11 +121,13 @@ interface Call {
 /**
  * An MCP endpoint in this process: the handshake, the tool list, and `reply`
  * for each call. It counts the `tools/call` requests it received — overall and
- * per `q` — and keeps the ids the client told it it had cancelled.
+ * per `q` — keeps their bodies as sent, and keeps the ids the client told it it
+ * had cancelled.
  */
 function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
   const perQ = new Map<unknown, number>();
   const cancelled: unknown[] = [];
+  const bodies: string[] = [];
   let calls = 0;
   // Typed for both doors it is handed to: the MCP SDK's fetch and AgentCore's auth fetch.
   const fetch = async (_input: unknown, init?: RequestInit): Promise<Response> => {
@@ -152,6 +156,7 @@ function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
         return result({ tools: [TOOL] });
       case 'tools/call': {
         calls += 1;
+        bodies.push(String(init?.body));
         const q = message.params?.arguments?.q;
         const n = (perQ.get(q) ?? 0) + 1;
         perQ.set(q, n);
@@ -161,7 +166,13 @@ function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
         return new Response(null, { status: 404 });
     }
   };
-  return { fetch, toolCalls: () => calls, callsFor: (q: unknown) => perQ.get(q) ?? 0, cancelled };
+  return {
+    fetch,
+    toolCalls: () => calls,
+    callsFor: (q: unknown) => perQ.get(q) ?? 0,
+    bodies: (): readonly string[] => bodies,
+    cancelled,
+  };
 }
 
 /** A request that hangs until its signal fires — the way a real fetch ends then. */
@@ -286,13 +297,25 @@ const sdkWith = (client: unknown, transport: unknown = StreamableHTTPClientTrans
 
 type CallToolArgs = Parameters<Client['callTool']>;
 
+/**
+ * A 429 the series asked again after — under the compatibility policy, today's
+ * default. Since E3 (app-authorized replay) the row also says what is known of
+ * its effect (`unknown`: a 429 does not prove nothing ran), what permitted the
+ * repeat (the policy's named assumption), and how long the attempt took.
+ */
 const RATE_LIMITED = {
   outcome: 'refused',
   reason: 'retryable',
   status: 429,
   kind: 'throttle',
   failure: 'rate-limited',
+  effect: 'unknown',
+  permission: { by: 'compatibility', assumes: 'refused-before-execution' },
+  durationMs: expect.any(Number),
 } as const;
+
+/** E3: how long an attempt took — on every row the library files. */
+const TOOK = { durationMs: expect.any(Number) } as const;
 
 const OUT_OF_TIME = 'The call ran out of time before an answer arrived.';
 
@@ -324,10 +347,24 @@ describe('saved retry evidence — S1 the saved run gives back every attempt', (
         attempts: [
           { attempt: 1, ...RATE_LIMITED, waitMs: 10 },
           { attempt: 2, ...RATE_LIMITED, waitMs: 20 },
-          { attempt: 3, outcome: 'answered', reason: 'answered', status: 200 },
+          {
+            attempt: 3,
+            outcome: 'answered',
+            reason: 'answered',
+            status: 200,
+            effect: 'applied',
+            ...TOOK,
+          },
         ],
         omitted: 0,
-        end: { outcome: 'answered', reason: 'answered', status: 200 },
+        // E3: the call completed, but an earlier 429 may have run — the series does not claim once.
+        end: {
+          outcome: 'answered',
+          reason: 'answered',
+          status: 200,
+          attempts: 3,
+          effect: 'unknown',
+        },
       });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       // The same run, the same call: stamped from the dispatch, never by the series.
@@ -377,7 +414,13 @@ describe('saved retry evidence — S2/S3 a cancelled run still carries its reque
           origin: 'http://mcp.example.test',
           attempts: [{ attempt: 1, ...RATE_LIMITED, waitMs: 30_000, retryAfterMs: 30_000 }],
           omitted: 0,
-          end: { outcome: 'cancelled', reason: 'cancelled', during: 'wait' },
+          end: {
+            outcome: 'cancelled',
+            reason: 'cancelled',
+            during: 'wait',
+            attempts: 1,
+            effect: 'unknown',
+          },
         },
       ]);
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
@@ -414,13 +457,22 @@ describe('saved retry evidence — S2/S3 a cancelled run still carries its reque
       // row, `cut`, its remote outcome unknown — never recorded as not run.
       expect(evidence.attempts).toEqual([
         { attempt: 1, ...RATE_LIMITED, waitMs: 5 },
-        { attempt: 2, outcome: 'cut', reason: 'cancelled', remote: 'unknown' },
+        {
+          attempt: 2,
+          outcome: 'cut',
+          reason: 'cancelled',
+          remote: 'unknown',
+          effect: 'unknown',
+          ...TOOK,
+        },
       ]);
       expect(evidence.end).toEqual({
         outcome: 'cut',
         reason: 'cancelled',
         during: 'request',
         remote: 'unknown',
+        attempts: 2,
+        effect: 'unknown',
       });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(wireCut, 'the run cancel must cut the request on the wire').toBe(true);
@@ -445,10 +497,24 @@ describe('saved retry evidence — S4 a 503 received is not an operation that su
       await agent.run({ message: 'find it' });
       const evidence = payloadOf(filedIn(await savedAndReloaded(rec))[0]);
 
+      // E3: a 503 answered the request, but the call did not complete — its effect is unknown.
       expect(evidence.attempts).toEqual([
-        { attempt: 1, outcome: 'answered', reason: 'answered', status: 503 },
+        {
+          attempt: 1,
+          outcome: 'answered',
+          reason: 'answered',
+          status: 503,
+          effect: 'unknown',
+          ...TOOK,
+        },
       ]);
-      expect(evidence.end).toEqual({ outcome: 'answered', reason: 'answered', status: 503 });
+      expect(evidence.end).toEqual({
+        outcome: 'answered',
+        reason: 'answered',
+        status: 503,
+        attempts: 1,
+        effect: 'unknown',
+      });
       expect(JSON.stringify(evidence)).not.toMatch(/succe|"ok"/);
       // The boundary never moves: a 503 is delivered, not asked again.
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
@@ -490,7 +556,14 @@ describe('saved retry evidence — S5 concurrent runs on one connection stay sep
       ]);
       expect(savedBeta.map((e) => e.payload.toolCallId)).toEqual(['tc-beta']);
       expect(payloadOf(savedBeta[0]).attempts).toEqual([
-        { attempt: 1, outcome: 'answered', reason: 'answered', status: 200 },
+        {
+          attempt: 1,
+          outcome: 'answered',
+          reason: 'answered',
+          status: 200,
+          effect: 'applied',
+          ...TOOK,
+        },
       ]);
       expect(savedAlpha[0]?.meta.runId).not.toBe(savedBeta[0]?.meta.runId);
       expectEveryRequestCounted(payloadOf(savedAlpha[0]), endpoint.callsFor('alpha'));
@@ -529,6 +602,8 @@ describe('saved retry evidence — S6 omitted attempts are counted', () => {
         status: 429,
         kind: 'throttle',
         failure: 'rate-limited',
+        attempts: 105,
+        effect: 'unknown',
       });
     } finally {
       await client.close();
@@ -618,7 +693,15 @@ describe('saved retry evidence — S8 a transport that retries its own refusal f
         [2, 'refused', 'session-busy', 10],
         [3, 'answered', undefined, undefined],
       ]);
-      expect(evidence.end).toEqual({ outcome: 'answered', reason: 'answered', status: 200 });
+      // E3: the adapter retried two busy replies on its assumption — never proof
+      // that they ran nothing — so the series' effect stays unknown.
+      expect(evidence.end).toEqual({
+        outcome: 'answered',
+        reason: 'answered',
+        status: 200,
+        attempts: 3,
+        effect: 'unknown',
+      });
       expect(JSON.stringify(evidence)).not.toContain('TOKEN-SECRET');
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
     } finally {
@@ -728,9 +811,22 @@ describe("saved retry evidence — S10 the app's redaction rule serves the recor
       // The library's own words and numbers are not the app's data: they stay.
       expect(evidence.attempts).toEqual([
         { attempt: 1, ...RATE_LIMITED, waitMs: 10 },
-        { attempt: 2, outcome: 'answered', reason: 'answered', status: 200 },
+        {
+          attempt: 2,
+          outcome: 'answered',
+          reason: 'answered',
+          status: 200,
+          effect: 'applied',
+          ...TOOK,
+        },
       ]);
-      expect(evidence.end).toEqual({ outcome: 'answered', reason: 'answered', status: 200 });
+      expect(evidence.end).toEqual({
+        outcome: 'answered',
+        reason: 'answered',
+        status: 200,
+        attempts: 2,
+        effect: 'unknown',
+      });
       expect(evidence.omitted).toBe(0);
       // A name the app declared is not a library word: the rule serves it.
       expect(evidence.endpoint).toBe('[REDACTED]');
@@ -766,6 +862,8 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
           failure: 'timeout',
           error: { message: OUT_OF_TIME, code: 'timeout' },
           remote: 'unknown',
+          effect: 'unknown',
+          ...TOOK,
         },
       ]);
       expect(evidence.end).toEqual({
@@ -775,6 +873,8 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
         during: 'request',
         error: { message: OUT_OF_TIME, code: 'timeout' },
         remote: 'unknown',
+        attempts: 2,
+        effect: 'unknown',
       });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.toolCalls()).toBe(2);
@@ -802,8 +902,10 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
         kind: 'throttle',
         failure: 'rate-limited',
       } as const;
-      expect(evidence.attempts).toEqual([{ attempt: 1, ...refusedForGood, retryAfterMs: 30_000 }]);
-      expect(evidence.end).toEqual(refusedForGood);
+      expect(evidence.attempts).toEqual([
+        { attempt: 1, ...refusedForGood, retryAfterMs: 30_000, effect: 'unknown', ...TOOK },
+      ]);
+      expect(evidence.end).toEqual({ ...refusedForGood, attempts: 1, effect: 'unknown' });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.toolCalls()).toBe(1);
     } finally {
@@ -839,7 +941,13 @@ describe('saved retry evidence — S13/S14 a call that settles first takes its s
 
       const evidence = payloadOf(filedIn(events)[0]);
       expect(evidence.attempts).toEqual([{ attempt: 1, ...RATE_LIMITED, waitMs: 250 }]);
-      expect(evidence.end).toEqual({ outcome: 'cancelled', reason: 'cancelled', during: 'wait' });
+      expect(evidence.end).toEqual({
+        outcome: 'cancelled',
+        reason: 'cancelled',
+        during: 'wait',
+        attempts: 1,
+        effect: 'unknown',
+      });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       const at = (type: string) => events.findIndex((e) => e.type === type);
       expect(at(EVIDENCE)).toBeLessThan(at('agentfootprint.stream.tool_end'));
@@ -877,7 +985,13 @@ describe('saved retry evidence — S13/S14 a call that settles first takes its s
       const events = await savedAndReloaded(rec);
 
       const evidence = payloadOf(filedIn(events)[0]);
-      expect(evidence.end).toEqual({ outcome: 'cancelled', reason: 'cancelled', during: 'wait' });
+      expect(evidence.end).toEqual({
+        outcome: 'cancelled',
+        reason: 'cancelled',
+        during: 'wait',
+        attempts: 1,
+        effect: 'unknown',
+      });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.cancelled, 'this path is the call settling, not the SDK cancelling').toEqual(
         [],
@@ -892,20 +1006,50 @@ describe('saved retry evidence — S13/S14 a call that settles first takes its s
 
 // ─── S15 / S16 when the request cannot be matched to its call ────────
 
-/** An SDK client that copies the params before sending — attribution fails. */
+/** An SDK client that copies the params before sending — the call's marker survives the copy. */
 class CloningClient extends Client {
   override callTool(...[params, schema, options]: CallToolArgs) {
     return super.callTool(structuredClone(params), schema, options);
   }
 }
 
+/** An SDK client that rebuilds the params without their `_meta` — attribution fails. */
+class RebuildingClient extends Client {
+  override callTool(...[params, schema, options]: CallToolArgs) {
+    return super.callTool({ name: params.name, arguments: params.arguments }, schema, options);
+  }
+}
+
 describe('saved retry evidence — S15/S16 cancellation never depends on attribution', () => {
-  it('S15 an SDK that copies the params: a run cancelled mid-wait still cancels the request — nothing is re-sent', async () => {
+  it('S15 an SDK that copies the params is still matched, by the marker: its attempts are filed', async () => {
+    const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      sdk: sdkWith(CloningClient),
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 5, jitter: 'none' },
+    });
+    try {
+      const agent = await agentFor(client, 'tc-cloned', 'printer');
+      const rec = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      const events = await savedAndReloaded(rec);
+      const evidence = payloadOf(filedIn(events)[0]);
+      expect(evidence.toolCallId).toBe('tc-cloned');
+      expect(evidence.attempts.map((a) => a.outcome)).toEqual(['refused', 'answered']);
+      // The marker never reached the server.
+      expect(JSON.stringify(endpoint.bodies())).not.toContain('agentfootprint/call-ref');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('S15 an SDK that rebuilds the params: a run cancelled mid-wait still cancels the request — nothing is re-sent', async () => {
     const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
     const wait = firstWait();
     const client = await mcpClient({
       name: 'tickets',
-      sdk: sdkWith(CloningClient),
+      sdk: sdkWith(RebuildingClient),
       transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
       retryOnThrottle: { baseDelayMs: 80, jitter: 'none', onRetry: wait.onRetry },
     });
@@ -936,7 +1080,8 @@ describe('saved retry evidence — S15/S16 cancellation never depends on attribu
       warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('could not be matched'));
     for (const [sdk, expected] of [
       [undefined, 0],
-      [sdkWith(CloningClient), 1],
+      [sdkWith(CloningClient), 0],
+      [sdkWith(RebuildingClient), 1],
     ] as const) {
       const endpoint = mcpEndpoint(({ id }) => answered(id));
       const client = await mcpClient({
@@ -1073,6 +1218,8 @@ describe('saved retry evidence — S19 a deadline that lands during a wait', () 
         kind: 'throttle',
         failure: 'rate-limited',
         during: 'wait',
+        attempts: 1,
+        effect: 'unknown',
       });
       expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.toolCalls()).toBe(1);

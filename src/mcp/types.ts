@@ -24,6 +24,7 @@
 import type { Tool } from '../tools/tools.js';
 import type { CredentialProvider } from '../identity/types.js';
 import type { RetryOnThrottle } from './throttleRetry.js';
+import type { McpReplayOptions } from './replay.js';
 import type { FetchLike } from './gatewayTransport.js';
 
 // ─── Transport options ─────────────────────────────────────────────
@@ -219,14 +220,17 @@ export interface McpClientOptions {
    * the transport's `retry` values as the call's overall limits and these as
    * limits on the 429 retries inside them.
    *
-   * **What this assumes.** Automatic 429 retries assume the server rejected
-   * the request before executing it. The saved response records that
-   * assumption's basis (the server's 429), not proof that nothing ran: HTTP 429
-   * says the request was rate-limited, nothing more (RFC 6585 §4). A tool with
-   * side effects is retried on 429 like any other today — this retry has no
-   * side-effect guard and sends no deduplication key — and
-   * `retryOnThrottle: false` turns that off for this server. Nothing else is
-   * retried: a 5xx or a timeout may be the record of work that ran.
+   * **Who may ask again is {@link McpClientOptions.replay}'s.** These
+   * options set the BUDGET of a call's retries; whether a tool call is sent
+   * again at all is the replay policy's. Under the default (`'compatibility'`)
+   * a 429 is repeated for every tool, ASSUMING the server refused it before
+   * running it — HTTP 429 says only that the request was rate-limited (RFC 6585
+   * §4) — and every such repeat records that assumption. A tool you declare as
+   * making changes is never repeated without a deduplication key, and
+   * `'app-authorized'` repeats only what you declare. `retryOnThrottle: false`
+   * turns 429 retries off for this server, and nothing else: a tool declared
+   * repeatable on `'network'`, and the `'app-authorized'` policy, keep their
+   * series and their record. A 5xx is an answer and is never repeated.
    *
    * **Why this is on by default.** Managed gateways rate-limit per principal by
    * design, and without this a designed, self-clearing condition reached the
@@ -235,6 +239,63 @@ export interface McpClientOptions {
    * Ignored for `stdio`, which has no HTTP status to read.
    */
   readonly retryOnThrottle?: RetryOnThrottle;
+
+  /**
+   * Who may send a tool call again, declared by YOU for this server's tools —
+   * never by the model, a tool's description or the server's annotations
+   * (`readOnlyHint`). Read once, here; a field it does not know is refused.
+   *
+   * ```ts
+   * const orders = await mcpClient({
+   *   name: 'orders',
+   *   transport: { transport: 'http', url },
+   *   replay: {
+   *     policy: 'app-authorized',
+   *     tools: {
+   *       search_orders: { on: ['throttle', 'network'] },
+   *       create_order: { on: ['throttle'], changes: true },
+   *     },
+   *     deduplicates: { argument: 'idempotency_key' },
+   *   },
+   * });
+   * ```
+   *
+   *   - `policy: 'compatibility'` (the default in 11.x) — today's behaviour,
+   *     by name: a 429 is sent again for every tool, assuming the server
+   *     refused it before running it. Each such retry records that assumption
+   *     (`permission: { by: 'compatibility', assumes: 'refused-before-execution' }`).
+   *   - `policy: 'app-authorized'` (the default from the next major) — a 429
+   *     (`'throttle'`) or a request that failed without an answer
+   *     (`'network'`) is sent again only for a tool whose entry names it.
+   *   - `changes: true` — the tool makes changes: never sent again
+   *     automatically, under either policy, unless `deduplicates` is declared
+   *     and the call carries the key. A key protects only when the server uses it.
+   *
+   * Under both policies the adapter you chose retries its own refusal —
+   * AgentCore Runtime's session-busy reply — within the budget, as its policy:
+   * each repeat records what it assumes, never proof that nothing ran. A
+   * repeat re-sends the SAME request: the same arguments, server and session,
+   * as the same identity. Each attempt's run record says what is known of its
+   * effect — `unknown` for anything sent that did not complete, `applied` when
+   * the call completed (never proof of a write) — and what permitted the next
+   * one. Under `'app-authorized'`, a received refusal or error (a 429, a 503,
+   * a JSON-RPC or tool error) reaches the caller as the server sent it, its
+   * effect still unknown; a call that genuinely lacked an answer somewhere —
+   * a request with no response, or one accepted over HTTP whose JSON-RPC
+   * answer never came — and then fails, fails as "may have run"
+   * (footprintjs's `UnknownEffectError`, its final error as the `cause`).
+   * Under `'compatibility'` the caller sees the error it always did.
+   *
+   * `'app-authorized'` needs each request matched to its call and each answer
+   * seen. A connection that cannot give both refuses the call BEFORE it is
+   * sent, with `McpReplayUnavailableError` and a typed `reason`: an MCP SDK
+   * whose `connect` replaces the transport's `onmessage` handler
+   * (`'answers-unobserved'`), one that drops the params' `_meta`
+   * (`'request-unmatched'`), or a transport whose requests the library cannot
+   * watch, such as `stdio` (`'requests-unwatched'`). Under `'compatibility'`,
+   * `stdio` ignores it: it has no retry series.
+   */
+  readonly replay?: McpReplayOptions;
 
   /**
    * Pre-resolved SDK modules. Give these and the library never touches its Node
@@ -315,6 +376,8 @@ export interface McpConnectionOptions {
   readonly clientInfo?: undefined;
   /** @see McpClientOptions — never set on this arm. */
   readonly retryOnThrottle?: undefined;
+  /** @see McpClientOptions — never set on this arm. */
+  readonly replay?: undefined;
   /** @internal @see McpClientOptions — never set on this arm. */
   readonly _client?: undefined;
 }

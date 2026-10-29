@@ -103,6 +103,17 @@ sentence. A vended bearer token is used for one request and dropped.
    agentCoreRuntimeMcpTransport({ agentRuntimeArn, region, retry: { maxAttempts: 6, maxElapsedMs: 15_000 } });
    // → at most 6 requests per call, whatever mix of session-busy and 429 it meets
    ```
+
+   Retrying it is this adapter's own POLICY, on an assumption: that the
+   platform refused the request before running it (`SESSION_BUSY_ASSUMES`).
+   AWS documents a retryable conflict while a session starts or stops
+   (`SESSION_BUSY_DOCUMENTATION` cites both pages) — neither page says a
+   matching reply ran nothing, and the 200 form is matched by its code and
+   words, which a server behind the runtime can send after it ran the call. So
+   each repeat records `permission: { by: 'adapter', assumes:
+   'refused-before-execution' }`, every attempt's effect stays `unknown`
+   (`mcp/replay.ts`), and a tool the app declares as making changes is not sent
+   again without a key the server deduplicates by.
 6. **The SDK's own retry is off.** The client `invoke.ts` builds has
    `maxAttempts: 1`: the SDK's standard policy re-sends after a 5xx or a dropped
    connection — a `tools/call` that may have run, in the same pinned session.

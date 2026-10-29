@@ -82,6 +82,13 @@ const BUILT_BY_THE_TRANSPORT: ReadonlyArray<
       'implementation, applied where you build it.',
   ],
   [
+    'replay',
+    'The replay declaration is asked by the retry series inside that transport, and a ' +
+      'connection you built has none of ours: `retryingFetch` keeps the compatibility ' +
+      'policy (a 429 retried for every tool, the assumption recorded nowhere). Pass ' +
+      '`transport` instead to have tool calls sent again only as you declare.',
+  ],
+  [
     'clientInfo',
     'Pass it to the SDK `Client` constructor instead: `new Client(clientInfo, { capabilities: {} })`.',
   ],

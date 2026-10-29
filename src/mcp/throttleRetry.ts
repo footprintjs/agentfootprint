@@ -10,27 +10,33 @@
  * tool, or invents an answer. A designed, transient, self-clearing condition
  * was being turned into a wrong answer.
  *
- * ── What retrying a 429 assumes, and why the policy is 429-ONLY ─────────────
- * **Automatic 429 retries assume the server rejected the request before
- * executing it.** A rate limiter that refuses at the edge has not run the tool —
- * but HTTP 429 says only that the request was rate-limited (RFC 6585 §4), so the
- * saved response records the assumption's basis (the server's 429), not proof
- * that nothing ran. There is no side-effect guard here: a tool with side
- * effects is retried on 429 like any other today, and `retryOnThrottle: false`
- * turns that off per server. What is certain is the contrast with a 500 or a
- * timeout, where the call may have half-run and a retry could charge a card
- * twice.
+ * ── Who may ask again: the app, by declaration (`replay.ts`) ─────────────────
+ * HTTP 429 says only that the request was rate-limited (RFC 6585 §4). It does
+ * not prove the server ran nothing, and `Retry-After` says when to ask again,
+ * not that asking is safe. So permission to send a tool call again is the
+ * APP's, declared per (server, tool) when the client is built (`mcpClient({
+ * replay })`), and kept apart from what is known of an attempt's effect. Before
+ * every repeat the series asks `permit`; the record keeps its answer.
  *
- * That assumption is the whole license for this module, so the policy must
- * never widen. Only HTTP 429 retries here. Not 5xx, not network errors, not timeouts
- * — those belong to a caller who knows whether the specific tool is idempotent,
- * and this seam does not. A property test pins the boundary.
+ *   - `'compatibility'` (the 11.x default) keeps today's behaviour by name: a
+ *     429 is repeated for every tool, ASSUMING the server refused it before
+ *     running it — and every such repeat records that assumption.
+ *   - `'app-authorized'` (opt-in, the next major's default) repeats a 429 only
+ *     for a tool the app declared repeatable on it.
+ *   - A request that failed in transport without an answer (footprintjs's
+ *     `network`: a lost connection, a timeout below the series) is repeated
+ *     only when the app declared that for the tool. A 5xx is an answer, never
+ *     repeated. A cut or a deadline ends the series.
+ *   - Under both, a tool the app declares as making changes is never repeated
+ *     automatically unless the server is declared to deduplicate by a key the
+ *     call carries — footprintjs's side-effect guard, now wired here.
  *
  * The loop takes its question as a {@link RetryDecision}, so the one other
  * refusal a service documents as one to retry — AgentCore Runtime's "session
  * operation in progress" — reuses this loop rather than growing a second one.
- * That decision is applied only by that vendor's own transport; what
- * `mcpClient` and `retryingFetch` retry is still a 429 and nothing else.
+ * That decision is applied only by that vendor's own transport, and its rule
+ * carries the adapter's retry assumption (`RetryRule.assumes`) — a policy,
+ * never evidence: its attempts record effect `unknown`, as a 429's do.
  *
  * ── Why it lives at the fetch seam and not around `Tool.execute` ─────────────
  * Because `Retry-After` is only reachable here. The MCP SDK reads the response,
@@ -58,12 +64,17 @@
  * operation that succeeded: a 503 is delivered as the answer it was, never
  * retried — and written down as `answered` with its status, never success.
  * A response a rule's decision recognises is thrown as a refusal that names
- * its kind, and the policy's `retryOn` accepts those refusals and nothing
- * else — so a 5xx, a dropped connection or a timeout ends the series on the
- * attempt it happened in, as it always did. When the
- * series ends on a refusal (attempts spent, a ceiling reached, no time left),
- * the refusal's response is delivered as the server sent it: the caller sees
- * the 429, never an error of ours.
+ * its kind, and the policy's `retryOn` accepts those refusals — and a network
+ * failure the app declared for the tool — when the replay rule permits them,
+ * and nothing else: a 5xx ends the series on the attempt it happened in, as it
+ * always did. When the series ends on a refusal (attempts spent, a ceiling
+ * reached, no time left, no permission), the refusal's response is delivered
+ * as the server sent it: the caller sees the 429, never an error of ours. The
+ * call decides what that means for it (`callLifetime.ts`): under
+ * 'app-authorized', a call that genuinely lacked an answer somewhere and does
+ * not complete fails as "may have run". This series reports the HTTP half of
+ * that — an attempt that got no response at all, and the status it delivered;
+ * a received refusal is an answer, its effect still unknown.
  *
  * ── A fetch that already retries is JOINED, never wrapped ────────────────────
  * A transport whose own fetch runs a series (AgentCore Runtime's session-busy
@@ -99,14 +110,27 @@ import {
   type RetryPolicy,
 } from 'footprintjs';
 
+import type { ToolRequestPermission } from '../events/payloads.js';
 import { abortErrorOf, eitherSignal, linkedController } from '../lib/abort.js';
 import { exponentialBackoff, statedWaitFirst, type BackoffFunction } from './backoff.js';
-import type { RequestLedger } from './requestLedger.js';
+import {
+  COMPATIBILITY,
+  permit,
+  replayTargetOf,
+  RequestReplay,
+  thrownFailure,
+  type MetFailure,
+  type ReplayDeclaration,
+  type ReplayTarget,
+} from './replay.js';
+import type { RequestLedger, RequestTicket } from './requestLedger.js';
 import {
   SeriesEvidence,
+  type AttemptFacts,
   type AttemptSeen,
   type DeclineReason,
   type RequestWhere,
+  type Settlement,
 } from './seriesEvidence.js';
 
 /**
@@ -129,8 +153,12 @@ export type RetryKind = 'throttle' | 'session-busy';
 
 /** Reported to {@link ThrottleRetryOptions.onRetry} before each wait. */
 export interface ThrottleRetryInfo {
-  /** Which refusal this retry answers. */
-  readonly kind: RetryKind;
+  /**
+   * Which refusal this retry answers — or `'network'`, a tool call the app
+   * declared repeatable after a request that failed without an answer
+   * (`McpClientOptions.replay`). It is reported to the series' first rule.
+   */
+  readonly kind: RetryKind | 'network';
   /** The attempt about to START. `2` is the first retry. */
   readonly attempt: number;
   /** Ceiling in force for this refusal, including the first attempt. */
@@ -268,16 +296,18 @@ export interface RetryVerdict {
  * The one question the loop asks of each response.
  *
  * ── The license every decision must hold ─────────────────────────────────────
- * A decision may answer "again" ONLY for a response the library treats as a
- * refusal made before anything ran — the assumption a 429 retry rests on (see
- * the module note: the 429 is its basis, not proof). A response that could be
- * the record of half-done work is never one.
- * The library holds exactly two such decisions: {@link throttled} below, and
- * AgentCore Runtime's documented "session operation in progress" refusal,
- * which lives with that vendor's adapter (`adapters/mcp/agentcoreRuntime/`).
- * Each stays ONE small function, so a retry has exactly one place it is
- * decided — and each attempt is written down as one footprintjs attempt
- * record.
+ * A decision RECOGNISES a refusal; whether the request is sent again is the
+ * replay rule's (`replay.ts`), never the decision's. It may recognise only a
+ * response that is a refusal — never one that could be the record of
+ * half-done work. The library holds exactly two: {@link throttled} below, a
+ * 429, and AgentCore Runtime's "session operation in progress" refusal, which
+ * lives with that vendor's adapter (`adapters/mcp/agentcoreRuntime/`) and whose
+ * rule carries the adapter's retry assumption (`RetryRule.assumes`). Either
+ * one's effect stays unknown: a 429 says the request was rate-limited, and the
+ * busy body is matched by its code and words, which a server behind the
+ * runtime can send after it ran the call. Each stays ONE small function, so a
+ * refusal has exactly one place it is recognised — and each attempt is written
+ * down as one footprintjs attempt record.
  */
 export type RetryDecision = (
   response: Response,
@@ -345,6 +375,13 @@ export interface RetryRule {
   /** The caller's own name for the endpoint, reported as `endpoint`. */
   readonly endpointLabel?: string;
   readonly onRetry?: (info: ThrottleRetryInfo) => void;
+  /**
+   * Set only by an adapter that retries this refusal as its own policy
+   * (`sessionBusy.ts`): what it assumes in doing so. The assumption is recorded
+   * beside each repeat (`permission: { by: 'adapter', assumes }`) — never as
+   * evidence: the attempt's effect stays `unknown`.
+   */
+  readonly assumes?: 'refused-before-execution';
 }
 
 /**
@@ -362,6 +399,7 @@ export function retryRule(
   config: RetryOnThrottle | undefined,
   defaults: RetryDefaults,
   where: string,
+  assumes?: 'refused-before-execution',
 ): RetryRule | undefined {
   if (config === false) return undefined;
   const opts: ThrottleRetryOptions = typeof config === 'object' && config !== null ? config : {};
@@ -381,6 +419,7 @@ export function retryRule(
     jitter: option.jitter(opts.jitter ?? defaults.jitter),
     ...(opts.endpointLabel !== undefined && { endpointLabel: option.label(opts.endpointLabel) }),
     ...(opts.onRetry && { onRetry: opts.onRetry }),
+    ...(assumes !== undefined && { assumes }),
   };
   return rule;
 }
@@ -436,23 +475,61 @@ export function retryingFetch(
 }
 
 /**
- * @internal What one call's series is built from: the rules it asks, in order,
- * and the connection's ledger — which tool call each request belongs to, so the
- * series can file its attempts into that call's run (`requestLedger.ts`).
+ * @internal The series for a transport whose 429 rule is off (`retryOnThrottle:
+ * false`) while the app's replay declaration still needs one (`replay.ts` ·
+ * `needsSeries`): a tool declared repeatable on `'network'`, or the
+ * `'app-authorized'` policy, whose record and "may have run" rest on the series.
+ * `retryOnThrottle: false` turns off the 429 rule and nothing else, so its one
+ * rule is that rule switched off: it recognises no response and holds the
+ * call's budget (`retryOnThrottle`'s defaults). A transport fetch that already
+ * runs a series is joined, as `retryingFetch` joins it.
+ */
+export function seriesWithoutThrottle(inner: ThrottleFetch | undefined): ThrottleFetch {
+  const rule = retryRule(
+    'throttle',
+    recognisesNothing,
+    true,
+    THROTTLE_RETRY_DEFAULTS,
+    'retryOnThrottle',
+  ) as RetryRule;
+  const rebuild = inner === undefined ? undefined : JOINS.get(inner);
+  return rebuild !== undefined
+    ? rebuild({ rule })
+    : retryingFetchFor(inner ?? platformFetch, { rules: [rule] });
+}
+
+/** A decision that recognises no response — a rule kept for its budget alone. */
+const recognisesNothing: RetryDecision = () => undefined;
+
+/**
+ * @internal What one call's series is built from: the rules it asks, in order;
+ * the connection's ledger — which tool call each request belongs to, so the
+ * series can file its attempts into that call's run (`requestLedger.ts`); and
+ * the app's replay declaration — who may send a tool call again (`replay.ts`).
+ * No declaration is the compatibility policy, naming no tool.
  */
 export interface SeriesSpec {
   readonly rules: readonly RetryRule[];
   readonly ledger?: RequestLedger;
+  readonly replay?: ReplayDeclaration;
 }
 
-/** @internal What a joinable fetch's series can be rebuilt with: one more rule, or a ledger. */
-export type SeriesJoin = { readonly rule: RetryRule } | { readonly ledger: RequestLedger };
+/**
+ * @internal What a joinable fetch's series can be rebuilt with: one more rule,
+ * or a ledger and the replay declaration (they arrive together, from `mcpClient`).
+ */
+export type SeriesJoin =
+  | { readonly rule: RetryRule }
+  | { readonly ledger: RequestLedger; readonly replay?: ReplayDeclaration };
 
 /** @internal `spec` with `join` in it. */
 export function joinedSpec(spec: SeriesSpec, join: SeriesJoin): SeriesSpec {
-  return 'rule' in join
-    ? { ...spec, rules: [...spec.rules, join.rule] }
-    : { ...spec, ledger: join.ledger };
+  if ('rule' in join) return { ...spec, rules: [...spec.rules, join.rule] };
+  return {
+    ...spec,
+    ledger: join.ledger,
+    ...(join.replay !== undefined && { replay: join.replay }),
+  };
 }
 
 /**
@@ -479,14 +556,16 @@ export function joinableRetry(
 
 /**
  * @internal `fetch` rebuilt so its series files each request's attempts through
- * `ledger` — or `undefined` when `fetch` runs no series (retry off), so there
- * is nothing to file and the caller keeps `fetch` as it is.
+ * `ledger`, and asks `replay` before sending a tool call again — or `undefined`
+ * when `fetch` runs no series (retry off), so there is nothing to file and the
+ * caller keeps `fetch` as it is.
  */
 export function ledgeredFetch(
   fetch: ThrottleFetch,
   ledger: RequestLedger,
+  replay?: ReplayDeclaration,
 ): ThrottleFetch | undefined {
-  return JOINS.get(fetch)?.({ ledger });
+  return JOINS.get(fetch)?.({ ledger, ...(replay !== undefined && { replay }) });
 }
 
 /**
@@ -495,12 +574,12 @@ export function ledgeredFetch(
  * see the module note. The result is joinable.
  */
 export function retryingFetchFor(inner: ThrottleFetch, spec: SeriesSpec): ThrottleFetch {
-  const { rules, ledger } = spec;
+  const { rules, ledger, replay = COMPATIBILITY } = spec;
   const [owner] = rules;
   if (owner === undefined) return inner;
   const bound = rules.map((rule) => boundRule(rule, owner));
   return joinableRetry(
-    (input, init) => new Series(bound, input, init, ledger).run(inner),
+    (input, init) => new Series(bound, input, init, replay, ledger).run(inner),
     (join) => retryingFetchFor(inner, joinedSpec(spec, join)),
   );
 }
@@ -574,7 +653,13 @@ class Series {
   /** Where this request's attempts are filed — a call the agent dispatched. */
   private readonly evidence: SeriesEvidence | undefined;
   private readonly replayable: boolean;
+  /** What this request is, as the app's replay declaration reads it (`replay.ts`). */
+  private readonly target: ReplayTarget;
+  /** What this request's series and its call share — through the ledger, else this series' own. */
+  private readonly shared: RequestReplay;
   private attemptNo = 0;
+  /** When the current attempt was sent — a cut attempt's duration is measured from it. */
+  private attemptSentAt = 0;
   private waitedMs = 0;
   private plannedWaitMs = 0;
   private latest: Refused | undefined;
@@ -582,6 +667,8 @@ class Series {
   private seen: { readonly attempt: number; readonly status: number } | undefined;
   /** Why `retryOn` last said no. */
   private declined: DeclineReason | undefined;
+  /** What allowed the repeat `retryOn` last said yes to. */
+  private permitted: ToolRequestPermission | undefined;
   /** The attempt sent and not yet recorded — what a cancellation cuts in flight. */
   private inFlight: number | undefined;
 
@@ -589,25 +676,33 @@ class Series {
     private readonly rules: readonly BoundRule[],
     private readonly input: string | URL,
     private readonly init: RequestInit | undefined,
+    private readonly declaration: ReplayDeclaration,
     ledger?: RequestLedger,
   ) {
     this.owner = rules[0] as BoundRule;
     this.signal = init?.signal ?? undefined;
     this.replayable = isReplayable(input, init);
+    this.target = replayTargetOf(init?.body, declaration);
     const { maxElapsedMs } = this.owner;
     this.deadline = Number.isFinite(maxElapsedMs) ? this.startedAt + maxElapsedMs : undefined;
     const claimed = ledger?.claim(init?.body);
     const ticket = claimed?.ticket;
+    // A request no ledger claimed keeps its facts here, with no answer to watch.
+    this.shared = claimed?.replay ?? new RequestReplay('', false);
+    if (declaration.policy === 'app-authorized') this.shared.appAuthorizedPolicy();
     this.cancel = eitherSignal(this.signal, ticket?.signal, claimed?.cancelled);
     this.cutsInFlight = this.deadline !== undefined || claimed !== undefined;
     this.evidence =
-      ticket === undefined ? undefined : new SeriesEvidence(ticket.sink, whereOf(rules, input));
+      ticket === undefined
+        ? undefined
+        : new SeriesEvidence(ticket.sink, whereOf(rules, input), settlementOf(ticket, this.shared));
   }
 
   async run(inner: ThrottleFetch): Promise<Response> {
     const unwatch = this.watchCancel();
     try {
       const response = await attempt((t) => this.send(inner, t), this.policy(), this.options());
+      this.shared.deliveredStatus(response.status);
       this.evidence?.delivered();
       return response;
     } catch (error) {
@@ -637,8 +732,11 @@ class Series {
   /** A cancellation, written down: the attempt it cut in flight, or the wait. */
   private fileCancellation(): void {
     const { evidence, inFlight } = this;
-    if (inFlight !== undefined) evidence?.cutInFlight(inFlight);
-    else evidence?.cancelled();
+    if (inFlight !== undefined) {
+      evidence?.cutInFlight(inFlight, Math.max(0, Date.now() - this.attemptSentAt));
+    } else {
+      evidence?.cancelled();
+    }
   }
 
   /**
@@ -684,6 +782,8 @@ class Series {
     this.attemptNo = t.attempt;
     // From here the request is SENT — counted, as a row, however the attempt ends.
     this.inFlight = t.attempt;
+    this.attemptSentAt = Date.now();
+    this.shared.sentOne();
     this.seen = undefined;
     // The previous attempt's refusal will not be delivered: release its body, so
     // a keep-alive connection is not pinned by an unread stream.
@@ -726,22 +826,31 @@ class Series {
   }
 
   /**
-   * The runner's `retryOn`: is this attempt's error a refusal worth another
-   * attempt? Plans the wait as it answers, because the ceilings need its length,
-   * and keeps why it said no, for the record.
+   * The runner's `retryOn`: may this request be sent again after this attempt?
+   * First WHO may say so (`replay.ts` · `permit`: the app's declaration, the
+   * adapter's own retry assumption, the compatibility policy's assumption — and
+   * the side-effect guard before all three), then whether the budget allows
+   * it. Plans the wait as it answers, because the ceilings need its length, and
+   * keeps what it decided, for the record.
    */
   private retryOn(error: unknown): boolean {
     this.plannedWaitMs = 0;
+    this.permitted = undefined;
     const refused = this.latest;
-    // The license: only a response a rule recognises as a refusal (the 429
-    // assumption — see the module note). A 5xx, a dropped connection or a
-    // timeout may be the record of work that ran.
-    if (refused === undefined || error !== refused.refusal) return this.decline('not-retryable');
+    const refusal = refused !== undefined && error === refused.refusal ? refused : undefined;
+    // What failed: a refusal a rule recognised, or a request that failed in
+    // transport (footprintjs's `network`). Anything else — a 5xx is an answer,
+    // not a failure — is never sent again.
+    const failure: MetFailure | undefined =
+      refusal === undefined ? thrownFailure(error) : refusalOf(refusal.rule);
+    if (failure === undefined) return this.decline('not-retryable');
+    const decision = permit(this.declaration, this.target, failure);
+    if (!decision.repeat) return this.decline(decision.declined);
     // A body we cannot send twice makes a retry a different request. Rare for
     // MCP (JSON strings), but silently replaying half a stream would be worse
     // than surfacing the refusal.
     if (!this.replayable) return this.decline('not-replayable');
-    const { rule } = refused;
+    const rule = refusal?.rule ?? this.owner;
     if (this.attemptNo >= rule.maxAttempts) return this.decline('exhausted');
     // The stated wait whole, else the schedule under `maxDelayMs`.
     const waitMs = rule.backoffMs(this.attemptNo, error);
@@ -758,6 +867,7 @@ class Series {
     }
     this.declined = undefined;
     this.plannedWaitMs = waitMs;
+    this.permitted = decision.permission;
     return true;
   }
 
@@ -779,20 +889,46 @@ class Series {
   private report(record: AttemptRecord): void {
     const refused = this.latest;
     if (this.inFlight === record.attempt) this.inFlight = undefined;
-    this.evidence?.attempt(record, this.seenOf(record, refused), this.declined);
-    if (record.next !== 'retry' || refused === undefined) return;
+    const seen = this.seenOf(record, refused);
+    const facts = this.factsOf(record);
+    // An attempt that got no response at all — a lost connection, a timeout,
+    // a cut — genuinely lacked an answer. A received refusal (a 429, a busy
+    // reply) is an answer: its effect is unknown, but the server answered.
+    if (record.outcome !== 'ok' && seen?.refusal === undefined) this.shared.noAnswer();
+    this.evidence?.attempt(record, seen, this.declined, facts);
+    if (record.next !== 'retry') return;
     const waitMs = record.delayMs ?? 0;
     this.waitedMs += waitMs;
-    const { rule, verdict } = refused;
+    // A refusal is reported to the rule that recognised it; a declared repeat
+    // after a network failure, to the series' first rule.
+    const rule = refused?.rule ?? this.owner;
+    const retryAfterMs = refused?.verdict.retryAfterMs;
     rule.onRetry?.({
-      kind: rule.kind,
+      kind: refused?.rule.kind ?? 'network',
       attempt: record.attempt + 1,
       maxAttempts: rule.maxAttempts,
       waitMs,
-      ...(verdict.retryAfterMs !== undefined && { retryAfterMs: verdict.retryAfterMs }),
+      ...(retryAfterMs !== undefined && { retryAfterMs }),
       url: originOf(this.input),
       ...(rule.endpointLabel !== undefined && { endpoint: rule.endpointLabel }),
     });
+  }
+
+  /**
+   * What the series knows of the attempt `record` ends beyond the record — the
+   * three facts kept apart (`replay.ts`). Its effect: `unknown` for every
+   * attempt that was sent and did not answer — a refusal included, whatever an
+   * adapter assumes of it; for an answer, nothing yet — the call's verdict
+   * decides, when the record is filed. What permitted the next attempt, when
+   * there is one. How long it took.
+   */
+  private factsOf(record: AttemptRecord): AttemptFacts {
+    const permission = record.next === 'retry' ? this.permitted : undefined;
+    return {
+      ...(record.outcome !== 'ok' && { effect: 'unknown' as const }),
+      ...(permission !== undefined && { permission }),
+      durationMs: record.durationMs,
+    };
   }
 
   /** What this series saw of the attempt `record` ends: its status, and the refusal it threw. */
@@ -822,6 +958,7 @@ class Series {
     // The series ended on a refusal — attempts spent, a ceiling reached, no
     // time left. The server's answer is delivered as it sent it.
     if (this.latest !== undefined && error === this.latest.refusal) {
+      this.shared.deliveredStatus(this.latest.response.status);
       this.evidence?.delivered();
       return this.latest.response;
     }
@@ -833,6 +970,20 @@ class Series {
     if (this.latest !== undefined) discardBody(this.latest.response);
     this.latest = undefined;
   }
+}
+
+/** A refusal a rule recognised, as the permission rule reads it: its kind, and an adapter's assumption. */
+function refusalOf(rule: BoundRule): MetFailure {
+  return { kind: rule.kind, ...(rule.assumes !== undefined && { assumes: rule.assumes }) };
+}
+
+/**
+ * Where a dispatched call's record waits for the call to settle: the ticket's
+ * signal fires when it settles or is cancelled. A ticket without one (a test's)
+ * files at once.
+ */
+function settlementOf(ticket: RequestTicket, replay: RequestReplay): Settlement | undefined {
+  return ticket.signal === undefined ? undefined : { signal: ticket.signal, replay };
 }
 
 /** Where a series' requests go, as its evidence may say it: a label the app declared, or the origin. */

@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **19 import paths** carrying **2645 distinct named exports**, plus **126 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **19 import paths** carrying **2652 distinct named exports**, plus **126 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1936 of 2645 exports (73%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1943 of 2652 exports (73%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **30 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **93 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **16 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **570 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1703 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1710 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 126 typed events are both described on the site and were seen firing in a real run. **26** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **30** are not described in prose on the site at all.
 
@@ -157,7 +157,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (511).** The other 1192 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (512).** The other 1198 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -624,6 +624,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `InvokeModelGatewayError` | class | `agentfootprint/providers` |
 | `InvokeModelGatewayProvider` | class | `agentfootprint/providers` |
 | `LocalPasswordConfigError` | class | `agentfootprint/security` |
+| `McpReplayUnavailableError` | class | `agentfootprint/providers` |
 | `MemoryBankStore` | class | `agentfootprint/memory` |
 | `MemorySignInsConfigError` | class | `agentfootprint/hosting` |
 | `MissingJwksSupportError` | class | `agentfootprint/security` |
@@ -950,7 +951,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
 | `agentfootprint` | 793 | 662 | 83% |
-| `agentfootprint/providers` | 186 | 158 | 85% |
+| `agentfootprint/providers` | 193 | 165 | 85% |
 | `agentfootprint/memory` | 233 | 124 | 53% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
 | `agentfootprint/cache` | 25 | 20 | 80% |
