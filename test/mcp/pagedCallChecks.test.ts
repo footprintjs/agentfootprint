@@ -1,5 +1,5 @@
 /**
- * A paged catalogue behaves exactly as the same tools would in a one-page
+ * A paged catalogue's tools fail exactly as the same tools would in a one-page
  * catalogue (Codex review of #248, P2).
  *
  * The MCP SDK's `Client` keeps three per-tool checks for the tools of its most
@@ -12,16 +12,21 @@
  *      plain `tools/call` is sent.
  *
  * Reading every page therefore dropped all three for every tool outside the
- * last page. These tests pin the repair, arm by arm, through the REAL SDK
- * client against an MCP endpoint in this process (the transport's `fetch`):
+ * last page. Every tool now carries its own (`callChecks.ts`), and a paged
+ * list's tools — the last page's too — always run them: no one answer holds
+ * them all. These tests pin that, arm by arm, through the REAL SDK client
+ * against an MCP endpoint in this process (the transport's `fetch`):
  *
  *   - the SAME error, at the same moment, whatever page the tool was on: the
  *     SDK's own class where the arm can reach it, otherwise the same name, code
  *     and message;
- *   - with no validator on an arm that cannot load the SDK's own, a call to an
- *     earlier-page tool with an `outputSchema` is refused before sending
+ *   - with no validator on an arm that cannot load the SDK's own, a call to a
+ *     paged list's tool with an `outputSchema` is refused before sending
  *     (`McpOutputUncheckedError`), never answered unchecked;
  *   - a one-page catalogue needs nothing new on any arm.
+ *
+ * What a later listing does to tools already handed out is pinned in
+ * `listingKeepsChecks.test.ts`.
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -248,9 +253,11 @@ describe('paged — an earlier-page tool fails exactly as it would on one page',
     },
   );
 
-  it.each(WITH_VALIDATOR)('the last page is still the SDK’s to check — %s', async (_, arm, v) => {
+  it.each(WITH_VALIDATOR)('the last page fails as every page does — %s', async (_, arm, v) => {
     const paged = await callOn(arm, PAGED, 'last', 'malformed', v);
+    const flat = await callOn(arm, ONE_PAGE, 'last', 'malformed', v);
     expect(handled(paged.error)).toMatchObject({ name: 'McpError', code: -32602 });
+    expect(handled(paged.error)).toEqual(handled(flat.error));
   });
 
   it.each(WITH_VALIDATOR)('a required task is refused before sending — %s', async (_, arm, v) => {
@@ -290,30 +297,31 @@ describe('paged — an earlier-page tool fails exactly as it would on one page',
 
 describe('paged — no validator on an arm that cannot load one', () => {
   it.each(['sdk', 'connection'] as const)(
-    '%s arm: an earlier-page tool with an outputSchema is refused before sending',
+    '%s arm: a tool with an outputSchema is refused before sending, on every page',
     async (arm) => {
-      const refused = await callOn(arm, PAGED, 'first', 'valid');
-      expect(refused.error).toBeInstanceOf(McpOutputUncheckedError);
-      expect(refused.error).toMatchObject({
-        name: 'McpOutputUncheckedError',
-        code: 'ERR_MCP_OUTPUT_UNCHECKED',
-        reason: 'output-unchecked',
-        sent: false,
-        server: 'paged',
-        tool: 'first',
-      });
-      expect((refused.error as Error).message).toContain('jsonSchemaValidator');
-      expect(refused.calls).toEqual([]);
+      for (const name of ['first', 'last']) {
+        const refused = await callOn(arm, PAGED, name, 'valid');
+        expect(refused.error).toBeInstanceOf(McpOutputUncheckedError);
+        expect(refused.error).toMatchObject({
+          name: 'McpOutputUncheckedError',
+          code: 'ERR_MCP_OUTPUT_UNCHECKED',
+          reason: 'output-unchecked',
+          sent: false,
+          server: 'paged',
+          tool: name,
+        });
+        expect((refused.error as Error).message).toContain('was not sent');
+        expect((refused.error as Error).message).toContain('jsonSchemaValidator');
+        expect(refused.calls).toEqual([]);
+      }
     },
   );
 
   it.each(['sdk', 'connection'] as const)(
-    '%s arm: everything the SDK still checks, or that needs no check, works as on one page',
+    '%s arm: a tool that needs no check works as on one page',
     async (arm) => {
       expect((await callOn(arm, PAGED, 'plain', 'missing')).value).toBe('no structure');
-      expect((await callOn(arm, PAGED, 'last', 'valid')).value).toBe('counted');
-      const malformedLast = await callOn(arm, PAGED, 'last', 'malformed');
-      expect(handled(malformedLast.error)).toMatchObject({ name: 'McpError', code: -32602 });
+      expect((await callOn(arm, PAGED, 'plain', 'valid')).value).toBe('counted');
     },
   );
 
@@ -352,14 +360,19 @@ describe('jsonSchemaValidator — one validator serves every page', () => {
     async (arm) => {
       const validator = recordingValidator();
       const { client } = await clientOn(arm, PAGED, 'valid', validator);
+      const count = (): number =>
+        validator.compiled.filter((s) => s === JSON.stringify(COUNT_SCHEMA)).length;
       try {
-        await client.tools();
+        const tools = await client.tools();
         // The SDK client compiled all three output schemas with it as it listed
-        // both pages; the library compiled the first page's two again, for the
-        // checks it applies to them.
-        expect(validator.compiled.filter((s) => s === JSON.stringify(COUNT_SCHEMA))).toHaveLength(
-          5,
-        );
+        // both pages; the library compiles nothing until a tool's own checks run.
+        expect(count()).toBe(3);
+        const first = tools.find((t) => t.schema.name === 'first')!;
+        await first.execute({}, CTX);
+        // `first`'s own checks compiled its schema with the same validator, once.
+        expect(count()).toBe(4);
+        await first.execute({}, CTX);
+        expect(count()).toBe(4);
       } finally {
         await client.close();
       }

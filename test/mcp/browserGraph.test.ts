@@ -190,8 +190,8 @@ describe.skipIf(!built)('the /providers browser graph', () => {
       '@modelcontextprotocol/sdk/server/streamableHttp.js',
       '@modelcontextprotocol/sdk/types.js',
       // The SDK's default validator, loaded with the SDK on the Node loader arm
-      // so a paged list's earlier-page tools are checked as the SDK checks the
-      // last page's (`mcp/callChecks.ts`). `client/index.js` already imports it.
+      // so a tool whose list the SDK no longer holds is checked as the SDK
+      // checks it (`mcp/callChecks.ts`). `client/index.js` already imports it.
       '@modelcontextprotocol/sdk/validation/ajv',
     ]);
   });

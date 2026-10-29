@@ -23,10 +23,16 @@
  * included. An abort is the caller's word, so it wins over an incomplete list.
  * What it cannot do is settle a page a connection that ignores the signal is
  * still holding: that promise settles when the connection says.
+ *
+ * Every page request is counted from the moment it is sent until it settles
+ * (`listingGenerations.ts`): the MCP SDK's `Client` replaces its per-tool call
+ * checks with each answer, so a tool's checks depend on which answer is the
+ * latest (`callChecks.ts`).
  */
 
 import { throwIfAborted } from '../lib/abort.js';
 import type { Tool } from '../tools/tools.js';
+import type { ListingGenerations } from './listingGenerations.js';
 import type { McpConnection, McpListedTool } from './types.js';
 
 /**
@@ -44,11 +50,12 @@ export interface ToolListing {
   readonly tools: readonly McpListedTool[];
   readonly pages: number;
   /**
-   * Where the last page read begins in `tools`: everything before it came from
-   * an earlier page. 0 for a one-page list. The MCP SDK's `Client` keeps its
-   * per-tool checks for the last page only (`callChecks.ts`).
+   * For a list read in ONE answer, the generation that answer settled at: the
+   * MCP SDK's `Client` holds its tools' checks while it stays the latest
+   * (`listingGenerations.ts`). Absent for a paged list: no one answer holds all
+   * of its tools.
    */
-  readonly lastPageStart: number;
+  readonly generation?: number;
   /** Absent when the server's list ended: the last page carried no cursor. */
   readonly incomplete?: McpToolListIncompleteReason;
 }
@@ -57,6 +64,8 @@ export interface ToolListing {
  * Read the server's tool list, page by page, until a page carries no cursor —
  * or until it cannot be finished, which the result says (`incomplete`).
  *
+ * @param listings the connection's count of list requests, which every page
+ *   request joins (`listingGenerations.ts`)
  * @throws the abort, when `signal` has fired before a page is asked for or by
  *   the time its answer arrives; and whatever the connection rejects a page
  *   with, as it always did
@@ -64,29 +73,30 @@ export interface ToolListing {
 export async function listEveryPage(
   connection: McpConnection,
   signal: AbortSignal | undefined,
+  listings: ListingGenerations,
 ): Promise<ToolListing> {
   const tools: McpListedTool[] = [];
   const sent = new Set<string>();
   let cursor: string | undefined;
-  let lastPageStart = 0;
   for (let pages = 1; ; pages++) {
     // Immediately before EVERY request, the first included: an aborted listing
     // asks for nothing more (`lib/abort.ts`).
     throwIfAborted(signal);
-    const page = await askPage(connection, cursor, signal);
+    const { answer: page, generation } = await listings.ask(() =>
+      askPage(connection, cursor, signal),
+    );
     // And after EVERY answer, before it is accepted: a page that lands after
     // the abort — the last page too — is never part of a listing, so nothing
     // incomplete is returned and nothing complete is cached.
     throwIfAborted(signal);
-    lastPageStart = tools.length;
     // One push per tool: spreading a very large page into `push` can overflow the stack.
     for (const tool of page.tools) tools.push(tool);
     const next = page.nextCursor;
-    if (next === undefined || next === null) return { tools, pages, lastPageStart };
-    if (sent.has(next)) return { tools, pages, lastPageStart, incomplete: 'cursor-repeated' };
-    if (pages >= MAX_TOOL_LIST_PAGES) {
-      return { tools, pages, lastPageStart, incomplete: 'page-limit' };
+    if (next === undefined || next === null) {
+      return pages === 1 ? { tools, pages, generation } : { tools, pages };
     }
+    if (sent.has(next)) return { tools, pages, incomplete: 'cursor-repeated' };
+    if (pages >= MAX_TOOL_LIST_PAGES) return { tools, pages, incomplete: 'page-limit' };
     sent.add(next);
     cursor = next;
   }

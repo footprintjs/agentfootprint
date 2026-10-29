@@ -88,11 +88,11 @@ try {
 const agent = Agent.create({ provider, model }).tools(tools).build();
 ```
 
-## A paged catalogue behaves as a one-page catalogue (`callChecks.ts`)
+## A listing never makes a callable tool lose its checks (`callChecks.ts`)
 
 **The rule.** The MCP SDK's `Client` (1.32) runs three checks inside `callTool`,
-and it keeps them only for the tools of its most recent `tools/list` answer: it
-replaces them on every page.
+and it keeps them only for the tools of its most recent `tools/list` answer:
+every answer replaces them.
 
 1. A tool with `execution.taskSupport: 'required'` is refused before a plain
    `tools/call` is sent.
@@ -100,57 +100,98 @@ replaces them on every page.
    answer is an error.
 3. That `structuredContent` must match the schema.
 
-So for every tool listed before the last page, the library runs the same three
-checks itself, at the same moments, and raises the same error. A caller handles
-each error the same way, whatever page the tool was on:
+So every `Tool` the library hands out carries these checks itself, as the list
+it came from declared them. The library counts each `tools/list` request it
+sends, from the moment it is sent until it settles, answered or failed
+(`listingGenerations.ts`). It leaves a call to the SDK only when the tool came
+from a one-page list whose answer is still the latest and no list request is
+out, both when the call starts and when its answer comes in. That is the
+one-page normal case, and it runs exactly as it always did. Every other call
+runs the tool's own checks, at the SDK's moments, and raises the same error:
+
+- a tool of a paged list, on any page: no one answer holds them all;
+- a tool whose list a later answer replaced, after a `refresh()` that succeeded
+  or failed, including a reference held across it;
+- any call made while a list is being read.
+
+A failed list request counts too: the SDK caches an answer before it returns
+it, and caching can throw after the old checks are cleared. So a failed
+`refresh()` still rejects, `tools()` still serves the old catalogue, and those
+tools are safe to call: they check themselves.
+
+A tool's own checks raise the SDK's errors, so a caller handles them the same
+way:
 
 - Where the library loaded the SDK (the Node loader arm), the error is the SDK's
   own `McpError`.
-- On the `sdk` and `connection` arms it is an error with the same name, `code`
-  and message.
+- On the `sdk` and `connection` arms it is an error with the same name, `code`,
+  `data` and message.
 
 The output checks use a validator equal to the client's:
 
 - **The Node loader arm:** the SDK's default, `AjvJsonSchemaValidator`, loaded
   with the SDK when the client is built.
 - **Any arm, with `jsonSchemaValidator`:** the caller's validator. The client the
-  library builds is handed the same one, so one validator checks every page.
-- **An `sdk` or `connection` arm given none:** no validator is reachable, so a
-  call to an earlier-page tool that declares an `outputSchema` is refused before
-  it is sent, with `McpOutputUncheckedError` (`sent: false`, `reason:
-  'output-unchecked'`). This is the only refusal with no SDK equivalent. An answer
-  is never returned unchecked. A required task gets the SDK's refusal, never this
-  one.
+  library builds is handed the same one, so one validator checks every call.
+- **An `sdk` or `connection` arm given none:** an answer is never returned
+  unchecked. `McpOutputUncheckedError` (`reason: 'output-unchecked'`) says which
+  way:
+  - `sent: false`: the call runs under the tool's own checks from the start and
+    the tool declares an `outputSchema`, so it is refused before it is sent;
+  - `sent: true`: the call started under the SDK's checks, and a `tools/list`
+    request went out before its answer came in, so the SDK may have checked the
+    answer against the other list. The answer is refused unread; the tool may
+    have run.
 
-A one-page catalogue gets none of this, because the SDK holds every tool. The
-checks follow the listing a `Tool` came from, so after `refresh()`, use the tools
-it returns.
+  A required task gets the SDK's refusal, never this one.
 
-**Why.** Reading every page used to drop all three checks for every tool outside
-the last page, so those tools behaved as if they had never declared an output
-schema. Paging must never weaken what a tool was checked against.
+A schema is compiled when a tool's own checks first need it, so the one-page
+normal case compiles nothing twice. The library sees only the list requests it
+sends: your own code calling `listTools` on a client passed as `connection`
+replaces the SDK's checks without the library knowing.
+
+**Why.** Each listing replaces the SDK's checks, so a tool handed out earlier —
+from an earlier page, from a list a refresh replaced, or from the old catalogue
+a failed refresh left in place — behaved as if it had never declared an output
+schema or a required task. A listing must never make a callable tool silently
+lose its checks.
+
+```ts
+const countRows = (await catalog.tools()).find((t) => t.schema.name === 'count_rows')!;
+// count_rows declares an outputSchema: { count: integer }
+
+try {
+  await catalog.refresh(); // the new list's second page fails, so refresh() rejects
+} catch {
+  // tools() still serves the old catalogue, and countRows is still callable
+}
+await countRows.execute({}, ctx);
+// the server answers { count: 'x' } → McpError -32602 "Structured content does
+// not match the tool's output schema: …", exactly as before the refresh.
+```
+
+On a client you built yourself, hand `mcpClient` the same validator your client
+checks with:
 
 ```ts
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
 
-// A client you built: hand mcpClient the SAME validator your client checks with.
 const jsonSchemaValidator = new AjvJsonSchemaValidator();
 const connection = new Client(info, { capabilities: {}, jsonSchemaValidator });
 await connection.connect(transport);
 const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
-// first page's `count_rows` answers { count: 'x' } against an integer schema →
-// McpError -32602 "Structured content does not match the tool's output schema: …",
-// exactly as if it had been on the last page.
 ```
 
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
 - `toolList.ts` — every page of a `tools/list` answer, and the typed refusal
   (`McpToolListIncompleteError`) when a list cannot be read to its end.
-- `callChecks.ts` — the SDK's three per-tool call checks, run again for the
-  tools listed before the last page, and the one refusal with no SDK equivalent
-  (`McpOutputUncheckedError`).
+- `callChecks.ts` — the SDK's three per-tool call checks, carried by every tool
+  and run whenever the SDK no longer holds its list, and the one refusal with no
+  SDK equivalent (`McpOutputUncheckedError`).
+- `listingGenerations.ts` — which `tools/list` answer the SDK holds its checks
+  for: each list request counted from the moment it is sent until it settles.
 - `mcpServe.ts` — outbound.
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a

@@ -240,7 +240,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
     {
       kind: 'unrepaired',
       count: 1,
-      why: "the MCP SDK's own task refusal ('Tool \"x\" requires task-based execution. Use client.experimental.tasks.callToolStream() instead.'), copied verbatim so a tool from an earlier page of a paged list fails exactly as on a one-page list, where the SDK delivers the identical sentence as the call's error result. Correctly flagged — it tells the model to use an SDK method it cannot call — and owned upstream: rewording it here would make the two pages' errors differ",
+      why: "the MCP SDK's own task refusal ('Tool \"x\" requires task-based execution. Use client.experimental.tasks.callToolStream() instead.'), copied verbatim so a tool whose list the SDK no longer holds (a paged list, a list a later answer replaced) fails exactly as one the SDK holds, where the SDK delivers the identical sentence as the call's error result. Correctly flagged — it tells the model to use an SDK method it cannot call — and owned upstream: rewording it here would make the two pages' errors differ",
     },
   ],
   'src/trace-toolpack/debugPrompt.ts': [
@@ -1238,9 +1238,9 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Typed negatives: the always-active citation schema and one-use correction
         // are system frames, never persistent tool results. Two new files/literals;
         // the persistent and unrepaired budgets are unchanged.
-        // Paged MCP tool lists: an earlier page's tool re-runs the SDK's call
-        // checks and raises the SDK's own sentences (mcp/callChecks.ts, one new
-        // file). The task refusal's "Use …" is the SDK's text, kept verbatim so
+        // Paged MCP tool lists: a tool whose list the SDK no longer holds re-runs
+        // the SDK's call checks and raises the SDK's own sentences
+        // (mcp/callChecks.ts, one new file). The task refusal's "Use …" is the SDK's text, kept verbatim so
         // both pages fail alike: files 104 → 105, total 203 → 204, unrepaired
         // 34 → 35 (entries 14 → 15).
         files: 105,

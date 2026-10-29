@@ -418,9 +418,9 @@ describe('mcpClient({ transport }) — the default arm, argument for argument', 
       expect(seen.specifiers).toEqual([
         '@modelcontextprotocol/sdk/client/index.js',
         '@modelcontextprotocol/sdk/client/streamableHttp.js',
-        // What an earlier page of a paged tool list is checked with, loaded with
-        // the SDK when the client is built (`callChecks.ts`): its error class and
-        // its default validator — modules `client/index.js` already loaded.
+        // What a tool's own checks run with, loaded with the SDK when the client
+        // is built (`callChecks.ts`): its error class and its default validator
+        // — modules `client/index.js` already loaded.
         '@modelcontextprotocol/sdk/types.js',
         '@modelcontextprotocol/sdk/validation/ajv',
       ]);

@@ -329,14 +329,15 @@ export interface McpClientOptions {
    * or your own).
    *
    * Why it exists: the SDK's `Client` checks a tool's output only for the tools
-   * of its most recent `tools/list` answer, so on a server that pages, the
-   * library checks the tools of the earlier pages itself (see
-   * `McpClient.tools()`). The client the library builds is handed this same
-   * validator, so every page is checked by one validator. Omit it and the
+   * of its most recent `tools/list` answer, so every tool the library hands out
+   * carries its own checks, and runs them whenever the SDK no longer holds its
+   * list: a paged list, a list a later answer replaced, a call made while a list
+   * is read (see `McpClient.tools()`). The client the library builds is handed
+   * this same validator, so one validator checks every call. Omit it and the
    * library uses the SDK's default, loaded with the SDK itself; with `sdk`,
-   * where the library never touches its Node loader, a call to an earlier-page
-   * tool that declares an `outputSchema` is refused before it is sent
-   * (`McpOutputUncheckedError`) unless you pass one.
+   * where the library never touches its Node loader, such a call to a tool that
+   * declares an `outputSchema` is refused (`McpOutputUncheckedError`) unless you
+   * pass one.
    */
   readonly jsonSchemaValidator?: McpJsonSchemaValidator;
 
@@ -395,10 +396,12 @@ export interface McpConnectionOptions {
    * default, `new AjvJsonSchemaValidator()`.
    *
    * The SDK's `Client` checks a tool's output only for the tools of its most
-   * recent `tools/list` answer, so on a server that pages, the library checks
-   * the tools of the earlier pages itself, with this. Without it, a call to an
-   * earlier-page tool that declares an `outputSchema` is refused before it is
-   * sent (`McpOutputUncheckedError`); a one-page catalogue never needs it.
+   * recent `tools/list` answer, so the library checks a tool itself, with this,
+   * whenever the SDK no longer holds its list: a paged list, a list a later
+   * answer replaced, a call made while a list is read. Without it, such a call
+   * to a tool that declares an `outputSchema` is refused
+   * (`McpOutputUncheckedError`); a one-page catalogue that is still the latest
+   * answer never needs it.
    */
   readonly jsonSchemaValidator?: McpJsonSchemaValidator;
 
@@ -443,14 +446,19 @@ export interface McpClient {
    * each page is asked for and when each answer arrives: once it has fired,
    * nothing more is asked for and no page is accepted.
    *
-   * A paged catalogue behaves as a one-page one. The SDK's `Client` checks a
-   * tool's call only for the tools of its last page (a required task refused
-   * before sending; `structuredContent` required by an `outputSchema`, and
-   * matched against it), so every tool from an earlier page runs the same
-   * checks here and fails with the same error. Where no JSON Schema validator
-   * is reachable (`jsonSchemaValidator` on the `sdk` and `connection` arms), a
-   * call to an earlier-page tool that declares an `outputSchema` is refused
-   * before it is sent, with `McpOutputUncheckedError`.
+   * Every tool keeps its checks, whatever is listed later. The SDK's `Client`
+   * checks a tool's call (a required task refused before sending;
+   * `structuredContent` required by an `outputSchema`, and matched against it)
+   * only for the tools of its most recent `tools/list` answer, so every tool
+   * returned here carries those checks itself. They are left to the SDK only
+   * for a tool of a one-page list whose answer is still the latest, with no
+   * list request out. Every other call runs the tool's own and fails with the
+   * same error: a paged list's tools, a tool held across a later `refresh()`
+   * (failed or not), a call made while a list is read. Where no JSON Schema
+   * validator is reachable (`jsonSchemaValidator` on the `sdk` and `connection`
+   * arms), such a call to a tool that declares an `outputSchema` is refused
+   * with `McpOutputUncheckedError`: before it is sent, or, when a list was read
+   * while it was out, once its answer is in, unread.
    */
   tools(): Promise<readonly Tool[]>;
 
@@ -458,6 +466,8 @@ export interface McpClient {
    * Force a refresh from the server. Use when you suspect the server
    * has dynamically added/removed tools mid-session (e.g., after the
    * server processes a config update). Reads every page, as `tools()` does.
+   * When it fails it rejects, and `tools()` keeps serving the catalogue it
+   * had: those tools keep their own checks (see `tools()`).
    */
   refresh(): Promise<readonly Tool[]>;
 
