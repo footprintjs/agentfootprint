@@ -345,9 +345,9 @@ await connection.connect(transport);
 const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
 ```
 
-The library only knows about the lists it reads. If your own code calls
-`listTools` on a client you passed as `connection`, the SDK replaces its checks
-without the library knowing.
+The library only knows about the lists it reads, from every `mcpClient` over the
+same client. If your own code calls `listTools` on a client you passed as
+`connection`, the SDK replaces its checks without the library knowing.
 
 ## MCP from a browser
 

@@ -16,7 +16,9 @@
  *   - each request that settles, answered or failed, starts a new GENERATION.
  *
  * The SDK holds the checks of a listing's one answer only while the generation
- * that answer settled at is the latest and no request is out. A `tools/list`
+ * that answer settled at is the latest and no request is out. The SDK keeps one
+ * set of checks per client, so there is one count per connection object: every
+ * `mcpClient` over the same client shares it (`listingsOf`). A `tools/list`
  * request the library did not send — your own code calling `listTools` on a
  * client passed as `connection` — is not counted: the library cannot see it.
  */
@@ -59,4 +61,21 @@ export class ListingGenerations {
     this.settled += 1;
     return this.settled;
   }
+}
+
+/** One count per connection object, held only as long as the connection is. */
+const BY_CONNECTION = new WeakMap<object, ListingGenerations>();
+
+/**
+ * The count for `connection`: the same one for every `mcpClient` that adapts
+ * the same client, because the SDK keeps one set of checks per client and a
+ * listing by any of them replaces it.
+ */
+export function listingsOf(connection: object): ListingGenerations {
+  let listings = BY_CONNECTION.get(connection);
+  if (listings === undefined) {
+    listings = new ListingGenerations();
+    BY_CONNECTION.set(connection, listings);
+  }
+  return listings;
 }

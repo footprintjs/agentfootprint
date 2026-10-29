@@ -61,6 +61,7 @@ import type {
 import { callMetaOf, readToolExtras } from './toolExtras.js';
 import { isToolError, readToolResult, resultModeOf } from './toolResult.js';
 import { listEveryPage, McpToolListIncompleteError } from './toolList.js';
+import { listingsOf } from './listingGenerations.js';
 import {
   callCheckKit,
   checkOutput,
@@ -237,11 +238,17 @@ async function openConnection(
 ): Promise<OpenConnection> {
   // A client built elsewhere: the library loads nothing, so only the caller's
   // validator can check a tool's output itself, and errors take the SDK's shape.
+  // Its list requests are counted per client: every mcpClient over it shares one
+  // count, as they share the SDK's one set of checks (`listingGenerations.ts`).
   if (opts.connection !== undefined) {
-    return { connection: opts.connection, kit: callCheckKit(name, validator) };
+    const kit = callCheckKit(name, listingsOf(opts.connection), validator);
+    return { connection: opts.connection, kit };
   }
   if (opts._client !== undefined) {
-    return { connection: opts._client, kit: callCheckKit(name, validator) };
+    return {
+      connection: opts._client,
+      kit: callCheckKit(name, listingsOf(opts._client), validator),
+    };
   }
   // `refuseConflictingOptions` has already refused the case where this is
   // absent, so the assertion documents that guarantee rather than assuming it.
@@ -287,8 +294,8 @@ async function resolveClient(
   // touched (`callChecks.ts`).
   const kit =
     sdk === undefined
-      ? callCheckKit(name, validator, loadCheckModules(validator))
-      : callCheckKit(name, validator);
+      ? callCheckKit(name, listingsOf(client), validator, loadCheckModules(validator))
+      : callCheckKit(name, listingsOf(client), validator);
   // Same rule as callTool: options ride beside the transport, never inside it.
   if (signal) await client.connect(built.transport, { signal });
   else await client.connect(built.transport);

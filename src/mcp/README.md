@@ -146,9 +146,11 @@ The output checks use a validator equal to the client's:
   A required task gets the SDK's refusal, never this one.
 
 A schema is compiled when a tool's own checks first need it, so the one-page
-normal case compiles nothing twice. The library sees only the list requests it
-sends: your own code calling `listTools` on a client passed as `connection`
-replaces the SDK's checks without the library knowing.
+normal case compiles nothing twice. The count is kept per client object, because
+the SDK keeps one set of checks per client: every `mcpClient` over the same
+`connection` shares it. The library sees only the list requests it sends: your
+own code calling `listTools` on a client passed as `connection` replaces the
+SDK's checks without the library knowing.
 
 **Why.** Each listing replaces the SDK's checks, so a tool handed out earlier —
 from an earlier page, from a list a refresh replaced, or from the old catalogue
@@ -191,7 +193,8 @@ const catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidat
   and run whenever the SDK no longer holds its list, and the one refusal with no
   SDK equivalent (`McpOutputUncheckedError`).
 - `listingGenerations.ts` — which `tools/list` answer the SDK holds its checks
-  for: each list request counted from the moment it is sent until it settles.
+  for: each list request counted from the moment it is sent until it settles,
+  one count per client object.
 - `mcpServe.ts` — outbound.
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a

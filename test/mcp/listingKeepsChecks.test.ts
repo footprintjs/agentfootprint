@@ -20,6 +20,7 @@
  *   - a successful refresh that drops or changes a tool, with a held reference;
  *   - a call in flight while a refresh's answer arrives, or while one is out;
  *   - a call made while a list request is out;
+ *   - a listing by another mcpClient over the same connection;
  *   - one-page controls: the same requests, nothing checked twice.
  */
 
@@ -565,6 +566,43 @@ describe('a call made while a list request is out — the tool’s own checks, f
     const { server, tools, finish } = await duringListing(arm);
     await expectRefused(server, tools, kase);
     await finish();
+  });
+});
+
+// ─── Two clients over one connection: one SDK, one count ──────────
+
+describe('two mcpClients over one connection — one count, as the SDK keeps one set of checks', () => {
+  /** `listing` lists the one page; then `other`, over the same client, lists a page without its tools. */
+  async function listedByAnother(
+    validator?: McpJsonSchemaValidator,
+  ): Promise<{ server: Endpoint; tools: readonly Tool[]; close: () => Promise<void> }> {
+    const server = endpoint(ONE_PAGE);
+    const given = validator === undefined ? {} : { jsonSchemaValidator: validator };
+    const connection = new Client(
+      { name: 'own', version: '1.0.0' },
+      { capabilities: {}, ...given },
+    );
+    await connection.connect(
+      new StreamableHTTPClientTransport(new URL(URL_), { fetch: server.fetch }),
+    );
+    const listing = await mcpClient({ name: 'listing', connection, ...given });
+    const other = await mcpClient({ name: 'other', connection, ...given });
+    const tools = await listing.tools();
+    server.script.catalogue = [[plain]];
+    await other.tools();
+    return { server, tools, close: () => connection.close() };
+  }
+
+  it.each(CASES)('%s, with a validator — connection arm', async (kase) => {
+    const { server, tools, close } = await listedByAnother(new AjvJsonSchemaValidator());
+    await expectChecked(server, tools, kase);
+    await close();
+  });
+
+  it.each(CASES)('%s, no validator — connection arm', async (kase) => {
+    const { server, tools, close } = await listedByAnother();
+    await expectRefused(server, tools, kase);
+    await close();
   });
 });
 

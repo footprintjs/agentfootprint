@@ -43,7 +43,7 @@
  */
 
 import type { McpCallToolResult, McpJsonSchemaValidator, McpListedTool } from './types.js';
-import { ListingGenerations } from './listingGenerations.js';
+import type { ListingGenerations } from './listingGenerations.js';
 
 /** The SDK's `McpError` constructor, as `@modelcontextprotocol/sdk/types.js` exports it. */
 export type McpErrorClass = new (code: number, message: string, data?: unknown) => Error;
@@ -67,19 +67,21 @@ export interface CallCheckKit {
   validator(): McpJsonSchemaValidator | undefined;
   /** The SDK's own `McpError`, when this arm loaded the SDK. */
   readonly McpError?: McpErrorClass;
-  /** The list requests this connection sent, counted (`listingGenerations.ts`). */
+  /** This connection's list requests, counted (`listingGenerations.ts` · `listingsOf`). */
   readonly listings: ListingGenerations;
 }
 
 /**
- * The kit for one connection, named `server`. `given` is the caller's
- * `jsonSchemaValidator`; `loaded` holds what the library loaded with the SDK on
- * the Node loader arm — the SDK's default validator class and its `McpError` —
- * each `undefined` where it is not a constructor (another arm, or an SDK
- * without it).
+ * The kit for one connection, named `server`, whose list requests `listings`
+ * counts (`listingsOf(connection)`, shared by every client over it). `given` is
+ * the caller's `jsonSchemaValidator`; `loaded` holds what the library loaded
+ * with the SDK on the Node loader arm — the SDK's default validator class and
+ * its `McpError` — each `undefined` where it is not a constructor (another arm,
+ * or an SDK without it).
  */
 export function callCheckKit(
   server: string,
+  listings: ListingGenerations,
   given: McpJsonSchemaValidator | undefined,
   loaded: { readonly Validator?: unknown; readonly McpError?: unknown } = {},
 ): CallCheckKit {
@@ -94,7 +96,7 @@ export function callCheckKit(
       return created;
     },
     ...(typeof loaded.McpError === 'function' && { McpError: loaded.McpError as McpErrorClass }),
-    listings: new ListingGenerations(),
+    listings,
   };
 }
 
