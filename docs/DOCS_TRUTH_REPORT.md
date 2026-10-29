@@ -6,7 +6,7 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **19 import paths** carrying **2645 distinct named exports**, plus **125 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **19 import paths** carrying **2645 distinct named exports**, plus **126 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
 **1936 of 2645 exports (73%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
@@ -16,7 +16,7 @@ The package publishes **19 import paths** carrying **2645 distinct named exports
 - **572 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
 - **1703 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
-On events: **70** of the 125 typed events are both described on the site and were seen firing in a real run. **25** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **30** are not described in prose on the site at all.
+On events: **70** of the 126 typed events are both described on the site and were seen firing in a real run. **26** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **30** are not described in prose on the site at all.
 
 ### Which number is "the" number
 
@@ -57,13 +57,13 @@ Freshness is a separate question from documentation. `docs/api-reference/` is re
 
 ## What the existing CI docs gate already covers
 
-CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 673 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **400 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
+CI's `docs` job builds docs-next, which twoslash-compiles code blocks marked `ts twoslash` against the real types. That gate is real, and where it applies nothing can drift. It just applies narrowly: **32 of the 674 TypeScript/JavaScript blocks on the site are twoslash-marked**, and **400 `import … from 'agentfootprint…'` lines sit inside blocks the compiler never sees**. Three genuinely broken imports were found in exactly that blind spot while this report was first built (plain `typescript`-tagged fences in `reference/strategy-everywhere.mdx`), which is the concrete argument for checking the export map directly rather than trusting the build to catch it.
 
 ## What each column means
 
 | Column | Definition used here |
 |---|---|
-| **DECLARED** | The symbol is exported from a shipped `.d.ts` reachable through a `package.json` `"exports"` subpath, enumerated with the TypeScript checker so `export *` chains resolve exactly as a consumer's compiler sees them. Deliberately **not** TypeDoc: TypeDoc runs from one entry point (`src/index.ts`), so it cannot see any `agentfootprint/<subpath>` symbol at all. Events come from `ALL_EVENT_TYPES` (`src/events/registry.ts:877`), whose count is pinned by `test/events/unit/registry.test.ts`. |
+| **DECLARED** | The symbol is exported from a shipped `.d.ts` reachable through a `package.json` `"exports"` subpath, enumerated with the TypeScript checker so `export *` chains resolve exactly as a consumer's compiler sees them. Deliberately **not** TypeDoc: TypeDoc runs from one entry point (`src/index.ts`), so it cannot see any `agentfootprint/<subpath>` symbol at all. Events come from `ALL_EVENT_TYPES` (`src/events/registry.ts:883`), whose count is pinned by `test/events/unit/registry.test.ts`. |
 | **DOCUMENTED** | The name appears in **prose** on a hand-written page under `docs-next/content/docs` — anywhere outside a fenced code block. Headings, paragraphs, table cells, inline `` `code` `` spans and frontmatter `title`/`description` all count as prose. A name that appears *only* inside a fenced sample is **not** documented and is reported as its own category. The two generated trees are excluded (see above). |
 | **EXERCISED** | For events: the event was observed on the event bus during a credential-free run of the repo's own `examples/`. For symbols: the symbol is imported by an example script that ran green. This signal **over-counts** (an import on a branch never taken still counts), so every gap number here is a **floor**, never a ceiling. Anything the evidence cannot speak to is **UNKNOWN**, never "absent". |
 
@@ -126,13 +126,14 @@ These provably work — a reference run touches them — and no page on the site
 
 The site describes it and it really is exported, but no reference run touches it. Split by kind, because the class only means "possibly dead" for things that can be called.
 
-**Events described on the site but never observed firing (25).**
+**Events described on the site but never observed firing (26).**
 
 | Event | Described on |
 |---|---|
 | `agentfootprint.agent.thinking_omitted` | `docs-next/content/docs/build/anthropic.mdx`, `docs-next/content/docs/monitor/observability.mdx` |
 | `agentfootprint.tools.session_close_failed` | `docs-next/content/docs/build/tools.mdx` |
 | `agentfootprint.tools.absent` | `docs-next/content/docs/build/tools.mdx`, `docs-next/content/docs/infrastructure/observability-sinks.mdx` |
+| `agentfootprint.tools.request_attempts` | `docs-next/content/docs/infrastructure/tools-and-gateways.mdx` |
 | `agentfootprint.skill.activated` | `docs-next/content/docs/build/skills.mdx` |
 | `agentfootprint.skill.route_conflict` | `docs-next/content/docs/build/skill-graph-architecture.mdx`, `docs-next/content/docs/build/skills.mdx` |
 | `agentfootprint.skill.steps_unfinished` | `docs-next/content/docs/build/skills.mdx` |

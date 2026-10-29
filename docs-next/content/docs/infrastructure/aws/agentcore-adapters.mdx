@@ -493,8 +493,8 @@ inside the 10 s ceiling on waiting.
 | `maxDelayMs` | none | The most one of the library's own backoff waits may last. It caps the ceiling before the jittered draw, so capped waits keep their spread. It never cuts a server's `Retry-After`. |
 | `maxWaitMs` | 10 000 | The most a call spends waiting in total. |
 | `maxElapsedMs` | none | A deadline for the whole call, requests included: no wait that would end past it is begun, and a request still waiting for its answer when it passes is cut. That includes the body the session-busy check reads. |
-| `endpointLabel` | none | A name you declare for this endpoint. `onRetry` reports it as `endpoint`. It is never made up from the URL. |
-| `onRetry` | — | A notification before each wait. It gets the refusal's `kind` (`'session-busy'` or `'throttle'`), the attempt about to start, the wait, the endpoint's origin (scheme, host and port) and your `endpointLabel` as `endpoint`. It never gets the URL's path, user info, query or fragment, the request's arguments or the server's answer. It is not told how the call ended. |
+| `endpointLabel` | none | A name you declare for this endpoint. `onRetry` reports it as `endpoint`, and a dispatched call's saved attempts name the endpoint by it in place of the origin. It is never made up from the URL. |
+| `onRetry` | — | A notification before each wait. It gets the refusal's `kind` (`'session-busy'` or `'throttle'`), the attempt about to start, the wait, the endpoint's origin (scheme, host and port) and your `endpointLabel` as `endpoint`. It never gets the URL's path, user info, query or fragment, the request's arguments or the server's answer. It is not told how the call ended: the run keeps that — see [A retried call is in the saved run](doc:tools-and-gateways#a-retried-call-is-in-the-saved-run). |
 
 Each request is one retry series on footprintjs's attempt runner. Under
 `mcpClient`, the client's 429 retry (`retryOnThrottle`) joins that series instead
