@@ -26,8 +26,10 @@
  *     consent), not a transient fault — retrying it would hammer the IdP
  *     without the user having authorized anything.
  *   • The request's `signal` (`CredentialRequest.signal`) is passed through to
- *     the wrapped provider and ends the backoff wait. A request whose signal
- *     has fired is never asked again: the call rejects with the abort.
+ *     the wrapped provider, ends the backoff wait, and is checked immediately
+ *     before every attempt, the first included: a request whose signal has
+ *     fired never asks the provider (again), and the call rejects with the
+ *     abort. An attempt already running is the provider's to stop.
  *   • After retries exhaust, the LAST error is rethrown — the call site
  *     behaves byte-identically to an unwrapped provider (fail-closed:
  *     `agentfootprint.credential.failed` emit + error tool result; the tool
@@ -85,6 +87,11 @@ export function withCredentialRetry(
     async getCredential(req: CredentialRequest): Promise<CredentialResult> {
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        // Immediately before EVERY attempt, the first included: a request whose
+        // signal has fired never asks the provider — not before the first
+        // attempt, and not after a wait or an `onRetry` that cancelled it (a
+        // zero wait never consults the signal).
+        throwIfAborted(req.signal);
         try {
           // Both result branches return as-is (same object — the wrapper never
           // clones or serializes the credential): `issued` is success;
@@ -92,8 +99,8 @@ export function withCredentialRetry(
           return await provider.getCredential(req);
         } catch (err) {
           lastError = err;
-          // A cancelled request is never asked again, whatever `shouldRetry`
-          // says: nobody is waiting for the credential (`lib/abort.ts`).
+          // A failure that lands after the abort is the abort, whatever
+          // `shouldRetry` says: nobody is waiting for the credential (`lib/abort.ts`).
           throwIfAborted(req.signal);
           if (attempt >= maxAttempts || !shouldRetry(err, attempt)) {
             throw err;

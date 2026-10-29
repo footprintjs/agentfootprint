@@ -102,11 +102,13 @@ carrying `authorizationUrl` — see
 
 **A cancelled request is never sent for a late credential.** The vend is a
 wait, and it honours the request's abort signal: the call's cancellation, or
-the retry series' deadline. The provider is handed the signal as
+the retry series' deadline. The signal is resolved as fetch resolves it, so a
+`Request` input's own signal counts too. The provider is handed the signal as
 `CredentialRequest.signal`, the wait ends at the abort with the abort, and the
 signal is checked again when the credential arrives. A provider that hangs
 cannot hold the call open. One that answers after a timeout does not send the
-request: its credential is dropped unused.
+request: the gateway drops its credential unused, though the provider may still
+finish its own work.
 
 Nothing in `gatewayTransport` is vendor-specific: it is the `CredentialProvider`
 port on one side and Streamable HTTP on the other. AWS AgentCore's Gateway is one

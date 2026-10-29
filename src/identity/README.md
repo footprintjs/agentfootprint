@@ -10,7 +10,8 @@ downstream service.
 - Reads the abort signal of the request a credential is for
   (`CredentialRequest.signal`) when the caller passes one, as `gatewayTransport`
   does. It is the provider's cue to stop. `withCredentialRetry` passes it through,
-  ends its backoff on it, and never retries a request whose signal has fired.
+  ends its backoff on it, and checks it immediately before every attempt, the
+  first included, so a request whose signal has fired never asks the provider.
 - Writes NOTHING into tracked scope. That is the standing invariant here:
   tracked writes flow into the record, and a vended token must never become
   evidence.

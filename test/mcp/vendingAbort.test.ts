@@ -297,6 +297,111 @@ describe('vending fetch — the normal path is unchanged', () => {
   });
 });
 
+// ─── A Request input: the signal fetch itself would honour ────────
+
+describe('vending fetch — a Request input carries its own signal', () => {
+  it('a pre-aborted Request asks no provider and sends nothing', async () => {
+    const held = heldProvider();
+    const base = recordingBase();
+    const controller = new AbortController();
+    const reason = new Error('the request was cancelled before it started');
+    controller.abort(reason);
+    const request = new Request(URL_, { method: 'POST', body: '{}', signal: controller.signal });
+
+    await expect(
+      settlesWithin(
+        createVendingFetch(
+          gatewayTransport({ url: URL_, credentials: held.provider }),
+          base,
+        )(request),
+        500,
+      ),
+    ).rejects.toBe(reason);
+    expect(held.asked).toEqual([]);
+    expect(base.sent).toEqual([]);
+  });
+
+  it('a Request aborted mid-vend: the provider had its signal, and the wait ends at the abort', async () => {
+    const held = heldProvider();
+    const base = recordingBase();
+    const controller = new AbortController();
+    const reason = new Error('cancelled while the credential was pending');
+    const request = new Request(URL_, { method: 'POST', body: '{}', signal: controller.signal });
+
+    const sending = createVendingFetch(
+      gatewayTransport({ url: URL_, credentials: held.provider }),
+      base,
+    )(request);
+    await until(() => held.asked.length === 1);
+    expect(held.asked[0]!.signal).toBe(request.signal);
+    controller.abort(reason);
+
+    await expect(settlesWithin(sending, 500)).rejects.toBe(reason);
+    expect(base.sent).toEqual([]);
+  });
+
+  it('a Request whose credential arrives after the abort is never sent', async () => {
+    const held = heldProvider();
+    const base = recordingBase();
+    const controller = new AbortController();
+    const reason = new Error('timed out');
+    const request = new Request(URL_, { method: 'POST', body: '{}', signal: controller.signal });
+
+    const sending = createVendingFetch(
+      gatewayTransport({ url: URL_, credentials: held.provider }),
+      base,
+    )(request);
+    await until(() => held.asked.length === 1);
+    controller.abort(reason);
+    const settled = settlesWithin(sending, 500).catch((error: unknown) => error);
+
+    held.release();
+    await drain();
+
+    expect(base.sent).toEqual([]);
+    expect(await settled).toBe(reason);
+  });
+
+  // fetch's own rule: an init that names a signal replaces the Request's —
+  // `null` meaning none at all.
+  it('a live init.signal replaces an aborted Request signal: the request is vended and sent', async () => {
+    const base = recordingBase();
+    const aborted = new AbortController();
+    aborted.abort(new Error('the Request’s own signal'));
+    const live = new AbortController();
+
+    const response = await createVendingFetch(
+      gatewayTransport({ url: URL_, credentials: heldProviderThatAnswers() }),
+      base,
+    )(new Request(URL_, { method: 'POST', body: '{}', signal: aborted.signal }), {
+      signal: live.signal,
+    });
+
+    expect(response.status).toBe(200);
+    expect(base.sent).toHaveLength(1);
+    expect(base.sent[0]!.signal).toBe(live.signal);
+  });
+
+  it('init.signal: null drops an aborted Request signal: the request is vended and sent', async () => {
+    const base = recordingBase();
+    const aborted = new AbortController();
+    aborted.abort(new Error('the Request’s own signal'));
+
+    const response = await createVendingFetch(
+      gatewayTransport({ url: URL_, credentials: heldProviderThatAnswers() }),
+      base,
+    )(new Request(URL_, { method: 'POST', body: '{}', signal: aborted.signal }), { signal: null });
+
+    expect(response.status).toBe(200);
+    expect(base.sent).toHaveLength(1);
+  });
+});
+
+/** A provider that answers at once — for the override controls. */
+function heldProviderThatAnswers(): CredentialProvider {
+  return { id: 'answers', getCredential: async () => ISSUED };
+}
+
 // ─── Scenario: through mcpClient, the series' signal reaches the vend ──
 
 /** One MCP endpoint in this process, reached only through the gateway's `fetch` seam. */
@@ -429,6 +534,57 @@ describe('vending fetch — through mcpClient', () => {
     }
   });
 
+  it('a cancellation inside withCredentialRetry’s onRetry starts no second vend of that request', async () => {
+    const server = endpoint();
+    const controller = new AbortController();
+    const reason = new Error('cancelled from the retry callback');
+    const seen: CredentialRequest[] = [];
+    let failNext = false;
+    const inner: CredentialProvider = {
+      id: 'flaky-once',
+      getCredential: async (req) => {
+        seen.push(req);
+        if (failNext) {
+          failNext = false;
+          throw Object.assign(new Error('upstream 503'), { status: 503 });
+        }
+        return ISSUED;
+      },
+    };
+    const client = await mcpClient({
+      name: 'gw',
+      transport: gatewayTransport({
+        url: URL_,
+        credentials: withCredentialRetry(inner, {
+          initialDelayMs: 0,
+          onRetry: () => controller.abort(reason),
+        }),
+        fetch: server.fetch,
+      }),
+    });
+    try {
+      const [lookup] = await client.tools();
+      failNext = true;
+      const before = seen.length;
+      const error = await settlesWithin(
+        lookup!
+          .execute({ q: 'x' }, { ...CALL_CONTEXT, signal: controller.signal })
+          .catch((e: unknown) => e),
+        1_000,
+      );
+      await drain(30);
+
+      expect(String(error)).toContain('cancelled from the retry callback');
+      // The call's own credential request — one object, handed to every attempt
+      // — was asked once. (The SDK's cancellation notice vends for itself.)
+      const target = seen[before]!;
+      expect(seen.filter((req) => req === target)).toHaveLength(1);
+      expect(server.calls()).toBe(0);
+    } finally {
+      await client.close();
+    }
+  });
+
   it('with no abort, the call is vended and sent as before', async () => {
     const server = endpoint();
     const credentials = switchableProvider();
@@ -491,6 +647,71 @@ describe('withCredentialRetry — the request signal', () => {
 
     await expect(settlesWithin(vending, 500)).rejects.toBe(reason);
     await drain(30);
+    expect(attempts).toBe(1);
+  });
+
+  it('a pre-aborted request never asks the provider it wraps', async () => {
+    let attempts = 0;
+    const inner: CredentialProvider = {
+      id: 'inner',
+      getCredential: async () => {
+        attempts += 1;
+        return ISSUED;
+      },
+    };
+    const controller = new AbortController();
+    const reason = new Error('cancelled before the first attempt');
+    controller.abort(reason);
+
+    await expect(
+      withCredentialRetry(inner).getCredential({ service: 'gw', signal: controller.signal }),
+    ).rejects.toBe(reason);
+    expect(attempts).toBe(0);
+  });
+
+  it('an abort inside onRetry, with no wait, launches no further attempt', async () => {
+    let attempts = 0;
+    const inner: CredentialProvider = {
+      id: 'flaky',
+      getCredential: async () => {
+        attempts += 1;
+        if (attempts === 1) throw transient();
+        return ISSUED;
+      },
+    };
+    const controller = new AbortController();
+    const reason = new Error('the callback cancelled it');
+
+    await expect(
+      withCredentialRetry(inner, {
+        initialDelayMs: 0,
+        onRetry: () => controller.abort(reason),
+      }).getCredential({ service: 'gw', signal: controller.signal }),
+    ).rejects.toBe(reason);
+    expect(attempts).toBe(1);
+  });
+
+  it('an abort inside onRetry before a positive wait ends it at once (control)', async () => {
+    let attempts = 0;
+    const inner: CredentialProvider = {
+      id: 'flaky',
+      getCredential: async () => {
+        attempts += 1;
+        throw transient();
+      },
+    };
+    const controller = new AbortController();
+    const reason = new Error('the callback cancelled it');
+
+    await expect(
+      settlesWithin(
+        withCredentialRetry(inner, {
+          initialDelayMs: 1_000,
+          onRetry: () => controller.abort(reason),
+        }).getCredential({ service: 'gw', signal: controller.signal }),
+        500,
+      ),
+    ).rejects.toBe(reason);
     expect(attempts).toBe(1);
   });
 
