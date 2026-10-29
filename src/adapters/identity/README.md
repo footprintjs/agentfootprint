@@ -37,8 +37,8 @@ A deployment picks ONE strategy by config (`strategies/`); the strategy's
    verifiers, and an expired or not-yet-valid one is refused even when a custom
    `backend` skipped the time checks (`verify/jwtCore.ts · verifySignedToken`).
    Clock tolerance is at most 300 s: skew, not a second lifetime.
-6. **A roles string is one role.** `"x neo-users"` never satisfies
-   `neo-users`. `jwksIdentity({ rolesFormat: 'space-delimited' })` keeps the
+6. **A roles string is one role.** `"x bot-users"` never satisfies
+   `bot-users`. `jwksIdentity({ rolesFormat: 'space-delimited' })` keeps the
    old reading for a claim that really is a list.
 7. **Unknown is not none.** A roles claim replaced by an overage pointer is
    `roles-unknown`, never "no roles".
@@ -75,7 +75,7 @@ await verifier.verify(appOnlyToken); // → IdentityNotVerifiedError, failure 'n
 
 | IdP | `userIdClaim` | Why not `sub` | Scope claim |
 |---|---|---|---|
-| AD FS 2016+ | a custom claim issuing `objectGUID` (e.g. `urn:neo:objectguid`) | `sub` is a hash of the client id and the anchor claim | `scp` |
+| AD FS 2016+ | a custom claim issuing `objectGUID` (e.g. `urn:bot:objectguid`) | `sub` is a hash of the client id and the anchor claim | `scp` |
 | Entra ID | `oid` | `sub` is pairwise per application | `scp` |
 | Keycloak | the directory id mapper (`objectguid`, from LDAP `objectGUID`) | a service account HAS a `sub` and carries your scope; it has no directory id, so it is refused even if a client list is too broad (lab-proven) | `scope` |
 | Okta | `uid` | unverified whether `sub` can hold the login | `scope` |
@@ -115,9 +115,9 @@ a company uses it.
   (RFC 9207) makes `iss` REQUIRED on the callback.
 
 ```sh
-IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_PUBLIC_URL=https://bot.corp.example
 IDENTITY_CLIENT_ID=<web client id>
-IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem
+IDENTITY_CLIENT_KEY_FILE=/run/secrets/bot-web.pem
 IDENTITY_SCOPE=openid profile api://<API>/access_as_user
 ```
 
@@ -142,7 +142,7 @@ and forwards a signed token on every request; `proxy-token` verifies it with
   custom `x-…` header is accepted: a standard header (`cookie`, `set-cookie`,
   `host`, …) means something else to every hop, and a bare user header
   (`X-Forwarded-User…`) is a string anybody can send.
-- **The public URL is the origin alone** (`https://neo.corp.example`); a path,
+- **The public URL is the origin alone** (`https://bot.corp.example`); a path,
   query or fragment is refused, as on the sign-in door.
 - **Every door is hardened.** The browser's credential is the PROXY's cookie
   or a Windows login, turned into a valid header on every request the proxy
@@ -165,11 +165,11 @@ IDENTITY_PROXY_TOKEN=access-token
 IDENTITY_PROXY_HEADER=x-forwarded-access-token      # oauth2-proxy --pass-access-token
 IDENTITY_ISSUER=http://fs.corp.example/adfs/services/trust   # literal, compared exactly
 IDENTITY_JWKS_URL=https://fs.corp.example/adfs/discovery/keys
-IDENTITY_AUDIENCE=urn:neo:api
-IDENTITY_USER_ID_CLAIM=urn:neo:objectguid
+IDENTITY_AUDIENCE=urn:bot:api
+IDENTITY_USER_ID_CLAIM=urn:bot:objectguid
 IDENTITY_REQUIRED_SCOPE=user_impersonation
 IDENTITY_ALLOWED_CLIENTS=<the proxy's client id>
-IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_PUBLIC_URL=https://bot.corp.example
 ```
 
 ## `directory-password` — Active Directory over LDAPS (PENDING INDEPENDENT REVIEW)
@@ -243,13 +243,13 @@ door shows a username and password form; the directory decides who it was.
 
 ```sh
 IDENTITY_STRATEGY=directory-password
-IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_PUBLIC_URL=https://bot.corp.example
 IDENTITY_LDAP_URL=ldaps://dc1.corp.example:636
-IDENTITY_LDAP_CA_FILE=/etc/neo/corp-root-ca.pem
+IDENTITY_LDAP_CA_FILE=/etc/bot/corp-root-ca.pem
 IDENTITY_LDAP_DOMAIN=corp.example
 IDENTITY_LDAP_NETBIOS_DOMAIN=CORP
 IDENTITY_LDAP_BASE_DN=DC=corp,DC=example
-IDENTITY_LDAP_REQUIRED_GROUP=CN=Neo Users,OU=Groups,DC=corp,DC=example
+IDENTITY_LDAP_REQUIRED_GROUP=CN=Bot Users,OU=Groups,DC=corp,DC=example
 IDENTITY_LDAP_LOCKOUT_THRESHOLD=10
 IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES=30
 # optional: refuse (not only delay) an address after 20 failures per window —

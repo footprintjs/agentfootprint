@@ -9,7 +9,7 @@
  * Role:    `src/tool-lint/` leaf. Pure functions over `CatalogTool`;
  *          no embedder, no I/O.
  *
- * Every rule encodes a FIELD FINDING from real catalogs (the Neo SAN
+ * Every rule encodes a FIELD FINDING from real catalogs (the host-app SAN
  * triage agent's 29-tool catalog was the seed corpus):
  *
  *   1. description-missing-or-short — the model can only guess from a name.
@@ -176,7 +176,7 @@ const COMMA_LIST = new RegExp(
  * (pipe-separated literals, or comma lists behind "one of"/"allowed
  * values") should declare a JSON-Schema `enum` instead — the model picks
  * reliably from enums, and arg validators (#9) can enforce them. The
- * field case: Neo's `influx_get_port_ranking.metric` =
+ * field case: the host app's `influx_get_port_ranking.metric` =
  * `"avg_iops | peak_iops | mbps"`.
  */
 export function enumInProseRule(): LintRule {
@@ -245,7 +245,7 @@ export interface OptionalParamRuleOptions {
 }
 
 /**
- * An optional param's omission usually MEANS something (Neo:
+ * An optional param's omission usually MEANS something (host app:
  * `influx_get_interface_counters` without `switch_name` = fabric-wide
  * sweep) — but the model can only reason about leaving a param out if
  * the description says so. No description at all, or one with no

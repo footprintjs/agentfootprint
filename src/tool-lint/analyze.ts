@@ -51,7 +51,7 @@ export const DEFAULT_WATCH_BAND = 0.05;
 
 /**
  * Threshold/band calibrated for the char-frequency `mockEmbedder` on
- * realistic tool prose (seed corpus: the Neo SAN catalog). The mock
+ * realistic tool prose (seed corpus: the host-app SAN catalog). The mock
  * compresses unrelated descriptions into ~0.85–0.97 cosine, so expect
  * false positives even at 0.94 — with the mock, the RELATIVE ordering
  * of `report.similarity.ranked` is the trustworthy signal; absolute
