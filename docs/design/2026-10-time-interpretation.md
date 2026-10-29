@@ -39,7 +39,8 @@ field-tests the library).
    - The **requested** window and the **executed** window are separate fields everywhere. The answer
      shows the executed bounds from the record, and says when they differ from the request.
    - The host app's phrases become the library's shared test corpus. The harness is in this PR.
-5. **Decisions.** § 15 lists what the reviews decided and what is still open.
+5. **Decisions.** § 15 lists what the reviews decided, what the third review settled, and the
+   owner's proposed answers to the rest.
 
 ---
 
@@ -82,10 +83,12 @@ itself, in a tool middleware, and guards the read with a word scan
 
 That guard cannot be finished:
 
-- **It leaks on new wording.** After several review rounds it reads none of the 274 phrases wrong
-  for their window. On the 80 held-out phrases it read 3 wrong: an event anchor ("of the outage"),
-  an approximation after a comma ("maybe a little more"), and a condition with no time word
-  ("restricted to backup runs").
+- **It leaks on new wording.** The rule as measured, at the host app's commit `0d52b9b`
+  (2026-10-28), read none of the 274 phrases wrong for their window. On the 80 held-out phrases it
+  read 3 wrong: an event anchor ("of the outage"), an approximation after a comma ("maybe a little
+  more"), and a condition with no time word ("restricted to backup runs"). The reviewer reports that
+  the host app's current rule refuses those three. That is the list growing by three more phrases,
+  which is the point: each round adds what the last round missed.
 - **No list of time words sees a condition with no time word.** Every reader that can read a
   lookback read the 2 hours there, even behind the scan. Adding "restricted to" to a list fixes that
   phrase, not the next one.
@@ -110,7 +113,7 @@ execute, ask about everything else (§ 8.6), and show the person exactly what wi
 | `time/rowsBuild.ts · timeReadingRows`, `time/rows.ts · TimeReadingRow` | one `time-reading` row per mention; the "Always confirm" law lives here | the rows carry the interpretation; the law is unchanged |
 | `lib/saidByPerson.ts · isSaidByPerson` | the one gate for which message a person wrote | unchanged: only that message is read |
 | `tools/declare.ts · ToolPeriod`, `periodRule` | a period's forms and facts; every period argument carries an `askOrAssume` rule | gains `shapes` and `sampling` (§ 8.1) |
-| `semantics/coverage/search/types.ts · ToolSearch`, `SearchArgument` | the search's words: `source.said`, `subject.said`, `fixed[].said`, and `said` on filter and source values | the rule reads them; population arguments gain words; roles tell which arguments carry scope (§ 8.4, § 8.6) |
+| `semantics/coverage/search/types.ts · ToolSearch`, `SearchArgument` | the search's words: `source.said`, `subject.said`, `fixed[].said`, and `said` on filter and source values | the rule reads them; population arguments gain words; an explicit `inert` role is the only thing that keeps an argument out of the scope digest (§ 8.4, § 8.6) |
 | `time/windows.ts · isOpenForPerson` | a reading waits on the person: to confirm, a zone, words not read | also open: leftovers, a modifier, a recurrence, an event, an unsupported shape, an unaccounted word or relation |
 | `time/bind.ts · callWindowOf`, `time/rows.ts · CallWindowRow` | which window a call carries (`person`, `asked`, `sent`); refuses what no form holds | names the requested and the executed window as separate fields; records the default (§ 9) |
 | `core/agent/arguments/ask.ts · planAskFields`, `stages/argumentAsk.ts · windowPlanOf`, `tools/inputRequest.ts · applyInputResponse` | the one batch ask before dispatch, and its resume door | the confirmation of each call's scope rides this ask; no second approval path (§ 8.4) |
@@ -164,7 +167,7 @@ declares neither.
 | Recognizers-Text | complete meaning | **0** / 10 / 8 | **0** / 50 / 45 | **0** / 0 / 1 |
 | Duckling | complete meaning | 0 / 15 / 5 | 0 / 79 / 17 | 0 / 1 / 0 |
 | chrono-node | complete meaning | 0 / 18 / 0 | 0 / 95 / 0 | 0 / 1 / 0 |
-| the host app's rule | its own | 9 / 7 / 10 | 17 / 43 / 48 | 14 / 0 / 1 |
+| the host app's rule at its commit `0d52b9b` (2026-10-28), a historical baseline | its own | 9 / 7 / 10 | 17 / 43 / 48 | 14 / 0 / 1 |
 
 - **H23** ("over the last 2 hours, restricted to backup runs") asks: "restricted", "to", "backup"
   and "runs" sit in no relation the tool executes.
@@ -175,8 +178,11 @@ declares neither.
   (§ 8.4).
 - **The grammar's 8 held-out questions** are metrics the measured tool did not declare. With them
   declared there are none.
-- **The host app's rule** has three real held-out misses, and reads or defaults sampling and
-  current-state requests, which are right only if its tool executes them.
+- **The host app's rule, as measured** at its commit `0d52b9b` (2026-10-28), had three real held-out
+  misses, and reads or defaults sampling and current-state requests, which are right only if its
+  tool executes them. The reviewer reports that the host app's current rule refuses those three
+  cases. This bench did not rerun against it; the row is a historical baseline, not a claim about
+  the host app's accuracy today.
 - Duckling and chrono reach zero by asking almost everything.
 
 The full tables, the method and its limits are in the
@@ -238,7 +244,8 @@ a hash and a time, across every class, reported apart.
 - *Met by:* 80 phrases in 11 classes, fixed at 2026-10-28T23:33:15Z (SHA-256 `caec788a…`). Its first
   run was blind. One person wrote the set, the labels and the prototypes, and the rule was revised
   after the first run and again after the third review, so later rounds are not blind (§ 13).
-- *Tested by:* the next set is written by someone else, fixed the same way, before it is run.
+- *Tested by:* the next set is written by a fresh author who has not seen the rules, the scan or
+  the grammar (a fresh agent given only the task description), fixed the same way, before it is run.
 
 **R8. Two numbers, never merged.** Wrong readings and unnecessary clarifications are counted apart.
 - *Met by:* every table here and in the measurement page.
@@ -286,16 +293,23 @@ hashes and raw results.
 - *Tested by:* `--duckling-replay` re-scores the committed raw results to identical records.
 
 **R15. The confirmation is bound to what executes.** What the person confirms is exactly what runs:
-one call or an enumerated batch, its tool and declaration version, its scope-bearing arguments, its
+one call or an enumerated batch, its tool and declaration version, every argument the call sends, its
 executed bounds and zone, its sampling. If anything changes before dispatch, the person is asked
 again, or the call is refused. It never proceeds silently.
 - *Met by:* the scope digest (§ 8.4), filed on the existing `time-answer` row and checked at dispatch
-  in `timeLayer.ts · timeAtDispatch`; retry and resume reuse a confirmation only for an identical
-  digest.
-- *Tested by:* a changed filter, a changed sampling step, a changed tool, a new declaration version,
-  a call added to or removed from a confirmed batch, bounds moved past the tool's step, a retry, and a
-  resume — each either reuses an identical digest or asks again; with no one to ask, the call is
-  refused.
+  in `timeLayer.ts · timeAtDispatch`. **Every argument is scope-bearing by default:** the digest
+  covers every argument the call sends, except those a declaration explicitly marks `inert`. A tool
+  with no `Tool.search`, or a partial one, binds all of its arguments; no incomplete declaration is
+  refused, because the default makes it safe. Retry and resume reuse a confirmation only for an
+  identical digest.
+- *Tested by:* the bench's acceptance set, run as code
+  (`bench/time/interpretation/scripts/acceptance.mjs`, `npm run acceptance`): a tool with no
+  `Tool.search`, a confirmed call, then its customer or node argument changes before dispatch → the
+  batch ask fires again; the same argument marked `inert` → no re-ask; a partial declaration that
+  leaves an argument out → that argument still binds; a changed sampling step, a different tool, a
+  new declaration version, moved bounds, a call added to a confirmed batch, an identical retry, and a
+  changed call with no one to ask (refused). In the library, the same cases through the batch ask,
+  plus a resume.
 
 **R16. The requested window and the executed window are separate, everywhere.** In the
 interpretation, the record, the confirmation and the answer.
@@ -439,7 +453,7 @@ period: {
 | `rolling-lookback` | one duration ending now; no modifier, recurrence or event; nothing left over | yes |
 | `range` | one closed range, as today's readings resolve it | yes |
 | `day` | one calendar day | yes |
-| `current` | the current state ("right now", "at the moment"): the tool reads its latest values | yes, when declared |
+| `current` | the current state ("right now", "at the moment"): the tool reads what its declaration says it selects | yes, when declared |
 | `recurrence-filter`, `event-window`, `complement` | a tool that can keep part of a window | named, not built |
 
 - **Compatibility, narrowly.** When `shapes` is absent it is derived from `forms`, so an existing
@@ -448,7 +462,9 @@ period: {
   not byte-identical for an app that arms `.time()`; an app that does not arm it is unaffected.
 - **A request for the current state is a time request.** "right now", "currently", "at the moment"
   are never read as "no time" and never fall to the default window. A tool that declares `current`
-  reads its latest values; any other tool asks.
+  must say what it selects, in words the confirmation and the answer show:
+  `shapes: ['current'], current: { selects: 'the latest stored sample per node, which may be up to
+  one cadence stale' }`. "Latest" is never promised fresh. Any other tool asks.
 - **A lookback-only tool does not read exact calendar or clock ranges.** "yesterday", "from 8 to 9"
   or "this week" to a tool whose only shape is `rolling-lookback` are asked. Where the tool's default
   is declared changes nothing about that. Only a tool that declares and executes a `range` or `day`
@@ -492,8 +508,9 @@ as every ask sentence may (TQ7). The answer is judged by `checkTimeAnswer`, as t
 
 "Always confirm" (TQ29) is unchanged in v1. Every reading of a person's time words is confirmed
 before the first call that needs it, a clean "last 2 hours" included. A finite corpus, passed, does
-not show that arbitrary wording is understood. Skipping the confirmation for one shape is a question
-for v2 (§ 15), to be decided on evidence.
+not show that arbitrary wording is understood: a frozen test set passing is necessary, not
+sufficient. Skipping the confirmation for one shape is a question for v2 (§ 15), and v2 needs an
+independently written held-out set and field use.
 
 **What is confirmed.** One call, or an enumerated batch of calls, each shown with:
 
@@ -501,10 +518,11 @@ for v2 (§ 15), to be decided on evidence.
 - the **requested** window: the person's words and how they were read ("your words: 'the last 2
   hours'");
 - the **executed** window: the bounds and zone the call will send ("07:30–09:30 UTC");
-- every scope-bearing argument, in the tool's declared words: each argument whose search role is
-  anything but `inert` (`population`, `filter`, `source`, `period`, `query`, `match`, `cap`, `page`),
-  plus the sampling step. Only `inert` arguments, which change the bytes and not the ground, are left
-  out;
+- every argument the call sends, in the tool's declared words where it has them, plus the sampling
+  step. **Every argument is scope-bearing by default.** Only an argument the declaration explicitly
+  marks `inert` (`Tool.search` · `role: 'inert'`: it changes the bytes, not the ground) is left out.
+  A tool with no `Tool.search`, or a partial one, binds all of its arguments: the default makes an
+  incomplete declaration safe, and none is refused;
 - "no other condition".
 
 > I will read **memory per node** on **node 8**, sent as **07:30–09:30 UTC** (your words: "the last
@@ -515,9 +533,9 @@ prose. It rides the existing batch ask (`arguments/ask.ts · planAskFields`, `re
 resume door (`tools/inputRequest.ts · applyInputResponse`). There is no second approval system.
 
 **How it is bound.** Each confirmed call gets a **scope digest**: SHA-256 over a canonical JSON of
-the tool name, the tool's declaration version (a hash of its `period` and `search` declarations), its
-scope-bearing arguments as they will be sent, the executed bounds and zone, the sampling step, and the
-requested mention. The executed bounds in the digest are the asked range at the turn's clock, so a
+the tool name, the tool's declaration version (a hash of its `period` and `search` declarations),
+every bound argument as it will be sent (all but the explicitly `inert` ones), the executed bounds and
+zone, the sampling step (whatever role its argument carries), and the requested mention. The executed bounds in the digest are the asked range at the turn's clock, so a
 dispatch within the tool's step of that clock keeps the digest; past the step, the bounds are
 recomputed and the digest changes (the time design's drift law decides which). A batch's digest also
 covers its list of call digests, in order. The person's answer is filed on the existing `time-answer`
@@ -536,6 +554,13 @@ runs, the library recomputes the digest from the call it is about to send:
 
 Nothing proceeds silently.
 
+**Run as code.** The bench's acceptance set (`bench/time/interpretation/scripts/acceptance.mjs`,
+`npm run acceptance`) runs this law on a prototype of the digest: a tool with no `Tool.search`
+whose customer or node argument changes before dispatch asks again; the same argument marked
+`inert` does not; a partial declaration still binds what it left out; a changed sampling step, tool,
+declaration version or bounds asks again; a call added to a batch is a new batch; an identical
+retry runs; with no one to ask, a changed call is refused.
+
 **Reuse.** A confirmation is reused only for a call whose digest equals a confirmed one: the same call
 retried after an error (`resumeOnError`), the same call after a resume (`Agent.resume` keeps the
 turn's frozen clock), or a later call of the same turn with the identical scope. A changed call is a
@@ -553,8 +578,8 @@ says how finely to read inside the window. Recognising those words does not appl
 - a tool that does not declare it gets a question. The instruction is never dropped silently.
 
 No such declaration exists today. The search declaration's roles (`SearchRole`) have no sampling
-role; the step argument would be classified `inert` for coverage, but it is scope-bearing for the
-digest.
+role; for coverage the step argument would be classified `inert`, and the digest still covers the
+sampling step whatever role its argument carries (§ 8.4).
 
 ### 8.6 The complete-meaning rule: bounded interpretation
 
@@ -620,7 +645,7 @@ confirmation (§ 8.4) shows the person the target the call carries, and its dige
 | the words for a fixed qualifier, a filter value, a source value | `SearchFixed.said`, `SearchArgument.said` (filter and source roles only) | nothing new |
 | the words for a **metric or target** a population argument selects ("memory", "node") | no: `said` is refused on population arguments | `said` on population values, and `words` for the argument's own noun |
 | that a number after a target noun is that target's identifier ("node 40") | no | `identifiers: true` on that argument |
-| which arguments carry **scope** (for the digest) | `SearchArgument.role` | nothing new: every role except `inert` |
+| which arguments carry **scope** (for the digest) | `SearchArgument.role` | nothing new: every argument by default; only an explicit `inert` opts out, and a missing or partial `Tool.search` binds every argument |
 | whether the tool executes **sampling** | no | `period.sampling` (§ 8.5) |
 | the **shapes** it reads, `current` included | no (derived from forms) | `period.shapes` (§ 8.1) |
 | the closed classes and the relation table | — | library data, versioned like the reader, never tool data |
@@ -691,11 +716,19 @@ model's choice of arguments between the confirmation and the call.
 | A model proposal that invents a quote, a value, or hides a restriction | Verbatim quote check; the grammar's agreement; spans, leftovers and unaccounted words computed by the library; never `said` (§ 7.4). |
 | A restriction made of known words ("at CPU peaks", "requests > errors") | Bounded relations: a word or operator in no supported relation asks (§ 8.6). |
 | The model changes a call after the person confirmed it | The scope digest is checked at dispatch; a changed call asks again or is refused (§ 8.4). |
+| A tool with no `Tool.search`, or a partial one, leaving a customer or node argument out of the confirmation | Every argument the call sends is in the digest by default; only an explicit `inert` opts out. An incomplete declaration is not refused; the default makes it safe (§ 8.4, R15). |
 | A wrong reading that passes every check | The bound confirmation shows the executable scope before the read; the answer shows requested, sent and declared periods apart (§ 9). The corpus grows with each found case. |
 | A tool declaring words or shapes it does not honour | A declaration is a fact the tool owns, as `direction` is. Over-declaring words can only turn questions into reads for that tool; the result checks still compare what was read with what was sent. |
 | Long or hostile text (slow regular expressions, huge input) | The scan and the rule are linear, with no backtracking pattern; the reader keeps `MAX_MENTIONS`; text past a fixed length is not interpreted and asks. To be pinned by a timing test. |
 | The person's words leaking from the record | Quotes, leftovers and unaccounted words are the person's words, as quotes are today. They follow the run's redaction policy, like every row. The digest holds no text, only a hash. |
 | A third-party reader | No new runtime dependency in v1. An optional adapter loads lazily, at a pinned version. No reader sends text to a server. |
+
+**The baseline in this page.** The host app's rule compared against in § 4 and in the measurement
+page is the rule at the host app's commit `0d52b9b` (2026-10-28). The reviewer reports that the
+host app's current rule refuses the three held-out cases counted against it there ("of the
+outage", "restricted to backup runs", "maybe a little more"). This bench did not rerun against the
+current rule, which is the host app's side: the comparison is a historical baseline, not a claim
+about the host app's accuracy today.
 
 ## 12. Migration: the host app
 
@@ -753,8 +786,11 @@ again, not shifted (§ 8.4). That is the price of v1.
 - **Blind batches, written by someone else:** the current held-out set had one author, who also wrote
   the labels and the prototypes. The rule was revised after its first run and again after the third
   review, so neither later round is blind. Every release that changes the reader, the scan, the
-  grammar or the rule adds a new batch, written by a different person before the run, fixed by hash
-  and time, and never tuned against after its run.
+  grammar or the rule adds a new batch, written by a fresh author who has not seen the rules, the
+  scan or the grammar (a fresh agent given only the task description; the reviewers have seen them,
+  so not a reviewer) before the run, fixed by hash and time, and never tuned against after its run.
+- **The acceptance set.** The binding law of § 8.4 runs as code in the bench
+  (`scripts/acceptance.mjs`), beside the corpus.
 - **What the score cannot judge.** It compares windows only. Which target a call binds needs the
   call's arguments; those cases are marked `inspect`, and the bound confirmation carries them.
 
@@ -786,22 +822,29 @@ again, not shifted (§ 8.4). That is the price of v1.
 7. **The host app's default to `askOrAssume`:** reasonable, after approval. It does not make a
    lookback-only tool read clock or calendar ranges (§ 8.1, § 12).
 8. **The harness:** in this PR, before approval (§ 13).
-9. **The confirmation is bound** to the call that runs, by a scope digest checked at dispatch; any
-   change asks again or refuses (§ 8.4).
+9. **The confirmation is bound** to the call that runs, by a scope digest over every argument the
+   call sends (an explicit `inert` opts out; a missing or partial `Tool.search` binds everything),
+   checked at dispatch; any change asks again or refuses (§ 8.4).
 10. **Requested and executed windows** are separate fields in the interpretation, the record, the
     confirmation and the answer (§ 6, § 8.4, § 9).
 
-**Still open for the owner:**
+**Settled by the third review's qualifications:**
 
-1. **v2: may one shape skip the confirmation?** Only on evidence: an independently written held-out set
-   with zero wrong readings, and the rule in use.
-2. **The closed classes and the relation table.** Who reviews their content, and how a change to them
-   is gated.
-3. **The vocabulary declaration.** `said` on population values, `words` and `identifiers` on
-   population arguments (§ 8.6): this shape, or another?
-4. **The clause.** Keep the whole message as the clause in v1, at the measured cost in questions?
-5. **The current state.** Ask unless the tool declares `current`, as proposed in § 8.1, or another
-   policy?
-6. **A lookback after a long pause.** Ask again (this design), or keep today's "run and record
-   shifted" for lookback-only tools?
-7. **The next held-out set.** Who writes it, and when.
+11. **No shape skips the confirmation in v1.** A frozen test set passing is necessary, not
+    sufficient. v2 may revisit one shape only with an independently written held-out set at zero
+    wrong readings **and** field use (§ 8.4).
+12. **A tool that declares `current` says what it selects**, in words the confirmation and the
+    answer show, such as "the latest stored sample per node, which may be up to one cadence stale".
+    "Latest" is never promised fresh (§ 8.1).
+13. **The next blind set is written by a fresh author** who has not seen the rules, the scan or the
+    grammar: a fresh agent given only the task description. The reviewers have seen them, so not a
+    reviewer (§ 13).
+
+**The owner's proposed answers, still under review:**
+
+14. **The closed classes and the relation table** change only by a PR the independent reviewer
+    reviews, and such a PR must add no wrong readings on the frozen sets.
+15. **The vocabulary declaration** takes the proposed names: `said` on population values, `words` and
+    `identifiers` on population arguments (§ 8.6).
+16. **The clause** is the whole message in v1, at the measured cost in questions (§ 8.6).
+17. **A lookback after a long pause** is asked again, not run and recorded `shifted` (§ 8.4).

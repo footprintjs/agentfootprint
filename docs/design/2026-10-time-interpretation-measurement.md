@@ -88,6 +88,15 @@ binds. A row like "memory per node in the last hour, excluding node 5" is labell
 asks, and that counts as an unnecessary clarification. The review's target cases are marked `inspect`
 for the same reason. The design binds targets in the confirmation, not in this score.
 
+**The reference row** is the host app's own rule as it stood at the host app's commit `0d52b9b`
+(2026-10-28): its word scan with the library's reader. It is a historical baseline. The reviewer
+reports that the host app's current rule refuses the three held-out cases counted against the
+measured rule (H16, H23, H31). This bench did not rerun against the current rule, which is the host
+app's side, so no table here is a claim about the host app's accuracy today. The rule's module is the
+host app's private code, so it is not in the bench; the row was measured locally. Against the host
+app's own labels at that commit it scores 0 wrong readings and 0 unnecessary clarifications of 274,
+which checks this harness.
+
 ## 2. The complete-meaning rule, as measured
 
 It is bounded interpretation, not a proof of complete meaning. When one lookback is accepted, every
@@ -138,18 +147,21 @@ or the current state.
 | library grammar · strict + agree | 1 (1 + 0) | 0 | 17 | 53 | 9 |
 | library grammar · complete | **0** | 8 | 9 | 54 | 9 |
 | library grammar · complete + nouns | **0** | 0 | 17 | 54 | 9 |
-| host app rule (reference) | 9 (6 + 3) | 7 | 10 | 45 | 9 |
+| host app rule (historical: commit `0d52b9b`) | 9 (6 + 3) | 7 | 10 | 45 | 9 |
+
+*The host app row is the rule at its commit `0d52b9b` (2026-10-28), a historical baseline; the reviewer reports that its current rule refuses the three held-out cases counted against it (H16, H23, H31). Not rerun here.*
 
 - The grammar's 8 unnecessary clarifications under `declared-from-existing` are all metrics that
   profile does not declare. With the nouns declared, there are none.
-- The host app rule's 9 wrong readings are H16 ("of the outage"), H23 and H31 ("maybe a little more"),
+- The host app rule's 9 wrong readings (the rule at commit `0d52b9b`; the reviewer reports that its
+  current rule refuses H16, H23 and H31, which this bench did not rerun) are H16 ("of the outage"), H23 and H31 ("maybe a little more"),
   five sampling phrases it reads or defaults without the sampling, and H80 ("at the moment"), which it
   defaults. If its tool executes sampling or reads the current state, those six are right for that
   tool; the measured profile does neither.
 
 ### Held-out set by class (wrong readings / unnecessary clarifications / exact reads)
 
-| Class | n | grammar · complete | grammar · complete + nouns | englishTimeReader · complete | Recognizers · complete | host app rule |
+| Class | n | grammar · complete | grammar · complete + nouns | englishTimeReader · complete | Recognizers · complete | host app rule (historical) |
 |---|---|---|---|---|---|---|
 | negation and complement | 8 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
 | recurrence | 7 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
@@ -180,9 +192,11 @@ or the current state.
 | library grammar · value-only | 165 (90 + 75) | 0 | 91 | 0 | 18 |
 | library grammar · strict + agree | 0 | 15 | 77 | 165 | 17 |
 | library grammar · complete | **0** | 22 | 70 | 165 | 17 |
-| host app rule (reference) | 17 (11 + 6) | 43 | 48 | 148 | 18 |
+| host app rule (historical: commit `0d52b9b`) | 17 (11 + 6) | 43 | 48 | 148 | 18 |
 
-`complete + nouns` equals `complete` on this set. The host app rule's 17 wrong readings are all
+*The host app row is the rule at its commit `0d52b9b` (2026-10-28), a historical baseline; the reviewer reports that its current rule refuses the three held-out cases counted against it (H16, H23, H31). Not rerun here.*
+
+`complete + nouns` equals `complete` on this set. The host app rule's 17 wrong readings (the rule at commit `0d52b9b`) are all
 sampling or current-state rows (the same caveat); against its own labels it scores 0 and 0 of 274,
 which checks the harness. The grammar's 22 unnecessary clarifications are words nothing accounts for
 ("before you answer", "as I said earlier", "once more", "excluding node 5", "but not CPU", "without
@@ -196,7 +210,9 @@ the cache", "not reporting") and the slot and scope asks of the scan.
 | library grammar, englishTimeReader, Recognizers · strict + agree | 11 | 0 | 1 | 4 |
 | library grammar, englishTimeReader, Recognizers · complete (either profile) | **0** | 0 | 1 | 15 |
 | Duckling, chrono · complete | 0 | 1 | 0 | 15 |
-| host app rule (reference) | 14 (11 + 3) | 0 | 1 | 1 |
+| host app rule (historical: commit `0d52b9b`) | 14 (11 + 3) | 0 | 1 | 1 |
+
+*The host app row is the rule at its commit `0d52b9b` (2026-10-28), a historical baseline; the reviewer reports that its current rule refuses the three held-out cases counted against it (H16, H23, H31). Not rerun here.*
 
 | id | phrase | expected | grammar · strict + agree | grammar · complete + nouns | englishTimeReader · complete + nouns | Recognizers · complete + nouns |
 |---|---|---|---|---|---|---|
@@ -292,6 +308,11 @@ order of magnitude, not a benchmark. Sizes are the first round's prototype.
 - **One clock and one language.** English only; monitoring wording; a clock on a whole minute, which
   helps Duckling's minute-grain intervals.
 - **No model.** No paid model calls were made, so an LLM reader is not measured.
+- **The host app baseline is historical.** Its row is the rule at the host app's commit `0d52b9b`
+  (2026-10-28). The reviewer reports that the host app's current rule refuses the three held-out
+  cases counted against it (H16, H23, H31). This bench did not rerun against the current rule, which
+  is the host app's side; the row is a baseline for the library's rule, not a claim about the host
+  app's accuracy today.
 
 ## 7. The held-out phrases
 
