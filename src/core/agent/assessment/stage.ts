@@ -8,8 +8,9 @@
  *          at build from the agent's arms) — runs `assessAnswer` over them,
  *          and serves the result three ways: `answerAssessment` for
  *          PrepareFinal's `turn_end.answerAssessment`, one
- *          `agentfootprint.answer.assessed` event, and — under its own arm —
- *          one line for the person (`compose.ts` · `standingLineOf`).
+ *          `agentfootprint.answer.assessed` event, and — under its own arm,
+ *          for the standings its mode says it for — one line for the person
+ *          (`compose.ts` · `standingLineOf`, `standingLineSaid`).
  * Role:    core/ layer. Loaded through `import()` by the mount
  *          (`honesty/mounts.ts` · `startFinalBranch`) on the first armed
  *          answer — the optional-family law — so a plain agent's graph never
@@ -55,16 +56,22 @@ import {
   sourcesByReason,
   standingDisplayNames,
   standingLineOf,
+  standingLineSaid,
   type AnswerAssessmentData,
   type StandingAssumedValue,
+  type StandingLineWhen,
 } from './compose.js';
 
 /** What the mount hands the stage — build-time facts, never scope. */
 export interface AnswerStageDeps {
   /** The committed keys the fold reads — only those this agent's arms can write. */
   readonly reads: readonly string[];
-  /** `.answerLayer({ standingLine: true })` — compose the line for the person. */
-  readonly standingLine?: true;
+  /**
+   * `.answerLayer({ standingLine })` — compose the line for the person, in
+   * the answers its mode says it for (`compose.ts` · `standingLineSaid`;
+   * `standingLine: true` is `'always'`). Absent → no line.
+   */
+  readonly standingLine?: StandingLineWhen;
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
   readonly validated?: true;
   /**
@@ -139,7 +146,10 @@ export async function assessAnswerStage(
     iteration: scope.iteration as number,
     ...assessmentDataOf(assessed),
   });
-  if (deps.standingLine !== true) return;
+  // The line's mode decides whether THIS answer gets one — the data above went out either way.
+  if (deps.standingLine === undefined || !standingLineSaid(deps.standingLine, assessed.standing)) {
+    return;
+  }
   const data = assessmentDataOf(assessed);
   const assumed = await assumedValuesOf(data, record);
   // The app's words for the calls the reasons rest on — only tools that declare them.

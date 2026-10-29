@@ -306,10 +306,19 @@ export interface AgentOptions {
    * files two witness rows the fold reads (the evidence gate's clean pass, an
    * answer given before its declared steps finished). `{ standingLine: true }`
    * also appends one line to a PROSE answer — refused beside
-   * `.answerValidation()` and `.outputSchema()`. Prefer the builder's
+   * `.answerValidation()` and `.outputSchema()`; `{ standingLine: { when } }`
+   * appends it only for the standings the mode names (`'always'`,
+   * `'unless-consistent'`, `'not-sure-or-ask'` — `ask` in every mode), while
+   * the standing still travels as data. Prefer the builder's
    * `.answerLayer()`. Absent → the chart is byte-identical.
    */
-  readonly answerLayer?: boolean | { readonly standingLine?: boolean };
+  readonly answerLayer?:
+    | boolean
+    | {
+        readonly standingLine?:
+          | boolean
+          | { readonly when: 'always' | 'unless-consistent' | 'not-sure-or-ask' };
+      };
   /**
    * THE TIME LAYER'S CLOCK (`time/`) — every run declares its clock: a
    * zone (the run's `time.zone`, else this fallback; with neither the zone is

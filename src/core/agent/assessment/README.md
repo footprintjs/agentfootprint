@@ -70,11 +70,12 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
   (`AgentRunCheckpoint.turnNumber`, carried while a layer is armed) and from the
   restored ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`): a window
   strategy trims the stored history, and its count of user messages repeats.
-- **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` only, on
-  a PROSE answer only (refused beside `.answerValidation()` and `.outputSchema()` at
-  build). Appended after the limits separator by the one composer; beside
-  `.limitsTravelWithTheAnswer()` it names the assumed values itself and the "Assumed"
-  block is not appended too. An assumed value is printed only in the tool's own view.
+- **The line** — `compose.ts` · `standingLineOf`, under `{ standingLine: true }` (or a
+  mode, below) only, on a PROSE answer only (refused beside `.answerValidation()` and
+  `.outputSchema()` at build, in every mode). Appended after the limits separator by
+  the one composer; beside `.limitsTravelWithTheAnswer()` it names the assumed values
+  itself and the "Assumed" block is not appended too — the block is appended whenever
+  no line was. An assumed value is printed only in the tool's own view.
 - **THE EQUALITY LAW** — the in-run standing equals `assessAnswer()` over the same
   recording read afterwards: one pure function over the same committed rows, at the one
   moment nothing after it can change them. Pinned by
@@ -84,6 +85,46 @@ const text = await agent.run({ message: 'Which ports on switch A are down?' });
   configurations.
 
 The runnable example is `examples/features/76-answer-layer.ts`.
+
+### When the line is said — `standingLine: { when }`
+
+**The rule.** `standingLine` is `true` (= `{ when: 'always' }`) or `{ when }`:
+
+| `when` | The line is appended for | Left off for |
+|---|---|---|
+| `'always'` | every standing | — |
+| `'unless-consistent'` | known · not sure · ask · not assessed | consistent |
+| `'not-sure-or-ask'` | not sure · ask | consistent · not assessed · known |
+
+`ask` is said in every mode. The mode decides ONE thing, in ONE place
+(`compose.ts` · `standingLineSaid`, asked by the stage): whether this answer gets
+the line. Everything else is the same in every mode — the standing travels as data
+(`turn_end.answerAssessment`, `agentfootprint.answer.assessed`, `agent.assessment()`),
+the limits block (`.limitsTravelWithTheAnswer()`) is appended whether or not the line
+is, and the answer the run returns, emits on `turn_end` and saves to memory is one
+string: memory keeps exactly what was delivered, a line only when one was appended. With
+nothing to append, there is no separator — the answer is the model's, byte for byte.
+
+**Why.** A line on every reply becomes boilerplate readers learn to skip — which
+weakens the "not sure" line on the reply where it matters — and "Not assessed" on a
+correct answer reads as doubt, though it only says nothing was checkable.
+
+**What silence means — say it to your users.** No line is never a check. Under
+`'not-sure-or-ask'` an answer without a line means no reason fired, and that includes
+"nothing could be checked" (`not-assessed`). The data still says which: read
+`standing` and `checked`. An app that hides BOTH the line and the data leaves the
+person unable to tell "checked" from "not assessed"; the material limitations — the
+limits block — stay visible in every mode.
+
+```ts
+Agent.create({ provider, model })
+  .tool(listDownPorts)
+  .limitsTravelWithTheAnswer()
+  .answerLayer({ standingLine: { when: 'not-sure-or-ask' } })
+  .build();
+// rows came back → 'Port eth1/7 on switch A is down.'  (consistent: no line; turn_end still says so)
+// [] came back   → '…\n\n---\n\nNot sure — a lookup came back empty without saying what it searched.'
+```
 
 ## The values, and the words
 
