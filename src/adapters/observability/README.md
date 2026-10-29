@@ -60,7 +60,10 @@ file are not coordinated either.
   `maxBatchSegments` to its whole part (what `splice` took before) and
   refuses, by name, a value below 1 — it used to send empty puts in a loop.
 - A delivery that never settles holds the queue, and `drain()` with it.
-  Nothing can cancel an in-flight write.
+  Nothing can cancel an in-flight write. The deadline belongs to the one
+  caller that must finish: `agent.shutdown({ timeoutMs })`
+  (`strategies/flushDeadline.ts`) stops waiting after 30 s by default and
+  names the sink still flushing — still delivering, or stuck.
 
 ```ts
 const outbox = createOutbox<string>({

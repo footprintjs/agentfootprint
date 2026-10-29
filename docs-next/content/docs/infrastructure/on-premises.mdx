@@ -302,7 +302,10 @@ Four things it is honest about:
   in flight — the price of keeping telemetry out of agent-loop latency.
   `agent.shutdown()` flushes, as do the handle and a closing `standingAgent`.
   A flush waits for a write already in flight, and settles every event accepted
-  before it was called: written, or dropped and reported.
+  before it was called: written, or dropped and reported. `agent.shutdown()`
+  waits for it under a deadline (`timeoutMs`, 30 s by default): a write still in
+  flight then — still delivering, or stuck on a hung mount — is reported by name
+  through `onError`, and the shutdown goes on.
 - **Rotation is ONE generation.** With `maxBytes` set, a batch that would cross
   the ceiling renames the file to `<path>.1`, replacing any previous `.1`, and
   starts fresh. No `.2`, no compression, no schedule, no cross-process
