@@ -25,7 +25,8 @@ node bench/time-checks/run.mjs --rescore bench/time-checks/runs/<dir>   # re-rea
 | `rule.mjs` | `RULE.md` as code, so the verdict is computed |
 | `run.mjs` | the command: shifts the clock, loads both builds, interleaves the arms under a seeded shuffle, enforces the cap, writes `results.json`, `report.md` and `raw/` |
 
-Paid runs are committed under `runs/`.
+Paid runs are committed under `runs/`. Their `config` names the reference build as `<scratch>/<folder>`
+(or a path inside the repo), never an absolute path of the machine that ran it (`bench/recordedDir.mjs`).
 
 ## The pause/shift follow-up (`RULE-shift.md`, rule `time-rule-shift`)
 

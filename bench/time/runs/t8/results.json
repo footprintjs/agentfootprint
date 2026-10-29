@@ -22,7 +22,7 @@
       "realStart": "2026-09-30T21:42:53.096Z",
       "offsetMs": 757026904
     },
-    "baseline": "/private/tmp/claude-501/-Users-sanjay-github-footprintjs-footPrint/a73c4937-45ef-4456-884b-db03b64c897d/scratchpad/timeimpl2/t8base",
+    "baseline": "<scratch>/timeimpl2/t8base",
     "concurrency": 4,
     "maxIterations": 6,
     "maxTokens": 1024,
