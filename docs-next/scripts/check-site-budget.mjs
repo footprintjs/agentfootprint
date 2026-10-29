@@ -30,7 +30,11 @@ const ROUTES = [
   {
     name: 'context story',
     file: 'context-engineering/index.html',
-    limits: { js: 225_000, css: 25_000, html: 45_000, requests: 21 },
+    // RAISED 2026-10-29 (context story modern JS gzip 225_000 -> 230_000), for the
+    // next 16.3.8 -> 16.4.3 security bump (Dependabot alerts 71-73): the route
+    // measured 225.7 KB with EXPORT=true. 230_000 is about 2% over. Owner-approved
+    // raise; cleanup planned. Every other limit holds.
+    limits: { js: 230_000, css: 25_000, html: 45_000, requests: 21 },
   },
   {
     name: 'docs',
