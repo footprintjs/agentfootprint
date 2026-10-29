@@ -284,8 +284,16 @@ export interface McpClientOptions {
    * a request with no response, or one accepted over HTTP whose JSON-RPC
    * answer never came — and then fails, fails as "may have run"
    * (footprintjs's `UnknownEffectError`, its final error as the `cause`).
-   * Under `'compatibility'` the caller sees the error it always did. Ignored
-   * for `stdio`, which has no retry series.
+   * Under `'compatibility'` the caller sees the error it always did.
+   *
+   * `'app-authorized'` needs each request matched to its call and each answer
+   * seen. A connection that cannot give both refuses the call BEFORE it is
+   * sent, with `McpReplayUnavailableError` and a typed `reason`: an MCP SDK
+   * whose `connect` replaces the transport's `onmessage` handler
+   * (`'answers-unobserved'`), one that drops the params' `_meta`
+   * (`'request-unmatched'`), or a transport whose requests the library cannot
+   * watch, such as `stdio` (`'requests-unwatched'`). Under `'compatibility'`,
+   * `stdio` ignores it: it has no retry series.
    */
   readonly replay?: McpReplayOptions;
 

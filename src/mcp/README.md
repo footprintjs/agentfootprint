@@ -53,12 +53,15 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a
   transport fetch that already retries is joined, never wrapped.
-- `requestLedger.ts`, `seriesEvidence.ts`, `callLifetime.ts` — which dispatched
-  call a request belongs to, that request's series written down for the call's
-  run, and the call's own lifetime: what cancels it, what its settling stops,
-  and the "may have run" failure.
+- `requestLedger.ts`, `callMarker.ts`, `seriesEvidence.ts`, `callLifetime.ts` —
+  which dispatched call a request belongs to (by a private `_meta` marker the
+  transport strips), that request's series written down for the call's run, and
+  the call's own lifetime: what cancels it, what its settling stops, and the
+  "may have run" failure.
 - `replay.ts` — who may send a tool call again (the app's declaration, one
   permission rule) and what is known of a series' effect.
+- `replayUnavailable.ts` — what `'app-authorized'` needs of a connection, and the
+  typed refusal (`McpReplayUnavailableError`) when the connection cannot give it.
 - `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
   footprintjs's own helpers (same names and laws) until a release ships them.
 - `toolExtras.ts` — our own declarations, carried over MCP.
@@ -75,15 +78,18 @@ The retry series is the one retry owner, and it runs inside the transport's
 `fetch` — built before any run, handed only a serialized body. A call the agent
 dispatched still gets its request's attempts in its own run: the dispatcher puts
 an internal port on the call's context (`tools/requestEvidence.ts`), the MCP tool
-keys a ticket by the request's params OBJECT, the watched transport binds it to
-the JSON-RPC id the SDK assigned, and the series claims it from its own body.
-Identity at every hop, never content: two calls with the same arguments, or two
-runs on one client, cannot claim each other's request, and nothing is added to
-the wire. The series files ONE `agentfootprint.tools.request_attempts` when the
-request ends — and, for a cancellation, the moment it lands. Every request the
-series sent is a row, or counted in `omitted`. One cut in flight is a `cut` row,
-`remote: 'unknown'`: it was sent, and the server may have run it — a cut is never
-recorded as not run. A request never sent has no row.
+puts a library-private marker in its request's `_meta` (`callMarker.ts`), the
+watched transport takes the marker out again and binds the call to the JSON-RPC
+id the SDK assigned, and the series claims it from its own body. The marker, not
+the params object, is what ties the request to the call, so an SDK that copies
+the params is still matched. Never content: two calls with the same arguments,
+or two runs on one client, cannot claim each other's request, and the server
+receives the bytes it always did. The series files ONE
+`agentfootprint.tools.request_attempts` when the request ends — and, for a
+cancellation, the moment it lands. Every request the series sent is a row, or
+counted in `omitted`. One cut in flight is a `cut` row, `remote: 'unknown'`: it
+was sent, and the server may have run it — a cut is never recorded as not run. A
+request never sent has no row.
 
 Cancellation never waits on attribution (`callLifetime.ts`): the call's
 `ctx.signal` and the client's reach the SDK request while the call runs, and the
@@ -180,6 +186,40 @@ accepted and never carry it). Then:
 
 Under `'compatibility'` the caller sees the error it always did; the record still
 says the effect is unknown and names the policy's assumption.
+
+**What `'app-authorized'` needs of a connection** (`replayUnavailable.ts`). The
+rule above rests on two things the library must establish for every call, never
+assume: its request is matched to the call, and its answer is seen. When either is
+missing, the call is refused BEFORE it is sent, with `McpReplayUnavailableError`
+(`sent: false`) and a typed `reason`:
+
+| `reason` | What is missing | When |
+|---|---|---|
+| `'answers-unobserved'` | The `initialize` answer never passed the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it (SDK 1.10 does) |
+| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta` |
+| `'requests-unwatched'` | The library cannot watch the transport's requests at all | `stdio`, or a transport whose `send` cannot be wrapped |
+
+**Why.** Without them, a request the server accepted and never answered would
+reach the caller as a plain timeout: the strict contract, silently weakened. A
+refusal says so instead, and nothing reaches the server. `'compatibility'` asks
+none of this and behaves as before: it never treats an unwatched response as
+unanswered.
+
+An answer's watch ends, by its request id, when the answer arrives, when the SDK
+cancels the request, when the call settles (found by its marker) or when the client
+closes. It never ends when only the HTTP send finished: a 202 or a stream can still
+carry the answer later.
+
+```ts
+try {
+  await tool.execute(args, ctx);
+} catch (error) {
+  if (error instanceof McpReplayUnavailableError) {
+    // Nothing was sent. error.reason says what the connection cannot give;
+    // keep this server under policy: 'compatibility', or upgrade the MCP SDK.
+  }
+}
+```
 
 ```ts
 const orders = await mcpClient({

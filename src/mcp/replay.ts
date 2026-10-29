@@ -52,7 +52,10 @@
  *       `unknown`; a call that genuinely lacked an answer somewhere — an
  *       attempt with no response, or a request accepted over HTTP whose
  *       JSON-RPC answer never came — and then fails, fails with
- *       `UnknownEffectError`, its final error the cause.
+ *       `UnknownEffectError`, its final error the cause. That needs each
+ *       request matched to its call and each answer seen; a connection that
+ *       cannot give both refuses the call before it is sent
+ *       (`replayUnavailable.ts`), so the contract never silently weakens.
  *
  * Under both, the adapter the app chose retries its own refusal within the
  * budget — AgentCore's session-busy reply — as the ADAPTER's policy, on an

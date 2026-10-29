@@ -68,6 +68,7 @@ import {
 } from './throttleRetry.js';
 import { RequestLedger } from './requestLedger.js';
 import { openCall } from './callLifetime.js';
+import { McpReplayUnavailableError, unavailableBeforeSending } from './replayUnavailable.js';
 import {
   needsSeries,
   replayDeclarationOf,
@@ -118,7 +119,8 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
   // The app's replay declaration — who may send a tool call again — read and
   // checked once, here, before anything connects (`replay.ts`).
   const replay = replayDeclarationOf(opts.replay, `mcpClient[${name}]`);
-  const { connection, ledger } = await openConnection(opts, replay);
+  const strict = replay.policy === 'app-authorized';
+  const { connection, ledger } = await openConnection(opts, replay, name);
   const unlisted = new Set<string>();
 
   // Tool cache so consumers calling `.tools()` more than once don't
@@ -142,7 +144,7 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
       : await connection.listTools();
     noteUnlisted(replay, listed.tools, name, unlisted);
     return listed.tools.map((t) =>
-      wrapMcpTool(name, connection, t, opts.signal, resultMode, ledger),
+      wrapMcpTool(name, connection, t, opts.signal, resultMode, ledger, strict),
     );
   };
 
@@ -162,7 +164,12 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
       if (closed) return;
       closed = true;
       cache = null;
-      await connection.close();
+      try {
+        await connection.close();
+      } finally {
+        // Nothing this connection sent is awaited any more, however it closed.
+        ledger?.close();
+      }
     },
   };
 }
@@ -187,6 +194,7 @@ interface OpenConnection {
 async function openConnection(
   opts: McpClientOptions | McpConnectionOptions,
   replay: ReplayDeclaration,
+  name: string,
 ): Promise<OpenConnection> {
   if (opts.connection !== undefined) return { connection: opts.connection };
   if (opts._client !== undefined) return { connection: opts._client };
@@ -200,6 +208,7 @@ async function openConnection(
     opts.retryOnThrottle,
     opts.sdk,
     replay,
+    name,
   );
 }
 
@@ -212,6 +221,7 @@ async function resolveClient(
   retryOnThrottle?: RetryOnThrottle,
   sdk?: McpSdk,
   replay?: ReplayDeclaration,
+  name = 'mcp',
 ): Promise<OpenConnection> {
   if (sdk !== undefined) assertSdk(sdk, transport.transport);
   const mod: McpSdkExports = sdk ?? loadClientModule();
@@ -220,7 +230,7 @@ async function resolveClient(
     capabilities: {},
   });
 
-  const built = await buildTransport(transport, retryOnThrottle, sdk, replay);
+  const built = await buildTransport(transport, retryOnThrottle, sdk, replay, name);
   // Same rule as callTool: options ride beside the transport, never inside it.
   if (signal) await client.connect(built.transport, { signal });
   else await client.connect(built.transport);
@@ -292,6 +302,7 @@ async function buildTransport(
   retryOnThrottle?: RetryOnThrottle,
   sdk?: McpSdk,
   replay?: ReplayDeclaration,
+  name = 'mcp',
 ): Promise<BuiltTransport> {
   if (t.transport === 'stdio') {
     // Deliberately NOT served by `sdk`: stdio spawns a subprocess, so it can
@@ -353,7 +364,12 @@ async function buildTransport(
     retryOnThrottle === false && replay !== undefined && needsSeries(replay)
       ? seriesWithoutThrottle(inner)
       : retryingFetch(inner, retryOnThrottle);
-  const ledger = new RequestLedger();
+  // Under 'app-authorized' the ledger refuses a request it cannot match to its
+  // call, and awaits each matched request's answer (`requestLedger.ts`).
+  const ledger = new RequestLedger({
+    server: name,
+    strict: replay?.policy === 'app-authorized',
+  });
   if (t.transport === 'gateway') {
     // The consumer's own `fetch` (9.32.0) goes UNDERNEATH the vending, not
     // beside it: `createVendingFetch` resolves the credential, applies it to
@@ -453,6 +469,7 @@ function wrapMcpTool(
   signal?: AbortSignal,
   resultMode?: McpClientOptions['resultMode'],
   ledger?: RequestLedger,
+  strict = false,
 ): Tool {
   const tool: Tool = {
     schema: {
@@ -496,23 +513,32 @@ function wrapMcpTool(
         ...(ctx?.time !== undefined && { _meta: callMetaOf(ctx.time) }),
       };
       // The call's lifetime (`callLifetime.ts`): its context's signal and the
-      // client's cancel the SDK request while it runs; a call the agent
-      // dispatched issues a ticket keyed by THIS params object — the one the
-      // SDK hands the transport — so the retry series that sends it files its
-      // attempts into the call's run; and however the call settles, a series
-      // still sending is cut, inside the call. Nothing is added to the request.
+      // client's cancel the SDK request while it runs; the call puts a private
+      // marker in its params' `_meta` (`call.params`), which ties the request
+      // the SDK sends to this call — through any copy the SDK makes — so the
+      // retry series that sends it files its attempts into the call's run; and
+      // however the call settles, a series still sending is cut, inside the
+      // call. The transport takes the marker out: the server receives the
+      // request it always did.
       //
       // How it settles is its verdict: `completed` when the server answered and
       // not with an error (a result it then cannot decode still completed).
       // Under 'app-authorized', a call that genuinely lacked an answer somewhere
       // and does not complete fails as "may have run"; a received refusal or
-      // error is delivered as it came (`callLifetime.ts`).
+      // error is delivered as it came (`callLifetime.ts`). That contract needs
+      // each request matched to its call and each answer seen: a connection
+      // that cannot establish both refuses the call here, before anything is
+      // sent (`replayUnavailable.ts`).
+      const unavailable = strict ? unavailableBeforeSending(ledger) : undefined;
+      if (unavailable !== undefined) {
+        throw new McpReplayUnavailableError(unavailable, serverName, mcp.name);
+      }
       const call = openCall(params, ctx, signal, ledger, serverName);
       let verdict: CallVerdict = 'failed';
       try {
         const result = call.signal
-          ? await connection.callTool(params, undefined, { signal: call.signal })
-          : await connection.callTool(params);
+          ? await connection.callTool(call.params, undefined, { signal: call.signal })
+          : await connection.callTool(call.params);
         verdict = isToolError(result) ? 'tool-error' : 'completed';
         return readToolResult(result, mcp.name, serverName, resultMode);
       } catch (error) {

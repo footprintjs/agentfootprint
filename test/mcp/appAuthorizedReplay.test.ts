@@ -45,6 +45,13 @@
  *   R16 Scenario — mandatory test 1's wiring control: the first request times
  *                  out, the declared retry would pass the deadline, so ONE
  *                  request is sent; one unknown attempt, no invented row
+ *   R17 Security — strict mode establishes both answer observation and the
+ *                  request/call match, or refuses before sending: an SDK that
+ *                  replaces the transport's handler, one that rebuilds the
+ *                  params, a transport it cannot watch; an SDK that COPIES the
+ *                  params is matched by the marker; compatibility is unchanged
+ *   R18 Boundary — an unanswered watch never outlives its call: repeated
+ *                  timeouts, cancellations and a close leave nothing behind
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -54,12 +61,18 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 
 import { Agent, type Tool, type ToolExecutionContext } from '../../src/index.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
-import { gatewayTransport, mcpClient } from '../../src/tool-providers/index.js';
+import {
+  gatewayTransport,
+  mcpClient,
+  McpReplayUnavailableError,
+} from '../../src/tool-providers/index.js';
 import { agentCoreRuntimeMcpTransport } from '../../src/adapters/mcp/agentcoreRuntime/transport.js';
 import { SESSION_BUSY_DOCUMENTATION } from '../../src/adapters/mcp/agentcoreRuntime/sessionBusy.js';
 import { staticTokens } from '../../src/identity/staticTokens.js';
 import { recordRun } from '../../src/recorders/observability/recordRun.js';
-import type { McpClient, McpReplayOptions, McpSdk } from '../../src/mcp/index.js';
+import type { McpClient, McpReplayOptions, McpReplayPolicy, McpSdk } from '../../src/mcp/index.js';
+import { RequestLedger } from '../../src/mcp/requestLedger.js';
+import { unavailableBeforeSending } from '../../src/mcp/replayUnavailable.js';
 import {
   COMPATIBILITY,
   permit,
@@ -1333,6 +1346,418 @@ describe('app-authorized replay — R16 a timeout, and the declared retry would 
     }
   });
 });
+
+// ─── R17 / R18 what an MCP SDK may do between `callTool` and the wire ──
+
+type CallToolArgs = Parameters<Client['callTool']>;
+
+/** The real SDK, with only `callTool`'s request timeout shortened (the injected `sdk` seam). */
+class QuickClient extends Client {
+  override callTool(...[params, schema, options]: CallToolArgs) {
+    return super.callTool(params, schema, { ...options, timeout: 60 });
+  }
+}
+
+/** Copies the params before sending them. The call's marker survives a copy. */
+class CopyingClient extends QuickClient {
+  override callTool(...[params, schema, options]: CallToolArgs) {
+    return super.callTool(structuredClone(params), schema, options);
+  }
+}
+
+/** Rebuilds the params and drops their `_meta`: nothing ties the request to its call. */
+class RebuildingClient extends QuickClient {
+  override callTool(...[params, schema, options]: CallToolArgs) {
+    return super.callTool({ name: params.name, arguments: params.arguments }, schema, options);
+  }
+}
+
+/** Connects the way SDK 1.10 did: its handler REPLACES the transport's `onmessage` instead of keeping it. */
+class ReplacingClient extends QuickClient {
+  override async connect(...[transport, options]: Parameters<Client['connect']>) {
+    (transport as { onmessage?: unknown }).onmessage = undefined;
+    return super.connect(transport, options);
+  }
+}
+
+/** A transport whose `send` cannot be wrapped: the library cannot watch its requests. */
+class SealedTransport extends StreamableHTTPClientTransport {
+  constructor(...args: ConstructorParameters<typeof StreamableHTTPClientTransport>) {
+    super(...args);
+    const send = this.send.bind(this);
+    Object.defineProperty(this, 'send', { value: send, configurable: false, writable: true });
+  }
+}
+
+/** A client over `endpoint` with the given SDK classes and replay policy. */
+function over(
+  endpoint: Endpoint,
+  SdkClient: typeof Client,
+  policy: McpReplayPolicy,
+  Transport: typeof StreamableHTTPClientTransport = StreamableHTTPClientTransport,
+): Promise<McpClient> {
+  return mcpClient({
+    name: 'tickets',
+    sdk: { Client: SdkClient, StreamableHTTPClientTransport: Transport } as unknown as McpSdk,
+    transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+    retryOnThrottle: { baseDelayMs: 1, jitter: 'none' },
+    replay: { policy },
+  });
+}
+
+/** The one tool's outcome: its result, or what it threw. */
+async function outcomeOf(client: McpClient): Promise<unknown> {
+  const [tool] = await client.tools();
+  return (tool as Tool).execute({ q: 'printer' }, BARE).then(
+    (result) => result,
+    (error: unknown) => error,
+  );
+}
+
+const accepted = (): Response => new Response(null, { status: 202 });
+const rpcError = (id: unknown): Response =>
+  json({
+    jsonrpc: '2.0',
+    id,
+    error: { code: -32000, message: 'The requested operation was refused' },
+  });
+const codeOf = (error: unknown): unknown => (error as { readonly code?: unknown }).code;
+const causeCodeOf = (error: unknown): unknown =>
+  codeOf((error as { readonly cause?: unknown }).cause);
+
+describe('app-authorized replay — R17 strict mode establishes what it needs, or refuses before sending', () => {
+  it("an SDK whose connect replaces the transport's handler (SDK 1.10): refused before sending — `answers-unobserved`", async () => {
+    const endpoint = server(({ id }) => answered(id));
+    const client = await over(endpoint, ReplacingClient, STRICT);
+    try {
+      const failure = await outcomeOf(client);
+      expect(failure).toBeInstanceOf(McpReplayUnavailableError);
+      expect(failure).toMatchObject({
+        reason: 'answers-unobserved',
+        server: 'tickets',
+        tool: 'search_tickets',
+        sent: false,
+        code: 'ERR_MCP_REPLAY_UNAVAILABLE',
+      });
+      expect(endpoint.calls(), 'nothing reached the server').toBe(0);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('the same SDK under compatibility: an answer, a JSON-RPC error and an unanswered 202 reach the caller as they always did', async () => {
+    const replies: ReadonlyArray<(call: Received) => Response> = [
+      ({ id }) => answered(id),
+      ({ id }) => rpcError(id),
+      () => accepted(),
+    ];
+    const outcomes: unknown[] = [];
+    for (const reply of replies) {
+      const endpoint = server(reply);
+      const client = await over(endpoint, ReplacingClient, 'compatibility');
+      try {
+        outcomes.push(await outcomeOf(client));
+        expect(endpoint.calls()).toBe(1);
+      } finally {
+        await client.close();
+      }
+    }
+    const [answer, error, timeout] = outcomes;
+    expect(answer).toBe('ticket-42');
+    for (const failure of [error, timeout]) {
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+      expect(failure).not.toBeInstanceOf(McpReplayUnavailableError);
+    }
+    expect(codeOf(error)).toBe(-32000);
+    expect(codeOf(timeout)).toBe(-32001);
+  });
+
+  it('an SDK that COPIES the params is matched by the marker: an unanswered 202 fails as "may have run", the timeout its cause', async () => {
+    const endpoint = server(() => accepted());
+    const client = await over(endpoint, CopyingClient, STRICT);
+    try {
+      const failure = await outcomeOf(client);
+      expect(failure).toBeInstanceOf(UnknownEffectError);
+      expect(causeCodeOf(failure)).toBe(-32001);
+      // The run's record is attributed too, through the copy.
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-copied')));
+      expect(evidence.end).toMatchObject({ attempts: 1, effect: 'unknown', mayHaveRun: true });
+      // The marker never reached the server.
+      expect(endpoint.received.map((r) => r.body).join('')).not.toContain(
+        'agentfootprint/call-ref',
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('copied params, the controls: an answer returns normally, a JSON-RPC error is delivered as it came', async () => {
+    const outcomes: unknown[] = [];
+    for (const reply of [({ id }: Received) => answered(id), ({ id }: Received) => rpcError(id)]) {
+      const endpoint = server(reply);
+      const client = await over(endpoint, CopyingClient, STRICT);
+      try {
+        outcomes.push(await outcomeOf(client));
+      } finally {
+        await client.close();
+      }
+    }
+    const [answer, error] = outcomes;
+    expect(answer).toBe('ticket-42');
+    expect(error).not.toBeInstanceOf(UnknownEffectError);
+    expect(codeOf(error)).toBe(-32000);
+  });
+
+  it('an SDK that rebuilds the params without their `_meta`: refused at the transport — `request-unmatched`, nothing sent', async () => {
+    const endpoint = server(({ id }) => answered(id));
+    const client = await over(endpoint, RebuildingClient, STRICT);
+    try {
+      const failure = await outcomeOf(client);
+      expect(failure).toBeInstanceOf(McpReplayUnavailableError);
+      expect(failure).toMatchObject({ reason: 'request-unmatched', tool: 'search_tickets' });
+      expect(endpoint.calls(), 'nothing reached the server').toBe(0);
+    } finally {
+      await client.close();
+    }
+    // Under compatibility the same SDK sends as it always did.
+    const lenient = server(({ id }) => answered(id));
+    const compatible = await over(lenient, RebuildingClient, 'compatibility');
+    try {
+      expect(await outcomeOf(compatible)).toBe('ticket-42');
+    } finally {
+      await compatible.close();
+    }
+  });
+
+  it('a transport whose requests cannot be watched: refused before sending — `requests-unwatched`; under compatibility it works as before', async () => {
+    const endpoint = server(({ id }) => answered(id));
+    const client = await over(endpoint, QuickClient, STRICT, SealedTransport);
+    try {
+      const failure = await outcomeOf(client);
+      expect(failure).toBeInstanceOf(McpReplayUnavailableError);
+      expect(failure).toMatchObject({ reason: 'requests-unwatched' });
+      expect(endpoint.calls()).toBe(0);
+    } finally {
+      await client.close();
+    }
+    const lenient = server(({ id }) => answered(id));
+    const compatible = await over(lenient, QuickClient, 'compatibility', SealedTransport);
+    try {
+      expect(await outcomeOf(compatible)).toBe('ticket-42');
+    } finally {
+      await compatible.close();
+    }
+  });
+
+  it('the readiness rule, as a table: a watched connection whose initialize answer was seen is ready', () => {
+    expect(unavailableBeforeSending(undefined)).toBe('requests-unwatched');
+    expect(unavailableBeforeSending({ answersObserved: false })).toBe('answers-unobserved');
+    expect(unavailableBeforeSending({ answersObserved: true })).toBeUndefined();
+  });
+
+  it('the refusal names the server and the tool, never an argument', async () => {
+    const endpoint = server(({ id }) => answered(id));
+    const client = await over(endpoint, ReplacingClient, STRICT);
+    try {
+      const [tool] = await client.tools();
+      const failure = await (tool as Tool).execute({ q: 'SECRET-ARGUMENT-VALUE' }, BARE).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(String((failure as Error).message)).not.toContain('SECRET-ARGUMENT-VALUE');
+      expect(JSON.stringify(failure)).not.toContain('SECRET-ARGUMENT-VALUE');
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+describe('app-authorized replay — R18 an unanswered watch never outlives its call', () => {
+  /** Every ledger `mcpClient` builds from here on, in order. */
+  function ledgersBuilt(): RequestLedger[] {
+    const built: RequestLedger[] = [];
+    const watch = RequestLedger.prototype.watch;
+    vi.spyOn(RequestLedger.prototype, 'watch').mockImplementation(function <T extends object>(
+      this: RequestLedger,
+      transport: T,
+    ): T | undefined {
+      built.push(this);
+      return watch.call(this, transport) as T | undefined;
+    });
+    return built;
+  }
+
+  it('repeated timeouts and cancellations leave nothing behind once every call settled — plain or copied params, either policy', async () => {
+    const built = ledgersBuilt();
+    for (const SdkClient of [QuickClient, CopyingClient]) {
+      for (const policy of [STRICT, 'compatibility'] as const) {
+        const endpoint = server(() => accepted());
+        const client = await over(endpoint, SdkClient, policy);
+        const ledger = built.at(-1) as RequestLedger;
+        try {
+          const [tool] = await client.tools();
+          // Four calls the server accepted and never answered: the SDK times each out.
+          for (let i = 0; i < 4; i += 1) {
+            await (tool as Tool).execute({ q: 'printer' }, BARE).catch(() => undefined);
+          }
+          // Two more, cancelled by their caller after the server accepted them.
+          for (let i = 0; i < 2; i += 1) {
+            const controller = new AbortController();
+            const ctx = {
+              toolCallId: `tc-cancel-${i}`,
+              iteration: 1,
+              signal: controller.signal,
+            } as unknown as ToolExecutionContext;
+            const settled = (tool as Tool).execute({ q: 'printer' }, ctx).catch(() => undefined);
+            await until(() => endpoint.calls() === 5 + i);
+            controller.abort(new Error('the person left'));
+            await settled;
+          }
+          expect(endpoint.calls()).toBe(6);
+          expect(ledger.retained, `${SdkClient.name} under ${policy}`).toBe(0);
+        } finally {
+          await client.close();
+        }
+      }
+    }
+  });
+
+  it('closing the client while calls still await their answers keeps nothing', async () => {
+    const built = ledgersBuilt();
+    const endpoint = server(() => accepted());
+    // The SDK's own timeout (60 s): only the close ends these calls.
+    const client = await over(endpoint, Client, STRICT);
+    const ledger = built.at(-1) as RequestLedger;
+    const [tool] = await client.tools();
+    const pending = [1, 2].map(() =>
+      (tool as Tool).execute({ q: 'printer' }, BARE).then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+    );
+    await until(() => endpoint.calls() === 2);
+    expect(ledger.retained).toBeGreaterThan(0);
+    await client.close();
+    // Accepted, never answered, then ended by the close: each may have run.
+    for (const failure of await Promise.all(pending)) {
+      expect(failure).toBeInstanceOf(UnknownEffectError);
+    }
+    expect(ledger.retained).toBe(0);
+  });
+
+  it('closing the client keeps nothing even when its transport never reports the close', async () => {
+    /** A transport whose close tells nobody: calls in flight stay pending until their own timeout. */
+    class SilentCloseTransport extends StreamableHTTPClientTransport {
+      override async close(): Promise<void> {
+        return undefined;
+      }
+    }
+    const built = ledgersBuilt();
+    const endpoint = server(() => accepted());
+    const client = await over(endpoint, QuickClient, STRICT, SilentCloseTransport);
+    const ledger = built.at(-1) as RequestLedger;
+    const [tool] = await client.tools();
+    const pending = [1, 2].map(() =>
+      (tool as Tool).execute({ q: 'printer' }, BARE).then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+    );
+    await until(() => endpoint.calls() === 2);
+    await client.close();
+    // The calls have not settled yet; the client's close released their entries anyway.
+    expect(ledger.retained).toBe(0);
+    // Each still knows its request: it times out later, and may have run.
+    for (const failure of await Promise.all(pending)) {
+      expect(failure).toBeInstanceOf(UnknownEffectError);
+      expect(causeCodeOf(failure)).toBe(-32001);
+    }
+    expect(ledger.retained).toBe(0);
+  });
+
+  it("a 202 whose answer arrives LATER, on the server's own stream: the watch was kept — an error comes as it was sent, an answer returns", async () => {
+    const outcomes: unknown[] = [];
+    for (const answer of [
+      (id: unknown) => ({
+        jsonrpc: '2.0',
+        id,
+        result: { content: [{ type: 'text', text: 'ticket-42' }] },
+      }),
+      (id: unknown) => ({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32000, message: 'The requested operation was refused' },
+      }),
+    ]) {
+      const endpoint = answeredLater(answer);
+      const client = await mcpClient({
+        name: 'tickets',
+        sdk: { Client, StreamableHTTPClientTransport } as unknown as McpSdk,
+        transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+        replay: { policy: STRICT },
+      });
+      try {
+        outcomes.push(await outcomeOf(client));
+        expect(endpoint.calls(), 'answered over HTTP with a 202, once').toBe(1);
+      } finally {
+        await client.close();
+      }
+    }
+    const [answer, error] = outcomes;
+    expect(answer).toBe('ticket-42');
+    expect(error).not.toBeInstanceOf(UnknownEffectError);
+    expect(codeOf(error)).toBe(-32000);
+  });
+});
+
+/**
+ * A server that accepts each `tools/call` with a 202 and answers it a moment
+ * later on its own standing event stream (the GET the SDK opens once it is
+ * initialized): the JSON-RPC answer arrives after the HTTP send is over.
+ */
+function answeredLater(answer: (id: unknown) => unknown) {
+  const encoder = new TextEncoder();
+  let push: ((event: unknown) => void) | undefined;
+  let calls = 0;
+  const fetch = async (_input: unknown, init?: RequestInit): Promise<Response> => {
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (method === 'GET') {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          push = (event) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
+    if (method !== 'POST') return new Response(null, { status: 405 });
+    const message = JSON.parse(String(init?.body)) as { method?: string; id?: unknown };
+    const result = (value: unknown, headers: Record<string, string> = {}): Response =>
+      json({ jsonrpc: '2.0', id: message.id, result: value }, 200, headers);
+    switch (message.method) {
+      case 'initialize':
+        return result(
+          {
+            protocolVersion: '2025-06-18',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'tickets', version: '1.0.0' },
+          },
+          { 'mcp-session-id': 'session-7' },
+        );
+      case 'tools/list':
+        return result({ tools: [SEARCH] });
+      case 'tools/call': {
+        calls += 1;
+        await until(() => push !== undefined);
+        setTimeout(() => push?.(answer(message.id)), 10);
+        return new Response(null, { status: 202 });
+      }
+      default:
+        return new Response(null, { status: 202 });
+    }
+  };
+  return { fetch, calls: (): number => calls };
+}
 
 // ─── R9 the declaration, read once ───────────────────────────────────
 

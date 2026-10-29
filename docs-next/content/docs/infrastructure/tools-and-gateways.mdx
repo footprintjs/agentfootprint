@@ -375,6 +375,30 @@ both policies; what reaches the caller follows footprintjs's law:
 Under `'compatibility'` the caller sees the error it always did, and the record
 still says the effect is unknown.
 
+**What `'app-authorized'` needs of a connection.** The rule above rests on two
+facts the library establishes for every call, never assumes: its request is
+matched to the call, and its answer is seen. The call carries a library-private
+marker in its request's `_meta`, which the transport takes out before sending,
+so the server receives the request it always did and an MCP SDK that copies the
+params is still matched. The answers are watched on the connection, and the
+library confirms the watch works when the `initialize` answer passes it. When
+either fact is missing, the call is refused before it is sent, with an
+`McpReplayUnavailableError` (`sent: false`) whose `reason` is an
+`McpReplayUnavailableReason`:
+
+| `reason` | What is missing | When |
+|---|---|---|
+| `'answers-unobserved'` | The `initialize` answer never reached the library's observer | An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it, as SDK 1.10 does |
+| `'request-unmatched'` | The request reached the transport without its call's marker | An SDK that rebuilds the params and drops `_meta` |
+| `'requests-unwatched'` | The library cannot watch the transport's requests | `stdio`, or a transport whose `send` cannot be wrapped |
+
+Without these facts, a request the server accepted and never answered would
+reach the caller as a plain timeout, and the strict contract would be weaker
+than it says. `'compatibility'` needs neither, and behaves as before. A watch on
+an answer ends when the answer arrives, when the SDK cancels the request, when
+the call settles or when the client closes, so a long-lived client keeps
+nothing for calls that are over.
+
 The example's run, read back from the saved recording: the search was sent
 again on your declaration and its effects stay unknown; the ticket was not sent
 again, because it makes changes and carried no key, and its 429 reached the

@@ -34,6 +34,9 @@ export type {
   McpReplayPolicy,
   McpReplayTool,
 } from './replay.js';
+// A call under 'app-authorized' that a connection cannot honour is refused
+// before it is sent, with a typed reason.
+export { McpReplayUnavailableError, type McpReplayUnavailableReason } from './replayUnavailable.js';
 export type {
   McpCallToolResult,
   McpClient,

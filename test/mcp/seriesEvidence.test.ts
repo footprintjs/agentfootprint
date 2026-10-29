@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AttemptRecord } from 'footprintjs';
 
+import { markParams } from '../../src/mcp/callMarker.js';
 import { RequestLedger } from '../../src/mcp/requestLedger.js';
 import { ledgeredFetch, retryingFetch, type ThrottleFetch } from '../../src/mcp/throttleRetry.js';
 import { rowOf } from '../../src/mcp/seriesEvidence.js';
@@ -39,11 +40,11 @@ describe('series evidence — P2 nothing started, nothing sent', () => {
       return new Response('{}');
     });
     const filed: RequestEvidence[] = [];
-    const params = { name: 'search_tickets', arguments: {} };
-    ledger.issue(params, {
+    const { marker } = ledger.issue({
       sink: { file: (evidence) => filed.push(evidence) },
       signal: AbortSignal.abort(new Error('the run ended')),
     });
+    const params = markParams({ name: 'search_tickets', arguments: {} }, marker);
 
     await expect(send({ jsonrpc: '2.0', method: 'tools/call', id: 1, params })).rejects.toThrow(
       'the run ended',

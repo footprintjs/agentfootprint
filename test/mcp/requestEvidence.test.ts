@@ -30,7 +30,9 @@
  *   S14 Scenario — a call that settles some other way first: its series is cut
  *                  inside the call, and nothing is re-sent
  *   S15 Security — cancellation does not depend on attribution: an SDK that
- *                  copies params still has its request cancelled, never re-sent
+ *                  rebuilds the params without their `_meta` still has its
+ *                  request cancelled, never re-sent; an SDK that only COPIES
+ *                  them is matched, by the call's marker
  *   S16 Unit     — dev mode names a request that could not be matched, once
  *   S17 ROI      — a transport class with `#private` fields connects and files
  *   S18 Scenario — a call approved on RESUME files into the resumed run
@@ -119,11 +121,13 @@ interface Call {
 /**
  * An MCP endpoint in this process: the handshake, the tool list, and `reply`
  * for each call. It counts the `tools/call` requests it received — overall and
- * per `q` — and keeps the ids the client told it it had cancelled.
+ * per `q` — keeps their bodies as sent, and keeps the ids the client told it it
+ * had cancelled.
  */
 function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
   const perQ = new Map<unknown, number>();
   const cancelled: unknown[] = [];
+  const bodies: string[] = [];
   let calls = 0;
   // Typed for both doors it is handed to: the MCP SDK's fetch and AgentCore's auth fetch.
   const fetch = async (_input: unknown, init?: RequestInit): Promise<Response> => {
@@ -152,6 +156,7 @@ function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
         return result({ tools: [TOOL] });
       case 'tools/call': {
         calls += 1;
+        bodies.push(String(init?.body));
         const q = message.params?.arguments?.q;
         const n = (perQ.get(q) ?? 0) + 1;
         perQ.set(q, n);
@@ -161,7 +166,13 @@ function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
         return new Response(null, { status: 404 });
     }
   };
-  return { fetch, toolCalls: () => calls, callsFor: (q: unknown) => perQ.get(q) ?? 0, cancelled };
+  return {
+    fetch,
+    toolCalls: () => calls,
+    callsFor: (q: unknown) => perQ.get(q) ?? 0,
+    bodies: (): readonly string[] => bodies,
+    cancelled,
+  };
 }
 
 /** A request that hangs until its signal fires — the way a real fetch ends then. */
@@ -995,20 +1006,50 @@ describe('saved retry evidence — S13/S14 a call that settles first takes its s
 
 // ─── S15 / S16 when the request cannot be matched to its call ────────
 
-/** An SDK client that copies the params before sending — attribution fails. */
+/** An SDK client that copies the params before sending — the call's marker survives the copy. */
 class CloningClient extends Client {
   override callTool(...[params, schema, options]: CallToolArgs) {
     return super.callTool(structuredClone(params), schema, options);
   }
 }
 
+/** An SDK client that rebuilds the params without their `_meta` — attribution fails. */
+class RebuildingClient extends Client {
+  override callTool(...[params, schema, options]: CallToolArgs) {
+    return super.callTool({ name: params.name, arguments: params.arguments }, schema, options);
+  }
+}
+
 describe('saved retry evidence — S15/S16 cancellation never depends on attribution', () => {
-  it('S15 an SDK that copies the params: a run cancelled mid-wait still cancels the request — nothing is re-sent', async () => {
+  it('S15 an SDK that copies the params is still matched, by the marker: its attempts are filed', async () => {
+    const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      sdk: sdkWith(CloningClient),
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 5, jitter: 'none' },
+    });
+    try {
+      const agent = await agentFor(client, 'tc-cloned', 'printer');
+      const rec = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      const events = await savedAndReloaded(rec);
+      const evidence = payloadOf(filedIn(events)[0]);
+      expect(evidence.toolCallId).toBe('tc-cloned');
+      expect(evidence.attempts.map((a) => a.outcome)).toEqual(['refused', 'answered']);
+      // The marker never reached the server.
+      expect(JSON.stringify(endpoint.bodies())).not.toContain('agentfootprint/call-ref');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('S15 an SDK that rebuilds the params: a run cancelled mid-wait still cancels the request — nothing is re-sent', async () => {
     const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
     const wait = firstWait();
     const client = await mcpClient({
       name: 'tickets',
-      sdk: sdkWith(CloningClient),
+      sdk: sdkWith(RebuildingClient),
       transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
       retryOnThrottle: { baseDelayMs: 80, jitter: 'none', onRetry: wait.onRetry },
     });
@@ -1039,7 +1080,8 @@ describe('saved retry evidence — S15/S16 cancellation never depends on attribu
       warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('could not be matched'));
     for (const [sdk, expected] of [
       [undefined, 0],
-      [sdkWith(CloningClient), 1],
+      [sdkWith(CloningClient), 0],
+      [sdkWith(RebuildingClient), 1],
     ] as const) {
       const endpoint = mcpEndpoint(({ id }) => answered(id));
       const client = await mcpClient({

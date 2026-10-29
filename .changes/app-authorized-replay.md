@@ -21,8 +21,17 @@ A generic 429 does not prove the server ran nothing: RFC 6585 §4 defines it as 
 
 Under `'compatibility'`, the caller sees the error it always did, and the record still says the effect is unknown.
 
+**`'app-authorized'` never silently weakens.** It needs each request matched to its call and each answer seen. When a connection cannot give both, the call is refused before it is sent, with the new `McpReplayUnavailableError` (`sent: false`) and a typed `reason` (`McpReplayUnavailableReason`):
+- `'answers-unobserved'`: the `initialize` answer never reached the library's observer. An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it, as SDK 1.10 does, causes this.
+- `'request-unmatched'`: the request reached the transport without its call's marker. An SDK that rebuilds the params and drops `_meta` causes this.
+- `'requests-unwatched'`: the library cannot watch the transport's requests, as with `stdio`.
+
+`'compatibility'` needs neither fact and behaves as before.
+
+**A request is matched to its call by a private marker.** The call puts it in its request's `_meta`, and the transport takes it out before sending, so the server receives the request it always did. An MCP SDK that copies the params is now matched too, so its attempts are recorded in the run; before, a copy lost them. An SDK that drops `_meta` is still named once in dev mode. A watch on a request's answer now ends by the request's id, when the answer arrives, when the SDK cancels the request, when the call settles or when the client closes. A long-lived client no longer keeps one entry per call that timed out unanswered.
+
 **`retryOnThrottle: false` turns off the 429 rule and nothing else.** A tool you declared repeatable on `network`, and the `'app-authorized'` policy, keep their retry series, with the default budget, and their record. A 429 is then an answer and is never sent again.
 
 A request's record is now filed when its call settles, so an answered attempt's `effect` can say whether the call completed. A cancellation is still filed the moment it lands. A repeat re-sends the same request: the same arguments, server and session, as the same identity. A credential the library vends is still vended afresh for each attempt, for that same identity.
 
-`ThrottleRetryInfo.kind` (`onRetry`) can now be `'network'`, for a repeat you declared after a request failed without an answer. The series' first rule reports it. `replay` is refused beside `connection`, whose transport this library did not build, and ignored for `stdio`. In dev mode, an entry for a tool the server does not list is named once per client.
+`ThrottleRetryInfo.kind` (`onRetry`) can now be `'network'`, for a repeat you declared after a request failed without an answer. The series' first rule reports it. `replay` is refused beside `connection`, whose transport this library did not build. On `stdio` it is ignored under `'compatibility'`, and under `'app-authorized'` each call is refused (`'requests-unwatched'`). In dev mode, an entry for a tool the server does not list is named once per client.
