@@ -52,7 +52,12 @@ import { findingsReferenceRefusal } from '../findings/admission.js';
  * activates that Skill (lifetime: turn).
  */
 
-import { CODE_RUN_SLOT, type CodeRunFacts, type CodeRunSlot } from '../../codeRunnerTool.js';
+import {
+  CODE_RUN_SLOT,
+  codeRunsOf,
+  type CodeRunFacts,
+  type CodeRunSlot,
+} from '../../codeRunnerTool.js';
 import { scriptOf } from '../../../tools/script.js';
 import { programIn, recordScriptRow, scriptRowFor } from '../scripts/rows.js';
 import type { CallSettlement } from '../scripts/label.js';
@@ -3136,27 +3141,40 @@ export function buildToolCallsHandler(
   };
 
   /**
-   * The code-run facts a code-runner tool left for THIS call — taken and
-   * deleted (the map never grows across a long run), and emitted as
-   * `agentfootprint.tools.code_run` under the name the model called. Asked at
-   * BOTH execute boundaries — the batch loop and `resolveCredentialAndExecute`
-   * — right after `tool.execute` returns. The code itself is never on this
-   * channel: generated code quotes the data it was handed.
+   * THIS dispatch's code-run facts, taken from its own slot (`CODE_RUN_SLOT`)
+   * — what the script row attests, whichever runner filed them (a wrapper that
+   * hands its context to a code runner included). Asked at BOTH execute
+   * boundaries — the batch loop and `resolveCredentialAndExecute` — right
+   * after `tool.execute` returns.
+   *
+   * The published map (`codeRunsOf`) is kept exactly as it always was: at the
+   * batch boundary (`takeListed`) the dispatched tool's entry for this call id
+   * is taken off it; the resume boundary leaves it, as it always did. The
+   * event fires when the dispatched tool is itself a code runner, as it always
+   * did, carrying the dispatch's own facts — never a same-id entry another run
+   * filed. The code itself is never on this channel: generated code quotes the
+   * data it was handed.
    */
   const takeCodeRun = (
     scope: TypedScope<AgentState>,
+    tool: Tool,
     slot: CodeRunSlot,
-    toolName: string,
+    call: { readonly toolName: string; readonly toolCallId: string; readonly takeListed: boolean },
   ): CodeRunFacts | undefined => {
-    const ranCode = slot.facts;
-    if (ranCode === undefined) return undefined;
+    const facts = slot.facts;
     slot.facts = undefined;
-    // `tool` is the name the model CALLED, not the one the runner's closure
-    // was built with: a runner re-exposed under another schema name must be
-    // recognizable by the name its calls carry (a content exporter withholds
-    // that tool's arguments — the program). Same bytes whenever they agree.
-    typedEmit(scope, 'agentfootprint.tools.code_run', { ...ranCode, tool: toolName });
-    return ranCode;
+    const listed = codeRunsOf(tool);
+    if (call.takeListed && listed?.get(call.toolCallId) !== undefined) {
+      listed.delete(call.toolCallId);
+    }
+    if (facts !== undefined && listed !== undefined) {
+      // `tool` is the name the model CALLED, not the one the runner's closure
+      // was built with: a runner re-exposed under another schema name must be
+      // recognizable by the name its calls carry (a content exporter withholds
+      // that tool's arguments — the program). Same bytes whenever they agree.
+      typedEmit(scope, 'agentfootprint.tools.code_run', { ...facts, tool: call.toolName });
+    }
+    return facts;
   };
 
   /** `emitToolEnd`'s twin: the call is open in the ledger until its `tool_end` lands. */
@@ -4497,7 +4515,11 @@ export function buildToolCallsHandler(
       }
       let result = await tool.execute(args, executionContext);
       // The runner's facts, at this execute boundary as at the batch loop's.
-      const codeRun = takeCodeRun(scope, codeRunSlot, toolName);
+      const codeRun = takeCodeRun(scope, tool, codeRunSlot, {
+        toolName,
+        toolCallId,
+        takeListed: false,
+      });
       if (seen !== undefined && codeRun !== undefined) seen.codeRun = codeRun;
       if (negativeDispatch !== undefined)
         result = captureNegativeResult(scope, negativeDispatch, result, tool);
@@ -5958,7 +5980,11 @@ export function buildToolCallsHandler(
               // session events follow with `keyHash`, never the key. Generated
               // code quotes the data it was handed, so the program is the one
               // part of a code run that must not reach an exporter.
-              ranCode = takeCodeRun(scope, codeRunSlot, tc.name);
+              ranCode = takeCodeRun(scope, tool, codeRunSlot, {
+                toolName: tc.name,
+                toolCallId: tc.id,
+                takeListed: true,
+              });
               // The typed effects channel (9.19.0): a recognized envelope is
               // unwrapped HERE, at the one boundary the raw return crosses —
               // everything downstream (governance rules, the cap, history,

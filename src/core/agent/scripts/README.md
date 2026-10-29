@@ -86,9 +86,11 @@ describes.**
   vocabulary), because its resume does not run it again.
 - **The runner's facts reach only the dispatch that ran.** Each dispatch puts
   its own slot on the call's execution context (`codeRunnerTool.ts` ·
-  `CODE_RUN_SLOT`); the runner files its exit code there. A map keyed by the
-  provider's id let one run's facts attest another run's script when two agents
-  shared a tool.
+  `CODE_RUN_SLOT`). The runner files its facts there and in the published
+  `codeRunsOf(tool)` map, which is filled and emptied exactly as before. A row
+  attests from the slot, never from the map: the map is keyed by the
+  provider's id, and when two agents shared a tool it let one run's facts
+  attest another run's script.
 
 Why: a row is an attestation ("this program ran, and exited 7"). One read from
 a live object, or a fact found by an id two calls share, can attach one call's

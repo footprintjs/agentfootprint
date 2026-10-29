@@ -15,6 +15,7 @@
  * argument (`shown.ts` keeps `text` off every allow-list).
  */
 
+import { recordedBoundary } from '../../core/agent/scripts/attachment.js';
 import type { ScriptLabel } from '../../core/agent/scripts/types.js';
 import { n, v } from '../render.js';
 import type { TemplateId } from '../templates.js';
@@ -141,6 +142,10 @@ function attachedLines(ctx: ReadContext): Sentence[] {
   const end = ctx.view.last('agent.turn_end');
   const scripts = end?.payload.scripts;
   if (end === undefined || !isRecord(scripts) || !Array.isArray(scripts.shown)) return [];
+  // The rendering boundary the record states: a value no writer of this
+  // library files is unread (and the account rebuilds no block from it).
+  const content = str(end.payload.finalContent);
+  if (recordedBoundary(scripts, content?.length) === undefined) ctx.noteUnread();
   const lines: Sentence[] = [];
   scripts.shown.forEach((shown: unknown, i) => {
     const tool = isRecord(shown) ? str(shown.tool) : undefined;

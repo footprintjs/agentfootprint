@@ -150,31 +150,30 @@ const DEFAULT_MAX_OUTPUT_CHARS = 4_000;
 export const TOOL_SESSIONS: unique symbol = Symbol.for('agentfootprint.tools.sessions');
 
 /**
- * Where a finished code run leaves its facts when NO agent dispatched it — a
- * direct `execute` with a hand-built context (a script, a test, `mcpServe`) —
- * keyed by `toolCallId`. A call an agent dispatched files into that
- * dispatch's own slot instead ({@link CODE_RUN_SLOT}), never here.
+ * Where a finished code run leaves its facts, keyed by `toolCallId`.
  *
  * `Symbol.for` for the same CJS/ESM reason as {@link TOOL_SESSIONS}, and keyed
- * by the CALL rather than stored as "the last run" because two tool calls can
- * run concurrently — a single slot would report one call's facts under the
- * other's name.
+ * by the CALL rather than stored as "the last run" because two tool calls in one
+ * iteration run concurrently — a single slot would report one call's facts under
+ * the other's name. The dispatch loop takes the entry and deletes it.
  */
 export const CODE_RUNS: unique symbol = Symbol.for('agentfootprint.tools.codeRuns');
 
 /**
- * Where a code run's facts go when the AGENT dispatched the call: a slot the
- * dispatch loop puts on that one call's execution context
+ * Where a code run's facts ALSO go when the AGENT dispatched the call: a slot
+ * the dispatch loop puts on that one call's execution context
  * (`core/agent/stages/toolCalls.ts`, both execute boundaries) and reads back
- * when `execute` returns.
+ * when `execute` returns. The published map above is filled exactly as
+ * before; the slot is the dispatch's own copy, the one the script record
+ * attests from and `agentfootprint.tools.code_run` carries.
  *
- * Why not the map above: the map is keyed by the provider's call id, and two
- * runs — two agents sharing one tool object, or one run whose provider reuses
- * an id — can hold the same id at once. A fact filed under an id then reaches
- * whichever dispatch reads first: one run's exit code attested another run's
- * script. The slot is the dispatch's own object, so its facts can only reach
- * it. A wrapper tool that hands the same context (or a spread of it) to this
- * one keeps the slot. `Symbol.for`, for the CJS/ESM reason above.
+ * Why not the map alone: it is keyed by the provider's call id, and two runs —
+ * two agents sharing one tool object, or one run whose provider reuses an id —
+ * can hold the same id at once. A fact read back by id then reaches whichever
+ * dispatch reads first: one run's exit code attested another run's script.
+ * The slot is the dispatch's own object, so its facts can only reach it. A
+ * wrapper tool that hands the same context (or a spread of it) to this one
+ * keeps the slot. `Symbol.for`, for the CJS/ESM reason above.
  *
  * @internal Library plumbing between the dispatch loop and this tool.
  */
@@ -465,11 +464,11 @@ export function codeRunnerTool(
         ...(result.terminatedBy !== undefined && { terminatedBy: result.terminatedBy }),
         shapeHash: fnv1a(codeShape(args.code)),
       };
-      // An agent's dispatch: into that call's own slot, exactly. A direct
-      // execute outside an agent (no slot): by the call's id, as before.
+      // The published map, by the call's id, exactly as always — and, for a
+      // call an agent dispatched, that dispatch's own slot as well.
       const slot = (ctx as { readonly [CODE_RUN_SLOT]?: CodeRunSlot })[CODE_RUN_SLOT];
       if (slot !== undefined) slot.facts = facts;
-      else codeRuns.set(ctx.toolCallId, facts);
+      codeRuns.set(ctx.toolCallId, facts);
       return rendered;
     },
   });

@@ -54,7 +54,7 @@
 import { utf8Length, utf8Prefix } from '../../../lib/utf8.js';
 import { codeRegionsOf } from '../evidence/codeRegions.js';
 import { inertCode } from './inert.js';
-import { labelWords } from './label.js';
+import { labelWords, SCRIPT_LABELS } from './label.js';
 import type {
   ResolvedScriptTravel,
   ScriptRow,
@@ -227,14 +227,97 @@ export function attachmentBoundary(before: string): AttachmentBoundary {
   return CLEAN;
 }
 
-/** The boundary a `turn_end.scripts` record states — what a reader rebuilds the text with. */
-export function boundaryOfRecord(scripts: TurnEndScripts): AttachmentBoundary {
-  if (scripts.withheldFromText === true) return { kind: 'unsettled' };
+// ─── Reading a record back (the answer account) ───────────────────────
+//
+// A saved `turn_end.scripts` is JSON a reader is handed, not a value this
+// library holds: every field is checked before anything is rebuilt from it,
+// and a value no writer of this library files makes the reader refuse
+// (`undefined`) rather than guess.
+
+/** The boundary a record states, checked — no fence string is built here. */
+export type RecordedBoundary =
+  | { readonly kind: 'clean' }
+  | { readonly kind: 'closed'; readonly char: 'backtick' | 'tilde'; readonly length: number }
+  | { readonly kind: 'unsettled' };
+
+const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0;
+
+/**
+ * The boundary a `turn_end.scripts` record states — `undefined` when the
+ * record holds a value no writer of this library files: a `closedFence` that
+ * is not `{ char: 'backtick' | 'tilde', length }` with a whole length of at
+ * least 3 and at most `within` (the answer the closing fence was written into
+ * — a fence longer than the text cannot be in it), a `withheldFromText` that
+ * is not `true`, or both at once.
+ */
+export function recordedBoundary(
+  scripts: unknown,
+  within: number = Number.MAX_SAFE_INTEGER,
+): RecordedBoundary | undefined {
+  if (!isObject(scripts)) return undefined;
+  const withheld = scripts.withheldFromText;
   const closed = scripts.closedFence;
-  if (closed !== undefined) {
-    return { kind: 'closed', fence: (closed.char === 'tilde' ? '~' : '`').repeat(closed.length) };
+  if (withheld !== undefined && withheld !== true) return undefined;
+  if (closed === undefined) return withheld === true ? { kind: 'unsettled' } : { kind: 'clean' };
+  if (withheld === true || !isObject(closed)) return undefined;
+  const char = closed.char;
+  if ((char !== 'backtick' && char !== 'tilde') || !isCount(closed.length)) return undefined;
+  if (closed.length < 3 || closed.length > within) return undefined;
+  return { kind: 'closed', char, length: closed.length };
+}
+
+/**
+ * The boundary to rebuild a recorded text behind — `undefined` when its fence
+ * is longer than `within`, the text it would have to be found in: the one
+ * repetition a reader makes is bounded by what it reads.
+ */
+export function rebuildBoundary(
+  recorded: RecordedBoundary,
+  within: number,
+): AttachmentBoundary | undefined {
+  if (recorded.kind !== 'closed') return recorded;
+  if (recorded.length > within) return undefined;
+  return { kind: 'closed', fence: (recorded.char === 'tilde' ? '~' : '`').repeat(recorded.length) };
+}
+
+/**
+ * One `turn_end.scripts.shown` entry, checked field by field — a fresh copy,
+ * or `undefined` when any field the text is rebuilt from is missing or of a
+ * shape no writer of this library files.
+ */
+export function shownScriptOf(value: unknown): ShownScript | undefined {
+  if (!isObject(value)) return undefined;
+  const v = value;
+  if (typeof v.toolCallId !== 'string' || typeof v.tool !== 'string') return undefined;
+  if (typeof v.text !== 'string' || !isCount(v.bytes) || !isCount(v.lines)) return undefined;
+  if (!isCount(v.dispatch) || v.dispatch < 1) return undefined;
+  if (!(SCRIPT_LABELS as readonly unknown[]).includes(v.label)) return undefined;
+  if (v.language !== undefined && typeof v.language !== 'string') return undefined;
+  if (v.exitCode !== undefined && !Number.isInteger(v.exitCode)) return undefined;
+  if (v.resultWithheld !== undefined && v.resultWithheld !== 'over-ceiling') return undefined;
+  if (v.rewritten !== undefined && v.rewritten !== true) return undefined;
+  if (v.truncated !== undefined && !(isObject(v.truncated) && isCount(v.truncated.shownBytes))) {
+    return undefined;
   }
-  return CLEAN;
+  return {
+    toolCallId: v.toolCallId,
+    dispatch: v.dispatch,
+    tool: v.tool,
+    ...(v.language !== undefined && { language: v.language as string }),
+    label: v.label as ShownScript['label'],
+    ...(v.exitCode !== undefined && { exitCode: v.exitCode as number }),
+    ...(v.resultWithheld !== undefined && { resultWithheld: 'over-ceiling' as const }),
+    ...(v.rewritten !== undefined && { rewritten: true as const }),
+    bytes: v.bytes,
+    lines: v.lines,
+    ...(v.truncated !== undefined && {
+      truncated: { shownBytes: (v.truncated as { shownBytes: number }).shownBytes },
+    }),
+    text: v.text,
+  };
 }
 
 /**

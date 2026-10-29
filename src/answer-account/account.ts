@@ -21,8 +21,14 @@ import {
 } from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
 import { scriptRowsOfTurn } from '../core/agent/scripts/rows.js';
-import { boundaryOfRecord, scriptsBlock } from '../core/agent/scripts/attachment.js';
-import type { ScriptRow, ShownScript, TurnEndScripts } from '../core/agent/scripts/types.js';
+import {
+  rebuildBoundary,
+  recordedBoundary,
+  scriptsBlock,
+  shownScriptOf,
+} from '../core/agent/scripts/attachment.js';
+import { scriptRowIsWellFormed } from '../core/agent/scripts/rows.js';
+import type { ScriptRow } from '../core/agent/scripts/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION, type TemplateId } from './templates.js';
@@ -198,15 +204,21 @@ function appendedStandingLine(
 function appendedScriptsOpenings(
   end: ViewEvent,
   state: Readonly<Record<string, unknown>> | undefined,
+  within: number,
 ): readonly string[] {
   const scripts = end.payload.scripts;
   if (!isRecord(scripts) || !Array.isArray(scripts.shown)) return [];
-  const omitted = num(scripts.omitted) ?? 0;
-  const boundary = boundaryOfRecord(scripts as unknown as TurnEndScripts);
+  // Every field the text is rebuilt from is checked first; a value no writer
+  // of this library files rebuilds nothing (the How-sure lines count it unread).
+  const recorded = recordedBoundary(scripts, within);
+  const boundary = recorded === undefined ? undefined : rebuildBoundary(recorded, within);
+  if (boundary === undefined) return [];
+  const omitted = num(scripts.omitted);
+  if (omitted === undefined || !Number.isInteger(omitted) || omitted < 0) return [];
   if (scripts.shown.length > 0) {
-    const first = scripts.shown[0];
-    if (!isRecord(first) || typeof first.text !== 'string') return [];
-    const only = { shown: [first as unknown as ShownScript], omitted: 0 };
+    const first = shownScriptOf(scripts.shown[0]);
+    if (first === undefined) return [];
+    const only = { shown: [first], omitted: 0 };
     // Up to and including the first label line: the closed fence, if any, then it.
     const lines = scriptsBlock(only, boundary).split('\n');
     return [lines.slice(0, boundary.kind === 'closed' ? 3 : 1).join('\n')];
@@ -214,10 +226,13 @@ function appendedScriptsOpenings(
   if (omitted === 0 || state === undefined) return [];
   const turn = num(state.turnNumber);
   if (turn === undefined) return [];
-  const reached = scriptRowsOfTurn(
-    Array.isArray(state.findingsLedger) ? state.findingsLedger : [],
-    turn,
-  ).current.filter((row) => row.outcome !== 'submitted');
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const current = scriptRowsOfTurn(ledger, turn).current;
+  // The rows come from saved state: rebuild only from rows this library writes.
+  if (!current.every((row) => scriptRowIsWellFormed(row as unknown as Record<string, unknown>))) {
+    return [];
+  }
+  const reached = current.filter((row) => row.outcome !== 'submitted');
   const overSizeOf = (rows: readonly ScriptRow[]) => rows.filter((row) => row.text === undefined);
   return [overSizeOf(reached.slice(-1)), overSizeOf(reached)].map((overSize) =>
     scriptsBlock({ shown: [], omitted, overSize }, boundary),
@@ -372,7 +387,7 @@ function readAnswer(view: RecordingView): {
   const { model, appended } = splitAppended(
     content,
     appendedStandingLine(end, view.state),
-    appendedScriptsOpenings(end, view.state),
+    appendedScriptsOpenings(end, view.state, content.length),
   );
   const answer: AccountFact<string> = {
     ...clipFact(model, MAX_ANSWER_CHARS),

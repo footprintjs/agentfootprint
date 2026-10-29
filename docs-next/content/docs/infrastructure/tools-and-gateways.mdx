@@ -749,11 +749,10 @@ leaves out the service's message, which can quote what was sent.
 
 ### Turn repeated code into a tool backlog
 
-Every completed run leaves a privacy-safe `CodeRunFacts` record. A call the
-agent dispatched delivers it to that dispatch alone, which emits it as
-`agentfootprint.tools.code_run` to attached observers; a direct `execute`
-outside an agent files it by tool-call ID, where `codeRunsOf(tool)` reads it
-for inspection. Neither path exposes the generated program: `codeShape(code)` removes
+Every completed run leaves a privacy-safe `CodeRunFacts` record keyed by its
+tool-call ID. `codeRunsOf(tool)` reads those facts for inspection, and
+`agentfootprint.tools.code_run` emits the same facts to attached observers after
+dispatch. Neither path exposes the generated program: `codeShape(code)` removes
 comments, literals and non-callee identifiers while keeping the operations and
 their order. The event carries the resulting `shapeHash` instead of source code.
 
