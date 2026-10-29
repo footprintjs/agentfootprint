@@ -925,8 +925,10 @@ declare no `displayName` gets the block it always got.
 
 **Why.** The block folds every call's declarations into ONE boundary, so a person
 could not tell which call left which ground unchecked — and the standing line now
-names the call a doubt came from. Both say it the same way, and neither ever prints
-a registered tool name the app did not choose to show.
+names the call a doubt came from. Both name a call the same way, in the words the app
+declared, and an item none of whose declaring calls has such words gets no mark at all
+— never a registered name in their place. (A `Period:` or "In progress" line of a tool
+without a `displayName` keeps its registered name, as before.)
 
 ```text
 Checked:

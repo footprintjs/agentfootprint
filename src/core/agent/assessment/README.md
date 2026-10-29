@@ -257,18 +257,24 @@ or a value.
 | `run` | `asked`, `argument-asked`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
 
 **Why.** "Not sure — a tool said nothing matched" did not say which tool: when an
-answer rested on one call's rows and another call found nothing, a reader could not
+answer rested on one call's rows and another call reported no matching results, a reader could not
 tell which part the doubt touched. The source is a projection of what is recorded —
 which claim depends on which call is NOT on the record, so naming a source never
 says the rest of the answer is unaffected, and it never moves the standing. An
 empty list of calls never stands for "the run": that is a kind of its own.
 
-**The app's words, never the registered name.** A tool may declare `displayName`
+**The app's words for a reason's calls.** A tool may declare `displayName`
 (`defineTool({ displayName })` — one plain line, at most 60 characters,
 `lib/displayName.ts`). The line names a reason's calls ONLY by it — the declared
 ones named, the rest counted — and a reason none of whose calls declares one keeps
 today's words, byte for byte. The registered name (`schema.name`) is the model's
-vocabulary; an app may forbid showing it, so the library never falls back to it.
+vocabulary; an app may forbid showing it, so the line never names a reason's calls
+by it. Where `displayName` is used today: the line's reason clauses and its assumed
+clause, and the limits block's items and its `Period:` / "In progress" lines. Still
+printing the registered name — a known follow-up: the time layer's limits lines
+(under `.time()`), the answer account's rows, and, for a tool that declares no
+`displayName`, the assumed clause and the `Period:` / "In progress" lines (today's
+words, unchanged).
 The words the line used ride `turn_end.standingLineNames`, so the answer account
 rebuilds the very line from the record. The limits block marks each item's
 declaring calls the same way (`semantics/coverage/answer.ts` ·
@@ -281,7 +287,7 @@ const loadAttachment = defineTool({ name: 'load_attachment', displayName: 'loadi
 (await agent.assessment())?.reasons;
 // [{ reason: 'declared-absent', layer: 3, witness: [...],
 //    source: { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'load_attachment' }] } }]
-text; // 'One draft run: run-1.\n\n---\n\nNot sure — loading the attached data found nothing.'
+text; // 'One draft run: run-1.\n\n---\n\nNot sure — loading the attached data reported no matching results.'
 ```
 
 The named clauses (`compose.ts` · `NAMED_REASON_WORDS`; `{who}` = the declared
@@ -289,7 +295,7 @@ names, then "and N other call(s)") — `STANDING_LINE_VERSION` 2:
 
 | Reason | Without a declared name (unchanged) | Named |
 |---|---|---|
-| `declared-absent` | a tool said nothing matched | {who} found nothing |
+| `declared-absent` | a tool said nothing matched | {who} reported no matching results |
 | `coverage-gap` | a tool said there is ground it did not check or cannot cover | {who} declared ground that was not checked or cannot be covered |
 | `empty-undeclared` | a lookup came back empty without saying what it searched | {who} came back empty without saying what was searched |
 | `period-not-held` | a tool's data does not reach the time the question asked about | {who} read data that does not reach the time the question asked about |
@@ -451,9 +457,10 @@ it at the study's freeze (adopted Q12).
   mixes rewrite and default rows, and the line does not split them. The time
   layer's own limits lines (`Period:` checks, `Clocks`, under `.time()`) keep the
   registered name. A typed answer's limits as data (`turn_end.answerCoverage`)
-  carry no per-item source. `sources` is not on the event or on
-  `turn_end.answerAssessment` (the projection's fields are pinned); read
-  `agent.assessment()` or `assessAnswer(recording)`.
+  carry no per-item source. A reason's `source` is not on the event or on
+  `turn_end.answerAssessment` — their fields are pinned and unchanged; read
+  `agent.assessment()` or `assessAnswer(recording)`. A later, versioned projection
+  can carry it.
 - **In the run, no app declarations.** The layer folds without `rowsAt`;
   `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
   account take them and can say more about the same run.

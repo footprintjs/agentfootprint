@@ -17,10 +17,12 @@
  * ## Why only the app's words
  *
  * A tool's registered name is the MODEL's vocabulary (`load_attachment`), and
- * an app may forbid showing it to the people it serves. Nothing here ever
+ * an app may forbid showing it to the people it serves. This module never
  * prints it: a call is named only by the words its tool declared, and a call
  * whose tool declared none is counted ("and 1 other call"), never named. A
- * caller that gets `undefined` back says what it always said.
+ * caller that gets `undefined` back says what it always said. Not every
+ * surface asks this module yet — the time layer's limits lines and the
+ * answer account's rows still print the registered name (a known follow-up).
  *
  * ## Why the plain-line rule
  *

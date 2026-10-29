@@ -68,9 +68,9 @@ whole (`account.ts` · `appendedStandingLine`; words the record does not hold in
 full and the line is not claimed).
 
 ```ts
-// the line said 'Not sure — loading the attached data found nothing.'
+// the line said 'Not sure — loading the attached data reported no matching results.'
 accountForAnswer(recording).answer.value;            // the model's own words, the line split off
-accountForAnswer(recording).facts.limitsBlock.value; // 'Not sure — loading the attached data found nothing.'
+accountForAnswer(recording).facts.limitsBlock.value; // 'Not sure — loading the attached data reported no matching results.'
 ```
 
 Fixture A was reduced before the fold existed: its state keeps `history` but not

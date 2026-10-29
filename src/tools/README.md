@@ -23,19 +23,22 @@ up into `core/` and are erased by `tsc`: `tools.ts` reads `CheckInDemand`
 (`core/checkin.ts`) and `runChain.ts` reads the middleware shapes
 (`core/agent/middleware/types.ts`).
 
-## A call is named to a person only in the app's words — `displayName`
+## The app's words for a call — `displayName`
 
 **The rule.** `defineTool({ displayName })` declares the app's own words for what a
-call of the tool does ("loading the attached data"). It is the ONLY name the text
-the library appends after an answer uses for a call — the standing line and the
-limits block (`../core/agent/assessment/README.md`, "What a reason rests on"). One
+call of the tool does ("loading the attached data"). The standing line names a
+reason's calls only by it, and uses it in its assumed clause; the limits block marks
+an item's declaring calls with it and names its `Period:` / "In progress" lines by it
+(`../core/agent/assessment/README.md`, "What a reason rests on"). Not every surface
+uses it yet: the time layer's limits lines (under `.time()`) and the answer account's
+rows still print the registered name — a known follow-up. One
 plain line of at most 60 characters, stored trimmed, judged by the one rule
 (`../lib/displayName.ts` · `displayNameProblem`) at `defineTool` and again at
 registration, so a hand-built tool cannot bring a bidi override or a line break to
 a person's screen.
 
 **Why.** The registered name is the model's vocabulary, and an app may forbid
-showing it. So the library never falls back to it: a call whose tool declares no
+showing it. So a reason's calls never fall back to it: a call whose tool declares no
 `displayName` is counted ("and 1 other call"), never named, and an agent whose
 tools declare none appends the bytes it always did. A remote tool's server cannot
 supply one: `mcpClient` never reads it from `_meta`.
@@ -47,7 +50,7 @@ const loadAttachment = defineTool({
   displayName: 'loading the attached data',
   execute: () => absent({ what: 'an attached data file', checked: ['the files attached to this chat'] }),
 });
-// .answerLayer({ standingLine: true }) → '…\n\n---\n\nNot sure — loading the attached data found nothing.'
+// .answerLayer({ standingLine: true }) → '…\n\n---\n\nNot sure — loading the attached data reported no matching results.'
 ```
 
 ## Files

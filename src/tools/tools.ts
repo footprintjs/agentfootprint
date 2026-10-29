@@ -438,12 +438,15 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
   /**
    * THE APP'S OWN WORDS for what a call of this tool does — "loading the
    * attached data" — read by a PERSON. The registered name (`schema.name`) is
-   * the model's vocabulary, and an app may forbid showing it, so the text the
-   * library appends after an answer names a call ONLY by this: the standing
-   * line (`.answerLayer({ standingLine: true })`) says "Not sure — loading the
-   * attached data found nothing", and the limits block marks the items this
-   * call declared with it. A call whose tool declares none is counted ("and 1
-   * other call"), never named.
+   * the model's vocabulary, and an app may forbid showing it, so the standing
+   * line (`.answerLayer({ standingLine: true })`) names a reason's calls ONLY
+   * by this — "Not sure — loading the attached data reported no matching
+   * results" — and uses it in its assumed clause; the limits block marks the
+   * items this call declared with it and names its `Period:` / "In progress"
+   * lines by it. A call whose tool declares none is counted ("and 1 other
+   * call"), never named there. Not every surface uses it yet: the time
+   * layer's limits lines and the answer account's rows still print the
+   * registered name (a known follow-up).
    *
    * One plain line of at most 60 characters (`lib/displayName.ts` — no control,
    * line separator or invisible format character), stored trimmed; refused at
