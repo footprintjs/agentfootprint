@@ -1,5 +1,5 @@
 **Mixed** — the answer's standing, folded from the run's committed record: known · consistent with the record · not sure (with the reasons) · ask · not assessed — read after the run, and (honesty layer 4, the answer layer) inside it.
-Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `sources.ts` (what each reason rests on).
+Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `sources.ts` (what each reason rests on, and `rowList`, the one way a list on a row is read).
 Map: `witness.ts` (the answer layer's two committed witness rows, filed by the Route decider).
 Walker: `stage.ts` (the answer layer's one stage, at the head of the final branch).
 Lens: `compose.ts` (the standing as data, and as one line for the person under its own arm).
@@ -166,13 +166,15 @@ grows as later honesty steps commit new rows.
 | `period-undeclared` | 3 | `findingsLedger`: a `period` row of this turn with verdict `undeclared` — the tool declares a `ToolPeriod` and its result declared no period |
 | `period-differs-from-asked` | 3 | `findingsLedger`: a `period` row of this turn with `differs` (the time layer, step T8 — `time/check.ts` · `periodTimeCheck`): what the call read is not the range it asked for — `missing` (asked, not read) or `extra` (read, not asked; TQ8: "not sure" too) — or, for a window the model chose, not the person's window. Witnesses: the row and the call's `argument` row |
 | `period-beyond-retention` | 3 | `findingsLedger`: a `period` row of this turn with `beyondRetention` (step T8): the window was wholly older than the tool declares its source keeps — refused before dispatch, or read that way |
-| `sources-conflict` | 3 | `findingsLedger`: a conflict row whose witnesses name a call of this turn |
+| `sources-conflict` | 3 | `findingsLedger`: a conflict row of this turn — one whose witnesses name a call of this turn, or one stamped with this turn whose witnesses the record does not all place in earlier turns (the incomplete-record policy, below) |
 | `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
 | `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
 | `derived-from-reading` | 4 | `findingsLedger`: a `time-derived` row of this turn — the answer states a time value no tool result carried that the library itself spelled from a reading of the person's words (an implied year, an offset, the end-of-grain minute, the served time line; the time layer, step T7 — `time/forms.ts` · `timeFormsOf`). Folded like `argument-assumed`: "not sure", never "known" |
 | `stopped-early` | 4 | `stoppedEarly` |
 | `steps-unfinished` | 4 | `findingsLedger`: a `steps-unfinished` witness row of this turn — the answer came before the active skill's declared steps finished (filed while the answer layer is armed) |
 | `negative-prose-unverified` | 4 | `findingsLedger`: a `negative-claim` or `negative-claim-note` row of this turn. Model prose is observe-only; detected negatives and skipped scans remain not-sure, never verified or blocking. |
+| `claim-exceeds-search` | 4 | `answerValidation.checks`: an `agent:negative-claims:` row with `disposition: 'checked-fail'` — a typed negative claimed more than the admitted search |
+| `declaration-overclaimed` | 3 | `answerValidation.checks`: an `agent:negative-claims:` row with `reason: 'declaration-overclaimed'` — a tool's refusal said more than it read (`.negativeClaims()`); the row's `tools` name the tool |
 | `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |
 | `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict — or a `failed` report that also counts `unreachable` checks or names a `reason` (a contradiction found beside them, or beside a validator that did not finish; both reasons fire) |
 
@@ -214,6 +216,50 @@ that looked nothing up did not apply, so it is left out; it never supports "know
 (finding a value in a result is a membership pass). A flag (`unsupportedValues`)
 stays the verdict when both exist. A `steps-unfinished` row fires the reason of that
 name and files no check: the record holds only the unfinished verdict.
+
+**A conflict whose readings the record cannot place — the incomplete-record
+policy** (`assess.ts` · `conflictOfThisTurn`). Each reading of a conflict row
+(`witnesses`) is placed by the call it names, as the record shows it:
+
+- **current** — a call of this turn;
+- **earlier** — a call `history` places before this turn began: its result, or
+  the request that asked for it;
+- **unresolved** — no call id, or one the record does not place anywhere: a
+  hole, a getter's entry, an id whose result the kept history no longer holds.
+
+Which turn the row belongs to is decided in this order:
+
+1. a row stamped with ANOTHER turn is never this turn's;
+2. a current reading places the row here, stamped or not (the call-id rule);
+3. a row stamped with THIS turn stays this turn's unless EVERY reading is
+   earlier. An unresolved reading, no readings at all, or a list the fold cannot
+   read whole (`rowList`, above) establishes no placement elsewhere, and its
+   source counts those readings in `unnamed`;
+4. an UNSTAMPED row is placed only by a current reading, and so is any row of a
+   record with no `turnNumber`.
+
+**Why.** The stamp says the writer filed this conflict in this turn. A missing
+id says nothing about which turn a reading belongs to, and neither does an id
+the kept history does not hold — a shortened history is not proof of an earlier
+turn. Reading either as "not this turn" made a doubt the record holds vanish:
+the answer read "consistent with the record" over a conflict filed in its own
+turn. The fold keeps the uncertainty instead — "not sure", resting on readings
+it cannot name — and lifts the stamp only on a placement the record establishes.
+The reverse stays refused: an unstamped conflict is never attached to today's
+answer by a reading the record does not show to be today's.
+
+```ts
+// turnNumber: 2; history: [person 't1', result of old1, person 't2', result of c2]
+const reading = (toolCallId?: string) => ({ toolCallId, subject: { kind: 'host', id: 'h1' }, predicate: 'state' });
+const filedNow = (witnesses: unknown[]) => ({ kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 });
+const fold = (witnesses: unknown[]) =>
+  assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [filedNow(witnesses)] } } });
+fold([reading('missingA'), reading('missingB')]).reasons[0].source; // { kind: 'calls', calls: [], unnamed: 2 }
+fold([reading('old1'), reading('missingB')]).standing;               // 'not-sure' — one earlier, one unresolved
+fold([reading(), reading()]).standing;                               // 'not-sure' — no ids at all
+fold([reading('old1')]).standing;                                    // 'consistent' — every reading earlier
+// The same rows with no `turn`: none of them is placed in this turn.
+```
 
 Every result is read through the ONE emptiness reader,
 `core/agent/emptiness.ts` · `readEmptiness`, the one the answer account
@@ -262,6 +308,62 @@ tell which part the doubt touched. The source is a projection of what is recorde
 which claim depends on which call is NOT on the record, so naming a source never
 says the rest of the answer is unaffected, and it never moves the standing. An
 empty list of calls never stands for "the run": that is a kind of its own.
+
+**Every field the fold reads is on the row the run commits — one name, one
+row.** A `.negativeClaims()` verdict reaches the record twice: whole on
+`answerNegatives.checks` (its `code`, its `tools`), and as a check row on the
+answer-check report, `answerValidation.checks` — the row the fold reads: for
+`declaration-overclaimed`, its `reason` and its `tools`. The ONE projection
+between them (`negativeClaims/delivery.ts` · `reportWithNegatives`) writes the
+code as `reason` and keeps `tools` under that name, so the fold reads one field
+for each fact, off one row. A field the projection dropped would read as "a
+call the record cannot name" on every real run, so the source is pinned on a
+real run, never only on a hand-built row (`reason-sources.test.ts`):
+
+```ts
+// .negativeClaims({ field: 'negatives', tools: ['read_incidents'] }) — read_incidents threw
+// "Service payments does not exist.": a refused call read nothing, so its refusal overclaims.
+agent.answerValidation()?.checks.find((c) => c.reason === 'declaration-overclaimed');
+// { id: 'agent:negative-claims:declaration:0', path: '/', disposition: 'not-applicable',
+//   reason: 'declaration-overclaimed', tools: ['read_incidents'] }
+(await agent.assessment())?.reasons.find((r) => r.reason === 'declaration-overclaimed')?.source;
+// { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }
+```
+
+**A list on a row is read by index — never through its own code.** Every list
+the fold reads off a row — a conflict's readings, a contingent value's carriers,
+an answer check's `tools`, a request's `toolCalls` — goes through ONE reader,
+`sources.ts` · `rowList`: the bounded-copy convention (`lib/boundedJson.ts` ·
+`copyJson`) as a reader that never refuses (`readOwnList`). A plain array only,
+its own `length`, the own data property at each index, at most
+`MAX_ROW_LIST_ENTRIES` (1,000). The record handed to `assessAnswer` may be
+host-built, so a list can be SPARSE, carry its own iterator or put a getter at
+an index; the reader never calls the iterator or the getter. What it cannot read
+is counted, never dropped and never a throw:
+
+- a hole, or an entry behind a getter, is one entry that names no call;
+- the entries past the bound are counted, never walked (a `length` is the
+  record's own claim);
+- a value that is not a plain array is not trusted as a list: one call the
+  record cannot name, and — for a conflict — no placement shown elsewhere, so
+  a row stamped with this turn keeps its doubt (`assess.ts` ·
+  `conflictOfThisTurn`, below).
+
+**Why.** `Array.from` and `for…of` run a list's own iterator: an empty one hid a
+named reading (the source read `{ calls: [], unnamed: 1 }`), and a getter would
+have run inside the fold.
+
+```ts
+const witnesses = [
+  { toolCallId: 'c2', subject: { kind: 'host', id: 'h1' }, predicate: 'state' },
+  { subject: { kind: 'host', id: 'h1' }, predicate: 'state' }, // names no call
+];
+witnesses.length = 3; // index 2 is a hole
+Object.defineProperty(witnesses, Symbol.iterator, { value: function* () {} }); // never called
+const conflict = { kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 };
+assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [conflict] } } })
+  .reasons[0].source; // { kind: 'calls', calls: [{ toolCallId: 'c2', toolName: 'lookup' }], unnamed: 2 }
+```
 
 **The app's words for a reason's calls.** A tool may declare `displayName`
 (`defineTool({ displayName })` — one plain line, at most 60 characters,
@@ -395,6 +497,15 @@ it at the study's freeze (adopted Q12).
 
 ## Not covered
 
+- **A host-built record's top-level lists.** The lists ON a row go through
+  `rowList`. The record's own keys — `history`, `findingsLedger`,
+  `coverageDeclared`, `answerValidation.checks`, `middlewareDecisions` (and the
+  `changedKeys` the shared reader `middleware/rewrites.ts` ·
+  `argumentRewritesOf` walks) — are read with the array's own length and
+  elements: never through `history`'s iterator or the checks' own `entries`, but
+  a getter at an index runs, an overridden `forEach` runs, and a very long
+  sparse list costs its length. A record the library committed, or a saved
+  recording read with `JSON.parse`, holds none of these.
 - **Verdicts that exist only as events.** The `.claims()` dispositions — so
   `claim-contradicted` and a claims-supported "known" — and the integrity
   dispositions are not on the committed record in this version. The fold never

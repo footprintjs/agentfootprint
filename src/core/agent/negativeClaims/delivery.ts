@@ -326,7 +326,15 @@ export function renderNegativeCandidate(
   return { candidate: { ...source, [config.field]: claims }, answer, correction, allowed };
 }
 
-/** Merge negative verdicts without manufacturing a successful host comparison. */
+/**
+ * Merge negative verdicts without manufacturing a successful host comparison.
+ *
+ * THE ONE PROJECTION of a negative row onto the report: its code becomes the
+ * check's `reason`, and the tools it names stay `tools` — the answer's fold
+ * reads both off this row (`assessment/assess.ts` · `readAnswerRows`,
+ * `assessment/sources.ts` · `callsOfCheck`), so a field it reads is never
+ * left behind here. A row that names no tool carries no `tools`.
+ */
 export function reportWithNegatives(
   report: AnswerValidationReport,
   answer: AnswerNegatives,
@@ -337,6 +345,7 @@ export function reportWithNegatives(
     path: row.path,
     disposition: row.disposition,
     reason: row.code,
+    ...(row.tools.length > 0 && { tools: [...row.tools] }),
   }));
   const checks = [...report.checks, ...rows];
   const failed = checks.filter((row) => row.disposition === 'checked-fail').length;

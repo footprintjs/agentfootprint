@@ -180,7 +180,8 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     layer: 3,
     class: 'not-sure',
     source: 'calls',
-    reads: 'findingsLedger: a conflict row whose witnesses name a call of this turn',
+    reads:
+      'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assess.ts · conflictOfThisTurn)',
   },
   {
     reason: 'value-unsupported',
@@ -233,7 +234,8 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     layer: 3,
     class: 'not-sure',
     source: 'calls',
-    reads: 'answerValidation.checks: a tool refusal overstated the read',
+    reads:
+      "answerValidation.checks: an agent:negative-claims: row with reason 'declaration-overclaimed' — a tool's refusal said more than it read; the row's tools name the tool (negativeClaims/delivery.ts · reportWithNegatives keeps both)",
   },
   {
     reason: 'answer-check-failed',

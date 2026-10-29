@@ -16,14 +16,14 @@ It did not check:
     • PowerMax array performance  ⟨notChecked.item.full@1 · tool:get_array_inventory · recorded⟩
     • VM disks this tool attributes to no array: 4 in this export  ⟨notChecked.item.full@1 · tool:get_array_inventory · recorded⟩
 It found:
-  get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and found none.  ⟨found.absent@1 · tool:get_array_inventory · recorded⟩
+  get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and reported no matching results.  ⟨found.absent@2 · tool:get_array_inventory · recorded⟩
   The model could also see the result of powerstore_get_volumes from an earlier answer (at least 1 answer back).  ⟨found.inView@1 · library · recorded⟩
 How sure:
   Not sure — the record holds 2 reasons this answer may not stand:  ⟨howSure.standing.notSure@1 · library · recorded⟩
     • 1 call declared ground it did not check or can never cover.  ⟨howSure.reason.coverageGap@1 · library · recorded⟩
     • 1 call declared that nothing matched.  ⟨howSure.reason.declaredAbsent@1 · library · recorded⟩
   Before calling get_array_inventory, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: high.  ⟨howSure.expected.direct@1 · model · recorded⟩
-  The call found nothing.  ⟨howSure.outcome.nothing@1 · tool:get_array_inventory · recorded⟩
+  The call reported no matching results.  ⟨howSure.outcome.nothing@2 · tool:get_array_inventory · recorded⟩
   The library checked the answer's names and numbers: none was missing from what the tools returned, your message, the conversation or the app's own instructions (recalled memory included).  ⟨howSure.evidence.unsplit@1 · library · recorded⟩
 Anything wrong:
   No tool call failed or was refused.  ⟨wrong.noErrors@1 · library · recorded⟩

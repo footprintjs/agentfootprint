@@ -21,6 +21,46 @@ export function ownData(value: unknown, allowed?: readonly string[]): Record<str
   return result;
 }
 
+/** A list as {@link readOwnList} read it. */
+export interface OwnList {
+  /** The entries read, in index order — a hole or an accessor entry is `undefined` (its getter never called). */
+  readonly entries: readonly unknown[];
+  /** How many entries the list holds past the bound — counted, never read. */
+  readonly unread: number;
+}
+
+/**
+ * Read a list the way {@link copyJson} reads an array — a plain array only
+ * (`Array.prototype`), its own `length`, the own DATA property at each index —
+ * as a READER that never refuses: at most `maxEntries` entries, a hole or an
+ * accessor entry read as `undefined` (the getter is never called), and the
+ * entries past the bound counted in `unread`, never walked. It never calls the
+ * list's iterator, a getter or a method, so a list from a record the library
+ * did not build cannot hide its entries or run code inside the reader.
+ * `undefined` when `value` is not a plain array: the caller says what that
+ * means for its own question, the conservative way.
+ *
+ * @example
+ * ```ts
+ * const list = ['a'];
+ * list.length = 3;                                                      // a hole at 1 and 2
+ * Object.defineProperty(list, Symbol.iterator, { value: function* () {} }); // never called
+ * readOwnList(list, 2); // { entries: ['a', undefined], unread: 1 }
+ * ```
+ */
+export function readOwnList(value: unknown, maxEntries: number): OwnList | undefined {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return undefined;
+  const length: unknown = Object.getOwnPropertyDescriptor(value, 'length')?.value;
+  if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0) return undefined;
+  const read = Math.min(length, maxEntries);
+  const entries: unknown[] = [];
+  for (let index = 0; index < read; index++) {
+    const slot = Object.getOwnPropertyDescriptor(value, String(index));
+    entries.push(slot !== undefined && 'value' in slot ? slot.value : undefined);
+  }
+  return { entries, unread: length - read };
+}
+
 /** JSON copy without invoking toJSON/getters or silently dropping data. */
 export function copyJson(
   value: unknown,
