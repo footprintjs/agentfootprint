@@ -213,10 +213,12 @@ for (const parser of PARSERS) md.push(`| ${parser} | ${summary.parsers[parser].c
 if (summary.reference?.vsAppLabels) md.push('', `Host app rule against the host app's own labels: ${summary.reference.vsAppLabels.wrongReadings} wrong readings, ${summary.reference.vsAppLabels.unnecessaryClarifications} unnecessary clarifications, of ${summary.reference.vsAppLabels.n}.`);
 if (which === 'regressions') {
   const short = (o) => (o.kind === 'read' ? (o.other ? 'read other' : `read ${o.seconds / 60} min`) : o.kind);
+  /** A table cell: backslashes first, then the column separator. */
+  const mdCell = (s) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
   md.push('', '| id | phrase | expected | grammar · strict + agree | grammar · complete + nouns | englishTimeReader · complete + nouns | Recognizers · complete + nouns |', '|---|---|---|---|---|---|---|');
   for (const r of rows) {
     const exp = r.expected === 'inspect' ? 'inspect' : typeof r.expected === 'object' ? `read ${r.expected.reads / 60} min` : r.expected;
-    md.push(`| ${r.id} | ${r.text.replace(/\|/g, '\\|')} | ${exp} | ${short(r.parsers['library-grammar'].outcomes['strict+agree'])} | ${short(r.parsers['library-grammar'].outcomes['complete+nouns'])} | ${short(r.parsers.agentfootprint.outcomes['complete+nouns'])} | ${short(r.parsers.recognizers.outcomes['complete+nouns'])} |`);
+    md.push(`| ${r.id} | ${mdCell(r.text)} | ${exp} | ${short(r.parsers['library-grammar'].outcomes['strict+agree'])} | ${short(r.parsers['library-grammar'].outcomes['complete+nouns'])} | ${short(r.parsers.agentfootprint.outcomes['complete+nouns'])} | ${short(r.parsers.recognizers.outcomes['complete+nouns'])} |`);
   }
 }
 writeFileSync(`results/${which}-table.md`, md.join('\n') + '\n');
