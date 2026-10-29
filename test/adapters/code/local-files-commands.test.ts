@@ -250,7 +250,7 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
   });
 
   it.skipIf(process.platform === 'win32')(
-    'TIMEOUT ends the whole process GROUP: a child the command started never writes afterwards',
+    'TIMEOUT stops the owned process GROUP: a child the command started never writes afterwards',
     async () => {
       // The review probe: the shell starts Node, which writes a file 300 ms
       // later; the `; :` keeps the shell from handing its process over.
@@ -272,7 +272,7 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
   );
 
   it.skipIf(process.platform === 'win32')(
-    'ABORT ends the whole process group too — no write lands after the caller stopped it',
+    'ABORT stops the owned process group too — no write lands after the caller stopped it',
     async () => {
       const s = await session({ commands: true });
       const late = join(root, 'aborted.txt');
@@ -286,6 +286,27 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
       setTimeout(() => controller.abort(new Error('stopped by the person')), 80);
       await expect(pending).rejects.toThrow('stopped by the person');
       await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(existsSync(late)).toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'the OUTPUT CEILING stops the owned group then and there — a descendant holding the pipe never writes',
+    async () => {
+      // A background subshell inherits stdout, so it holds the pipe open: a
+      // runner that waits for the pipes to close waits for IT, and it writes.
+      // `head` reaches the 32 MiB ceiling in milliseconds, long before the
+      // subshell's 500 ms sleep ends.
+      const s = await session({ commands: true });
+      const late = join(root, 'after-overflow.txt');
+      const out = await s.runCommand?.(
+        `(sleep 0.5; echo late > ${JSON.stringify(late)}) & head -c 40000000 /dev/zero`,
+        { maxOutputChars: 10, timeoutMs: 5_000 },
+      );
+      expect(out?.terminatedBy).toBe('SIGKILL');
+      expect(out?.truncated).toEqual({ stdout: true });
+      expect('exitCode' in (out ?? {})).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 900));
       expect(existsSync(late)).toBe(false);
     },
   );
@@ -321,6 +342,31 @@ describe('localCodeRunner.execute — the same group handling on the code path',
         /did not finish within 150ms and its process group was killed/,
       );
       await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(existsSync(late)).toBe(false);
+    },
+  );
+});
+
+describe('localCodeRunner.execute — the output ceiling stops the owned group too', () => {
+  it.skipIf(process.platform === 'win32')(
+    'a run past the ceiling returns its cut and its signal, and a child it started with the inherited pipes never writes',
+    async () => {
+      // The review probe: a Node child with stdio 'inherit' writes after
+      // 500 ms; the parent prints 40 MiB. Before, the run returned at ~556 ms
+      // — AFTER the write — because the cleanup waited for the pipes.
+      const s = await session({ maxOutputChars: 40 });
+      const late = join(root, 'after-overflow.txt');
+      const writer = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(
+        late,
+      )}, "late"), 500)`;
+      const code =
+        `require("child_process").spawn(process.execPath, ["-e", ${JSON.stringify(writer)}], ` +
+        '{ stdio: "inherit" }); process.stdout.write("x".repeat(40 * 1024 * 1024));';
+      const result = await s.execute({ code, language: 'javascript', timeoutMs: 5_000 });
+      expect(result).toMatchObject({ ok: false, terminatedBy: 'SIGKILL' });
+      expect(result.truncated).toEqual({ stdout: true });
+      expect('exitCode' in result).toBe(false);
+      await new Promise((resolve) => setTimeout(resolve, 900));
       expect(existsSync(late)).toBe(false);
     },
   );

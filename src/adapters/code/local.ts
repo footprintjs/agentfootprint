@@ -13,9 +13,12 @@
  * What a child process DOES give you:
  *   • a separate process and heap — a crash or an OOM takes the child, not you;
  *   • kill on timeout, so runaway code has a ceiling — on POSIX the child
- *     runs in a process group of its own and the WHOLE group is killed
- *     (SIGKILL), so nothing it started keeps running; on Windows only the
- *     child itself can be stopped, and the timeout error says so;
+ *     runs in a process group of its own, and at the timeout, on an abort or
+ *     at the output ceiling the runner stops that OWNED group (SIGKILL). That
+ *     is cleanup, not containment: a descendant that starts its own session
+ *     or group escapes it, and a host killed before its exit handlers run
+ *     stops nothing. On Windows only the child itself can be stopped, and the
+ *     timeout error says so;
  *   • no inherited stdin, so nothing can block waiting for a terminal;
  *   • an environment ALLOWLIST — `process.env` is not inherited (only `PATH`,
  *     so the interpreter can be found), so an `AWS_SECRET_ACCESS_KEY` in your
@@ -664,9 +667,9 @@ const CHILD_BUFFER_BYTES = 32 * 1024 * 1024;
 const BUFFER_OVERFLOW = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
 
 /**
- * Whether a child gets a process group of its own, so that ending it ends
- * everything it started. POSIX only: Windows has no process group to signal,
- * and there only the child itself can be stopped.
+ * Whether a child gets a process group of its own, so that the runner can stop
+ * that whole group. POSIX only: Windows has no process group to signal, and
+ * there only the child itself can be stopped.
  */
 const OWN_PROCESS_GROUP = process.platform !== 'win32';
 
@@ -701,13 +704,20 @@ function killGroup(pid: number): void {
 }
 
 /**
- * End a child and EVERYTHING it started, then release its pipes.
+ * Stop a child's OWNED PROCESS GROUP, then release its pipes — every path on
+ * which the runner ends a run goes through here: the deadline, an abort, the
+ * output ceiling, an error after a start.
  *
  * Signalling only the direct child (the shell, or the interpreter) leaves its
  * own children running: a `sh -c` command that started a Node script would
- * keep writing files after the caller was told it had been killed. The whole
- * group goes, with SIGKILL, which none of them can ignore. The pipes are
- * closed so that a process which left the group cannot hold the caller open.
+ * keep writing files after the caller was told it had been killed. The group
+ * goes, with SIGKILL, which none of its members can ignore, and the pipes are
+ * closed so that nothing still holding them keeps the caller waiting.
+ *
+ * Cleanup, not containment: a descendant that starts a session or a group of
+ * its own has left the owned group and is not stopped, and a host that is
+ * killed without running its JavaScript exit handlers cannot stop anything.
+ * This runner is not a sandbox (see the module header).
  */
 function endChild(child: ChildLike | undefined): void {
   if (child === undefined) return;
@@ -746,12 +756,13 @@ function childFailure(
 /**
  * `execFile`'s callback contract, built on `spawn` — because only `spawn`
  * passes `detached` on, and a child in a process group of its own is what
- * lets a timeout end everything it started. Same results: stdout and stderr
- * as text, a failure carrying the exit `code` or the `signal`, a spawn error
+ * lets the runner stop the group it owns. Same results: stdout and stderr as
+ * text, a failure carrying the exit `code` or the `signal`, a spawn error
  * (ENOENT …) carrying its string code, and `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`
- * — the child ended with `killSignal` — when a stream passes `maxBuffer`
- * bytes, with what was collected up to the ceiling. stdin is not connected:
- * nothing can block waiting for input that never comes.
+ * when a stream passes `maxBuffer` bytes, with what was collected up to the
+ * ceiling. At that ceiling the owned group is stopped AT ONCE and the call
+ * answered then (`endChild`), not when the pipes close. stdin is not
+ * connected: nothing can block waiting for input that never comes.
  */
 function execFileOn(spawn: SpawnLike): NonNullable<ChildProcessModuleLike['execFile']> {
   return (file, args, options, callback) => {
@@ -782,11 +793,11 @@ function execFileOn(spawn: SpawnLike): NonNullable<ChildProcessModuleLike['execF
         overflow = Object.assign(new RangeError(`${stream} maxBuffer length exceeded`), {
           code: BUFFER_OVERFLOW,
         });
-        try {
-          child.kill?.(options.killSignal ?? 'SIGKILL');
-        } catch {
-          // Already gone.
-        }
+        // Stop the owned process GROUP here, and release the pipes, then
+        // answer: waiting for `close` would wait for any descendant that
+        // inherited the pipes — and it keeps working until it lets go.
+        endChild(child);
+        reply(overflow);
         return;
       }
       chunks[stream].push(chunk);
@@ -817,8 +828,9 @@ function execFileOn(spawn: SpawnLike): NonNullable<ChildProcessModuleLike['execF
  * sends SIGTERM and then waits for the child to exit, so a child that ignored
  * SIGTERM ran on, and if it then exited 0 the call came back as a SUCCESS with
  * its output cut at the deadline. Here the deadline and the caller's signal
- * abort one controller; the child's whole PROCESS GROUP is killed with SIGKILL
- * (`endChild`), and the call rejects at once, whatever the child does next.
+ * abort one controller; the child's owned PROCESS GROUP is killed with
+ * SIGKILL (`endChild`), and the call rejects at once, whatever the child does
+ * next.
  *
  * An abort rejects with the caller's own reason, never read as a missing
  * interpreter. So did an output past the buffer ceiling
@@ -859,7 +871,7 @@ async function runChild(
       if (OWN_PROCESS_GROUP && typeof child?.pid === 'number') liveGroups.delete(child.pid);
       return true;
     };
-    // The deadline, or the caller: end the whole group and answer NOW. The
+    // The deadline, or the caller: stop the owned group and answer NOW. The
     // child's own callback, whenever it comes, finds the call settled.
     const onAbort = (): void => {
       endChild(child);
@@ -889,8 +901,9 @@ async function runChild(
             return;
           }
           if (error.code === BUFFER_OVERFLOW) {
-            // The runtime ended the child itself (with our SIGKILL); end the
-            // rest of its group too, so nothing it started writes on.
+            // On the `spawn` path the group was stopped where the overflow was
+            // seen; this covers an injected `execFile`, which ends only the
+            // direct child. A second stop of a stopped group is a no-op.
             endChild(child);
             resolve({
               stdout: out,
@@ -902,7 +915,9 @@ async function runChild(
           }
           if (typeof error.code === 'string') {
             // ENOENT and friends — the interpreter itself is not here. Naming it
-            // beats handing the model a traceback it cannot act on.
+            // beats handing the model a traceback it cannot act on. A process
+            // that did start before the error is stopped too, never left on.
+            endChild(child);
             reject(refusals.notRunnable(error.code));
             return;
           }
