@@ -61,7 +61,7 @@ import {
 } from '../emptiness.js';
 import { argumentRewritesOf } from '../middleware/rewrites.js';
 import { REASONS, reasonEntry } from './reasons.js';
-import { reasonSourceOf, type SourceRead } from './sources.js';
+import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
 import type {
   AnswerAssessment,
   AssessmentDeclarations,
@@ -406,9 +406,9 @@ function callsNamedBy(row: Readonly<Record<string, unknown>>): string[] {
   if (id !== undefined) named.push(id);
   const on = isRecord(row.declaredOn) ? str(row.declaredOn.toolCallId) : undefined;
   if (on !== undefined) named.push(on);
+  // Read through the one row-list reader (`sources.ts` · `rowList`): by index, never the list's code.
   for (const list of [row.carriers, row.witnesses]) {
-    if (!Array.isArray(list)) continue;
-    for (const entry of list as readonly unknown[]) {
+    for (const entry of rowList(list)?.entries ?? []) {
       const at = isRecord(entry) ? str(entry.toolCallId) : undefined;
       if (at !== undefined) named.push(at);
     }
@@ -750,8 +750,8 @@ function readConflicts(
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
   ledger.forEach((row: unknown, index) => {
-    if (!isRecord(row) || row.kind !== 'conflict' || !Array.isArray(row.witnesses)) return;
-    if (conflictOfThisTurn(row, row.witnesses, turn, calls)) {
+    if (!isRecord(row) || row.kind !== 'conflict') return;
+    if (conflictOfThisTurn(row, turn, calls)) {
       fire(g, 'sources-conflict', statePointer('findingsLedger', index, 'kind'));
     }
   });
@@ -773,20 +773,27 @@ function readConflicts(
  * - an UNSTAMPED row is never placed by a missing id: an earlier turn's
  *   conflict whose ids are gone stays that turn's. Nor is any row of a record
  *   with no `turnNumber`, where no stamp can be read against the turn.
+ *
+ * The readings are read through the one row-list reader (`sources.ts` ·
+ * `rowList`): by index, never through the list's own code. A list the fold
+ * cannot read whole — not a plain array, or longer than it reads — shows no
+ * placement elsewhere, so a row stamped with this turn keeps its doubt.
  */
 function conflictOfThisTurn(
   row: Readonly<Record<string, unknown>>,
-  witnesses: readonly unknown[],
   turn: number | undefined,
   calls: ReadonlySet<string>,
 ): boolean {
   const stamped = typeof row.turn === 'number' && turn !== undefined;
   if (stamped && row.turn !== turn) return false;
-  // By index: a hole is a reading too — one that names no call.
-  const ids = Array.from(witnesses, (w) => (isRecord(w) ? w.toolCallId : undefined));
+  const witnesses = rowList(row.witnesses);
+  // A hole, or a getter's entry, is a reading too — one that names no call.
+  const ids = (witnesses?.entries ?? []).map((w) => (isRecord(w) ? w.toolCallId : undefined));
   if (ids.some((id) => typeof id === 'string' && calls.has(id))) return true;
+  if (!stamped) return false;
   const namesACall = (id: unknown): boolean => typeof id === 'string' && id.length > 0;
-  return stamped && !(ids.length > 0 && ids.every(namesACall));
+  const readWhole = witnesses !== undefined && witnesses.unread === 0;
+  return !(readWhole && ids.length > 0 && ids.every(namesACall));
 }
 
 /** One answer-layer witness row of this turn, where it sits on the ledger. */
@@ -878,19 +885,16 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
   if (!isRecord(report) || typeof report.status !== 'string') return;
   const at = statePointer('answerValidation', 'status');
   g.checked.push({ layer: 4, check: 'answer-checks', ran: 1, of: 1, witness: [at] });
-  if (Array.isArray(report.checks)) {
-    for (const [index, check] of report.checks.entries()) {
-      if (
-        !isRecord(check) ||
-        typeof check.id !== 'string' ||
-        !check.id.startsWith('agent:negative-claims:')
-      )
-        continue;
-      if (check.disposition === 'checked-fail')
-        fire(g, 'claim-exceeds-search', statePointer('answerValidation', 'checks', index));
-      if (check.reason === 'declaration-overclaimed')
-        fire(g, 'declaration-overclaimed', statePointer('answerValidation', 'checks', index));
-    }
+  // By index over the list's own length — never its iterator or its own `entries`.
+  const checks: readonly unknown[] = Array.isArray(report.checks) ? report.checks : [];
+  for (let index = 0; index < checks.length; index++) {
+    const check = checks[index];
+    if (!isRecord(check) || typeof check.id !== 'string') continue;
+    if (!check.id.startsWith('agent:negative-claims:')) continue;
+    if (check.disposition === 'checked-fail')
+      fire(g, 'claim-exceeds-search', statePointer('answerValidation', 'checks', index));
+    if (check.reason === 'declaration-overclaimed')
+      fire(g, 'declaration-overclaimed', statePointer('answerValidation', 'checks', index));
   }
   if (report.status === 'failed') fire(g, 'answer-check-failed', at);
   if (report.status === 'unverified') fire(g, 'check-unreachable', at);

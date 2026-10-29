@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assessAnswer } from '../../../../src/core/agent/assessment/assess.js';
 import { REASONS, reasonEntry } from '../../../../src/core/agent/assessment/reasons.js';
+import { MAX_ROW_LIST_ENTRIES } from '../../../../src/core/agent/assessment/sources.js';
 import type {
   AnswerAssessment,
   AssessmentReason,
@@ -456,6 +457,38 @@ describe('UNIT — a conflict whose readings the record cannot name: the incompl
       expect(reasonsOf(a)).toEqual([]);
       expect(a.standing).toBe('consistent');
     }
+  });
+
+  it('stamped with this turn, readings that are not a plain list → still this turn’s, one unnamed call', () => {
+    // No list the fold can read (missing, not an array, an array that is not plain): no
+    // placement elsewhere is shown, so the stamp keeps its doubt — and the source counts one call.
+    const notPlain = Object.setPrototypeOf([reading('old1')], null) as unknown[];
+    for (const witnesses of [undefined, 'old1', notPlain]) {
+      const a = run({
+        turnNumber: 2,
+        history,
+        findingsLedger: [{ ...conflict([], 2), witnesses }],
+      });
+      expect(reasonsOf(a)).toEqual(['sources-conflict']);
+      expect(sourceOf(a)).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
+    }
+    // Unstamped, such a row is never placed in this turn.
+    for (const witnesses of [undefined, 'c2', notPlain]) {
+      const a = run({ turnNumber: 2, history, findingsLedger: [{ ...conflict([]), witnesses }] });
+      expect(reasonsOf(a)).toEqual([]);
+    }
+  });
+
+  it('stamped with this turn, more readings than the fold reads → the unread ones keep the doubt', () => {
+    // Every reading the fold read names an earlier call, but the list holds more than it reads.
+    const witnesses = Array.from({ length: MAX_ROW_LIST_ENTRIES + 1 }, () => reading('old1'));
+    const a = run({ turnNumber: 2, history, findingsLedger: [conflict(witnesses, 2)] });
+    expect(reasonsOf(a)).toEqual(['sources-conflict']);
+    expect(sourceOf(a)).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'old1', toolName: 'lookup' }],
+      unnamed: 1,
+    });
   });
 
   it('stamped with an EARLIER turn, no reading names a call → not this turn’s', () => {

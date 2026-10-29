@@ -1,5 +1,5 @@
 **Mixed** — the answer's standing, folded from the run's committed record: known · consistent with the record · not sure (with the reasons) · ask · not assessed — read after the run, and (honesty layer 4, the answer layer) inside it.
-Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `sources.ts` (what each reason rests on).
+Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `sources.ts` (what each reason rests on, and `rowList`, the one way a list on a row is read).
 Map: `witness.ts` (the answer layer's two committed witness rows, filed by the Route decider).
 Walker: `stage.ts` (the answer layer's one stage, at the head of the final branch).
 Lens: `compose.ts` (the standing as data, and as one line for the person under its own arm).
@@ -318,20 +318,39 @@ agent.answerValidation()?.checks.find((c) => c.reason === 'declaration-overclaim
 // { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }
 ```
 
-**A hole is an entry.** Every list a source reads — a conflict's readings, a
-contingent value's carriers, an answer check's `tools` — is read by index
-(`sources.ts` · `entriesOf`). An in-memory record (a live snapshot, a host-built
-one) can be SPARSE: a hole is no entry at all, which `map` and `filter` skip,
-where a saved recording would spell it `null`. Read by index, a hole is one
-entry that names no call — counted in `unnamed`, never skipped, and never a
-throw out of the fold:
+**A list on a row is read by index — never through its own code.** Every list
+the fold reads off a row — a conflict's readings, a contingent value's carriers,
+an answer check's `tools`, a request's `toolCalls` — goes through ONE reader,
+`sources.ts` · `rowList`: the bounded-copy convention (`lib/boundedJson.ts` ·
+`copyJson`) as a reader that never refuses (`readOwnList`). A plain array only,
+its own `length`, the own data property at each index, at most
+`MAX_ROW_LIST_ENTRIES` (1,000). The record handed to `assessAnswer` may be
+host-built, so a list can be SPARSE, carry its own iterator or put a getter at
+an index; the reader never calls the iterator or the getter. What it cannot read
+is counted, never dropped and never a throw:
+
+- a hole, or an entry behind a getter, is one entry that names no call;
+- the entries past the bound are counted, never walked (a `length` is the
+  record's own claim);
+- a value that is not a plain array is not trusted as a list: one call the
+  record cannot name, and — for a conflict — no placement shown elsewhere, so
+  a row stamped with this turn keeps its doubt (`assess.ts` ·
+  `conflictOfThisTurn`, below).
+
+**Why.** `Array.from` and `for…of` run a list's own iterator: an empty one hid a
+named reading (the source read `{ calls: [], unnamed: 1 }`), and a getter would
+have run inside the fold.
 
 ```ts
-const carriers = [{ toolCallId: 'c1', standing: 'noise' }];
-carriers.length = 2; // index 1 is a hole
-const contingent = { kind: 'contingent', declaredOn: 'answer', value: 'x-1', carriers };
-assessAnswer({ snapshot: { sharedState: { history, findingsLedger: [contingent] } } }).reasons[0]
-  .source; // { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'inventory' }], unnamed: 1 }
+const witnesses = [
+  { toolCallId: 'c2', subject: { kind: 'host', id: 'h1' }, predicate: 'state' },
+  { subject: { kind: 'host', id: 'h1' }, predicate: 'state' }, // names no call
+];
+witnesses.length = 3; // index 2 is a hole
+Object.defineProperty(witnesses, Symbol.iterator, { value: function* () {} }); // never called
+const conflict = { kind: 'conflict', key: 'host h1 · state', witnesses, iteration: 1, turn: 2 };
+assessAnswer({ snapshot: { sharedState: { turnNumber: 2, history, findingsLedger: [conflict] } } })
+  .reasons[0].source; // { kind: 'calls', calls: [{ toolCallId: 'c2', toolName: 'lookup' }], unnamed: 2 }
 ```
 
 **The app's words for a reason's calls.** A tool may declare `displayName`
@@ -466,6 +485,15 @@ it at the study's freeze (adopted Q12).
 
 ## Not covered
 
+- **A host-built record's top-level lists.** The lists ON a row go through
+  `rowList`. The record's own keys — `history`, `findingsLedger`,
+  `coverageDeclared`, `answerValidation.checks`, `middlewareDecisions` (and the
+  `changedKeys` the shared reader `middleware/rewrites.ts` ·
+  `argumentRewritesOf` walks) — are read with the array's own length and
+  elements: never through `history`'s iterator or the checks' own `entries`, but
+  a getter at an index runs, an overridden `forEach` runs, and a very long
+  sparse list costs its length. A record the library committed, or a saved
+  recording read with `JSON.parse`, holds none of these.
 - **Verdicts that exist only as events.** The `.claims()` dispositions — so
   `claim-contradicted` and a claims-supported "known" — and the integrity
   dispositions are not on the committed record in this version. The fold never

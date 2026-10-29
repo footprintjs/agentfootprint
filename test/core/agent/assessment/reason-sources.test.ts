@@ -32,7 +32,7 @@
  *                 reasons and checks, and the line opens with the same word.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   Agent,
@@ -46,7 +46,10 @@ import { mock } from '../../../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../../../src/observe.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
 import { REASONS } from '../../../../src/core/agent/assessment/reasons.js';
-import { reasonSourceOf } from '../../../../src/core/agent/assessment/sources.js';
+import {
+  MAX_ROW_LIST_ENTRIES,
+  reasonSourceOf,
+} from '../../../../src/core/agent/assessment/sources.js';
 import {
   sourcesByReason,
   standingLineOf,
@@ -539,6 +542,119 @@ describe('UNIT — a list that names some calls and not others never loses one',
       calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
       unnamed: 1,
     });
+  });
+
+  // A list is read by INDEX, never through its own code (review of #250): a host-built record
+  // can give a list its own iterator, put a getter at an index, or hand over something that is
+  // not a plain array at all. `Array.from` ran the iterator — an empty one hid the named call —
+  // and would have run the getter inside the fold.
+  const iterating = (list: unknown[], iterate: () => Generator<unknown>): unknown[] =>
+    Object.defineProperty(list, Symbol.iterator, { value: iterate });
+  const fromNowhere = function* (): Generator<unknown> {};
+
+  it('a witness list with its own iterator: never called — the named reading is still named', () => {
+    // A conflict stamped with this turn whose list's iterator yields nothing.
+    const witnesses = iterating([reading('c1'), reading()], fromNowhere);
+    const a = fold({
+      history,
+      turnNumber: 1,
+      findingsLedger: [{ ...conflict(witnesses), turn: 1 }],
+    });
+    expect(sourceOf(a, 'sources-conflict')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 1,
+    });
+  });
+
+  it('a carrier list and a tools list with their own iterators: read by index, never iterated', () => {
+    const carriers = iterating([carrier('c1'), carrier()], function* () {
+      yield carrier('elsewhere');
+    });
+    expect(
+      sourceOf(fold({ history, findingsLedger: [contingent(carriers)] }), 'value-contingent'),
+    ).toEqual({ kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'inventory' }], unnamed: 1 });
+    const tools = iterating(['inventory'], function* () {
+      yield 'archive';
+    });
+    const check = {
+      id: 'agent:negative-claims:declaration:0',
+      disposition: 'not-applicable',
+      reason: 'declaration-overclaimed',
+      tools,
+    };
+    const a = fold({
+      history,
+      answerValidation: { mode: 'observe', status: 'passed', checks: [check] },
+    });
+    expect(sourceOf(a, 'declaration-overclaimed')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+    });
+  });
+
+  it('an entry behind a getter is never read through it: one call the record cannot name', () => {
+    const getter = vi.fn(() => carrier('c1'));
+    const carriers: unknown[] = [carrier('c1')];
+    Object.defineProperty(carriers, 1, { enumerable: true, get: getter });
+    const a = fold({ history, findingsLedger: [contingent(carriers)] });
+    expect(sourceOf(a, 'value-contingent')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 1,
+    });
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it('the fold never iterates a record list through the list’s own code: history and the report’s checks', () => {
+    // `history` with an iterator that yields nothing: the tool-name join reads it by index.
+    const quiet = iterating([...history], fromNowhere);
+    const a = fold({ history: quiet, findingsLedger: [conflict([reading('c1')])] });
+    expect(sourceOf(a, 'sources-conflict')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+    });
+    // The report's checks with their own `entries`: never called — every row is read by index.
+    const entries = vi.fn(() => [][Symbol.iterator]());
+    const checks = Object.defineProperty(
+      [
+        {
+          id: 'agent:negative-claims:declaration:0',
+          disposition: 'not-applicable',
+          reason: 'declaration-overclaimed',
+          tools: ['inventory'],
+        },
+      ],
+      'entries',
+      { value: entries },
+    );
+    const b = fold({ history, answerValidation: { mode: 'observe', status: 'passed', checks } });
+    expect(b.reasons.map((r) => r.reason)).toContain('declaration-overclaimed');
+    expect(entries).not.toHaveBeenCalled();
+  });
+
+  it('a list that is not a plain array is not trusted as one: one call the record cannot name', () => {
+    const carriers = Object.setPrototypeOf([carrier('c1')], null) as unknown[];
+    expect(Array.isArray(carriers)).toBe(true);
+    const a = fold({ history, findingsLedger: [contingent(carriers)] });
+    expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
+  });
+
+  it('a list longer than the fold reads: the entries past the bound are counted, never read', () => {
+    // `length` is the record's own claim: a hostile 4,294,967,295 must not be walked.
+    const carriers: unknown[] = [];
+    carriers[MAX_ROW_LIST_ENTRIES + 1] = carrier('c1'); // past the bound: counted, not read
+    const a = fold({ history, findingsLedger: [contingent(carriers)] });
+    expect(sourceOf(a, 'value-contingent')).toEqual({
+      kind: 'calls',
+      calls: [],
+      unnamed: MAX_ROW_LIST_ENTRIES + 2,
+    });
+    const huge: unknown[] = [];
+    huge.length = 2 ** 32 - 1;
+    expect(
+      sourceOf(fold({ history, findingsLedger: [contingent(huge)] }), 'value-contingent'),
+    ).toEqual({ kind: 'calls', calls: [], unnamed: 2 ** 32 - 1 });
   });
 
   it('contingent, all unnamed: every carrier counted, and the line keeps its own words', () => {
