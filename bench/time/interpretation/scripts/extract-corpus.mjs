@@ -25,4 +25,4 @@ if (rawEntries !== rows.length) throw new Error(`parsed ${rows.length} rows but 
 const dupes = rows.length - new Set(rows.map((r) => r.text)).size;
 writeFileSync(out, JSON.stringify(rows, null, 1) + '\n');
 console.log(`extracted ${rows.length} rows (${dupes} duplicate texts) → ${out}`);
-console.log('labels:', JSON.stringify(rows.reduce((a, r) => { const k = typeof r.app === 'string' ? r.app : 'reads'; a[k] = (a[k] ?? 0) + 1; return a; }, {})));
+console.log('labels:', JSON.stringify(rows.reduce((a, r) => { const k = typeof r.app === 'string' ? r.app : 'reads'; a[k] = (a[k] ?? 0) + 1; return a; }, Object.create(null))));

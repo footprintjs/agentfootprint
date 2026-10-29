@@ -7,17 +7,31 @@
 // declaration safe, and none is refused. The sampling step is in the digest whatever role its
 // argument carries. The digest is a SHA-256 over canonical JSON (sorted keys, no whitespace), so it
 // holds no text of the request, and equal scopes give equal digests.
+//
+// OWN KEYS ONLY, NO PROTOTYPE SETTER. Arguments are read from the call's OWN enumerable keys, each
+// value from its own data descriptor (no getter runs), into a null-prototype record. An argument
+// named "__proto__" (valid JSON) is an argument like any other: on an ordinary object,
+// `bound['__proto__'] = value` would run the inherited setter and drop it from the digest.
 import { createHash } from 'node:crypto';
 
-export const BINDING_VERSION = '1.0.0';
+export const BINDING_VERSION = '1.1.0';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
+const own = (o, k) => o !== null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
 
-/** Canonical JSON: sorted keys at every depth, no whitespace. */
+/** The value of an own data property, never a getter's result. An accessor is bound as a marker. */
+function ownValue(o, k) {
+  const d = Object.getOwnPropertyDescriptor(o, k);
+  return d === undefined ? undefined : 'value' in d ? d.value : { '[accessor]': true };
+}
+
+/** Canonical JSON: own enumerable keys only, sorted at every depth, no whitespace, no getter run. */
 export function canonical(value) {
-  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+  if (Array.isArray(value)) {
+    return '[' + Array.from({ length: value.length }, (_, i) => canonical(ownValue(value, i))).join(',') + ']';
+  }
   if (value !== null && typeof value === 'object') {
-    return '{' + Object.keys(value).sort().map((k) => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';
+    return '{' + Object.keys(value).sort().map((k) => JSON.stringify(k) + ':' + canonical(ownValue(value, k))).join(',') + '}';
   }
   return JSON.stringify(value === undefined ? null : value);
 }
@@ -36,8 +50,9 @@ export function declarationVersion(declaration) {
 /** What the digest covers: everything the call will run with that the person could have meant. */
 export function scopeOf(call, declaration) {
   const inert = inertArguments(declaration);
-  const bound = {};
-  for (const [name, value] of Object.entries(call.args ?? {})) if (!inert.has(name)) bound[name] = value;
+  const args = call.args ?? {};
+  const bound = Object.create(null); // no inherited "__proto__" setter
+  for (const name of Object.keys(args)) if (!inert.has(name)) bound[name] = ownValue(args, name);
   return {
     tool: call.tool,
     declaration: declarationVersion(declaration),
@@ -54,7 +69,7 @@ export function scopeDigest(call, declaration) {
 
 /** A batch's digest covers its calls' digests, in order: a member added or removed is a new batch. */
 export function batchDigest(calls, declarations) {
-  return sha256(canonical(calls.map((c) => scopeDigest(c, declarations[c.tool]))));
+  return sha256(canonical(calls.map((c) => scopeDigest(c, own(declarations, c.tool) ? declarations[c.tool] : undefined))));
 }
 
 /**

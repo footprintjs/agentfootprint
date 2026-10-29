@@ -185,7 +185,7 @@ if (reference) {
   if (which === 'existing') summary.reference.vsAppLabels = tally(rows.map((r) => r.reference.verdictVsAppLabel));
 }
 if (which === 'heldout') {
-  summary.byClass = {};
+  summary.byClass = Object.create(null); // keyed by corpus class names: no inherited setter
   for (const cls of [...new Set(rows.map((r) => r.cls))]) {
     const sub = rows.filter((r) => r.cls === cls);
     summary.byClass[cls] = { n: sub.length };

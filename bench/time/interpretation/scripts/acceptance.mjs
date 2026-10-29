@@ -2,7 +2,7 @@
 // (design § 8.4, R15). They run the prototype in binding.mjs, not the library.  Run: npm run acceptance
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { atDispatch, batchDigest, canonical, scopeDigest } from './binding.mjs';
+import { atDispatch, batchDigest, canonical, scopeDigest, scopeOf } from './binding.mjs';
 
 const executed = { from: '2026-10-27T07:30:00Z', to: '2026-10-27T09:30:00Z', zone: 'UTC' };
 const period = { forms: [{ kind: 'lookback', argument: 'window', signed: false }], direction: 'past', shapes: ['rolling-lookback'] };
@@ -29,7 +29,7 @@ test('the same argument marked inert: a changed customer does not ask again; a b
   assert.equal(atDispatch(ok, withArgs(call, { node: 9 }), declaration).outcome, 'ask-again');
 });
 
-test('a partial Tool.search that leaves an argument out still binds it; nothing is refused', () => {
+test('a partial Tool.search that leaves an argument out still binds it (defence in depth: the library refuses one today)', () => {
   const declaration = { period, search: { arguments: [{ name: 'window', role: 'period' }] } }; // customer and node undeclared
   const ok = confirm(declaration, call);
   assert.equal(atDispatch(ok, withArgs(call, { customer: 'globex' }), declaration).outcome, 'ask-again');
@@ -54,7 +54,7 @@ test('a different tool, a new declaration version, or moved bounds asks again', 
   assert.equal(atDispatch(ok, { ...call, executed: moved }, declaration).outcome, 'ask-again');
 });
 
-test('a call added to a confirmed batch is a new batch; the same batch is the same digest', () => {
+test('a call added to a confirmed batch is a new batch digest (membership only: the batch ask is not built)', () => {
   const declarations = { readings: { period }, inventory: { period } };
   const second = { tool: 'inventory', args: { customer: 'acme' }, executed, mention: 0 };
   assert.notEqual(batchDigest([call], declarations), batchDigest([call, second], declarations));
@@ -74,4 +74,39 @@ test('the digest is canonical: key order never changes it, and it is a hash, not
   assert.equal(digest, scopeDigest(call, declaration));
   assert.match(digest, /^[0-9a-f]{64}$/);
   assert.equal(canonical({ b: 1, a: [2, { d: 3, c: 4 }] }), '{"a":[2,{"c":4,"d":3}],"b":1}');
+});
+
+// An argument named "__proto__" is valid JSON. Copied into an ordinary object, `bound['__proto__'] = v`
+// runs the inherited setter and the argument drops out of the digest (found in review at b32c49aa).
+const parsed = (customer) => ({ tool: 'readings', args: JSON.parse(`{"window":"2h","__proto__":{"customer":"${customer}"}}`), executed, mention: 0 });
+
+test('parsed JSON: an argument named __proto__ is bound like any other; a changed value asks again', () => {
+  const declaration = { period };
+  const first = parsed('A');
+  assert.deepEqual(Object.keys(first.args), ['window', '__proto__'], 'JSON.parse makes it an own argument');
+  assert.deepEqual(Object.keys(scopeOf(first, declaration).args), ['window', '__proto__'], 'the digest keeps it');
+  assert.notEqual(scopeDigest(first, declaration), scopeDigest(parsed('B'), declaration));
+  const ok = confirm(declaration, first);
+  assert.equal(atDispatch(ok, parsed('B'), declaration).outcome, 'ask-again');
+  assert.equal(atDispatch(ok, parsed('B'), declaration, { canAsk: false }).outcome, 'refused');
+  assert.equal(atDispatch(ok, parsed('A'), declaration).outcome, 'run', 'the identical call reuses the confirmation');
+  const without = { ...first, args: JSON.parse('{"window":"2h"}') };
+  assert.equal(atDispatch(ok, without, declaration).outcome, 'ask-again', 'dropping the argument is a change too');
+});
+
+test('parsed JSON: __proto__ nested in an argument value is in the digest; marked inert, it is left out', () => {
+  const nested = (customer) => ({ ...call, args: JSON.parse(`{"window":"2h","filter":{"__proto__":{"customer":"${customer}"}}}`) });
+  const declaration = { period };
+  assert.equal(atDispatch(confirm(declaration, nested('A')), nested('B'), declaration).outcome, 'ask-again');
+  const inert = { period, search: { arguments: [{ name: '__proto__', role: 'inert' }] } };
+  assert.equal(atDispatch(confirm(inert, parsed('A')), parsed('B'), inert).outcome, 'run');
+});
+
+test('only own data is bound: no getter runs, and an inherited property is not an argument', () => {
+  const declaration = { period };
+  const args = { window: '2h' };
+  Object.defineProperty(args, 'customer', { enumerable: true, get() { throw new Error('a getter ran'); } });
+  assert.doesNotThrow(() => scopeDigest({ ...call, args }, declaration));
+  const inherited = Object.assign(Object.create({ customer: 'acme' }), { window: '2h' });
+  assert.deepEqual(Object.keys(scopeOf({ ...call, args: inherited }, declaration).args), ['window']);
 });

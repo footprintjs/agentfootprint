@@ -15,6 +15,8 @@ import { englishTimeReader } from '../.build/af-english.mjs';
 const MINUTE = 60_000;
 const endsNow = (to, now) => Math.abs(to - now.getTime()) < MINUTE;
 const UNIT_SECONDS = { second: 1, minute: 60, hour: 3600, day: 86400, week: 604800 };
+/** Own keys only: a unit the table does not name is NaN, never an inherited property. */
+const unitSeconds = (u) => (Object.prototype.hasOwnProperty.call(UNIT_SECONDS, u) ? UNIT_SECONDS[u] : NaN);
 
 /** Drop an entity whose span lies inside another's (Duckling returns a duration inside a time). */
 function maximal(entities) {
@@ -158,7 +160,7 @@ export function afEnglish(text) {
     if (m.problem === 'unreadable') { e.kind = 'unreadable'; return e; }
     const p = m.parses[0];
     if (p.relative?.count !== undefined && Object.keys(p).length === 1) {
-      e.kind = 'lookback'; e.lookbackSeconds = p.relative.count * UNIT_SECONDS[p.relative.unit];
+      e.kind = 'lookback'; e.lookbackSeconds = p.relative.count * unitSeconds(p.relative.unit);
     } else if (p.rangeOf !== undefined) {
       e.kind = 'range';
     }
