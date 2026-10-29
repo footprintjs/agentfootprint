@@ -90,12 +90,21 @@ src/
    next version from the fragments, writes the CHANGELOG entry, bumps `package.json`,
    regenerates every generated doc, and opens (or updates) **one** PR, `chore: release vX.Y.Z`,
    from the branch `release/next`. Later fragments update the same PR.
-2. That PR runs the full CI. With auto-merge on it merges itself once CI is green; otherwise
+2. That PR runs the full CI, except the docs-site build (`docs`), which it skips: the website
+   never holds up a release. With auto-merge on it merges itself once CI is green; otherwise
    merge it yourself.
-3. Its merge runs every gate again on the exact release tree, then tags, creates the GitHub
-   release, publishes to npm with provenance and deploys agentfootprint.dev — each step only if
-   the one before succeeded. A red gate publishes nothing; fix it with a normal PR and the
-   version publishes when that merges (or re-run the failed job).
+3. Its merge builds the package from the exact release tree, checks its packaging (publint,
+   attw, the packed ContextFootprint consumers), tags, creates the GitHub release and publishes
+   to npm with provenance — each step only if the one before succeeded. The other gates do not
+   run a second time when the release PR's CI already passed them on that exact tree. When the
+   workflow cannot show that (main moved after CI ran, CI was not green, the commit is not the
+   release PR's merge), it runs every gate first, as before. A red gate publishes nothing; fix
+   it with a normal PR and the version publishes when that merges (or re-run the failed job).
+4. Once npm has the version, the Deploy Docs workflow builds and deploys agentfootprint.dev. A
+   site problem — an export over its budget, docs-next unable to install — delays only the
+   website: fix it and run **Actions → Deploy Docs** again. No new version is needed. Every
+   other PR still builds the site and checks its budget, so growth shows up in the PR that
+   causes it.
 
 Start it by hand with **Actions → Release → Run workflow** or
 `gh workflow run publish.yml -f bump=minor` (e.g. to force a bigger bump). `npm run release`
@@ -127,9 +136,11 @@ never report. The release PR is opened by a small GitHub App instead:
 Settings → Rules → Rulesets → **New branch ruleset**: target the default branch; enable
 **Restrict deletions**, **Block force pushes**, **Require a pull request before merging**
 (0 required approvals if you are the only maintainer — otherwise every release PR waits for
-an approval) and **Require status checks to pass** with: `test (20)`, `test (22)`, `lint`,
-`docs`, `generated`, `docs-links`, `docs-truth`, `coverage`, `changes`. Leave the bypass list
-empty. Tags are not affected, so the Release workflow can still tag and publish.
+an approval) and **Require status checks to pass** with: `test (22)`, `test (24)`, `lint`,
+`docs`, `generated`, `docs-links`, `docs-truth`, `coverage`, `changes`, `tested-tree`. The
+release PR skips `docs` and `changes`; GitHub reports a job skipped by its `if:` as passing,
+so neither holds it up. Leave the bypass list empty. Tags are not affected, so the Release
+workflow can still tag and publish.
 
 ## Commit Messages
 

@@ -2,6 +2,14 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 
+// WHERE THIS RUNS (from 2026-10-29): ci.yml's `docs` job, on every pull request
+// except the release PR and on every push to main, and docs.yml before each
+// deploy. NOT publish.yml any more: a red budget there kept 9.87.0, 9.92.0 and
+// 9.101.0 off npm. Site growth is caught in the PR that causes it, and a red
+// budget at deploy time leaves the website on its previous version — never a
+// version off npm. The paragraphs below that call publish.yml the blocking
+// copy of this check record the wiring of their day.
+
 const outputRoot = path.resolve(process.argv[2] ?? 'out');
 const projectRoot = path.resolve(import.meta.dirname, '..');
 const failures = [];

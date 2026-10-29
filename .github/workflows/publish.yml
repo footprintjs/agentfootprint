@@ -11,9 +11,12 @@ name: Release
 #   2. That PR runs the full CI like any other PR. With auto-merge on, it merges
 #      itself once CI is green; otherwise a person merges it.
 #   3. Its merge puts a version on main that has no tag yet. This workflow runs
-#      again (`publish` mode): EVERY gate against that exact tree, then tag,
-#      GitHub release, `npm publish --provenance`, and the docs site — in that
-#      order, each only after the one before it succeeded.
+#      again (`publish` mode): build and stage the package from that exact
+#      tree, then tag, GitHub release and `npm publish --provenance` — in that
+#      order, each only after the one before it succeeded — then start the
+#      docs site deploy. The gates do not run a second time when the release
+#      PR's CI already passed them on this exact tree (`verdict`); when that
+#      cannot be shown, `build` runs every one of them first, as it always did.
 #
 # Jobs:
 #   plan     what does main need? `publish` when package.json names a version
@@ -26,13 +29,20 @@ name: Release
 #            with the release GitHub App's token: a PR opened with GITHUB_TOKEN
 #            would run no CI, and its required checks would never report.
 #            Installs nothing.
-#   build    every gate against the release tree, then stages the npm tarball.
-#            No write power of any kind.
+#   verdict  did the release PR's CI already pass every gate on THIS tree?
+#            Reads the GitHub API only: no checkout, no install, read-only.
+#   build    builds the package from the release tree, checks its packaging
+#            and stages the npm tarball; runs every other gate too, unless
+#            `verdict` showed CI already passed them on this tree. No write
+#            power of any kind.
 #   release  tag + GitHub release. Runs no npm install. Safe to re-run: a tag or
 #            a release that already exists is skipped.
 #   publish  `npm publish --provenance` of the tarball `build` staged. The ONLY
 #            job with an OIDC token.
-#   docs     deploys the docs site — AFTER npm has the version.
+#   docs     starts the docs site deploy (docs.yml) — AFTER npm has the version.
+#            The website never gates npm: a site that fails to build, install
+#            or fit its budget delays the website only, and Deploy Docs can be
+#            run again with no new version.
 #
 # A red gate publishes nothing, and nothing a person has to undo: the version
 # on main simply stays untagged until a fixing PR merges (whose run publishes)
@@ -66,9 +76,10 @@ on:
     types: [published]
 
 # Least privilege: nothing at the top level. `release` gets contents write,
-# `publish` gets id-token, `docs` gets actions write; `build` and `propose` —
-# the jobs that install dependencies — get read and keep no credentials, and
-# only `release-pr`, which installs nothing, holds the App token (scoped to
+# `publish` gets id-token, `docs` gets actions write, `verdict` gets read access
+# to Actions runs and pull requests; `build` and `propose` — the jobs that
+# install dependencies — get read and keep no credentials, and only
+# `release-pr`, which installs nothing, holds the App token (scoped to
 # contents + pull requests).
 #
 # No cache on the release path, restored or saved. Every run here is a
@@ -151,9 +162,130 @@ jobs:
             echo "Nothing to release: v$VERSION is tagged and no .changes/ fragments are waiting." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  build:
+  # Did CI already pass every gate on THE TREE about to be published? The
+  # release PR ran the full CI (ci.yml) on the merge of its head into main.
+  # When that merge's tree is the tree of the commit `plan` pinned, running the
+  # gates again in `build` tests the same bytes a second time: about 23 of
+  # the build's 28 minutes (Release run 40897854122). So `build` skips those
+  # gates when, and only when, this job shows ALL of:
+  #
+  #   1. the commit is the merge of a pull request from `release/next` on this
+  #      repository into main (squash, merge commit or rebase: the tree
+  #      decides, not the merge method);
+  #   2. the NEWEST CI run on that pull request's final head — the run its
+  #      checks showed — finished green in every job of its latest attempt. A
+  #      flaky job that went green on a re-run counts, as a re-run of a failed
+  #      job here would; a newer run that failed is never outweighed by an
+  #      older green one;
+  #   3. every CI job named in GATES RAN and passed in that run. A job
+  #      renamed, removed or skipped is not a pass;
+  #   4. the tree that run tested, as its `tested-tree` job recorded it, is
+  #      byte for byte the tree of the commit being published. A pull request
+  #      run tests the merge ref, whose tree is the squash commit's only while
+  #      main does not move; when main moved in between, the trees differ and
+  #      the gates run here.
+  #
+  # Any other outcome — no such pull request or run, an API call that fails,
+  # an answer it does not expect, this job failing outright — leaves `tested`
+  # unset, and `build` runs every gate as it always did. This job can only
+  # decline to skip the gates: even when it fails, the release goes on, with
+  # every gate run in `build`.
+  verdict:
     needs: plan
     if: needs.plan.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read # CI's runs and their jobs
+      contents: read # the commit's tree
+      pull-requests: read # the pull request that merged it
+    outputs:
+      tested: ${{ steps.verdict.outputs.tested }}
+    steps:
+      # The GitHub API and jq only: no checkout, no install, no repository
+      # code. Every value reaches the script through env, none through ${{ }}.
+      - id: verdict
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          # The ci.yml jobs that run every gate `build` may skip — the steps
+          # below marked `if: needs.verdict.outputs.tested != 'true'`. A test
+          # (test/docs/release-verdict.test.ts) pins that each command those
+          # steps run is run by one of these jobs.
+          GATES: '["test (22)", "test (24)", "lint", "coverage", "generated", "docs-truth", "docs-links"]'
+        run: |
+          # Every early exit is "build runs every gate": `tested` stays unset.
+          run_gates() {
+            echo "::notice::build runs every gate: $1"
+            echo "**Gates:** \`build\` runs every gate: $1." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
+          # So is anything unexpected: a fault in this check costs minutes,
+          # never a release.
+          trap 'run_gates "the check stopped unexpectedly (line $LINENO)"' ERR
+          hex40='^[0-9a-f]{40}$'
+
+          jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' <<<"$GATES" >/dev/null ||
+            run_gates "GATES is not a list of CI job names"
+          [[ "$SHA" =~ $hex40 ]] || run_gates "plan pinned no commit"
+          COMMIT="$(gh api "repos/$REPO/git/commits/$SHA")" || run_gates "could not read commit $SHA"
+          TREE="$(jq -r '.tree.sha' <<<"$COMMIT")"
+          [[ "$TREE" =~ $hex40 ]] || run_gates "commit $SHA has no readable tree"
+
+          # 1. The pull request this commit merged: the release PR, from this
+          #    repository, into main.
+          PULLS="$(gh api "repos/$REPO/commits/$SHA/pulls")" ||
+            run_gates "could not read which pull request merged $SHA"
+          PR="$(jq -c --arg sha "$SHA" '[.[] | select(.merge_commit_sha == $sha and .merged_at != null)]' <<<"$PULLS")"
+          [ "$(jq length <<<"$PR")" = 1 ] || run_gates "$SHA is not the merge of one pull request"
+          jq -e --arg repo "$REPO" '.[0] | .base.ref == "main" and .head.ref == "release/next" and .head.repo.full_name == $repo' <<<"$PR" >/dev/null ||
+            run_gates "$SHA is not the merge of the release PR (release/next on $REPO into main)"
+          NUMBER="$(jq -r '.[0].number' <<<"$PR")"
+          PR_HEAD="$(jq -r '.[0].head.sha' <<<"$PR")"
+          [[ "$PR_HEAD" =~ $hex40 ]] || run_gates "#$NUMBER names no head commit"
+
+          # 2. The newest CI run on that head, from this repository: finished,
+          #    and green. Older runs do not count, green or not.
+          RUNS="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$PR_HEAD&per_page=100")" ||
+            run_gates "could not list the CI runs of #$NUMBER"
+          NEWEST="$(jq -c --arg repo "$REPO" --arg head "$PR_HEAD" '
+            [.workflow_runs[] | select(.event == "pull_request" and .head_sha == $head
+              and .head_repository.full_name == $repo)] | max_by(.id) // empty' <<<"$RUNS")"
+          [ -n "$NEWEST" ] || run_gates "#$NUMBER has no CI run on its head $PR_HEAD"
+          RUN="$(jq -r '.id' <<<"$NEWEST")"
+          jq -e '.status == "completed" and .conclusion == "success"' <<<"$NEWEST" >/dev/null ||
+            run_gates "the newest CI run of #$NUMBER, $RUN, is $(jq -r '"\(.status)/\(.conclusion // "none")"' <<<"$NEWEST")"
+          JOBS="$(gh api "repos/$REPO/actions/runs/$RUN/jobs?filter=latest&per_page=100")" ||
+            run_gates "could not read the jobs of CI run $RUN"
+
+          # 3. Every gate job ran and passed. Skipped is not passed.
+          jq -e --argjson gates "$GATES" '
+            [.jobs[] | select(.conclusion == "success") | .name] as $passed
+            | all($gates[]; IN($passed[]))' <<<"$JOBS" >/dev/null ||
+            run_gates "CI run $RUN lacks a passed job named in GATES"
+
+          # 4. The tree that run tested is the tree being published. Another
+          #    tree: main moved after the run began. None: a run from before
+          #    ci.yml recorded one.
+          TESTED="$(jq -r '
+            [.jobs[] | select(.name == "tested-tree" and .conclusion == "success")
+              | (.steps // [])[].name | strings | capture("^tested tree (?<tree>[0-9a-f]{40})$").tree]
+            | if length == 1 then .[0] else "" end' <<<"$JOBS")"
+          [ "$TESTED" = "$TREE" ] ||
+            run_gates "CI run $RUN tested ${TESTED:-no recorded tree}, not $TREE"
+
+          URL="https://github.com/$REPO/actions/runs/$RUN"
+          echo "::notice::CI run $URL passed every gate on tree $TREE, the tree of $SHA (the merge of #$NUMBER). build does not run them again."
+          echo "**Gates:** CI run [$RUN]($URL) passed every gate on tree \`$TREE\`, the tree of \`$SHA\` (the merge of #$NUMBER), so \`build\` does not run them again." >> "$GITHUB_STEP_SUMMARY"
+          echo "tested=true" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [plan, verdict]
+    # Runs even when `verdict` failed: its output is then unset, so every gate
+    # below runs. `plan` must have succeeded and named a version to publish.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mode == 'publish' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -189,53 +321,63 @@ jobs:
       - run: npm run build
 
       # ── Gates — the same list scripts/release.sh runs locally ──────────
+      # Skipped ONLY when `verdict` showed that the release PR's CI passed
+      # every one of them on this exact tree (each runs in a ci.yml job named
+      # in verdict's GATES). Anything but an explicit 'true' runs them all. The
+      # condition reads `needs`, which no step in this job can change — unlike
+      # an env value, which any process here could rewrite through $GITHUB_ENV.
       - name: Documentation check (removed API names)
+        if: needs.verdict.outputs.tested != 'true'
         run: bash scripts/check-docs.sh
       - name: Duplicate type check
+        if: needs.verdict.outputs.tested != 'true'
         run: node scripts/check-dup-types.mjs
       - name: Format
+        if: needs.verdict.outputs.tested != 'true'
         run: npm run format
       - name: Lint
+        if: needs.verdict.outputs.tested != 'true'
         run: npm run lint
       - name: Typecheck
+        if: needs.verdict.outputs.tested != 'true'
         run: npx tsc --noEmit && npm run test:types
       # The instrumented run is a superset of `npm test` (see release.sh gate 4).
       - name: Tests (with coverage — the command CI's coverage job runs)
+        if: needs.verdict.outputs.tested != 'true'
         run: npm run test:coverage
       - name: Examples (typecheck + run every one end-to-end)
+        if: needs.verdict.outputs.tested != 'true'
         run: npm run test:examples
       # Generated files must match this exact tree — the release PR regenerated
       # them, and nothing may have drifted since.
       - name: Generated files are current
+        if: needs.verdict.outputs.tested != 'true'
         run: npm run docs:check
       # Docs-truth RATCHET: no new export or event without prose, and never
       # docs that tell a reader to import something that does not exist.
       - name: Docs truth
+        if: needs.verdict.outputs.tested != 'true'
         run: npm run docs:truth
       - name: Doc links
+        if: needs.verdict.outputs.tested != 'true'
         run: |
           npm install --no-save github-slugger
           node scripts/check-doc-links.mjs --strict
-      # Packaging correctness: the registry dependency through isolated packed
-      # consumers, then dual CJS/ESM types in every consumer mode.
+
+      # Packaging correctness — ALWAYS, whatever `verdict` said: these check
+      # the package this job is about to stage, as built here. The registry
+      # dependency through isolated packed consumers, then dual CJS/ESM types
+      # in every consumer mode.
+      #
+      # No docs site here. It used to be built and measured at this point, so
+      # a site over its budget kept a version off npm (9.87.0, 9.92.0 and
+      # 9.101.0 never published; 12.0.0 waited for a docs-next install). Now
+      # ci.yml's `docs` job catches site growth in the PR that causes it, and
+      # docs.yml builds and checks the site after npm has the version, where a
+      # failure delays the website only.
       - run: npm run test:context-package
       - run: npx publint
       - run: npx @arethetypeswrong/cli --pack
-
-      # Site-budget RATCHET — no version reaches npm while the docs site is over
-      # budget (the measured history is above OUTPUT_LIMITS in
-      # docs-next/scripts/check-site-budget.mjs). Runs last: it costs ~1m40s.
-      - name: Install docs-next deps (site-budget gate)
-        working-directory: docs-next
-        run: npm ci
-      - name: Build docs static export
-        working-directory: docs-next
-        env:
-          EXPORT: 'true'
-        run: npm run build
-      - name: Enforce site performance budgets
-        working-directory: docs-next
-        run: npm run check:site-budget
 
       # Stage the EXACT publishable package, files-agnostically: npm computes the
       # tarball (honoring the `files` globs/negations), then we extract it. The
@@ -255,7 +397,10 @@ jobs:
 
   release:
     needs: [plan, build]
-    if: github.event_name != 'release'
+    # Explicit rather than the implicit success(): `build` can succeed after
+    # `verdict` failed (it then ran every gate), and the release must not
+    # depend on how success() weighs a failed job further up the chain.
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'release' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -302,8 +447,10 @@ jobs:
 
   publish:
     needs: [build, release]
-    # `release` is skipped on the legacy trigger (the tag already exists).
-    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    # `release` is skipped on the legacy trigger (the tag already exists) — and
+    # a `release` skipped on any other run publishes nothing, so no version can
+    # reach npm untagged.
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.release.result == 'success' || (needs.release.result == 'skipped' && github.event_name == 'release')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -336,6 +483,8 @@ jobs:
 
   # The site documents what npm serves, so it deploys only once npm has the
   # version (see docs.yml). On the legacy path, release.sh starts it itself.
+  # docs.yml builds the site, checks its budget and deploys it; its failure
+  # leaves the website on the previous version and touches nothing here.
   docs:
     needs: [release, publish]
     if: ${{ !cancelled() && needs.release.result == 'success' && needs.publish.result == 'success' }}
@@ -347,7 +496,9 @@ jobs:
       - name: Deploy the docs site
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run docs.yml --repo "${{ github.repository }}" --ref main
+        run: |
+          gh workflow run docs.yml --repo "${{ github.repository }}" --ref main
+          echo "Docs site deploy started: Actions → Deploy Docs. If it fails, npm is unaffected; fix the cause and run Deploy Docs again — no new version is needed." >> "$GITHUB_STEP_SUMMARY"
 
       # A PR may have merged a fragment while this release was publishing. Its
       # own run found an untagged version and deferred to this one, so ask

@@ -15,7 +15,7 @@
  *
  * Real axios is not a dependency of this repo, so the shape below is axios
  * 1.x's `AxiosError.prototype.toJSON`, verbatim; the reviewer's real-axios
- * probe is kept and runs where that checkout exists.
+ * probe is kept and runs when `AF_REAL_AXIOS` names a local axios build.
  *
  * Test types (Convention 3): security · regression · property · unit.
  */
@@ -37,6 +37,13 @@ import { toWireJson, withWireErrors, wireError } from '../../src/lib/wireJson.js
 import { AxiosLikeError } from './axiosLikeError.js';
 
 const TOKEN = 'Bearer tok-RECHECK';
+
+/**
+ * A local axios 1.x build (its `dist/node/axios.cjs`), for the reviewer's
+ * real-axios probe. Axios is not a dependency of this repo, so the probe runs
+ * only when `AF_REAL_AXIOS` names one, and skips when it is unset.
+ */
+const REAL_AXIOS = process.env.AF_REAL_AXIOS ?? '';
 
 function agentReturning(result: () => unknown): Agent {
   const provider = new MockProvider({
@@ -101,18 +108,18 @@ describe('RB2 (W1) — an Error with toJSON is rendered by the rule, not by its 
     expect(detached).toBe(sync);
   });
 
-  it('REAL axios (where that checkout exists on this machine) is rendered by the rule', () => {
-    const where =
-      '/Users/sanjay/eb1a-case/.codex-staging/missionfootprint-phase25/node_modules/openmct/src/plugins/persistence/couch/node_modules/axios/dist/node/axios.cjs';
-    if (!existsSync(where)) return;
-    const axios = createRequire(import.meta.url)(where) as {
-      AxiosError: new (m: string, c: string, config: object) => Error;
-    };
-    const err = new axios.AxiosError('Request failed with status code 401', 'ERR_BAD_REQUEST', {
-      headers: { Authorization: TOKEN },
-    });
-    expect(toWireJson({ result: err })).not.toContain('tok-RECHECK');
-  });
+  it.skipIf(!REAL_AXIOS)(
+    'REAL axios (when AF_REAL_AXIOS names a local copy) is rendered by the rule',
+    () => {
+      const axios = createRequire(import.meta.url)(REAL_AXIOS) as {
+        AxiosError: new (m: string, c: string, config: object) => Error;
+      };
+      const err = new axios.AxiosError('Request failed with status code 401', 'ERR_BAD_REQUEST', {
+        headers: { Authorization: TOKEN },
+      });
+      expect(toWireJson({ result: err })).not.toContain('tok-RECHECK');
+    },
+  );
 });
 
 describe('RB3 (W2) — toSSE streams an Error by the rule', () => {

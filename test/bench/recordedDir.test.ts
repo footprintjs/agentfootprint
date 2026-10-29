@@ -71,7 +71,7 @@ describe('UNIT — a directory as a result file records it', () => {
 
 describe('SECURITY — no part of an outside path reaches the file', () => {
   it('a home directory named after a person gives the constant, not the name', () => {
-    expect(recordedDir('/Users/example-person', ROOT)).toBe(OUTSIDE_REPO);
+    expect(recordedDir('/Users/example-person/', ROOT)).toBe(OUTSIDE_REPO);
   });
 
   it('a temp folder named after a session gives the constant, not the name', () => {

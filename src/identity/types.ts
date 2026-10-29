@@ -84,9 +84,13 @@ export interface CredentialRequest {
    *
    * A provider that does work of its own (a token endpoint, a vault, an SDK
    * call) should hand it on and stop when it fires: the request it would serve
-   * has been cancelled or ran out of time. Ignoring it is safe, never a leak:
-   * the caller stops waiting at the abort and never uses a credential that
-   * arrives after it. It is a live object, not data: never put it in a cache
+   * has been cancelled or ran out of time. Ignoring it is safe on the gateway
+   * route, never a leak there: `gatewayTransport` stops waiting at the abort
+   * and never uses a credential that arrives after it, although the provider
+   * may still finish its own work. That is the gateway's guarantee, not every
+   * caller's: a direct `withCredentialRetry(...).getCredential(...)` call lets
+   * an attempt already running settle, and can return the credential it issues
+   * after the abort. It is a live object, not data: never put it in a cache
    * key, a log line or an error message.
    */
   readonly signal?: AbortSignal;

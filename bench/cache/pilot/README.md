@@ -3,9 +3,21 @@
 This kit compares the public Phase A package with the reviewed Phase B package.
 Both have the same citation enforcement. It is not a comparison against the old
 permissive admission policy. Do not run the paid path before the owner’s external
-review of the final kit/manifest and cap tests. The existing approval is Haiku 4.5
-only, at most $10 for this one paired synthetic pilot; it is not approval for a
-second run, another model, customer data or an automatic retry.
+review of the final kit/manifest and cap tests.
+
+## Approvals
+
+- **Earlier approval:** Haiku 4.5 only, at most $10 for one paired synthetic
+  pilot. Its smoke on 2026-10-20 stopped after its first call. That smoke’s
+  journal, `findings-cache-phase-c-20261020.ndjson`, stays as its record: one
+  $0.40512 reservation, outcome unknown. It is never deleted, reopened or reused.
+- **2026-10-29, owner approval in chat:** one paid run of this re-frozen kit.
+  Haiku 4.5 only, at most $10, under the same 16-call cap ($6.48192 reserved).
+  No retry, no other model, no customer data. It writes its own journal,
+  `findings-cache-phase-c-20261029.ndjson`.
+
+Neither approval covers a second run, another model, customer data or an
+automatic retry.
 
 ## Frozen experiment
 
@@ -136,22 +148,26 @@ loading method from the owner’s handoff. Never read, copy or print that file o
 its values. The CLI additionally requires `--execute` and
 `--approve-manifest <exact SHA256 of manifest.json>` with the same consumer and
 a new private output file. From the repository root, use this exact loader (replace
-only the consumer and output paths with the admitted install and a new private file):
+only the three paths: `<approved env file>` with the environment file the handoff
+approves, and the consumer and output paths with the admitted install and a new
+private file):
 
 ```sh
-node --env-file=/Users/sanjay/github/footprintjs/neo-seo-local/.env bench/cache/pilot/run.mjs \
+node --env-file=<approved env file> bench/cache/pilot/run.mjs \
   --consumer /path/to/reviewed-pilot-consumer \
   --out /path/to/new-private-summary.json \
-  --approve-manifest 8dac9b8c4135f5bbc27c9dab2a2257b8b1b38b198f24b7b38508ffa9dc30a681 \
+  --approve-manifest 63f2aef2266db91e13594a7c671c0b08de97f7b10159ce649deb7a175ae97cd5 \
   --execute
 ```
 
 Never inspect or print the environment file or its values. CI does not execute
-this command, and the kit does not schedule a future call. The live journal’s
-identity is fixed at
-`~/.local/state/agentfootprint/pilots/findings-cache-phase-c-20261020.ndjson`,
-irrespective of the checkout, manifest revision or report path. Do not delete
-that journal to repeat the pilot.
+this command, and the kit does not schedule a future call. For the 2026-10-29
+approval, the live journal’s identity is fixed at
+`~/.local/state/agentfootprint/pilots/findings-cache-phase-c-20261029.ndjson`,
+irrespective of the checkout, manifest revision or report path. If that file
+already exists, the run stops before any call. The 2026-10-20 smoke’s journal
+beside it is a record that this kit never opens. Do not delete either journal
+to repeat the pilot; another run needs its own approval and journal identity.
 
 Only the bounded summary is saved: raw input/write/read/output token counts,
 per-run costs, missing usage, fixed reservations, request hashes, stability checks
