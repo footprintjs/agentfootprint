@@ -55,8 +55,8 @@ it is sent (`request-too-large`), measured exactly as the SDK serializes it. A
 deadline is a real bound: one per verb (AgentCore's setup call and the code share
 it). On POSIX `localCodeRunner` runs each command and each code run in a process
 group of its own, and whenever IT ends a run — at the deadline, on an abort, at
-the output ceiling — it stops that owned group with SIGKILL, which cannot be
-ignored, at that moment (never after the pipes close), and never reports a run
+the output ceiling, on an error reported after the start — it stops that owned
+group with SIGKILL, which cannot be ignored, at that moment (never after the pipes close), and never reports a run
 it stopped as a success. That is cleanup, not containment: a descendant that
 starts a session or group of its own is outside the owned group, and a host
 killed without running its exit handlers stops nothing — the local runner is

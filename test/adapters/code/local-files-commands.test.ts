@@ -6,17 +6,22 @@
  * value is that it is the real thing on a developer's machine, so its tests
  * run the real thing. The two seams (`_fs`, `_childProcess`) are used only to
  * produce what a real machine will not produce on demand — a file that grows
- * between its size check and its read, a child the runtime reports as aborted.
+ * between its size check and its read, a child the runtime reports as aborted,
+ * an error reported for a child that did start.
  */
 
 import { existsSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn as realSpawn } from 'node:child_process';
 import * as realFs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { localCodeRunner, type FsModuleLike } from '../../../src/adapters/code/local.js';
+import {
+  localCodeRunner,
+  type ChildProcessModuleLike,
+  type FsModuleLike,
+} from '../../../src/adapters/code/local.js';
 import {
   canReadCodeFiles,
   canRunCodeCommands,
@@ -311,6 +316,35 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
     },
   );
 
+  it.skipIf(process.platform === 'win32')(
+    'an ERROR after the start stops the owned group too — the refusal never leaves a descendant writing',
+    async () => {
+      // A real child in its own group, for which the runtime then reports an
+      // error with a string code: what a real machine will not produce on
+      // demand, so the seam wraps the REAL `spawn` and adds only the event.
+      const late = join(root, 'after-error.txt');
+      type Spawn = NonNullable<ChildProcessModuleLike['spawn']>;
+      const spawnThenError = (...[file, args, options]: Parameters<Spawn>): ReturnType<Spawn> => {
+        const child = realSpawn(file, [...args], { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+        setTimeout(() => {
+          child.emit('error', Object.assign(new Error('injected'), { code: 'EIO' }));
+        }, 100);
+        // The real child, typed as the seam's slice of it: Node's `kill` takes
+        // its own signal names, the slice a plain string.
+        return child as unknown as ReturnType<Spawn>;
+      };
+      const s = await session({ commands: true, _childProcess: { spawn: spawnThenError } });
+      const err = await s
+        .runCommand?.(`(sleep 0.4; echo late > ${JSON.stringify(late)}) & sleep 5`, {
+          timeoutMs: 5_000,
+        })
+        .catch((e: unknown) => e);
+      expect((err as Error).message).toMatch(/could not run 'sh' \(EIO\)/);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      expect(existsSync(late)).toBe(false);
+    },
+  );
+
   it('ABORT comes back as the caller’s own reason', async () => {
     const s = await session({ commands: true });
     const controller = new AbortController();
@@ -325,7 +359,7 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
 
 describe('localCodeRunner.execute — the same group handling on the code path', () => {
   it.skipIf(process.platform === 'win32')(
-    'a TIMED-OUT run leaves nothing running: a process the code spawned never writes afterwards',
+    'a TIMED-OUT run stops the owned process group: a process the code spawned never writes afterwards',
     async () => {
       const s = await session();
       const late = join(root, 'spawned.txt');

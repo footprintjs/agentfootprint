@@ -668,7 +668,7 @@ const BUFFER_OVERFLOW = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
 
 /**
  * Whether a child gets a process group of its own, so that the runner can stop
- * that whole group. POSIX only: Windows has no process group to signal, and
+ * the group it owns. POSIX only: Windows has no process group to signal, and
  * there only the child itself can be stopped.
  */
 const OWN_PROCESS_GROUP = process.platform !== 'win32';
