@@ -189,44 +189,73 @@ agent.emit('agentfootprint.eval.score', {
 });
 ```
 
-## What the audit chain's bounded mode keeps (`audit.ts`)
-`auditExport()` chains every event. In its default `payloadMode: 'bounded'` the
-fields it bounds follow the span exporter's rule: **structure is kept, content
-is a marker.**
+## What the audit chain's bounded mode keeps (`audit.ts`, `auditBounding.ts`)
+`auditExport()` chains every event. In its default `payloadMode: 'bounded'` a
+record follows the span exporter's rule: **structure is kept, content is a
+marker.** Content is every string or value the run composed from what it read
+or produced, whoever wrote it: a person, the model, a tool, the data, or the
+app's code at run time. Structure is ids, names, kinds, codes and telemetry
+tags, verdicts, counts, timestamps the library takes, the library's own
+sentences built from those, and the words the app declared up front (labels,
+descriptions, step notes, hints, display names).
 
-- A content field is replaced whole, per event type (`BOUND_FIELDS`): a prompt
-  or an answer becomes `'[N chars]'`, tool arguments their key names, a result
-  its type.
-- A field that holds the record's own words beside content keeps its shape
-  and is bounded at each content leaf (`shapeOf`, `listOf`). A typed answer's
-  limits (`turn_end.answerCoverage`) keep their lists and lengths, tool and
-  argument names, call ids, counts, `kind`, `hidden` and `held: 'unknown'`;
-  every `what` / `why` / `short`, period instant and assumed `value` is a
-  marker. Its negatives (`turn_end.answerNegatives`) keep the field name,
-  codes, verdicts, `restsOn` handles, checks, coverage and actions; each
-  `statement` and `about` is a marker.
-- A shape fails closed. A field it does not name, or a value that is not the
-  declared shape, is a marker. Its rules are exhaustive by type, so a field
-  added to the payload type does not compile until it is classified, and
-  `test/type-regressions/TurnEndContent.completeness.test.ts` runs a canary in
-  every content leaf through every exporter that passes `turn_end` on.
-- Not bounded yet (a known gap, outside `turn_end`): the prose and values on
-  `tools.absent`, `tools.coverage_declared`, `tools.semantics_declared`,
-  `agent.evidence_checked`, `integrity.external_ground_used`, `map.engaged`
-  and `skill.turn_routed` are only sanitized (strings capped at 256
-  characters).
+- **A field that is all content is replaced whole**, per event type
+  (`audit.ts` · `BOUND_FIELDS`): a prompt or an answer becomes `'[N chars]'`,
+  tool arguments their key names, a result its type, and an error message its
+  length.
+- **An event whose content sits beside structure keeps its shape**, each
+  content leaf a marker (`auditBounding.ts` · `eventShapes`, and `turn_end`'s
+  `answerCoverage` and `answerNegatives`). Examples: a tool's absence and
+  coverage words keep their lists and lengths, tool names and call ids, and
+  each `what` / `why` / `short` is a marker; a routing witness keeps its
+  keyword, and the matched message text is a marker.
+- **Each shape fails closed.** A field it does not name, or a value that is
+  not the declared shape, is a marker. Its rules are exhaustive by type, so a
+  field added to a payload type does not compile until it is classified.
+  `test/type-regressions/EventContent.completeness.test.ts` classifies every
+  registered event (shape, field rules, or structure only) and runs a canary in
+  every content leaf through every exporter. Its sibling,
+  `TurnEndContent.completeness.test.ts`, does the same for `turn_end`.
+
+**What a bounded record still carries, by contract:**
+
+- **Each record's `meta`:** run and stage ids, paths, and indices. When the
+  caller named them, also `sessionId`, `principal` and `tenant`, the who of an
+  audit record.
+- **Decision evidence, as the engine summarized it:** `decide()` evidence on
+  `composition.route_decided` and a skill guard's conditions on
+  `context.evaluated`. It holds a summary of each value a rule read; under an
+  agent's `redact` a selected key is the placeholder.
+- **The app's own words:** a policy's telemetry `reason` tag, and the reason
+  word an app attaches to a lifecycle event it emits itself
+  (`skill.deactivated`, `tools.offered`, `permission.gate_closed`). An app
+  that writes a run's value into one of them carries that value.
+- **A `tryInsteadTool` name**, but only once the strategy has seen that tool
+  run (the rule `otel.ts` uses).
+
+Sanitizing caps a string's length; it does not hide what the string says.
+
+**Channels that do not bound content:**
+
+- the audit chain under `payloadMode: 'verbatim'`;
+- `file`, `cloudwatch` and `agentcore`, which ship the whole envelope;
+- the bug-report bundle's recording;
+- `xray`: its `stream.llm_end` case puts the whole `llm_end` payload,
+  the model's draft `content` included, into the segment's metadata.
 
 ```ts
 const audit = auditExport(); // bounded
-// a typed answer's limits in a turn_end record, as chained:
-// { checked: [{ what: '[38 chars]' }], notChecked: [],
-//   cannotCover: [{ what: '[24 chars]', why: '[29 chars]', kind: 'scope' }],
-//   assumed: [{ toolName: 'orders_search', argument: 'region', value: '[2 chars]', hidden: false }] }
+// a tools.absent record, as chained:
+// { toolName: 'orders_search', toolCallId: 'call-1', iteration: 1,
+//   lookedFor: '[31 chars]', checked: [{ what: '[24 chars]' }],
+//   tryInsteadTool: { tool: 'archive_search', why: '[40 chars]' } } // archive_search ran earlier
 ```
 
 ## Files
 - `otel.ts`, `xray.ts`, `cloudwatch.ts`, `agentcore.ts`, `file.ts` — exporters.
 - `audit.ts` — a tamper-evident bundle.
+- `auditBounding.ts` — what its bounded mode keeps of each event: the markers,
+  the sanitizer and the shapes.
 - `githubBugReporter.ts`, `githubDeviceSignIn.ts` — filing a report as the
   reporter, not as the library.
 - `deliveryErrors.ts` — where an exporter's own failures go.

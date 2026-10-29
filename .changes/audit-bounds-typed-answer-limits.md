@@ -1,8 +1,0 @@
----
-type: changed
----
-**The bounded audit export no longer records a typed answer's coverage sentences, assumed values or negative statements.** `auditExport()`'s default `payloadMode: 'bounded'` promises that a chained record holds no raw value that can echo a person's data, but `turn_end.answerCoverage` and `turn_end.answerNegatives` rode into the chain sanitized, not bounded: a tool's coverage sentences (`what`, `why`, `short`), a declared period's instants, the prose of an in-progress item, a value a tool's `assume` rule filled, and each negative's `statement` and `about`, which name the population a search covered. Each of these is now the same `'[N chars]'` marker the other bounded fields use (`'[type: number]'` for a numeric `about`).
-
-The structure stays as it was: every list and its length, tool and argument names, call ids, counts, `kind`, `hidden` and `held: 'unknown'` on the limits; the field name, codes, verdicts, `restsOn` handles, checks, coverage and actions on the negatives. A field these shapes do not name, or a value that is not the declared shape, is a marker too, so a field added later is bounded until it is classified. `payloadMode: 'verbatim'` is unchanged, and so are the other exporters that pass `turn_end` on (OpenTelemetry in both modes, X-Ray, the AG-UI serializer, the bug-report transcript): none of them carried these fields.
-
-Migration: a consumer that read these sentences or values out of a bounded bundle now finds markers in their place. Read them from a `payloadMode: 'verbatim'` bundle kept in an access-controlled store, or in process from `agent.answerCoverage()` and `agent.answerNegatives()`. Bundles written before the change still verify; only new records differ.

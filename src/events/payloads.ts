@@ -178,6 +178,16 @@ export interface AgentTurnEndPayload {
       readonly toolCallId?: string;
     })[];
     /**
+     * What the calls' reads found still running — its outcome not known yet —
+     * one entry per declaring call, as declared; present only when one did.
+     * The data twin of a prose answer's "In progress" lines.
+     */
+    readonly inProgress?: readonly {
+      readonly toolName: string;
+      readonly toolCallId?: string;
+      readonly items: readonly InProgressItemPayload[];
+    }[];
+    /**
      * The values a tool's `assume` rule filled this turn (the inputs layer,
      * honesty layer 2) — the SAME rows, read the same way, that the prose
      * answer's "Assumed" block prints (`arguments/serve.ts` ·
@@ -4077,6 +4087,9 @@ export interface AnswerNegativesPayload {
     readonly disposition: 'checked-fail' | 'not-applicable' | 'unreachable';
     readonly tools: readonly string[];
     readonly results: readonly string[];
+    /** On a `'stale-turn'` check: the turn the cited result was read on, and when
+     *  the read ran (the library's own clock), when it was recorded. */
+    readonly staleSince?: { readonly turn: number; readonly readAt?: string };
   }[];
   readonly coverage: readonly { readonly tool: string; readonly checked: number }[];
   readonly actions: readonly {

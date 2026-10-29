@@ -227,11 +227,13 @@ const check = verifyAuditBundle(bundle); // offline: no agent needed
 - **Verify offline.** `verifyAuditBundle` is a pure function over the JSON and names
   the exact record a change broke. The serialization rules are exported as
   `canonicalJson`, so an auditor can write an independent verifier.
-- **Bounded payloads by default.** Tool arguments are recorded as key names, results
-  as a type, prompts and content as `[N chars]`. A typed answer's limits and
-  negatives on `turn_end` keep their shape (lists, names, ids, counts, codes), with
-  each sentence and value as `[N chars]`. `payloadMode: 'verbatim'` records
-  everything, for access-controlled stores.
+- **Bounded payloads by default.** Structure is kept and content becomes a marker.
+  Tool arguments are recorded as key names and results as a type. Prompts, answers,
+  and every sentence or value a person, the model or a tool wrote become `[N chars]`,
+  while each event keeps its shape (lists, names, ids, counts, codes). Each record's
+  `meta` still names the run and, when the caller set them, the session, principal
+  and tenant, and `decide()` evidence rides as the engine summarized it.
+  `payloadMode: 'verbatim'` records everything, for access-controlled stores.
 - **Long runs.** `audit.drain()` returns the records since the last drain; pass the
   segments together (`verifyAuditBundle([seg1, seg2])`) and they verify end to end.
 - **Runtime.** Hashing uses `node:crypto` (Node 20+, Bun, Deno). Browsers have no

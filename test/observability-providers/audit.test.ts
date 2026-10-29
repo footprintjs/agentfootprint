@@ -817,6 +817,10 @@ describe("auditExport — security: a typed answer's limits and negatives (turn_
     const recorded = turnEndOf(audit.bundle()).answerCoverage as AnswerCoverage;
     const recordedText = JSON.stringify(recorded);
     for (const content of LIMITS_CONTENT) expect(recordedText, content).not.toContain(content);
+    // Nor does any other record: the tool's own `tools.coverage_declared` event
+    // carries the same sentences, and the chain bounds them there too.
+    const bundleText = JSON.stringify(audit.bundle());
+    for (const content of LIMITS_CONTENT) expect(bundleText, content).not.toContain(content);
 
     // The shape survives: every list, its length, the names, ids, counts and kinds.
     expect(recorded.checked).toHaveLength(live.checked.length);
@@ -867,6 +871,8 @@ describe("auditExport — security: a typed answer's limits and negatives (turn_
 
     const recorded = turnEndOf(audit.bundle()).answerNegatives as AnswerNegatives;
     expect(JSON.stringify(recorded)).not.toContain('NEGATIVES-SERVICE');
+    // Nor does any other record of the run.
+    expect(JSON.stringify(audit.bundle())).not.toContain('NEGATIVES-SERVICE');
     expect(recorded.claims[0]?.statement).toMatch(CHARS);
     expect(recorded.claims[0]?.about).toMatch(CHARS);
     // Everything the check decided rides as it was.
@@ -943,6 +949,118 @@ describe("auditExport — security: a typed answer's limits and negatives (turn_
     expect(limits.checked).toHaveLength(33);
     expect(limits.checked[32]).toBe('…+8 more');
     expect(JSON.stringify(limits)).not.toMatch(/EDGE-/);
+  });
+});
+
+// ─── SECURITY — every event whose content sits beside structure ──────
+
+/** The bounded payload one event becomes. */
+function boundedOf(type: string, payload: unknown): unknown {
+  const audit = auditExport();
+  audit.exportEvent(envelope(type, payload));
+  return audit.bundle().records[1]?.payload;
+}
+
+describe('auditExport — security: content beside structure, event by event', () => {
+  it("SECURITY: decide() evidence rides as the engine summarized it; a router's reason is a marker", () => {
+    const decided = {
+      conditionalId: 'tier',
+      chosen: 'gold',
+      rationale: "predicate for 'gold' returned true",
+      evidence: { rules: [{ label: 'big spender', matched: true }], chosen: 'gold' },
+    };
+    expect(boundedOf('agentfootprint.composition.route_decided', decided)).toEqual(decided);
+    expect(
+      boundedOf('agentfootprint.composition.route_decided', {
+        conditionalId: 'router',
+        chosen: 'refunds',
+        rationale: "router chose 'refunds'",
+        evidence: { reason: 'EDGE-ROUTER: the customer said refund', inRoster: true },
+      }),
+    ).toEqual({
+      conditionalId: 'router',
+      chosen: 'refunds',
+      rationale: "router chose 'refunds'",
+      evidence: '[keys: reason, inRoster]',
+    });
+  });
+
+  it("SECURITY: a pause's own reason is a marker; the library's fixed reason stays", () => {
+    expect(
+      boundedOf('agentfootprint.pause.request', {
+        reason: 'EDGE-PAUSE: approve the refund of 9000?',
+        questionPayload: { question: 'EDGE-PAUSE' },
+      }),
+    ).toEqual({ reason: '[39 chars]', questionPayload: '[keys: question]' });
+    expect(
+      boundedOf('agentfootprint.pause.request', {
+        reason: 'stage requested pause',
+        questionPayload: { data: 1 },
+      }),
+    ).toEqual({ reason: 'stage requested pause', questionPayload: '[keys: data]' });
+  });
+
+  it('EDGE: a declared "none" stays — no next page, no question, a store the tool cannot vouch for', () => {
+    expect(
+      boundedOf('agentfootprint.tools.semantics_declared', {
+        toolName: 't',
+        toolCallId: 'c',
+        iteration: 1,
+        semantics: { af_semantics: true, note: 'n', paging: { next: null }, clarify: null },
+      }),
+    ).toEqual({
+      toolName: 't',
+      toolCallId: 'c',
+      iteration: 1,
+      semantics: { af_semantics: true, note: 'n', paging: { next: null }, clarify: null },
+    });
+    expect(
+      boundedOf('agentfootprint.tools.coverage_declared', {
+        toolName: 't',
+        toolCallId: 'c',
+        iteration: 1,
+        period: { queried: { from: 'EDGE-FROM', to: 'EDGE-TO' }, held: 'unknown' },
+      }),
+    ).toEqual({
+      toolName: 't',
+      toolCallId: 'c',
+      iteration: 1,
+      period: { queried: { from: '[9 chars]', to: '[7 chars]' }, held: 'unknown' },
+    });
+  });
+
+  it('EDGE: a whole-event shape fails closed — an unnamed field, or a payload that is not an object', () => {
+    expect(
+      boundedOf('agentfootprint.map.parked', {
+        mapId: 'orders-map',
+        iteration: 3,
+        by: 'lexical',
+        idleCalls: 3,
+        witness: 'EDGE-WITNESS',
+        futureQuote: 'EDGE-FUTURE',
+      }),
+    ).toEqual({
+      mapId: 'orders-map',
+      iteration: 3,
+      by: 'lexical',
+      idleCalls: 3,
+      witness: '[12 chars]',
+      futureQuote: '[11 chars]',
+    });
+    expect(boundedOf('agentfootprint.map.parked', 'EDGE-NOT-AN-OBJECT')).toBe('[18 chars]');
+  });
+
+  it("SECURITY: payloadMode 'verbatim' still carries every event whole (documented opt-in)", () => {
+    const audit = auditExport({ payloadMode: 'verbatim' });
+    audit.exportEvent(
+      envelope('agentfootprint.map.engaged', {
+        mapId: 'm',
+        iteration: 1,
+        by: 'lexical',
+        witness: 'EDGE-VERBATIM-WITNESS',
+      }),
+    );
+    expect(JSON.stringify(audit.bundle())).toContain('EDGE-VERBATIM-WITNESS');
   });
 });
 

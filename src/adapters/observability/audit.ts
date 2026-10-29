@@ -67,9 +67,11 @@
  *
  * ## PII discipline (mirrors #19's otelObservability)
  *
- * Payloads enter records through a bounding layer — by default
- * (`payloadMode: 'bounded'`) record payloads NEVER carry raw runtime
- * values that can echo PII:
+ * Payloads enter records through a bounding layer (`auditBounding.ts`).
+ * In the default `payloadMode: 'bounded'` a record payload keeps the run's
+ * STRUCTURE and never its CONTENT — every string or value the run composed
+ * from what it read or produced, whoever wrote it — except what is named
+ * below under "What a bounded record still carries":
  *
  *   - tool args             → `'[keys: …]'` (top-level key NAMES only);
  *                             `tool_end`'s `changedArgKeys` is names already
@@ -95,13 +97,49 @@
  *     names, call ids, counts, kinds, codes and verdicts stay; a field the
  *     shape does not name is a marker too, so one added later is bounded
  *     until it is classified
+ *   - every other event whose content sits beside structure keeps its
+ *     shape, each content leaf a marker (`eventShapes`, exhaustive by type;
+ *     a field a shape does not name is a marker): a tool's absence, coverage
+ *     and described-result words and data (`tools.absent`,
+ *     `tools.coverage_declared`, `tools.semantics_declared`), the evidence
+ *     gate's values, an external ground's value, the message text a routing
+ *     match quotes (`map.engaged`, `map.parked`, `skill.turn_routed`,
+ *     `context.evaluated`), a validation issue's quoted value, parser and
+ *     fallback messages and previews, a tool's progress payload and a
+ *     check-in's evidence pack, a person's note, a middleware's reason or
+ *     question, the model's own words (`skill.step_skipped`, `agent.handoff`),
+ *     the opt-in assembled system prompt, a retrieved passage's heading, an
+ *     integrity finding's witnessed values and message, a tool effect's
+ *     reason, a pause's own reason, an artifact's label and refusal detail, a
+ *     fail-fast reason, a check's `rationale` and `tellLLM`, a fallback's or a
+ *     credential failure's message, and a router's own reason
  *
- * Everything else is embedded as the registry payload (sanitized:
- * strings capped at 256 chars, lists at 32 items, cycles broken) —
- * those payloads are bounded by construction: identifiers, counts,
- * enums, decide() evidence (engine-bounded + redaction-aware),
- * validation issues (paths/TYPES per #9), credential events (no
- * secrets by contract).
+ * Everything else is structure, embedded as the registry payload (sanitized:
+ * strings capped at 256 chars, lists at 32 items, cycles broken): ids,
+ * names, kinds, codes and telemetry tags, verdicts, counts, timestamps the
+ * library takes, the library's own sentences built from those, and the
+ * words the app declared up front (labels, descriptions, step notes, hints,
+ * display names, rule ids).
+ *
+ * What a bounded record still carries, by contract:
+ *
+ *   - each record's `meta`: run and stage ids, paths, turn and iteration
+ *     indices and — when the caller named them — `sessionId`, `principal`
+ *     and `tenant`, the who of an audit record;
+ *   - decision evidence as the engine summarized it: `decide()` evidence on
+ *     `composition.route_decided` and a skill guard's conditions on
+ *     `context.evaluated` — rule labels, operators, thresholds and a summary
+ *     of each value a rule read. It is redaction-aware (under an agent's
+ *     `redact` a selected key is the placeholder); otherwise the summary
+ *     shows the value;
+ *   - a policy's telemetry `reason` tag, and the reason word an app attaches
+ *     to a lifecycle event it emits itself (`skill.deactivated`,
+ *     `tools.offered`, `permission.gate_closed`): the app's own words, as
+ *     written — an app that writes a run's value into one carries it;
+ *   - a `tryInsteadTool` name, only once this strategy has seen that tool run;
+ *   - every field of an event type the registry does not declare, sanitized.
+ *
+ * Sanitizing caps a string's length; it does not hide what the string says.
  *
  * `payloadMode: 'verbatim'` embeds full payloads (still
  * JSON-sanitized). For Art. 12 completeness on an access-controlled
@@ -155,21 +193,21 @@
  * ```
  */
 
-import type { RuntimeNegativeRow } from '../../core/agent/negativeClaims/delivery.js';
-import type {
-  AgentTurnEndPayload,
-  AnswerNegativesPayload,
-  CoverageItemPayload,
-  DeliveredNegative,
-} from '../../events/payloads.js';
 import type { AgentfootprintEvent } from '../../events/registry.js';
 import { canonicalJson, CANONICAL_JSON_VERSION } from '../../lib/canonicalJson.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { libraryVersion } from '../../lib/libraryVersion.js';
-import { isErrorValue, wireError } from '../../lib/wireJson.js';
-import type { AnswerCoverage, AnswerInProgress } from '../../semantics/coverage/answer.js';
-import type { InProgressItem } from '../../semantics/coverage/types.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
+import {
+  boundAnswerCoverage,
+  boundAnswerNegatives,
+  charsMarker,
+  createToolRunTracker,
+  eventShapes,
+  keysMarker,
+  sanitizeJson,
+  typeofOf,
+} from './auditBounding.js';
 
 // ─── Public types ─────────────────────────────────────────────────────
 
@@ -308,235 +346,7 @@ function sha256Hex(text: string): string {
   return resolveCrypto().createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
-// ─── JSON sanitization (both modes) ──────────────────────────────────
-
-/** Caps mirror otel.ts's bounding discipline (defense-in-depth — the
- *  registry payloads are mostly bounded upstream). */
-const MAX_STRING_CHARS = 256;
-const MAX_LIST_ITEMS = 32;
-const MAX_DEPTH = 8;
-
-/**
- * Convert any value to a JSON-safe, size-bounded tree:
- * strings capped, arrays capped with an overflow marker, cycles
- * broken, depth capped, Date → ISO, bigint → string, non-finite →
- * null, functions/symbols/undefined dropped (objects) or null
- * (arrays). Output always canonicalizes without throwing.
- */
-function sanitizeJson(value: unknown, depth = 0, seen = new Set<object>()): unknown {
-  if (value === null) return null;
-  switch (typeof value) {
-    case 'string':
-      return value.length > MAX_STRING_CHARS ? `${value.slice(0, MAX_STRING_CHARS - 1)}…` : value;
-    case 'number':
-      return Number.isFinite(value) ? value : null;
-    case 'boolean':
-      return value;
-    case 'bigint':
-      return String(value);
-    case 'undefined':
-    case 'function':
-    case 'symbol':
-      return undefined;
-    default:
-      break;
-  }
-
-  const obj = value as object;
-  if (obj instanceof Date) return obj.toISOString();
-  // The wire rule (`lib/wireJson.ts`): name, message, code, cause — never an
-  // Error's custom properties (an axios error's request headers).
-  if (isErrorValue(obj)) return sanitizeJson(wireError(obj), depth, seen);
-  if (depth >= MAX_DEPTH) return '[truncated: depth]';
-  if (seen.has(obj)) return '[circular]';
-  seen.add(obj);
-  try {
-    if (Array.isArray(obj)) {
-      const capped = obj.slice(0, MAX_LIST_ITEMS).map((item) => {
-        const sanitized = sanitizeJson(item, depth + 1, seen);
-        return sanitized === undefined ? null : sanitized;
-      });
-      if (obj.length > MAX_LIST_ITEMS) capped.push(`…+${obj.length - MAX_LIST_ITEMS} more`);
-      return capped;
-    }
-    const out: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(obj)) {
-      const sanitized = sanitizeJson(entry, depth + 1, seen);
-      if (sanitized !== undefined) out[key] = sanitized;
-    }
-    return out;
-  } finally {
-    seen.delete(obj);
-  }
-}
-
 // ─── Bounding layer (payloadMode: 'bounded') ─────────────────────────
-
-/** `'[23 chars]'` — length evidence without content. */
-function charsMarker(value: unknown): string {
-  return typeof value === 'string' ? `[${value.length} chars]` : `[type: ${typeofOf(value)}]`;
-}
-
-/** `'[keys: a, b, c]'` — shape evidence for free-form Records. */
-function keysMarker(value: unknown): string {
-  if (value === null || typeof value !== 'object') return `[type: ${typeofOf(value)}]`;
-  const keys = Object.keys(value as object).slice(0, MAX_LIST_ITEMS);
-  return `[keys: ${keys.join(', ')}]`;
-}
-
-function typeofOf(value: unknown): string {
-  return value === null ? 'null' : typeof value;
-}
-
-// ─── Shapes that hold the record's own words beside content ──────────
-
-/** How the bounded mode writes one value. */
-type BoundRule = (value: unknown) => unknown;
-
-/** The record's own words (ids, names, counts, kinds, codes): kept, sanitized. */
-const kept: BoundRule = (value) => sanitizeJson(value);
-
-/**
- * An object of a known shape, every field ruled (exhaustive by type, so a field
- * added to `T` does not compile until it is). A field the rules do not name is
- * a marker: whatever the shape gains at runtime is bounded until someone decides
- * it is the record's own words. Anything but an object is a marker too.
- */
-function shapeOf<T>(rules: { readonly [K in keyof T]-?: BoundRule }): BoundRule {
-  const byField = rules as Readonly<Record<string, BoundRule>>;
-  return (value) => {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-      return charsMarker(value);
-    }
-    const out: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      if (entry === undefined) continue; // absent, as JSON has it
-      const rule = Object.hasOwn(byField, key) ? byField[key] : undefined;
-      const bounded = (rule ?? charsMarker)(entry);
-      if (bounded !== undefined) out[key] = bounded;
-    }
-    return out;
-  };
-}
-
-/** A list of one shape: each entry by `rule`, capped like every list (`sanitizeJson`). */
-function listOf(rule: BoundRule): BoundRule {
-  return (value) => {
-    if (!Array.isArray(value)) return charsMarker(value);
-    const out: unknown[] = [];
-    for (let i = 0; i < Math.min(value.length, MAX_LIST_ITEMS); i++) {
-      out.push(rule(value[i]) ?? null);
-    }
-    if (value.length > MAX_LIST_ITEMS) out.push(`…+${value.length - MAX_LIST_ITEMS} more`);
-    return out;
-  };
-}
-
-/** `turn_end.answerCoverage` — what the payload type declares, and what the runtime value carries. */
-type TurnEndCoverage = NonNullable<AgentTurnEndPayload['answerCoverage']> & AnswerCoverage;
-type CoveragePeriod = NonNullable<TurnEndCoverage['periods']>[number];
-type AssumedValue = NonNullable<TurnEndCoverage['assumed']>[number];
-/** One negative check row — the payload's fields and the runtime row's (`staleSince`). */
-type NegativeCheckRow = AnswerNegativesPayload['checks'][number] & RuntimeNegativeRow;
-
-/** One coverage item: the tool author's prose (`what`, `why`, `short`), and its `kind`. */
-const boundCoverageItem = shapeOf<CoverageItemPayload>({
-  what: charsMarker,
-  why: charsMarker,
-  short: charsMarker,
-  kind: kept,
-});
-
-/** A declared window: both instants are the tool's own values. */
-const boundInstants = shapeOf<{ readonly from: string; readonly to: string }>({
-  from: charsMarker,
-  to: charsMarker,
-});
-
-/**
- * A typed answer's limits: the three lists, the declared periods, what a read
- * found still running and the values an `assume` rule filled. Every sentence
- * and value is a marker; the tool and argument NAMES, the call ids, counts,
- * kinds and the library's `'unknown'` stay.
- */
-const boundAnswerCoverage = shapeOf<TurnEndCoverage>({
-  checked: listOf(boundCoverageItem),
-  notChecked: listOf(boundCoverageItem),
-  cannotCover: listOf(boundCoverageItem),
-  periods: listOf(
-    shapeOf<CoveragePeriod>({
-      toolName: kept,
-      toolCallId: kept,
-      queried: boundInstants,
-      // `'unknown'` is the library's word: the tool said it cannot vouch for the store.
-      held: (value) => (value === 'unknown' ? value : boundInstants(value)),
-      readAt: charsMarker,
-    }),
-  ),
-  inProgress: listOf(
-    shapeOf<AnswerInProgress>({
-      toolName: kept,
-      toolCallId: kept,
-      items: listOf(
-        shapeOf<InProgressItem>({
-          what: charsMarker,
-          why: charsMarker,
-          short: charsMarker,
-          count: kept,
-        }),
-      ),
-    }),
-  ),
-  assumed: listOf(
-    shapeOf<AssumedValue>({
-      toolName: kept,
-      argument: kept,
-      value: charsMarker,
-      hidden: kept,
-    }),
-  ),
-});
-
-/**
- * A typed answer's negatives: each statement and the population it is about
- * are markers; the answer field's declared name, the codes, verdicts, ids,
- * tool names and counts stay.
- */
-const boundAnswerNegatives = shapeOf<AnswerNegativesPayload>({
-  field: kept,
-  version: kept,
-  delivery: kept,
-  claims: listOf(
-    shapeOf<DeliveredNegative>({
-      kind: kept,
-      about: charsMarker,
-      restsOn: kept,
-      statement: charsMarker,
-      delivery: kept,
-      version: kept,
-    }),
-  ),
-  checks: listOf(
-    shapeOf<NegativeCheckRow>({
-      id: kept,
-      path: kept,
-      index: kept,
-      kind: kept,
-      notes: kept,
-      code: kept,
-      disposition: kept,
-      tools: kept,
-      results: kept,
-      staleSince: kept,
-    }),
-  ),
-  coverage: listOf(
-    shapeOf<AnswerNegativesPayload['coverage'][number]>({ tool: kept, checked: kept }),
-  ),
-  actions: listOf(
-    shapeOf<AnswerNegativesPayload['actions'][number]>({ tool: kept, outcome: kept }),
-  ),
-});
 
 /**
  * Content-bearing fields per event type → bounded replacement.
@@ -656,6 +466,16 @@ export function auditExport(opts: AuditExportOptions = {}): AuditExportStrategy 
   let retained: AuditRecord[] = [];
   const seenRunIds = new Set<string>();
   let stopped = false;
+  // Bounded mode: the tools this strategy has seen run (a `tryInsteadTool`
+  // name is kept only for one of them) and the whole-event shapes.
+  const toolRuns = createToolRunTracker();
+  const shapes = eventShapes(toolRuns.ran);
+
+  /** An event's payload in bounded mode: its whole-event shape, else its fields' rules. */
+  function boundEvent(eventType: string, payload: unknown): unknown {
+    const shape = shapes[eventType];
+    return shape !== undefined ? shape(payload) : boundPayload(eventType, payload);
+  }
 
   function append(
     eventType: string,
@@ -737,9 +557,10 @@ export function auditExport(opts: AuditExportOptions = {}): AuditExportStrategy 
         runId,
       } as AuditRecord['meta'];
 
+      toolRuns.observe(event.type, event.payload);
       const payload =
         payloadMode === 'bounded'
-          ? boundPayload(event.type, event.payload)
+          ? boundEvent(event.type, event.payload)
           : sanitizeJson(event.payload);
 
       append(event.type, timestamp, payload, recordMeta);
