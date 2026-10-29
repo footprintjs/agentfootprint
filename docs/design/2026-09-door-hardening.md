@@ -420,7 +420,7 @@ client.
 ## What the field app must set
 
 The field app (`be-server`) builds its own `httpHost` in `beHost`. **Its real
-deployment is not the nginx one.** `deploy/seo-be-server.service` runs it as a
+deployment is not the nginx one.** The host app's service unit runs it as a
 systemd unit with `BE_SERVER_HOST=0.0.0.0` "because the team reaches this from
 their own machines", and `DEPLOYMENT.md` says the BE brain "is reached over
 plain http by design". So the live door is the backend port itself, over plain

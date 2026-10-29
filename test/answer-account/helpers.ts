@@ -23,8 +23,8 @@ export function fixtureA(): Recording & { meta: { origin: { runId: string } } } 
 }
 
 /** The app's declarations: a skill label, the wrapper shape of one lookup, "the app decides entries". */
-export const NEO_DECLARATIONS: AnswerAccountDeclarations = Object.freeze({
-  id: 'bot-seo',
+export const HOST_APP_DECLARATIONS: AnswerAccountDeclarations = Object.freeze({
+  id: 'host-app',
   version: '1',
   skills: { 'array-inventory': { label: 'array estate report' } },
   tools: { powerstore_get_volumes: { rowsAt: 'volumes' } },

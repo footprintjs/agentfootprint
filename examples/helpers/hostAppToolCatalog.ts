@@ -20,7 +20,7 @@
 
 import type { CatalogTool } from '../../src/doors/observe.js';
 
-export const neoToolCatalog: readonly CatalogTool[] = [
+export const hostAppToolCatalog: readonly CatalogTool[] = [
   // ── Interface-triage spine (NX-API, live switch state) ──────────────
   {
     name: 'get_interface_status',

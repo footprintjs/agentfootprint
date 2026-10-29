@@ -39,7 +39,7 @@ import {
   type ToolCatalogReport,
 } from '../../src/doors/observe.js';
 import { mockEmbedder } from '../../src/doors/memory.js';
-import { neoToolCatalog } from '../helpers/neoToolCatalog.js';
+import { hostAppToolCatalog } from '../helpers/hostAppToolCatalog.js';
 import { isCliEntry, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -74,7 +74,7 @@ export async function run(_input?: string | null): Promise<LintConfusableResult>
     '',
   );
 
-  const report = await analyzeToolCatalog(neoToolCatalog, {
+  const report = await analyzeToolCatalog(hostAppToolCatalog, {
     embedder: mockEmbedder(),
     ...MOCK_EMBEDDER_CALIBRATION,
   });

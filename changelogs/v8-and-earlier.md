@@ -7678,7 +7678,7 @@ narrow, proxyDisagreement, skipped }`.
 - **Examples (Convention 2)** — all offline/deterministic, pinned by
   `test/lib/tool-lint/examples.test.ts`:
   `examples/observability/02-lint-confusable-catalog.ts` (the real
-  16-tool host-app fixture in `examples/helpers/neoToolCatalog.ts`; the fcns
+  16-tool host-app fixture in `examples/helpers/hostAppToolCatalog.ts`; the fcns
   twin pair flagged with its hint + the metric/optional structural
   findings), `03-lint-fix-and-pass.ts` (fail → rewrite descriptions to
   lead with WHEN + real enum + documented optionals → `ok` under the

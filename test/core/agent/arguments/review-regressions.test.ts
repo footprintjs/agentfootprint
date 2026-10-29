@@ -53,7 +53,11 @@ import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { unreadableRulesRefusal } from '../../../../src/core/agent/arguments/serve.js';
 import { accountForAnswer } from '../../../../src/answer-account/account.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
-import { fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from '../../../answer-account/helpers.js';
+import {
+  fixtureA,
+  FLAGSHIP_RUN_ID,
+  HOST_APP_DECLARATIONS,
+} from '../../../answer-account/helpers.js';
 import { pausedRequest } from '../../../helpers/pausedRequest.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
@@ -399,7 +403,7 @@ describe('the note hides no reading of the result it follows', () => {
         (m) => m.role === 'tool' && m.toolCallId === id,
       )!;
       edit(message);
-      return accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, {
+      return accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
         runId: FLAGSHIP_RUN_ID,
       }).facts.inView[0]!;
     };

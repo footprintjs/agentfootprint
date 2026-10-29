@@ -19,7 +19,7 @@ import {
   MOCK_EMBEDDER_CALIBRATION,
   type ToolCatalogReport,
 } from '../../src/tool-lint';
-import { neoToolCatalog } from '../../examples/helpers/neoToolCatalog';
+import { hostAppToolCatalog } from '../../examples/helpers/hostAppToolCatalog';
 
 const FCNS_TWINS = ['get_fcns_database', 'influx_get_fcns_database'] as const;
 
@@ -27,8 +27,8 @@ function pairKey(a: string, b: string): string {
   return [a, b].sort().join('|');
 }
 
-async function lintNeo(): Promise<ToolCatalogReport> {
-  return analyzeToolCatalog(neoToolCatalog, {
+async function lintHostApp(): Promise<ToolCatalogReport> {
+  return analyzeToolCatalog(hostAppToolCatalog, {
     embedder: mockEmbedder(),
     ...MOCK_EMBEDDER_CALIBRATION,
   });
@@ -36,7 +36,7 @@ async function lintNeo(): Promise<ToolCatalogReport> {
 
 describe('Host-app catalog acceptance — relative ordering under mock (C1)', () => {
   it('the fcns twins are EACH OTHER’s top-1 most-similar partner', async () => {
-    const report = await lintNeo();
+    const report = await lintHostApp();
     const { ranked } = report.similarity;
     for (const tool of FCNS_TWINS) {
       const partners = ranked.filter((pair) => pair.a === tool || pair.b === tool);
@@ -50,7 +50,7 @@ describe('Host-app catalog acceptance — relative ordering under mock (C1)', ()
   });
 
   it('flags the fcns twin pair as confusable (the §7 bar)', async () => {
-    const report = await lintNeo();
+    const report = await lintHostApp();
     const flagged = report.similarity.confusable.some(
       (pair) => pairKey(pair.a, pair.b) === pairKey(...FCNS_TWINS),
     );
@@ -62,7 +62,7 @@ describe('Host-app catalog acceptance — relative ordering under mock (C1)', ()
   });
 
   it('every NX-API/Influx twin pair outranks the catalog median pair', async () => {
-    const report = await lintNeo();
+    const report = await lintHostApp();
     const { ranked } = report.similarity;
     const median = ranked[Math.floor(ranked.length / 2)].similarity;
     const twins = [
@@ -81,7 +81,7 @@ describe('Host-app catalog acceptance — relative ordering under mock (C1)', ()
   });
 
   it('the fcns twin hint names the differentiating axis (the influx qualifier)', async () => {
-    const report = await lintNeo();
+    const report = await lintHostApp();
     const finding = report.similarity.confusable.find(
       (pair) => pairKey(pair.a, pair.b) === pairKey(...FCNS_TWINS),
     );
@@ -91,7 +91,7 @@ describe('Host-app catalog acceptance — relative ordering under mock (C1)', ()
   });
 
   it('structural findings include the host-app field cases (metric enum + silent optionals)', async () => {
-    const report = await lintNeo();
+    const report = await lintHostApp();
     // The metric case: avg_iops | peak_iops | mbps in prose.
     expect(
       report.structural.some(
@@ -116,7 +116,7 @@ describe('Host-app catalog acceptance — relative ordering under mock (C1)', ()
     // Honesty pin: under the mock at the calibrated threshold, at least
     // one non-twin pair ALSO flags (prose compression). If this ever
     // starts failing, the calibration note in analyze.ts is stale.
-    const report = await lintNeo();
+    const report = await lintHostApp();
     const twins = new Set([
       pairKey('get_fcns_database', 'influx_get_fcns_database'),
       pairKey('get_flogi_database', 'influx_get_flogi_database'),
