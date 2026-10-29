@@ -1,0 +1,105 @@
+/**
+ * strategies/flushDeadline — flush a handle, stop waiting at a deadline, and
+ * name the strategy that did not finish.
+ *
+ * A sink's `flush()` waits for its own in-flight delivery. One that never
+ * settles — a hung network mount under `appendFile`, a network call with no
+ * timeout — would hold a shutdown forever, and a slow one for as long as it is
+ * slow. The deadline belongs to the caller that must finish,
+ * `RunnerBase · shutdown`, never to the sink: nothing can cancel an in-flight
+ * write, and pretending otherwise would be worse than saying we stopped
+ * waiting (the `withinBound` law in hosting/standingAgent.ts).
+ *
+ * A missed deadline is REPORTED, through the stuck strategy's own `_onError`
+ * (the console when it has none), and names it — the same rule as every
+ * delivery failure: telemetry that fails invisibly is indistinguishable from
+ * telemetry that works. A deadline cannot tell a slow delivery from a stuck
+ * one, so the report says both.
+ */
+
+import { setLongTimeout } from '../lib/longTimeout.js';
+
+import type { BaseStrategy, StrategyHandle } from './types.js';
+
+/** How long `shutdown()` waits for each handle's flush unless told otherwise:
+ *  30 s, the same number footprintjs's `drainObservers` uses as its default. */
+export const DEFAULT_SHUTDOWN_TIMEOUT_MS = 30_000;
+
+/** Which strategy a handle flushes — so a missed deadline can name it. Weak,
+ *  so a released handle is not retained. */
+const STRATEGY_OF_HANDLE = new WeakMap<object, BaseStrategy>();
+
+/** Remember the strategy behind a handle. Called once, where the handle is
+ *  built (`strategies/attach.ts · makeStrategyHandle`). */
+export function rememberStrategyOf(handle: object, strategy: BaseStrategy): void {
+  STRATEGY_OF_HANDLE.set(handle, strategy);
+}
+
+/** The deadline a `shutdown({ timeoutMs })` asked for. Throws a `TypeError`
+ *  when it is not a positive number of milliseconds — called from the async
+ *  `shutdown()`, so its caller sees a REJECTED promise, never a sync throw.
+ *
+ *  The refusal names the field and the shape it takes, NEVER the value: a
+ *  value of the wrong type can be anything a caller had at hand, and an error
+ *  message is copied into logs, reports and traces. */
+export function shutdownTimeoutOf(timeoutMs: number | undefined): number {
+  if (timeoutMs === undefined) return DEFAULT_SHUTDOWN_TIMEOUT_MS;
+  // `> 0` is false for NaN, so NaN is refused here too.
+  if (typeof timeoutMs === 'number' && timeoutMs > 0) return timeoutMs;
+  throw new TypeError(
+    'shutdown({ timeoutMs }) must be a positive number of milliseconds, ' +
+      'or Infinity to wait for every flush without a deadline.',
+  );
+}
+
+/**
+ * Flush one handle, but wait no longer than `timeoutMs`. On a missed deadline
+ * the strategy is reported by name and this resolves `'stuck'`; its flush
+ * keeps running — it is not, and cannot be, cancelled.
+ *
+ * The deadline is armed by `lib/longTimeout.ts · setLongTimeout`: `Infinity`
+ * arms no timer at all, and a finite deadline of ANY length fires when asked —
+ * past the ~24.8 days one host timer holds, it is waited in chained chunks,
+ * never dropped and never fired after 1 ms. Whatever is armed is cleared as
+ * soon as the flush settles, so a healthy shutdown leaves no timer behind.
+ * It is NOT unref'd: it is bounded, and it is what lets the code after
+ * `await agent.shutdown()` run when the stuck write holds nothing else open.
+ */
+export async function flushWithinDeadline(
+  handle: StrategyHandle,
+  timeoutMs: number,
+): Promise<'flushed' | 'stuck'> {
+  const flushing = handle.flush().then(() => 'flushed' as const);
+  let cancelDeadline: () => void = () => undefined;
+  const deadline = new Promise<'stuck'>((resolve) => {
+    cancelDeadline = setLongTimeout(() => resolve('stuck'), timeoutMs);
+  });
+  try {
+    const outcome = await Promise.race([flushing, deadline]);
+    if (outcome === 'stuck') reportStillFlushing(handle, timeoutMs);
+    return outcome;
+  } finally {
+    cancelDeadline();
+  }
+}
+
+function reportStillFlushing(handle: StrategyHandle, timeoutMs: number): void {
+  const strategy = STRATEGY_OF_HANDLE.get(handle);
+  if (strategy === undefined) return;
+  const error = new Error(
+    `[${strategy.name}] flush did not finish within ${timeoutMs} ms of shutdown: a ` +
+      `delivery it started is still in flight — still delivering, or stuck. ` +
+      `Shutdown went on without it; what this sink still holds may not be delivered.`,
+  );
+  try {
+    if (strategy._onError) {
+      strategy._onError(error);
+      return;
+    }
+  } catch {
+    // The sink's own error hook threw. Shutdown never inherits a sink's
+    // exception; the console below still says it.
+  }
+  // eslint-disable-next-line no-console
+  console.error(error.message);
+}
