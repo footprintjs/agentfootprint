@@ -403,12 +403,14 @@ export interface McpClient {
    * SDK between fetches).
    *
    * Every page of the server's `tools/list` answer is read: the client
-   * follows `nextCursor` until a page carries none, for at most 100 pages.
+   * follows `nextCursor` until a page carries none, sending at most 100
+   * `tools/list` requests (a bound on requests, not on the catalogue's size).
    * A list that does not end within them, or that names a cursor it already
    * sent (a loop), is never returned cut short: the call rejects with
    * `McpToolListIncompleteError`, whose `reason` says which and whose `tools`
-   * holds what was listed. `signal` rides every page, and no page is asked
-   * for once it has fired.
+   * holds what was listed. `signal` rides every page and is checked before
+   * each page is asked for and when each answer arrives: once it has fired,
+   * nothing more is asked for and no page is accepted.
    */
   tools(): Promise<readonly Tool[]>;
 

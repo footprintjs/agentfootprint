@@ -363,6 +363,64 @@ describe('tools/list pagination — the signal rides every page', () => {
 
     expect(await rejectionOf(client.tools())).toBe(reason);
   });
+
+  // Both ends of a request, with connections that ignore the signal: only the
+  // library's own checks can stop these.
+
+  it('a pre-aborted listing asks for nothing, and every later call asks for nothing', async () => {
+    const controller = new AbortController();
+    const reason = new Error('cancelled before listing');
+    const { connection, calls } = pagingConnection(threePages);
+    const client = await mcpClient({
+      name: 'paged',
+      connection: connection as McpConnection,
+      signal: controller.signal,
+    });
+    controller.abort(reason);
+
+    expect(await rejectionOf(client.tools())).toBe(reason);
+    expect(await rejectionOf(client.refresh())).toBe(reason);
+    expect(calls).toEqual([]);
+  });
+
+  it('an abort as the FINAL page arrives: the page is not accepted, nothing is returned', async () => {
+    const controller = new AbortController();
+    const reason = new Error('cancelled on the last page');
+    const { connection, calls } = pagingConnection((cursor) => {
+      // Page three is the last (no cursor); it is answered after the abort.
+      if (cursor === 'p3') controller.abort(reason);
+      return threePages(cursor);
+    });
+    const client = await mcpClient({
+      name: 'paged',
+      connection: connection as McpConnection,
+      signal: controller.signal,
+    });
+
+    expect(await rejectionOf(client.tools())).toBe(reason);
+    expect(calls).toHaveLength(3);
+    // Nothing was cached as complete: the next call checks the signal first.
+    expect(await rejectionOf(client.tools())).toBe(reason);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('a one-page list answered after the abort is not accepted either', async () => {
+    const controller = new AbortController();
+    const reason = new Error('cancelled while the only page was in flight');
+    const { connection, calls } = pagingConnection(() => {
+      controller.abort(reason);
+      return { tools: [toolNamed('solo')] };
+    });
+    const client = await mcpClient({
+      name: 'flat',
+      connection: connection as McpConnection,
+      signal: controller.signal,
+    });
+
+    expect(await rejectionOf(client.tools())).toBe(reason);
+    // The page was asked exactly as before: no params, the signal in the options.
+    expect(calls).toEqual([[undefined, { signal: controller.signal }]]);
+  });
 });
 
 // ─── 5. One page: the request it always got ───────────────────────

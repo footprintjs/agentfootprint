@@ -76,7 +76,7 @@ export {
   // cannot honour (its requests unmatched, or its answers unseen) is refused
   // before it is sent, with this error and a typed reason.
   McpReplayUnavailableError,
-  // A server's tool list that could not be read to its end — past 100 pages,
+  // A server's tool list that could not be read to its end — past 100 requests,
   // or a cursor it already sent — is refused with this error and a typed
   // reason; what was listed travels on it, never as a list cut short.
   McpToolListIncompleteError,

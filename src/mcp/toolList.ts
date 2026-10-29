@@ -17,9 +17,12 @@
  *
  * The first page is asked exactly as before pagination was followed: no params
  * (and, with no signal, no arguments at all). The client's signal rides every
- * page in the SDK's trailing options, and once it has fired no further page is
- * asked for (`lib/abort.ts`): an abort is the caller's word, so it wins over an
- * incomplete list.
+ * page in the SDK's trailing options, and it is checked immediately before each
+ * page is asked for and again when each answer arrives (`lib/abort.ts`): once
+ * it has fired, nothing more is asked for and no page is accepted, the last one
+ * included. An abort is the caller's word, so it wins over an incomplete list.
+ * What it cannot do is settle a page a connection that ignores the signal is
+ * still holding: that promise settles when the connection says.
  */
 
 import { throwIfAborted } from '../lib/abort.js';
@@ -27,9 +30,9 @@ import type { Tool } from '../tools/tools.js';
 import type { McpConnection, McpListedTool } from './types.js';
 
 /**
- * The most `tools/list` pages one listing reads. A catalogue past it is far
- * more than a model can choose from; a server that keeps paging past it is
- * reported as incomplete rather than read without end.
+ * The most `tools/list` requests one listing sends. A bound on REQUESTS, not on
+ * the catalogue's size: a page may hold any number of tools. A server that
+ * keeps paging past it is reported as incomplete rather than read without end.
  */
 export const MAX_TOOL_LIST_PAGES = 100;
 
@@ -48,8 +51,9 @@ export interface ToolListing {
  * Read the server's tool list, page by page, until a page carries no cursor —
  * or until it cannot be finished, which the result says (`incomplete`).
  *
- * @throws the abort, once `signal` has fired and another page was due; and
- *   whatever the connection rejects a page with, as it always did
+ * @throws the abort, when `signal` has fired before a page is asked for or by
+ *   the time its answer arrives; and whatever the connection rejects a page
+ *   with, as it always did
  */
 export async function listEveryPage(
   connection: McpConnection,
@@ -59,12 +63,18 @@ export async function listEveryPage(
   const sent = new Set<string>();
   let cursor: string | undefined;
   for (let pages = 1; ; pages++) {
+    // Immediately before EVERY request, the first included: an aborted listing
+    // asks for nothing more (`lib/abort.ts`).
+    throwIfAborted(signal);
     const page = await askPage(connection, cursor, signal);
+    // And after EVERY answer, before it is accepted: a page that lands after
+    // the abort — the last page too — is never part of a listing, so nothing
+    // incomplete is returned and nothing complete is cached.
+    throwIfAborted(signal);
     // One push per tool: spreading a very large page into `push` can overflow the stack.
     for (const tool of page.tools) tools.push(tool);
     const next = page.nextCursor;
     if (next === undefined || next === null) return { tools, pages };
-    throwIfAborted(signal);
     if (sent.has(next)) return { tools, pages, incomplete: 'cursor-repeated' };
     if (pages >= MAX_TOOL_LIST_PAGES) return { tools, pages, incomplete: 'page-limit' };
     sent.add(next);

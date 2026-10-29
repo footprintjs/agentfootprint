@@ -248,13 +248,15 @@ real server exists.
 
 A server may page its tool list: each `tools/list` page carries a `nextCursor`
 while there is more. `tools()` and `refresh()` follow it until a page carries
-none, for at most **100 pages**. The first page is asked exactly as before, so
-a server that answers in one page sees no change.
+none, sending at most **100 `tools/list` requests**. That bound counts requests,
+not the size of the catalogue: a page may hold any number of tools. The first
+page is asked exactly as before, so a server that answers in one page sees no
+change.
 
 A list that cannot be read to its end is never returned cut short — an agent
 cannot know which tools it was not offered. The call rejects with
 `McpToolListIncompleteError` instead. Its `reason` (`McpToolListIncompleteReason`)
-says why: `'page-limit'` when the list did not end within 100 pages,
+says why: `'page-limit'` when the list did not end within 100 requests,
 `'cursor-repeated'` when a page named a cursor the listing had already sent (a
 loop). `pages` counts the pages read, and `tools` holds what was listed, wrapped
 and callable, for a caller that decides to use an incomplete list on purpose:
@@ -272,8 +274,11 @@ try {
 }
 ```
 
-`signal` rides every page, and once it fires no further page is asked for: the
-listing rejects with the abort, which wins over an incomplete list.
+`signal` rides every page. It is checked immediately before each page is asked
+for and again when each answer arrives. Once it has fired, nothing more is asked
+for and no page is accepted, the last one included. The listing rejects with
+the abort, which wins over an incomplete list. A connection that ignores the
+signal still settles its own pending page in its own time.
 
 ## MCP from a browser
 

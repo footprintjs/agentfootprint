@@ -51,15 +51,23 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 
 **The rule.** `tools()` and `refresh()` read every page of the server's
 `tools/list` answer: the first page with no params, exactly as before, then
-each `nextCursor` as `{ cursor }` until a page carries none. They read at most
-100 pages (`MAX_TOOL_LIST_PAGES`). A list that does not end within them
-(`'page-limit'`), or a page that names a cursor this listing already sent
-(`'cursor-repeated'`, a loop), is never returned cut short: the call rejects
-with `McpToolListIncompleteError`, whose `reason` says which, whose `pages`
-counts what was read, and whose `tools` holds what was listed, wrapped and
-callable. The client's `signal` rides every page in the trailing options, and
-no page is asked for once it has fired; an abort wins over an incomplete list.
-The error names the server and the counts, never a cursor.
+each `nextCursor` as `{ cursor }` until a page carries none. They send at most
+100 `tools/list` requests (`MAX_TOOL_LIST_PAGES`). The bound counts requests,
+not the catalogue's size, because one page may hold any number of tools. A list
+that does not end within the bound (`'page-limit'`), or a page that names a
+cursor this listing already sent (`'cursor-repeated'`, a loop), is never
+returned cut short. The call rejects with `McpToolListIncompleteError`, whose
+`reason` says which, whose `pages` counts what was read, and whose `tools`
+holds what was listed, wrapped and callable. The error names the server and the
+counts, never a cursor.
+
+The client's `signal` rides every page in the trailing options, and the library
+checks it twice per page: immediately before the page is asked for, and when its
+answer arrives. Once it has fired, nothing more is asked for and no page is
+accepted, the last one included, so nothing is returned and nothing is cached.
+An abort wins over an incomplete list. The check cannot settle a page that a
+connection ignoring the signal is still holding: that promise settles when the
+connection settles it.
 
 **Why.** Reading one page cut a paginating server's catalogue short in
 silence: the agent was offered part of it and nothing said so. An agent cannot
