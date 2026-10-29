@@ -18,6 +18,13 @@ concurrency:
 # EVERY install here is `npm ci` against the committed lockfiles — the same
 # tree the Release workflow gates and publishes. `npm install` would resolve
 # fresh versions and let CI pass on a tree that never ships.
+#
+# This run's verdict is a release gate: when the release PR's run is green on
+# the exact tree that merges, the Release workflow publishes without running
+# the gates again (publish.yml · verdict, which reads `tested-tree` below). So
+# every action here is pinned to a full commit SHA, as in publish.yml: a moved
+# tag could otherwise report a tree as tested that never was. Renovate's
+# github-actions manager proposes new pins.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -27,9 +34,9 @@ jobs:
         node-version: [22, 24]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -63,9 +70,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -88,13 +95,30 @@ jobs:
   # "ts twoslash" code block against the real agentfootprint types at build.
   # A snippet using a renamed/removed API fails the build -> hand-written doc
   # code can't drift from the library (the test job runs every example).
+  #
+  # NOT on the release PR (release/next, from this repository — a fork's
+  # branch of that name still runs it). The website does not gate npm: the
+  # release PR changes no page and no library source (the version, CHANGELOG,
+  # CAPABILITIES, lockfiles), and docs.yml builds and checks the site again
+  # once npm has the version, where a failure delays only the website.
+  # Skipped rather than run as non-blocking: GitHub documents that a job
+  # skipped by `if:` reports Success and does not block a merge even when it
+  # is a required check, so the release PR shows no red site check to stop
+  # for, and spends no runner time on a site docs.yml rebuilds anyway. A site
+  # problem (12.0.0 waited on a docs-next install that needed a Lens release
+  # first) can no longer hold a release PR. Every other PR and every push to
+  # main still runs this job.
   docs:
+    if: >-
+      !(github.event_name == 'pull_request' &&
+        github.head_ref == 'release/next' &&
+        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -129,23 +153,20 @@ jobs:
           EXPORT: 'true'
         run: npm run build
 
-      # Site-budget RATCHET, on every push and PR — the visible half of the gate.
-      # The same check runs in docs.yml (after merge, in a workflow nobody
-      # watches) and in publish.yml (on the release path, where it blocks). It
-      # runs here because the export is already built two steps up, so the
-      # marginal cost is one second of stat()ing files.
+      # Site-budget RATCHET, on every PR and push — where site growth is caught:
+      # in the change that causes it. It runs here because the export is
+      # already built two steps up, so the marginal cost is one second of
+      # stat()ing files. The same check runs in docs.yml before each deploy.
       #
-      # WHAT THIS NOW GUARANTEES: the commit that pushes the export over a
-      # ceiling is red at the moment it is proposed, in the check people already
-      # read, with the measured bytes in the log — rather than four days and
-      # three releases later when someone thinks to open Deploy Docs.
+      # WHAT THIS GUARANTEES: the commit that pushes the export over a ceiling
+      # is red at the moment it is proposed, in the check people already read,
+      # with the measured bytes in the log — rather than days and releases
+      # later when someone thinks to open Deploy Docs.
       #
-      # WHAT IT CANNOT DO: stop a release by itself. CI runs on `push` and the
-      # publish on `release: published`; release.sh fires both within seconds of
-      # each other, so npm never waits on this verdict (the same wiring that let
-      # a red docs-truth ratchet reach the registry in 9.58.0). The BLOCKING copy
-      # of this gate is the one in publish.yml; this one is how anybody finds out
-      # before it gets that far.
+      # WHAT IT DOES NOT DO, on purpose: stop a release. publish.yml no longer
+      # builds the site (a budget kept 9.87.0, 9.92.0 and 9.101.0 off npm), and
+      # the release PR skips this job. Over budget at release time, the site
+      # waits — docs.yml refuses to deploy it — and the npm version does not.
       - name: Enforce site performance budgets
         working-directory: docs-next
         run: npm run check:site-budget
@@ -158,9 +179,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -183,11 +204,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
 
@@ -203,9 +224,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
 
@@ -230,9 +251,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -248,9 +269,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -260,10 +281,37 @@ jobs:
       - run: npm run test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./coverage/lcov.info
           flags: unittests
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # The tree this run tested, recorded where the Release workflow can read it
+  # back. Every job here checks out the same commit — for a pull request, the
+  # merge of its head into main as main stood when the run began (a re-run
+  # reuses it) — so this is the tree every gate in the run tested. No checkout
+  # in this file may name a `ref:`, or that would stop being true.
+  #
+  # publish.yml's `verdict` skips the release's own run of the gates only when
+  # this tree is byte for byte the tree it is about to publish. The hash goes
+  # into a step NAME, which the Jobs API returns as rendered: the runner
+  # renders it from this file and the `tree` step's output, and this job runs
+  # no dependency code that could write that output. Not a log line or an
+  # annotation: any process in any job, an install script included, can print
+  # one of those.
+  tested-tree:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tree
+        run: echo "hash=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      - name: tested tree ${{ steps.tree.outputs.hash }}
+        env:
+          TREE: ${{ steps.tree.outputs.hash }}
+        run: echo "This run tested tree $TREE."

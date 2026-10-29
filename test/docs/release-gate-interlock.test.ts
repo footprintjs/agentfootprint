@@ -14,6 +14,12 @@
  * publish job never starts — regardless of how the release was created (the
  * script, the web UI, another machine, a workflow re-run).
  *
+ * One exception, and only one: the `build` job skips a gate when publish.yml's
+ * `verdict` job showed that the release PR's CI already passed it on the EXACT
+ * tree being published — the same gate on the same bytes, not run twice. When
+ * that cannot be shown, the gate runs here as before. release-verdict.test.ts
+ * pins the verdict and that nothing else can skip a gate.
+ *
  * The second half pins the hand-edit. `docs/DOCS_TRUTH_REPORT.md` is GENERATED,
  * and the 9.58.0 release commit edited it by hand (103 → 105 typed events,
  * nothing else), which left the export count stale AND meant nobody had run the
@@ -28,6 +34,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { jobBlock } from '../helpers/workflowText';
 
 const ROOT = join(__dirname, '..', '..');
 const PUBLISH_YML = join(ROOT, '.github', 'workflows', 'publish.yml');
@@ -56,14 +63,14 @@ describe('release interlock — a red gate cannot reach npm', () => {
     // It must be in `build`, not in `publish` — `publish` has the OIDC token and
     // does zero dependency resolution, so a gate there would both run too late
     // and violate the least-privilege split this workflow is built around.
-    const buildJob = yml.slice(yml.indexOf('  build:'), yml.indexOf('  publish:'));
+    const buildJob = jobBlock(yml, 'build');
     expect(
       buildJob.includes('npm run docs:truth'),
       'docs:truth must run in the `build` job (the one `publish` needs:), not in the ' +
         'publish job — a gate that runs beside `npm publish` cannot prevent it.',
     ).toBe(true);
 
-    const publishJob = yml.slice(yml.indexOf('  publish:'));
+    const publishJob = jobBlock(yml, 'publish');
     expect(
       NEEDS_BUILD.test(publishJob),
       'the publish job must `needs: build`, or the gate in `build` blocks nothing.',
@@ -90,7 +97,7 @@ describe('release interlock — a red gate cannot reach npm', () => {
 
   it('publish.yml checks the packed dependency after build and before staging in the required job', () => {
     const yml = read(PUBLISH_YML);
-    const buildJob = yml.slice(yml.indexOf('  build:'), yml.indexOf('  publish:'));
+    const buildJob = jobBlock(yml, 'build');
     const gate = buildJob.indexOf('      - run: npm run test:context-package\n');
     expect(
       gate,
@@ -98,7 +105,7 @@ describe('release interlock — a red gate cannot reach npm', () => {
     ).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(buildJob.indexOf('      - run: npm run build\n'));
     expect(gate).toBeLessThan(buildJob.indexOf('      - name: Stage published package'));
-    expect(yml.slice(yml.indexOf('  publish:'))).toMatch(NEEDS_BUILD);
+    expect(jobBlock(yml, 'publish')).toMatch(NEEDS_BUILD);
   });
 
   it('release.sh checks the packed dependency after build and before the version bump', () => {
