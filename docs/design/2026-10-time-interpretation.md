@@ -317,7 +317,11 @@ again, or the call is refused. It never proceeds silently.
   whose change asks again. With a page argument the app's local declaration marks `continuation`:
   page 2 of a confirmed call runs; page 2 with a changed customer asks again; the same mark from a
   remote declaration is ignored, not refused, so a page change asks again; and without the role, a
-  page change asks again. **Batch membership is tested only as a digest change:** the real batch
+  page change asks again. Every argument is checked before a role leaves one out: for `inert` and
+  `continuation` alike, a getter on the exempt argument is refused without running and cannot
+  change a bound field, an exempt value that is not JSON data or holds a cycle is refused, and what
+  runs is the checked copy; a cycle, or data past the bounds, is refused rather than thrown.
+  **Batch membership is tested only as a digest change:** the real batch
   ask and its resume are future implementation work, not measured behaviour. In the library, the
   same cases through the batch ask, plus a resume and the long-pause test (§ 8.4).
 
@@ -552,15 +556,21 @@ every bound argument as it will be sent (all but those the app's local declarati
 `continuation`), the executed bounds and zone, the sampling step (whatever role its argument
 carries), and the requested mention. The arguments are read from the call's own enumerable keys,
 each value from its own data property, into a null-prototype record: an argument named `__proto__`
-is valid JSON and is bound like any other. Only JSON data is bound: a call carrying anything else
-(an accessor, a function, a `Date`, a non-finite number) is refused, never bound by a stand-in
-another value would share. The executed bounds in the digest are the asked range at the
-confirmation's clock: the turn's clock for the first confirmation, the moment of the person's answer
-for a re-ask after a pause. A dispatch within the tool's step of that clock keeps the digest; past
-the step, the bounds are recomputed and the digest changes (the time design's drift law decides
-which). A batch's digest also covers its list of call digests, in order. The person's answer is
-filed on the existing `time-answer` row, which gains the confirmed digests and the clock each is
-anchored at (`time/rows.ts · TimeAnswerRow`).
+is valid JSON and is bound like any other. **Every argument is checked first, then the digest is
+taken, then the checked copy runs.** The check covers the arguments a role leaves out of the digest
+too: `inert` and `continuation` waive membership in the digest, never the data contract. It reads
+own data properties only, so no getter and no `toJSON` runs, and it refuses anything that is not
+JSON data (an accessor, a function, a `Date`, a non-finite number, `undefined`), a cycle, and data
+deeper or larger than its bounds, always as a refusal, never a thrown error and never a stand-in
+another value would share. It copies as it goes, and that copy is what the call sends: nothing reads
+the caller's object after the check, so nothing it does later can change what was bound. The
+executed bounds in the digest are the asked range at the confirmation's clock: the turn's clock for
+the first confirmation, the moment of the person's answer for a re-ask after a pause. A dispatch
+within the tool's step of that clock keeps the digest; past the step, the bounds are recomputed and
+the digest changes (the time design's drift law decides which). A batch's digest also covers its
+list of call digests, in order. The person's answer is filed on the existing `time-answer` row,
+which gains the confirmed digests and the clock each is anchored at
+(`time/rows.ts · TimeAnswerRow`).
 
 **A page of the same scope keeps the confirmation (proposed, for review).** An argument the app's
 local declaration marks `continuation` (a page number, a cursor or an offset) selects a slice of the
@@ -590,20 +600,24 @@ runs, the library recomputes the digest from the call it is about to send:
 Nothing proceeds silently.
 
 **Run as code.** The bench's acceptance set (`bench/time/interpretation/scripts/acceptance.mjs`,
-`npm run acceptance`) runs this law on a prototype of the digest: a tool with no `Tool.search`
-whose customer or node argument changes before dispatch asks again; the same argument marked
-`inert` does not; a partial declaration still binds what it left out; a changed sampling step, tool,
-declaration version or bounds asks again; a call added to a batch is a new batch; an identical
-retry runs; with no one to ask, a changed call is refused; an argument named `__proto__`, parsed
-from JSON, is bound, so a changed value asks again (a review found the first prototype dropped it);
-a call carrying anything but JSON data is refused, and no getter runs. With a local `continuation`:
-page 2 of a confirmed call runs, as does a cursor the tool returned; page 2 with a changed customer,
-node or bounds asks again; a remote declaration's `continuation` (or `inert`) is ignored, not
-refused, so the argument stays bound; and a page argument declared `page`, or not declared, asks
-again on a page change.
-**Batch membership is tested only as a digest change.** The real batch ask and its resume
-(`planAskFields`, `applyInputResponse`) are future implementation work, not measured behaviour; so
-are the hidden inputs and the long-pause re-ask below.
+`npm run acceptance`) runs this law on a prototype of the digest: a tool with no `Tool.search` whose
+customer or node argument changes before dispatch asks again; the same argument marked `inert` does
+not; a partial declaration still binds what it left out; a changed sampling step, tool, declaration
+version or bounds asks again; a call added to a batch is a new batch; an identical retry runs; with
+no one to ask, a changed call is refused; an argument named `__proto__`, parsed from JSON, is bound,
+so a changed value asks again (a review found the first prototype dropped it); a call carrying
+anything but JSON data is refused, and no getter runs; every argument is checked before a role
+leaves one out, so for `inert` and `continuation` alike a getter on the exempt argument is refused
+without running and cannot change a bound field, an exempt `Date`, function, `undefined`, `NaN` or
+`toJSON` object is refused, and so is a cycle there, and the call that runs gets the checked copy (a
+review found the previous prototype left exempt arguments out before checking them); a cycle, or
+data deeper or larger than the bounds, is refused instead of throwing `RangeError`. With a local
+`continuation`: page 2 of a confirmed call runs, as does a cursor the tool returned; page 2 with a
+changed customer, node or bounds asks again; a remote declaration's `continuation` (or `inert`) is
+ignored, not refused, so the argument stays bound; and a page argument declared `page`, or not
+declared, asks again on a page change. **Batch membership is tested only as a digest change.** The
+real batch ask and its resume (`planAskFields`, `applyInputResponse`) are future implementation
+work, not measured behaviour; so are the hidden inputs and the long-pause re-ask below.
 
 **Reuse.** A confirmation is reused only for a call whose digest equals a confirmed one: the same
 call retried after an error (`resumeOnError`), the same call after a resume (`Agent.resume` keeps
@@ -640,12 +654,18 @@ or measured here.
    without end. Each pause costs at most one question. Pinned by a test: confirm, pause past the
    step, re-ask, confirm the new bounds (once promptly, once slower than the step), and the call
    dispatches exactly once, with those bounds.
-4. **Own keys, JSON data only.** The digest reads the call's own enumerable arguments, values from
-   own data properties, into a null-prototype record, as the bench's prototype now does
-   (`scripts/binding.mjs · scopeOf`). An argument named `__proto__` is bound like any other. A call
-   carrying anything but JSON data is refused. The model's arguments are parsed JSON; the build must
-   check that every value the library itself writes into a call (a redrawn window, a filled answer)
-   is JSON data too.
+4. **Validate all argument data first; dispatch the validated snapshot.** Every argument is checked
+   as JSON data before any role leaves one out of the digest: `inert` and `continuation` waive
+   membership in the digest, never the data contract. The check reads the call's own enumerable
+   keys and own data properties only, so it never runs a getter or `toJSON`. It refuses anything
+   that is not JSON data and any cycle, and it is bounded in depth and size, always as a refusal,
+   never a thrown error. It copies as it goes, into plain data in which `__proto__` is an argument
+   like any other, and the digest is taken over that copy. The call sends that copy, never the
+   caller's object: nothing reads the original after the check, and no custom serialization runs
+   after the confirmation. The copy is taken of the arguments as finally sent, after the library's
+   own rewrites (a redrawn window, a filled answer), so those are checked too. The bench's
+   prototype does this (`scripts/binding.mjs · plainData`, `atDispatch`); the build must, in the
+   real dispatch.
 5. **`continuation` reads as `page` everywhere else** (if § 15 item 18 is accepted). The role joins
    the closed set (`semantics/coverage/search/types.ts · SearchRole`, and
    `declaration.ts · SEARCH_ROLES`), and every reader of `page` reads it the same way: the facet
@@ -803,7 +823,7 @@ model's choice of arguments between the confirmation and the call.
 | A restriction made of known words ("at CPU peaks", "requests > errors") | Bounded relations: a word or operator in no supported relation asks (§ 8.6). |
 | The model changes a call after the person confirmed it | The scope digest is checked at dispatch; a changed call asks again or is refused (§ 8.4). |
 | A tool with no `Tool.search`, or a partial one, leaving a customer or node argument out of the confirmation | Every argument the call sends is in the digest by default; only an explicit `inert` opts out. The binding refuses no tool for its declaration, and `searchOf` still refuses a partial one, as today (§ 8.4, R15). |
-| An argument named `__proto__` (valid JSON) slipping out of the digest, or a value that is not data (a getter) changing after the check | The digest reads own enumerable keys into a null-prototype record, so such an argument is bound like any other; anything but JSON data is refused. Acceptance cases pin both (§ 8.4). |
+| An argument named `__proto__` (valid JSON) slipping out of the digest, or a value that is not data (a getter, a `toJSON`) changing what runs after the check, in an exempt argument too | Every argument is checked as JSON data from own keys and own data properties before a role leaves any out, without running a getter; a cycle or oversized data is refused. The checked copy, in which `__proto__` is an argument like any other, is what runs. Acceptance cases pin each (§ 8.4). |
 | A remote declaration marking a scope-bearing argument `inert` or `continuation` | Both count only from a local declaration `searchOf` accepted. A remote one's marks are ignored, not refused, so it binds every argument (§ 8.4). |
 | A page argument used to change the scope: a tool whose page argument really selects other rows, or a cursor made up to encode another query | Local declarations only. `continuation` is the app's own statement that the argument selects a slice of the same scope (for an opaque cursor: that the tool ties it to the request it came from). A remote declaration cannot make that statement, and an app that cannot vouch declares `page`, which stays bound. Any other change still asks (§ 8.4). |
 | A host-filled tenant or credential changing unseen, or shown in the confirmation | Bound by what it stands for, never the secret; shown by a safe label, never its value (§ 8.4). |
@@ -964,8 +984,10 @@ remain the owner's proposals, not approvals.
     what they stand for, never the secret); the confirmation shows safe labels, never their values.
 21. **A long pause asks once, then runs.** A test pins it: confirm, pause past the step, re-ask,
     confirm the new bounds, dispatch exactly once. Reusing the turn's frozen clock must not loop.
-22. **The digest reads own keys and JSON data only**, into a null-prototype record; `__proto__` is
-    an argument, and anything that is not JSON data is refused.
+22. **Validate all argument data first; dispatch the validated snapshot.** Every argument, exempt
+    or not, is checked as JSON data from own keys and own data properties, so no getter or `toJSON`
+    runs; a cycle or oversized data is refused, within bounds. The call sends that checked copy,
+    never the caller's object, and `__proto__` is an argument like any other.
 23. **The batch ask and its resume are built and tested in the library.** The bench tested batch
     membership only as a digest change; that is not measured runtime behaviour.
 24. **`continuation` reads as `page` everywhere else**: the facet composer, the `paged` gaps and the
