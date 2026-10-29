@@ -187,6 +187,19 @@ Gotchas:
   CRLF for LF, a combining accent — is a different program, so it is a miss.
 * **Formatting exempts nothing.** Inline code, indented code, a fence with
   leading spaces and a fence that never closes are prose.
+* **A block ends where a renderer ends it.** A block closes at a fence of its
+  own character at least as long as its opening, indented by up to three
+  spaces, as in CommonMark. Text after that point is prose, even if the
+  program submitted to the tool went on.
+* **Reading stops where a renderer could disagree.** From these lines on, no
+  block is read:
+  - a fence indented inside a list;
+  - an HTML block;
+  - a `$$` math line;
+  - a closing fence with a trailing tab;
+  - a block whose program holds a fence run as long as its own fence.
+  Everything after the stop is checked as prose. To show a program that holds
+  three backticks, use a longer fence, as the attached copy always does.
 * **Only this turn.** A block is compared with this turn's calls only; a
   program from an earlier turn is a miss.
 * **Bounded.** A program over 32,768 UTF-8 bytes keeps its facts but no text

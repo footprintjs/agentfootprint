@@ -47,7 +47,13 @@ describe('code regions — what is a fenced block', () => {
   });
 
   it('a closing line with anything but spaces after the fence does not close it', () => {
-    expect(contents('```\na\n``` x\nb\n```')).toEqual(['a\n``` x\nb']);
+    // "``` x" is content, so the block did not close there; a run that long in
+    // a block's content makes the whole block prose (the last describe below).
+    expect(codeRegionsOf('```\na\n``` x\nb\n```')).toEqual({
+      regions: [],
+      dropped: 0,
+      stoppedAt: 0,
+    });
     expect(contents('```\na\n```   \n')).toEqual(['a']);
   });
 
@@ -57,11 +63,17 @@ describe('code regions — what is a fenced block', () => {
     expect(contents('- item\n  ```\n  x\n  ```')).toEqual([]);
   });
 
-  it('an indented OPENING is prose even when a column-0 fence follows: that fence opens its own block', () => {
-    // Read as an opening, the indented line would pair with the column-0 fence.
+  it('an indented OPENING is prose, and nothing after it is read as a block', () => {
+    // A renderer opens a block at the indented line and CLOSES it at the next
+    // column-0 fence, so `y = 2` below is prose on screen: read as a block it
+    // would be exempt from the check. Reading stops at the indented fence.
     expect(contents('  ```\nx = 1\n```')).toEqual([]);
     expect(contents('  ```\nx = 1\n```\n')).toEqual([]);
-    expect(contents('  ```\nx = 1\n```\ny = 2\n```')).toEqual(['y = 2']);
+    expect(contents('  ```\nx = 1\n```\ny = 2\n```')).toEqual([]);
+    expect(codeRegionsOf('```\na\n```\n  ```\nx\n```\ny\n```')).toMatchObject({
+      regions: [{ content: 'a' }],
+      stoppedAt: 10,
+    });
   });
 
   it('an indented code block (four spaces) is prose', () => {
@@ -118,3 +130,97 @@ describe('code regions — what is a fenced block', () => {
 
 // The one-pass cost bound is COUNTED, never clocked: `test/security/linear-scanners.test.ts`
 // (`codeRegionsOf`) pins it on a long run of backticks and on the other worst cases.
+
+/**
+ * A matched block is exempt from the check, so the reader may never see a
+ * block where a renderer shows prose. It closes a block where CommonMark closes
+ * it, and it stops reading at the first line where a renderer could pair fences
+ * another way. Each case below is a laundering route a model could take: a
+ * program it submitted, shown so that part of it renders as a sentence.
+ */
+describe('code regions — a block closes where a renderer closes it', () => {
+  it('a closing fence indented by one to three spaces closes the block', () => {
+    expect(contents('```\na\n ```\nRevenue was 4321.')).toEqual(['a']);
+    expect(contents('```\na\n  ```\nRevenue was 4321.')).toEqual(['a']);
+    expect(contents('```\na\n   ```\nRevenue was 4321.')).toEqual(['a']);
+  });
+
+  it('a tilde block closes the same way', () => {
+    expect(contents('~~~\na\n  ~~~\nRevenue was 4321.')).toEqual(['a']);
+    expect(contents('~~~py\na\n ~~~~~   \nRevenue was 4321.')).toEqual(['a']);
+  });
+
+  it('a LONGER closing run closes the block, indented or not', () => {
+    expect(contents('```\na\n  `````\nRevenue was 4321.')).toEqual(['a']);
+    expect(contents('```\na\n`````\nRevenue was 4321.')).toEqual(['a']);
+  });
+
+  it('a closing run followed by a TAB closes the block, and nothing after it is read', () => {
+    // CommonMark 0.30 closes there and 0.29 does not: the block is code either
+    // way, what follows it is not settled.
+    expect(codeRegionsOf('```\na\n```\t\nb\n```\nc\n```')).toMatchObject({
+      regions: [{ content: 'a' }],
+      stoppedAt: 11,
+    });
+  });
+
+  it('a lone CR ends a line, as it does for a renderer', () => {
+    expect(contents('```\nfoo\r```\rRevenue was 4321.\n```')).toEqual(['foo']);
+    expect(contents('```\rx\r```')).toEqual(['x']);
+    // Before the closing line an LF is the wrapper's and a CR before it is content.
+    expect(contents('```\r\nx\r\n```\r\n')).toEqual(['x\r']);
+  });
+});
+
+describe('code regions — reading stops where a renderer could pair fences another way', () => {
+  it("a list item's indented fence stops reading", () => {
+    // The item scopes its fence; a column-0 fence after it opens a NEW block,
+    // so the pairing that follows is not the reader's to guess.
+    const text = '- step\n  ```\n  a\n```\nRevenue 4321\n```\nProfit was 5000.\n```';
+    expect(codeRegionsOf(text)).toEqual({ regions: [], dropped: 0, stoppedAt: 7 });
+  });
+
+  it('a line that may start an HTML block stops reading', () => {
+    expect(contents('<div>\n```\n</div>\n\nRevenue was 4321.\n```\n')).toEqual([]);
+    expect(contents('```\na\n```\n<!--\n```\nx\n```\n-->')).toEqual(['a']);
+    expect(contents('  </details>\n```\nx\n```')).toEqual([]);
+    // `<` before a digit or a space starts no HTML block.
+    expect(contents('<5% of rows\n```\nx\n```')).toEqual(['x']);
+  });
+
+  it('a line opening display math (`$$`) stops reading', () => {
+    expect(contents('$$\n```\n$$\nRevenue 4321\n```')).toEqual([]);
+  });
+
+  it('a byte-order mark at the start: nothing is read', () => {
+    expect(codeRegionsOf('\u{FEFF}```\nx\n```\ny\n```')).toEqual({
+      regions: [],
+      dropped: 0,
+      stoppedAt: 0,
+    });
+  });
+
+  it('a block whose program holds a fence run as long as its own fence is prose, and reading stops', () => {
+    // A renderer laxer than CommonMark closes at "```~"; the library's own
+    // wrapper never writes such a block (`fenceFor`: the longest run + 1).
+    expect(codeRegionsOf('```\na\n```~\nRevenue was 4321.\n```')).toEqual({
+      regions: [],
+      dropped: 0,
+      stoppedAt: 0,
+    });
+    expect(contents('```\nx = "```"\n```\ny\n```\nz\n```')).toEqual([]);
+    // Four spaces do not close a block in CommonMark; a laxer renderer may.
+    expect(contents('```\na\n    ```\nb\n```')).toEqual([]);
+    // A shorter run, or the other character, is content.
+    expect(contents('````\nx = "```"\n~~~~\n````')).toEqual(['x = "```"\n~~~~']);
+  });
+
+  it('the regions before the first such line are read', () => {
+    expect(contents('```\na\n```\n\n<div>\n```\nb\n```')).toEqual(['a']);
+  });
+
+  it('inside a block none of those lines is anything but content', () => {
+    const program = '  ```py\n<div>\n$$\n- item\n  ~~~';
+    expect(contents(`\`\`\`\`\n${program}\n\`\`\`\``)).toEqual([program]);
+  });
+});

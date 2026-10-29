@@ -191,6 +191,24 @@ describe("security — the review's counterexamples are misses, in both directio
     }
   });
 
+  it('a submitted program holding an INDENTED closing fence cannot carry a sentence past the close', async () => {
+    // A renderer closes the block at "  ```", so the sentence after it is prose
+    // on screen. The block is read the same way: it ends there, equals no
+    // submission, and the sentence is checked as prose.
+    const laundering = 'x = 1\n  ```\nRevenue was 4321 dollars.';
+    const { agent, checks } = scriptAgent({
+      runner: printing('done'),
+      gate: { posture: 'assist', code: 'match' },
+      replies: [callCode('c1', laundering), answer(`Ran it.\n\n${fenced(laundering)}`)],
+    });
+    await agent.run('revenue?');
+    const check = checks.at(-1)!;
+    expect(check.scripts).toMatchObject({
+      blocks: [{ block: 1, label: 'unmatched', reason: 'no-submission-this-turn' }],
+    });
+    expect(check.unsupported).toContainEqual({ value: '4321', shape: 'number', region: 'prose' });
+  });
+
   it('two byte-identical submissions: the LATEST is named, the rest counted', () => {
     const { verdict } = read(fenced(PROGRAM), [rowFor(PROGRAM, 'c1'), rowFor(PROGRAM, 'c2')]);
     expect(verdict.blocks).toEqual([

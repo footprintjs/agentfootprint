@@ -85,9 +85,45 @@ its neighbour.
 
 ## The match (`code: 'match'`)
 
-A prose answer is scanned once (`../evidence/codeRegions.ts`): closed fences at
-column 0 are regions; inline spans, indented code, indented fences and unclosed
-fences are prose — formatting alone exempts nothing. A region matches only when
+A prose answer is scanned once (`../evidence/codeRegions.ts`). A fence opened at
+column 0 and closed is a region. Inline spans, indented code, indented fences and
+unclosed fences are prose, so formatting alone exempts nothing.
+
+**The reader rule: a block closes where a CommonMark renderer closes it, and
+reading stops wherever a renderer could pair fences another way.** A block
+closes at a run of its own fence character at least as long as its opening
+fence, indented by up to three spaces and followed only by spaces. A line ends
+at an LF, a CR or a CRLF.
+
+Reading stops at the first of these lines; from there on nothing is read as a
+block, and everything is prose:
+- outside a block:
+  - a fence indented by one to three spaces (a list item's fence, or an
+    indented one);
+  - a line that may start an HTML block;
+  - a `$$` display-math line;
+  - a byte-order mark at the start;
+- inside a block:
+  - a closing run followed by a tab (CommonMark versions disagree on it);
+  - a run of the block's own fence character as long as its fence (a laxer
+    renderer could close there). That block is prose too.
+
+Why: a matched block is exempt from the check. If the reader saw a block where a
+renderer shows prose, a model could submit a program that holds a sentence and
+show it so that the sentence renders outside the block, unchecked:
+
+````text
+```python            ← the model's fence, three backticks
+x = 1
+  ```                ← CommonMark closes the block here
+Revenue was 4321.    ← on screen: prose, so it is checked
+```                  ← opens a new block that never closes
+````
+
+The library's own attachment can never trip this rule. Its fence is longer than
+any run in the program, and the reader never scans it.
+
+A region matches only when
 its content equals a program a call of THIS TURN submitted, with nothing
 normalized (no trailing-space strip, no line-ending rewrite, no Unicode
 normalization, no shape match, no nearest match). A match is cut out of the text

@@ -77,6 +77,10 @@
  *                             when a rule changed it, `modelResult` alike
  *   - an evaluation's `explanation` → `'[N chars]'` (a judge's reason can
  *                             quote the answer it graded)
+ *   - an attached script's program (`turn_end.scripts.shown[].text`)
+ *                           → `'[N chars]'`; its labels, ids, exit code and
+ *                             counts stay (`BOUND_LEAVES`: bounded at the
+ *                             leaf, never the whole field)
  *   - userPrompt / LLM content / thinking blocks / history
  *                           → `'[N chars]'` / `'[N messages]'` markers
  *   - content PREVIEWS (`contentSummary` on context/memory events,
@@ -421,9 +425,74 @@ const BOUND_FIELDS: Readonly<
   'agentfootprint.memory.strategy_applied': { scoreEvidence: keysMarker },
 };
 
+/** The fields of one attached script that are the record's own words, never content. */
+const SHOWN_SCRIPT_RECORD_FIELDS: ReadonlySet<string> = new Set([
+  'toolCallId',
+  'tool',
+  'language',
+  'label',
+  'exitCode',
+  'resultWithheld',
+  'rewritten',
+  'bytes',
+  'lines',
+  'truncated',
+]);
+
+/** One attached script: its record fields kept, every other field (the program) a marker. */
+function boundShownScript(script: unknown): unknown {
+  if (script === null || typeof script !== 'object' || Array.isArray(script)) {
+    return `[type: ${typeofOf(script)}]`;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(script)) {
+    out[key] = SHOWN_SCRIPT_RECORD_FIELDS.has(key) ? sanitizeJson(value) : charsMarker(value);
+  }
+  return out;
+}
+
+/** `turn_end.scripts`: every program `'[N chars]'`, the labels, ids and counts as they are. */
+function boundScripts(value: unknown): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return `[type: ${typeofOf(value)}]`;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === 'shown' && Array.isArray(entry))
+      out[key] = sanitizeJson(entry.map(boundShownScript));
+    else if (key === 'omitted' && typeof entry === 'number') out[key] = entry;
+    else out[key] = charsMarker(entry);
+  }
+  return out;
+}
+
 /**
- * The content field names the bounded mode replaces, across every event type.
- * Pinned against the agent's redaction vocabulary
+ * Fields that carry the record's own words BESIDE content, per event type —
+ * bounded at the content leaf, so the labels, ids and counts stay readable.
+ * Each names the leaves it bounds. A field here is NOT a name the redaction
+ * vocabulary hides: a name would hide the labels too. The vocabulary keeps the
+ * leaf out by its kind (a served string that is not a library word is the
+ * placeholder), and `boundedContentLeaves` is pinned against that.
+ */
+const BOUND_LEAVES: Readonly<
+  Record<
+    string,
+    Readonly<
+      Record<
+        string,
+        { readonly bound: (value: unknown) => unknown; readonly leaves: readonly string[] }
+      >
+    >
+  >
+> = {
+  'agentfootprint.agent.turn_end': {
+    scripts: { bound: boundScripts, leaves: ['shown[].text'] },
+  },
+};
+
+/**
+ * The content field names the bounded mode replaces WHOLE, across every event
+ * type. Pinned against the agent's redaction vocabulary
  * (`redaction/conversation.ts` · `conversationRedaction`): a field this table
  * calls content is a name the conversation travels under, and the test fails
  * when the two disagree.
@@ -432,6 +501,21 @@ const BOUND_FIELDS: Readonly<
  */
 export function boundedContentFieldNames(): readonly string[] {
   return [...new Set(Object.values(BOUND_FIELDS).flatMap((rules) => Object.keys(rules)))];
+}
+
+/**
+ * The content LEAVES the bounded mode replaces inside a field that also holds
+ * the record's own words — `'<event type> · <field>.<leaf>'`. Pinned against
+ * the redaction vocabulary's value-kind rule.
+ *
+ * @internal
+ */
+export function boundedContentLeaves(): readonly string[] {
+  return Object.entries(BOUND_LEAVES).flatMap(([eventType, fields]) =>
+    Object.entries(fields).flatMap(([field, rule]) =>
+      rule.leaves.map((leaf) => `${eventType} · ${field}.${leaf}`),
+    ),
+  );
 }
 
 /** Error-MESSAGE field names — bounded in EVERY event (messages can
@@ -444,9 +528,10 @@ function boundPayload(eventType: string, payload: unknown): unknown {
     return sanitizeJson(payload);
   }
   const fieldRules = BOUND_FIELDS[eventType];
+  const leafRules = BOUND_LEAVES[eventType];
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(payload)) {
-    const rule = fieldRules?.[key];
+    const rule = fieldRules?.[key] ?? leafRules?.[key]?.bound;
     if (rule !== undefined) {
       out[key] = rule(value);
       continue;

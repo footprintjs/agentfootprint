@@ -58,7 +58,7 @@ looks the way it does, and it is stated again at the top of `gate.ts`.
 | `answerCarriers.ts` | which of THIS turn's results the answer's values were read from (`answerCarriersOf`) — identities and counts, the whole list or none; rides `evidence_checked` as `carriedBy` |
 | `gate.ts` | resolve options, judge an answer, write the sentences |
 | `recovery.ts` | resolve bounded recovery guidance and compose the internal repair instruction |
-| `codeRegions.ts` | the fenced code blocks of an answer, in one linear pass — read only under `code: 'match'` (`../scripts/`) |
+| `codeRegions.ts` | the fenced code blocks of an answer, in one linear pass, closed where a CommonMark renderer closes them; reading stops where a renderer could pair fences another way — read only under `code: 'match'` (`../scripts/`) |
 | `errors.ts` | `UnsupportedValuesError` — the `rails` refusal at the boundary |
 | `index.ts` | the door: what the main barrel publishes |
 

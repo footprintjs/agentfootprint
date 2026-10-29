@@ -49,7 +49,11 @@ import {
   unpackRecording,
 } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
-import { boundedContentFieldNames } from '../../src/adapters/observability/audit.js';
+import {
+  boundedContentFieldNames,
+  boundedContentLeaves,
+} from '../../src/adapters/observability/audit.js';
+import { keepKnownValues } from '../../src/redaction/knownStrings.js';
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
 import type { AnswerAccount } from '../../src/answer-account/types.js';
 import { CONVERSATION_FEATURES } from '../../src/redaction/conversation.js';
@@ -1104,5 +1108,39 @@ describe('the vocabulary agrees with the audit export on what is content', () =>
       (policy.keys ?? []).includes(name) || (policy.patterns ?? []).some((p) => p.test(name));
     const missing = boundedContentFieldNames().filter((name) => !kept(name));
     expect(missing).toEqual([]);
+  });
+
+  it('every content LEAF the audit bounds inside a record field is kept out by its kind, not its name', () => {
+    // `turn_end.scripts` holds the library's words (labels, counts) beside one
+    // content leaf per script, the program. The audit bounds the leaf; the
+    // vocabulary keeps it out with the value-kind rule — a model-written string
+    // is the placeholder under ANY policy — and names nothing, because a name
+    // would hide the labels too (and `evidence_checked.scripts`, which holds no
+    // content, shares it).
+    expect(boundedContentLeaves()).toEqual([
+      'agentfootprint.agent.turn_end · scripts.shown[].text',
+    ]);
+    const policy = conversationRedaction();
+    expect((policy.keys ?? []).includes('scripts')).toBe(false);
+    const served = keepKnownValues({
+      scripts: {
+        shown: [
+          {
+            toolCallId: 'c1',
+            tool: 'run_code',
+            label: 'completed',
+            exitCode: 0,
+            bytes: 26,
+            lines: 1,
+            text: 'print("CANARY-LEAF-SCRIPT")',
+          },
+        ],
+        omitted: 0,
+      },
+    });
+    expect(JSON.stringify(served)).not.toContain('CANARY-LEAF-SCRIPT');
+    expect(served).toMatchObject({
+      scripts: { shown: [{ label: 'completed', exitCode: 0, bytes: 26, lines: 1 }], omitted: 0 },
+    });
   });
 });
