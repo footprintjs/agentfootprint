@@ -4,7 +4,7 @@ title: ShownScript
 
 # Interface: ShownScript
 
-Defined in: [src/lib/scriptRecord.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L93)
+Defined in: [src/lib/scriptRecord.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L100)
 
 One attached script, as `turn_end.scripts.shown` carries it.
 
@@ -14,9 +14,19 @@ One attached script, as `turn_end.scripts.shown` carries it.
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/lib/scriptRecord.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L106)
+Defined in: [src/lib/scriptRecord.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L116)
 
 UTF-8 bytes of the whole program.
+
+***
+
+### dispatch
+
+> `readonly` **dispatch**: `number`
+
+Defined in: [src/lib/scriptRecord.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L104)
+
+The library's identity for the call: its dispatch order within the turn.
 
 ***
 
@@ -24,7 +34,7 @@ UTF-8 bytes of the whole program.
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/lib/scriptRecord.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L101)
+Defined in: [src/lib/scriptRecord.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L111)
 
 Only when the runner supplied one.
 
@@ -34,7 +44,7 @@ Only when the runner supplied one.
 
 > `readonly` **label**: [`ScriptLabel`](/docs/api/type-aliases/ScriptLabel)
 
-Defined in: [src/lib/scriptRecord.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L99)
+Defined in: [src/lib/scriptRecord.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L109)
 
 ***
 
@@ -42,7 +52,7 @@ Defined in: [src/lib/scriptRecord.ts:99](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **language?**: `string`
 
-Defined in: [src/lib/scriptRecord.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L98)
+Defined in: [src/lib/scriptRecord.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L108)
 
 As declared.
 
@@ -52,7 +62,7 @@ As declared.
 
 > `readonly` **lines**: `number`
 
-Defined in: [src/lib/scriptRecord.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L107)
+Defined in: [src/lib/scriptRecord.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L117)
 
 ***
 
@@ -60,7 +70,7 @@ Defined in: [src/lib/scriptRecord.ts:107](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **resultWithheld?**: `"over-ceiling"`
 
-Defined in: [src/lib/scriptRecord.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L102)
+Defined in: [src/lib/scriptRecord.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L112)
 
 ***
 
@@ -68,7 +78,7 @@ Defined in: [src/lib/scriptRecord.ts:102](https://github.com/footprintjs/agentfo
 
 > `readonly` `optional` **rewritten?**: `true`
 
-Defined in: [src/lib/scriptRecord.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L104)
+Defined in: [src/lib/scriptRecord.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L114)
 
 A before-tool rule changed the program before dispatch.
 
@@ -78,7 +88,7 @@ A before-tool rule changed the program before dispatch.
 
 > `readonly` **text**: `string`
 
-Defined in: [src/lib/scriptRecord.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L111)
+Defined in: [src/lib/scriptRecord.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L121)
 
 The program, cut at `maxBytes` — a model-written string.
 
@@ -88,7 +98,7 @@ The program, cut at `maxBytes` — a model-written string.
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/lib/scriptRecord.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L96)
+Defined in: [src/lib/scriptRecord.ts:106](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L106)
 
 The name the model called.
 
@@ -98,7 +108,9 @@ The name the model called.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/lib/scriptRecord.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L94)
+Defined in: [src/lib/scriptRecord.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L102)
+
+The provider's id for the call — display only; two calls may share one.
 
 ***
 
@@ -106,7 +118,7 @@ Defined in: [src/lib/scriptRecord.ts:94](https://github.com/footprintjs/agentfoo
 
 > `readonly` `optional` **truncated?**: `object`
 
-Defined in: [src/lib/scriptRecord.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L109)
+Defined in: [src/lib/scriptRecord.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/scriptRecord.ts#L119)
 
 Present when `text` is a cut: how many bytes of `bytes` it holds.
 

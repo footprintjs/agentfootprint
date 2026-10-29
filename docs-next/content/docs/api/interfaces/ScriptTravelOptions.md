@@ -4,7 +4,7 @@ title: ScriptTravelOptions
 
 # Interface: ScriptTravelOptions
 
-Defined in: [src/core/agent/scripts/types.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L78)
+Defined in: [src/core/agent/scripts/types.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L86)
 
 `.scriptTravelsWithTheAnswer()` options.
 
@@ -14,7 +14,7 @@ Defined in: [src/core/agent/scripts/types.ts:78](https://github.com/footprintjs/
 
 > `readonly` `optional` **maxBytes?**: `number`
 
-Defined in: [src/core/agent/scripts/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L89)
+Defined in: [src/core/agent/scripts/types.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L97)
 
 UTF-8 bytes of each program shown (default 4,000). A longer program is
 cut at a code-point boundary and says it is incomplete.
@@ -25,7 +25,7 @@ cut at a code-point boundary and says it is incomplete.
 
 > `readonly` `optional` **which?**: `"all"` \| `"last"`
 
-Defined in: [src/core/agent/scripts/types.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L84)
+Defined in: [src/core/agent/scripts/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L92)
 
 `'last'` (default) — the last call of the turn that reached the tool;
 `'all'` — every call of the turn that reached it, at most

@@ -23,7 +23,7 @@ the next turn boundary (seed) the row keeps its facts and loses its `text`.
 
 > `readonly` **argument**: `string`
 
-Defined in: [src/core/agent/scripts/types.ts:51](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L51)
+Defined in: [src/core/agent/scripts/types.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L59)
 
 The declared argument that carried the program.
 
@@ -33,9 +33,22 @@ The declared argument that carried the program.
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/core/agent/scripts/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L55)
+Defined in: [src/core/agent/scripts/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L63)
 
 UTF-8 bytes of the program submitted to the tool.
+
+***
+
+### dispatch
+
+> `readonly` **dispatch**: `number`
+
+Defined in: [src/core/agent/scripts/types.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L55)
+
+The library's identity for the call: the 1-based order of the actual
+dispatch within its turn (`rows.ts` · `recordScriptRow`). A pause and its
+settlement share it; a later call that reuses the provider id is a new
+dispatch. Rows are counted, read and matched by it.
 
 ***
 
@@ -43,7 +56,7 @@ UTF-8 bytes of the program submitted to the tool.
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/core/agent/scripts/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L65)
+Defined in: [src/core/agent/scripts/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L73)
 
 Exactly the runner's exit code, only when it supplied one.
 
@@ -53,7 +66,7 @@ Exactly the runner's exit code, only when it supplied one.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/scripts/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L74)
+Defined in: [src/core/agent/scripts/types.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L82)
 
 ***
 
@@ -69,7 +82,7 @@ Defined in: [src/core/agent/scripts/types.ts:46](https://github.com/footprintjs/
 
 > `readonly` `optional` **language?**: `string`
 
-Defined in: [src/core/agent/scripts/types.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L53)
+Defined in: [src/core/agent/scripts/types.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L61)
 
 The declared language, when the tool declared one.
 
@@ -79,7 +92,7 @@ The declared language, when the tool declared one.
 
 > `readonly` **lines**: `number`
 
-Defined in: [src/core/agent/scripts/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L57)
+Defined in: [src/core/agent/scripts/types.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L65)
 
 Lines of that program (LF-separated; `0` for an empty program).
 
@@ -89,7 +102,7 @@ Lines of that program (LF-separated; `0` for an empty program).
 
 > `readonly` **outcome**: [`ScriptLabel`](/docs/api/type-aliases/ScriptLabel)
 
-Defined in: [src/core/agent/scripts/types.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L63)
+Defined in: [src/core/agent/scripts/types.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L71)
 
 ***
 
@@ -97,7 +110,7 @@ Defined in: [src/core/agent/scripts/types.ts:63](https://github.com/footprintjs/
 
 > `readonly` `optional` **resultWithheld?**: `"over-ceiling"`
 
-Defined in: [src/core/agent/scripts/types.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L69)
+Defined in: [src/core/agent/scripts/types.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L77)
 
 The tool's own `resultCeiling` replaced the delivered result.
 
@@ -107,7 +120,7 @@ The tool's own `resultCeiling` replaced the delivered result.
 
 > `readonly` `optional` **rewritten?**: `true`
 
-Defined in: [src/core/agent/scripts/types.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L71)
+Defined in: [src/core/agent/scripts/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L79)
 
 A before-tool rule changed the program before dispatch; the earlier text is on no row.
 
@@ -117,7 +130,7 @@ A before-tool rule changed the program before dispatch; the earlier text is on n
 
 > `readonly` `optional` **serviceError?**: `true`
 
-Defined in: [src/core/agent/scripts/types.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L67)
+Defined in: [src/core/agent/scripts/types.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L75)
 
 The runner's failure verdict was the service's, with no exit code.
 
@@ -127,7 +140,7 @@ The runner's failure verdict was the service's, with no exit code.
 
 > `readonly` `optional` **text?**: `string`
 
-Defined in: [src/core/agent/scripts/types.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L62)
+Defined in: [src/core/agent/scripts/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L70)
 
 The program submitted to the tool, byte for byte. ABSENT over
 `MAX_SCRIPT_BYTES`, and after the row's turn ended.
@@ -138,7 +151,7 @@ The program submitted to the tool, byte for byte. ABSENT over
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/agent/scripts/types.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L49)
+Defined in: [src/core/agent/scripts/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L57)
 
 The name the model called.
 
@@ -148,7 +161,9 @@ The name the model called.
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/core/agent/scripts/types.ts:47](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L47)
+Defined in: [src/core/agent/scripts/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L48)
+
+The provider's id for the call — display only; two calls may share one.
 
 ***
 
@@ -156,6 +171,6 @@ Defined in: [src/core/agent/scripts/types.ts:47](https://github.com/footprintjs/
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/core/agent/scripts/types.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L73)
+Defined in: [src/core/agent/scripts/types.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/scripts/types.ts#L81)
 
 `AgentState.turnNumber` when the call was made.

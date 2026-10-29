@@ -29,11 +29,21 @@ Defined in: [src/core/agent/assessment/witness.ts:133](https://github.com/footpr
 
 ***
 
+### dispatch?
+
+> `readonly` `optional` **dispatch?**: `number`
+
+Defined in: [src/core/agent/assessment/witness.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L142)
+
+On a match: the call's dispatch within the turn (`ScriptRow.dispatch`) — its identity.
+
+***
+
 ### exitCode?
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L142)
+Defined in: [src/core/agent/assessment/witness.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L144)
 
 On a match: exactly the runner's exit code, when it supplied one.
 
