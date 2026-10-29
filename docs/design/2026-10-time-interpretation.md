@@ -517,9 +517,11 @@ resume door (`tools/inputRequest.ts · applyInputResponse`). There is no second 
 **How it is bound.** Each confirmed call gets a **scope digest**: SHA-256 over a canonical JSON of
 the tool name, the tool's declaration version (a hash of its `period` and `search` declarations), its
 scope-bearing arguments as they will be sent, the executed bounds and zone, the sampling step, and the
-requested mention. A batch's digest also covers its list of call digests, in order. The person's
-answer is filed on the existing `time-answer` row, which gains the confirmed digests
-(`time/rows.ts · TimeAnswerRow`).
+requested mention. The executed bounds in the digest are the asked range at the turn's clock, so a
+dispatch within the tool's step of that clock keeps the digest; past the step, the bounds are
+recomputed and the digest changes (the time design's drift law decides which). A batch's digest also
+covers its list of call digests, in order. The person's answer is filed on the existing `time-answer`
+row, which gains the confirmed digests (`time/rows.ts · TimeAnswerRow`).
 
 **Checked at dispatch.** In `core/agent/stages/timeLayer.ts · timeAtDispatch`, before each call
 runs, the library recomputes the digest from the call it is about to send:
