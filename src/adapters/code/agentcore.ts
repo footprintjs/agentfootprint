@@ -380,11 +380,16 @@ function openSession(plan: SessionPlan): CodeSession {
       });
       const bounded = boundOutput(answer.stdout, answer.stderr, maxOutputChars);
       const ok = reportedOutcome(answer);
+      // An error flag with no exit status is the SERVICE's verdict, not the
+      // program's: whether the code ran is unconfirmed, and the result says
+      // which kind of `false` it is.
+      const unconfirmed = answer.isError === true && answer.exitCode === undefined;
       return {
         ...(ok !== undefined && { ok }),
         stdout: bounded.stdout,
         stderr: bounded.stderr,
         ...(answer.exitCode !== undefined && { exitCode: answer.exitCode }),
+        ...(unconfirmed && { reason: 'service-error' as const }),
         ...(bounded.truncated !== undefined && { truncated: bounded.truncated }),
       };
     },

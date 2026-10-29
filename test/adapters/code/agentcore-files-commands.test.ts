@@ -720,6 +720,16 @@ describe('agentCoreCodeRunner.execute — ok is the service’s word, or absent'
     expect((await run(result({ content: [], structuredContent: { exitCode: 3 } }))).ok).toBe(false);
   });
 
+  it('an error flag with NO exit status is a service error — the run is unconfirmed, not failed', async () => {
+    const flagged = await run(result({ content: [], isError: true }));
+    expect(flagged).toEqual({ ok: false, reason: 'service-error', stdout: '', stderr: '' });
+    // With an exit status, the program's own exit explains it: no reason.
+    const exited = await run(
+      result({ content: [], structuredContent: { exitCode: 3 }, isError: true }),
+    );
+    expect(exited).toEqual({ ok: false, exitCode: 3, stdout: '', stderr: '' });
+  });
+
   it('the service’s own verdict decides it when there is no exit status', async () => {
     expect((await run(result({ content: [], isError: true }))).ok).toBe(false);
     expect((await run(result({ content: [], isError: false }))).ok).toBe(true);

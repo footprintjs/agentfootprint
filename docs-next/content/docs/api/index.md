@@ -470,6 +470,7 @@ title: agentfootprint
 - [CheckInDemand](/docs/api/type-aliases/CheckInDemand)
 - [CheckInScorer](/docs/api/type-aliases/CheckInScorer)
 - [CodeRunnerToolScope](/docs/api/type-aliases/CodeRunnerToolScope)
+- [CodeRunReason](/docs/api/type-aliases/CodeRunReason)
 - [CodeSandboxRefusal](/docs/api/type-aliases/CodeSandboxRefusal)
 - [ColumnCheckMode](/docs/api/type-aliases/ColumnCheckMode)
 - [ColumnType](/docs/api/type-aliases/ColumnType)

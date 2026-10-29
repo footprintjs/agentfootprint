@@ -126,3 +126,116 @@ describe('end to end — AgentCore reports nothing, and nothing is claimed', () 
     expect(payloads[0]).toMatchObject({ tool: 'run_code', language: 'python' });
   });
 });
+
+describe('the code-run record tells a failed program from an unconfirmed run', () => {
+  /**
+   * One AgentCore answer, driven end to end: the real SDK shim, the adapter,
+   * `codeRunnerTool` and a real Agent. Returns what the adapter reported, what
+   * the model read, and the `tools.code_run` record.
+   */
+  async function through(events: Record<string, unknown>[]): Promise<{
+    result: CodeResult;
+    read: string;
+    record: Record<string, unknown>;
+  }> {
+    const row = AWS_COMMAND_PINS.find((p) => p.adapter === 'agentCoreCodeRunner');
+    const sdk = fakeSdk(row!, {
+      StartCodeInterpreterSessionCommand: { sessionId: 'ci-7' },
+      InvokeCodeInterpreterCommand: () => ({
+        stream: (async function* () {
+          for (const event of events) yield event;
+        })(),
+      }),
+      StopCodeInterpreterSessionCommand: {},
+    });
+    const runner = agentCoreCodeRunner({ identifier: 'aws.codeinterpreter.v1', _sdk: sdk.module });
+    const direct = await runner.start({ key: 'direct' });
+    const result = await direct.execute({ code: 'run()' });
+    const reads: string[] = [];
+    const agent = Agent.create({
+      provider: mock({
+        respond: (request) => {
+          const tool = request.messages.find((m) => m.role === 'tool');
+          if (tool === undefined) {
+            return { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: 'run()' } }] };
+          }
+          reads.push(String(tool.content));
+          return { content: 'done' };
+        },
+      }),
+      model: 'mock',
+      maxIterations: 3,
+    })
+      .tool(codeRunnerTool({ runner }))
+      .build();
+    const records: Record<string, unknown>[] = [];
+    agent.on('agentfootprint.tools.code_run', (e) => records.push({ ...e.payload }));
+    await agent.run({ message: 'go' });
+    return { result, read: reads[0] ?? '', record: records[0] ?? {} };
+  }
+
+  it('a SERVICE ERROR without an exit code: ok false, reason service-error, no exitCode — not a failed program', async () => {
+    const { result, read, record } = await through([
+      {
+        result: {
+          content: [{ type: 'text', text: 'The interpreter could not take the request.' }],
+          isError: true,
+        },
+      },
+    ]);
+    expect(result).toEqual({
+      ok: false,
+      reason: 'service-error',
+      stdout: 'The interpreter could not take the request.',
+      stderr: '',
+    });
+    expect(read).toContain('[not confirmed: the code runner flagged an error for the run_code');
+    expect(read).toContain('whether that code ran is not known');
+    expect(read).not.toContain('[exit');
+    expect(record).toMatchObject({ ok: false, reason: 'service-error' });
+    expect('exitCode' in record).toBe(false);
+  });
+
+  it('a SUCCESSFUL response without an exit code: ok true, and no exitCode is made up', async () => {
+    const { result, read, record } = await through([
+      { result: { content: [], structuredContent: { stdout: 'done\n' }, isError: false } },
+    ]);
+    expect(result).toEqual({ ok: true, stdout: 'done\n', stderr: '' });
+    expect(read).toBe('done\n');
+    expect(record).toMatchObject({ ok: true });
+    expect('exitCode' in record).toBe(false);
+    expect('reason' in record).toBe(false);
+  });
+
+  it('an explicit NONZERO exit after partial work: ok false, exitCode 7, the partial output kept', async () => {
+    const { result, read, record } = await through([
+      {
+        result: {
+          content: [],
+          structuredContent: { stdout: 'wrote rows 1-500\n', stderr: 'MemoryError\n', exitCode: 7 },
+          isError: true,
+        },
+      },
+    ]);
+    expect(result).toEqual({
+      ok: false,
+      exitCode: 7,
+      stdout: 'wrote rows 1-500\n',
+      stderr: 'MemoryError\n',
+    });
+    expect(read).toContain('wrote rows 1-500');
+    expect(read).toContain('[exit 7] the code did not complete successfully');
+    expect(read).not.toContain('not confirmed');
+    expect(record).toMatchObject({ ok: false, exitCode: 7 });
+    expect('reason' in record).toBe(false);
+  });
+
+  it('a clean exit 0 is kept in the record exactly as reported', async () => {
+    const { record } = await through([
+      {
+        result: { content: [], structuredContent: { stdout: '1\n', exitCode: 0 }, isError: false },
+      },
+    ]);
+    expect(record).toMatchObject({ ok: true, exitCode: 0 });
+  });
+});

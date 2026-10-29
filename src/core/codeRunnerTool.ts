@@ -54,7 +54,13 @@
 
 import { fnv1a } from '../lib/fnv1a.js';
 import { isLineBreak } from '../lib/linearText.js';
-import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../provider-contract/types.js';
+import type {
+  CodeInput,
+  CodeResult,
+  CodeRunner,
+  CodeRunReason,
+  CodeSession,
+} from '../provider-contract/types.js';
 import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../provider-contract/types.js';
 import type { ToolWants } from '../artifacts/wants.js';
 import type { CredentialNeed } from '../identity/types.js';
@@ -166,9 +172,16 @@ export interface CodeRunFacts {
   readonly stagedInputs: number;
   readonly outputChars: number;
   readonly truncated: boolean;
-  /** The runner's reported outcome (`CodeResult.ok`). ABSENT when the runner
-   *  reported none — unknown, never recorded as success. */
+  /** What the runner REPORTED (`CodeResult.ok`). ABSENT when it reported
+   *  nothing — unknown, never recorded as success. `false` is a failed
+   *  program when `exitCode` is present, and an unconfirmed run when `reason`
+   *  is `'service-error'`. */
   readonly ok?: boolean;
+  /** The program's exit status — exactly when the runner supplied one. */
+  readonly exitCode?: number;
+  /** `'service-error'`: the runner flagged an error with no exit status, so
+   *  whether the code ran is not confirmed. Absent otherwise. */
+  readonly reason?: CodeRunReason;
   readonly shapeHash: string;
 }
 
@@ -418,6 +431,10 @@ export function codeRunnerTool(
         // outcome leaves no `ok` here, so the record never says "ran clean"
         // on the strength of silence.
         ...(result.ok !== undefined && { ok: result.ok }),
+        // The two facts that tell a failed program from an unconfirmed run,
+        // copied exactly when the runner supplied them — never inferred here.
+        ...(result.exitCode !== undefined && { exitCode: result.exitCode }),
+        ...(result.reason !== undefined && { reason: result.reason }),
         shapeHash: fnv1a(codeShape(args.code)),
       });
       return rendered;
@@ -820,7 +837,15 @@ function render(
   const stderr = clip(result.stderr, maxOutputChars, result.truncated?.stderr === true);
   if (stdout.text.length > 0) parts.push(stdout.text);
   if (stderr.text.length > 0) parts.push(`stderr:\n${stderr.text}`);
-  if (result.ok === false) {
+  if (result.reason === 'service-error' && result.ok !== true) {
+    // NOT a failed program: the service flagged an error and reported no exit
+    // status, so the code may not have run at all. Saying "[exit non-zero]"
+    // here would invent the one fact that is missing.
+    parts.push(
+      `[not confirmed: the code runner flagged an error for the ${toolName} call this result ` +
+        'answers and reported no exit status, so whether that code ran is not known]',
+    );
+  } else if (result.ok === false) {
     parts.push(
       `[exit ${result.exitCode ?? 'non-zero'}] the code did not complete successfully — read ` +
         'stderr above and fix it.',

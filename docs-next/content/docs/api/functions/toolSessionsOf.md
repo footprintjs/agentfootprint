@@ -6,7 +6,7 @@ title: toolSessionsOf
 
 > **toolSessionsOf**(`candidate`): `ReadonlyMap`\<`string`, [`CodeSession`](/docs/api/interfaces/CodeSession)\> \| `undefined`
 
-Defined in: [src/core/codeRunnerTool.ts:326](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L326)
+Defined in: [src/core/codeRunnerTool.ts:339](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L339)
 
 Read the live-session map off a candidate, or `undefined` when it holds none.
 

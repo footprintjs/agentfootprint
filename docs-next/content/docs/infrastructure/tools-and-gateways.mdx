@@ -409,18 +409,28 @@ interface CodeSession {
 }
 ```
 
-`CodeResult` is `{ ok?, stdout, stderr, exitCode?, artifacts?, truncated? }`.
+`CodeResult` is `{ ok?, stdout, stderr, exitCode?, reason?, artifacts?, truncated? }`.
 `truncated` is the load-bearing field: **an unstated slice is a silent success.**
 A runner that quietly cuts its own output to fit is the same context-window bug
 wearing a different hat, and the model would reason over a fragment of a table
 believing it had the table.
 
-`ok` is `true` or `false` only when the backend said which — an exit status, or
-its own error verdict. When it reported neither, `ok` is **absent**: the outcome
-is unknown, and an absent `ok` is never success. `codeRunnerTool` says so in the
-result the model reads (`[exit status unknown: …]`), and the `tools.code_run`
-record carries no `ok` either. Check `result.ok === true` where you mean "it
-worked".
+`ok` is what the runner reported: `true` or `false` only when the backend said
+which — an exit status, or its own error verdict. When it reported neither, `ok`
+is **absent**: the outcome is unknown, and an absent `ok` is never success.
+Check `result.ok === true` where you mean "it worked". A `false` is one of two
+different facts, and the result says which:
+
+- **a program that failed** — `exitCode` holds the status the runner reported
+  (it is never inferred and never defaulted);
+- **an unconfirmed run** — `reason: 'service-error'` (a `CodeRunReason`): the
+  backend flagged an error and reported no exit status, so whether the code ran
+  at all is not known.
+
+`codeRunnerTool` keeps the three apart in the result the model reads
+(`[exit 7] …`, `[not confirmed: …]`, `[exit status unknown: …]`) and in the
+`tools.code_run` record, which carries `ok`, `exitCode` and `reason` exactly as
+the runner supplied them.
 
 `start({ key })` takes the ISOLATION key the caller derived. An adapter may use
 it to name the remote session; it must never widen it.
@@ -571,7 +581,9 @@ agent is repeatedly writing the same missing operation; the most frequent
 shapes are a measured backlog of tools worth implementing. The remaining facts
 — language, staged-input count, output size, truncation and success — let you
 prioritize that backlog without sending the model-written code or the customer
-data embedded in it to an observability provider.
+data embedded in it to an observability provider. `ok`, `exitCode` and `reason`
+are recorded exactly as the runner supplied them, so a failed program, an
+unconfirmed run and an unreported outcome stay three different rows.
 
 ### Why it is a plain tool — and what the chart form buys you
 

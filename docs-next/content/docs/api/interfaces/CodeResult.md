@@ -4,7 +4,7 @@ title: CodeResult
 
 # Interface: CodeResult
 
-Defined in: [src/provider-contract/types.ts:1381](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1381)
+Defined in: [src/provider-contract/types.ts:1390](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1390)
 
 What one execution produced.
 
@@ -14,7 +14,7 @@ What one execution produced.
 
 > `readonly` `optional` **artifacts?**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:1424](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1424)
+Defined in: [src/provider-contract/types.ts:1441](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1441)
 
 Files the run produced, described rather than inlined — the whole point is
  that big data does not enter the window. All fields beyond the original
@@ -52,7 +52,10 @@ Files the run produced, described rather than inlined — the whole point is
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1394](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1394)
+Defined in: [src/provider-contract/types.ts:1408](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1408)
+
+The exit status — exactly when the runner reported one. Never inferred
+ from an error flag, never defaulted.
 
 ***
 
@@ -60,15 +63,29 @@ Defined in: [src/provider-contract/types.ts:1394](https://github.com/footprintjs
 
 > `readonly` `optional` **ok?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1391](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1391)
+Defined in: [src/provider-contract/types.ts:1403](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1403)
 
-Did the code run to completion without an error exit — as the BACKEND
-reported it?
+Did the code run to completion without an error exit? WHAT THE RUNNER
+REPORTED, nothing more.
 
 `true` or `false` only when the backend said so: an exit status, or its
 own error verdict. ABSENT when it reported neither — the outcome is
 unknown, and an absent `ok` is never success. (Before this was optional,
-`agentCoreCodeRunner` filled `true` from silence.)
+`agentCoreCodeRunner` filled `true` from silence.) `false` covers two
+different facts, told apart by the next two fields: a program that exited
+non-zero (`exitCode`), and a backend error with no exit status
+(`reason: 'service-error'`), where the run is unconfirmed.
+
+***
+
+### reason?
+
+> `readonly` `optional` **reason?**: `"service-error"`
+
+Defined in: [src/provider-contract/types.ts:1411](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1411)
+
+Present when the outcome is not an exit status — see [CodeRunReason](/docs/api/type-aliases/CodeRunReason).
+ With `'service-error'`, `ok` is `false` and `exitCode` is absent.
 
 ***
 
@@ -76,7 +93,7 @@ unknown, and an absent `ok` is never success. (Before this was optional,
 
 > `readonly` **stderr**: `string`
 
-Defined in: [src/provider-contract/types.ts:1393](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1393)
+Defined in: [src/provider-contract/types.ts:1405](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1405)
 
 ***
 
@@ -84,7 +101,7 @@ Defined in: [src/provider-contract/types.ts:1393](https://github.com/footprintjs
 
 > `readonly` **stdout**: `string`
 
-Defined in: [src/provider-contract/types.ts:1392](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1392)
+Defined in: [src/provider-contract/types.ts:1404](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1404)
 
 ***
 
@@ -92,7 +109,7 @@ Defined in: [src/provider-contract/types.ts:1392](https://github.com/footprintjs
 
 > `readonly` `optional` **truncated?**: [`CodeTruncation`](/docs/api/interfaces/CodeTruncation)
 
-Defined in: [src/provider-contract/types.ts:1434](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1434)
+Defined in: [src/provider-contract/types.ts:1451](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1451)
 
 Present IFF output was cut — see [CodeTruncation](/docs/api/interfaces/CodeTruncation). An unstated
  slice is a silent success.

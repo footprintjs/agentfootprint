@@ -1377,21 +1377,38 @@ export interface CodeTruncation {
   readonly ofChars?: number;
 }
 
+/**
+ * Why an outcome is not an exit status, when the runner can say. One value:
+ *
+ * `'service-error'` — the backend flagged its answer as an error and reported
+ * NO exit status, so whether the code ran at all is not confirmed. That is not
+ * a program that failed: a program that ran and failed has an `exitCode`.
+ */
+export type CodeRunReason = 'service-error';
+
 /** What one execution produced. */
 export interface CodeResult {
   /**
-   * Did the code run to completion without an error exit — as the BACKEND
-   * reported it?
+   * Did the code run to completion without an error exit? WHAT THE RUNNER
+   * REPORTED, nothing more.
    *
    * `true` or `false` only when the backend said so: an exit status, or its
    * own error verdict. ABSENT when it reported neither — the outcome is
    * unknown, and an absent `ok` is never success. (Before this was optional,
-   * `agentCoreCodeRunner` filled `true` from silence.)
+   * `agentCoreCodeRunner` filled `true` from silence.) `false` covers two
+   * different facts, told apart by the next two fields: a program that exited
+   * non-zero (`exitCode`), and a backend error with no exit status
+   * (`reason: 'service-error'`), where the run is unconfirmed.
    */
   readonly ok?: boolean;
   readonly stdout: string;
   readonly stderr: string;
+  /** The exit status — exactly when the runner reported one. Never inferred
+   *  from an error flag, never defaulted. */
   readonly exitCode?: number;
+  /** Present when the outcome is not an exit status — see {@link CodeRunReason}.
+   *  With `'service-error'`, `ok` is `false` and `exitCode` is absent. */
+  readonly reason?: CodeRunReason;
   /** Files the run produced, described rather than inlined — the whole point is
    *  that big data does not enter the window. All fields beyond the original
    *  `{ name, bytes, uri? }` are ADDITIVE (9.22.0) and honest about absence:
