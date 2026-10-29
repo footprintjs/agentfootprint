@@ -36,10 +36,11 @@ export async function pilot({
   let journal;
   try {
     // One fixed durable live identity, independent of --out. No resume/reset.
+    // The 20261020 journal is the aborted smoke's record; this run never opens it.
     if (execute) {
       const state = join(homedir(), '.local/state/agentfootprint/pilots');
       mkdirSync(state, { recursive: true });
-      journal = openJournal(join(state, 'findings-cache-phase-c-20261020.ndjson'));
+      journal = openJournal(join(state, 'findings-cache-phase-c-20261029.ndjson'));
     }
     const events = [],
       results = [];
