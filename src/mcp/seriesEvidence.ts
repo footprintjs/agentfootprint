@@ -189,11 +189,13 @@ export class SeriesEvidence {
   /**
    * The series delivered a response. It is the last attempt's — an answer, or a
    * refusal it will not ask again after. A refusal it MEANT to ask again after
-   * is delivered when the deadline lands inside the wait: the runner's wait
-   * ends early, the series stops, and the end says so (`no-time-left`, during
-   * the `wait`). Filed when the call has read it.
+   * is delivered when the series stopped inside the wait: the deadline landed
+   * there (`no-time-left`), or a pooled call's send gate refused the next
+   * attempt before it was sent (`stoppedBy`, `not-permitted`). The end says
+   * which, during the `wait`; the attempt that was never sent has no row.
+   * Filed when the call has read it.
    */
-  delivered(): void {
+  delivered(stoppedBy?: DeclineReason): void {
     const last = this.last;
     if (last === undefined) {
       this.fileWhenSettled(UNACCOUNTED);
@@ -201,7 +203,7 @@ export class SeriesEvidence {
     }
     this.fileWhenSettled(
       last.reason === 'retryable'
-        ? { ...endOf(last), reason: 'no-time-left', during: 'wait' }
+        ? { ...endOf(last), reason: stoppedBy ?? 'no-time-left', during: 'wait' }
         : endOf(last),
     );
   }
@@ -213,12 +215,19 @@ export class SeriesEvidence {
    * as one: a deadline that had passed before the first request (`timed-out`,
    * no `during`, nothing sent) or one a future runner reports from inside a wait
    * (`during: 'wait'`); anything else is filed as a failure the record cannot
-   * account for, so a request is never left unfiled. Filed when the call settles.
+   * account for, so a request is never left unfiled. A pooled call's send gate
+   * that refused the next attempt before it was sent ends it as `stoppedBy`,
+   * during the `wait`. Filed when the call settles.
    */
-  threw(outOfTime: boolean): void {
+  threw(outOfTime: boolean, stoppedBy?: DeclineReason): void {
     const last = this.last;
     if (last !== undefined && last.reason !== 'retryable') {
       this.fileWhenSettled(endOf(last));
+      return;
+    }
+    // A pooled call's send gate refused the next attempt before it was sent.
+    if (last !== undefined && stoppedBy !== undefined) {
+      this.fileWhenSettled({ ...endOf(last), reason: stoppedBy, during: 'wait' });
       return;
     }
     if (!outOfTime) {

@@ -22,6 +22,12 @@
  *     tenant)>`. The tenant is always in it: the app's names widen sharing
  *     across principals, never across tenants.
  *
+ * The transport is resolved once, when a client opens; the context is not. The
+ * app's names can move — a policy version in `authorization` — so the pool asks
+ * `share` again at every listing, every call and every send gate
+ * (`contextFor`), over the client's own `configHash`: a conversation that
+ * already has a client follows a new name as a new conversation would.
+ *
  * Neither hash leaves the process; the app's names are hashed and never kept.
  */
 
@@ -77,10 +83,23 @@ export function resolvePlan(settings: PoolSettings, key: PoolKey): ClientPlan {
     );
   }
   const configHash = configHashOf(settings, transport);
+  return { transport, configHash, ...contextFor(settings, key, configHash) };
+}
+
+/**
+ * The definitions context `key` belongs to now, for a client opened with
+ * `configHash`: the app's `share` asked again.
+ *
+ * @throws what `share` throws, and a TypeError when it answers with anything
+ *   but two names or `undefined`
+ */
+export function contextFor(
+  settings: PoolSettings,
+  key: PoolKey,
+  configHash: string,
+): { readonly context: string; readonly shared: boolean } {
   const names = shareOf(settings, key);
-  if (names === undefined) {
-    return { transport, configHash, context: `pc:${configHash}`, shared: false };
-  }
+  if (names === undefined) return { context: `pc:${configHash}`, shared: false };
   const context = sha256Hex(
     canonicalJson({
       configHash,
@@ -89,7 +108,7 @@ export function resolvePlan(settings: PoolSettings, key: PoolKey): ClientPlan {
       tenant: key.tenant,
     }),
   );
-  return { transport, configHash, context: `sh:${context}`, shared: true };
+  return { context: `sh:${context}`, shared: true };
 }
 
 /** The app's two names for this conversation, or `undefined` for a list of its own. */

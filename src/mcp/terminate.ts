@@ -19,9 +19,12 @@
  *      at the deadline the request is aborted and the outcome is `'timed-out'`;
  *   3. a local close, whatever happened.
  *
- * The caller's answer comes by the deadline; the work's own settlement may come
- * later (a `fetch` that ignores its abort). Both are returned, apart: the MCP
- * client pool keeps an ending charged until `settled`.
+ * ONE DEADLINE ANSWERS THE CALLER: the remote answer and the local close are
+ * waited for together for at most `TOOL_TEARDOWN_TIMEOUT_MS` from the start. A
+ * close that finishes in time is finished before the caller hears; one that
+ * hangs does not hold the answer. The work's own settlement — the `DELETE`, a
+ * `fetch` that ignores its abort, the close — may come later, and is returned
+ * apart (`settled`): the MCP client pool keeps an ending charged until then.
  *
  * Never vendor-aware: the one port is the Streamable HTTP `DELETE`. A transport
  * that turns it into something else (AgentCore Runtime's `StopRuntimeSession`)
@@ -120,6 +123,27 @@ export function outcomeWithout(
 }
 
 /**
+ * An ending that sends nothing — `remote` says why — only the local close:
+ * the caller is answered when the close finishes or at `timeoutMs`, whichever
+ * comes first; `settled` waits for the close itself.
+ */
+export function endLocally(
+  remote: 'no-session' | 'unavailable',
+  close: () => Promise<void>,
+  now: () => number = Date.now,
+  timeoutMs: number = TOOL_TEARDOWN_TIMEOUT_MS,
+): Ending {
+  const startedAt = now();
+  const closing = settle(close);
+  return {
+    outcome: within(closing, timeoutMs).then(() =>
+      outcomeWithout(remote, Math.max(0, now() - startedAt)),
+    ),
+    settled: closing,
+  };
+}
+
+/**
  * End `transport`'s session, then close locally with `close` — the procedure
  * in the module note. `watch` is the `DeleteWatch` installed on the transport's
  * fetch. `now` is the clock the duration is measured with.
@@ -131,20 +155,14 @@ export function endSession(
   now: () => number = Date.now,
   timeoutMs: number = TOOL_TEARDOWN_TIMEOUT_MS,
 ): Ending {
+  if (transport.sessionId === undefined) return endLocally('no-session', close, now, timeoutMs);
   const startedAt = now();
-  if (transport.sessionId === undefined) {
-    const closing = settle(close);
-    return {
-      outcome: closing.then(() => outcomeWithout('no-session', now() - startedAt)),
-      settled: closing,
-    };
-  }
   const deadline = new AbortController();
   watch.arm(deadline.signal);
   // The transport's own termination; its promise is the work this ending
   // waits for, however long the caller is answered before it.
   const work = Promise.resolve().then(() => transport.terminateSession());
-  const outcome = withTimeout(() => work, timeoutMs, 'MCP session termination').then(
+  const remote = withTimeout(() => work, timeoutMs, 'MCP session termination').then(
     () => answered(watch.answered, startedAt, now),
     (error: unknown) => {
       if (error instanceof ToolTeardownTimeoutError) {
@@ -154,10 +172,14 @@ export function endSession(
       return failedWith(error, watch.answered, startedAt, now);
     },
   );
-  // Closed locally once the caller has its answer, whatever it is.
-  const closing = outcome.then(() => settle(close));
+  // Closed locally once the remote side has its answer, whatever it is. The
+  // caller waits for that close only within what is left of the one deadline.
+  const closing = remote.then(() => settle(close));
+  const outcome = remote.then((answer) =>
+    within(closing, Math.max(0, timeoutMs - (now() - startedAt))).then(() => answer),
+  );
   return {
-    outcome: closing.then(() => outcome),
+    outcome,
     settled: Promise.allSettled([work, closing]).then(() => undefined),
   };
 }
@@ -170,6 +192,15 @@ function settle(close: () => Promise<void>): Promise<void> {
       () => undefined,
       () => undefined,
     );
+}
+
+/** `work`, or `ms` — whichever comes first; at once when no time is left. Never rejects; the work goes on. */
+function within(work: Promise<void>, ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return withTimeout(() => work, ms, 'MCP local close').then(
+    () => undefined,
+    () => undefined,
+  );
 }
 
 /** The SDK resolved: a 2xx, or a 405 it treats as success. */

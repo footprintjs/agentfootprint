@@ -8,9 +8,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ToolDispatchContext } from '../../../src/tools/toolProvider.js';
+import type { Tool } from '../../../src/tools/tools.js';
 import { REAL_TRANSPORT_TIMEOUT } from '../realTransportSupport.js';
 import { fakeEndpoint } from './fakeEndpoint.js';
-import { callCtx, flush, id, poolOver } from './harness.js';
+import { callCtx, flush, id, poolOver, stallingProvider } from './harness.js';
 import { startSessionServer, type SessionServer } from './sessionServer.js';
 
 const listCtx = (identity: ReturnType<typeof id>): ToolDispatchContext =>
@@ -210,5 +211,154 @@ describe('entries are frozen plain-data copies', () => {
     }).toThrow(TypeError);
     const [theirs] = await pool.toolProvider().list(listCtx(id('bob', 'c2')));
     expect(theirs!.schema.inputSchema).toEqual({ type: 'object', properties: {} });
+  });
+});
+
+describe('a versioned authorization name reaches conversations that already have a client', () => {
+  /** A server whose list depends on the policy version; `share` names that version. */
+  function versioned() {
+    const state = { version: 1, asked: 0 };
+    const endpoint = fakeEndpoint({
+      toolsFor: () =>
+        state.version === 1 ? [{ name: 'status' }, { name: 'refund' }] : [{ name: 'status' }],
+    });
+    const { pool } = poolOver(endpoint, {
+      definitions: {
+        share: () => {
+          state.asked += 1;
+          return { configuration: 'same-server', authorization: `role@policy-${state.version}` };
+        },
+      },
+    });
+    return { state, endpoint, pool };
+  }
+  const names = (tools: readonly Tool[]) => tools.map((t) => t.schema.name);
+  const named = (tools: readonly Tool[], name: string): Tool =>
+    tools.find((t) => t.schema.name === name) as Tool;
+  const calls = (endpoint: ReturnType<typeof fakeEndpoint>, tool: string) =>
+    endpoint.requests.filter((r) => r.rpc === 'tools/call' && r.tool === tool);
+
+  it('relisting the same conversation after the version moved lists again under the new name — the tool the new policy dropped is gone', async () => {
+    const { state, endpoint, pool } = versioned();
+    const alice = id('alice', 'a');
+    expect(names(await pool.toolProvider().list(listCtx(alice)))).toEqual(['status', 'refund']);
+    const asked = state.asked;
+    state.version = 2;
+    expect(names(await pool.toolProvider().list(listCtx(alice)))).toEqual(['status']);
+    expect(state.asked).toBeGreaterThan(asked);
+    // The controls: a new conversation, and the explicit signal, agree.
+    expect(names(await pool.toolProvider().list(listCtx(id('bob', 'b'))))).toEqual(['status']);
+    pool.permissionsChanged({ principal: 'alice' });
+    expect(names(await pool.toolProvider().list(listCtx(alice)))).toEqual(['status']);
+    expect(calls(endpoint, 'refund')).toHaveLength(0);
+    await pool.close();
+  });
+
+  it('a tool bound under the old name is refused before it is sent — whether or not anything was listed since', async () => {
+    const { state, endpoint, pool } = versioned();
+    const alice = id('alice', 'a');
+    const before = await pool.toolProvider().list(listCtx(alice));
+    state.version = 2;
+    // Nothing listed since the version moved: still refused, nothing sent.
+    await expect(named(before, 'refund').execute({}, callCtx(alice))).rejects.toMatchObject({
+      name: 'McpPoolRefusedError',
+      reason: 'binding-changed',
+    });
+    await expect(named(before, 'status').execute({}, callCtx(alice))).rejects.toMatchObject({
+      reason: 'binding-changed',
+    });
+    expect(endpoint.requests.filter((r) => r.rpc === 'tools/call')).toHaveLength(0);
+    // Listed again under the new name, the tools it lists run.
+    const after = await pool.toolProvider().list(listCtx(alice));
+    await expect(named(after, 'status').execute({}, callCtx(alice))).resolves.toContain('status@');
+    expect(calls(endpoint, 'refund')).toHaveLength(0);
+    await pool.close();
+  });
+
+  it('the version moving while a call waits for its credential: refused at the send gate once it arrives — nothing sent', async () => {
+    const state = { version: 1 };
+    const endpoint = fakeEndpoint({ toolsFor: () => [{ name: 'refund' }] });
+    const vend = stallingProvider();
+    const { pool } = poolOver(endpoint, {
+      transport: () => ({
+        transport: 'gateway',
+        url: endpoint.url,
+        credentials: vend.provider,
+        service: 'orders',
+        fetch: endpoint.fetch,
+      }),
+      definitions: {
+        share: () => ({
+          configuration: 'same-server',
+          authorization: `role@policy-${state.version}`,
+        }),
+      },
+    });
+    const alice = id('alice', 'a');
+    const [refund] = await pool.toolProvider().list(listCtx(alice));
+    vend.stall();
+    const call = refund!.execute({}, callCtx(alice)).catch((error: unknown) => error);
+    await flush();
+    expect(vend.waiting).toBe(1);
+    state.version = 2;
+    vend.releaseAll();
+    expect(await call).toMatchObject({ reason: 'binding-changed' });
+    expect(endpoint.requests.filter((r) => r.rpc === 'tools/call')).toHaveLength(0);
+    await pool.close();
+  });
+
+  it('a call asks again BEFORE any work on its client: a tool bound under the old answer is refused before the replacement lists anything', async () => {
+    const state = { shared: false };
+    const endpoint = fakeEndpoint();
+    const { pool } = poolOver(endpoint, {
+      definitions: {
+        share: () =>
+          state.shared
+            ? { configuration: 'same-server', authorization: 'role@policy-1' }
+            : undefined,
+      },
+    });
+    const alice = id('alice', 'a');
+    const [status] = await pool.toolProvider().list(listCtx(alice));
+    // The client is replaced — the next one opened, never listed — and then the
+    // app's answer changes.
+    await pool.terminate({ principal: 'alice', conversationId: 'a' });
+    (await pool.acquire(alice)).release();
+    const listsBefore = lists(endpoint).length;
+    state.shared = true;
+    await expect(status!.execute({}, callCtx(alice))).rejects.toMatchObject({
+      reason: 'binding-changed',
+    });
+    // Refused before the replacement listed anything to revalidate against.
+    expect(lists(endpoint)).toHaveLength(listsBefore);
+    expect(endpoint.requests.filter((r) => r.rpc === 'tools/call')).toHaveLength(0);
+    await pool.close();
+  });
+
+  it('a share that throws when asked again refuses that listing and that call (binding-changed, its error as cause) — never the old list', async () => {
+    const state = { fail: false };
+    const endpoint = fakeEndpoint();
+    const { pool } = poolOver(endpoint, {
+      definitions: {
+        share: () => {
+          if (state.fail) throw new Error('policy service unavailable');
+          return { configuration: 'same-server', authorization: 'role@policy-1' };
+        },
+      },
+    });
+    const alice = id('alice', 'a');
+    const [status] = await pool.toolProvider().list(listCtx(alice));
+    state.fail = true;
+    const listed = await pool
+      .toolProvider()
+      .list(listCtx(alice))
+      .catch((error: unknown) => error);
+    expect(listed).toMatchObject({ name: 'McpPoolRefusedError', reason: 'binding-changed' });
+    expect((listed as Error).cause).toMatchObject({ message: 'policy service unavailable' });
+    await expect(status!.execute({}, callCtx(alice))).rejects.toMatchObject({
+      reason: 'binding-changed',
+    });
+    expect(endpoint.requests.filter((r) => r.rpc === 'tools/call')).toHaveLength(0);
+    await pool.close();
   });
 });

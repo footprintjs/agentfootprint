@@ -2488,6 +2488,7 @@ export interface ToolsMcpClientPayload {
     | 'identity-mismatch'
     | 'stale-tools'
     | 'binding-changed'
+    | 'request-unmatched'
     | 'lease-expired'
     | 'operations-full'
     | 'closed';

@@ -233,11 +233,15 @@ reads the answer through the pass-through `fetch` every library-built transport
 carries (the SDK treats a 405 as success), and closes locally whatever happened.
 The wait is bounded by `TOOL_TEARDOWN_TIMEOUT_MS` (the tool-session tier's
 `withTimeout`, shared): at the deadline the request is aborted and the outcome is
-`'timed-out'`. At most once per client. `resolved` is true only for
-`'terminated'`, `'already-gone'` and `'no-session'`; a local settlement and a
-remote resolution are reported apart. The pass-through `fetch` changes no
-request: a transport with no retry series hands the platform `fetch` the same
-URL and the same `init`.
+`'timed-out'`. ONE deadline answers the caller — the remote answer and the local
+close together: a close that hangs never holds the answer (after a confirmed
+`DELETE`, after the remote deadline, with no session at all), and is reported
+apart as the ending's settlement, which a pool keeps charged until it really
+finishes. At most once per client. `resolved` is true only for `'terminated'`,
+`'already-gone'` and `'no-session'`; a local settlement and a remote resolution
+are reported apart. The pass-through `fetch` changes no request: a transport
+with no retry series hands the platform `fetch` the same URL and the same
+`init`.
 
 **Why.** Nothing ended a remote session: `close()` only aborts the requests in
 flight, so a `'reuse'` runtime session ran until the platform's idle timeout, and
@@ -262,7 +266,12 @@ so each incarnation has a list and a listing count of its own.
 
 - **One open per key**, under the pool's own signal and `initTimeoutMs` — a
   caller that gives up detaches alone; the operation that started the open keeps
-  its charge until the open's work settles. A failure is not cached.
+  its charge until the open's work settles. A failure is not cached. Every
+  operation waiting for the open holds a RESERVATION on the client until it
+  takes its lease, so nothing can evict or end it in between; its state is
+  checked after every wait, and an `acquire` re-checks the pool and its caller
+  before it creates its hold — a successful acquire never hands out a client
+  that is ending, nor a lease after `close()`.
 - **Three budgets**: open clients (`maxClients`, `maxClientsPerPrincipal`),
   endings (`maxEnding`), and operations outstanding on any client
   (`maxOperations`). Every listing, call, acquire and ending is admitted before
@@ -273,11 +282,24 @@ so each incarnation has a list and a listing count of its own.
   full budget is `PoolFullError` at once, naming the budget: there is no queue.
 - **Ending reserves an ending slot and an operation slot first**; otherwise the
   client stays in the open set, counted, reported deferred, and is ended once
-  slots free. A busy client is never ended. Every end goes through `terminate()`.
+  slots free. A busy client is never ended. Every end goes through `terminate()`
+  — a lost handle's too, as its local close alone: nothing can be sent for it,
+  but the close is work, charged until it settles and waited for by `settled()`.
 - **Definitions per client incarnation** by default; shared only under the app's
   `definitions.share` names AND a matching `configHash`, the tenant always in the
-  context. Every bound tool re-checks its binding after each wait and at the send
-  gate — before every attempt, after a credential arrives, after signing.
+  context. `share` is asked again at every listing, call and send gate, so a
+  versioned `authorization` name reaches a conversation that already has a
+  client: its tools are listed again, and one bound under the old name is
+  refused (`binding-changed`). Every bound tool re-checks its binding after each
+  wait and at the send gate — before every attempt, after a credential arrives,
+  after signing.
+- **Nothing pooled is sent unchecked.** A pooled client's transport must let its
+  `send` be watched — one that does not is refused before anything is sent
+  (`init-failed`). Every request carries a guard: its call's, or the client's
+  open, listing or ending; a request with none — a tool call the SDK rebuilt
+  without its call's marker, a request while nothing is under way — is refused
+  unsent (`request-unmatched`), under either replay policy. `replay` is passed to
+  every client; it decides who may send a call AGAIN, never whether the gate runs.
 - **A server's 404 for its own session** (a JSON-RPC error to a request that
   carried the session id) is `SessionExpiredError`; a handle this process lost
   is `LocalSessionHandleLostError`, nothing sent, its ending unresolved.
@@ -308,7 +330,8 @@ again.
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
 - `terminate.ts` — `canTerminate` and the one ending procedure: the remote answer
-  read by a pass-through `fetch`, the wait bounded, the local close.
+  read by a pass-through `fetch`, the local close, one deadline for the caller's
+  answer and the settlement reported apart.
 - `clientPort.ts` — what the pool asks of a client it opens, and the port back.
 - `requestGuard.ts` — a pooled operation's send gate and work count, carried on
   each request's `init` and asked at every boundary that waits.

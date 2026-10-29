@@ -22,7 +22,8 @@
  *      definition, compared as canonical JSON; otherwise `stale-tools`. Under
  *      the app's sharing contract, a replacement whose context matches uses the
  *      shared entry as it stands;
- *   4. after every wait, checks step 2 again;
+ *   4. after every wait, checks step 2 again — and asks the app's `share`
+ *      again, so a changed authorization name refuses it (`binding-changed`);
  *   5. sends through the send gate (`mcp/requestGuard.ts`), asked at every
  *      boundary the request crosses — before every attempt, after a credential
  *      arrives, after signing — classifies the outcome (a server's 404 for the
@@ -89,18 +90,19 @@ async function executeBound(
     pool.interact();
     // 2 — the binding, before anything is admitted.
     if (beforeLease(pool, binding) === 'stale') throw pool.refused('stale-tools');
-    // 3 — admitted, leased, opened when the key has none.
+    // 3 — admitted, leased, opened when the key has none; the app's names asked
+    // again, so a changed authorization refuses what was listed under the old.
     operation = pool.admit('call', 'call', ctx?.signal);
     const client = await pool.leaseClient(binding.key, operation, facts);
-    if (client.plan.context !== binding.context) throw pool.refused('binding-changed');
+    if (pool.refreshContext(client).context !== binding.context) {
+      throw pool.refused('binding-changed');
+    }
     const { inner, effective } = await toolOn(pool, binding, client, operation, facts);
     // 4 — after every wait, the binding again.
     operation.check();
-    if (!holds(pool, client, effective)) throw pool.refused('stale-tools');
+    checkHolds(pool, client, effective);
     // 5 — the send gate, asked at every boundary the request crosses.
-    operation.guardWith(() => {
-      if (!holds(pool, client, effective)) throw pool.refused('stale-tools');
-    });
+    operation.guardWith(() => checkHolds(pool, client, effective));
     operation.phase = 'call';
     const callCtx = withCallGuard(
       { ...(ctx ?? {}), signal: operation.signal } as ToolExecutionContext,
@@ -179,9 +181,15 @@ function beforeLease(pool: Pool, binding: Binding): 'stale' | 'ok' {
   return listHolds(current, binding) ? 'ok' : 'stale';
 }
 
-/** The binding holds on `client` — the one the call runs on. */
-function holds(pool: Pool, client: PooledClient, binding: Binding): boolean {
-  return binding.shared ? sharedHolds(pool, binding) : listHolds(client, binding);
+/**
+ * The binding holds on `client` — the one the call runs on: the app's names
+ * still give its context, and its list has not moved. Otherwise the refusal:
+ * `binding-changed` for a changed context, `stale-tools` for a moved list.
+ */
+function checkHolds(pool: Pool, client: PooledClient, binding: Binding): void {
+  if (!pool.contextHolds(client, binding.context)) throw pool.refused('binding-changed');
+  const holds = binding.shared ? sharedHolds(pool, binding) : listHolds(client, binding);
+  if (!holds) throw pool.refused('stale-tools');
 }
 
 function sharedHolds(pool: Pool, binding: Binding): boolean {

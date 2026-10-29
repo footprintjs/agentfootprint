@@ -12,6 +12,7 @@
  */
 
 import type { MemoryIdentity } from '../../memory/identity/types.js';
+import { replayDeclarationOf, type McpReplayOptions } from '../replay.js';
 import type { RetryOnThrottle } from '../throttleRetry.js';
 import type { McpJsonSchemaValidator, McpSdk, McpTransport } from '../types.js';
 import type { McpPoolReport } from './record.js';
@@ -30,18 +31,26 @@ export interface McpPoolShareContext {
   /**
    * What the server's tool visibility depends on — a role and a policy version
    * (`'analyst@policy-7'`). A version in the name reaches a new entry without
-   * `permissionsChanged`. Hashed into the context, never recorded.
+   * `permissionsChanged`, for conversations that already have a client too:
+   * their tools are listed again under the new name, and a tool bound under the
+   * old one is refused before it is sent. Hashed into the context, never
+   * recorded.
    */
   readonly authorization: string;
 }
 
 /**
  * Share tool definitions between conversations — declared by the app, checked by
- * the pool. `share` is asked before anything opens, for every conversation;
- * return both names, or `undefined` to keep that conversation's list to itself.
- * Conversations share a list only when the transport's comparable data, both
- * names and the tenant are all equal. Never share a server whose list follows
- * the session (one that unlocks tools as a conversation goes on).
+ * the pool. `share` is asked for every conversation before anything opens, and
+ * again at every listing, every call and every send gate after that, so a
+ * changed answer takes effect at the next one; it must be synchronous and
+ * cheap. Return both names, or `undefined` to keep that conversation's list to
+ * itself. Conversations share a list only when the transport's comparable
+ * data, both names and the tenant are all equal. A `share` that throws refuses
+ * the open (`init-failed`) or, for a conversation that already has a client,
+ * that listing or call (`binding-changed`) — its error as `cause`. Never share
+ * a server whose list follows the session (one that unlocks tools as a
+ * conversation goes on).
  */
 export interface McpPoolDefinitionSharing {
   readonly share: (identity: McpPoolIdentity) => McpPoolShareContext | undefined;
@@ -103,6 +112,13 @@ export interface McpClientPoolOptions {
   readonly clientInfo?: { readonly name: string; readonly version: string };
   /** Passed to every client: the 429 retry (`McpClientOptions.retryOnThrottle`). */
   readonly retryOnThrottle?: RetryOnThrottle;
+  /**
+   * Passed to every client: who may send a tool call again
+   * (`McpClientOptions.replay`). Read and checked when the pool is built. The
+   * default stays `'compatibility'`. Whatever the policy, the pool's own send
+   * gate refuses a pooled request it cannot check (`request-unmatched`).
+   */
+  readonly replay?: McpReplayOptions;
   /** Passed to every client: the two SDK modules, imported by you (`McpClientOptions.sdk`). */
   readonly sdk?: McpSdk;
   /**
@@ -156,6 +172,7 @@ export interface PoolSettings {
     readonly resultMode?: McpClientPoolOptions['resultMode'];
     readonly clientInfo?: McpClientPoolOptions['clientInfo'];
     readonly retryOnThrottle?: RetryOnThrottle;
+    readonly replay?: McpReplayOptions;
     readonly sdk?: McpSdk;
     readonly jsonSchemaValidator?: McpJsonSchemaValidator;
   };
@@ -202,6 +219,8 @@ export function readPoolOptions(options: McpClientPoolOptions): PoolSettings {
   if (options.now !== undefined && typeof options.now !== 'function') {
     throw new TypeError(`${where}: the clock option must be a function returning milliseconds.`);
   }
+  // Refused by field now, as each client would refuse it at its first open.
+  if (options.replay !== undefined) replayDeclarationOf(options.replay, where);
   return {
     name,
     transport,
@@ -221,6 +240,7 @@ export function readPoolOptions(options: McpClientPoolOptions): PoolSettings {
       ...(options.resultMode !== undefined && { resultMode: options.resultMode }),
       ...(options.clientInfo !== undefined && { clientInfo: options.clientInfo }),
       ...(options.retryOnThrottle !== undefined && { retryOnThrottle: options.retryOnThrottle }),
+      ...(options.replay !== undefined && { replay: options.replay }),
       ...(options.sdk !== undefined && { sdk: options.sdk }),
       ...(options.jsonSchemaValidator !== undefined && {
         jsonSchemaValidator: options.jsonSchemaValidator,

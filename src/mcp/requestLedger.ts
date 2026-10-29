@@ -103,10 +103,13 @@ export interface RequestLedgerOptions {
   /** The `'app-authorized'` policy is in force: see the module note. */
   readonly strict: boolean;
   /**
-   * A pooled client's guard for a message that is not a matched `tools/call` —
-   * its open, its listing, its ending (`mcp/pool/`). Asked for every message;
-   * a request it guards is checked before it is sent, and every message's send
-   * is counted under it. Absent for a client no pool built.
+   * A pooled client's guard for every message that does not carry its own — its
+   * open, its listing, its ending (`mcp/pool/`) — and for a `tools/call` that
+   * reached `send` without a call carrying a guard: the pool answers that one
+   * with a guard that refuses it, so a pooled request is never sent unchecked,
+   * under either replay policy. A request it guards is checked before it is
+   * sent, and every message's send is counted under it. Absent for a client no
+   * pool built.
    */
   readonly guardFor?: (message: unknown) => RequestGuard | undefined;
 }
@@ -341,8 +344,10 @@ export class RequestLedger {
     const matched = call !== undefined && call.request === undefined ? call : undefined;
     // A pooled call's send gate, asked here — the last boundary on a transport
     // whose `send` writes without waiting (stdio). Refused, nothing is sent and
-    // the marker stays unused.
-    const guard = matched?.guard;
+    // the marker stays unused. On a pooled connection a tool call without a
+    // guarded call of its own is the pool's to answer (`guardFor`), whatever
+    // the replay policy.
+    const guard = matched?.guard ?? this.options.guardFor?.(message);
     try {
       guard?.check();
     } catch (refusal) {

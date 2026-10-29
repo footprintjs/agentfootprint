@@ -52,9 +52,11 @@ export async function listTools(
         throw pool.refused('init-failed', cause);
       }
     }
-    const planNow = current?.plan ?? (plan as ClientPlan);
-    if (planNow.shared) {
-      const served = await sharedWithoutClient(pool, key, planNow, operation.signal);
+    // A key with a client: the app's names asked again, so a changed
+    // authorization reaches this conversation as it would a new one.
+    const definitions = current === undefined ? (plan as ClientPlan) : pool.refreshContext(current);
+    if (definitions.shared) {
+      const served = await sharedWithoutClient(pool, key, definitions.context, operation.signal);
       if (served !== undefined) {
         facts.client = 'not-needed';
         facts.definitions = 'shared';
@@ -63,6 +65,8 @@ export async function listTools(
       }
     }
     const client = await pool.leaseClient(key, operation, facts, plan);
+    // After that wait, the names once more: the list is served under what they say now.
+    pool.refreshContext(client);
     let served: ServedList;
     try {
       served = await pool.ensureListed(client, pool.servedListOf(client), operation);
@@ -84,16 +88,16 @@ export async function listTools(
 async function sharedWithoutClient(
   pool: Pool,
   key: PoolKey,
-  plan: ClientPlan,
+  context: string,
   signal: AbortSignal,
 ): Promise<ServedList | undefined> {
-  const entry = pool.shared.entryFor(plan.context, key.tenant);
+  const entry = pool.shared.entryFor(context, key.tenant);
   const servable = (): boolean => entry.list.servable(pool.now(), pool.settings.definitionTtlMs);
   if (!servable() && entry.list.listing !== undefined) {
     // Joined inside this operation's own slot; if it fails, this one lists itself.
     await untilAborted(entry.list.listing, signal).catch(() => undefined);
   }
-  return servable() ? { list: entry.list, shared: true, context: plan.context } : undefined;
+  return servable() ? { list: entry.list, shared: true, context } : undefined;
 }
 
 /** Every definition of `served`, bound to `key` and to the list it came from. */

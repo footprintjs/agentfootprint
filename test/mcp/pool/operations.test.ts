@@ -6,10 +6,12 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { PoolFullError } from '../../../src/tool-providers/index.js';
+import { DeleteWatch, endSession } from '../../../src/mcp/terminate.js';
+import { mcpClientPool, PoolFullError } from '../../../src/tool-providers/index.js';
 import type { ToolDispatchContext } from '../../../src/tools/toolProvider.js';
 import { fakeEndpoint } from './fakeEndpoint.js';
 import { callCtx, flush, id, poolOver, stallingProvider } from './harness.js';
+import { heldCloses, NO_NETWORK, stubClient } from './stubClient.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -298,5 +300,67 @@ describe('ending admission: an ending reserves an ending slot AND an operation s
     expect(reports[endedAt]).toMatchObject({ remote: 'terminated', resolved: true });
     expect(endpoint.requests.filter((r) => r.method === 'DELETE')).toHaveLength(1);
     expect(pool.stats()).toMatchObject({ open: 0, ending: 0, operations: 0 });
+  });
+});
+
+describe('an ending whose local close hangs', () => {
+  it('terminate() is answered by the ending deadline; the ending stays charged — its ending slot and its operation slot — until the close settles, and settled() waits for it', async () => {
+    const closes = heldCloses();
+    const pool = mcpClientPool({
+      name: 'orders',
+      transport: NO_NETWORK,
+      maxEnding: 1,
+      maxOperations: 2,
+      _open: async () => {
+        const watch = new DeleteWatch();
+        const transport = {
+          sessionId: 'session-1',
+          async terminateSession(): Promise<void> {
+            await watch.fetch(async () => new Response(null, { status: 204 }))(
+              'https://orders.example.test/mcp',
+              { method: 'DELETE' },
+            );
+          },
+        };
+        return stubClient('held', {
+          end: () => endSession(transport, watch, closes.close, Date.now, 20),
+        });
+      },
+    });
+    const alice = id('alice', 'a');
+    (await pool.acquire(alice)).release();
+    const terminating = pool.terminate({ principal: 'alice', conversationId: 'a' });
+    const answered = await Promise.race([
+      terminating.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1_000)),
+    ]);
+    expect(answered).toBe(true);
+    expect(await terminating).toEqual([
+      expect.objectContaining({ remote: 'terminated', resolved: true }),
+    ]);
+    expect(closes.running).toBe(1);
+    expect(pool.stats()).toMatchObject({
+      ending: 1,
+      operations: 1,
+      unsettled: expect.objectContaining({ ending: 1 }),
+    });
+    let settled = false;
+    void pool.settled().then(() => (settled = true));
+    await flush();
+    expect(settled).toBe(false);
+    // The ending slot is held: another ending cannot start, so it waits — deferred.
+    (await pool.acquire(id('bob', 'b'))).release();
+    await expect(pool.terminate({ principal: 'bob' })).resolves.toEqual([]);
+    expect(closes.started).toBe(1);
+    // The first close settles: its slots free, and the waiting ending starts.
+    closes.releaseOne();
+    await flush();
+    expect(closes.started).toBe(2);
+    expect(settled).toBe(false);
+    closes.releaseOne();
+    await flush();
+    expect(settled).toBe(true);
+    expect(pool.stats()).toMatchObject({ open: 0, ending: 0, operations: 0 });
+    await pool.close();
   });
 });

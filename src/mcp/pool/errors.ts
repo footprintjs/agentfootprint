@@ -24,6 +24,7 @@ export type McpPoolRefusal =
   | 'init-failed'
   | 'stale-tools'
   | 'binding-changed'
+  | 'request-unmatched'
   | 'lease-expired'
   | 'closed';
 
@@ -43,6 +44,8 @@ export const MCP_POOL_REFUSAL_SENTENCES: Readonly<Record<McpPoolRefusal, string>
     "This tool's definition is no longer current, so the tool call was not sent. List the tools again.",
   'binding-changed':
     'This tool was listed for another configuration of this server, so the tool call was not sent. List the tools again.',
+  'request-unmatched':
+    "The pool could not check this tool's request against its listing before sending it, so the tool call was not sent.",
   'lease-expired': 'This connection lease has expired, so the tool call was not sent.',
   closed: 'The connection pool for this server is closed, so the tool call was not sent.',
 });

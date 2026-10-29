@@ -2022,6 +2022,23 @@ describe("agentCoreRuntimeMcpTransport — 'reuse' terminate() is StopRuntimeSes
     ).rejects.toThrow(/StopRuntimeSessionCommand/);
   });
 
+  it('terminate() over an SDK module without StopRuntimeSessionCommand: failed and unresolved — never a confirmed termination', async () => {
+    const runtime = lookupRuntime();
+    const client = await mcpClient({
+      name: 'orders',
+      transport: agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        session: 'reuse',
+        sdk: runtime.sdk,
+      }),
+    });
+    await client.tools();
+    const outcome = await client.terminate!();
+    expect(outcome).toMatchObject({ remote: 'failed', resolved: false });
+    expect(outcome.status).toBeUndefined();
+  });
+
   it('settings state the strategies as data — never a credential', () => {
     expect(
       agentCoreRuntimeMcpTransport({

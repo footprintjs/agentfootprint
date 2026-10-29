@@ -7,15 +7,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { LocalSessionHandleLostError, SessionExpiredError } from '../../../src/index.js';
-import { agentCoreRuntimeMcpTransport } from '../../../src/tool-providers/index.js';
+import { agentCoreRuntimeMcpTransport, mcpClientPool } from '../../../src/tool-providers/index.js';
 import { staticTokens } from '../../../src/identity/staticTokens.js';
 import type { McpTransport } from '../../../src/mcp/types.js';
 import { takeListUses, type McpClientUse } from '../../../src/tools/mcpClientUse.js';
 import type { ToolDispatchContext } from '../../../src/tools/toolProvider.js';
+import type { Tool } from '../../../src/tools/tools.js';
 import { REAL_TRANSPORT_TIMEOUT } from '../realTransportSupport.js';
 import { fakeEndpoint, type FakeEndpoint } from './fakeEndpoint.js';
-import { callCtx, id, poolOver } from './harness.js';
+import { callCtx, flush, id, poolOver } from './harness.js';
 import { startSessionServer, type SessionServer } from './sessionServer.js';
+import { heldCloses, NO_NETWORK, stubClient } from './stubClient.js';
 
 const ARN = 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/orders-a1b2c3';
 const listCtx = (identity: ReturnType<typeof id>): ToolDispatchContext =>
@@ -99,6 +101,111 @@ describe('(a) a lost handle is not an expiry', () => {
     },
     REAL_TRANSPORT_TIMEOUT,
   );
+});
+
+describe("(a′) a lost handle's local close is work, charged like any ending until it settles", () => {
+  /** A pool whose every client loses its handle at the first call, and whose closes wait until released. */
+  function losingPool(limits: { maxClients: number; maxEnding: number; maxOperations: number }) {
+    const closes = heldCloses();
+    let opened = 0;
+    const pool = mcpClientPool({
+      name: 'lost-handle',
+      transport: NO_NETWORK,
+      ...limits,
+      _open: async () => {
+        opened += 1;
+        return stubClient(`lost-${opened}`, {
+          call: async () => {
+            throw new LocalSessionHandleLostError();
+          },
+          close: closes.close,
+        });
+      },
+    });
+    return { pool, closes, opened: () => opened };
+  }
+
+  it('one slot each: the close holds the ending and operation slots, settled() waits for it, and the next arrival is refused at once until it settles', async () => {
+    const { pool, closes, opened } = losingPool({ maxClients: 1, maxEnding: 1, maxOperations: 1 });
+    const alice = id('alice', 'a');
+    const [status] = await pool.toolProvider().list(listCtx(alice));
+    await expect(status!.execute({}, callCtx(alice))).rejects.toBeInstanceOf(
+      LocalSessionHandleLostError,
+    );
+    await flush();
+    expect(closes.running).toBe(1);
+    expect(pool.stats()).toMatchObject({ open: 0, ending: 1, operations: 1, unresolvedEndings: 1 });
+    let settled = false;
+    void pool.settled().then(() => (settled = true));
+    await flush();
+    expect(settled).toBe(false);
+    // The slots are held: refused at once, and nothing opens.
+    await expect(pool.toolProvider().list(listCtx(alice))).rejects.toMatchObject({
+      name: 'PoolFullError',
+      limit: 'operations',
+    });
+    expect(opened()).toBe(1);
+    // The close settles: the slots free, settled() resolves, the key opens its next client.
+    closes.releaseOne();
+    await flush();
+    expect(settled).toBe(true);
+    expect(pool.stats()).toMatchObject({ open: 0, ending: 0, operations: 0 });
+    await pool.toolProvider().list(listCtx(alice));
+    expect(opened()).toBe(2);
+    const closing = pool.close();
+    await flush();
+    closes.releaseAll();
+    await closing;
+    await pool.settled();
+  });
+
+  it('five lost handles in a row never run more local closes than maxEnding: the rest wait, counted, and every one settles before settled() resolves', async () => {
+    const limits = { maxClients: 1, maxEnding: 1, maxOperations: 3 };
+    const { pool, closes } = losingPool(limits);
+    const alice = id('alice', 'a');
+    let lost = 0;
+    let refused = 0;
+    for (let i = 0; i < 5; i += 1) {
+      const listed = await pool
+        .toolProvider()
+        .list(listCtx(alice))
+        .catch((error: unknown) => error);
+      if (listed instanceof Error) {
+        expect(listed).toMatchObject({ name: 'PoolFullError' });
+        refused += 1;
+      } else {
+        const outcome = await (listed as readonly Tool[])[0]!
+          .execute({}, callCtx(alice))
+          .catch((error: unknown) => error);
+        if (outcome instanceof LocalSessionHandleLostError) lost += 1;
+      }
+      await flush();
+      expect(closes.running).toBeLessThanOrEqual(limits.maxEnding);
+      const stats = pool.stats();
+      expect(stats.open + stats.ending).toBeLessThanOrEqual(limits.maxClients + limits.maxEnding);
+      expect(stats.operations).toBeLessThanOrEqual(limits.maxOperations);
+    }
+    expect(lost).toBeGreaterThanOrEqual(2);
+    expect(lost + refused).toBe(5);
+    let settled = false;
+    void pool.settled().then(() => (settled = true));
+    await flush();
+    expect(settled).toBe(false);
+    // Release closes one at a time: the waiting ones start, never more than maxEnding at once.
+    for (let i = 0; i < 10 && closes.running > 0; i += 1) {
+      closes.releaseOne();
+      await flush();
+      expect(closes.running).toBeLessThanOrEqual(limits.maxEnding);
+    }
+    const closing = pool.close();
+    await flush();
+    closes.releaseAll();
+    await closing;
+    await pool.settled();
+    expect(settled).toBe(true);
+    expect(closes.started).toBe(lost);
+    expect(pool.stats()).toMatchObject({ open: 0, ending: 0, operations: 0 });
+  });
 });
 
 describe('(b) a failed stop is unresolved', () => {

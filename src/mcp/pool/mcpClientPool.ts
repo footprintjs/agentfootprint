@@ -163,8 +163,16 @@ export function mcpClientPool(options: McpClientPoolOptions): McpClientPool {
       const operation = pool.admit('acquire', 'open', acquireOptions?.signal);
       try {
         const facts = new UseFacts(settings.name, 'list');
-        const client = await pool.leaseClient(key, operation, facts);
-        return leaseHandle(pool, key, pool.holdLease(client));
+        for (let round = 0; round < 3; round += 1) {
+          const client = await pool.leaseClient(key, operation, facts);
+          // After that wait, before anything is held: the pool may have closed,
+          // the caller may have gone, the client may have been named by a
+          // terminate. Refused, the operation's own lease ends with it below.
+          if (pool.closed) throw pool.refused('closed');
+          operation.check();
+          if (client.serving) return leaseHandle(pool, key, pool.holdLease(client));
+        }
+        throw pool.refused('init-failed');
       } finally {
         operation.finish();
       }

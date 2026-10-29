@@ -6,9 +6,11 @@
  * Role:    § 5 of the design. A client is OPENING until its open settles, OPEN
  *          while it can serve, ENDING from the decision to end it until that
  *          ending's work has settled, then ENDED. It is BUSY while any lease is
- *          open — the library's, one per operation, or the app's — and IDLE
- *          otherwise. A busy client is never evicted, closed for idleness or
- *          ended. "Used" is the last lease taken or released.
+ *          open — the library's, one per operation, or the app's — while an
+ *          operation that waited for its open has not yet taken its lease (a
+ *          RESERVATION), and while it opens; IDLE otherwise. A busy client is
+ *          never evicted, closed for idleness or ended. "Used" is the last lease
+ *          taken or released.
  *
  * Its `clientId` is the pool's own random id; its `generation` counts the key's
  * incarnations (1 = the key's first client). A replacement is a new record with
@@ -52,6 +54,11 @@ export class PooledClient {
   port: ClientPort | undefined;
   /** Open leases: one per library operation, one per app lease. */
   leases = 0;
+  /**
+   * Operations waiting for its open, each holding it until it takes its lease —
+   * so between the open settling and that lease nothing can evict or end it.
+   */
+  reserved = 0;
   /** The last lease taken or released, on the pool's clock. */
   usedAt: number;
   /** No new lease: `terminate` named it, its session expired, or its handle was lost. */
@@ -77,6 +84,12 @@ export class PooledClient {
   lost: 'expired' | 'handle-lost' | undefined;
   /** The outcome of its ending, once one started. */
   endingOutcome: Promise<McpTerminateOutcome> | undefined;
+  /**
+   * The definitions context its tools are served under now. It starts as its
+   * plan's; the app's `share` is asked again at every use, and a changed answer
+   * moves it here — its connection, the plan's transport, never changes.
+   */
+  definitions: { readonly context: string; readonly shared: boolean };
 
   constructor(
     readonly key: PoolKey,
@@ -86,11 +99,12 @@ export class PooledClient {
     now: number,
   ) {
     this.usedAt = now;
+    this.definitions = { context: plan.context, shared: plan.shared };
   }
 
-  /** Busy: a lease is open, or it is still opening. */
+  /** Busy: a lease is open, an operation holds it between its open and its lease, or it is still opening. */
   get busy(): boolean {
-    return this.leases > 0 || this.state === 'opening';
+    return this.leases > 0 || this.reserved > 0 || this.state === 'opening';
   }
 
   /** Can it serve a new lease right now? */

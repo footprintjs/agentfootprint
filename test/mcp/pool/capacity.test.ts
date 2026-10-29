@@ -11,10 +11,11 @@ afterEach(() => {
 });
 
 import { PoolFullError, POOL_FULL_SENTENCE } from '../../../src/mcp/pool/errors.js';
-import { McpPoolRefusedError } from '../../../src/tool-providers/index.js';
+import { mcpClientPool, McpPoolRefusedError } from '../../../src/tool-providers/index.js';
 import type { McpClientUse } from '../../../src/tools/mcpClientUse.js';
 import { fakeEndpoint } from './fakeEndpoint.js';
 import { callCtx, flush, id, poolOver } from './harness.js';
+import { NO_NETWORK, stubClient } from './stubClient.js';
 
 /** A clock the test moves. */
 function clock(start = 1_000_000) {
@@ -223,5 +224,91 @@ describe('the app lease', () => {
     expect(pool.stats().busy).toBe(0);
     await lease[Symbol.asyncDispose]();
     expect(pool.stats().busy).toBe(0);
+  });
+});
+
+describe('close during an acquire', () => {
+  it('an acquire still waiting when the pool closes is refused (closed): no hold is created, and close finishes without anyone releasing anything', async () => {
+    const ended: string[] = [];
+    const pool = mcpClientPool({
+      name: 'close-race',
+      transport: NO_NETWORK,
+      _open: async () => stubClient('warm', { ended }),
+    });
+    const alice = id('alice', 'a');
+    (await pool.acquire(alice)).release();
+    const pending = pool.acquire(alice).then(
+      (lease) => ({ lease }),
+      (error: unknown) => ({ error }),
+    );
+    const closing = pool.close();
+    const outcome = await pending;
+    expect(outcome).toMatchObject({ error: { name: 'McpPoolRefusedError', reason: 'closed' } });
+    // Nothing to release by hand: close ends the client on its own.
+    await closing;
+    await pool.settled();
+    expect(ended).toEqual(['warm']);
+    expect(pool.stats()).toMatchObject({ open: 0, busy: 0, operations: 0, ending: 0 });
+  });
+
+  it('a caller that gives up while its acquire resumes gets no hold: refused with its own reason, nothing held', async () => {
+    const pool = mcpClientPool({
+      name: 'gone',
+      transport: NO_NETWORK,
+      _open: async () => stubClient('warm'),
+    });
+    const alice = id('alice', 'a');
+    (await pool.acquire(alice)).release();
+    const caller = new AbortController();
+    const pending = pool.acquire(alice, { signal: caller.signal });
+    caller.abort(new Error('the caller gave up'));
+    await expect(pending).rejects.toThrow('the caller gave up');
+    await pool.settled();
+    expect(pool.stats()).toMatchObject({ open: 1, busy: 0, operations: 0 });
+    await pool.close();
+  });
+
+  it('a terminate that names the client while its acquire resumes: the acquire holds the key’s next client, never the ended one', async () => {
+    const ended: string[] = [];
+    let opened = 0;
+    const pool = mcpClientPool({
+      name: 'named',
+      transport: NO_NETWORK,
+      _open: async () => stubClient(`c${++opened}`, { ended }),
+    });
+    const alice = id('alice', 'a');
+    (await pool.acquire(alice)).release();
+    const pending = pool.acquire(alice);
+    const terminating = pool.terminate({ principal: 'alice', conversationId: 'a' });
+    const lease = await pending;
+    const [status] = await lease.tools();
+    await expect(status!.execute({}, callCtx(alice))).resolves.toBe('status@c2');
+    await terminating;
+    expect(ended).toEqual(['c1']);
+    lease.release();
+    await pool.close();
+  });
+
+  it('a cold acquire whose open settles after close: refused (closed), and the client it opened is ended', async () => {
+    const ended: string[] = [];
+    let complete!: () => void;
+    const opening = new Promise<void>((resolve) => (complete = resolve));
+    const pool = mcpClientPool({
+      name: 'close-race',
+      transport: NO_NETWORK,
+      _open: async () => {
+        await opening;
+        return stubClient('late', { ended });
+      },
+    });
+    const pending = pool.acquire(id('alice', 'a')).catch((error: unknown) => error);
+    await flush(1);
+    const closing = pool.close();
+    complete();
+    expect(await pending).toMatchObject({ name: 'McpPoolRefusedError', reason: 'closed' });
+    await closing;
+    await pool.settled();
+    expect(ended).toEqual(['late']);
+    expect(pool.stats()).toMatchObject({ open: 0, busy: 0, operations: 0, ending: 0 });
   });
 });

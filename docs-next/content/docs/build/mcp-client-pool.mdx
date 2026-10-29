@@ -56,6 +56,12 @@ being served after `pool.permissionsChanged({ tenant, principal? })`,
 `definitionTtlMs`. A tool bound to it is then refused (`stale-tools`) before
 anything is sent.
 
+`share` is asked again at every listing and every call, so a version in the
+`authorization` name works for conversations that already have a client too.
+When the name changes, the next listing lists again under the new name. A tool
+bound under the old name is refused (`binding-changed`) before it is sent, even
+if nothing was listed since. Keep `share` synchronous and cheap.
+
 ## Full means refused, never queued
 
 Three budgets apply: open clients (`maxClients`, and `maxClientsPerPrincipal`),
@@ -68,9 +74,12 @@ once, and its `limit` names the budget.
 
 <CodeFile path="examples/features/120-mcp-client-pool.ts" region="ending" title="examples/features/120-mcp-client-pool.ts (region: ending)" />
 
-A client in use is never evicted, closed for idleness or ended. To keep a
-conversation's client through a whole turn, hold `pool.acquire(identity)` around
-`agent.run()` and `release()` it after (it is `AsyncDisposable`).
+A client in use is never evicted, closed for idleness or ended. That includes
+the moment just after it opens, before the caller that opened it has its
+lease. To keep a conversation's client through a whole turn, hold
+`pool.acquire(identity)` around `agent.run()` and `release()` it after (it is
+`AsyncDisposable`). An `acquire` still waiting when the pool closes is refused
+(`closed`) and holds nothing.
 
 ## Ending a conversation
 
@@ -84,6 +93,10 @@ side; `terminate()` ends the remote session, and says whether it did.
 After `'not-offered'`, `'failed'`, `'timed-out'` or `'handle-lost'`, the remote
 session lives until the server's own timeout; `stats().unresolvedEndings` counts
 those. On AgentCore Runtime under `'reuse'`, an ending is `StopRuntimeSession`.
+
+`terminate()` answers within its deadline even when a client's local close
+hangs. The ending keeps its ending slot and its operation slot until that close
+really finishes, and `settled()` waits for it.
 
 ## What the record says
 
@@ -101,12 +114,29 @@ after its caller was answered reach your `onEvent` as an `McpPoolReport`
 charged past its deadline (`unsettled`) and the endings never confirmed
 (`unresolvedEndings`).
 
+## Nothing is sent unchecked
+
+Every pooled request is checked against its tool's binding before it leaves:
+when the SDK sends it, when the pool's `fetch` hands it on, before each retry,
+after a credential arrives, and after AWS signing. The pool refuses what it
+cannot check:
+
+- A transport whose `send` cannot be watched is never opened. The listing or
+  call fails with `init-failed`, and nothing is sent.
+- A request that carries no guard is refused unsent (`request-unmatched`).
+  For example, an SDK that rebuilt a tool call's params without its marker, so
+  the pool could not tie the call to its tool.
+
+`replay` (who may send a call again, `McpClientOptions.replay`) is passed to
+every client and works as on a standalone client. It never turns the check off.
+
 ## Gotchas
 
 - **Two failures that look alike stay two.** A server's 404 for the session it
   issued is `SessionExpiredError`. A handle this process lost is
   `LocalSessionHandleLostError`, and nothing was sent. Neither call is repeated;
-  the next one opens a new client for the same conversation.
+  the next one opens a new client for the same conversation. The lost client's
+  local close still counts: it holds an ending slot until it finishes.
 - **The budgets bound client objects, endings and operations.** They do not bound
   response sizes or total memory. Put per-caller limits at your door
   (`AdmissionPolicy`).
@@ -122,7 +152,7 @@ From `agentfootprint/providers`:
 | export | what it is |
 | --- | --- |
 | `mcpClientPool(options)` | Build a pool for one server. Returns an `McpClientPool`. |
-| `McpClientPoolOptions` | `name`, `transport` (or a function of the identity), the budgets, `initTimeoutMs`, `idleMs`, `maxLeaseMs`, `definitionTtlMs`, `definitions`, `requirePrincipal`, `requireTenant`, `onEvent`, and the connection options passed to every client. |
+| `McpClientPoolOptions` | `name`, `transport` (or a function of the identity), the budgets, `initTimeoutMs`, `idleMs`, `maxLeaseMs`, `definitionTtlMs`, `definitions`, `requirePrincipal`, `requireTenant`, `onEvent`, and the connection options passed to every client (`resultMode`, `clientInfo`, `retryOnThrottle`, `replay`, `sdk`, `jsonSchemaValidator`). |
 | `MCP_POOL_DEFAULTS` | The defaults: 64 clients, 8 per principal, 8 endings, 256 operations, a 30 s open, 600 s idle, a 15-minute lease, a 600 s definitions limit. |
 | `MAX_DEFINITION_ENTRIES` | At most this many shared definition entries are kept (256). |
 | `MAX_SHARED_TOOLS` | A list longer than this (512 tools) is used by its own client and never shared. |

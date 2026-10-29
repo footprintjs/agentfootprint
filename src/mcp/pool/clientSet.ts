@@ -7,9 +7,9 @@
  *          open that has not settled. The ENDING set holds every client from the
  *          decision to end it until that ending's work has settled, and counts
  *          toward `maxEnding`. A client leaves the open set only into the ending
- *          set (the one exception, a lost handle, leaves at once: there is
- *          nothing to send). So the pool holds at most `maxClients + maxEnding`
- *          client objects.
+ *          set — a lost handle too: its ending is its local close — or, when its
+ *          open failed and left nothing to end, by being dropped. So the pool
+ *          holds at most `maxClients + maxEnding` client objects.
  *
  * Each key has at most one CURRENT client — the one new leases go to. A client
  * named by `terminate`, or whose session expired, stops being current at once
@@ -83,9 +83,15 @@ export class ClientSet {
     this.perPrincipal.set(client.key.principal, this.principalCount(client.key.principal) + 1);
   }
 
-  /** The client stops taking new leases: its key has no current client until the next open. */
+  /**
+   * The client stops taking new leases: its key has no current client until the
+   * next open, and that open's record says `why`. A client that is no longer
+   * its key's current one has already left it, so nothing is recorded again —
+   * a later client of the key keeps its own reason.
+   */
   retire(client: PooledClient, why: PreviousEnd): void {
-    if (this.current.get(client.key.key) === client) this.current.delete(client.key.key);
+    if (this.current.get(client.key.key) !== client) return;
+    this.current.delete(client.key.key);
     this.remember(client.key.key).previous = why;
   }
 

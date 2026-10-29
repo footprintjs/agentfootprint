@@ -1012,12 +1012,15 @@ class Series {
     // time left, or a pooled operation's gate that permits nothing more. The
     // server's answer is delivered as it sent it.
     const stopped = this.gateStopped !== undefined;
+    // A gate stop is the decision the record ends on — never a deadline the
+    // series did not reach, never an attempt that was not sent.
+    const stoppedBy = stopped ? 'not-permitted' : undefined;
     if (this.latest !== undefined && (error === this.latest.refusal || stopped)) {
       this.shared.deliveredStatus(this.latest.response.status);
-      this.evidence?.delivered();
+      this.evidence?.delivered(stoppedBy);
       return this.latest.response;
     }
-    this.evidence?.threw(this.deadline !== undefined && Date.now() >= this.deadline);
+    this.evidence?.threw(this.deadline !== undefined && Date.now() >= this.deadline, stoppedBy);
     // A gate stop after a failure with no answer ends on that failure: the
     // attempt that was sent is the one the caller hears about.
     throw stopped ? this.lastError : error;

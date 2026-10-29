@@ -103,8 +103,8 @@ import {
 import type { RequestGuard } from './requestGuard.js';
 import {
   DeleteWatch,
+  endLocally,
   endSession,
-  outcomeWithout,
   type Ending,
   type TerminableTransport,
 } from './terminate.js';
@@ -307,17 +307,13 @@ interface OpenConnection {
   readonly ending: (close: () => Promise<void>) => Ending;
 }
 
-/** An ending that sends nothing: the local close, and the outcome that says why. */
+/**
+ * An ending that sends nothing: the local close, and the outcome that says why
+ * — answered by the teardown deadline even when the close hangs, the close
+ * itself reported apart (`terminate.ts` · `endLocally`).
+ */
 function endingWithout(remote: 'no-session' | 'unavailable'): OpenConnection['ending'] {
-  return (close) => {
-    const settled = Promise.resolve()
-      .then(close)
-      .then(
-        () => undefined,
-        () => undefined,
-      );
-    return { outcome: settled.then(() => outcomeWithout(remote)), settled };
-  };
+  return (close) => endLocally(remote, close);
 }
 
 /**
@@ -589,7 +585,7 @@ async function buildTransport(
       strict: replay?.policy === 'app-authorized',
       guardFor: seam.guardFor,
     });
-    return watched(stdio, ledger, endingWithout('no-session'));
+    return watchedForPool(stdio, ledger, endingWithout('no-session'), name);
   }
 
   // http + gateway transports both ride Streamable HTTP. They differ only in
@@ -651,9 +647,12 @@ async function buildTransport(
       transportUrl(t.url, 'mcpClient'),
       { fetch: outermost(ledgered ?? gatewayFetch) },
     );
+    if (seam !== undefined) {
+      return watchedForPool(sdkTransport, ledger, sessionEnding(sdkTransport, watch), name);
+    }
     return watched(
       sdkTransport,
-      ledgered !== undefined || seam !== undefined ? ledger : undefined,
+      ledgered !== undefined ? ledger : undefined,
       sessionEnding(sdkTransport, watch),
     );
   }
@@ -667,9 +666,12 @@ async function buildTransport(
     ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
     fetch: outermost(ledgered ?? httpFetch),
   });
+  if (seam !== undefined) {
+    return watchedForPool(sdkTransport, ledger, sessionEnding(sdkTransport, watch), name);
+  }
   return watched(
     sdkTransport,
-    ledgered !== undefined || seam !== undefined ? ledger : undefined,
+    ledgered !== undefined ? ledger : undefined,
     sessionEnding(sdkTransport, watch),
   );
 }
@@ -702,6 +704,33 @@ function watched(
   return ledger.watch(transport) === undefined
     ? { transport, ending }
     : { transport, ledger, ending };
+}
+
+/**
+ * A pooled client's transport, its sends watched — REQUIRED. The pool checks
+ * every request against its binding at the watched `send` (on stdio the last
+ * boundary there is) and ties each tool call to its guard there, so a
+ * transport whose `send` cannot be watched is refused before anything is
+ * built on it or sent: the pool's guarantee needs the watch, whatever the
+ * replay policy. A standalone client never comes here (`watched`).
+ *
+ * @throws when the transport has no `send` to watch or refuses the property
+ */
+function watchedForPool(
+  transport: unknown,
+  ledger: RequestLedger,
+  ending: OpenConnection['ending'],
+  name: string,
+): BuiltTransport {
+  const built = watched(transport, ledger, ending);
+  if (built.ledger === undefined) {
+    throw new Error(
+      `mcpClient[${name}]: the MCP client pool checks every request at its transport's \`send\` ` +
+        "before it is sent, and this transport's `send` cannot be watched (it is missing, or a " +
+        'property that cannot be redefined), so the pooled client is not opened. Nothing was sent.',
+    );
+  }
+  return built;
 }
 
 /** The platform's fetch, looked up at call time so a later polyfill still wins. */

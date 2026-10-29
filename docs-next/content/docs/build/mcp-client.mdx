@@ -548,7 +548,8 @@ Two notes:
 `close()` does not end the remote session; `terminate()` does, and says whether
 it did. It sends the Streamable HTTP `DELETE` carrying the session id, reads the
 answer itself (the MCP SDK reports a 405 as success), and closes locally
-whatever happened. The wait is bounded at 5 s.
+whatever happened. You are answered within 5 s, even when the local close
+hangs: the close goes on after the answer.
 
 ```ts
 const outcome = await client.terminate!();

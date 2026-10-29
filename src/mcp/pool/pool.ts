@@ -17,12 +17,23 @@
  *     the open's work settles. Past the deadline every waiter is refused at once
  *     (`init-timeout`), and until the open's work settles the key cannot open
  *     again. A failure reaches every current waiter and is not cached.
+ *   - THE HANDOFF: every operation waiting for an open holds a RESERVATION on
+ *     the client until it takes its lease, so between the open settling and
+ *     that lease the client is busy — nobody can evict, idle-end or end it. The
+ *     client's state is checked again after every wait, and the lease taken in
+ *     the same step: a lease is never handed out on a client that is ending.
  *   - MAKING ROOM: the principal's, then the pool's, least recently used IDLE
  *     client moves to the ending set — or `PoolFullError` at once.
  *   - ENDING reserves an ending slot and an operation slot FIRST; when either is
  *     full the client stays in the open set, counted, reported deferred, and is
- *     ended when slots free. Every end goes through `terminate()`.
+ *     ended when slots free. Every end goes through `terminate()` — but a client
+ *     whose handle this process lost: nothing can be sent for it, so its ending
+ *     is its local close alone, charged the same way until it settles.
  *   - SETTLEMENT, never an abort, returns a slot (`work.ts`).
+ *   - NOTHING UNCHECKED: on a pooled client every request carries a guard — its
+ *     call's, or the client's open, listing or ending — and a request with none
+ *     is refused before it is sent (`request-unmatched`), at the watched `send`
+ *     and at the pool's own fetch alike.
  */
 
 import { eitherSignal, untilAborted } from '../../lib/abort.js';
@@ -37,6 +48,7 @@ import {
 import { openPooledClient } from '../mcpClient.js';
 import { withGuard, type RequestGuard } from '../requestGuard.js';
 import type { ThrottleFetch } from '../throttleRetry.js';
+import type { Ending } from '../terminate.js';
 import type { McpClientOptions, McpTerminateOutcome } from '../types.js';
 import { ClientSet, previousOf, type PreviousEnd } from './clientSet.js';
 import {
@@ -49,7 +61,7 @@ import { McpPoolRefusedError, PoolFullError, type McpPoolLimit } from './errors.
 import { encodeIdentityField } from '../../memory/identity/encode.js';
 import { scopeMatcher, type PoolKey } from './identityKey.js';
 import { MAX_SHARED_TOOLS, type PoolSettings } from './options.js';
-import { resolvePlan, type ClientPlan, type OpenedClient } from './plan.js';
+import { contextFor, resolvePlan, type ClientPlan, type OpenedClient } from './plan.js';
 import { PooledClient, type EndReason } from './pooledClient.js';
 import { Reporter, type UseFacts } from './record.js';
 import {
@@ -211,8 +223,9 @@ export class Pool {
       const current = this.clients.currentFor(key.key);
       if (current === undefined) {
         const opened = this.openFor(key, operation, facts, plan);
-        await this.waitOpen(opened, operation);
-        return this.takeLease(opened, operation, facts);
+        const leased = await this.leaseOnceOpen(opened, operation, facts);
+        if (leased !== undefined) return leased;
+        continue;
       }
       if (current.abandoned) throw this.refused('init-timeout');
       if (current.state === 'open') {
@@ -223,14 +236,57 @@ export class Pool {
       facts.client = 'joined';
       facts.clientId = current.clientId;
       facts.generation = current.generation;
-      await this.waitOpen(current, operation);
-      if (current.serving) return this.takeLease(current, operation, facts);
+      const leased = await this.leaseOnceOpen(current, operation, facts);
+      if (leased !== undefined) return leased;
     }
     throw this.refused('init-failed');
   }
 
+  /**
+   * Wait for `client`'s open inside `operation`, holding a reservation on it
+   * all the while — between the open settling and this lease the client is
+   * busy, so nobody can evict, idle-end or end it — then check it again and
+   * lease it in the same step, with no wait between. `undefined` when it no
+   * longer serves: the caller's next round finds the key's next client.
+   */
+  private async leaseOnceOpen(
+    client: PooledClient,
+    operation: Operation,
+    facts: UseFacts,
+  ): Promise<PooledClient | undefined> {
+    client.reserved += 1;
+    try {
+      await this.waitOpen(client, operation);
+    } catch (error) {
+      client.reserved -= 1;
+      this.becameIdle(client);
+      // The pool closed while it waited: that is the refusal, whatever the wait threw.
+      throw this.closed ? this.refused('closed') : error;
+    }
+    client.reserved -= 1;
+    if (!client.serving) {
+      this.becameIdle(client);
+      return undefined;
+    }
+    try {
+      return this.takeLease(client, operation, facts);
+    } catch (error) {
+      this.becameIdle(client);
+      throw this.closed ? this.refused('closed') : error;
+    }
+  }
+
+  /** `client` may have just become idle: a deferred ending may run, and a waiter for idleness may go on. */
+  private becameIdle(client: PooledClient): void {
+    if (client.busy) return;
+    this.retryDeferred();
+    this.notifyIdle();
+  }
+
   private takeLease(client: PooledClient, operation: Operation, facts: UseFacts): PooledClient {
-    // The caller detached while it waited: nothing more is done for it.
+    // The caller detached while it waited, or before it was admitted: nothing
+    // more is done for it. The cached path reaches here with no wait at all,
+    // so this is its only check.
     operation.check();
     client.leases += 1;
     client.usedAt = this.now();
@@ -251,10 +307,8 @@ export class Pool {
   releaseLease(client: PooledClient): void {
     client.leases -= 1;
     client.usedAt = this.now();
-    if (client.leases === 0) {
-      // A lost handle has left the pool already: closed locally once idle.
-      if (client.lost === 'handle-lost') void client.client?.close().catch(() => undefined);
-      else if (client.deferredEnd !== undefined) this.endClient(client, client.deferredEnd);
+    if (!client.busy && client.deferredEnd !== undefined) {
+      this.endClient(client, client.deferredEnd);
     }
     this.notifyIdle();
   }
@@ -398,9 +452,13 @@ export class Pool {
     );
     // Once the open's own work has settled: an abandoned open that opened a
     // session is ended under the ending rule; a failed one frees its slot.
+    // Either way the client has stopped opening — a wait for idle clients
+    // (`terminate`, `close`) is told once its new state is in place.
     work.onSettled(() => {
-      this.notifyIdle();
-      if (!timedOut && opened !== undefined) return;
+      if (!timedOut && opened !== undefined) {
+        this.notifyIdle();
+        return;
+      }
       client.opening = undefined;
       if (client.phase === work) client.phase = undefined;
       // A failed open whose server opened a session all the same has a session
@@ -408,13 +466,14 @@ export class Pool {
       const session = opened?.port ?? (halfOpen?.hasSession() === true ? halfOpen : undefined);
       if (session === undefined) {
         this.dropFailedOpen(client);
-        return;
+      } else {
+        if (opened === undefined) client.port = endingOnly(session);
+        client.state = 'open';
+        client.closedToNew = true;
+        this.clients.retire(client, 'terminated');
+        this.endClient(client, 'abandoned-open');
       }
-      if (opened === undefined) client.port = endingOnly(session);
-      client.state = 'open';
-      client.closedToNew = true;
-      this.clients.retire(client, 'terminated');
-      this.endClient(client, 'abandoned-open');
+      this.notifyIdle();
     });
     return work;
   }
@@ -453,10 +512,29 @@ export class Pool {
     return {
       connectSignal,
       wrapFetch: (inner, claim) => this.pooledFetch(client, inner, claim),
-      guardFor: () => client.phase,
+      guardFor: (message) => this.guardOf(client, message),
       onToolsChanged: () => this.toolsChangedOn(client),
     };
   }
+
+  /**
+   * The guard for a message on `client` that carries none of its own: a tool
+   * call always brings its call's guard, so one without it is refused; any
+   * other request runs under the client's open, listing or ending — and with
+   * none under way, it is refused too. Nothing pooled is sent unchecked.
+   */
+  private guardOf(client: PooledClient, message: unknown): RequestGuard {
+    if (isToolCall(message)) return this.unmatched;
+    return client.phase ?? this.unmatched;
+  }
+
+  /** The guard of a request nothing covers: it refuses, so the request is never sent. */
+  private readonly unmatched: RequestGuard = {
+    check: () => {
+      throw this.refused('request-unmatched');
+    },
+    track: () => undefined,
+  };
 
   /**
    * The pool's own fetch, outermost on every pooled transport: a request is
@@ -464,8 +542,9 @@ export class Pool {
    * counted under it; the guard's signal is linked in; and the answer is read
    * for the two pieces of evidence the pool classifies on — a 404 the MCP server
    * itself sent to a request that carried its session id, and a handle this
-   * process lost. The client's own standalone stream (a GET) is the client's,
-   * not an operation's: it passes untouched.
+   * process lost. The client's own standalone stream (a GET), a notification and
+   * an answer to the server's own request are the client's, not an operation's:
+   * they pass untouched. Any other request with no guard is refused unsent.
    */
   private pooledFetch(
     client: PooledClient,
@@ -473,13 +552,14 @@ export class Pool {
     claim: (body: unknown) => RequestGuard | undefined,
   ): ThrottleFetch {
     return async (input, init) => {
-      // The client's own stream, and a notification — never refused, never cut
-      // by an operation; a cancellation is counted under its call at `send`.
-      if ((init?.method ?? 'GET').toUpperCase() === 'GET' || isNotification(init?.body)) {
+      // The client's own stream, a notification, an answer to the server —
+      // never refused, never cut by an operation; a cancellation is counted
+      // under its call at `send`.
+      if ((init?.method ?? 'GET').toUpperCase() === 'GET' || passesUnguarded(init?.body)) {
         return inner(input, init);
       }
       const guard = claim(init?.body) ?? client.phase;
-      if (guard === undefined) return inner(input, init);
+      if (guard === undefined) throw this.refused('request-unmatched');
       guard.check();
       const carriesSession = new Headers(init?.headers).has('mcp-session-id');
       const signal = eitherSignal(init?.signal ?? undefined, guard.signal);
@@ -532,7 +612,10 @@ export class Pool {
       this.defer(victim, 'evicted');
       throw this.full(reserved);
     }
-    this.startEnding(victim, 'evicted', reserved);
+    // A victim already waiting to end for a stronger reason ends for that one.
+    const waiting = victim.deferredEnd;
+    const reason = waiting !== undefined && waiting !== 'idle' ? waiting : 'evicted';
+    this.startEnding(victim, reason, reserved);
   }
 
   /** An ending slot and an operation slot, both, or which one is full. */
@@ -547,7 +630,7 @@ export class Pool {
    * (once); it is ended when its last lease ends or slots free.
    */
   endClient(client: PooledClient, reason: EndReason): void {
-    if (client.state !== 'open' || client.leases > 0 || client.port === undefined) {
+    if (client.state !== 'open' || client.busy || client.port === undefined) {
       this.defer(client, reason);
       return;
     }
@@ -576,13 +659,19 @@ export class Pool {
     });
   }
 
-  /** Move `client` into the ending set under `operation`, and end it through `terminate()`. */
+  /**
+   * Move `client` into the ending set under `operation`, and end it through
+   * `terminate()` — or, for a lost handle, through its local close alone.
+   */
   private startEnding(client: PooledClient, reason: EndReason, operation: Operation): void {
     client.deferredEnd = undefined;
     client.state = 'ending';
     this.clients.moveToEnding(client, previousOf(reason));
     client.phase = operation;
-    const ending = (client.port as NonNullable<PooledClient['port']>).end();
+    const ending =
+      client.lost === 'handle-lost'
+        ? closeLocally(client)
+        : (client.port as NonNullable<PooledClient['port']>).end();
     client.endingOutcome = ending.outcome;
     operation.track(ending.settled);
     void ending.outcome.then((outcome) => {
@@ -616,24 +705,19 @@ export class Pool {
   }
 
   /**
-   * A client whose handle this process lost: nothing can be sent, so it leaves
-   * the open set at once, its ending recorded unresolved. It is closed locally
-   * once its last lease ends.
+   * A client whose handle this process lost: nothing can be sent for it, so it
+   * leaves its key at once — the next use opens the key's next client — and is
+   * ended under the ending rule like any other: its ending is its LOCAL close,
+   * charged an ending slot and an operation slot until that close settles, its
+   * remote outcome recorded unresolved. Busy, or with no slots free, it waits —
+   * still counted in the open set, reported deferred.
    */
   lostHandle(client: PooledClient): void {
     if (client.lost !== undefined || client.state !== 'open') return;
     client.lost = 'handle-lost';
     client.closedToNew = true;
-    client.deferredEnd = undefined;
-    client.state = 'ended';
-    this.clients.drop(client, 'handle-lost');
-    this.noteEnded(client, 'handle-lost', {
-      remote: 'handle-lost',
-      resolved: false,
-      durationMs: 0,
-    });
-    if (client.leases === 0) void client.client?.close().catch(() => undefined);
-    this.retryDeferred();
+    this.clients.retire(client, 'handle-lost');
+    this.endClient(client, 'handle-lost');
   }
 
   /** A client whose session the server ended: no new lease; ended (through `terminate()`) when idle. */
@@ -667,14 +751,44 @@ export class Pool {
 
   /** Where `client`'s definitions are served from: its shared entry, or its own list. */
   servedListOf(client: PooledClient): ServedList {
-    if (client.plan.shared) {
-      return {
-        list: this.shared.entryFor(client.plan.context, client.key.tenant).list,
-        shared: true,
-        context: client.plan.context,
-      };
+    const { context, shared } = client.definitions;
+    if (shared) {
+      return { list: this.shared.entryFor(context, client.key.tenant).list, shared: true, context };
     }
-    return { list: client.list, shared: false, context: client.plan.context };
+    return { list: client.list, shared: false, context };
+  }
+
+  /**
+   * The definitions context `client` serves under NOW: the app's `share` asked
+   * again over the client's own configuration. A changed answer moves the
+   * client to the new context and stops serving its own list, so every tool
+   * bound under the old one is refused before it is sent.
+   *
+   * @throws `binding-changed`, `share`'s error as its cause, when the answer
+   *   cannot be had — never the old context
+   */
+  refreshContext(client: PooledClient): PooledClient['definitions'] {
+    if (this.settings.share === undefined) return client.definitions;
+    let now: PooledClient['definitions'];
+    try {
+      now = contextFor(this.settings, client.key, client.plan.configHash);
+    } catch (cause) {
+      throw this.refused('binding-changed', cause);
+    }
+    if (now.context !== client.definitions.context) {
+      client.definitions = now;
+      client.list.invalidate();
+    }
+    return now;
+  }
+
+  /** Does `context` still name the definitions context `client` serves under? False when it cannot be had. */
+  contextHolds(client: PooledClient, context: string): boolean {
+    try {
+      return this.refreshContext(client).context === context;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -763,7 +877,8 @@ export class Pool {
   /** The server said a client's tool list changed: that client's list and its shared entry. */
   private toolsChangedOn(client: PooledClient): void {
     client.list.invalidate();
-    if (client.plan.shared) this.shared.peek(client.plan.context)?.list.invalidate();
+    const { context, shared } = client.definitions;
+    if (shared) this.shared.peek(context)?.list.invalidate();
   }
 
   /** The app's permission signal: every list in the scope. */
@@ -969,15 +1084,60 @@ function poolClosed(): Error {
   return Object.assign(new Error('The MCP client pool was closed.'), { name: 'AbortError' });
 }
 
-/** A JSON-RPC notification: a method and no id. Never refused, never counted here. */
-function isNotification(body: RequestInit['body'] | undefined): boolean {
+/**
+ * A body the pool's fetch passes with no guard: a JSON-RPC notification (a
+ * method, no id) or an answer to the server's own request (an id, a result or
+ * an error, no method). Never refused, never counted here. Anything else — a
+ * request, a batch, a body that is not JSON-RPC — needs a guard.
+ */
+function passesUnguarded(body: RequestInit['body'] | undefined): boolean {
   if (typeof body !== 'string') return false;
+  let message: unknown;
   try {
-    const message = JSON.parse(body) as { readonly method?: unknown; readonly id?: unknown };
-    return typeof message?.method === 'string' && message.id === undefined;
+    message = JSON.parse(body);
   } catch {
     return false;
   }
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) return false;
+  const fields = message as {
+    readonly method?: unknown;
+    readonly id?: unknown;
+    readonly result?: unknown;
+    readonly error?: unknown;
+  };
+  if (typeof fields.method === 'string') return fields.id === undefined;
+  return fields.method === undefined && ('result' in fields || 'error' in fields);
+}
+
+/** A `tools/call` request: a pooled one always brings its own call's guard. */
+function isToolCall(message: unknown): boolean {
+  return (
+    message !== null &&
+    typeof message === 'object' &&
+    (message as { readonly method?: unknown }).method === 'tools/call'
+  );
+}
+
+/**
+ * A lost handle's ending: nothing can be sent for it, so the remote outcome is
+ * known at once — `handle-lost`, unresolved — and the work is the local close
+ * alone, which the ending stays charged for until it settles.
+ */
+function closeLocally(client: PooledClient): Ending {
+  const target = client.client;
+  const settled =
+    target === undefined
+      ? Promise.resolve()
+      : Promise.resolve()
+          .then(() => target.close())
+          .then(
+            () => undefined,
+            () => undefined,
+          );
+  return {
+    outcome: Promise.resolve({ remote: 'handle-lost', resolved: false, durationMs: 0 }),
+    settled,
+  };
 }
 
 /**

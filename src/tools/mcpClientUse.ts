@@ -159,6 +159,7 @@ const REFUSAL: Words<NonNullable<ToolsMcpClientPayload['refusal']>> = {
   'identity-mismatch': true,
   'stale-tools': true,
   'binding-changed': true,
+  'request-unmatched': true,
   'lease-expired': true,
   'operations-full': true,
   closed: true,

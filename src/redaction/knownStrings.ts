@@ -636,6 +636,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'registry+provider+injections': true,
   remote: true,
   request: true,
+  'request-unmatched': true,
   'require-instruction': true,
   result: true,
   'result-period': true,

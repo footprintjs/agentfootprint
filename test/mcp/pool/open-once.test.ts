@@ -7,10 +7,17 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { McpPoolRefusedError, PoolFullError } from '../../../src/tool-providers/index.js';
+import type { OpenedClient } from '../../../src/mcp/pool/plan.js';
+import {
+  mcpClientPool,
+  McpPoolRefusedError,
+  PoolFullError,
+} from '../../../src/tool-providers/index.js';
 import { takeListUses } from '../../../src/tools/mcpClientUse.js';
+import type { ToolDispatchContext } from '../../../src/tools/toolProvider.js';
 import { fakeEndpoint } from './fakeEndpoint.js';
 import { callCtx, flush, id, poolOver } from './harness.js';
+import { NO_NETWORK, stubClient } from './stubClient.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -216,5 +223,162 @@ describe('the admitted joiner — the accounting unit at small budgets', () => {
     expect(refused).toMatchObject({ limit: 'operations', max: 1, operations: 1 });
     slow.release();
     (await first).release();
+  });
+});
+
+describe('the open → lease handoff: a just-opened client is held for the callers that waited for it', () => {
+  it('a second key admitted in the next microtask finds no idle client to end: it is refused at once, and the first lease serves from the client it holds', async () => {
+    const ended: string[] = [];
+    let complete!: (opened: OpenedClient) => void;
+    const firstOpen = new Promise<OpenedClient>((resolve) => (complete = resolve));
+    let opened = 0;
+    const pool = mcpClientPool({
+      name: 'handoff',
+      transport: NO_NETWORK,
+      maxClients: 1,
+      maxOperations: 4,
+      _open: () => (++opened === 1 ? firstOpen : Promise.resolve(stubClient('second', { ended }))),
+    });
+    const alice = id('alice', 'a');
+    const first = pool.acquire(alice);
+    complete(stubClient('first', { ended }));
+    // The open has settled; its caller has not resumed yet.
+    await Promise.resolve();
+    const second = pool.acquire(id('bob', 'b')).then(
+      (lease) => ({ lease }),
+      (error: unknown) => ({ error }),
+    );
+    const lease = await first;
+    expect(await second).toMatchObject({ error: { name: 'PoolFullError', limit: 'pool' } });
+    expect(ended).toEqual([]);
+    // The lease serves from the client it holds: no second open, nothing refused.
+    const [status] = await lease.tools();
+    await expect(status!.execute({}, callCtx(alice))).resolves.toBe('status@first');
+    expect(opened).toBe(1);
+    lease.release();
+    await pool.close();
+    await pool.settled();
+    expect(ended).toEqual(['first']);
+  });
+
+  it('a joiner is held for too: an arrival between the open settling and the joiner resuming cannot end the client the joiner waited for', async () => {
+    const ended: string[] = [];
+    let complete!: (opened: OpenedClient) => void;
+    const firstOpen = new Promise<OpenedClient>((resolve) => (complete = resolve));
+    let opened = 0;
+    const pool = mcpClientPool({
+      name: 'handoff',
+      transport: NO_NETWORK,
+      maxClients: 1,
+      maxOperations: 4,
+      _open: () => (++opened === 1 ? firstOpen : Promise.resolve(stubClient('second', { ended }))),
+    });
+    const alice = id('alice', 'a');
+    const opener = new AbortController();
+    // The opener gives up; the joiner waits on.
+    const creator = pool.acquire(alice, { signal: opener.signal }).catch((error: unknown) => error);
+    const joiner = pool.acquire(alice);
+    opener.abort(new Error('the opener gave up'));
+    await flush(1);
+    complete(stubClient('first', { ended }));
+    await Promise.resolve();
+    const bob = await pool.acquire(id('bob', 'b')).catch((error: unknown) => error);
+    expect(bob).toMatchObject({ name: 'PoolFullError', limit: 'pool' });
+    const lease = await joiner;
+    expect(await creator).toBeInstanceOf(Error);
+    expect(ended).toEqual([]);
+    const [status] = await lease.tools();
+    await expect(status!.execute({}, callCtx(alice))).resolves.toBe('status@first');
+    lease.release();
+    await pool.close();
+  });
+});
+
+describe('the client is checked again after every wait', () => {
+  it('a client named by terminate while it opens is never leased: the waiting listing opens the key’s next client and lists there', async () => {
+    const ended: string[] = [];
+    const listedOn: string[] = [];
+    const named = (name: string) =>
+      stubClient(name, {
+        ended,
+        tools: () => {
+          listedOn.push(name);
+          return ['status'];
+        },
+      });
+    let complete!: (opened: OpenedClient) => void;
+    const firstOpen = new Promise<OpenedClient>((resolve) => (complete = resolve));
+    let opened = 0;
+    const pool = mcpClientPool({
+      name: 'renamed',
+      transport: NO_NETWORK,
+      _open: () => (++opened === 1 ? firstOpen : Promise.resolve(named('second'))),
+    });
+    const alice = id('alice', 'a');
+    const listing = pool
+      .toolProvider()
+      .list({ iteration: 1, callerIdentity: alice } as ToolDispatchContext);
+    await flush(1);
+    const terminating = pool.terminate({ principal: 'alice', conversationId: 'a' });
+    complete(named('first'));
+    const [status] = await listing;
+    // The listing never ran on the client the terminate named.
+    expect(listedOn).toEqual(['second']);
+    await expect(status!.execute({}, callCtx(alice))).resolves.toBe('status@second');
+    expect(opened).toBe(2);
+    await terminating;
+    expect(ended).toEqual(['first']);
+    await pool.close();
+  });
+});
+
+describe('a caller that has already gone is never served', () => {
+  const gone = (): AbortSignal => {
+    const caller = new AbortController();
+    caller.abort(new Error('the caller gave up'));
+    return caller.signal;
+  };
+
+  it('a pre-aborted acquire on a WARM client is refused: no lease, nothing held', async () => {
+    const pool = mcpClientPool({
+      name: 'warm',
+      transport: NO_NETWORK,
+      _open: async () => stubClient('warm'),
+    });
+    const alice = id('alice', 'a');
+    (await pool.acquire(alice)).release();
+    await expect(pool.acquire(alice, { signal: gone() })).rejects.toThrow('the caller gave up');
+    await pool.settled();
+    expect(pool.stats()).toMatchObject({ open: 1, busy: 0, operations: 0 });
+    await pool.close();
+  });
+
+  it('a pre-aborted listing on a WARM client with a current list is refused: nothing listed, nothing bound', async () => {
+    let listings = 0;
+    const pool = mcpClientPool({
+      name: 'warm',
+      transport: NO_NETWORK,
+      _open: async () =>
+        stubClient('warm', {
+          tools: () => {
+            listings += 1;
+            return ['status'];
+          },
+        }),
+    });
+    const alice = id('alice', 'a');
+    const ctx = (signal?: AbortSignal): ToolDispatchContext =>
+      ({
+        iteration: 1,
+        callerIdentity: alice,
+        ...(signal !== undefined && { signal }),
+      } as ToolDispatchContext);
+    await pool.toolProvider().list(ctx());
+    expect(listings).toBe(1);
+    await expect(pool.toolProvider().list(ctx(gone()))).rejects.toThrow('the caller gave up');
+    expect(listings).toBe(1);
+    await pool.settled();
+    expect(pool.stats()).toMatchObject({ busy: 0, operations: 0 });
+    await pool.close();
   });
 });
