@@ -96,7 +96,7 @@ describe('saysWhatNotWhenRule — no temporal/conditional cue', () => {
 describe('enumInProseRule — literal values listed in prose', () => {
   const rule = enumInProseRule();
 
-  it('FIXTURE the Neo metric case: pipe-separated literals → warn + enum suggestion', () => {
+  it('FIXTURE the host-app metric case: pipe-separated literals → warn + enum suggestion', () => {
     const findings = rule.check(
       {
         name: 'influx_get_port_ranking',
@@ -136,7 +136,7 @@ describe('enumInProseRule — literal values listed in prose', () => {
     expect(flagged[0].suggestion).toContain('"red"');
   });
 
-  it('does NOT flag free-form examples ("e.g. 1h, 24h" — the Neo window param)', () => {
+  it('does NOT flag free-form examples ("e.g. 1h, 24h" — the host-app window param)', () => {
     const findings = rule.check(
       {
         name: 'influx_get_interface_counters',
@@ -181,7 +181,7 @@ describe('enumInProseRule — literal values listed in prose', () => {
 describe('optionalParamRule — omission has meaning but nothing says so', () => {
   const rule = optionalParamRule();
 
-  it('FIXTURE the Neo sweep case: optional param with NO description → warn', () => {
+  it('FIXTURE the host-app sweep case: optional param with NO description → warn', () => {
     const findings = rule.check(
       {
         name: 'influx_get_interface_counters',

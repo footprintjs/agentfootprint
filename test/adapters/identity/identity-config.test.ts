@@ -64,11 +64,11 @@ describe('identityConfigFromEnv — unit', () => {
         PATH: '/usr/bin',
         IDENTITY_STRATEGY: 'oidc-token',
         IDENTITY_ISSUER: ' https://fs.corp.example/adfs ',
-        IDENTITY_AUDIENCE: 'urn:neo:api',
-        IDENTITY_USER_ID_CLAIM: 'urn:neo:objectguid',
+        IDENTITY_AUDIENCE: 'urn:bot:api',
+        IDENTITY_USER_ID_CLAIM: 'urn:bot:objectguid',
         IDENTITY_REQUIRED_SCOPE: 'user_impersonation',
         IDENTITY_SCOPE_CLAIM: 'scp',
-        IDENTITY_ALLOWED_CLIENTS: 'neo-web, lab-cli  other',
+        IDENTITY_ALLOWED_CLIENTS: 'bot-web, lab-cli  other',
         IDENTITY_ROLES_CLAIM: '["realm_access","roles"]',
         IDENTITY_JWKS_URL: '',
         IDENTITY_CLOCK_TOLERANCE_SECONDS: '30',
@@ -76,11 +76,11 @@ describe('identityConfigFromEnv — unit', () => {
     ).toEqual({
       strategy: 'oidc-token',
       issuer: 'https://fs.corp.example/adfs',
-      audience: 'urn:neo:api',
-      userIdClaim: 'urn:neo:objectguid',
+      audience: 'urn:bot:api',
+      userIdClaim: 'urn:bot:objectguid',
       requiredScope: 'user_impersonation',
       scopeClaim: 'scp',
-      allowedClients: ['neo-web', 'lab-cli', 'other'],
+      allowedClients: ['bot-web', 'lab-cli', 'other'],
       rolesClaim: ['realm_access', 'roles'],
       clockToleranceSeconds: 30,
     });
@@ -107,8 +107,8 @@ describe('identityConfigFromEnv — unit', () => {
       /the proxy sign-out link, which is not in this release/,
     ],
     [{ IDENTITY_DIAGNOSE: '1' }, 'IDENTITY_DIAGNOSE', /the first-token report/],
-    [{ IDENTITY_REQUIRED_ROLE: 'neo-users' }, 'IDENTITY_REQUIRED_ROLE', /the role gate/],
-    [{ IDENTITY_ALLOWED_CLIENTS: 'any, neo-web' }, 'IDENTITY_ALLOWED_CLIENTS', /'any' beside/],
+    [{ IDENTITY_REQUIRED_ROLE: 'bot-users' }, 'IDENTITY_REQUIRED_ROLE', /the role gate/],
+    [{ IDENTITY_ALLOWED_CLIENTS: 'any, bot-web' }, 'IDENTITY_ALLOWED_CLIENTS', /'any' beside/],
     [{ IDENTITY_ROLES_CLAIM: '[realm_access.roles' }, 'IDENTITY_ROLES_CLAIM', /JSON array/],
     [
       { IDENTITY_CLOCK_TOLERANCE_SECONDS: 'soon' },
@@ -177,7 +177,7 @@ describe('identityFromConfig — boot refusals', () => {
     const idp = await fakeIdp();
     const boot = { production: false, fetch: idp.fetch, backend: idp.backend };
     const half = await refusal(() =>
-      identityFromConfig(oidcConfig(idp, { publicUrl: 'https://neo.corp.example' }), boot),
+      identityFromConfig(oidcConfig(idp, { publicUrl: 'https://bot.corp.example' }), boot),
     );
     expect(half.key).toBe('IDENTITY_CLIENT_ID');
     expect(half.message).toMatch(/browser sign-in is half set/);
@@ -403,7 +403,7 @@ describe('identityFromConfig — security', () => {
     expect(banner).not.toContain('Priya Shah');
     expect(banner).toMatch(/user id claim oid/);
     expect(banner).toMatch(/required scope 'access_as_user' in 'scp'/);
-    expect(banner).toMatch(/allowed clients: neo-web/);
+    expect(banner).toMatch(/allowed clients: bot-web/);
   });
 
   it("allowedClients 'any' is REFUSED in production (review B-1), and stated loudly in development", async () => {
@@ -429,7 +429,7 @@ describe('identityFromConfig — security', () => {
       backend: idp.backend,
     });
     expect(choice.banner.join('\n')).toMatch(
-      /neo-web \(each must have service accounts \/ client credentials turned off\)/,
+      /bot-web \(each must have service accounts \/ client credentials turned off\)/,
     );
   });
 });

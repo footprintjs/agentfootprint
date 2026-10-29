@@ -279,8 +279,8 @@ describeJose('jwksIdentity — integration over the real jose', () => {
   });
 
   it('a roles STRING is ONE role by default; absent roles stay absent', async () => {
-    // "Not neo-users" is a group name, not the two roles `Not` and `neo-users`
-    // — a space-splitting reader let it satisfy a gate for `neo-users`.
+    // "Not bot-users" is a group name, not the two roles `Not` and `bot-users`
+    // — a space-splitting reader let it satisfy a gate for `bot-users`.
     const ring = await keyring();
     const verifier = jwksIdentity({
       jwksUrl: 'https://idp.example.test/keys',
@@ -288,8 +288,8 @@ describeJose('jwksIdentity — integration over the real jose', () => {
       audience: AUDIENCE,
       backend: localBackend(ring.keys),
     });
-    const one = await verifier.verify(await ring.sign({ roles: 'Not neo-users' }));
-    expect(one.roles).toEqual(['Not neo-users']);
+    const one = await verifier.verify(await ring.sign({ roles: 'Not bot-users' }));
+    expect(one.roles).toEqual(['Not bot-users']);
     const without = await verifier.verify(await ring.sign({}));
     expect(without.roles).toBeUndefined();
   });

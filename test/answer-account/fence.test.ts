@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { accountForAnswer } from '../../src/answer-account/account.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
-import { fixtureA, fixtureB, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from './helpers.js';
+import { fixtureA, fixtureB, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS } from './helpers.js';
 
 const SRC = resolve(__dirname, '../../src');
 const FOLDER = join(SRC, 'answer-account');
@@ -155,9 +155,9 @@ describe('RUNTIME TRAP — no network, no timer', () => {
       vi.spyOn(globalThis, 'queueMicrotask'),
     ];
     const cases = [
-      [fixtureA(), NEO_DECLARATIONS],
+      [fixtureA(), HOST_APP_DECLARATIONS],
       [fixtureA(), undefined],
-      [fixtureB(), NEO_DECLARATIONS],
+      [fixtureB(), HOST_APP_DECLARATIONS],
     ] as const;
     for (const [recording, declarations] of cases) {
       const account = accountForAnswer(recording, declarations, { runId: FLAGSHIP_RUN_ID });
@@ -172,12 +172,14 @@ describe('RUNTIME TRAP — no network, no timer', () => {
   it('pure: no clock is read — the same inputs give the same bytes a second later', () => {
     const now = vi.spyOn(Date, 'now');
     const one = JSON.stringify(
-      accountForAnswer(fixtureA(), NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID }),
+      accountForAnswer(fixtureA(), HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID }),
     );
     expect(now).not.toHaveBeenCalled();
     vi.setSystemTime(new Date('2031-01-01T00:00:00Z'));
     expect(
-      JSON.stringify(accountForAnswer(fixtureA(), NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID })),
+      JSON.stringify(
+        accountForAnswer(fixtureA(), HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID }),
+      ),
     ).toBe(one);
     vi.useRealTimers();
   });

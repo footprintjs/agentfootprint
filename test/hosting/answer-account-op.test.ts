@@ -69,7 +69,7 @@ import {
   deniedLeaves,
   fixtureA,
   FLAGSHIP_RUN_ID,
-  NEO_DECLARATIONS,
+  HOST_APP_DECLARATIONS,
 } from '../answer-account/helpers.js';
 
 const { served, closeAll } = harness();
@@ -354,15 +354,15 @@ describe('answer-account — the record', () => {
   it('the owner gets { account, shown }, equal to accountForAnswer over the same recording', async () => {
     const store = inMemoryArtifacts();
     const { host } = await served(storeAgent(store), {
-      extra: { answerAccounts: { declarations: NEO_DECLARATIONS } },
+      extra: { answerAccounts: { declarations: HOST_APP_DECLARATIONS } },
     });
     const ref = await putFlagship(store, 's-flag');
     const body = bodyOf(await explain(host, 's-flag', ref));
 
     const recording = fixtureA() as unknown as Recording;
-    const expected = accountForAnswer(recording, NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+    const expected = accountForAnswer(recording, HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
     expect(JSON.parse(JSON.stringify(body.account))).toEqual(JSON.parse(JSON.stringify(expected)));
-    expect(body.shown).toEqual(showLeaves(expected, recording, NEO_DECLARATIONS));
+    expect(body.shown).toEqual(showLeaves(expected, recording, HOST_APP_DECLARATIONS));
     expect(body.account.summary.tone).toBe('warn');
   });
 
@@ -630,7 +630,7 @@ describe('answerAccounts — the cache key and the bounds (unit)', () => {
 
   it('the key moves with the scope, the ref, the template-set version and the declarations digest', () => {
     const plain = answerAccounts({});
-    const declared = answerAccounts({ declarations: NEO_DECLARATIONS });
+    const declared = answerAccounts({ declarations: HOST_APP_DECLARATIONS });
     const base = plain.keyFor(scope, ref);
     expect(base).toContain(`@${ANSWER_ACCOUNT_TEMPLATE_SET_VERSION}`);
     expect(plain.keyFor(scope, ref)).toBe(base);
@@ -645,7 +645,7 @@ describe('answerAccounts — the cache key and the bounds (unit)', () => {
         tools: { powerstore_get_volumes: { rowsAt: 'volumes' } },
         skills: { 'array-inventory': { label: 'array estate report' } },
         version: '1',
-        id: 'neo-seo',
+        id: 'host-app',
       },
     });
     expect(reordered.keyFor(scope, ref)).toBe(declared.keyFor(scope, ref));
@@ -805,7 +805,7 @@ describe('answer-account — the response is allow-listed and bounded', () => {
   it('the flagship response carries no denied leaf and stays within its caps', async () => {
     const store = inMemoryArtifacts();
     const { host } = await served(storeAgent(store), {
-      extra: { answerAccounts: { declarations: NEO_DECLARATIONS } },
+      extra: { answerAccounts: { declarations: HOST_APP_DECLARATIONS } },
     });
     const ref = await putFlagship(store, 's-flag');
     const body = bodyOf(await explain(host, 's-flag', ref));
@@ -813,7 +813,7 @@ describe('answer-account — the response is allow-listed and bounded', () => {
     expect(JSON.stringify(body.account).length).toBeLessThanOrEqual(128 * 1024);
     expect(JSON.stringify(body.shown).length).toBeLessThanOrEqual(64 * 1024);
     expect(text.length).toBeLessThanOrEqual(192 * 1024);
-    const denied = deniedLeaves(fixtureA() as unknown as Recording, NEO_DECLARATIONS);
+    const denied = deniedLeaves(fixtureA() as unknown as Recording, HOST_APP_DECLARATIONS);
     expect(denied.length).toBeGreaterThan(0);
     for (const leaf of denied) {
       expect(text.includes(JSON.stringify(leaf).slice(1, -1)), leaf.slice(0, 80)).toBe(false);
@@ -825,7 +825,7 @@ describe('answer-account — the response is allow-listed and bounded', () => {
   it('every pointer a row prints is found in `shown` under answerAccountPointerKey — the key the lens uses', async () => {
     const store = inMemoryArtifacts();
     const { host } = await served(storeAgent(store), {
-      extra: { answerAccounts: { declarations: NEO_DECLARATIONS } },
+      extra: { answerAccounts: { declarations: HOST_APP_DECLARATIONS } },
     });
     const ref = await putFlagship(store, 's-flag');
     const body = bodyOf(await explain(host, 's-flag', ref));

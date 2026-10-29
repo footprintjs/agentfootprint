@@ -61,8 +61,8 @@ export const meta: ExampleMeta = {
 };
 
 const ISSUER = 'https://login.example.test/tenant-1/v2.0';
-const API = 'api://neo';
-const WEB_CLIENT = 'neo-web';
+const API = 'api://bot';
+const WEB_CLIENT = 'bot-web';
 
 /** A fake OpenID provider: one RSA key, its discovery document, a token minter. */
 async function fakeIdentityProvider(): Promise<{

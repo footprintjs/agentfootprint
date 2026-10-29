@@ -1,7 +1,7 @@
 # Saved data references and bounded paging
 
 **Status: approved in principle, 2026-10-19. Phase 1 is approved for implementation.**
-This note proposes library contracts and implements nothing. It does not change Neo,
+This note proposes library contracts and implements nothing. It does not change the host app,
 dependencies, releases, deployed storage policy or public exports. Only sections 1–2
 are approved for a separate implementation PR now. The later sections record direction
 and policy decisions; each later phase needs a short focused design, a real need and
@@ -19,7 +19,7 @@ store and scope until session end, capped at 24 hours and 1 MiB. Accept deferral
 generic read lease: today's adapters cannot make its proposed guarantee. Coordinate
 exact read provenance with Foottrace after footPrint #113 before adding an export mapping.
 
-This is a library for different applications and storage backends. Neo's proof viewer
+This is a library for different applications and storage backends. The host app's proof viewer
 is one field example of domain admission composed with the shared viewer.
 
 ## Source baseline and existing owners
@@ -185,7 +185,7 @@ foreign refs, redaction and action/output bounds. Test the three ceiling precede
 and that the detail response cannot itself be placed into an endless ticket chain:
 reader output must fit both its fixed bound and the host's downstream inline budget,
 or return a short fixed refusal without another detail action.
-The neo #18-style regression is a **required phase 1 test**: pass an instruction-like
+The host app's #18-style regression is a **required phase 1 test**: pass an instruction-like
 source label through the actual provider-port request boundary and prove it remains
 tool data, without becoming or changing system instructions. A source-only assertion
 or a future test plan does not satisfy this gate.
@@ -266,7 +266,7 @@ cannot widen kinds/size or replace the admitted payload. Verify host routes and 
 tools resolve the same scope without a second identity composer.
 
 This helper proves neither current-run origin nor producer identity, parent integrity,
-domain correctness, source freshness or permission to assert a conclusion. Neo retains
+domain correctness, source freshness or permission to assert a conclusion. The host app retains
 its proof → finding → query checks on every page. Existing apps opt in and keep their
 callbacks; there is no default admission change or compatibility alias.
 
@@ -580,7 +580,7 @@ or encoding metadata before admission. Cloud ETags/version tokens are adapter fa
 not portable content digests. A partial range cannot claim verification from a
 full-object hash. Domains requiring verified evidence keep using verifying `get` within its bounds
 until a separately reviewed authenticated chunk manifest exists. No weaker path is
-selected silently for Neo's proofs.
+selected silently for the host app's proofs.
 
 | Adapter         | Initial range position                                                                                                                                                                    |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -661,7 +661,7 @@ saved artifacts remain untouched and honestly report unsupported range access.
 
 ### Problem and options
 
-Hosts such as Neo verify a proof chain again for every page. Options are caching an
+Hosts such as the host app verify a proof chain again for every page. Options are caching an
 earlier approval, holding a cross-adapter read lease, or using conditional reads only
 where a backend can bind one immutable generation. Neither a digest in `head` nor a
 JavaScript frozen object proves that a later store read is unchanged. All current
@@ -703,7 +703,7 @@ and cancel while a read is pending: these must refuse rather than serve cached-a
 data. A matching digest precondition never sets integrity to verified.
 No persistent or cross-run verification cache is introduced, so no migration is required.
 
-This deliberately does not speed up Neo's chain checks or promise data survival after
+This deliberately does not speed up the host app's chain checks or promise data survival after
 deletion. **Adopted owner decision: defer the generic lease.** Reopen it only for a named
 backend and a precise, provable generation and deletion/expiry contract in a separately
 reviewed design. A cross-adapter promise cannot be approved from synthetic behavior alone.
@@ -816,7 +816,7 @@ the next provider request yields no exact model-use receipt. Metadata-only, fail
 cancelled and unsent reads yield none. Test repeated pages and multiple code/screen readers without accidental
 merges, cross-conversation export redaction, selector/page digest mismatch, absent source
 digest, packed recordings and parallel step IDs. Reuse the standard PROV conformance
-and per-step translation tests instead of adding a Neo-specific exporter.
+and per-step translation tests instead of adding an app-specific exporter.
 
 This is an evidence-of-use link, not physical cause, source authenticity, claim approval
 or proof that a person understood a screen. Adding receipt/event fields is additive only

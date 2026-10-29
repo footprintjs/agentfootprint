@@ -156,12 +156,12 @@ describe('cacheStrategyFor — scenario', () => {
 
   it("an application's renaming wrapper that forwards the field keeps it; one that drops it says so", () => {
     const forwards: LLMProvider = {
-      name: `seo-routing/${inner.name}`,
+      name: `host-app-routing/${inner.name}`,
       ...(inner.promptCaching !== undefined && { promptCaching: inner.promptCaching }),
       complete: (req, hooks) => inner.complete(req, hooks),
     };
     expect(cacheStrategyFor(forwards).name).toBe('breakpoints');
-    const drops: LLMProvider = { name: 'seo-routing/anthropic', complete: forwards.complete };
+    const drops: LLMProvider = { name: 'host-app-routing/anthropic', complete: forwards.complete };
     // Undeclared is the no-op — and the receipt records 'none', so the run says why.
     expect(cacheStrategyFor(drops).name).toBe('none');
   });
@@ -176,7 +176,7 @@ describe('cacheStrategyFor — property', () => {
     'ANTHROPIC',
     'anthropic+retry',
     'a|b',
-    'seo-routing/anthropic',
+    'host-app-routing/anthropic',
     '*',
   ];
   const DECLS: (PromptCaching | undefined)[] = [BREAKPOINTS, AUTOMATIC, undefined];

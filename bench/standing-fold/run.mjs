@@ -25,9 +25,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const load = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
 
-// ── the app's declarations for fixture A (test/answer-account/helpers.ts · NEO_DECLARATIONS) ──
-const NEO_DECLARATIONS = Object.freeze({
-  id: 'neo-seo',
+// ── the app's declarations for fixture A (test/answer-account/helpers.ts · HOST_APP_DECLARATIONS) ──
+const HOST_APP_DECLARATIONS = Object.freeze({
+  id: 'host-app',
   version: '1',
   skills: { 'array-inventory': { label: 'array estate report' } },
   tools: { powerstore_get_volumes: { rowsAt: 'volumes' } },
@@ -145,7 +145,7 @@ function collect() {
     tier: 'full',
     source: 'test/answer-account/fixtures/turn2.recorded.json',
     record: fixtureA,
-    declarations: NEO_DECLARATIONS,
+    declarations: HOST_APP_DECLARATIONS,
     missing: FOLD_KEYS.filter((k) => !(k in fixtureA.snapshot.sharedState)),
     rq3: { events: fixtureA.events, entity: 'SHPSTRPLPCL003', arm: 'DECLARED' },
   });

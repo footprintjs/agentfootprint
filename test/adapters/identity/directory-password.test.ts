@@ -105,7 +105,7 @@ describe('directory-password — unit', () => {
   });
 
   it('RFC 4515 escaping: * ( ) \\ NUL and non-ASCII; bytes escaped whole', () => {
-    expect(escapeFilterValue('CN=Neo Users (Prod),OU=G')).toBe('CN=Neo Users \\28Prod\\29,OU=G');
+    expect(escapeFilterValue('CN=Bot Users (Prod),OU=G')).toBe('CN=Bot Users \\28Prod\\29,OU=G');
     expect(escapeFilterValue('a*b\\c\u0000')).toBe('a\\2ab\\5cc\\00');
     expect(escapeFilterValue('é')).toBe('\\c3\\a9');
     expect(escapeFilterValue(Buffer.from([0x01, 0x41]))).toBe('\\01A');
@@ -217,11 +217,11 @@ describe('directory-password — scenarios', () => {
   });
 
   it('the required group, nested; a group DN with parentheses is escaped', async () => {
-    const group = 'CN=Neo Users (Prod),OU=G,DC=corp,DC=example';
+    const group = 'CN=Bot Users (Prod),OU=G,DC=corp,DC=example';
     const { directory, passwords } = checker({ requiredGroup: group });
     directory.groups['CN=SAN-Ops,OU=G,DC=corp,DC=example'] = [group];
     expect(await passwords.check('alice', 'Quartz-River-41!')).toBeDefined();
-    expect(directory.lastFilter).toContain('Neo Users \\28Prod\\29');
+    expect(directory.lastFilter).toContain('Bot Users \\28Prod\\29');
     expect(await passwords.check('bob', 'Maple-Stone-52!')).toBeUndefined();
   });
 
@@ -314,7 +314,7 @@ describe('directory-password — ROI', () => {
     writeFileSync(join(dir, 'ca.pem'), TEST_CA_PEM);
     const env = {
       IDENTITY_STRATEGY: 'directory-password',
-      IDENTITY_PUBLIC_URL: 'https://neo.corp.example',
+      IDENTITY_PUBLIC_URL: 'https://bot.corp.example',
       IDENTITY_LDAP_URL: 'ldaps://dc1.corp.example:636',
       IDENTITY_LDAP_CA_FILE: join(dir, 'ca.pem'),
       IDENTITY_LDAP_DOMAIN: 'corp.example',
@@ -325,7 +325,7 @@ describe('directory-password — ROI', () => {
     };
     const choice = await identityFromConfig(identityConfigFromEnv(env), {
       production: true,
-      crossSite: { allowedHosts: ['neo.corp.example'] },
+      crossSite: { allowedHosts: ['bot.corp.example'] },
     });
     expect(choice.strategy).toBe('directory-password');
     expect(choice.mode).toBe('password');
@@ -340,7 +340,7 @@ describe('directory-password — ROI', () => {
     await expect(
       identityFromConfig(identityConfigFromEnv({ ...env, IDENTITY_LDAP_URL: 'ldap://dc1:389' }), {
         production: true,
-        crossSite: { allowedHosts: ['neo.corp.example'] },
+        crossSite: { allowedHosts: ['bot.corp.example'] },
       }),
     ).rejects.toMatchObject({ key: 'IDENTITY_LDAP_URL' });
     const { IDENTITY_LDAP_LOCKOUT_THRESHOLD: _t, ...noThreshold } = env;

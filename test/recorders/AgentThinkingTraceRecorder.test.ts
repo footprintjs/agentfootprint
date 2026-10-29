@@ -55,7 +55,7 @@ describe('agentThinkingTrace — functional (real agent run)', () => {
       },
     });
 
-    const att = agentThinkingTrace({ agent: 'Neo', model: 'mock', asker: 'oncall' });
+    const att = agentThinkingTrace({ agent: 'Bot', model: 'mock', asker: 'oncall' });
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 5 })
       .system('')
       .skill(triage)
@@ -67,7 +67,7 @@ describe('agentThinkingTrace — functional (real agent run)', () => {
     const trace = att.getTrace({ task: 'is it healthy?' });
 
     // Header
-    expect(trace.agent).toBe('Neo');
+    expect(trace.agent).toBe('Bot');
     expect(trace.model).toBe('mock');
     expect(trace.asker).toBe('oncall');
     expect(trace.task).toBe('is it healthy?');
@@ -156,7 +156,7 @@ describe('agentThinkingTrace — commentary engine fills every beat', () => {
   }
 
   it('return beats carry engine prose (never blank) with the agent as the actor', async () => {
-    const att = agentThinkingTrace({ agent: 'Neo', model: 'mock' });
+    const att = agentThinkingTrace({ agent: 'Bot', model: 'mock' });
     await buildLookupAgent(att).run({ message: 'q' });
     const trace = att.getTrace({ task: 'q' });
 
@@ -164,15 +164,15 @@ describe('agentThinkingTrace — commentary engine fills every beat', () => {
       (s) => s.kind === 'return' && (s as { toolName?: string }).toolName === 'lookup',
     ) as { brain?: string } | undefined;
     expect(dataReturn, 'lookup return beat exists').toBeTruthy();
-    // Default 'stream.tool_end' template, with appName ('Neo') as the actor.
+    // Default 'stream.tool_end' template, with appName ('Bot') as the actor.
     expect(dataReturn!.brain).toContain('returned its result');
-    expect(dataReturn!.brain).toContain('Neo');
+    expect(dataReturn!.brain).toContain('Bot');
     expect(dataReturn!.brain!.length).toBeGreaterThan(0);
   });
 
   it('commentaryTemplates override changes the prose (one engine, consumer voice)', async () => {
     const att = agentThinkingTrace({
-      agent: 'Neo',
+      agent: 'Bot',
       commentaryTemplates: { 'stream.tool_end': 'TOOL DONE ✓' },
     });
     await buildLookupAgent(att).run({ message: 'q' });
@@ -185,7 +185,7 @@ describe('agentThinkingTrace — commentary engine fills every beat', () => {
   });
 
   it("the LLM's own reasoning still wins on the first ask of an iteration", async () => {
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     await buildLookupAgent(att).run({ message: 'q' });
     const trace = att.getTrace({ task: 'q' });
     const ask = trace.steps.find(
@@ -215,7 +215,7 @@ describe('agentThinkingTrace — extended thinking on the beat', () => {
     } as unknown as Ev);
 
   it("attaches the iteration's reasoning to its first ask", () => {
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     att.onEmit(
       ev('agentfootprint.stream.llm_end', {
         content: 'I will look it up.',
@@ -254,7 +254,7 @@ describe('agentThinkingTrace — extended thinking on the beat', () => {
   });
 
   it('back-fills reasoning onto a terminal answer (thinking_end fires after llm_end)', () => {
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     att.onEmit(
       ev('agentfootprint.stream.llm_end', {
         content: 'Done.',
@@ -279,7 +279,7 @@ describe('agentThinkingTrace — extended thinking on the beat', () => {
   });
 
   it('leaves `thinking` undefined when no reasoning blocks are emitted', () => {
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     att.onEmit(
       ev('agentfootprint.stream.llm_end', {
         content: 'go',
@@ -310,7 +310,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
       .tree(decideSkill((c) => /probe/.test(c.userMessage), probe, fallback, 'probe intent?'))
       .build();
     const provider: LLMProvider = mock({ reply: 'All good.' });
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
       .system('')
       .skillGraph(graph)
@@ -330,7 +330,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
 
   it('no skillGraph routing → no lead-in (brain is just the LLM content)', async () => {
     const provider: LLMProvider = mock({ reply: 'Plain answer.' });
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     const agent = Agent.create({ provider, model: 'mock' }).system('').watch(att).build();
     await agent.run({ message: 'hi' });
     const answer = att.getTrace({ task: 'hi' }).steps.find((s) => s.kind === 'answer') as
@@ -364,7 +364,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
           : { content: 'done', toolCalls: [], stopReason: 'stop' };
       },
     });
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')
       .skillGraph(graph)
@@ -393,7 +393,7 @@ describe('agentThinkingTrace — skill-graph routing leads the iteration', () =>
       })
       .classify(keywordScorer())
       .build();
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     const agent = Agent.create({
       provider: mock({ reply: 'All good.' }),
       model: 'mock',
@@ -431,7 +431,7 @@ describe('agentThinkingTrace — tools the model saw', () => {
       execute: async () => ({ ok: true }),
     });
     const provider: LLMProvider = mock({ reply: 'all good' });
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 3 })
       .system('')
       .tool(peek)
@@ -468,7 +468,7 @@ describe('agentThinkingTrace — tools the model saw', () => {
           : { content: 'done', toolCalls: [], stopReason: 'stop' };
       },
     });
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     const agent = Agent.create({ provider, model: 'mock', maxIterations: 4 })
       .system('')
       .tool(peek)
@@ -486,7 +486,7 @@ describe('agentThinkingTrace — tools the model saw', () => {
 
   it('no tools → no toolsSeen on the beat', async () => {
     const provider: LLMProvider = mock({ reply: 'hi' });
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     const agent = Agent.create({ provider, model: 'mock' }).system('').watch(att).build();
     await agent.run({ message: 'q' });
     const answer = att.getTrace({ task: 'q' }).steps.find((s) => s.kind === 'answer') as
@@ -517,7 +517,7 @@ describe('agentThinkingTrace — routing verdicts lead the beat', () => {
   const policy = { nearTieMargin: 0.1, menuSize: 3 };
 
   it('a turn_routed verdict leads the answer beat brain', () => {
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     att.onEmit(ev('agentfootprint.skill.turn_routed', { by: 'entry', to: 'billing', policy }));
     att.onEmit(
       ev('agentfootprint.stream.llm_end', {
@@ -531,7 +531,7 @@ describe('agentThinkingTrace — routing verdicts lead the beat', () => {
   });
 
   it('a route_conflict line queues BEHIND a pending verdict — neither overwrites the other', () => {
-    const att = agentThinkingTrace({ agent: 'Neo' });
+    const att = agentThinkingTrace({ agent: 'Bot' });
     att.onEmit(
       ev('agentfootprint.skill.turn_routed', {
         by: 'intent',
