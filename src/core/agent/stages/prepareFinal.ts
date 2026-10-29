@@ -76,6 +76,7 @@ const captureTurnPayload = (
   answerCoverage?: AnswerCoverage,
   answerAssessment?: AnswerAssessmentData,
   releaseTokens = false,
+  standingLineNames?: Readonly<Record<string, string>>,
 ): void => {
   const iteration = scope.iteration;
   scope.finalContent = answer;
@@ -151,6 +152,8 @@ const captureTurnPayload = (
     // The answer layer's standing (honesty layer 4) — only on an agent that
     // armed it; every other turn emits the exact payload it always did.
     ...(answerAssessment !== undefined && { answerAssessment }),
+    // The app's words the standing line named calls in — only when it named one.
+    ...(standingLineNames !== undefined && { standingLineNames }),
     // A refused answer rides for the record, flagged so no consumer shows it.
     ...(refused && { refused: { by: 'evidence-rails' as const } }),
   });
@@ -260,11 +263,23 @@ export const prepareFinalWithLimitsAsDataStage = (scope: TypedScope<AgentState>)
  * to a check for values the MODEL could not support would be asking whether
  * the library grounded itself.
  */
-const prepareFinalWithLimits = (scope: TypedScope<AgentState>, releaseTokens = false): void => {
+const prepareFinalWithLimits = (
+  scope: TypedScope<AgentState>,
+  releaseTokens = false,
+  displayNameOf?: DisplayNameOf,
+): void => {
   const declared = scope.coverageDeclared;
   const answer =
     declared !== undefined && declared.length > 0
-      ? composeAnswerWithCoverage(scope.llmLatestContent, declared)
+      ? composeAnswerWithCoverage(
+          scope.llmLatestContent,
+          declared,
+          '',
+          '',
+          undefined,
+          undefined,
+          displayNameOf,
+        )
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
 };
@@ -315,6 +330,7 @@ async function timeLinesOf(scope: TypedScope<AgentState>): Promise<TimeLimitLine
 const prepareFinalWithLimitsInZone = async (
   scope: TypedScope<AgentState>,
   releaseTokens = false,
+  displayNameOf?: DisplayNameOf,
 ): Promise<void> => {
   const declared = scope.coverageDeclared ?? [];
   const time = await timeLinesOf(scope);
@@ -327,6 +343,7 @@ const prepareFinalWithLimitsInZone = async (
           '',
           await presentationOf(scope),
           time,
+          displayNameOf,
         )
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
@@ -363,6 +380,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
   readsRewrites: boolean,
   inZone = false,
   releaseTokens = false,
+  displayNameOf?: DisplayNameOf,
 ): FinalStage {
   return async (scope) => {
     const { assumedBlockOf } = await import('../arguments/serve.js');
@@ -386,6 +404,7 @@ export function prepareFinalWithLimitsAndAssumedStage(
             '',
             inZone ? await presentationOf(scope) : undefined,
             time,
+            displayNameOf,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
@@ -408,7 +427,18 @@ export interface FinalStageArms {
   readonly timeLayer?: true;
   /** The evidence gate's `'rails'` posture — a refused answer is recorded flagged and ends the branch. */
   readonly evidenceRails?: true;
+  /**
+   * A tool's `displayName`, read through the agent's own tools — present only
+   * on an agent where a tool can declare one. The prose limits block then names
+   * an item's declaring calls in the app's words (`coverage/answer.ts` ·
+   * `composeAnswerWithCoverage`). Absent → the stage each combination of arms
+   * has always mounted, same reference, same bytes.
+   */
+  readonly displayNameOf?: DisplayNameOf;
 }
+
+/** A tool's registered name → the app's words for a call of it, when its tool declares them. */
+export type DisplayNameOf = (toolName: string) => string | undefined;
 
 /**
  * THE ONE CHOICE of PrepareFinal's body, for both chart builders (the twins
@@ -458,12 +488,21 @@ function withRailsRefusal(stage: FinalStage): FinalStage {
 /** Pick the existing composer; output admission wraps it without recomposing the answer. */
 function finalStageFor(arms: FinalStageArms): FinalStage {
   const releaseTokens = arms.releaseOutputTokens === true;
-  // A stage's second argument belongs to the engine. Bind delivery here,
-  // never add a policy parameter to the function the executor invokes.
+  const displayNameOf = arms.displayNameOf;
+  // A stage's second argument belongs to the engine. Bind delivery (and the
+  // app's words for a call) here, never add a policy parameter to the function
+  // the executor invokes.
   const select = (
     original: FinalStage,
-    body: (scope: TypedScope<AgentState>, releaseTokens: boolean) => void | Promise<void>,
-  ): FinalStage => (releaseTokens ? (scope) => body(scope, true) : original);
+    body: (
+      scope: TypedScope<AgentState>,
+      releaseTokens: boolean,
+      displayNameOf?: DisplayNameOf,
+    ) => void | Promise<void>,
+  ): FinalStage =>
+    releaseTokens || displayNameOf !== undefined
+      ? (scope) => body(scope, releaseTokens, displayNameOf)
+      : original;
   if (arms.answerLayer !== undefined) {
     return prepareFinalWithAnswerLayerStage(
       {
@@ -475,6 +514,7 @@ function finalStageFor(arms: FinalStageArms): FinalStage {
         }),
         standingLine: arms.answerLayer.standingLine === true,
         ...(arms.timeLayer === true && { inZone: true }),
+        ...(displayNameOf !== undefined && { displayNameOf }),
       },
       releaseTokens,
     );
@@ -483,18 +523,23 @@ function finalStageFor(arms: FinalStageArms): FinalStage {
   return arms.hasAnswerValidation === true
     ? prepareFinalWithValidationStage
     : arms.coverageLimitsAsData === true
-    ? select(prepareFinalWithLimitsAsDataStage, prepareFinalWithLimitsAsData)
+    ? releaseTokens
+      ? (scope) => prepareFinalWithLimitsAsData(scope, true)
+      : prepareFinalWithLimitsAsDataStage
     : arms.attachCoverageLimits === true
     ? arms.inputsLayer !== undefined
       ? prepareFinalWithLimitsAndAssumedStage(
           arms.inputsLayer.rewrites === true,
           inZone,
           releaseTokens,
+          displayNameOf,
         )
       : inZone
       ? select(prepareFinalWithLimitsInZoneStage, prepareFinalWithLimitsInZone)
       : select(prepareFinalWithLimitsStage, prepareFinalWithLimits)
-    : select(prepareFinalStage, prepareFinal);
+    : releaseTokens
+    ? (scope) => prepareFinal(scope, true)
+    : prepareFinalStage;
 }
 
 /** The answer layer's standing as detached plain data — the fields the projection declares, nothing else. */
@@ -534,6 +579,8 @@ export function prepareFinalWithAnswerLayerStage(
     readonly standingLine: boolean;
     /** The time layer is armed — `Period:` lines render in the clock's zone. */
     readonly inZone?: true;
+    /** A tool's `displayName` — the limits block names an item's calls in the app's words. */
+    readonly displayNameOf?: DisplayNameOf;
   },
   releaseTokens = false,
 ): FinalStage {
@@ -558,6 +605,8 @@ export function prepareFinalWithAnswerLayerStage(
       return;
     }
     const line = o.standingLine ? scope.answerStandingLine ?? '' : '';
+    // The app's words the line named calls in, kept on `turn_end` — only when it named one.
+    const names = o.standingLine ? scope.answerStandingNames : undefined;
     const declared = o.limits ? scope.coverageDeclared ?? [] : [];
     let assumed = '';
     if (o.limits && o.assumed !== undefined && !o.standingLine) {
@@ -583,8 +632,17 @@ export function prepareFinalWithAnswerLayerStage(
               ? await presentationOf(scope)
               : undefined,
             time,
+            o.displayNameOf,
           )
         : scope.llmLatestContent;
-    captureTurnPayload(scope, answer, false, undefined, assessed, releaseTokens);
+    captureTurnPayload(
+      scope,
+      answer,
+      false,
+      undefined,
+      assessed,
+      releaseTokens,
+      names === undefined ? undefined : { ...names },
+    );
   };
 }

@@ -132,6 +132,7 @@ describe('UNIT — the value, by precedence', () => {
     expect(a.reasons[0]).toEqual({
       reason: 'asked',
       witness: [{ kind: 'state', key: 'pausedToolCallId', path: '' }],
+      source: { kind: 'run' },
     });
   });
 });

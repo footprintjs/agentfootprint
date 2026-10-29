@@ -2294,6 +2294,15 @@ export interface AgentState {
    */
   answerStandingLine?: string;
   /**
+   * The app's words the line used — registered tool name → its
+   * `displayName`, for the tools the line's reasons rest on that declare one.
+   * Written by the same stage only when there is one, and put on
+   * `turn_end.standingLineNames` by PrepareFinal, so a reader of the record
+   * rebuilds the very line. Final-branch working state, like
+   * `answerStandingLine`.
+   */
+  answerStandingNames?: Readonly<Record<string, string>>;
+  /**
    * What the inputs layer (honesty layer 2) hands ToolCalls for the batch it
    * resolved — per call, the declared defaults to FILL, or the sentence the
    * call reads instead of running. Written by the `sf-inputs` mount's output
