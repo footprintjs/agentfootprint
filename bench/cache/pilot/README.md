@@ -144,7 +144,7 @@ private file):
 node --env-file=<approved env file> bench/cache/pilot/run.mjs \
   --consumer /path/to/reviewed-pilot-consumer \
   --out /path/to/new-private-summary.json \
-  --approve-manifest 8dac9b8c4135f5bbc27c9dab2a2257b8b1b38b198f24b7b38508ffa9dc30a681 \
+  --approve-manifest f15ca3dc5591cf8e662df4073a376d9275196c57289fc06cd15a719140e1fdfa \
   --execute
 ```
 

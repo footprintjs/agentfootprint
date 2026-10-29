@@ -70,8 +70,8 @@
     "bench/cache/pilot/live.mjs": "a6eef524295fa867c79167f9e4c73339c09b24e64e941f6457dbba2d9a7c9e6f",
     "bench/cache/pilot/run.mjs": "1c1e32ce08a71854eb2ebd12313d3df8c193f2bf8c0697d9ed5c80561a27b267",
     "bench/cache/verify-fixture.mjs": "85de6d1da3147a5dedd061e7c2db50ae9cd36dddf6ae72d5dba67f6e7631d7da",
-    "dist/lib/boundedJson.js": "13fb65eb7c5029481c7521b58273c59988a74dfa816cad5b4108fd4bdde9e61f",
-    "src/lib/boundedJson.ts": "08e5411b199a8387d67ff4b5fb264d6eb7c55d17295925a40db66258ee6117a3"
+    "dist/lib/boundedJson.js": "c8d8691525dc6c0a49c5150a5c9b37b7278f231177ad6c35311cbe6ba090c94c",
+    "src/lib/boundedJson.ts": "831938c9e19f11a3e22093b1caa6019ed9c103a124cc917f9ca5e178080e83b6"
   },
   "payloadSha256": "1610973aedc36324535126c359f4fb07f5a660c86bca8556b46eae62ff2fb3a3"
 }
