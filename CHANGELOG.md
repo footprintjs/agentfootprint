@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.5.0] - 2026-10-29
+
+### Added
+
+- **You decide which MCP tool calls are sent again, and the run records what each attempt is known to have done.** `mcpClient({ replay })` takes your declaration for that server's tools: which failure kinds each tool may be sent again on (`on: ['throttle', 'network']`), which tools make changes (`changes: true`), and whether the server deduplicates by an idempotency key the call carries (`deduplicates: { argument }`). The permission comes only from you. The model, a tool's description and a server's annotations (`readOnlyHint`) never grant it. It is read once, when the client is built, and a field it does not know is refused there, so a misspelled `changes` cannot quietly turn the side-effect guard off.
+
+  A generic 429 does not prove the server ran nothing: RFC 6585 §4 defines it as rate limiting, and `Retry-After` says when to ask again, not that asking is safe. Under the new opt-in `policy: 'app-authorized'`, a 429 or a request that failed without an answer is sent again only for a tool your entry names. With no declaration, the 429 is not sent again, and the record says why (`reason: 'not-permitted'`). The adapter you chose still retries its own refusal, AgentCore Runtime's session-busy reply, within the budget. That retry is the adapter's policy, and each repeat records what it assumes: `permission: { by: 'adapter', assumes: 'refused-before-execution' }`. It is never recorded as proof that nothing ran. The busy body is matched by its code and words, and a server behind the runtime can send the same error after it ran the call. AWS's pages describe a retryable conflict, not a guarantee that nothing ran.
+
+  **The default does not change in 11.x.** It is now named `policy: 'compatibility'`. A 429 is still sent again for every tool, on the assumption that the server refused it before running it. Every such retry records that assumption: `permission: { by: 'compatibility', assumes: 'refused-before-execution' }`, beside `effect: 'unknown'`. The assumption is never recorded as evidence that nothing ran. In the next major, `'app-authorized'` becomes the default. To keep today's behaviour then, write `replay: { policy: 'compatibility' }`. To move now, list each tool you want sent again on a 429 (`on: ['throttle']`), mark the tools that make changes, and declare `deduplicates` only for a server that honours the key.
+
+  **The side-effect guard is wired.** A tool you declare as making changes is never sent again automatically, under either policy, unless the server is declared to deduplicate by a key the call carries (`reason: 'changes-without-key'` otherwise). A key protects only when the server uses it. Before, the MCP retry used footprintjs's attempt runner without this guard, and only `retryOnThrottle: false` stopped a 429 retry of a tool with side effects.
+
+  **Every attempt in the saved run now carries three separate facts and its duration.** On each `agentfootprint.tools.request_attempts` row: the `failure` category, as before; `effect`, what is known about whether the attempt took effect (`unknown` for every attempt sent that did not complete: a 429, a session-busy reply, a lost connection, a timeout, a cut, a 5xx, a JSON-RPC error or a tool error; `applied` when the call completed, which is never proof that anything was written; `none` only for a request that was never sent); `permission`, what allowed the next attempt (`by: 'declaration' | 'adapter' | 'compatibility'`, with what an adapter or the compatibility policy assumes); and `durationMs`. The `end` says how many requests were sent (`attempts`) and what is known of the whole series (`effect`). Uncertainty survives: once any attempt's effect is `unknown`, so is the series'. A later refusal does not resolve it, and a later success does not prove the operation happened only once.
+
+  **Under `'app-authorized'`, a call that may have run says so, and a received error stays as it came.** This follows footprintjs's own law.
+
+  - A received refusal or error keeps the server's error as it came: a 429, a 503, a JSON-RPC or tool error, or a chain in which every attempt received one. Its effect stays `unknown`, and the record says why it was not sent again.
+  - A call that genuinely lacked an answer and then fails, fails as "may have run": footprintjs's `UnknownEffectError`, with the final error (a later refusal's, or the timeout) as its `cause`. The `end` says `mayHaveRun: true`. The call lacked an answer if an attempt got no response at all, or if the request was accepted over HTTP and its JSON-RPC answer never came, such as a 202 or a stream with no result before the SDK's timeout. A row's `outcome: 'answered'` is what HTTP showed, not the MCP call's answer. The library watches the connection for the answer to each request's id.
+  - A call that completes returns normally.
+  - A cancellation keeps the caller's reason. Once a request was sent, the record says its effect is `unknown`.
+
+  Under `'compatibility'`, the caller sees the error it always did, and the record still says the effect is unknown.
+
+  **`'app-authorized'` never silently weakens.** It needs each request matched to its call and each answer seen. When a connection cannot give both, the call is refused before it is sent, with the new `McpReplayUnavailableError` (`sent: false`) and a typed `reason` (`McpReplayUnavailableReason`):
+  - `'answers-unobserved'`: the `initialize` answer never reached the library's observer. An MCP SDK whose `connect` replaces the transport's `onmessage` handler instead of keeping it, as SDK 1.10 does, causes this.
+  - `'request-unmatched'`: the request reached the transport without its call's marker. An SDK that rebuilds the params and drops `_meta` causes this.
+  - `'requests-unwatched'`: the library cannot watch the transport's requests, as with `stdio`.
+
+  `'compatibility'` needs neither fact and behaves as before.
+
+  **A request is matched to its call by a private marker.** The call puts it in its request's `_meta`, and the transport takes it out before sending, so the server receives the request it always did. An MCP SDK that copies the params is now matched too, so its attempts are recorded in the run; before, a copy lost them. An SDK that drops `_meta` is still named once in dev mode. A watch on a request's answer now ends by the request's id, when the answer arrives, when the SDK cancels the request, when the call settles or when the client closes. A long-lived client no longer keeps one entry per call that timed out unanswered.
+
+  **`retryOnThrottle: false` turns off the 429 rule and nothing else.** A tool you declared repeatable on `network`, and the `'app-authorized'` policy, keep their retry series, with the default budget, and their record. A 429 is then an answer and is never sent again.
+
+  A request's record is now filed when its call settles, so an answered attempt's `effect` can say whether the call completed. A cancellation is still filed the moment it lands. A repeat re-sends the same request: the same arguments, server and session, as the same identity. A credential the library vends is still vended afresh for each attempt, for that same identity.
+
+  `ThrottleRetryInfo.kind` (`onRetry`) can now be `'network'`, for a repeat you declared after a request failed without an answer. The series' first rule reports it. `replay` is refused beside `connection`, whose transport this library did not build. On `stdio` it is ignored under `'compatibility'`, and under `'app-authorized'` each call is refused (`'requests-unwatched'`). In dev mode, an entry for a tool the server does not list is named once per client.
+
 ## [11.4.0] - 2026-10-29
 
 ### Added
