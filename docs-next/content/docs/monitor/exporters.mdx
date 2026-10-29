@@ -232,7 +232,9 @@ const check = verifyAuditBundle(bundle); // offline: no agent needed
   and every sentence or value a person, the model or a tool wrote become `[N chars]`,
   while each event keeps its shape (lists, names, ids, counts, codes). Each record's
   `meta` still names the run and, when the caller set them, the session, principal
-  and tenant, and `decide()` evidence rides as the engine summarized it.
+  and tenant, and `decide()` evidence rides as the engine summarized it. Bounding is
+  closed by default: a field an event's type does not declare, and every field of
+  an event you `emit()` yourself, becomes a marker too.
   `payloadMode: 'verbatim'` records everything, for access-controlled stores.
 - **Long runs.** `audit.drain()` returns the records since the last drain; pass the
   segments together (`verifyAuditBundle([seg1, seg2])`) and they verify end to end.

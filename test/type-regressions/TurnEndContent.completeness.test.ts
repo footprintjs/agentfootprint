@@ -23,8 +23,8 @@
  * leaf exactly as it was.
  *
  * The exporters that pass `turn_end` on: the audit chain in its default
- * `payloadMode: 'bounded'` (`adapters/observability/audit.ts` ·
- * `BOUND_FIELDS`), OpenTelemetry with and without `captureContent`, X-Ray, the
+ * `payloadMode: 'bounded'` (`adapters/observability/auditShapes.ts` ·
+ * `eventShapes`), OpenTelemetry with and without `captureContent`, X-Ray, the
  * AG-UI serializer and the bug-report transcript. The audit chain's
  * `payloadMode: 'verbatim'`, the file sink and the CloudWatch and AgentCore
  * sinks ship every payload whole by contract (each says so in its header) and

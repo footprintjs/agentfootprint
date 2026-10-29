@@ -11,7 +11,9 @@ type: changed
 - the model's own words, a router's own reason, a permission check's rationale and the text it told the model;
 - the opt-in assembled system prompt, a retrieved passage's heading, an integrity finding's witnessed values and message, and an artifact's label and refusal detail.
 
-Each is now the same marker the other bounded fields use: `'[N chars]'`, `'[type: …]'`, or `'[keys: …]'` for a free-form record. Every event keeps its structure: lists and their lengths, ids, tool, skill and argument names, kinds, codes, verdicts and counts. A field a shape does not name, or a value that is not the declared shape, is a marker too.
+Each is now the same marker the other bounded fields use: `'[N chars]'`, `'[type: …]'`, or `'[keys: …]'` for a free-form record. Every event keeps its structure: lists and their lengths, ids, tool, skill and argument names, kinds, codes, verdicts and counts.
+
+**Bounding is now closed by default, so the next content field cannot leak the same way.** The old rule listed the content fields someone remembered and let every other field through. Now every registered event type has a shape that names every field of its payload; a new event or field does not compile until it is classified. What a shape does not name is a marker: a field the payload's type does not declare, a value that is not the declared shape, and every field of an event type the registry does not declare. For every declared field the bounded output is unchanged, except the content listed above; a checked-in snapshot pins the fate of every field of every event.
 
 The module documentation now says exactly what a bounded record still carries, by contract:
 
@@ -22,4 +24,4 @@ The module documentation now says exactly what a bounded record still carries, b
 
 `payloadMode: 'verbatim'` is unchanged, and so is every other exporter.
 
-Migration: a consumer that read any of these sentences or values out of a bounded bundle now finds a marker in its place. Read them from a `payloadMode: 'verbatim'` bundle kept in an access-controlled store, or in process from the agent's accessors (`agent.answerCoverage()`, `agent.answerNegatives()`) and events. Bundles written before the change still verify; only new records differ.
+Migration: a consumer that read any of these sentences or values out of a bounded bundle now finds a marker in its place. So does one that sends its own events through `agent.emit()` with a name the registry does not declare: in a bounded bundle every field of such an event is now a marker (keys kept), where before its values rode through as written. Read them from a `payloadMode: 'verbatim'` bundle kept in an access-controlled store, or in process from the agent's accessors (`agent.answerCoverage()`, `agent.answerNegatives()`) and events. Bundles written before the change still verify; only new records differ.

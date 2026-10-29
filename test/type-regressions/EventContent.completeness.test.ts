@@ -9,14 +9,17 @@
  * compile here (`npm run test:types`) until someone decides whether it
  * carries content and where the audit bounds it —
  *
- *   - `'shape'`     — content beside structure, bounded at each content leaf by
- *                     a whole-event shape (`auditBounding.ts` · `eventShapes`);
- *   - `'fields'`    — a content field replaced whole (`audit.ts` · `BOUND_FIELDS`
- *                     and its error-message rule; `turn_end` has its own pin,
- *                     `TurnEndContent.completeness`);
+ *   - `'shape'`     — content beside structure, bounded at each content leaf;
+ *   - `'fields'`    — a content field replaced whole (the fields `audit.ts` ·
+ *                     `BOUND_FIELDS` declares, and error messages; `turn_end`
+ *                     has its own pin, `TurnEndContent.completeness`);
  *   - `'structure'` — ids, names, kinds, codes, counts, verdicts, the library's
  *                     own sentences and the words the app declared up front; no
  *                     field the run composed from what it read or produced.
+ *
+ * Every event, whatever its kind, has a shape (`auditShapes.ts` ·
+ * `eventShapes`): bounding is closed by default, and the kinds say where the
+ * content is, not whether the event is bounded.
  *
  * For each `'shape'` event, `CANARY_PAYLOAD` builds a payload with EVERY field
  * filled at every depth (`DeepRequired`: a field added to the payload type is a
@@ -31,7 +34,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { auditExport } from '../../src/adapters/observability/audit';
-import { eventShapes } from '../../src/adapters/observability/auditBounding';
+import { eventShapes } from '../../src/adapters/observability/auditShapes';
 import {
   otelObservability,
   type OtelAttributeValue,
@@ -982,13 +985,8 @@ const EXPORTERS: readonly Exporter[] = [
 ];
 
 describe('every event is classified, and its content reaches an exporter only where declared', () => {
-  it('the shapes the audit chain bounds are exactly the events classified as shape', () => {
-    expect(Object.keys(eventShapes(() => false)).sort()).toEqual(
-      Object.entries(EVENT_CONTENT)
-        .filter(([, kind]) => kind === 'shape')
-        .map(([type]) => type)
-        .sort(),
-    );
+  it('the audit chain has a shape for every registered event: bounding is closed by default', () => {
+    expect(Object.keys(eventShapes(() => false)).sort()).toEqual(Object.keys(EVENT_CONTENT).sort());
   });
 
   it.each(SHAPE_EVENTS.map((type) => [type] as const))(

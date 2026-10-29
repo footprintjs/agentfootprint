@@ -67,11 +67,17 @@
  *
  * ## PII discipline (mirrors #19's otelObservability)
  *
- * Payloads enter records through a bounding layer (`auditBounding.ts`).
- * In the default `payloadMode: 'bounded'` a record payload keeps the run's
- * STRUCTURE and never its CONTENT — every string or value the run composed
- * from what it read or produced, whoever wrote it — except what is named
- * below under "What a bounded record still carries":
+ * Payloads enter records through a bounding layer: every registered event
+ * has a shape that names every field of its payload (`auditShapes.ts`, total
+ * over the event registry and exhaustive by type, built from the combinators
+ * in `auditBounding.ts`). In the default `payloadMode: 'bounded'` a record
+ * payload keeps the run's STRUCTURE and never its CONTENT — every string or
+ * value the run composed from what it read or produced, whoever wrote it —
+ * except what is named below under "What a bounded record still carries".
+ * Bounding is CLOSED by default: a field a shape does not name, a value that
+ * is not the declared shape, and every field of an event type the registry
+ * does not declare (a consumer's own `emit`), is a marker. Some of what that
+ * bounds:
  *
  *   - tool args             → `'[keys: …]'` (top-level key NAMES only);
  *                             `tool_end`'s `changedArgKeys` is names already
@@ -98,8 +104,7 @@
  *     shape does not name is a marker too, so one added later is bounded
  *     until it is classified
  *   - every other event whose content sits beside structure keeps its
- *     shape, each content leaf a marker (`eventShapes`, exhaustive by type;
- *     a field a shape does not name is a marker): a tool's absence, coverage
+ *     shape, each content leaf a marker: a tool's absence, coverage
  *     and described-result words and data (`tools.absent`,
  *     `tools.coverage_declared`, `tools.semantics_declared`), the evidence
  *     gate's values, an external ground's value, the message text a routing
@@ -114,12 +119,15 @@
  *     fail-fast reason, a check's `rationale` and `tellLLM`, a fallback's or a
  *     credential failure's message, and a router's own reason
  *
- * Everything else is structure, embedded as the registry payload (sanitized:
- * strings capped at 256 chars, lists at 32 items, cycles broken): ids,
- * names, kinds, codes and telemetry tags, verdicts, counts, timestamps the
- * library takes, the library's own sentences built from those, and the
- * words the app declared up front (labels, descriptions, step notes, hints,
- * display names, rule ids).
+ * What the shapes keep is structure, sanitized (strings capped at 256 chars,
+ * lists at 32 items, cycles broken): ids, names, kinds, codes and telemetry
+ * tags, verdicts, counts, timestamps the library takes, the library's own
+ * sentences built from those, and the words the app declared up front
+ * (labels, descriptions, step notes, hints, display names, rule ids). `kept`
+ * never covers a container that can hold text: such a container is spelled
+ * out field by field, so every text leaf is classified by name
+ * (`test/type-regressions/AuditBoundingDepth.test.ts` walks every shape
+ * beside its type and pins every leaf's fate).
  *
  * What a bounded record still carries, by contract:
  *
@@ -136,8 +144,7 @@
  *     to a lifecycle event it emits itself (`skill.deactivated`,
  *     `tools.offered`, `permission.gate_closed`): the app's own words, as
  *     written — an app that writes a run's value into one carries it;
- *   - a `tryInsteadTool` name, only once this strategy has seen that tool run;
- *   - every field of an event type the registry does not declare, sanitized.
+ *   - a `tryInsteadTool` name, only once this strategy has seen that tool run.
  *
  * Sanitizing caps a string's length; it does not hide what the string says.
  *
@@ -199,15 +206,18 @@ import { lazyRequire } from '../../lib/lazyRequire.js';
 import { libraryVersion } from '../../lib/libraryVersion.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 import {
-  boundAnswerCoverage,
-  boundAnswerNegatives,
+  blocksMarker,
   charsMarker,
   createToolRunTracker,
-  eventShapes,
   keysMarker,
+  messagesMarker,
   sanitizeJson,
-  typeofOf,
+  summariesMarker,
+  typeMarker,
+  unknownEventShape,
+  type BoundRule,
 } from './auditBounding.js';
+import { boundAnswerCoverage, boundAnswerNegatives, eventShapes } from './auditShapes.js';
 
 // ─── Public types ─────────────────────────────────────────────────────
 
@@ -349,14 +359,14 @@ function sha256Hex(text: string): string {
 // ─── Bounding layer (payloadMode: 'bounded') ─────────────────────────
 
 /**
- * Content-bearing fields per event type → bounded replacement.
- * Only fields that can echo raw runtime values appear here; everything
- * else passes through `sanitizeJson` untouched (see module docs for
- * the per-domain verbatim/summarized table).
+ * The conversation fields the bounded mode replaces WHOLE, per event type — a
+ * DECLARATION. Bounding itself is every event's shape (`auditShapes.ts` ·
+ * `eventShapes`), which applies these same rule functions to these same fields
+ * (pinned by `test/type-regressions/AuditBoundingDepth.test.ts`); this table
+ * names them so the redaction vocabulary can be pinned against them
+ * (`boundedContentFieldNames`).
  */
-const BOUND_FIELDS: Readonly<
-  Record<string, Readonly<Record<string, (value: unknown) => unknown>>>
-> = {
+const BOUND_FIELDS: Readonly<Record<string, Readonly<Record<string, BoundRule>>>> = {
   'agentfootprint.agent.turn_start': { userPrompt: charsMarker },
   // A typed answer's limits and negatives hold tool-written sentences, assumed
   // values and the populations a search covered BESIDE the record's own words:
@@ -366,33 +376,24 @@ const BOUND_FIELDS: Readonly<
     answerCoverage: boundAnswerCoverage,
     answerNegatives: boundAnswerNegatives,
   },
-  'agentfootprint.agent.iteration_end': {
-    history: (v) => (Array.isArray(v) ? `[${v.length} messages]` : charsMarker(v)),
-  },
+  'agentfootprint.agent.iteration_end': { history: messagesMarker },
   'agentfootprint.agent.output_schema_validation_failed': { rawOutput: charsMarker },
   'agentfootprint.stream.llm_end': { content: charsMarker },
   'agentfootprint.stream.token': { content: charsMarker },
   'agentfootprint.stream.thinking_delta': { content: charsMarker },
-  'agentfootprint.stream.thinking_end': {
-    blocks: (v) => (Array.isArray(v) ? `[${v.length} blocks]` : charsMarker(v)),
-  },
+  'agentfootprint.stream.thinking_end': { blocks: blocksMarker },
   'agentfootprint.stream.tool_start': { args: keysMarker },
   // `modelResult` (what a rule let the model read, or the envelope without
   // its record-only `short` / `kind`) is the same content as `result`, from
   // the other side of a rule or that strip — bounded the same way.
   // `changedArgKeys` is names only and rides verbatim, like `args`' keys.
-  'agentfootprint.stream.tool_end': {
-    result: (v) => `[type: ${typeofOf(v)}]`,
-    modelResult: (v) => `[type: ${typeofOf(v)}]`,
-  },
+  'agentfootprint.stream.tool_end': { result: typeMarker, modelResult: typeMarker },
   // contentSummary is a raw-content PREVIEW (not a redacted summary) —
   // for short content it IS the content, so it is bounded like content.
   // `contentHash` stays verbatim: it links identical injections across
   // records without echoing a byte of them.
   'agentfootprint.context.injected': { rawContent: charsMarker, contentSummary: charsMarker },
-  'agentfootprint.context.slot_composed': {
-    droppedSummaries: (v) => (Array.isArray(v) ? `[${v.length} summaries]` : charsMarker(v)),
-  },
+  'agentfootprint.context.slot_composed': { droppedSummaries: summariesMarker },
   'agentfootprint.composition.merge_end': { resultSummary: charsMarker },
   'agentfootprint.memory.attached': { contentSummary: charsMarker },
   'agentfootprint.memory.written': { contentSummary: charsMarker },
@@ -418,31 +419,14 @@ export function boundedContentFieldNames(): readonly string[] {
   return [...new Set(Object.values(BOUND_FIELDS).flatMap((rules) => Object.keys(rules)))];
 }
 
-/** Error-MESSAGE field names — bounded in EVERY event (messages can
- *  echo runtime values; mirrors #19's "stage + scope only" rule). The
- *  classifier fields (`errorName`, `errorKind`) stay verbatim. */
-const ERROR_MESSAGE_FIELDS: ReadonlySet<string> = new Set(['error', 'errorMessage', 'lastError']);
-
-function boundPayload(eventType: string, payload: unknown): unknown {
-  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
-    return sanitizeJson(payload);
-  }
-  const fieldRules = BOUND_FIELDS[eventType];
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(payload)) {
-    const rule = fieldRules?.[key];
-    if (rule !== undefined) {
-      out[key] = rule(value);
-      continue;
-    }
-    if (ERROR_MESSAGE_FIELDS.has(key) && typeof value === 'string') {
-      out[key] = charsMarker(value);
-      continue;
-    }
-    const sanitized = sanitizeJson(value);
-    if (sanitized !== undefined) out[key] = sanitized;
-  }
-  return out;
+/**
+ * The rules `BOUND_FIELDS` declares, by event type and field — what the pin
+ * holds every event's shape to.
+ *
+ * @internal
+ */
+export function boundedFieldRules(): Readonly<Record<string, Readonly<Record<string, BoundRule>>>> {
+  return BOUND_FIELDS;
 }
 
 // ─── Strategy factory ────────────────────────────────────────────────
@@ -471,10 +455,11 @@ export function auditExport(opts: AuditExportOptions = {}): AuditExportStrategy 
   const toolRuns = createToolRunTracker();
   const shapes = eventShapes(toolRuns.ran);
 
-  /** An event's payload in bounded mode: its whole-event shape, else its fields' rules. */
+  /** An event's payload in bounded mode: its shape — closed by default, an
+   *  event type the registry does not declare included. */
   function boundEvent(eventType: string, payload: unknown): unknown {
-    const shape = shapes[eventType];
-    return shape !== undefined ? shape(payload) : boundPayload(eventType, payload);
+    const shape: BoundRule | undefined = (shapes as Readonly<Record<string, BoundRule>>)[eventType];
+    return (shape ?? unknownEventShape)(payload);
   }
 
   function append(

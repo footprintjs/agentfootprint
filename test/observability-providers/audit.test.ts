@@ -47,6 +47,15 @@ import {
   type AnswerNegatives,
 } from '../../src/index.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
+import {
+  charsMarker,
+  custom,
+  kept,
+  listOf,
+  nullOr,
+  orList,
+  recordOf,
+} from '../../src/adapters/observability/auditBounding.js';
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -1048,6 +1057,53 @@ describe('auditExport — security: content beside structure, event by event', (
       futureQuote: '[11 chars]',
     });
     expect(boundedOf('agentfootprint.map.parked', 'EDGE-NOT-AN-OBJECT')).toBe('[18 chars]');
+  });
+
+  it("EDGE: a gap's facet word stays; a declared filter keeps its name and its values", () => {
+    const gap = (bears: unknown) => ({
+      toolName: 't',
+      toolCallId: 'c',
+      iteration: 1,
+      composition: {
+        origin: 'local',
+        resultId: 'r',
+        complete: false,
+        facets: [],
+        gaps: [{ kind: 'period', what: 'the archive', bears }],
+      },
+    });
+    const gaps = (bears: unknown) =>
+      (
+        boundedOf('agentfootprint.tools.coverage_declared', gap(bears)) as {
+          composition: { gaps: { bears: unknown }[] };
+        }
+      ).composition.gaps[0]?.bears;
+    expect(gaps('period')).toBe('period');
+    expect(gaps({ filter: 'status', values: ['open', 3] })).toEqual({
+      filter: 'status',
+      values: ['open', 3],
+    });
+  });
+
+  it('the combinators bound by the rule they are given', () => {
+    // A value, or a list of them: each by the rule.
+    expect(orList(charsMarker)('EDGE')).toBe('[4 chars]');
+    expect(orList(charsMarker)(['EDGE', 'EDGES'])).toEqual(['[4 chars]', '[5 chars]']);
+    // An open map: keys kept, every value by the rule; anything else a marker.
+    expect(recordOf(charsMarker)({ a: 'EDGE', b: 'X' })).toEqual({
+      a: '[4 chars]',
+      b: '[1 chars]',
+    });
+    expect(recordOf(kept)('EDGE')).toBe('[4 chars]');
+    // A declared "none" stays; anything else by the rule.
+    expect(nullOr(charsMarker)(null)).toBeNull();
+    expect(nullOr(charsMarker)('EDGE')).toBe('[4 chars]');
+    // A list is capped like every list, its overflow counted.
+    const long = Array.from({ length: 34 }, (_, i) => `EDGE-${i}`);
+    expect(listOf(charsMarker)(long)).toHaveLength(33);
+    expect((listOf(charsMarker)(long) as unknown[])[32]).toBe('…+2 more');
+    // A custom rule is its rule.
+    expect(custom('why', charsMarker)('EDGE')).toBe('[4 chars]');
   });
 
   it("SECURITY: payloadMode 'verbatim' still carries every event whole (documented opt-in)", () => {

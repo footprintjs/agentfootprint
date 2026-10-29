@@ -189,7 +189,7 @@ agent.emit('agentfootprint.eval.score', {
 });
 ```
 
-## What the audit chain's bounded mode keeps (`audit.ts`, `auditBounding.ts`)
+## What the audit chain's bounded mode keeps (`audit.ts`, `auditShapes.ts`, `auditBounding.ts`)
 `auditExport()` chains every event. In its default `payloadMode: 'bounded'` a
 record follows the span exporter's rule: **structure is kept, content is a
 marker.** Content is every string or value the run composed from what it read
@@ -199,23 +199,34 @@ tags, verdicts, counts, timestamps the library takes, the library's own
 sentences built from those, and the words the app declared up front (labels,
 descriptions, step notes, hints, display names).
 
-- **A field that is all content is replaced whole**, per event type
-  (`audit.ts` · `BOUND_FIELDS`): a prompt or an answer becomes `'[N chars]'`,
-  tool arguments their key names, a result its type, and an error message its
-  length.
-- **An event whose content sits beside structure keeps its shape**, each
-  content leaf a marker (`auditBounding.ts` · `eventShapes`, and `turn_end`'s
-  `answerCoverage` and `answerNegatives`). Examples: a tool's absence and
-  coverage words keep their lists and lengths, tool names and call ids, and
-  each `what` / `why` / `short` is a marker; a routing witness keeps its
-  keyword, and the matched message text is a marker.
-- **Each shape fails closed.** A field it does not name, or a value that is
-  not the declared shape, is a marker. Its rules are exhaustive by type, so a
-  field added to a payload type does not compile until it is classified.
-  `test/type-regressions/EventContent.completeness.test.ts` classifies every
-  registered event (shape, field rules, or structure only) and runs a canary in
-  every content leaf through every exporter. Its sibling,
-  `TurnEndContent.completeness.test.ts`, does the same for `turn_end`.
+**Bounding is closed by default.** It used to be a list of the content fields
+someone remembered, and every other field rode through as written, so a new
+content field leaked until someone noticed. Now:
+
+- **Every registered event has a shape** (`auditShapes.ts` · `eventShapes`,
+  total over the event registry) that names every field of its payload,
+  `kept` or a marker. A new event type, or a new field on a payload, does
+  not compile until it is classified.
+- **What a shape does not name is a marker:** a field the payload type does
+  not declare, a value that is not the declared shape, and every field of an
+  event type the registry does not declare (a consumer's own `emit`).
+- **`kept` never covers a container that can hold text.** Such a container is
+  spelled out field by field (`shapeOf`, `listOf`, `recordOf`, `orList`), so
+  every text leaf is classified by name. A `custom` rule decides by value and
+  states its reason.
+- **`BOUND_FIELDS` (`audit.ts`) is a declaration:** the conversation fields
+  replaced whole, which the redaction vocabulary is pinned against. The shapes
+  apply the very rule functions it names.
+
+Three pins hold this:
+
+- `test/type-regressions/AuditBoundingDepth.test.ts` walks every shape beside
+  its payload type with the TypeScript checker, refuses a `kept` over text, and
+  pins the fate of every leaf of every event (`audit-bounding-fates.snapshot.json`;
+  a deliberate change updates it with `-u`).
+- `EventContent.completeness.test.ts` runs a canary in every content leaf
+  through every exporter.
+- `TurnEndContent.completeness.test.ts` does the same for `turn_end`.
 
 **What a bounded record still carries, by contract:**
 
@@ -254,8 +265,10 @@ const audit = auditExport(); // bounded
 ## Files
 - `otel.ts`, `xray.ts`, `cloudwatch.ts`, `agentcore.ts`, `file.ts` — exporters.
 - `audit.ts` — a tamper-evident bundle.
-- `auditBounding.ts` — what its bounded mode keeps of each event: the markers,
-  the sanitizer and the shapes.
+- `auditShapes.ts` — what its bounded mode keeps of each event: one shape per
+  registered event type.
+- `auditBounding.ts` — how it bounds: the markers, the sanitizer and the
+  combinators the shapes are built from.
 - `githubBugReporter.ts`, `githubDeviceSignIn.ts` — filing a report as the
   reporter, not as the library.
 - `deliveryErrors.ts` — where an exporter's own failures go.
