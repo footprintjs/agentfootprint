@@ -34,7 +34,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, absent, coverage, defineTool, type Tool } from '../../../../src/index.js';
+import {
+  Agent,
+  absent,
+  coverage,
+  defineTool,
+  type OutputSchemaParser,
+  type Tool,
+} from '../../../../src/index.js';
 import { mock } from '../../../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../../../src/observe.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
@@ -127,6 +134,38 @@ async function runOnce(agent: Agent, message = 'which runs used the attached dat
 
 const sourceOf = (a: AnswerAssessment, reason: string): Source | undefined =>
   a.reasons.find((r) => r.reason === reason)?.source;
+
+/** A typed answer for the negative-claims arm: a summary and the model's typed negatives. */
+const typedReply: OutputSchemaParser<{ summary: string; negatives: unknown[] }> = {
+  parse(raw) {
+    const value = raw as { summary?: unknown; negatives?: unknown };
+    if (typeof value?.summary !== 'string' || !Array.isArray(value.negatives)) {
+      throw new Error('summary and negatives are required');
+    }
+    return { summary: value.summary, negatives: value.negatives };
+  },
+};
+const TYPED_REPLY_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    negatives: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['none', 'not-found', 'complete'] },
+          about: { type: ['string', 'number'] },
+          restsOn: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['kind', 'restsOn'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['summary', 'negatives'],
+  additionalProperties: false,
+} as const;
 
 const LINE = '\n\n---\n\n';
 
@@ -563,6 +602,63 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
     expect(r.live.reasons.map((x) => x.reason)).toEqual(['value-unsupported']);
     expect(sourceOf(r.live, 'value-unsupported')).toEqual({ kind: 'answer' });
     expect(sourceOf(assessAnswer(r.recording), 'value-unsupported')).toEqual({ kind: 'answer' });
+  });
+
+  it('a refusal that asserted an absence → declaration-overclaimed rests on the call that refused (L-41)', async () => {
+    // Under `.negativeClaims()`, a refused call read nothing, so a refusal saying "does not
+    // exist" overclaims. The run files ONE check row for it, and the fold reads that row as
+    // committed: its code as `reason`, the tool it names as `tools`. Before the fix the
+    // projection onto the report dropped `tools`, so the source read `{ calls: [], unnamed: 1 }`
+    // — "a call the record cannot name" — on every real run, though the record names it.
+    const refusing = defineTool({
+      name: 'read_incidents',
+      description: 'Read open incidents for a service',
+      inputSchema: {
+        type: 'object',
+        properties: { service: { type: 'string' } },
+        required: ['service'],
+      },
+      effects: 'read',
+      search: {
+        source: { what: 'the incident store', said: ['the incident store'] },
+        subject: { what: 'incidents', said: ['incident', 'incidents'] },
+        arguments: [{ name: 'service', role: 'population' }],
+        complete: 'within-arguments',
+      },
+      execute: () => {
+        throw new Error('Service payments does not exist.');
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'c1', name: 'read_incidents', args: { service: 'payments' } }] },
+          { content: JSON.stringify({ summary: 'The read was refused.', negatives: [] }) },
+        ] as never,
+      }),
+      model: 'mock',
+    })
+      .tool(refusing)
+      .outputSchema(typedReply, { jsonSchema: TYPED_REPLY_SCHEMA })
+      .negativeClaims({ field: 'negatives', tools: ['read_incidents'] })
+      .build();
+    const r = await runOnce(agent, 'Any open incidents for payments?');
+    for (const a of [r.live, assessAnswer(r.recording)]) {
+      expect(a.standing).toBe('not-sure');
+      expect(sourceOf(a, 'declaration-overclaimed')).toEqual({
+        kind: 'calls',
+        calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }],
+      });
+    }
+    // The row as the run committed it — the documented `AnswerCheck` shape.
+    const row = agent.answerValidation()?.checks.find((c) => c.id.endsWith(':declaration:0'));
+    expect(row).toEqual({
+      id: 'agent:negative-claims:declaration:0',
+      path: '/',
+      disposition: 'not-applicable',
+      reason: 'declaration-overclaimed',
+      tools: ['read_incidents'],
+    });
   });
 });
 

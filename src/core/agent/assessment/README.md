@@ -173,6 +173,8 @@ grows as later honesty steps commit new rows.
 | `stopped-early` | 4 | `stoppedEarly` |
 | `steps-unfinished` | 4 | `findingsLedger`: a `steps-unfinished` witness row of this turn — the answer came before the active skill's declared steps finished (filed while the answer layer is armed) |
 | `negative-prose-unverified` | 4 | `findingsLedger`: a `negative-claim` or `negative-claim-note` row of this turn. Model prose is observe-only; detected negatives and skipped scans remain not-sure, never verified or blocking. |
+| `claim-exceeds-search` | 4 | `answerValidation.checks`: an `agent:negative-claims:` row with `disposition: 'checked-fail'` — a typed negative claimed more than the admitted search |
+| `declaration-overclaimed` | 3 | `answerValidation.checks`: an `agent:negative-claims:` row with `reason: 'declaration-overclaimed'` — a tool's refusal said more than it read (`.negativeClaims()`); the row's `tools` name the tool |
 | `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |
 | `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict — or a `failed` report that also counts `unreachable` checks or names a `reason` (a contradiction found beside them, or beside a validator that did not finish; both reasons fire) |
 
@@ -262,6 +264,27 @@ tell which part the doubt touched. The source is a projection of what is recorde
 which claim depends on which call is NOT on the record, so naming a source never
 says the rest of the answer is unaffected, and it never moves the standing. An
 empty list of calls never stands for "the run": that is a kind of its own.
+
+**Every field the fold reads is on the row the run commits — one name, one
+row.** A `.negativeClaims()` verdict reaches the record twice: whole on
+`answerNegatives.checks` (its `code`, its `tools`), and as a check row on the
+answer-check report, `answerValidation.checks` — the row the fold reads: for
+`declaration-overclaimed`, its `reason` and its `tools`. The ONE projection
+between them (`negativeClaims/delivery.ts` · `reportWithNegatives`) writes the
+code as `reason` and keeps `tools` under that name, so the fold reads one field
+for each fact, off one row. A field the projection dropped would read as "a
+call the record cannot name" on every real run, so the source is pinned on a
+real run, never only on a hand-built row (`reason-sources.test.ts`):
+
+```ts
+// .negativeClaims({ field: 'negatives', tools: ['read_incidents'] }) — read_incidents threw
+// "Service payments does not exist.": a refused call read nothing, so its refusal overclaims.
+agent.answerValidation()?.checks.find((c) => c.reason === 'declaration-overclaimed');
+// { id: 'agent:negative-claims:declaration:0', path: '/', disposition: 'not-applicable',
+//   reason: 'declaration-overclaimed', tools: ['read_incidents'] }
+(await agent.assessment())?.reasons.find((r) => r.reason === 'declaration-overclaimed')?.source;
+// { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }
+```
 
 **The app's words for a reason's calls.** A tool may declare `displayName`
 (`defineTool({ displayName })` — one plain line, at most 60 characters,

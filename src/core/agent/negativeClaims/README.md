@@ -15,6 +15,11 @@ absence family and supplies the recorded subject. It checks other reads using
 those recorded populations and composes the delivered field. A negative
 check never produces `checked-pass`. App answer checks keep their independent
 veto, and `state-searched` changes delivery without upgrading verification.
+`reportWithNegatives` is the ONE projection of a negative row onto the answer-check
+report (`answerValidation.checks`): its `code` becomes the check's `reason` and
+the tools it names stay `tools`. The answer's standing reads both off that row
+(`declaration-overclaimed` rests on the named tool's calls), so the projection
+never drops a field the fold reads.
 
 `recheck.ts` spends the shared one-correction budget. The correction is a
 request-only system frame, never conversation evidence; tools remain disabled.

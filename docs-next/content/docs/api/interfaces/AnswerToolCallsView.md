@@ -4,7 +4,7 @@ title: AnswerToolCallsView
 
 # Interface: AnswerToolCallsView
 
-Defined in: [src/answer-validation/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L68)
+Defined in: [src/answer-validation/types.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L78)
 
 The run's tool calls in landing order, frozen and detached from state: the
 MODEL's own calls, each closed by a `stream.tool_end` bracket. Calls a tool
@@ -19,7 +19,7 @@ leg inside its checkpoint, which the host must keep server-side (as
 
 > `readonly` **calls**: readonly [`AnswerToolCall`](/docs/api/interfaces/AnswerToolCall)[]
 
-Defined in: [src/answer-validation/types.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L69)
+Defined in: [src/answer-validation/types.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L79)
 
 ***
 
@@ -27,7 +27,7 @@ Defined in: [src/answer-validation/types.ts:69](https://github.com/footprintjs/a
 
 > `readonly` **complete**: `boolean`
 
-Defined in: [src/answer-validation/types.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L83)
+Defined in: [src/answer-validation/types.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L93)
 
 `false` when the list may disagree with what the run did: more than
 `limits.maxToolCalls`, an oversized name or id, a call still open (its

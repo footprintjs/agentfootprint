@@ -33,7 +33,9 @@
  *   argument row behind `value-contingent` — the result it names (`result`):
  *   the reason is that a value came from results the model itself set aside;
  * - an answer check that names its tool and not its call
- *   (`declaration-overclaimed`) — every call of that tool this turn: it may
+ *   (`declaration-overclaimed`, the report row's `tools` — kept by the one
+ *   projection onto the report, `negativeClaims/delivery.ts` ·
+ *   `reportWithNegatives`) — every call of that tool this turn: it may
  *   over-report, it never hides (the fold's rule for "rests on").
  *
  * A row that names no call, a call whose tool's name the record does not

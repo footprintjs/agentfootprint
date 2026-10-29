@@ -11,6 +11,16 @@ export interface AnswerCheck {
   readonly path?: string;
   /** Must have resolved through this validation's artifact capability. */
   readonly evidenceRefs?: readonly ArtifactRef[];
+  /**
+   * The registered names of the tools a LIBRARY row is about: present only on a
+   * `.negativeClaims()` row (`agent:negative-claims:…`) that names one, beside its
+   * code in `reason` — the tools whose reads a typed negative cited, or the tool
+   * whose refusal said more than it read (`reason: 'declaration-overclaimed'`;
+   * the answer's standing rests on that tool's calls). Names only, never a value.
+   * An app validator's row never carries it: its rows are read as `id`,
+   * `disposition`, `reason`, `path` and `evidenceRefs` only.
+   */
+  readonly tools?: readonly string[];
 }
 
 /** Why a requested artifact could not be delivered to the validator. */

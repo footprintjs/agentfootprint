@@ -1,0 +1,4 @@
+---
+type: fixed
+---
+- **`declaration-overclaimed` now names the call whose refusal said more than it read.** Under `.negativeClaims()`, a refused call whose refusal says something "does not exist" makes the answer "not sure" with `declaration-overclaimed`, and its `source` (on `agent.assessment()` and `assessAnswer(recording)`) now lists that tool's calls of the turn: `{ kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'read_incidents' }] }`. Before, the reason fired but its source read `{ calls: [], unnamed: 1 }` on every real run, because the check row on `agent.answerValidation()` lost the tool's name on its way there. That row now keeps it: a `.negativeClaims()` row carries `tools` (the new optional `AnswerCheck.tools`, names only) beside its code in `reason`, the two fields the fold reads.
