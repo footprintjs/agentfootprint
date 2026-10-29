@@ -26,9 +26,11 @@ examples and releases honest without anyone remembering anything.
 7. **Fast gate:** `npm run lint && npm run format && npx tsc --noEmit`.
 8. **Releasing is not part of a change — merging is.** A fragment reaching `main` makes
    the Release workflow (`.github/workflows/publish.yml`) open or update the release PR
-   (`release/next`: version, CHANGELOG, regenerated docs). Merging THAT PR runs every gate,
-   then tags, publishes to npm with provenance and deploys the docs site. A red gate
-   releases nothing. Never edit `release/next` by hand — the workflow rebuilds it.
+   (`release/next`: version, CHANGELOG, regenerated docs). Merging THAT PR publishes the
+   tree its CI passed — the gates run again only when the workflow cannot show CI passed
+   them on that exact tree — then tags, publishes to npm with provenance and starts the docs
+   site deploy, which never holds up npm. A red gate releases nothing. Never edit
+   `release/next` by hand — the workflow rebuilds it.
 
 **Three kinds of docs — keep them apart:**
 

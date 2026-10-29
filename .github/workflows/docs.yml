@@ -7,8 +7,15 @@ name: Deploy Docs
 # agentfootprint` gives you — deploying from main showed readers features npm did
 # not have yet. The Release workflow (publish.yml) starts this once npm has the
 # version, and scripts/release.sh after tagging; run it by hand (Actions → Deploy Docs) for a docs-only fix
-# that should not wait for the next release. Every push and PR still BUILDS the
-# site in ci.yml's `docs` job, so a broken page is caught long before a release.
+# that should not wait for the next release. Every push and every PR except the
+# release PR still BUILDS the site in ci.yml's `docs` job, so a broken page or
+# an export over its budget is caught in the change that causes it.
+#
+# THE WEBSITE NEVER GATES NPM. This workflow is the only one that deploys the
+# site, and the release starts it once npm already has the version. If it
+# fails — an export over budget, docs-next unable to install — the published
+# site stays on its previous version and nothing else is affected: fix the
+# cause, then run Deploy Docs again. No new version is needed.
 on:
   workflow_dispatch:
 
@@ -64,8 +71,8 @@ jobs:
       # writes beside every route's index.txt and that nothing in a static export
       # ever fetches — 676 files and 151.87 MB here, a fifth of what would
       # otherwise be uploaded. It is wired to the build rather than added as a
-      # step of its own so that ci.yml and publish.yml, which build the same
-      # export to measure it, cannot measure a tree this job does not deploy.
+      # step of its own so that ci.yml, which builds the same export to
+      # measure it, cannot measure a tree this job does not deploy.
       # The evidence, the risk of a future Next changing its mind, and the symptom
       # that would show it had (client navigation degrading to full page loads)
       # are all in that script. Read it before changing what this step ships.
@@ -76,6 +83,9 @@ jobs:
           NEXT_PUBLIC_BASE_PATH: ''
         run: npm run build
 
+      # The site-budget ratchet gates this DEPLOY, never the npm version, which
+      # is already published when this runs. Over budget, the site stays on its
+      # previous version until a fix lands and this workflow runs again.
       - name: Enforce site performance budgets
         working-directory: docs-next
         run: npm run check:site-budget
