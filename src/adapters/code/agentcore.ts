@@ -10,43 +10,70 @@
  * network-and-filesystem-isolated environment, and the tool code is identical
  * across the swap.
  *
- * ── The three operations, verified against the SDK ──────────────────────────
- * Pinned in `test/adapters/aws/awsCommandPin.ts`, and verified against a real
- * install of `@aws-sdk/client-bedrock-agentcore` 3.1108.0:
+ * ── The operations, verified against the SDK ────────────────────────────────
+ * Pinned in `test/adapters/aws/awsCommandPin.ts`. The three commands were
+ * verified against a real install of `@aws-sdk/client-bedrock-agentcore`
+ * 3.1108.0, and the four `InvokeCodeInterpreter` tool shapes below against
+ * 3.1159.0:
  *
  *   • `StartCodeInterpreterSessionCommand`
  *       in  `{ codeInterpreterIdentifier, name?, sessionTimeoutSeconds? }`
  *       out `{ codeInterpreterIdentifier, sessionId, createdAt }`
- *   • `InvokeCodeInterpreterCommand`
- *       in  `{ codeInterpreterIdentifier, sessionId, name: 'executeCode',
- *              arguments: { code, language } }`
- *       out `{ sessionId, stream }` — an **event stream**, not a body (below)
+ *   • `InvokeCodeInterpreterCommand` — `{ codeInterpreterIdentifier, sessionId,
+ *       name, arguments }`, one service tool per call:
+ *       `executeCode`    `{ code, language? }`        → `execute`
+ *       `writeFiles`     `{ content: [{ path, text } | { path, blob }] }` → `stageInputs`
+ *       `readFiles`      `{ paths: [path] }`           → `readFile`
+ *       `executeCommand` `{ command }`                 → `runCommand`
+ *     out `{ sessionId, stream }` — an **event stream**, not a body
  *   • `StopCodeInterpreterSessionCommand`
  *       in  `{ codeInterpreterIdentifier, sessionId }`   ← the session ID, not a URI
- *       out `{ codeInterpreterIdentifier, sessionId, lastUpdatedAt }`
  *
- * **`Invoke` answers with an `AsyncIterable`.** `InvokeCodeInterpreterResponse`
- * is `{ sessionId?, stream?: AsyncIterable<CodeInterpreterStreamOutput> }`, and
- * every member of that union is either `{ result }` or a modelled EXCEPTION —
- * `accessDeniedException`, `throttlingException`, `validationException`, and
- * four more. An adapter that read a `body` field would find `undefined` and
- * report an empty success on every call, and one that iterated only for
- * `result` would treat an AccessDenied as "the code printed nothing." So this
- * drains the stream, raises the exception members BY NAME, and folds the
- * result members into one `CodeResult`.
+ * **`Invoke` answers with an `AsyncIterable`** whose members are `{ result }`
+ * or a modelled EXCEPTION, and `./agentcoreClient.ts` drains it: exception
+ * members raise BY NAME, result members fold into one answer — and nothing
+ * the stream did not carry is filled in.
  *
- * The payload lands twice: `structuredContent` carries `{ stdout, stderr,
- * exitCode, executionTime }` and `content[]` carries typed blocks. The
- * structured half is preferred because it is typed; the text blocks are the
- * fallback for a response that only filled the other one.
+ * ── Results say only what the service reported ──────────────────────────────
+ * `CodeResult.ok` is `true` or `false` only when the service said which: an
+ * exit status, or its own `isError` verdict. When it reported neither, `ok`
+ * is ABSENT — unknown. (It used to be `true`: success from silence.) A
+ * command's `exitCode` is the reported one or absent, never read off `isError`.
+ *
+ * ── Files in and out, exactly and bounded ───────────────────────────────────
+ * `stageInputs` writes TEXT as text and BYTES as a blob — never base64 inside
+ * text with a decode step — in ONE `writeFiles` call, refused before it is
+ * sent when its body would pass AgentCore's 100 MB per-call limit. AgentCore
+ * takes no environment, so `AF_STAGED_INPUTS` reaches code by a setup
+ * execution before EVERY run (confirmed by the line it prints; the runtime is
+ * mutable by the code it runs, so an earlier setup proves nothing now) and
+ * reaches a command as an `export` line ahead of it. `readFile` reads ONE path
+ * and pairs the file to it by the URI the service returned — one `file:///`
+ * form, read one way, a raw query or fragment refused — failing closed on a
+ * missing or different one; text or bytes is whichever field the service
+ * filled, and a file over `maxBytes` is refused, never cut.
+ *
+ * ── Commands are opt-in ─────────────────────────────────────────────────────
+ * `runCommand` runs arbitrary shell, so a session has it only when the runner
+ * is built with `commands: true`. The sandbox's network is whatever the code
+ * interpreter resource was created with — the built-in `aws.codeinterpreter.v1`
+ * runs with AWS's most restrictive defaults (Sandbox mode: limited network
+ * access, Amazon S3 included); a custom interpreter may be Public (internet)
+ * or VPC. This adapter can neither see nor change that.
+ *
+ * ── A session that is gone says so, once ────────────────────────────────────
+ * A service error naming the session as "not active" becomes
+ * {@link SessionExpiredError} on every verb, and so does a
+ * `ResourceNotFoundException` on a verb that addresses nothing but the session
+ * (code, a command, a write). On a READ, "not found" may mean the file, so it
+ * is `CodeSandboxError` (`'file-not-returned'`), naming both possibilities —
+ * never offered as proof the session is gone.
  *
  * ── How this talks to the SDK (the 9.4.0 law) ───────────────────────────────
  * Through `client.send(new SomeCommand(input))`, never a method on the client.
  * A bare `@aws-sdk/client-*` **Client is command-based**: its prototype carries
- * `send` and `destroy` and nothing else — verified again for this adapter
- * (`BedrockAgentCoreClient.prototype.startCodeInterpreterSession` is
- * `undefined`; the shortcut exists only on the aggregated `BedrockAgentCore`).
- * Three adapters have shipped that bug in this package.
+ * `send` and `destroy` and nothing else. Three adapters have shipped that bug
+ * in this package.
  *
  * ── Credentials ─────────────────────────────────────────────────────────────
  * Standard AWS credential resolution (the SDK's own chain). A tool holding a
@@ -58,15 +85,67 @@
  * `start()` first runs (or never, if you inject `_client` / `_sdk`).
  */
 
-import type { CodeResult, CodeRunner, CodeSession } from '../../provider-contract/types.js';
+import type {
+  CodeCommandOptions,
+  CodeCommandResult,
+  CodeFile,
+  CodeInput,
+  CodeReadOptions,
+  CodeResult,
+  CodeRunner,
+  CodeSession,
+  StagedCodeInput,
+} from '../../provider-contract/types.js';
+import { CodeSandboxError, readBound, sandboxPath } from '../../provider-contract/codeSandbox.js';
+import { SessionExpiredError } from '../../provider-contract/sessionExpired.js';
 import { hashSessionKey } from '../../tools/toolSessions.js';
-import { lazyRequire } from '../../lib/lazyRequire.js';
+import {
+  abortErrorOf,
+  armDeadline,
+  linkedController,
+  throwIfAborted,
+  untilAborted,
+} from '../../lib/abort.js';
+import {
+  createCodeClient,
+  type AgentCoreCodeClientLike,
+  type AgentCoreInvokeAnswer,
+  type AgentCoreInvokeInput,
+  type BedrockAgentCoreCodeSdkModule,
+} from './agentcoreClient.js';
+import {
+  AGENTCORE_MAX_REQUEST_BYTES,
+  errorNameOf,
+  MANIFEST_SET_MARKER,
+  STAGED_INPUTS_DIR,
+  fileContent,
+  manifestRuntime,
+  manifestSetupCode,
+  pairReadFile,
+  serviceRefusal,
+  sessionExpiryEvidence,
+  withManifestExport,
+  writeFilesRequestBytes,
+} from './agentcoreWire.js';
+import { safeFileName } from './fileName.js';
+import { boundOutput, commandBounds, commandResult, payloadBytes, printedLine } from './output.js';
+
+export type {
+  AgentCoreCodeClientLike,
+  AgentCoreFileContent,
+  AgentCoreInvokeAnswer,
+  AgentCoreInvokeInput,
+  AgentCoreInvokeTarget,
+  AgentCoreResource,
+  BedrockAgentCoreCodeSdkModule,
+} from './agentcoreClient.js';
 
 export interface AgentCoreCodeRunnerOptions {
   readonly region?: string;
   /**
    * The code-interpreter resource to run in — AWS's built-in
    * (`'aws.codeinterpreter.v1'`) or your own custom interpreter's identifier.
+   * Its network mode (Sandbox, Public or VPC) is set on the resource, not here.
    */
   readonly identifier: string;
   /**
@@ -75,7 +154,8 @@ export interface AgentCoreCodeRunnerOptions {
    *
    * **This is why "already gone" is a normal outcome, not an incident**: the
    * far side reaps on its own schedule, so a `Stop` may arrive after AWS has
-   * already collected the session. `stop()` treats that as done.
+   * already collected the session. `stop()` treats that as done, and every
+   * other verb raises `SessionExpiredError`.
    */
   readonly sessionTimeoutSeconds?: number;
   /** Default language when a call does not name one. `'python'` (the service
@@ -84,56 +164,26 @@ export interface AgentCoreCodeRunnerOptions {
   /** Per-stream output ceiling, in characters. Default 8000; anything cut is
    *  REPORTED on `CodeResult.truncated`, never dropped quietly. */
   readonly maxOutputChars?: number;
+  /**
+   * Give each session `runCommand` — one shell command through AgentCore's
+   * `executeCommand`. Default `false`, and then the member is ABSENT
+   * (`canRunCodeCommands` says no): it runs arbitrary shell, so a runner offers
+   * it only when built to. Build one runner per agent that should have it.
+   */
+  readonly commands?: boolean;
   /** Stable id (default `'agentcore-code-runner'`). Rides the session events. */
   readonly id?: string;
   /** Test seam — inject a client implementing {@link AgentCoreCodeClientLike}.
-   *  Bypasses the SDK entirely; the field mapping below is then yours. */
+   *  Bypasses the SDK entirely; the field mapping is then yours. */
   readonly _client?: AgentCoreCodeClientLike;
   /** @internal Test injection — the AWS SDK module, to exercise the real shim
    *  (`send(new Command(...))`) with a fake SDK. */
   readonly _sdk?: BedrockAgentCoreCodeSdkModule;
 }
 
-/** The operation-semantic surface this adapter calls. */
-export interface AgentCoreCodeClientLike {
-  startSession(input: {
-    readonly codeInterpreterIdentifier: string;
-    readonly name?: string;
-    readonly sessionTimeoutSeconds?: number;
-  }): Promise<{ readonly sessionId?: string }>;
-  invoke(input: {
-    readonly codeInterpreterIdentifier: string;
-    readonly sessionId: string;
-    readonly name: string;
-    readonly arguments: { readonly code: string; readonly language?: string };
-  }): Promise<AgentCoreInvokeAnswer>;
-  stopSession(input: {
-    readonly codeInterpreterIdentifier: string;
-    readonly sessionId: string;
-  }): Promise<void>;
-}
-
-/** What `invoke` reports back, already drained of its event stream. */
-export interface AgentCoreInvokeAnswer {
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode?: number;
-  readonly isError?: boolean;
-}
-
-/** The slice of `@aws-sdk/client-bedrock-agentcore` this shim touches. */
-export interface BedrockAgentCoreCodeSdkModule {
-  readonly BedrockAgentCoreClient?: new (config: { region?: string }) => {
-    send(cmd: unknown): Promise<unknown>;
-  };
-  readonly StartCodeInterpreterSessionCommand?: new (input: unknown) => unknown;
-  readonly InvokeCodeInterpreterCommand?: new (input: unknown) => unknown;
-  readonly StopCodeInterpreterSessionCommand?: new (input: unknown) => unknown;
-}
-
 const DEFAULT_MAX_OUTPUT_CHARS = 8_000;
-/** The service's own name for "run this code". Not a name we chose. */
-const EXECUTE_CODE = 'executeCode';
+/** The adapter's own name, on every refusal it raises. */
+const BACKEND = 'agentCoreCodeRunner';
 
 export function agentCoreCodeRunner(options: AgentCoreCodeRunnerOptions): CodeRunner {
   const id = options.id ?? 'agentcore-code-runner';
@@ -167,63 +217,314 @@ export function agentCoreCodeRunner(options: AgentCoreCodeRunnerOptions): CodeRu
             'carried forward as an unusable session.',
         );
       }
-      let stopped = false;
-      return {
-        id: sessionId,
-        async execute(exec): Promise<CodeResult> {
-          if (stopped) {
-            throw new Error(
-              `agentCoreCodeRunner: session ${sessionId} was stopped; open a new one to run more code.`,
-            );
-          }
-          const answer = await api.invoke({
-            codeInterpreterIdentifier: options.identifier,
-            sessionId,
-            name: EXECUTE_CODE,
-            arguments: {
-              code: exec.code,
-              ...(exec.language ?? req.language ?? options.language
-                ? { language: exec.language ?? req.language ?? options.language ?? 'python' }
-                : {}),
-            },
-          });
-          const stdout = cut(answer.stdout, maxOutputChars);
-          const stderr = cut(answer.stderr, maxOutputChars);
-          const truncated = {
-            ...(stdout.cut && { stdout: true }),
-            ...(stderr.cut && { stderr: true }),
-            ...((stdout.cut || stderr.cut) && {
-              ofChars: Math.max(answer.stdout.length, answer.stderr.length),
-            }),
-          };
-          return {
-            // `isError` is the service's own verdict; a non-zero exit is ours.
-            ok: answer.isError !== true && (answer.exitCode ?? 0) === 0,
-            stdout: stdout.text,
-            stderr: stderr.text,
-            ...(answer.exitCode !== undefined && { exitCode: answer.exitCode }),
-            ...(Object.keys(truncated).length > 0 && { truncated }),
-          };
-        },
-        async stop(): Promise<void> {
-          if (stopped) return;
-          stopped = true;
-          try {
-            await api.stopSession({
-              codeInterpreterIdentifier: options.identifier,
-              sessionId,
-            });
-          } catch (err) {
-            // "Already gone" is the EXPECTED shape here, not an incident: the
-            // session TTL is enforced by AWS, so a run that idled past it finds
-            // the session collected. Anything else is re-raised, and the tier
-            // reports it on `tools.session_close_failed`.
-            if (!isAlreadyGone(err)) throw err;
-          }
-        },
-      };
+      return openSession({
+        api,
+        identifier: options.identifier,
+        sessionId,
+        language: req.language ?? options.language,
+        maxOutputChars,
+        commands: options.commands === true,
+      });
     },
   };
+}
+
+/** What one open session needs to know. */
+interface SessionPlan {
+  readonly api: AgentCoreCodeClientLike;
+  readonly identifier: string;
+  readonly sessionId: string;
+  /** The session's default language (the start request's, else the runner's). */
+  readonly language: string | undefined;
+  readonly maxOutputChars: number;
+  readonly commands: boolean;
+}
+
+/** How long one invoke may take, and what can cut it short. */
+interface InvokeBounds {
+  readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+/** The session behind {@link agentCoreCodeRunner}: the verbs, in the order a caller uses them. */
+function openSession(plan: SessionPlan): CodeSession {
+  const { api, identifier, sessionId, maxOutputChars } = plan;
+  const target = { codeInterpreterIdentifier: identifier, sessionId };
+  let stopped = false;
+  /** name → path, exactly as the manifest carries it. */
+  const staged = new Map<string, string>();
+
+  const refuseIfStopped = (toDo: string): void => {
+    if (stopped) {
+      throw new Error(
+        `agentCoreCodeRunner: session ${sessionId} was stopped; open a new one to ${toDo}.`,
+      );
+    }
+  };
+  const manifestJson = (): string | undefined =>
+    staged.size > 0 ? JSON.stringify(Object.fromEntries(staged)) : undefined;
+
+  /**
+   * One deadline and one cancellation for a whole verb. A verb that makes two
+   * calls — the manifest setup, then the code — spends ONE `timeoutMs`, not
+   * one each. A deadline or the caller's own signal stops the WAIT at once
+   * (`lib/abort.ts`); what the service does with a request it already
+   * received is its own business, and the timeout error says so.
+   */
+  const withinBounds = async <T>(
+    verb: AgentCoreInvokeInput['name'],
+    bounds: InvokeBounds,
+    work: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> => {
+    throwIfAborted(bounds.signal);
+    const { controller, unlink } = linkedController(bounds.signal);
+    const disarm =
+      bounds.timeoutMs === undefined
+        ? undefined
+        : armDeadline(
+            controller,
+            bounds.timeoutMs,
+            () =>
+              new CodeSandboxError(
+                'timed-out',
+                `agentCoreCodeRunner: ${verb} did not answer within ${bounds.timeoutMs}ms ` +
+                  'and was abandoned. The session was not stopped, so what was sent may still ' +
+                  'be running in it — whether it finished is not known.',
+              ),
+          );
+    try {
+      return await work(controller.signal);
+    } finally {
+      disarm?.();
+      unlink();
+    }
+  };
+
+  /**
+   * One invoke under `signal`. A gone session becomes `SessionExpiredError`;
+   * a modelled service error on a file or command call is rewritten without
+   * the service's words (they can quote what was sent).
+   */
+  const invoke = async (
+    input: AgentCoreInvokeInput,
+    signal: AbortSignal,
+  ): Promise<AgentCoreInvokeAnswer> => {
+    throwIfAborted(signal);
+    try {
+      return await untilAborted(api.invoke(input, { abortSignal: signal }), signal);
+    } catch (err) {
+      if (signal.aborted) throw abortErrorOf(signal);
+      const evidence = sessionExpiryEvidence(err, input.name);
+      if (evidence === 'session') {
+        throw new SessionExpiredError(BACKEND, sessionId, errorNameOf(err));
+      }
+      if (evidence === 'file-or-session' && input.name === 'readFiles') {
+        // A read names a FILE as well as the session, so "not found" can mean
+        // either. It is not taken as proof the session is gone.
+        throw new CodeSandboxError(
+          'file-not-returned',
+          `agentCoreCodeRunner: reading '${input.arguments.paths.join(', ')}' — the service ` +
+            'answered ResourceNotFoundException, which can mean the file is missing or the ' +
+            'session is gone; which one is not known here.',
+          { path: input.arguments.paths[0] ?? '' },
+        );
+      }
+      if (input.name === 'executeCode') throw err;
+      throw serviceRefusal(err, input.name) ?? err;
+    }
+  };
+
+  /**
+   * Set {@link STAGED_INPUTS_ENV} in the runtime `language` runs in — before
+   * EVERY execution once anything is staged, and confirmed each time.
+   *
+   * Never skipped because this process set it before: the runtime is mutable
+   * by the very code it runs, so a previous execution may have changed or
+   * deleted the variable, and a record of what was once sent is not an
+   * observation of what the runtime holds. Re-applying it costs one call per
+   * execution, inside the same deadline. Nothing when nothing was staged — a
+   * session that never stages sends exactly what it always sent.
+   */
+  const exposeManifest = async (
+    language: string | undefined,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    const json = manifestJson();
+    if (json === undefined) return;
+    const runtime = manifestRuntime(language);
+    if (runtime === undefined) {
+      throw new CodeSandboxError(
+        'staged-inputs-unset',
+        `agentCoreCodeRunner: inputs were staged, and this adapter does not know how to set ` +
+          `AF_STAGED_INPUTS for language '${String(language)}', so the code is not run against ` +
+          'a manifest it could not read. AgentCore runs python, javascript and typescript.',
+      );
+    }
+    const answer = await invoke(
+      {
+        ...target,
+        name: 'executeCode',
+        arguments: { code: manifestSetupCode(runtime, json), ...(language ? { language } : {}) },
+      },
+      signal,
+    );
+    // The setup prints one line once the variable is set — it proves that
+    // checkpoint and nothing else, which is all that is asked of it.
+    if (!printedLine(answer.stdout, MANIFEST_SET_MARKER)) {
+      throw new CodeSandboxError(
+        'staged-inputs-unset',
+        `agentCoreCodeRunner: the staged inputs are in the session, but setting AF_STAGED_INPUTS ` +
+          `in its ${runtime} runtime was not confirmed, so the code is not run against a ` +
+          'manifest it may not be able to read.',
+      );
+    }
+  };
+
+  const session: CodeSession = {
+    id: sessionId,
+    async execute(exec): Promise<CodeResult> {
+      refuseIfStopped('run more code');
+      const language = exec.language ?? plan.language;
+      const bounds: InvokeBounds = {
+        ...(exec.timeoutMs !== undefined && { timeoutMs: exec.timeoutMs }),
+        ...(exec.signal && { signal: exec.signal }),
+      };
+      const answer = await withinBounds('executeCode', bounds, async (signal) => {
+        await exposeManifest(language, signal);
+        return invoke(
+          {
+            ...target,
+            name: 'executeCode',
+            arguments: { code: exec.code, ...(language ? { language } : {}) },
+          },
+          signal,
+        );
+      });
+      const bounded = boundOutput(answer.stdout, answer.stderr, maxOutputChars);
+      const ok = reportedOutcome(answer);
+      // An error flag with no exit status is the SERVICE's verdict, not the
+      // program's: whether the code ran is unconfirmed, and the result says
+      // which kind of `false` it is.
+      const serviceError = answer.isError === true && answer.exitCode === undefined;
+      return {
+        ...(ok !== undefined && { ok }),
+        stdout: bounded.stdout,
+        stderr: bounded.stderr,
+        ...(answer.exitCode !== undefined && { exitCode: answer.exitCode }),
+        ...(serviceError && { serviceError: true as const }),
+        ...(bounded.truncated !== undefined && { truncated: bounded.truncated }),
+      };
+    },
+    async stageInputs(inputs: readonly CodeInput[]): Promise<readonly StagedCodeInput[]> {
+      refuseIfStopped('stage inputs');
+      if (inputs.length === 0) return [];
+      // The name is CALLER data landing in a filesystem, so it is ENCODED
+      // into one inert segment — the same encoder `localCodeRunner` uses, so
+      // a name lands under the same file name on either backend.
+      const landing = inputs.map((input) => ({
+        input,
+        path: `${STAGED_INPUTS_DIR}/${safeFileName(input.fileName ?? input.name)}`,
+      }));
+      const content = landing.map(({ input, path }) => fileContent(path, input.data));
+      const bytes = writeFilesRequestBytes(content);
+      if (bytes > AGENTCORE_MAX_REQUEST_BYTES) {
+        throw new CodeSandboxError(
+          'request-too-large',
+          `agentCoreCodeRunner: staging these ${inputs.length} input(s) would send a ` +
+            `${bytes}-byte request, and AgentCore takes at most ${AGENTCORE_MAX_REQUEST_BYTES} ` +
+            'bytes in one call. Nothing was sent. Stage fewer or smaller inputs per call, or ' +
+            'have the code fetch large data itself (from Amazon S3, for example).',
+          { bytes, limit: AGENTCORE_MAX_REQUEST_BYTES },
+        );
+      }
+      const answer = await withinBounds('writeFiles', {}, (signal) =>
+        invoke({ ...target, name: 'writeFiles', arguments: { content } }, signal),
+      );
+      if (answer.isError === true) {
+        throw new CodeSandboxError(
+          'write-failed',
+          'agentCoreCodeRunner: the service flagged the write of the staged inputs as an error, ' +
+            'so which of them landed is not known. Its words are not repeated here.',
+        );
+      }
+      for (const { input, path } of landing) staged.set(input.name, path);
+      return landing.map(({ input, path }) => ({
+        name: input.name,
+        path,
+        bytes: payloadBytes(input.data),
+      }));
+    },
+    async readFile(path: string, readOptions: CodeReadOptions): Promise<CodeFile> {
+      refuseIfStopped('read files');
+      const maxBytes = readBound(readOptions);
+      const relative = sandboxPath(path);
+      const answer = await withinBounds(
+        'readFiles',
+        { ...(readOptions.signal && { signal: readOptions.signal }) },
+        (signal) =>
+          invoke({ ...target, name: 'readFiles', arguments: { paths: [relative] } }, signal),
+      );
+      return pairReadFile(relative, answer, maxBytes);
+    },
+    ...(plan.commands && {
+      async runCommand(
+        command: string,
+        commandOptions?: CodeCommandOptions,
+      ): Promise<CodeCommandResult> {
+        refuseIfStopped('run commands');
+        const bounds = commandBounds(command, commandOptions, maxOutputChars);
+        const json = manifestJson();
+        const answer = await withinBounds(
+          'executeCommand',
+          {
+            ...(bounds.timeoutMs !== undefined && { timeoutMs: bounds.timeoutMs }),
+            ...(bounds.signal && { signal: bounds.signal }),
+          },
+          (signal) =>
+            invoke(
+              {
+                ...target,
+                name: 'executeCommand',
+                arguments: {
+                  command: json === undefined ? command : withManifestExport(command, json),
+                },
+              },
+              signal,
+            ),
+        );
+        return commandResult(answer, bounds);
+      },
+    }),
+    async stop(): Promise<void> {
+      if (stopped) return;
+      stopped = true;
+      staged.clear();
+      try {
+        await api.stopSession({ codeInterpreterIdentifier: identifier, sessionId });
+      } catch (err) {
+        // "Already gone" is the EXPECTED shape here, not an incident: the
+        // session TTL is enforced by AWS, so a run that idled past it finds
+        // the session collected. Anything else is re-raised, and the tier
+        // reports it on `tools.session_close_failed`.
+        if (!isAlreadyGone(err)) throw err;
+      }
+    },
+  };
+  return session;
+}
+
+/**
+ * Did the code complete — as far as the service SAID?
+ *
+ * Its own error verdict first, then an exit status, then its explicit
+ * "not an error". When it said none of those, the answer is `undefined`:
+ * unknown, never success from silence.
+ */
+function reportedOutcome(answer: AgentCoreInvokeAnswer): boolean | undefined {
+  if (answer.isError === true) return false;
+  if (answer.exitCode !== undefined) return answer.exitCode === 0;
+  if (answer.isError === false) return true;
+  return undefined;
 }
 
 /**
@@ -253,7 +554,8 @@ export function agentCoreCodeRunner(options: AgentCoreCodeRunnerOptions): CodeRu
  * nothing — here or in the SDK — ever looks a session up by it. The address is
  * the service-assigned `sessionId`, which `start()` reads back and passes to
  * every `Invoke` and `Stop` verbatim. So no stored state is keyed on this
- * string and relabelling migrates nothing.
+ * string and relabelling migrates nothing — and no session is ever reattached
+ * by it.
  */
 function sessionName(key: string): string {
   return `af-${hashSessionKey(key)}`;
@@ -262,176 +564,4 @@ function sessionName(key: string): string {
 function isAlreadyGone(err: unknown): boolean {
   const name = err instanceof Error ? err.name : '';
   return name === 'ResourceNotFoundException' || name === 'ValidationException';
-}
-
-/**
- * Map {@link AgentCoreCodeClientLike} onto the real SDK commands.
- *
- * Two things this function owns and nothing else does: the COMMAND FORM (see
- * the module header), and the DRAIN of `InvokeCodeInterpreterResponse.stream`.
- */
-function createCodeClient(options: AgentCoreCodeRunnerOptions): AgentCoreCodeClientLike {
-  let mod: BedrockAgentCoreCodeSdkModule;
-  if (options._sdk) {
-    mod = options._sdk;
-  } else {
-    try {
-      // Lazy peer-dep: only loaded when no _client/_sdk is injected and start() runs.
-      mod = lazyRequire<BedrockAgentCoreCodeSdkModule>('@aws-sdk/client-bedrock-agentcore');
-    } catch {
-      throw new Error(
-        'agentCoreCodeRunner requires the `@aws-sdk/client-bedrock-agentcore` peer dependency.\n' +
-          '  Install:  npm install @aws-sdk/client-bedrock-agentcore\n' +
-          '  Or pass `_client` for a pre-built or mock client.\n' +
-          '  For a local dev loop with no AWS at all, use `localCodeRunner()`.',
-      );
-    }
-  }
-  if (!mod.BedrockAgentCoreClient) {
-    throw new Error(
-      'agentCoreCodeRunner: `@aws-sdk/client-bedrock-agentcore` is installed but ' +
-        '`BedrockAgentCoreClient` was not found. Update the SDK.',
-    );
-  }
-  const sdk = new mod.BedrockAgentCoreClient({ ...(options.region && { region: options.region }) });
-
-  const send = async (
-    Ctor: (new (i: unknown) => unknown) | undefined,
-    name: string,
-    input: unknown,
-  ): Promise<unknown> => {
-    if (!Ctor) {
-      throw new Error(
-        `agentCoreCodeRunner: \`@aws-sdk/client-bedrock-agentcore\` is missing ${name}. ` +
-          'Upgrade the SDK, or pass `_client` with your own mapping.',
-      );
-    }
-    return sdk.send(new Ctor(input));
-  };
-
-  return {
-    async startSession(input) {
-      const r = (await send(
-        mod.StartCodeInterpreterSessionCommand,
-        'StartCodeInterpreterSessionCommand',
-        input,
-      )) as { sessionId?: string } | null;
-      return { ...(r?.sessionId !== undefined && { sessionId: r.sessionId }) };
-    },
-    async invoke(input) {
-      const r = (await send(
-        mod.InvokeCodeInterpreterCommand,
-        'InvokeCodeInterpreterCommand',
-        input,
-      )) as { stream?: AsyncIterable<CodeInterpreterStreamOutputLike> } | null;
-      return drainStream(r?.stream);
-    },
-    async stopSession(input) {
-      await send(mod.StopCodeInterpreterSessionCommand, 'StopCodeInterpreterSessionCommand', input);
-    },
-  };
-}
-
-/** One event off `InvokeCodeInterpreterResponse.stream`. */
-interface CodeInterpreterStreamOutputLike {
-  readonly result?: {
-    readonly content?: readonly {
-      readonly type?: string;
-      readonly text?: string;
-      readonly name?: string;
-    }[];
-    readonly structuredContent?: {
-      readonly stdout?: string;
-      readonly stderr?: string;
-      readonly exitCode?: number;
-    };
-    readonly isError?: boolean;
-  };
-  readonly accessDeniedException?: { readonly message?: string };
-  readonly conflictException?: { readonly message?: string };
-  readonly internalServerException?: { readonly message?: string };
-  readonly resourceNotFoundException?: { readonly message?: string };
-  readonly serviceQuotaExceededException?: { readonly message?: string };
-  readonly throttlingException?: { readonly message?: string };
-  readonly validationException?: { readonly message?: string };
-}
-
-/** Every modelled error member of the stream union, in SDK spelling. */
-const STREAM_ERROR_MEMBERS = [
-  'accessDeniedException',
-  'conflictException',
-  'internalServerException',
-  'resourceNotFoundException',
-  'serviceQuotaExceededException',
-  'throttlingException',
-  'validationException',
-] as const;
-
-/**
- * Drain the event stream into one answer.
- *
- * An ERROR MEMBER RAISES. This is the honesty line for this adapter: the SDK
- * models seven failure shapes as ordinary members of the stream union, so an
- * `AccessDeniedException` arrives as a value, not a rejection. Folding it in
- * as empty output would report a clean run in which the code "printed
- * nothing" — a silent success, at the exact moment an operator most needs the
- * word "AccessDenied".
- */
-async function drainStream(
-  stream: AsyncIterable<CodeInterpreterStreamOutputLike> | undefined,
-): Promise<AgentCoreInvokeAnswer> {
-  if (!stream) {
-    throw new Error(
-      'agentCoreCodeRunner: InvokeCodeInterpreter returned no stream. The response carries ' +
-        'its payload as an event stream (`response.stream`), so an absent one is a broken ' +
-        'call, not an empty result.',
-    );
-  }
-  let stdout = '';
-  let stderr = '';
-  let exitCode: number | undefined;
-  let isError = false;
-  for await (const event of stream) {
-    for (const member of STREAM_ERROR_MEMBERS) {
-      const raised = event[member];
-      if (raised) {
-        const error = new Error(
-          `agentCoreCodeRunner: ${member} from InvokeCodeInterpreter — ` +
-            `${raised.message ?? 'no message supplied'}`,
-        );
-        error.name = member.charAt(0).toUpperCase() + member.slice(1);
-        throw error;
-      }
-    }
-    const result = event.result;
-    if (!result) continue;
-    if (result.isError === true) isError = true;
-    const structured = result.structuredContent;
-    if (structured) {
-      if (structured.stdout !== undefined) stdout += structured.stdout;
-      if (structured.stderr !== undefined) stderr += structured.stderr;
-      if (structured.exitCode !== undefined) exitCode = structured.exitCode;
-    } else {
-      // Fallback: a response that filled only the typed content blocks. Text
-      // blocks are the readable half; a binary/resource block is described by
-      // name rather than inlined, because inlining it is the bug this port exists
-      // to prevent.
-      for (const block of result.content ?? []) {
-        if (block.text !== undefined) stdout += block.text;
-        else if (block.name !== undefined) stdout += `[${block.type ?? 'resource'}: ${block.name}]`;
-      }
-    }
-  }
-  return {
-    stdout,
-    stderr,
-    ...(exitCode !== undefined && { exitCode }),
-    ...(isError && { isError }),
-  };
-}
-
-/** Cut to `max` characters, saying whether it cut. */
-function cut(text: string, max: number): { text: string; cut: boolean } {
-  if (text.length <= max) return { text, cut: false };
-  return { text: text.slice(0, max), cut: true };
 }

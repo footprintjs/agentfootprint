@@ -17,6 +17,15 @@ see; the agent composes the request, an adapter carries it.
   request-contract refusals, not transport failures or arbitrary application
   errors.
 - `contextWindow.ts` — `ContextWindowExceededError`: the budget refusal, named.
+- `codeSandbox.ts` — the code-session port's refusals (`CodeSandboxError`, one
+  `reason` per refusal) and its ONE path rule, `sandboxPath`: a session path is
+  relative to the working directory and never above it. Both code adapters call
+  it before they read, so a path one refuses the other refuses too — two copies
+  of a path rule would be two rules. Example: `sandboxPath('./out//a.csv')` is
+  `'out/a.csv'`; `sandboxPath('../secret')` throws `reason: 'path-refused'`.
+- `sessionExpired.ts` — `SessionExpiredError`: a remote session that is gone,
+  said one way whatever words the service used, so "start a new session" is one
+  `instanceof` away. Nothing reconnects — a session name is not an address.
 
 ## The one law here
 

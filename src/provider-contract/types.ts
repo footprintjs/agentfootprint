@@ -1214,6 +1214,42 @@ export interface CodeSession {
    */
   stageInputs?(inputs: readonly CodeInput[]): Promise<readonly StagedCodeInput[]>;
   /**
+   * OPTIONAL — read ONE file back out of the session, whole or not at all.
+   *
+   * `path` is relative to the session's working directory and may not leave
+   * it. An absolute path, a `..` that climbs above the working directory, a
+   * backslash, a leading `~` or a NUL is refused by name before anything is
+   * sent (`CodeSandboxError`, reason `'path-refused'`) — one rule,
+   * `sandboxPath`, shared by every adapter.
+   *
+   * The answer is the file the BACKEND returned for that path, paired to it
+   * by what the backend said it returned. A file the adapter cannot pair with
+   * the path it asked for is refused, never guessed at — a backend that
+   * answers with another file, or with two, has not answered this read.
+   *
+   * `maxBytes` is required: a read names its bound. A file over it is refused
+   * (reason `'file-too-large'`), never cut — a truncated file handed back as
+   * the file is the silent success this port refuses everywhere else.
+   *
+   * Feature-detect with `canReadCodeFiles(session)`.
+   */
+  readFile?(path: string, options: CodeReadOptions): Promise<CodeFile>;
+  /**
+   * OPTIONAL — run ONE shell command in the session.
+   *
+   * It runs arbitrary shell, so an adapter offers it only when the runner was
+   * built with `commands: true`; otherwise the member is ABSENT. Feature-detect
+   * with `canRunCodeCommands(session)`. The command runs in the session's
+   * working directory with the environment `execute` gets, staged-input
+   * manifest included.
+   *
+   * The result says only what the backend reported. The exit status comes
+   * from the backend or not at all: when it reported none, `exitCode` is
+   * absent — unknown, never inferred from an error flag and never defaulted.
+   * stdout and stderr are bounded, and a cut is stated on `truncated`.
+   */
+  runCommand?(command: string, options?: CodeCommandOptions): Promise<CodeCommandResult>;
+  /**
    * Release the session.
    *
    * Must tolerate a session the far side already reaped — an idle timeout is
@@ -1231,13 +1267,153 @@ export function canStageCodeInputs(
   return typeof session.stageInputs === 'function';
 }
 
-/** What one execution produced. */
-export interface CodeResult {
-  /** Did the code run to completion without an error exit? */
-  readonly ok: boolean;
+/** Can this session read files back out? Read the member, never the adapter's name. */
+export function canReadCodeFiles(
+  session: CodeSession,
+): session is CodeSession & Required<Pick<CodeSession, 'readFile'>> {
+  return typeof session.readFile === 'function';
+}
+
+/** Can this session run shell commands? Absent unless the runner was built
+ *  with `commands: true`. Read the member, never the adapter's name. */
+export function canRunCodeCommands(
+  session: CodeSession,
+): session is CodeSession & Required<Pick<CodeSession, 'runCommand'>> {
+  return typeof session.runCommand === 'function';
+}
+
+/** How one {@link CodeSession.readFile} is bounded. */
+export interface CodeReadOptions {
+  /**
+   * The most bytes this read may return. Required, and a positive whole
+   * number: a file larger than this is refused, never cut.
+   */
+  readonly maxBytes: number;
+  /** Stop waiting for the read. */
+  readonly signal?: AbortSignal;
+}
+
+/** One file read back out of a code session — exactly as the backend returned it. */
+export interface CodeFile {
+  /** The path that was read, in the canonical form the backend was asked for
+   *  (`./out//a.csv` → `out/a.csv`). */
+  readonly path: string;
+  /**
+   * The contents. A string when the backend returned TEXT, bytes when it
+   * returned BYTES — decided by which of the two the backend filled, never by
+   * the file's name or extension. A backend that draws no such line
+   * (`localCodeRunner`: a file on disk is bytes) returns bytes, and never
+   * guesses an encoding.
+   */
+  readonly data: string | Uint8Array;
+  /** The size of `data` in bytes (a string's UTF-8 length). */
+  readonly bytes: number;
+  /** The backend's own statement of the media type, when it made one. Never guessed. */
+  readonly mediaType?: string;
+}
+
+/** How one {@link CodeSession.runCommand} is bounded. */
+export interface CodeCommandOptions {
+  /**
+   * Stop waiting after this many milliseconds. What happens to the command
+   * depends on the backend, and the error says which: a local child process is
+   * killed; a managed sandbox may keep running it.
+   */
+  readonly timeoutMs?: number;
+  /** Stop waiting when this fires. */
+  readonly signal?: AbortSignal;
+  /** Per-stream ceiling for this command's output, in characters. The
+   *  runner's own `maxOutputChars` when absent. A cut is stated on `truncated`. */
+  readonly maxOutputChars?: number;
+  /**
+   * A line the command prints when it reaches a point you care about — for
+   * example `make && echo STEP_DONE` with `checkpoint: 'STEP_DONE'`. The
+   * result then says, on `checkpointSeen`, whether stdout held that exact line,
+   * read BEFORE any cut, so a marker printed past `maxOutputChars` is still
+   * found.
+   *
+   * It proves the command reached that line and nothing more: not that it
+   * exited cleanly, and not that anything after it ran. Its absence proves
+   * nothing about why. One line, no line breaks.
+   */
+  readonly checkpoint?: string;
+}
+
+/** What one shell command produced — only what the backend reported. */
+export interface CodeCommandResult {
   readonly stdout: string;
   readonly stderr: string;
+  /**
+   * The exit status the backend reported. ABSENT when it reported none: the
+   * outcome is unknown. Never inferred from {@link CodeCommandResult.isError},
+   * never defaulted, never derived from the output.
+   */
   readonly exitCode?: number;
+  /**
+   * The backend's own error flag, as it reported it (AgentCore's `isError`);
+   * absent when it reported none. It is NOT an exit status — a command can
+   * fail without it, and it can be set with no exit status at all.
+   */
+  readonly isError?: boolean;
+  /** The signal that ended the command before it exited, when the runner knows
+   *  it (`'SIGKILL'`). There is no `exitCode` then, and none is made up. */
+  readonly terminatedBy?: string;
+  /** Present IFF output was cut — see {@link CodeTruncation}. */
+  readonly truncated?: CodeTruncation;
+  /** Present IFF a `checkpoint` was asked for: whether stdout held that line. */
+  readonly checkpointSeen?: boolean;
+}
+
+/**
+ * Present IFF output was cut, and then it says by how much.
+ *
+ * Load-bearing, not politeness. A runner exists so big data is computed
+ * outside the context window instead of pasted into it; a runner that
+ * quietly slices its own output to fit is the same bug wearing a different
+ * hat, and the model would go on to reason over a truncated table it was
+ * never told was truncated. An unstated slice is a silent success.
+ */
+export interface CodeTruncation {
+  readonly stdout?: boolean;
+  readonly stderr?: boolean;
+  /** The pre-truncation length, in characters, of whichever stream was cut. */
+  readonly ofChars?: number;
+}
+
+/** What one execution produced. */
+export interface CodeResult {
+  /**
+   * Did the code run to completion without an error exit? WHAT THE RUNNER
+   * REPORTED, nothing more.
+   *
+   * `true` or `false` only when the backend said so: an exit status, or its
+   * own error verdict. ABSENT when it reported neither — the outcome is
+   * unknown, and an absent `ok` is never success. (Before this was optional,
+   * `agentCoreCodeRunner` filled `true` from silence.) A `false` is told
+   * apart by the fields below: a program that exited non-zero (`exitCode`), a
+   * backend error with no exit status (`serviceError`, where the run is
+   * unconfirmed), and a process ended before it exited (`terminatedBy`).
+   */
+  readonly ok?: boolean;
+  readonly stdout: string;
+  readonly stderr: string;
+  /** The exit status — exactly when the runner reported one. Never inferred
+   *  from an error flag, never defaulted. */
+  readonly exitCode?: number;
+  /**
+   * `true` when the backend flagged its answer as an error and reported NO
+   * exit status: whether the code ran at all is not confirmed. That is not a
+   * program that failed — a program that ran and failed has an `exitCode`.
+   * `ok` is `false` alongside it.
+   */
+  readonly serviceError?: true;
+  /**
+   * The signal that ended the process before it exited, when the runner knows
+   * it (`'SIGKILL'`): there is no exit status then, and none is made up. A
+   * local child the operating system ended, or one the runner ended because
+   * its output passed the buffer ceiling. `ok` is `false` alongside it.
+   */
+  readonly terminatedBy?: string;
   /** Files the run produced, described rather than inlined — the whole point is
    *  that big data does not enter the window. All fields beyond the original
    *  `{ name, bytes, uri? }` are ADDITIVE (9.22.0) and honest about absence:
@@ -1275,19 +1451,7 @@ export interface CodeResult {
     readonly data?: string | Uint8Array;
     readonly ref?: string;
   }[];
-  /**
-   * Present IFF output was cut, and then it says by how much.
-   *
-   * Load-bearing, not politeness. A runner exists so big data is computed
-   * outside the context window instead of pasted into it; a runner that
-   * quietly slices its own output to fit is the same bug wearing a different
-   * hat, and the model would go on to reason over a truncated table it was
-   * never told was truncated. An unstated slice is a silent success.
-   */
-  readonly truncated?: {
-    readonly stdout?: boolean;
-    readonly stderr?: boolean;
-    /** The pre-truncation length, in characters, of whichever stream was cut. */
-    readonly ofChars?: number;
-  };
+  /** Present IFF output was cut — see {@link CodeTruncation}. An unstated
+   *  slice is a silent success. */
+  readonly truncated?: CodeTruncation;
 }

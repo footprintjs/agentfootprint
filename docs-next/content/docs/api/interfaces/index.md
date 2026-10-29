@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-372 exported from `agentfootprint`.
+377 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -84,12 +84,17 @@ title: Interfaces
 - [`ClaimRequirementPolicy`](/docs/api/interfaces/ClaimRequirementPolicy)
 - [`ClockOnResumeRow`](/docs/api/interfaces/ClockOnResumeRow)
 - [`ClockRow`](/docs/api/interfaces/ClockRow)
+- [`CodeCommandOptions`](/docs/api/interfaces/CodeCommandOptions)
+- [`CodeCommandResult`](/docs/api/interfaces/CodeCommandResult)
+- [`CodeFile`](/docs/api/interfaces/CodeFile)
 - [`CodeInput`](/docs/api/interfaces/CodeInput)
+- [`CodeReadOptions`](/docs/api/interfaces/CodeReadOptions)
 - [`CodeResult`](/docs/api/interfaces/CodeResult)
 - [`CodeRunFacts`](/docs/api/interfaces/CodeRunFacts)
 - [`CodeRunner`](/docs/api/interfaces/CodeRunner)
 - [`CodeRunnerToolOptions`](/docs/api/interfaces/CodeRunnerToolOptions)
 - [`CodeSession`](/docs/api/interfaces/CodeSession)
+- [`CodeTruncation`](/docs/api/interfaces/CodeTruncation)
 - [`ColumnDeclaration`](/docs/api/interfaces/ColumnDeclaration)
 - [`ColumnViolation`](/docs/api/interfaces/ColumnViolation)
 - [`CommentaryContext`](/docs/api/interfaces/CommentaryContext)
