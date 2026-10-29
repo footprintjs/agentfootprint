@@ -201,7 +201,7 @@ import type { LLMToolSchema } from '../../provider-contract/types.js';
 import { PRESENT_TOOL_NAME } from '../../artifacts/present.js';
 import { buildPresentTool } from './presentTool.js';
 import { searchOf } from '../../tools/searchOf.js';
-import { assertToolEffects } from '../../tools/tools.js';
+import { assertDisplayName, assertToolEffects } from '../../tools/tools.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
 import { warnIfInvalidToolName } from '../../lib/toolName.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
@@ -540,6 +540,9 @@ export function buildToolRegistry(
     const { problem } = searchOf(tool);
     if (problem !== undefined) throw new Error(`registration: ${problem}`);
     assertToolEffects(tool.schema.name, tool.effects, tool.source !== undefined);
+    // The app's words for a call reach a person verbatim: a hand-built tool's
+    // `displayName` is held to the `defineTool` rule here, by name.
+    assertDisplayName(tool.schema.name, tool.displayName);
   }
   // ── skip_step — the procedure-integrity tool (9.18.0) ───────────────
   // Auto-attached to the DISPATCH map when ≥1 registered skill declares

@@ -4,7 +4,7 @@ title: AnswerCoverage
 
 # Interface: AnswerCoverage
 
-Defined in: [src/semantics/coverage/answer.ts:94](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L94)
+Defined in: [src/semantics/coverage/answer.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L95)
 
 A TYPED answer's limits, as data — the three coverage lists the prose block
 would print, plus the values a tool's `assume` rule filled this turn (the
@@ -30,7 +30,7 @@ data twin of the block's `Period:` lines, present only when a call declared one.
 
 > `readonly` `optional` **assumed?**: readonly `object`[]
 
-Defined in: [src/semantics/coverage/answer.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L102)
+Defined in: [src/semantics/coverage/answer.ts:103](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L103)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [src/semantics/coverage/types.ts:123](https://github.com/footprintjs
 
 > `readonly` `optional` **inProgress?**: readonly `object`[]
 
-Defined in: [src/semantics/coverage/answer.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L101)
+Defined in: [src/semantics/coverage/answer.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L102)
 
 What the calls found still running — its outcome not known yet — one
  entry per declaring call, as declared; present only when one did. Never a
@@ -86,7 +86,7 @@ Defined in: [src/semantics/coverage/types.ts:124](https://github.com/footprintjs
 
 > `readonly` `optional` **periods?**: readonly `object`[]
 
-Defined in: [src/semantics/coverage/answer.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L97)
+Defined in: [src/semantics/coverage/answer.ts:98](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/coverage/answer.ts#L98)
 
 The periods the calls declared (honesty step 7b) — one per declaring
  call, as declared; present only when one did.
