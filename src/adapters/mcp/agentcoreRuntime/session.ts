@@ -33,8 +33,12 @@
  * `Mcp-Session-Id` the server returns for it is stored WITH that connection,
  * and the client is handed an opaque handle of the transport's own in its
  * place. Every later request carrying the handle is sent in that connection's
- * runtime session with the server's own id; a handle the transport does not
- * know is answered 404 "Session not found" here, never sent.
+ * runtime session with the server's own id. A handle the transport does not
+ * know — one it never issued, or one it forgot — is never sent: the request
+ * fails with `LocalSessionHandleLostError`, thrown from the transport's
+ * `fetch`. It is not a 404: no server said anything, and the runtime session
+ * behind a forgotten handle may still run — it can no longer be stopped from
+ * here, because its id went with the handle.
  *
  * Why a handle and not the server's id: the server's ids are unique only as far
  * as the server makes them. One that numbers sessions per process hands every
@@ -46,10 +50,15 @@
  * between users.
  *
  * At most {@link MAX_CONNECTIONS} connections are remembered, least recently
- * used forgotten first; a client's `DELETE` (its `close()`) forgets its own.
+ * used forgotten first. A client's `DELETE` — sent by `terminate()`, never by
+ * `close()`, which ends only the local side — forgets its own handle first, and
+ * then becomes `StopRuntimeSession` for that connection's runtime session
+ * (`transport.ts`), answered like a server would answer the `DELETE`.
  *
  * Pattern: Strategy. Role: outer ring, vendor fact. Holds no credential.
  */
+
+import { LocalSessionHandleLostError } from '../../../tools/toolSessions.js';
 
 /** The runtime session header, as `InvokeAgentRuntime` binds `runtimeSessionId` to it. */
 export const AGENTCORE_RUNTIME_SESSION_HEADER = 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id';
@@ -61,16 +70,22 @@ export const MCP_SESSION_HEADER = 'Mcp-Session-Id';
 export type AgentCoreRuntimeSession = 'reuse' | 'per-call';
 
 /**
- * What a strategy does with one request: either answer it here, unsent, or
- * let it go — with its session headers fixed in place — and say what the MCP
- * client may see of the response.
+ * What a strategy does with one request: answer it here, unsent; let it go —
+ * with its session headers fixed in place — and say what the MCP client may see
+ * of the response; or, for a `'reuse'` connection's `DELETE`, stop that
+ * connection's runtime session (`stop`, its runtime session id).
  */
 export type SessionStep =
   | { readonly answer: Response }
-  | { readonly settle: (response: Response) => Response };
+  | { readonly settle: (response: Response) => Response }
+  | { readonly stop: string };
 
 /** One strategy, applied once per request the MCP client makes. */
 export interface SessionStrategy {
+  /**
+   * @throws `LocalSessionHandleLostError` for a handle this strategy does not
+   *   hold: nothing is sent
+   */
   request(headers: Headers, method: string): SessionStep;
 }
 
@@ -121,12 +136,18 @@ function reuse(): SessionStrategy {
     request(headers, method) {
       const handle = headers.get(MCP_SESSION_HEADER);
       const known = handle === null ? undefined : connections.get(handle);
-      // A handle this transport did not issue, or has forgotten: fail closed.
-      if (handle !== null && known === undefined) return { answer: sessionNotFound() };
+      // A handle this transport did not issue, or has forgotten: fail closed,
+      // and say what happened — nothing was sent, and nothing answered.
+      if (handle !== null && known === undefined) throw new LocalSessionHandleLostError();
       const connection: Connection = known ?? { runtimeId: newId() };
       if (handle !== null) {
-        if (method === 'DELETE') connections.delete(handle);
-        else remember(handle, connection);
+        // Ending the session: the handle is forgotten FIRST, so nothing more is
+        // ever sent under it, then the runtime session is stopped.
+        if (method === 'DELETE') {
+          connections.delete(handle);
+          return { stop: connection.runtimeId };
+        }
+        remember(handle, connection);
       }
       // Set, not merged: these are the only session ids this request sends.
       headers.set(AGENTCORE_RUNTIME_SESSION_HEADER, connection.runtimeId);
@@ -145,7 +166,7 @@ function reuse(): SessionStrategy {
             remember(issued, { ...connection, serverSessionId: returned });
             return withSessionHeader(response, issued);
           }
-          if (method !== 'DELETE') connection.serverSessionId = returned;
+          connection.serverSessionId = returned;
           return withSessionHeader(response, handle);
         },
       };
@@ -181,19 +202,4 @@ function withSessionHeader(response: Response, value: string | undefined): Respo
     statusText: response.statusText,
     headers,
   });
-}
-
-/**
- * The MCP Streamable HTTP answer to a session the server does not know: 404,
- * after which a client starts a new session with `initialize`.
- */
-function sessionNotFound(): Response {
-  return new Response(
-    JSON.stringify({
-      jsonrpc: '2.0',
-      id: null,
-      error: { code: -32001, message: 'Session not found' },
-    }),
-    { status: 404, headers: { 'content-type': 'application/json' } },
-  );
 }

@@ -557,14 +557,62 @@ export class ToolTeardownTimeoutError extends Error {
 }
 
 /**
+ * This process no longer holds the handle a conversation's session was reached
+ * by, so the call was not sent.
+ *
+ * Not an expiry: nothing was sent and nothing answered. The transport that held
+ * the handle forgot it (`evidence`), and the remote session's fate is unknown
+ * (`remote`) — it may still run, and it can no longer be ended from here,
+ * because its id went with the handle.
+ *
+ * The message is one fixed sentence; `cause`, when present, is for the app.
+ */
+export class LocalSessionHandleLostError extends Error {
+  readonly code = 'ERR_LOCAL_SESSION_HANDLE_LOST' as const;
+  /** What proves the loss: the transport no longer holds the handle. */
+  readonly evidence = 'transport-forgot-handle' as const;
+  /** What is known of the remote session: nothing. */
+  readonly remote = 'unknown' as const;
+
+  constructor(options: { readonly cause?: unknown } = {}) {
+    super(
+      'The session for the call this result answers could not be reached from here, so that call was not sent.',
+      {
+        ...(options.cause !== undefined && { cause: options.cause }),
+      },
+    );
+    this.name = 'LocalSessionHandleLostError';
+  }
+}
+
+/**
+ * Is `error` a {@link LocalSessionHandleLostError}? By its code as well as its
+ * class, so a second copy of the module (a CJS and an ESM build in one
+ * process) is still recognised.
+ */
+export function isLocalSessionHandleLost(error: unknown): error is LocalSessionHandleLostError {
+  return (
+    error instanceof LocalSessionHandleLostError ||
+    (error !== null &&
+      typeof error === 'object' &&
+      (error as { readonly code?: unknown }).code === 'ERR_LOCAL_SESSION_HANDLE_LOST')
+  );
+}
+
+/**
  * Run `work`, giving up after `timeoutMs`.
  *
  * The abandoned promise is deliberately NOT cancelled — there is nothing to
  * cancel a vendor's in-flight `Stop` with, and pretending otherwise would be
  * worse than saying we stopped waiting. The timer is unref'd where the runtime
  * allows it, so a pending teardown can never be the reason a process stays up.
+ *
+ * Shared, not copied: the MCP client's `terminate()` bounds its wait with it.
+ *
+ * @throws {@link ToolTeardownTimeoutError} when `timeoutMs` passes first; what
+ *   `work` throws, otherwise
  */
-async function withTimeout(
+export async function withTimeout(
   work: () => Promise<void>,
   timeoutMs: number,
   what: string,

@@ -93,6 +93,17 @@ export {
   // builds no transport — can wrap its own `fetch` with the same code rather
   // than quietly doing without it.
   retryingFetch,
+  // Ending a client's remote session — a capability `terminate?()` a client may
+  // have; ask before calling it.
+  canTerminate,
+  // A client per conversation for one MCP server: bounded, ended remotely, its
+  // tool definitions per client incarnation unless the app declares sharing.
+  mcpClientPool,
+  MCP_POOL_DEFAULTS,
+  MAX_DEFINITION_ENTRIES,
+  MAX_SHARED_TOOLS,
+  McpPoolRefusedError,
+  PoolFullError,
 } from '../mcp/index.js';
 // Reaching an AWS Bedrock AgentCore Gateway (9.66.0). A configuration of
 // `gatewayTransport` plus the four facts that are AgentCore's alone — kept in
@@ -169,4 +180,22 @@ export type {
   McpHttpServeTransport,
   McpSdkServer,
   McpToolExtras,
+  // Ending a client's remote session, and what it came to.
+  McpTerminateOutcome,
+  TerminableMcpClient,
+  // What a library-built transport keeps inside its fetch, stated as data.
+  McpTransportSettings,
+  // The MCP client pool (`mcpClientPool`).
+  McpClientPool,
+  McpClientPoolOptions,
+  McpPoolDefinitionSharing,
+  McpPoolEndReason,
+  McpPoolIdentity,
+  McpPoolLease,
+  McpPoolLimit,
+  McpPoolRefusal,
+  McpPoolReport,
+  McpPoolScope,
+  McpPoolShareContext,
+  McpPoolStats,
 } from '../mcp/index.js';

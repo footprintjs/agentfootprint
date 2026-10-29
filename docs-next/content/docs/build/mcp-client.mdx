@@ -543,13 +543,40 @@ Two notes:
   works and means exactly the same thing, but passing both with two different
   modules is refused.
 
+## End the remote session: `terminate()`
+
+`close()` does not end the remote session; `terminate()` does, and says whether
+it did. It sends the Streamable HTTP `DELETE` carrying the session id, reads the
+answer itself (the MCP SDK reports a 405 as success), and closes locally
+whatever happened. You are answered within 5 s of elapsed time, even when the
+local close hangs or the system clock changes: the close goes on after the
+answer.
+
+```ts
+const outcome = await client.terminate!();
+// { remote: 'terminated' | 'already-gone' | 'no-session' | 'not-offered' | 'failed'
+//          | 'timed-out' | 'handle-lost' | 'unavailable', resolved, status?, errorClass?, durationMs }
+if (!outcome.resolved) log.warn(`session left to the server's own timeout: ${outcome.remote}`);
+```
+
+`resolved` is `true` only when the server is known not to hold the session any
+more. A client built on `connection` answers `'unavailable'`: the library did not
+build its transport. Under AgentCore Runtime's `session: 'reuse'`, the `DELETE`
+becomes `StopRuntimeSession` for that client's runtime session; pass
+`StopRuntimeSessionCommand` in `sdk` beside the other two commands when you
+supply the SDK yourself. To manage a client per conversation, use
+[`mcpClientPool`](doc:mcp-client-pool).
+
 ## What the package exports
 
 From `agentfootprint/providers`:
 
 | export | what it is |
 | --- | --- |
-| `mcpClient(opts)` | Connect. Returns an `McpClient` — `.tools()`, `.refresh()`, `.close()`. |
+| `mcpClient(opts)` | Connect. Returns an `McpClient` — `.tools()`, `.refresh()`, `.close()`, `.terminate()`. |
+| `canTerminate(client)` | Can this client end its remote session? `terminate` is optional on `McpClient`, so ask before calling it. |
+| `McpTerminateOutcome` | What `terminate()` came to: `remote` (`'terminated'`, `'already-gone'`, `'no-session'`, `'not-offered'`, `'failed'`, `'timed-out'`, `'handle-lost'`, `'unavailable'`), `resolved`, `status?`, `errorClass?`, `durationMs`. |
+| `mcpClientPool(options)` | A client per conversation for one server. See [A client per conversation](doc:mcp-client-pool). |
 | `mockMcpClient({ tools })` | The same shape, in memory. |
 | `gatewayTransport({ url, credentials, service })` | A transport whose auth header is vended per request. |
 | `retryingFetch(fetch, options)` | The 429 retry `mcpClient({ transport })` applies for you, so a `connection` caller can apply it too. |
@@ -577,6 +604,7 @@ run against a real socket.
 
 ## Related
 
+- [A client per conversation](doc:mcp-client-pool) — `mcpClientPool()`, for a server that keeps state per session
 - [Serve your tools over MCP](doc:mcp-serve) — `mcpServe(tools)`, the other direction
 - [Middleware](doc:middleware) — where `toolSource` is read
 - [Tool providers](doc:tool-providers) — `staticTools` / `gatedTools` over the tools you just connected
