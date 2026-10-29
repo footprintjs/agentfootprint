@@ -21,6 +21,20 @@
  *      failed, or given up by the SDK (its own timeout) — a retry series still
  *      sending the request is cut there and then, inside the call: it files
  *      `cancelled` before the call's result is read, and sends nothing more.
+ *   4. ITS VERDICT REACHES ITS RECORD. A series that has ended waits for the
+ *      call to settle before it files, because only the call can say whether
+ *      the answer completed — a 200 can carry a tool error. The call leaves its
+ *      verdict in the request's shared replay facts (`replay.ts` ·
+ *      `RequestReplay`) before it settles the series' wait.
+ *   5. "MAY HAVE RUN" IS RAISED HERE. When the series sent the request again
+ *      after an attempt whose effect is unknown, on the app's or an adapter's
+ *      permission, and the call then does not complete, the call fails with
+ *      footprintjs's `UnknownEffectError` — its own error as the `cause` — and
+ *      never with the last attempt's error alone, which would read as "this
+ *      did not run". The compatibility policy's assumed 429s do not raise it:
+ *      that policy keeps today's behaviour, and its record says what it assumed.
+ *      Nor does a cancellation: a call its caller cancelled ends with the
+ *      caller's reason, as it always did.
  *
  * In dev mode, a ticket that no request was bound to by the time the call
  * settled, when a `tools/call` request DID go out, is named once per connection: the SDK copied
@@ -29,18 +43,29 @@
  * `notifications/cancelled`).
  */
 
-import { isDevMode } from 'footprintjs';
+import { isDevMode, UnknownEffectError } from 'footprintjs';
 
 import { eitherSignal, linkedController } from '../lib/abort.js';
 import { requestEvidenceOf } from '../tools/requestEvidence.js';
+import type { CallVerdict } from './replay.js';
 import type { RequestLedger, RequestTicket } from './requestLedger.js';
 
 /** A call that has been opened: the signal its SDK request runs under, and how to close it. */
 export interface OpenCall {
   /** What cancels the SDK request — absent when nothing can. */
   readonly signal?: AbortSignal;
-  /** The call settled: undo the link, cut a series still sending, check the ticket was bound. */
-  close(): void;
+  /**
+   * The call failed with `error` (`verdict` says how far it got): the error it
+   * fails with — `error` itself, or footprintjs's `UnknownEffectError` with
+   * `error` as its `cause` when its series asked again after an attempt of
+   * unknown effect and the call did not complete.
+   */
+  failed(error: unknown, verdict: CallVerdict): unknown;
+  /**
+   * The call settled with `verdict`: leave it for the record, undo the link,
+   * cut a series still sending, check the ticket was bound.
+   */
+  close(verdict: CallVerdict): void;
 }
 
 /**
@@ -71,9 +96,23 @@ export function openCall(
       : { sink, signal: eitherSignal(signal, settled?.signal) as AbortSignal };
   const sentBefore = ledger?.toolCallsSent ?? 0;
   if (ticket !== undefined) ledger?.issue(params, ticket);
+  let mayHaveRun = false;
   return {
     ...(signal !== undefined && { signal }),
-    close: () => {
+    failed: (error, verdict) => {
+      // A call its caller cancelled ends with the caller's reason, whatever its
+      // series did; the record still says what is known of its effect.
+      if (verdict === 'completed' || signal?.aborted === true) return error;
+      const replay = ledger?.replayOf(params);
+      if (replay === undefined || !replay.uncertain) return error;
+      mayHaveRun = true;
+      // The key, when one was sent, is an argument VALUE: it stays with the
+      // caller, who sent it, and never rides an error a run may record.
+      return new UnknownEffectError({ system: server, attempts: replay.sent, cause: error });
+    },
+    close: (verdict) => {
+      // The verdict first: settling the series' wait files its record.
+      ledger?.replayOf(params)?.settle(verdict, mayHaveRun);
       settled?.abort(callSettled());
       link?.unlink();
       if (ticket !== undefined && ledger !== undefined) {

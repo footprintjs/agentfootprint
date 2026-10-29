@@ -508,6 +508,19 @@ begun: the 429 is delivered instead.
 The example above sets a deadline (`maxElapsedMs`) and records each retry's
 `kind` and attempt; everything else there is the default schedule.
 
+The session-busy refusal is the one refusal the library records as having run
+nothing. AgentCore documents it as made while the service is provisioning or
+tearing down the session the request targets: see the
+[MCP protocol contract's error handling](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp-protocol-contract.html#mcp-error-handling)
+and the [`InvokeAgentRuntime` errors](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html#API_InvokeAgentRuntime_Errors).
+So each such attempt records `effect: 'none'` with
+`guarantee: 'agentcore-session-busy'`, and choosing this adapter is permission
+enough to send the request again, under either replay policy. A 429 has no such
+guarantee, so its effect stays `unknown`. A tool you declare as making changes
+is not sent again even after this refusal unless the server deduplicates by a
+key the call carries. See
+[Who may send a call again](doc:tools-and-gateways#who-may-send-a-call-again).
+
 <Callout type="warn" title="A 'reuse' client is ONE session">
 Build one client per conversation. Two clients built on one transport are two
 sessions, but a `'reuse'` client shared by two users puts both in one microVM,

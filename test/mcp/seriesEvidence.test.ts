@@ -55,7 +55,8 @@ describe('series evidence — P2 nothing started, nothing sent', () => {
         origin: 'http://mcp.example.test',
         attempts: [],
         omitted: 0,
-        end: { outcome: 'cancelled', reason: 'cancelled' },
+        // E3: nothing was sent, so nothing ran.
+        end: { outcome: 'cancelled', reason: 'cancelled', attempts: 0, effect: 'none' },
       },
     ]);
   });

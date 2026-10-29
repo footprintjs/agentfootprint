@@ -55,7 +55,10 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
   transport fetch that already retries is joined, never wrapped.
 - `requestLedger.ts`, `seriesEvidence.ts`, `callLifetime.ts` — which dispatched
   call a request belongs to, that request's series written down for the call's
-  run, and the call's own lifetime: what cancels it, and what its settling stops.
+  run, and the call's own lifetime: what cancels it, what its settling stops,
+  and the "may have run" failure.
+- `replay.ts` — who may send a tool call again (the app's declaration, one
+  permission rule) and what is known of a series' effect.
 - `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
   footprintjs's own helpers (same names and laws) until a release ships them.
 - `toolExtras.ts` — our own declarations, carried over MCP.
@@ -103,12 +106,80 @@ sent.
 A response received is `answered` with its status — a 503 is never success.
 `refused` is a response the retry policy recognises as a refusal (a 429, a
 session-busy reply), recorded as the server sent it — not proof that nothing
-ran. Automatic 429 retries assume the server rejected the request before
-executing it. There is no side-effect guard on them today: a tool with side
-effects is retried on 429 like any other, and `retryOnThrottle: false` turns that
-off per server.
+ran. Who may send a call again, and what each attempt is known to have done,
+are the next section's.
 A row holds numbers and the library's own words; a failure is a fixed sentence
 and its category, never the thrown error's text. See `seriesEvidence.ts`.
+
+## Who may send a tool call again (`replay.ts`)
+
+**The rule.** Permission to repeat is the APP's, declared per (server, tool) when
+the client is built — never the model's, a tool description's or a server
+annotation's (`readOnlyHint`). What is known of an attempt's effect comes only
+from the record and a documented service guarantee. Each attempt records three
+facts apart, none read from another: its `failure` (footprintjs's category), its
+`effect` (`none` | `unknown` | `applied`, footprintjs's effect law), and — when
+another attempt followed — the `permission` that allowed it.
+
+**Why.** A generic 429 does not prove non-execution: RFC 6585 §4 defines it as
+rate limiting, and `Retry-After` says when to ask again, not that asking is safe.
+A vendor's SDK may retry its own 429s because the vendor documents its own
+service; a generic MCP client cannot assume that of an arbitrary server. So:
+
+| Situation | Sent again automatically? | Recorded |
+|---|---|---|
+| A documented pre-execution refusal from the adapter you chose (AgentCore's session-busy) | Yes, within the budget | `effect: 'none'`, `guarantee: 'agentcore-session-busy'`, `permission: { by: 'adapter' }` |
+| Any other server, and your declaration names `throttle` for the tool | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on: 'throttle' }` |
+| Any other server, no declaration, `policy: 'app-authorized'` | No — the refusal is returned | `reason: 'not-permitted'` |
+| Any other server, no declaration, `policy: 'compatibility'` (the 11.x default) | Yes — today's behaviour | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
+
+A request that failed in transport without an answer (footprintjs's `network`: a
+lost connection, a timeout below the series) is sent again only when the entry
+names `network`. A 5xx is an answer and never is. **The side-effect guard** holds
+under every policy: a tool declared `changes: true` is never sent again unless the
+server is declared to deduplicate (`deduplicates`) and the call carries the key —
+and a key protects only when the server uses it. A repeat re-sends the SAME
+request: the same body, server and session, as the same identity (a credential is
+vended afresh for each attempt, for that identity). The protocol's own requests
+(`initialize`, `tools/list`, notifications) run no tool and keep the 429 retry.
+
+**Uncertainty survives** (`SeriesKnowledge`). The `end` says how many requests
+were sent (`attempts`) and what is known of the whole series: once any attempt is
+`unknown`, so is the series — a later proven refusal does not resolve it, and a
+later success does not prove the operation happened once. `applied` means the
+call completed (the server answered, not with an error), never that anything was
+written; an answered attempt's effect comes from the call's verdict, so a ticketed
+request files when its call settles (or at once, when cancelled). After a repeat
+that followed an attempt of unknown effect, on a declaration's or an adapter's
+permission, a call that does not complete fails as "may have run" — footprintjs's
+`UnknownEffectError`, its own error as the `cause` (`callLifetime.ts`), and the
+`end` says `mayHaveRun: true`. The compatibility policy's assumed 429s do not
+raise it: that policy keeps today's behaviour, and its record names the assumption.
+
+```ts
+const orders = await mcpClient({
+  name: 'orders',
+  transport: { transport: 'http', url },
+  replay: {
+    policy: 'app-authorized', // opt-in in 11.x; the default from the next major
+    tools: {
+      search_orders: { on: ['throttle', 'network'] },
+      create_order: { on: ['throttle'], changes: true },
+    },
+    deduplicates: { argument: 'idempotency_key' }, // set by your code, never the model
+  },
+});
+// a search throttled once, then answered — what the saved run's row says:
+// { attempt: 1, outcome: 'refused', reason: 'retryable', status: 429, kind: 'throttle',
+//   failure: 'rate-limited', waitMs: 200, effect: 'unknown',
+//   permission: { by: 'declaration', on: 'throttle' }, durationMs: 41 }
+```
+
+**Moving to the next major.** `'app-authorized'` becomes the default. To keep
+today's behaviour, write `replay: { policy: 'compatibility' }` — its records keep
+naming the assumption. To move now, list each tool you want sent again on a 429
+(`on: ['throttle']`), mark the tools that make changes (`changes: true`), and
+declare `deduplicates` only for a server that honours the key.
 
 ## Structured results for execution adapters
 

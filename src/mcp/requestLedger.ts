@@ -38,12 +38,20 @@
  * fields works as it always did. Assigning `send` again afterwards THROWS: a
  * send that bypassed the ledger would quietly lose every call's attempts.
  *
+ * Each `tools/call` in flight also gets ONE `RequestReplay` (`replay.ts`), the
+ * facts its series and its call share: the series' claim hands it over by the
+ * request's id, the call finds it by its own params object (`replayOf`). The
+ * series writes what it sent and whether it asked again after an attempt of
+ * unknown effect; the call writes how it settled. When the SDK copied the
+ * params, the call finds none — and fails with its own error, as before.
+ *
  * What it does NOT do: retry, wait, or decide anything. The series is the one
  * retry owner; this only tells it whose attempts it is making, and when the SDK
  * has stopped waiting for them.
  */
 
 import type { RequestEvidenceSink } from '../tools/requestEvidence.js';
+import { RequestReplay } from './replay.js';
 
 /** One call's claim on the request it sends. */
 export interface RequestTicket {
@@ -59,6 +67,8 @@ export interface ClaimedRequest {
   readonly ticket?: RequestTicket;
   /** Fires when the MCP SDK cancels this request (`notifications/cancelled`). */
   readonly cancelled: AbortSignal;
+  /** What this request's series and its call share (`replay.ts` · `RequestReplay`). */
+  readonly replay: RequestReplay;
 }
 
 type JsonRpcId = string | number;
@@ -68,6 +78,7 @@ type Send = (message: unknown, options?: unknown) => Promise<unknown>;
 interface InFlight {
   readonly ticket?: RequestTicket;
   readonly cut: AbortController;
+  readonly replay: RequestReplay;
 }
 
 /** The method whose requests a tool call issues tickets for. */
@@ -83,6 +94,8 @@ export class RequestLedger {
   private readonly bound = new WeakSet<RequestTicket>();
   /** Every `tools/call` sent and not yet settled — keyed by its JSON-RPC id. */
   private readonly sending = new Map<JsonRpcId, InFlight>();
+  /** Each `tools/call` request's replay facts, by the params object it was sent with. Collected with it. */
+  private readonly replays = new WeakMap<object, RequestReplay>();
   private calls = 0;
   private unboundNamed = false;
 
@@ -94,6 +107,15 @@ export class RequestLedger {
   /** Whether a request the transport sent was bound to `ticket`. */
   wasBound(ticket: RequestTicket): boolean {
     return this.bound.has(ticket);
+  }
+
+  /**
+   * The replay facts of the `tools/call` sent with `params` — the call's own
+   * params object — or `undefined` when no such request was sent, or the SDK
+   * copied the params before sending them.
+   */
+  replayOf(params: object): RequestReplay | undefined {
+    return this.replays.get(params);
   }
 
   /** How many `tools/call` requests the watched transport has sent — matched to a call or not. */
@@ -157,6 +179,7 @@ export class RequestLedger {
     return {
       ...(entry.ticket !== undefined && { ticket: entry.ticket }),
       cancelled: entry.cut.signal,
+      replay: entry.replay,
     };
   }
 
@@ -190,7 +213,13 @@ export class RequestLedger {
       this.issued.delete(params as object);
       this.bound.add(ticket);
     }
-    this.sending.set(id, { ...(ticket !== undefined && { ticket }), cut: new AbortController() });
+    const replay = new RequestReplay();
+    if (params !== null && typeof params === 'object') this.replays.set(params, replay);
+    this.sending.set(id, {
+      ...(ticket !== undefined && { ticket }),
+      cut: new AbortController(),
+      replay,
+    });
     return id;
   }
 

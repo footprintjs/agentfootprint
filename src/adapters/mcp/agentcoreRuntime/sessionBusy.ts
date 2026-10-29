@@ -17,11 +17,15 @@
  * it reaches the model as a failed tool call, a moment after the session it was
  * waiting for came up.
  *
- * ── Why asking again is safe ─────────────────────────────────────────────────
- * The refusal is the PLATFORM's, about the session, made before the request
- * reached the MCP server: nothing ran. That is the license the retry series
- * asks of every refusal it repeats — for a 429 it is an assumption, not proof
- * (see `mcp/throttleRetry.ts` · `RetryDecision`).
+ * ── Why asking again is safe: the documented guarantee ───────────────────────
+ * The refusal is the PLATFORM's, about the session, made while the service is
+ * provisioning or tearing down the session the request targets — before the
+ * request reached the MCP server: nothing ran. That is what the series records
+ * of each such attempt — `effect: 'none'`, `guarantee: 'agentcore-session-busy'`
+ * ({@link SESSION_BUSY_GUARANTEE}) — and why the adapter's selection is
+ * permission enough to ask again (`mcp/replay.ts`). The documentation it rests
+ * on is cited in {@link SESSION_BUSY_DOCUMENTATION}. A 429 has no such
+ * guarantee: its effect stays unknown.
  *
  * ── What it must NOT match ───────────────────────────────────────────────────
  * `ConflictException` shares the code -32005 ("Resource conflict - Resource
@@ -42,8 +46,31 @@
  */
 
 import { bodyChunks } from '../../../lib/abort.js';
+import type { ToolRequestGuarantee } from '../../../events/payloads.js';
 import type { RetryVerdict } from '../../../mcp/throttleRetry.js';
 import { awsErrorType } from './errorType.js';
+
+/**
+ * The guarantee this refusal's records name: the request ran nothing.
+ * Attached to the session-busy retry rule (`transport.ts`).
+ */
+export const SESSION_BUSY_GUARANTEE: ToolRequestGuarantee = 'agentcore-session-busy';
+
+/**
+ * Where AgentCore documents the refusal this file recognises, in both forms:
+ *
+ *   1. The AgentCore Runtime MCP protocol contract, "Error handling": the row
+ *      `-32005 · RetryableConflictException · HTTP 200 · "Session operation in
+ *      progress, please retry"`, returned "when a second operation targets a
+ *      session while the service is provisioning or tearing down that session".
+ *   2. The `InvokeAgentRuntime` API reference, "Errors":
+ *      `RetryableConflictException`, HTTP 409 — "a temporary condition that may
+ *      resolve itself with retries".
+ */
+export const SESSION_BUSY_DOCUMENTATION: readonly string[] = Object.freeze([
+  'https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-mcp-protocol-contract.html#mcp-error-handling',
+  'https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html#API_InvokeAgentRuntime_Errors',
+]);
 
 /** The JSON-RPC error code the contract gives `RetryableConflictException`. */
 export const SESSION_BUSY_CODE = -32005;

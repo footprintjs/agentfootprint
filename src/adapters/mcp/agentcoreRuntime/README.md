@@ -103,6 +103,14 @@ sentence. A vended bearer token is used for one request and dropped.
    agentCoreRuntimeMcpTransport({ agentRuntimeArn, region, retry: { maxAttempts: 6, maxElapsedMs: 15_000 } });
    // → at most 6 requests per call, whatever mix of session-busy and 429 it meets
    ```
+
+   It is the one refusal recorded as having run nothing, because AgentCore
+   documents it as made while the session is starting or stopping
+   (`SESSION_BUSY_DOCUMENTATION` cites both pages). Its rule carries that
+   guarantee (`SESSION_BUSY_GUARANTEE`), so each such attempt records
+   `effect: 'none'`, and the app's choice of this adapter is the permission to
+   send it again (`mcp/replay.ts`) — except for a tool the app declares as
+   making changes, without a key the server deduplicates by.
 6. **The SDK's own retry is off.** The client `invoke.ts` builds has
    `maxAttempts: 1`: the SDK's standard policy re-sends after a 5xx or a dropped
    connection — a `tools/call` that may have run, in the same pinned session.

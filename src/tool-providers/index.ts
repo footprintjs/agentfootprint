@@ -125,6 +125,13 @@ export type {
   McpCallToolResult,
   McpClient,
   McpClientOptions,
+  // Who may send a tool call again (`mcpClient({ replay })`): the policy, the
+  // per-tool entries, and how the server deduplicates.
+  McpReplayDeduplication,
+  McpReplayKind,
+  McpReplayOptions,
+  McpReplayPolicy,
+  McpReplayTool,
   // The browser seams (9.81.0): a connection you opened yourself, the options
   // that carry it, and the two SDK modules you can hand over instead of letting
   // the Node loader find them.

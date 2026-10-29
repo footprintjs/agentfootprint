@@ -13,6 +13,20 @@ export function resultModeOf(value: unknown, name: string): ResultMode {
   );
 }
 
+/**
+ * Whether a `tools/call` answer is the tool's own error (`isError: true`, an
+ * own data property). Read once, never throwing: anything it cannot read is
+ * not a tool error — the decoder refuses it on its own.
+ */
+export function isToolError(result: unknown): boolean {
+  if (result === null || typeof result !== 'object') return false;
+  try {
+    return ownValue(result, 'isError') === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Internal shared decoder for the real connection and curated mock. */
 export function readToolResult(
   result: McpCallToolResult,

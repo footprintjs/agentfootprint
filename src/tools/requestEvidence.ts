@@ -43,6 +43,7 @@ import type {
   ToolRequestAttempt,
   ToolRequestEnd,
   ToolRequestError,
+  ToolRequestPermission,
   ToolsRequestAttemptsPayload,
 } from '../events/payloads.js';
 import { typedEmit, type EmitableScope } from '../recorders/core/typedEmit.js';
@@ -155,7 +156,29 @@ const REASONS: Words<ToolRequestAttempt['reason']> = {
   'no-time-left': true,
   'not-replayable': true,
   'not-retryable': true,
+  'not-permitted': true,
+  'changes-without-key': true,
   cancelled: true,
+};
+const EFFECTS: Words<NonNullable<ToolRequestAttempt['effect']>> = {
+  none: true,
+  unknown: true,
+  applied: true,
+};
+const GUARANTEES: Words<NonNullable<ToolRequestAttempt['guarantee']>> = {
+  'agentcore-session-busy': true,
+};
+const PERMITTED_BY: Words<ToolRequestPermission['by']> = {
+  declaration: true,
+  adapter: true,
+  compatibility: true,
+};
+const REPLAY_KINDS: Words<NonNullable<ToolRequestPermission['on']>> = {
+  throttle: true,
+  network: true,
+};
+const ASSUMPTIONS: Words<NonNullable<ToolRequestPermission['assumes']>> = {
+  'refused-before-execution': true,
 };
 const KINDS: Words<NonNullable<ToolRequestAttempt['kind']>> = {
   throttle: true,
@@ -187,6 +210,10 @@ const ATTEMPT_FIELDS = new Set([
   'retryAfterMs',
   'error',
   'remote',
+  'effect',
+  'guarantee',
+  'permission',
+  'durationMs',
 ]);
 const END_FIELDS = new Set([
   'outcome',
@@ -197,7 +224,11 @@ const END_FIELDS = new Set([
   'during',
   'error',
   'remote',
+  'attempts',
+  'effect',
+  'mayHaveRun',
 ]);
+const PERMISSION_FIELDS = new Set(['by', 'on', 'assumes', 'deduplicated']);
 const EVIDENCE_FIELDS = new Set(['endpoint', 'origin', 'attempts', 'omitted', 'end']);
 
 /** Thrown inside the walk when a filing leaves the allow-list; caught at its root. */
@@ -243,6 +274,10 @@ function servedAttempt(raw: unknown): ToolRequestAttempt {
     ...(row.retryAfterMs !== undefined && { retryAfterMs: duration(row.retryAfterMs) }),
     ...(row.error !== undefined && { error: servedError(row.error) }),
     ...(row.remote !== undefined && { remote: word(REMOTE, row.remote) }),
+    ...(row.effect !== undefined && { effect: word(EFFECTS, row.effect) }),
+    ...(row.guarantee !== undefined && { guarantee: word(GUARANTEES, row.guarantee) }),
+    ...(row.permission !== undefined && { permission: servedPermission(row.permission) }),
+    ...(row.durationMs !== undefined && { durationMs: duration(row.durationMs) }),
   };
 }
 
@@ -257,7 +292,36 @@ function servedEnd(raw: unknown): ToolRequestEnd {
     ...(end.during !== undefined && { during: word(DURING, end.during) }),
     ...(end.error !== undefined && { error: servedError(end.error) }),
     ...(end.remote !== undefined && { remote: word(REMOTE, end.remote) }),
+    ...(end.attempts !== undefined && { attempts: count(end.attempts) }),
+    ...(end.effect !== undefined && { effect: word(EFFECTS, end.effect) }),
+    ...(end.mayHaveRun !== undefined && { mayHaveRun: exactlyTrue(end.mayHaveRun) }),
   };
+}
+
+/**
+ * What permitted a repeat: who, and the one detail that belongs to who — the
+ * declared kind for `declaration`, the assumption for `compatibility`, nothing
+ * for `adapter`. A detail beside the wrong `by` is refused, never dropped.
+ */
+function servedPermission(raw: unknown): ToolRequestPermission {
+  const permission = record(raw, PERMISSION_FIELDS);
+  const by = word(PERMITTED_BY, permission.by);
+  if ((by === 'declaration') !== (permission.on !== undefined)) throw new Refused();
+  if ((by === 'compatibility') !== (permission.assumes !== undefined)) throw new Refused();
+  return {
+    by,
+    ...(permission.on !== undefined && { on: word(REPLAY_KINDS, permission.on) }),
+    ...(permission.assumes !== undefined && { assumes: word(ASSUMPTIONS, permission.assumes) }),
+    ...(permission.deduplicated !== undefined && {
+      deduplicated: exactlyTrue(permission.deduplicated),
+    }),
+  };
+}
+
+/** The literal `true` — a flag that is either set or absent. */
+function exactlyTrue(value: unknown): true {
+  if (value === true) return true;
+  throw new Refused();
 }
 
 function servedError(raw: unknown): ToolRequestError {

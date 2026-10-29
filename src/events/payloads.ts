@@ -2424,12 +2424,13 @@ export interface ToolsCodeRunPayload {
  *     `status: 503`. A response received is not an operation that succeeded,
  *     so nothing here is called success; read `status`.
  *   - `'refused'` — a response the retry policy recognises as a refusal
- *     (`kind`): HTTP 429, or AgentCore Runtime's session-busy reply. The only
- *     outcome that is ever retried. It records the response the server sent,
- *     not proof that nothing ran: a 429 says the request was rate-limited,
- *     nothing more (RFC 6585 §4).
+ *     (`kind`): HTTP 429, or AgentCore Runtime's session-busy reply. It records
+ *     the response the server sent, not proof that nothing ran: a 429 says the
+ *     request was rate-limited, nothing more (RFC 6585 §4). `effect` says what
+ *     is known; `permission` says what allowed asking again.
  *   - `'failed'` — the request threw before an answer arrived (a dropped
- *     connection, a DNS failure). Never retried: the server may have run it.
+ *     connection, a DNS failure). The server may have run it, so it is asked
+ *     again only when the app declared that for this tool (`replay`).
  *   - `'timed-out'` — the call's deadline (`maxElapsedMs`) cut the request
  *     while it was in flight.
  *   - `'cut'` — the call was cancelled while the request was in flight: the
@@ -2465,19 +2466,26 @@ export type ToolRequestRemote = 'unknown';
 /**
  * Why the request went on after an attempt, or ended with it.
  *
- *   - `'retryable'` — refused; another attempt follows after `waitMs`. The
- *     only reason that is not an end.
+ *   - `'retryable'` — another attempt follows after `waitMs`; `permission`
+ *     says what allowed it. The only reason that is not an end.
  *   - `'answered'` — answered; the response is delivered.
- *   - `'exhausted'` — refused, and the request has made every attempt it may.
- *   - `'wait-limit'` — refused, and the wait would pass the call's total
- *     waiting budget (`maxWaitMs`). A stated `Retry-After` is never shortened
- *     to fit: the refusal is delivered instead.
- *   - `'no-time-left'` — refused, and the wait would pass the call's deadline;
- *     or the deadline cut a request or a wait.
- *   - `'not-replayable'` — refused, but the request's body cannot be sent twice.
- *   - `'not-retryable'` — the attempt failed in a way this retry never
- *     repeats: only a response the retry policy recognises as a refusal (a 429,
- *     a session-busy reply) is retried.
+ *   - `'exhausted'` — the request has made every attempt it may.
+ *   - `'wait-limit'` — the wait would pass the call's total waiting budget
+ *     (`maxWaitMs`). A stated `Retry-After` is never shortened to fit: the
+ *     refusal is delivered instead.
+ *   - `'no-time-left'` — the wait would pass the call's deadline; or the
+ *     deadline cut a request or a wait.
+ *   - `'not-replayable'` — the request's body cannot be sent twice.
+ *   - `'not-retryable'` — the attempt failed without an answer, and nothing
+ *     permits asking again after that failure: the app declared no repeat of
+ *     this tool on it (`replay`), or it is not a kind the series repeats.
+ *   - `'not-permitted'` — refused with a 429, and the policy in force does not
+ *     permit asking this tool again on it. Under `'app-authorized'`, only the
+ *     app's declaration does: a generic 429 does not prove the server ran
+ *     nothing.
+ *   - `'changes-without-key'` — the app declared this tool as making changes,
+ *     and the call carries no key the server is declared to deduplicate by. It
+ *     is never asked again automatically, under any policy.
  *   - `'cancelled'` — the caller's signal ended the request.
  */
 export type ToolRequestReason =
@@ -2488,10 +2496,70 @@ export type ToolRequestReason =
   | 'no-time-left'
   | 'not-replayable'
   | 'not-retryable'
+  | 'not-permitted'
+  | 'changes-without-key'
   | 'cancelled';
 
 /** The refusals a retry rule recognises: HTTP 429, and AgentCore Runtime's session-busy reply. */
 export type ToolRequestRefusalKind = 'throttle' | 'session-busy';
+
+/**
+ * What is known about whether an attempt took effect on the server —
+ * footprintjs's effect law (`AttemptEffect`), read for an MCP request:
+ *
+ *   - `'none'` — it ran nothing, and a documented guarantee says so
+ *     (`guarantee`). Only a refusal an adapter documents as made before the
+ *     request reached the server earns it.
+ *   - `'unknown'` — anything else that did not complete: a 429 (it says the
+ *     request was rate-limited, not that nothing ran), a lost connection or a
+ *     timeout after the request was sent, a cut, a 5xx, a JSON-RPC error, a
+ *     tool error (one can follow a write that succeeded).
+ *   - `'applied'` — the call completed: the server answered it, and not with
+ *     an error. It is not proof that anything was written.
+ */
+export type ToolRequestEffect = 'none' | 'unknown' | 'applied';
+
+/**
+ * The documented guarantee an `effect: 'none'` rests on.
+ *
+ *   - `'agentcore-session-busy'` — AgentCore Runtime refuses a request with
+ *     "Session operation in progress" while it is provisioning or tearing down
+ *     the session it targets (its MCP protocol contract, "Error handling"; the
+ *     API reference's `RetryableConflictException`): the request did not reach
+ *     the MCP server.
+ */
+export type ToolRequestGuarantee = 'agentcore-session-busy';
+
+/** The failure kinds the app may declare a tool repeatable on (`replay.tools[name].on`). */
+export type ToolRequestReplayKind = 'throttle' | 'network';
+
+/**
+ * What allowed the next attempt — present exactly when `reason` is
+ * `'retryable'`. Permission and effect are separate facts: neither is ever
+ * read from the other.
+ *
+ *   - `by: 'declaration'` — the app's entry for this tool names the failure
+ *     kind (`on`).
+ *   - `by: 'adapter'` — a refusal the adapter the app chose documents as made
+ *     before anything ran (the row's `guarantee`).
+ *   - `by: 'compatibility'` — the compatibility policy, today's default: it
+ *     repeats a 429 for every tool, and it says what it assumes in doing so
+ *     (`assumes`). The assumption is never evidence: the row's `effect` stays
+ *     `'unknown'`.
+ */
+export interface ToolRequestPermission {
+  readonly by: 'declaration' | 'adapter' | 'compatibility';
+  /** `declaration` only — the failure kind the app's entry names. */
+  readonly on?: ToolRequestReplayKind;
+  /** `compatibility` only — what the policy assumes of a 429. */
+  readonly assumes?: 'refused-before-execution';
+  /**
+   * The app declared this tool as making changes, so it was asked again only
+   * because the server is declared to deduplicate by a key this call carries.
+   * The key protects only if the server uses it.
+   */
+  readonly deduplicated?: true;
+}
 
 /**
  * footprintjs's failure categories (`AttemptCategory`) — the one fixed set
@@ -2553,6 +2621,17 @@ export interface ToolRequestAttempt {
    * own refusal, not proof that nothing ran.
    */
   readonly remote?: ToolRequestRemote;
+  /**
+   * What is known about whether this attempt took effect (see
+   * {@link ToolRequestEffect}). On every attempt the library files.
+   */
+  readonly effect?: ToolRequestEffect;
+  /** The documented guarantee behind `effect: 'none'` — present exactly then. */
+  readonly guarantee?: ToolRequestGuarantee;
+  /** What allowed the next attempt — present exactly when `reason` is `'retryable'`. */
+  readonly permission?: ToolRequestPermission;
+  /** How long the attempt took, in ms, from sending to its end. On every attempt the library files. */
+  readonly durationMs?: number;
 }
 
 /** How an MCP request ended. */
@@ -2584,6 +2663,27 @@ export interface ToolRequestEnd {
    * `timed-out`, `cut`): whether the server ran that request is not known.
    */
   readonly remote?: ToolRequestRemote;
+  /**
+   * How many requests the series sent: `attempts.length + omitted`. On every
+   * end the library files.
+   */
+  readonly attempts?: number;
+  /**
+   * What is known about the series' effect as a whole. Uncertainty survives:
+   * once any attempt's effect is `'unknown'`, so is the series' — a later
+   * proven refusal does not resolve it, and a later success does not prove the
+   * operation happened only once. `'applied'` only when the call completed and
+   * no attempt's effect is unknown; `'none'` only when every attempt is proven
+   * to have run nothing (or none was sent). On every end the library files.
+   */
+  readonly effect?: ToolRequestEffect;
+  /**
+   * The call failed as "may have run" (footprintjs's `UnknownEffectError`, the
+   * call's own error as its `cause`): the series asked again after an attempt
+   * whose effect is unknown, on the app's or an adapter's permission, and the
+   * call did not complete.
+   */
+  readonly mayHaveRun?: true;
 }
 
 /**
@@ -2591,7 +2691,8 @@ export interface ToolRequestEnd {
  * on or stopped after each, how long it waited, and how the request ended.
  *
  * Filed by `mcpClient`'s retry series for a call the agent dispatched, ONCE per
- * request, when the request ends — and at the moment of a cancellation, so a
+ * request, when the call settles — so the last attempt's `effect` can say
+ * whether the call completed — and at the moment of a cancellation, so a
  * run cancelled during a wait still carries it when it is saved. A call that
  * settles before its series (the MCP SDK's own timeout, say) cancels the series
  * there and then, inside the call, so it is never filed after its run, and no

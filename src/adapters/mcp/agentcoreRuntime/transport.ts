@@ -84,7 +84,7 @@ import {
 } from './invoke.js';
 import { safeAnswer } from './safeAnswer.js';
 import { sessionStrategy, type AgentCoreRuntimeSession, type SessionStrategy } from './session.js';
-import { sessionBusy } from './sessionBusy.js';
+import { SESSION_BUSY_GUARANTEE, sessionBusy } from './sessionBusy.js';
 
 /**
  * A bearer token, for a runtime whose inbound auth is OAuth (a JWT authorizer).
@@ -259,6 +259,8 @@ export function agentCoreRuntimeMcpTransport(
     options.retry,
     SESSION_BUSY_RETRY_DEFAULTS,
     'agentCoreRuntimeMcpTransport: `retry`',
+    // Documented as made before the request reached the server (`sessionBusy.ts`).
+    SESSION_BUSY_GUARANTEE,
   );
   const session = sessionStrategy(options.session ?? 'per-call');
   return {

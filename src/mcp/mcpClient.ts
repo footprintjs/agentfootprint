@@ -43,6 +43,8 @@
  * inject `_client` and skip the import path entirely.
  */
 
+import { isDevMode } from 'footprintjs';
+
 import type { Tool } from '../tools/tools.js';
 import type {
   McpClient,
@@ -55,11 +57,12 @@ import type {
   McpTransport,
 } from './types.js';
 import { callMetaOf, readToolExtras } from './toolExtras.js';
-import { readToolResult, resultModeOf } from './toolResult.js';
+import { isToolError, readToolResult, resultModeOf } from './toolResult.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import { ledgeredFetch, retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
 import { RequestLedger } from './requestLedger.js';
 import { openCall } from './callLifetime.js';
+import { replayDeclarationOf, type CallVerdict, type ReplayDeclaration } from './replay.js';
 import { refuseConflictingOptions } from './connectionRefusals.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { transportUrl } from './transportUrl.js';
@@ -101,7 +104,11 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
   // Before anything connects: an option that names a behaviour which cannot
   // happen on the chosen arm is a defect, not a preference.
   refuseConflictingOptions(opts, name);
-  const { connection, ledger } = await openConnection(opts);
+  // The app's replay declaration — who may send a tool call again — read and
+  // checked once, here, before anything connects (`replay.ts`).
+  const replay = replayDeclarationOf(opts.replay, `mcpClient[${name}]`);
+  const { connection, ledger } = await openConnection(opts, replay);
+  const unlisted = new Set<string>();
 
   // Tool cache so consumers calling `.tools()` more than once don't
   // hammer the server. `.refresh()` invalidates it.
@@ -122,6 +129,7 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
     const listed = opts.signal
       ? await connection.listTools(undefined, { signal: opts.signal })
       : await connection.listTools();
+    noteUnlisted(replay, listed.tools, name, unlisted);
     return listed.tools.map((t) =>
       wrapMcpTool(name, connection, t, opts.signal, resultMode, ledger),
     );
@@ -167,13 +175,21 @@ interface OpenConnection {
  */
 async function openConnection(
   opts: McpClientOptions | McpConnectionOptions,
+  replay: ReplayDeclaration,
 ): Promise<OpenConnection> {
   if (opts.connection !== undefined) return { connection: opts.connection };
   if (opts._client !== undefined) return { connection: opts._client };
   // `refuseConflictingOptions` has already refused the case where this is
   // absent, so the assertion documents that guarantee rather than assuming it.
   const transport = opts.transport as McpTransport;
-  return resolveClient(transport, opts.clientInfo, opts.signal, opts.retryOnThrottle, opts.sdk);
+  return resolveClient(
+    transport,
+    opts.clientInfo,
+    opts.signal,
+    opts.retryOnThrottle,
+    opts.sdk,
+    replay,
+  );
 }
 
 // ─── SDK construction (lazy require, unless the caller supplied it) ─
@@ -184,6 +200,7 @@ async function resolveClient(
   signal?: AbortSignal,
   retryOnThrottle?: RetryOnThrottle,
   sdk?: McpSdk,
+  replay?: ReplayDeclaration,
 ): Promise<OpenConnection> {
   if (sdk !== undefined) assertSdk(sdk, transport.transport);
   const mod: McpSdkExports = sdk ?? loadClientModule();
@@ -192,7 +209,7 @@ async function resolveClient(
     capabilities: {},
   });
 
-  const built = await buildTransport(transport, retryOnThrottle, sdk);
+  const built = await buildTransport(transport, retryOnThrottle, sdk, replay);
   // Same rule as callTool: options ride beside the transport, never inside it.
   if (signal) await client.connect(built.transport, { signal });
   else await client.connect(built.transport);
@@ -263,6 +280,7 @@ async function buildTransport(
   t: McpTransport,
   retryOnThrottle?: RetryOnThrottle,
   sdk?: McpSdk,
+  replay?: ReplayDeclaration,
 ): Promise<BuiltTransport> {
   if (t.transport === 'stdio') {
     // Deliberately NOT served by `sdk`: stdio spawns a subprocess, so it can
@@ -312,8 +330,10 @@ async function buildTransport(
   //
   // The ledger joins the same series, so each request a dispatched tool call
   // sends files its attempts into that call's run; the transport's `send` is
-  // watched to bind each request to its call (`requestLedger.ts`). A fetch that
-  // runs no series (retry off) gets no ledger: there is nothing to file.
+  // watched to bind each request to its call (`requestLedger.ts`). The app's
+  // replay declaration joins with it: the series asks it before sending a tool
+  // call again (`replay.ts`). A fetch that runs no series (retry off) gets
+  // neither: there is nothing to file and nothing is sent again.
   const ledger = new RequestLedger();
   if (t.transport === 'gateway') {
     // The consumer's own `fetch` (9.32.0) goes UNDERNEATH the vending, not
@@ -324,7 +344,7 @@ async function buildTransport(
     // default global `fetch`, which is byte-identical to every release before
     // the seam existed.
     const gatewayFetch = retryingFetch(createVendingFetch(t, t.fetch), retryOnThrottle);
-    const ledgered = gatewayFetch && ledgeredFetch(gatewayFetch, ledger);
+    const ledgered = gatewayFetch && ledgeredFetch(gatewayFetch, ledger, replay);
     return watched(
       new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
         fetch: ledgered ?? gatewayFetch,
@@ -337,7 +357,7 @@ async function buildTransport(
   // hands the custom fetch, so a signer sees the static headers and has the
   // final word over the bytes — see `McpHttpTransport.fetch`.
   const httpFetch = retryingFetch(t.fetch, retryOnThrottle);
-  const ledgered = httpFetch && ledgeredFetch(httpFetch, ledger);
+  const ledgered = httpFetch && ledgeredFetch(httpFetch, ledger, replay);
   const fetch = ledgered ?? httpFetch;
   return watched(
     new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
@@ -377,6 +397,30 @@ function loadHttpModule(transport: 'http' | 'gateway'): McpHttpExports {
           'Pass `sdk` (the two SDK modules, imported statically) or `connection` ' +
           '(a client you connected yourself).',
       }),
+    );
+  }
+}
+
+/**
+ * Dev mode, once per client and name: a replay entry for a tool the server does
+ * not list applies to nothing — a misspelled name would leave a tool that makes
+ * changes outside the side-effect guard, so it is named.
+ */
+function noteUnlisted(
+  replay: ReplayDeclaration,
+  listed: readonly McpListedTool[],
+  server: string,
+  noted: Set<string>,
+): void {
+  if (replay.tools.size === 0 || !isDevMode()) return;
+  const names = new Set(listed.map((tool) => tool.name));
+  for (const tool of replay.tools.keys()) {
+    if (names.has(tool) || noted.has(tool)) continue;
+    noted.add(tool);
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[agentfootprint] mcpClient[${server}]: \`replay.tools\` names ${JSON.stringify(tool)}, ` +
+        "which the server does not list, so the entry applies to nothing. Check the name against the server's tool list.",
     );
   }
 }
@@ -438,14 +482,23 @@ function wrapMcpTool(
       // SDK hands the transport — so the retry series that sends it files its
       // attempts into the call's run; and however the call settles, a series
       // still sending is cut, inside the call. Nothing is added to the request.
+      //
+      // How it settles is its verdict: `completed` when the server answered and
+      // not with an error (a result it then cannot decode still completed). A
+      // call that does not complete after its series asked again past an
+      // attempt of unknown effect fails as "may have run" (`callLifetime.ts`).
       const call = openCall(params, ctx, signal, ledger, serverName);
+      let verdict: CallVerdict = 'failed';
       try {
         const result = call.signal
           ? await connection.callTool(params, undefined, { signal: call.signal })
           : await connection.callTool(params);
+        verdict = isToolError(result) ? 'tool-error' : 'completed';
         return readToolResult(result, mcp.name, serverName, resultMode);
+      } catch (error) {
+        throw call.failed(error, verdict);
       } finally {
-        call.close();
+        call.close(verdict);
       }
     },
   };
