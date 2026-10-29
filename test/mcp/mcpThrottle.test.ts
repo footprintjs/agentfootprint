@@ -10,11 +10,12 @@
  *   P6 Performance  — disabled costs nothing; the success path makes exactly one call
  *   P7 ROI          — http ≡ gateway; stdio untouched; unreplayable bodies pass through
  *
- * P4 is the load-bearing one. Retrying a 429 is safe ONLY because a 429 is a
- * pre-execution rejection — the rate limiter refused the request at the edge and
- * the server never ran the tool, so a retry cannot double-execute anything. That
- * is NOT true of a 500 or a timeout, where the call may have half-run. The
- * moment this policy widens past 429, that argument collapses and this library
+ * P4 is the load-bearing one. Retrying a 429 rests on an ASSUMPTION: that the
+ * server rejected the request before executing it. HTTP 429 says only that the
+ * request was rate-limited (RFC 6585 §4), so the 429 is the assumption's basis,
+ * not proof that nothing ran, and this retry has no side-effect guard. A 500 or
+ * a timeout has no such basis: the call may have half-run. The moment this
+ * policy widens past 429, a retry may repeat work that ran, and this library
  * starts silently re-charging cards. The `EVERY OTHER STATUS` table below exists
  * to make widening it fail loudly.
  */
@@ -281,7 +282,7 @@ describe('mcp throttle — P4 property', () => {
   const EVERY_OTHER_STATUS = [400, 401, 403, 404, 408, 409, 428, 430, 500, 502, 503, 504];
 
   it.each(EVERY_OTHER_STATUS)(
-    'P4 HTTP %i is NOT retried — only a 429 is a pre-execution rejection',
+    'P4 HTTP %i is NOT retried — only a 429 is assumed rejected before execution',
     async (status) => {
       const scripted = scriptedFetch([status, 200]);
       const wrapped = retryingFetch(scripted.fetch, true);

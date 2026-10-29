@@ -32,6 +32,7 @@ up into `core/` and are erased by `tsc`: `tools.ts` reads `CheckInDemand`
 - `inputRequest.ts` — the typed ask: `requestInput`'s fields, `applyInputResponse`.
 - `askComponent.ts` — `AskComponent` and its one assert.
 - `toolSessions.ts` — `onTeardown` registration and the firing matrix.
+- `requestEvidence.ts` — the internal per-dispatch port a call's MCP retry series files its request attempts through, and the allow-list every filing passes (`agentfootprint.tools.request_attempts`). Not a public retry API.
 - `toolContract.ts` — `toolContractCheckup`, a pure diff against a server's catalog.
 - `runChain.ts` — `runToolChain`, `runToolAfterChain`, `runMessageChain`.
 - `toolProvider.ts` — `ToolProvider`, `ToolDispatchContext`, `ToolGatePredicate`.
