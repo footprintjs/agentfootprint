@@ -24,8 +24,9 @@ node bench/time/run.mjs --rescore bench/time/runs/<dir>   # re-read saved runs, 
 | `rule-v2.mjs` | `RULE-v2.md` written as code: v1's own clauses, with T2 split into T2a/T2b and T7 added |
 | `run.mjs` | the command: it shifts the clock to the anchor, interleaves the arms under a seeded shuffle, enforces the cap and writes `results.json`, `report.md` and `raw/` |
 
-Paid runs are committed under `runs/`. Their `config` names the reference build as `<scratch>/<folder>`
-(or a path inside the repo), never an absolute path of the machine that ran it (`bench/recordedDir.mjs`).
+Paid runs are committed under `runs/`. Their `config` records the reference build as `<outside-repo>` when
+it sits outside the repo, with no part of its path (not even the folder name), or as a path inside the repo
+(`bench/recordedDir.mjs`).
 
 ## The unread-words line (`RULE-unread.md`, rule `time-rule-unread`)
 

@@ -16,7 +16,7 @@
       "realStart": "2026-10-01T01:03:54.131Z",
       "offsetMs": 744965869
     },
-    "before": "<scratch>/timeimpl2/af",
+    "before": "<outside-repo>",
     "concurrency": 4,
     "maxIterations": 6,
     "maxTokens": 1024,
