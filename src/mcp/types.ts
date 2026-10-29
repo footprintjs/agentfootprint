@@ -260,11 +260,12 @@ export interface McpClientOptions {
    * });
    * ```
    *
-   *   - `policy: 'compatibility'` (the default in 11.x) — today's behaviour,
-   *     by name: a 429 is sent again for every tool, assuming the server
-   *     refused it before running it. Each such retry records that assumption
-   *     (`permission: { by: 'compatibility', assumes: 'refused-before-execution' }`).
-   *   - `policy: 'app-authorized'` (the default from the next major) — a 429
+   *   - `policy: 'compatibility'` (the default, kept in 12.0) — today's
+   *     behaviour, by name: a 429 is sent again for every tool, assuming the
+   *     server refused it before running it. Each such retry records that
+   *     assumption (`permission: { by: 'compatibility', assumes: 'refused-before-execution' }`).
+   *     It gains none of the strict guarantees below.
+   *   - `policy: 'app-authorized'` (opt-in, by name) — a 429
    *     (`'throttle'`) or a request that failed without an answer
    *     (`'network'`) is sent again only for a tool whose entry names it.
    *   - `changes: true` — the tool makes changes: never sent again
@@ -287,13 +288,15 @@ export interface McpClientOptions {
    * Under `'compatibility'` the caller sees the error it always did.
    *
    * `'app-authorized'` needs each request matched to its call and each answer
-   * seen. A connection that cannot give both refuses the call BEFORE it is
-   * sent, with `McpReplayUnavailableError` and a typed `reason`: an MCP SDK
-   * whose `connect` replaces the transport's `onmessage` handler
+   * seen. A connection that cannot give both refuses each tool call BEFORE its
+   * request is sent, with `McpReplayUnavailableError` and a typed `reason`: an
+   * MCP SDK whose `connect` replaces the transport's `onmessage` handler
    * (`'answers-unobserved'`), one that drops the params' `_meta`
    * (`'request-unmatched'`), or a transport whose requests the library cannot
-   * watch, such as `stdio` (`'requests-unwatched'`). Under `'compatibility'`,
-   * `stdio` ignores it: it has no retry series.
+   * watch, such as `stdio` (`'requests-unwatched'`). Connecting and listing
+   * tools still run; only the tool invocation is refused. An explicit
+   * `'app-authorized'` never falls back to `'compatibility'`. Under
+   * `'compatibility'`, `stdio` ignores it: it has no retry series.
    */
   readonly replay?: McpReplayOptions;
 

@@ -52,6 +52,82 @@ Defined in: [src/provider-contract/types.ts:1181](https://github.com/footprintjs
 
 ***
 
+### readFile()?
+
+> `optional` **readFile**(`path`, `options`): `Promise`\<[`CodeFile`](/docs/api/interfaces/CodeFile)\>
+
+Defined in: [src/provider-contract/types.ts:1236](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1236)
+
+OPTIONAL — read ONE file back out of the session, whole or not at all.
+
+`path` is relative to the session's working directory and may not leave
+it. An absolute path, a `..` that climbs above the working directory, a
+backslash, a leading `~` or a NUL is refused by name before anything is
+sent (`CodeSandboxError`, reason `'path-refused'`) — one rule,
+`sandboxPath`, shared by every adapter.
+
+The answer is the file the BACKEND returned for that path, paired to it
+by what the backend said it returned. A file the adapter cannot pair with
+the path it asked for is refused, never guessed at — a backend that
+answers with another file, or with two, has not answered this read.
+
+`maxBytes` is required: a read names its bound. A file over it is refused
+(reason `'file-too-large'`), never cut — a truncated file handed back as
+the file is the silent success this port refuses everywhere else.
+
+Feature-detect with `canReadCodeFiles(session)`.
+
+#### Parameters
+
+##### path
+
+`string`
+
+##### options
+
+[`CodeReadOptions`](/docs/api/interfaces/CodeReadOptions)
+
+#### Returns
+
+`Promise`\<[`CodeFile`](/docs/api/interfaces/CodeFile)\>
+
+***
+
+### runCommand()?
+
+> `optional` **runCommand**(`command`, `options?`): `Promise`\<[`CodeCommandResult`](/docs/api/interfaces/CodeCommandResult)\>
+
+Defined in: [src/provider-contract/types.ts:1251](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1251)
+
+OPTIONAL — run ONE shell command in the session.
+
+It runs arbitrary shell, so an adapter offers it only when the runner was
+built with `commands: true`; otherwise the member is ABSENT. Feature-detect
+with `canRunCodeCommands(session)`. The command runs in the session's
+working directory with the environment `execute` gets, staged-input
+manifest included.
+
+The result says only what the backend reported. The exit status comes
+from the backend or not at all: when it reported none, `exitCode` is
+absent — unknown, never inferred from an error flag and never defaulted.
+stdout and stderr are bounded, and a cut is stated on `truncated`.
+
+#### Parameters
+
+##### command
+
+`string`
+
+##### options?
+
+[`CodeCommandOptions`](/docs/api/interfaces/CodeCommandOptions)
+
+#### Returns
+
+`Promise`\<[`CodeCommandResult`](/docs/api/interfaces/CodeCommandResult)\>
+
+***
+
 ### stageInputs()?
 
 > `optional` **stageInputs**(`inputs`): `Promise`\<readonly [`StagedCodeInput`](/docs/api/interfaces/StagedCodeInput)[]\>
@@ -101,7 +177,7 @@ readonly [`CodeInput`](/docs/api/interfaces/CodeInput)[]
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1223](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1223)
+Defined in: [src/provider-contract/types.ts:1259](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1259)
 
 Release the session.
 
