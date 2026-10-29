@@ -90,7 +90,8 @@ describe('fixture A — the real run, with the app’s declarations', () => {
   it('It found — the declared absence (tool), and the earlier empty result in view (app)', () => {
     expect(said(account, 'found')).toEqual([
       [
-        'get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and found none.',
+        // The tool's declaration, attributed — its search scope kept, never "found none".
+        'get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and reported no matching results.',
         'tool:get_array_inventory',
       ],
       [

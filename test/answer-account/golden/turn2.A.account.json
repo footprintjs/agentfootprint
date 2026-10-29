@@ -1194,18 +1194,18 @@
    },
    "lines": [
     {
-     "text": "get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and found none.",
+     "text": "get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and reported no matching results.",
      "parts": [
       {
        "code": "get_array_inventory"
       },
       {
-       "text": " looked for a VM disk in the RVTools export attributed to the array asked and found none."
+       "text": " looked for a VM disk in the RVTools export attributed to the array asked and reported no matching results."
       }
      ],
      "template": {
       "id": "found.absent",
-      "version": 1
+      "version": 2
      },
      "vars": {
       "tool": {

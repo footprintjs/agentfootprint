@@ -1162,26 +1162,26 @@
   ],
   "source": "library"
  },
- "found.absent@1": {
-  "text": "lookup_volumes looked for lookedFor value and found none.",
+ "found.absent@2": {
+  "text": "lookup_volumes looked for lookedFor value and reported no matching results.",
   "parts": [
    {
     "code": "lookup_volumes"
    },
    {
-    "text": " looked for lookedFor value and found none."
+    "text": " looked for lookedFor value and reported no matching results."
    }
   ],
   "source": "tool:lookup_volumes"
  },
- "found.bare@1": {
-  "text": "lookup_volumes found nothing matching.",
+ "found.bare@2": {
+  "text": "lookup_volumes reported no matching results.",
   "parts": [
    {
     "code": "lookup_volumes"
    },
    {
-    "text": " found nothing matching."
+    "text": " reported no matching results."
    }
   ],
   "source": "tool:lookup_volumes"
@@ -1372,8 +1372,8 @@
   ],
   "source": "library"
  },
- "found.beforePause.absent@1": {
-  "text": "Before the pause, lookup_volumes looked for lookedFor value and found none.",
+ "found.beforePause.absent@2": {
+  "text": "Before the pause, lookup_volumes looked for lookedFor value and reported no matching results.",
   "parts": [
    {
     "text": "Before the pause, "
@@ -1382,13 +1382,13 @@
     "code": "lookup_volumes"
    },
    {
-    "text": " looked for lookedFor value and found none."
+    "text": " looked for lookedFor value and reported no matching results."
    }
   ],
   "source": "tool:lookup_volumes"
  },
- "found.beforePause.bare@1": {
-  "text": "Before the pause, lookup_volumes found nothing matching.",
+ "found.beforePause.bare@2": {
+  "text": "Before the pause, lookup_volumes reported no matching results.",
   "parts": [
    {
     "text": "Before the pause, "
@@ -1397,7 +1397,7 @@
     "code": "lookup_volumes"
    },
    {
-    "text": " found nothing matching."
+    "text": " reported no matching results."
    }
   ],
   "source": "tool:lookup_volumes"

@@ -36,7 +36,7 @@ pinned in `test/answer-account/golden/turn2.A.txt`:
 | It understood  | The library's routing picked the array estate report skill (array-inventory). | library (the label part: app) |
 |                | The app's scoring put it first: 1 against 0 for every other skill.            | app                           |
 | It checked     | get_array_inventory says it checked: • …                                      | tool:get_array_inventory      |
-| It found       | get_array_inventory looked for a VM disk … and found none.                    | tool:get_array_inventory      |
+| It found       | get_array_inventory looked for a VM disk … and reported no matching results.  | tool:get_array_inventory      |
 | How sure       | Not sure — the record holds 2 reasons this answer may not stand: • 1 call declared ground it did not check or can never cover. • 1 call declared that nothing matched. | library |
 | Anything wrong | 1 of the 3 checks could not be run on this record.                            | library                       |
 
@@ -238,13 +238,20 @@ Change a template's text → bump its `version` AND
 pinned digest fails a word change without a bump. English-only surfaces for the
 later locale map: the table itself, `joinAnd`'s ", " / " and ".
 
-**A declared absence is what the tool REPORTED.** "How sure" attributes a call's
-declared absence the way the standing line does ("{who} reported no matching
-results"): `howSure.outcome.nothing@2` reads "The call reported no matching
-results." (set 13), never "The call found nothing." A declaration is the tool's
-claim, vouched by the tool — whether the thing exists is not on the record, and
-"found nothing" reads as if it were. Fixture A's row, pinned in `turn2.A.txt`:
+**A declared absence is what the tool REPORTED.** Every line the account says
+about a call whose tool declared that nothing matched attributes it the way the
+standing line does ("{who} reported no matching results"), with the scope the
+tool declared kept: "It found" — `found.absent@2` ("… looked for {{lookedFor}}
+and reported no matching results."), `found.bare@2` when no scope was declared,
+and the same two before a pause (`found.beforePause.absent@2`,
+`found.beforePause.bare@2`) — and "How sure" — `howSure.outcome.nothing@2`
+("The call reported no matching results."). Template set 13. A declaration is
+the tool's claim, vouched by the tool; whether the thing exists is not on the
+record, and "found none" / "found nothing" read as if it were. A call that never
+ran still "found nothing" (`found.refused` and its siblings): it read nothing.
+Fixture A's rows, pinned in `turn2.A.txt`:
 
 ```text
+  get_array_inventory looked for a VM disk in the RVTools export attributed to the array asked and reported no matching results.  ⟨found.absent@2 · tool:get_array_inventory · recorded⟩
   The call reported no matching results.  ⟨howSure.outcome.nothing@2 · tool:get_array_inventory · recorded⟩
 ```
