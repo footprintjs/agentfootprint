@@ -448,6 +448,12 @@ moment the answer exists:
   separator. It is refused beside `.answerValidation()` (the checks judge the
   exact bytes) and beside `.outputSchema()` (a typed answer is JSON) — the
   standing still travels as data there.
+- `{ standingLine: { when } }` says the line only when it matters:
+  `'always'` (what `true` means), `'unless-consistent'` (not for "consistent with
+  the run's record"), or `'not-sure-or-ask'` (only "not sure" and "ask"). `ask` is
+  said in every mode.
+
+<CodeFile path="examples/features/117-standing-line-modes.ts" region="standing-line-modes" title="examples/features/117-standing-line-modes.ts (region: standing-line-modes)" />
 
 The in-run standing and a later `assessAnswer(recording)` are one fold over the
 same committed rows, so they agree:
@@ -470,6 +476,15 @@ Gotchas:
   a window strategy trims the stored history.
 - **The line is not streamed.** Like the limits block, it is appended to the
   answer the run returns; `stream.token` carries the model's text.
+- **A mode changes the line, nothing else.** The standing travels as data in every
+  mode, the limits block is appended whether or not the line is, and memory keeps
+  exactly the answer that was delivered — the line only when one was appended. With
+  nothing to append there is no separator.
+- **Silence is never a check.** Under `'not-sure-or-ask'`, an answer with no line
+  means no reason fired — which includes "nothing could be checked". The data still
+  tells the two apart (`standing`, `checked`). If your app hides both the line and
+  the data, the person cannot tell "checked" from "not assessed"; the limits block,
+  the answer's material limitations, stays visible in every mode.
 - **Off by default.** Without `.answerLayer()` the chart, the committed rows, the
   events and the answer are exactly what they were.
 

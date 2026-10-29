@@ -674,10 +674,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   private resultsLayerArmed = false;
   /** `.answerLayer()` (honesty layer 4): the answer's standing folded at the
    *  head of the final branch and served as data; `standingLine` — also one
-   *  line appended to a prose answer. Undefined on every agent that did not
+   *  line appended to a prose answer, for the standings its mode names
+   *  (`'always'` for `standingLine: true`). Undefined on every agent that did not
    *  ask, and that undefined is the whole zero-cost guarantee: no stage, no
    *  witness row, no stamp, no event, no bridge. */
-  private readonly answerLayerOption?: { readonly standingLine?: true };
+  private readonly answerLayerOption?: {
+    readonly standingLine?: import('./agent/assessment/compose.js').StandingLineWhen;
+  };
   /** `.time()` (the time layer, `time/`): the fallback zone, as read.
    *  Undefined on every agent that did not ask — then no clock is read, no
    *  time row is filed and `time` on a run is refused. */
@@ -1280,7 +1283,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     if (opts.resultsLayer === true) this.resultsLayerOption = true;
     if (opts.answerLayer === true) this.answerLayerOption = {};
     else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
-      this.answerLayerOption = opts.answerLayer.standingLine === true ? { standingLine: true } : {};
+      // The builder judged the option (`AgentBuilder.ts` · `answerLayerArm`); `true` is 'always'.
+      const line = opts.answerLayer.standingLine;
+      this.answerLayerOption =
+        line === true
+          ? { standingLine: 'always' }
+          : typeof line === 'object' && line !== null
+          ? { standingLine: line.when }
+          : {};
     }
     // The time layer's door (`.time()` / `AgentOptions.time`): `true` or the
     // options, read once; a malformed zone is refused here, at build.
@@ -6093,7 +6103,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             inputs: inputsArmed,
             toolMiddleware: this.toolMiddleware.length > 0,
           }),
-          ...(this.answerLayerOption.standingLine === true && { standingLine: true as const }),
+          ...(this.answerLayerOption.standingLine !== undefined && {
+            standingLine: this.answerLayerOption.standingLine,
+          }),
           ...(this.answerValidationConfig !== undefined && { validated: true as const }),
           ...(displayNameOf !== undefined && { displayNameOf }),
         },

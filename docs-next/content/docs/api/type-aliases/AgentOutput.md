@@ -6,4 +6,4 @@ title: AgentOutput
 
 > **AgentOutput** = `string`
 
-Defined in: [src/core/agent/types.ts:1432](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1432)
+Defined in: [src/core/agent/types.ts:1441](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L1441)
