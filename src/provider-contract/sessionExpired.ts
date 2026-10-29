@@ -3,11 +3,16 @@
  *
  * A managed backend reaps its sessions on its own schedule (a timeout, a stop,
  * a restart), and each service words that differently: AgentCore's Code
- * Interpreter answers with a `ResourceNotFoundException`, a
- * `ValidationException` saying the session is "not active", or a stream error
- * naming an inactive session. A caller that has to recognise all of those by
- * message text will miss the next one. An adapter recognises them once and
- * raises this instead, so "start a new session" is one `instanceof` away.
+ * Interpreter answers with a `ValidationException` saying the session is "not
+ * active", a stream error naming an inactive session, or a
+ * `ResourceNotFoundException` on a call that addresses nothing but the session.
+ * A caller that has to recognise all of those by message text will miss the
+ * next one. An adapter recognises them once and raises this instead, so "start
+ * a new session" is one `instanceof` away.
+ *
+ * Raised only on evidence that names the session. A "not found" that could be
+ * about something else in the session (a file a read asked for) is not taken
+ * as proof the session is gone.
  *
  * It names the session and the signal that said so — never the request that
  * hit it. Nothing reconnects: the session's files and state are gone, and a

@@ -299,14 +299,15 @@ const parkCards = (): readonly string[] => {
 
 /**
  * The code runner's rendered result — BOTH preamble arms of `render`, and the
- * two lines that state an outcome that is not an exit status.
+ * three lines that state an outcome that is not an exit status.
  *
  * The registry drove only the ref-less call, so the arm that speaks when data
  * WAS staged had no row reading it and no marker pinning it; it was registered
  * and unchecked, which is the same green badge as unregistered. So the run
- * makes four calls: one passing a live ref (staged), one passing none, one
- * whose runner reports no outcome at all (`ok` absent), and one whose runner
- * reports a service error with no exit status (`reason: 'service-error'`).
+ * makes five calls: one passing a live ref (staged), one passing none, one
+ * whose runner reports no outcome at all (`ok` absent), one whose runner
+ * reports a service error with no exit status (`serviceError`), and one whose
+ * process was ended by a signal before it exited (`terminatedBy`).
  */
 const codeRunnerResults = async (): Promise<readonly string[]> => {
   let executions = 0;
@@ -319,7 +320,10 @@ const codeRunnerResults = async (): Promise<readonly string[]> => {
       execute: async () => {
         executions += 1;
         if (executions === 3) return { stdout: 'ran', stderr: '' };
-        if (executions === 4) return { ok: false, reason: 'service-error', stdout: '', stderr: '' };
+        if (executions === 4) return { ok: false, serviceError: true, stdout: '', stderr: '' };
+        if (executions === 5) {
+          return { ok: false, terminatedBy: 'SIGKILL', stdout: '', stderr: '' };
+        }
         return { ok: true, stdout: 'ran', stderr: '', artifacts: [] };
       },
       stop: async () => undefined,
@@ -357,11 +361,16 @@ const codeRunnerResults = async (): Promise<readonly string[]> => {
           toolCalls: [{ id: 't4', name: 'run_code', args: { code: 'print(4)' } }],
           stopReason: 'tool_use',
         },
+        {
+          content: '',
+          toolCalls: [{ id: 't5', name: 'run_code', args: { code: 'print(5)' } }],
+          stopReason: 'tool_use',
+        },
         { content: 'done', toolCalls: [], stopReason: 'stop' },
       ] as never,
     }),
     model: 'mock',
-    maxIterations: 6,
+    maxIterations: 7,
     artifacts: { store },
   })
     .system('s')
@@ -1453,6 +1462,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /\bpaths\b/,
       /exit status unknown/,
       /not confirmed: the code runner flagged an error/,
+      /no exit status reported \(terminated by SIGKILL\)/,
     ],
     compose: codeRunnerResults,
   },

@@ -4,7 +4,7 @@ title: CodeResult
 
 # Interface: CodeResult
 
-Defined in: [src/provider-contract/types.ts:1390](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1390)
+Defined in: [src/provider-contract/types.ts:1384](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1384)
 
 What one execution produced.
 
@@ -14,7 +14,7 @@ What one execution produced.
 
 > `readonly` `optional` **artifacts?**: readonly `object`[]
 
-Defined in: [src/provider-contract/types.ts:1441](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1441)
+Defined in: [src/provider-contract/types.ts:1446](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1446)
 
 Files the run produced, described rather than inlined — the whole point is
  that big data does not enter the window. All fields beyond the original
@@ -52,7 +52,7 @@ Files the run produced, described rather than inlined — the whole point is
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1408](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1408)
+Defined in: [src/provider-contract/types.ts:1402](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1402)
 
 The exit status — exactly when the runner reported one. Never inferred
  from an error flag, never defaulted.
@@ -63,7 +63,7 @@ The exit status — exactly when the runner reported one. Never inferred
 
 > `readonly` `optional` **ok?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1403](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1403)
+Defined in: [src/provider-contract/types.ts:1397](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1397)
 
 Did the code run to completion without an error exit? WHAT THE RUNNER
 REPORTED, nothing more.
@@ -71,21 +71,23 @@ REPORTED, nothing more.
 `true` or `false` only when the backend said so: an exit status, or its
 own error verdict. ABSENT when it reported neither — the outcome is
 unknown, and an absent `ok` is never success. (Before this was optional,
-`agentCoreCodeRunner` filled `true` from silence.) `false` covers two
-different facts, told apart by the next two fields: a program that exited
-non-zero (`exitCode`), and a backend error with no exit status
-(`reason: 'service-error'`), where the run is unconfirmed.
+`agentCoreCodeRunner` filled `true` from silence.) A `false` is told
+apart by the fields below: a program that exited non-zero (`exitCode`), a
+backend error with no exit status (`serviceError`, where the run is
+unconfirmed), and a process ended before it exited (`terminatedBy`).
 
 ***
 
-### reason?
+### serviceError?
 
-> `readonly` `optional` **reason?**: `"service-error"`
+> `readonly` `optional` **serviceError?**: `true`
 
-Defined in: [src/provider-contract/types.ts:1411](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1411)
+Defined in: [src/provider-contract/types.ts:1409](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1409)
 
-Present when the outcome is not an exit status — see [CodeRunReason](/docs/api/type-aliases/CodeRunReason).
- With `'service-error'`, `ok` is `false` and `exitCode` is absent.
+`true` when the backend flagged its answer as an error and reported NO
+exit status: whether the code ran at all is not confirmed. That is not a
+program that failed — a program that ran and failed has an `exitCode`.
+`ok` is `false` alongside it.
 
 ***
 
@@ -93,7 +95,7 @@ Present when the outcome is not an exit status — see [CodeRunReason](/docs/api
 
 > `readonly` **stderr**: `string`
 
-Defined in: [src/provider-contract/types.ts:1405](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1405)
+Defined in: [src/provider-contract/types.ts:1399](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1399)
 
 ***
 
@@ -101,7 +103,20 @@ Defined in: [src/provider-contract/types.ts:1405](https://github.com/footprintjs
 
 > `readonly` **stdout**: `string`
 
-Defined in: [src/provider-contract/types.ts:1404](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1404)
+Defined in: [src/provider-contract/types.ts:1398](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1398)
+
+***
+
+### terminatedBy?
+
+> `readonly` `optional` **terminatedBy?**: `string`
+
+Defined in: [src/provider-contract/types.ts:1416](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1416)
+
+The signal that ended the process before it exited, when the runner knows
+it (`'SIGKILL'`): there is no exit status then, and none is made up. A
+local child the operating system ended, or one the runner ended because
+its output passed the buffer ceiling. `ok` is `false` alongside it.
 
 ***
 
@@ -109,7 +124,7 @@ Defined in: [src/provider-contract/types.ts:1404](https://github.com/footprintjs
 
 > `readonly` `optional` **truncated?**: [`CodeTruncation`](/docs/api/interfaces/CodeTruncation)
 
-Defined in: [src/provider-contract/types.ts:1451](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1451)
+Defined in: [src/provider-contract/types.ts:1456](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1456)
 
 Present IFF output was cut — see [CodeTruncation](/docs/api/interfaces/CodeTruncation). An unstated
  slice is a silent success.

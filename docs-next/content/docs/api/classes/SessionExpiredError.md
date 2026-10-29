@@ -4,17 +4,22 @@ title: SessionExpiredError
 
 # Class: SessionExpiredError
 
-Defined in: [src/provider-contract/sessionExpired.ts:17](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L17)
+Defined in: [src/provider-contract/sessionExpired.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L22)
 
 `SessionExpiredError` — a remote session that is gone, said ONE way.
 
 A managed backend reaps its sessions on its own schedule (a timeout, a stop,
 a restart), and each service words that differently: AgentCore's Code
-Interpreter answers with a `ResourceNotFoundException`, a
-`ValidationException` saying the session is "not active", or a stream error
-naming an inactive session. A caller that has to recognise all of those by
-message text will miss the next one. An adapter recognises them once and
-raises this instead, so "start a new session" is one `instanceof` away.
+Interpreter answers with a `ValidationException` saying the session is "not
+active", a stream error naming an inactive session, or a
+`ResourceNotFoundException` on a call that addresses nothing but the session.
+A caller that has to recognise all of those by message text will miss the
+next one. An adapter recognises them once and raises this instead, so "start
+a new session" is one `instanceof` away.
+
+Raised only on evidence that names the session. A "not found" that could be
+about something else in the session (a file a read asked for) is not taken
+as proof the session is gone.
 
 It names the session and the signal that said so — never the request that
 hit it. Nothing reconnects: the session's files and state are gone, and a
@@ -31,7 +36,7 @@ next step is a new session.
 
 > **new SessionExpiredError**(`backend`, `sessionId`, `evidence`): `SessionExpiredError`
 
-Defined in: [src/provider-contract/sessionExpired.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L26)
+Defined in: [src/provider-contract/sessionExpired.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L31)
 
 #### Parameters
 
@@ -61,7 +66,7 @@ Defined in: [src/provider-contract/sessionExpired.ts:26](https://github.com/foot
 
 > `readonly` **backend**: `string`
 
-Defined in: [src/provider-contract/sessionExpired.ts:20](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L20)
+Defined in: [src/provider-contract/sessionExpired.ts:25](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L25)
 
 The adapter that raised it, e.g. `'agentCoreCodeRunner'`.
 
@@ -83,7 +88,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_SESSION_EXPIRED"`
 
-Defined in: [src/provider-contract/sessionExpired.ts:18](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L18)
+Defined in: [src/provider-contract/sessionExpired.ts:23](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L23)
 
 ***
 
@@ -91,7 +96,7 @@ Defined in: [src/provider-contract/sessionExpired.ts:18](https://github.com/foot
 
 > `readonly` **evidence**: `string`
 
-Defined in: [src/provider-contract/sessionExpired.ts:24](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L24)
+Defined in: [src/provider-contract/sessionExpired.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L29)
 
 The service's own name for the signal that said so, e.g. `'ResourceNotFoundException'`.
 
@@ -125,7 +130,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **sessionId**: `string`
 
-Defined in: [src/provider-contract/sessionExpired.ts:22](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L22)
+Defined in: [src/provider-contract/sessionExpired.ts:27](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/sessionExpired.ts#L27)
 
 The backend's id for the session that is gone.
 

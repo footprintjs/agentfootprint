@@ -1495,8 +1495,9 @@ the same file-name encoding: one `writeFiles` call per staging, text as text and
 bytes as bytes (never base64 inside text), refused before it is sent when the
 request would pass AgentCore's 100 MB per-call limit. AgentCore takes no
 environment variables, so the adapter sets `AF_STAGED_INPUTS` in the code's
-runtime with one setup call before the code runs, and checks the line that call
-prints; when that is not confirmed the run fails with `CodeSandboxError`
+runtime with a setup call before EVERY run — the runtime keeps state the code
+can change — and checks the line that call prints; when that is not confirmed
+the run fails with `CodeSandboxError`
 (`reason: 'staged-inputs-unset'`) instead of running code that cannot find its
 inputs. Reading files back and running commands are covered under
 [Tools & gateways](doc:tools-and-gateways#files-in-and-out-and-commands).

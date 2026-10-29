@@ -4,7 +4,7 @@ title: CodeTruncation
 
 # Interface: CodeTruncation
 
-Defined in: [src/provider-contract/types.ts:1373](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1373)
+Defined in: [src/provider-contract/types.ts:1376](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1376)
 
 Present IFF output was cut, and then it says by how much.
 
@@ -20,7 +20,7 @@ never told was truncated. An unstated slice is a silent success.
 
 > `readonly` `optional` **ofChars?**: `number`
 
-Defined in: [src/provider-contract/types.ts:1377](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1377)
+Defined in: [src/provider-contract/types.ts:1380](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1380)
 
 The pre-truncation length, in characters, of whichever stream was cut.
 
@@ -30,7 +30,7 @@ The pre-truncation length, in characters, of whichever stream was cut.
 
 > `readonly` `optional` **stderr?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1375](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1375)
+Defined in: [src/provider-contract/types.ts:1378](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1378)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [src/provider-contract/types.ts:1375](https://github.com/footprintjs
 
 > `readonly` `optional` **stdout?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1374](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1374)
+Defined in: [src/provider-contract/types.ts:1377](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1377)

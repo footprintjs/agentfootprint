@@ -44,11 +44,13 @@
  * `stageInputs` writes TEXT as text and BYTES as a blob — never base64 inside
  * text with a decode step — in ONE `writeFiles` call, refused before it is
  * sent when its body would pass AgentCore's 100 MB per-call limit. AgentCore
- * takes no environment, so `AF_STAGED_INPUTS` reaches code by one setup
- * execution per runtime and manifest (confirmed by the line it prints) and
+ * takes no environment, so `AF_STAGED_INPUTS` reaches code by a setup
+ * execution before EVERY run (confirmed by the line it prints; the runtime is
+ * mutable by the code it runs, so an earlier setup proves nothing now) and
  * reaches a command as an `export` line ahead of it. `readFile` reads ONE path
- * and pairs the file to it by the URI the service returned, failing closed on
- * a missing or different one; text or bytes is whichever field the service
+ * and pairs the file to it by the URI the service returned — one `file:///`
+ * form, read one way, a raw query or fragment refused — failing closed on a
+ * missing or different one; text or bytes is whichever field the service
  * filled, and a file over `maxBytes` is refused, never cut.
  *
  * ── Commands are opt-in ─────────────────────────────────────────────────────
@@ -60,8 +62,12 @@
  * or VPC. This adapter can neither see nor change that.
  *
  * ── A session that is gone says so, once ────────────────────────────────────
- * A `ResourceNotFoundException`, or a service error saying the session is "not
- * active", becomes {@link SessionExpiredError} on every verb.
+ * A service error naming the session as "not active" becomes
+ * {@link SessionExpiredError} on every verb, and so does a
+ * `ResourceNotFoundException` on a verb that addresses nothing but the session
+ * (code, a command, a write). On a READ, "not found" may mean the file, so it
+ * is `CodeSandboxError` (`'file-not-returned'`), naming both possibilities —
+ * never offered as proof the session is gone.
  *
  * ── How this talks to the SDK (the 9.4.0 law) ───────────────────────────────
  * Through `client.send(new SomeCommand(input))`, never a method on the client.
@@ -109,6 +115,7 @@ import {
 } from './agentcoreClient.js';
 import {
   AGENTCORE_MAX_REQUEST_BYTES,
+  errorNameOf,
   MANIFEST_SET_MARKER,
   STAGED_INPUTS_DIR,
   fileContent,
@@ -246,8 +253,6 @@ function openSession(plan: SessionPlan): CodeSession {
   let stopped = false;
   /** name → path, exactly as the manifest carries it. */
   const staged = new Map<string, string>();
-  /** runtime → the manifest JSON last confirmed set in it. */
-  const manifestSetIn = new Map<string, string>();
 
   const refuseIfStopped = (toDo: string): void => {
     if (stopped) {
@@ -309,17 +314,36 @@ function openSession(plan: SessionPlan): CodeSession {
       return await untilAborted(api.invoke(input, { abortSignal: signal }), signal);
     } catch (err) {
       if (signal.aborted) throw abortErrorOf(signal);
-      const evidence = sessionExpiryEvidence(err);
-      if (evidence !== undefined) throw new SessionExpiredError(BACKEND, sessionId, evidence);
+      const evidence = sessionExpiryEvidence(err, input.name);
+      if (evidence === 'session') {
+        throw new SessionExpiredError(BACKEND, sessionId, errorNameOf(err));
+      }
+      if (evidence === 'file-or-session' && input.name === 'readFiles') {
+        // A read names a FILE as well as the session, so "not found" can mean
+        // either. It is not taken as proof the session is gone.
+        throw new CodeSandboxError(
+          'file-not-returned',
+          `agentCoreCodeRunner: reading '${input.arguments.paths.join(', ')}' — the service ` +
+            'answered ResourceNotFoundException, which can mean the file is missing or the ' +
+            'session is gone; which one is not known here.',
+          { path: input.arguments.paths[0] ?? '' },
+        );
+      }
       if (input.name === 'executeCode') throw err;
       throw serviceRefusal(err, input.name) ?? err;
     }
   };
 
   /**
-   * Make sure the runtime `language` runs in can read {@link STAGED_INPUTS_ENV}.
-   * Nothing when nothing was staged — a session that never stages sends
-   * exactly what it always sent.
+   * Set {@link STAGED_INPUTS_ENV} in the runtime `language` runs in — before
+   * EVERY execution once anything is staged, and confirmed each time.
+   *
+   * Never skipped because this process set it before: the runtime is mutable
+   * by the very code it runs, so a previous execution may have changed or
+   * deleted the variable, and a record of what was once sent is not an
+   * observation of what the runtime holds. Re-applying it costs one call per
+   * execution, inside the same deadline. Nothing when nothing was staged — a
+   * session that never stages sends exactly what it always sent.
    */
   const exposeManifest = async (
     language: string | undefined,
@@ -336,7 +360,6 @@ function openSession(plan: SessionPlan): CodeSession {
           'a manifest it could not read. AgentCore runs python, javascript and typescript.',
       );
     }
-    if (manifestSetIn.get(runtime) === json) return;
     const answer = await invoke(
       {
         ...target,
@@ -355,7 +378,6 @@ function openSession(plan: SessionPlan): CodeSession {
           'manifest it may not be able to read.',
       );
     }
-    manifestSetIn.set(runtime, json);
   };
 
   const session: CodeSession = {
@@ -383,13 +405,13 @@ function openSession(plan: SessionPlan): CodeSession {
       // An error flag with no exit status is the SERVICE's verdict, not the
       // program's: whether the code ran is unconfirmed, and the result says
       // which kind of `false` it is.
-      const unconfirmed = answer.isError === true && answer.exitCode === undefined;
+      const serviceError = answer.isError === true && answer.exitCode === undefined;
       return {
         ...(ok !== undefined && { ok }),
         stdout: bounded.stdout,
         stderr: bounded.stderr,
         ...(answer.exitCode !== undefined && { exitCode: answer.exitCode }),
-        ...(unconfirmed && { reason: 'service-error' as const }),
+        ...(serviceError && { serviceError: true as const }),
         ...(bounded.truncated !== undefined && { truncated: bounded.truncated }),
       };
     },
@@ -477,7 +499,6 @@ function openSession(plan: SessionPlan): CodeSession {
       if (stopped) return;
       stopped = true;
       staged.clear();
-      manifestSetIn.clear();
       try {
         await api.stopSession({ codeInterpreterIdentifier: identifier, sessionId });
       } catch (err) {

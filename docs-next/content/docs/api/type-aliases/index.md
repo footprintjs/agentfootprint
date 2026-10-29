@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-146 exported from `agentfootprint`.
+145 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -32,7 +32,6 @@ title: Type Aliases
 - [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)
 - [`CheckInScorer`](/docs/api/type-aliases/CheckInScorer)
 - [`CodeRunnerToolScope`](/docs/api/type-aliases/CodeRunnerToolScope)
-- [`CodeRunReason`](/docs/api/type-aliases/CodeRunReason)
 - [`CodeSandboxRefusal`](/docs/api/type-aliases/CodeSandboxRefusal)
 - [`ColumnCheckMode`](/docs/api/type-aliases/ColumnCheckMode)
 - [`ColumnType`](/docs/api/type-aliases/ColumnType)

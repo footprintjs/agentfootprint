@@ -54,13 +54,7 @@
 
 import { fnv1a } from '../lib/fnv1a.js';
 import { isLineBreak } from '../lib/linearText.js';
-import type {
-  CodeInput,
-  CodeResult,
-  CodeRunner,
-  CodeRunReason,
-  CodeSession,
-} from '../provider-contract/types.js';
+import type { CodeInput, CodeResult, CodeRunner, CodeSession } from '../provider-contract/types.js';
 import { canStageCodeInputs, STAGED_INPUTS_ENV } from '../provider-contract/types.js';
 import type { ToolWants } from '../artifacts/wants.js';
 import type { CredentialNeed } from '../identity/types.js';
@@ -173,15 +167,17 @@ export interface CodeRunFacts {
   readonly outputChars: number;
   readonly truncated: boolean;
   /** What the runner REPORTED (`CodeResult.ok`). ABSENT when it reported
-   *  nothing — unknown, never recorded as success. `false` is a failed
-   *  program when `exitCode` is present, and an unconfirmed run when `reason`
-   *  is `'service-error'`. */
+   *  nothing — unknown, never recorded as success. A `false` is told apart by
+   *  the three fields below. */
   readonly ok?: boolean;
   /** The program's exit status — exactly when the runner supplied one. */
   readonly exitCode?: number;
-  /** `'service-error'`: the runner flagged an error with no exit status, so
-   *  whether the code ran is not confirmed. Absent otherwise. */
-  readonly reason?: CodeRunReason;
+  /** `true`: the runner flagged an error with no exit status, so whether the
+   *  code ran is not confirmed — not a failed program. */
+  readonly serviceError?: true;
+  /** The signal that ended the process before it exited, when the runner
+   *  knows it (`'SIGKILL'`): no exit status exists, and none is recorded. */
+  readonly terminatedBy?: string;
   readonly shapeHash: string;
 }
 
@@ -431,10 +427,12 @@ export function codeRunnerTool(
         // outcome leaves no `ok` here, so the record never says "ran clean"
         // on the strength of silence.
         ...(result.ok !== undefined && { ok: result.ok }),
-        // The two facts that tell a failed program from an unconfirmed run,
-        // copied exactly when the runner supplied them — never inferred here.
+        // The facts that tell a failed program from an unconfirmed run and
+        // from a stopped one, copied exactly when the runner supplied them —
+        // never inferred here.
         ...(result.exitCode !== undefined && { exitCode: result.exitCode }),
-        ...(result.reason !== undefined && { reason: result.reason }),
+        ...(result.serviceError === true && { serviceError: true as const }),
+        ...(result.terminatedBy !== undefined && { terminatedBy: result.terminatedBy }),
         shapeHash: fnv1a(codeShape(args.code)),
       });
       return rendered;
@@ -837,28 +835,8 @@ function render(
   const stderr = clip(result.stderr, maxOutputChars, result.truncated?.stderr === true);
   if (stdout.text.length > 0) parts.push(stdout.text);
   if (stderr.text.length > 0) parts.push(`stderr:\n${stderr.text}`);
-  if (result.reason === 'service-error' && result.ok !== true) {
-    // NOT a failed program: the service flagged an error and reported no exit
-    // status, so the code may not have run at all. Saying "[exit non-zero]"
-    // here would invent the one fact that is missing.
-    parts.push(
-      `[not confirmed: the code runner flagged an error for the ${toolName} call this result ` +
-        'answers and reported no exit status, so whether that code ran is not known]',
-    );
-  } else if (result.ok === false) {
-    parts.push(
-      `[exit ${result.exitCode ?? 'non-zero'}] the code did not complete successfully — read ` +
-        'stderr above and fix it.',
-    );
-  } else if (result.ok === undefined) {
-    // UNKNOWN IS STATED, like a cut. A runner that reported neither an exit
-    // status nor an error has not said the code finished, and output alone
-    // cannot say it either — a script can print its answer and then fail.
-    parts.push(
-      `[exit status unknown: the code runner reported neither an exit status nor an error for ` +
-        `the ${toolName} call this result answers, so whether that code finished is not known]`,
-    );
-  }
+  const outcome = outcomeLine(result, toolName);
+  if (outcome !== undefined) parts.push(outcome);
   for (const artifact of result.artifacts ?? []) {
     const outcome = minted?.get(artifact.name);
     // A ref the RUNNER already stamped is honored; one this tool minted wins
@@ -885,6 +863,51 @@ function render(
     parts.push('(the code ran and printed nothing — print the value you want returned)');
   }
   return parts.join('\n');
+}
+
+/**
+ * The one line that states how the run ended — built only from the fields the
+ * runner supplied, and never contradicting one of them.
+ *
+ * - `[exit N]` appears only when N was supplied. An absent exit status is
+ *   never written as one ("non-zero" was a guess the runner never made).
+ * - A service error with no exit status is NOT a failed program: whether the
+ *   code ran is not confirmed.
+ * - A process ended before it exited says so, with the signal when known.
+ * - An exit status that was supplied is never called missing: with
+ *   `exitCode: 0` and no verdict, the run reported its exit, so there is
+ *   nothing to add.
+ * - Only when the runner supplied none of these is the outcome stated as
+ *   unknown — UNKNOWN IS STATED, like a cut, because output alone cannot say
+ *   a script finished: it can print its answer and then fail.
+ */
+function outcomeLine(result: CodeResult, toolName: string): string | undefined {
+  if (result.ok === true) return undefined;
+  if (result.serviceError === true && result.exitCode === undefined) {
+    return (
+      `[not confirmed: the code runner flagged an error for the ${toolName} call this result ` +
+      'answers and reported no exit status, so whether that code ran is not known]'
+    );
+  }
+  if (result.exitCode !== undefined) {
+    if (result.exitCode === 0 && result.ok === undefined) return undefined;
+    return (
+      `[exit ${result.exitCode}] the code did not complete successfully — read stderr above ` +
+      'and fix it.'
+    );
+  }
+  if (result.ok === false) {
+    const ended =
+      result.terminatedBy === undefined ? '' : ` (terminated by ${result.terminatedBy})`;
+    return (
+      `[no exit status reported${ended}: the code of the ${toolName} call this result answers ` +
+      'did not run to completion — read stderr above]'
+    );
+  }
+  return (
+    `[exit status unknown: the code runner reported neither an exit status nor an error for ` +
+    `the ${toolName} call this result answers, so whether that code finished is not known]`
+  );
 }
 
 /** Clip to the tool's ceiling, and SAY SO — including a cut the runner made. */

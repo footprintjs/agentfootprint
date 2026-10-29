@@ -70,6 +70,8 @@ export interface CommandReport {
   readonly isError?: boolean;
   /** A stream the backend itself cut before handing it over. */
   readonly overflowed?: 'stdout' | 'stderr';
+  /** The signal that ended the command before it exited, when known. */
+  readonly terminatedBy?: string;
 }
 
 /** A command's options, checked once. */
@@ -99,6 +101,7 @@ export function commandResult(report: CommandReport, bounds: CommandBounds): Cod
     stderr: bounded.stderr,
     ...(report.exitCode !== undefined && { exitCode: report.exitCode }),
     ...(report.isError !== undefined && { isError: report.isError }),
+    ...(report.terminatedBy !== undefined && { terminatedBy: report.terminatedBy }),
     ...(bounded.truncated !== undefined && { truncated: bounded.truncated }),
     ...(bounds.checkpoint !== undefined && {
       checkpointSeen: printedLine(report.stdout, bounds.checkpoint),

@@ -409,7 +409,7 @@ interface CodeSession {
 }
 ```
 
-`CodeResult` is `{ ok?, stdout, stderr, exitCode?, reason?, artifacts?, truncated? }`.
+`CodeResult` is `{ ok?, stdout, stderr, exitCode?, serviceError?, terminatedBy?, artifacts?, truncated? }`.
 `truncated` is the load-bearing field: **an unstated slice is a silent success.**
 A runner that quietly cuts its own output to fit is the same context-window bug
 wearing a different hat, and the model would reason over a fragment of a table
@@ -418,19 +418,22 @@ believing it had the table.
 `ok` is what the runner reported: `true` or `false` only when the backend said
 which — an exit status, or its own error verdict. When it reported neither, `ok`
 is **absent**: the outcome is unknown, and an absent `ok` is never success.
-Check `result.ok === true` where you mean "it worked". A `false` is one of two
+Check `result.ok === true` where you mean "it worked". A `false` is one of three
 different facts, and the result says which:
 
 - **a program that failed** — `exitCode` holds the status the runner reported
   (it is never inferred and never defaulted);
-- **an unconfirmed run** — `reason: 'service-error'` (a `CodeRunReason`): the
-  backend flagged an error and reported no exit status, so whether the code ran
-  at all is not known.
+- **an unconfirmed run** — `serviceError: true`: the backend flagged an error
+  and reported no exit status, so whether the code ran at all is not known;
+- **a process ended before it exited** — `terminatedBy` names the signal when
+  the runner knows it (`'SIGKILL'`), and there is no exit status at all.
 
-`codeRunnerTool` keeps the three apart in the result the model reads
-(`[exit 7] …`, `[not confirmed: …]`, `[exit status unknown: …]`) and in the
-`tools.code_run` record, which carries `ok`, `exitCode` and `reason` exactly as
-the runner supplied them.
+`codeRunnerTool` keeps them apart in the result the model reads — `[exit 7] …`,
+`[not confirmed: …]`, `[no exit status reported (terminated by SIGKILL): …]` and
+`[exit status unknown: …]` — writes `[exit N]` only when N was supplied, and
+never contradicts a field the runner did supply. The `tools.code_run` record
+carries `ok`, `exitCode`, `serviceError` and `terminatedBy` exactly as the
+runner supplied them.
 
 `start({ key })` takes the ISOLATION key the caller derived. An adapter may use
 it to name the remote session; it must never widen it.
@@ -520,29 +523,45 @@ only what the backend reported.
   through the `AF_STAGED_INPUTS` manifest on both runners. On AgentCore one
   staging call is one request, refused before it is sent when it would pass
   AgentCore's 100 MB per-call limit (`CodeSandboxError`, `reason:
-  'request-too-large'`).
+  'request-too-large'`). AgentCore takes no environment, so the adapter sets the
+  variable in the code's runtime **before every execution**, inside the same
+  deadline, and checks the line that setup prints — the runtime keeps state the
+  code can change, so a value set for an earlier run is never assumed to still
+  be there.
 - **Out — `readFile(path, { maxBytes })`.** One file, whole, or refused. The bound
   is required, and a file over it is refused (`'file-too-large'`), never cut. On
   AgentCore the file is paired with the path by the URI the service put on it; a
-  missing or different URI fails closed (`'uri-missing'`, `'uri-mismatch'`). Text
-  or bytes is whichever the backend returned — never decided by the extension;
-  `localCodeRunner` returns bytes, because a file on disk is bytes.
+  missing or different URI fails closed (`'uri-missing'`, `'uri-mismatch'`). The
+  URI is read one way, as a `file:///` URI: each segment percent-decoded, a raw
+  `?` or `#` refused as the query or fragment it is (a name with `?` or `#`
+  arrives as `%3F` / `%23`), and an encoded `/` never taken for a separator.
+  Text or bytes is whichever the backend returned — never decided by the
+  extension; `localCodeRunner` returns bytes, because a file on disk is bytes.
 - **Commands — `runCommand(command, { timeoutMs, signal, maxOutputChars,
   checkpoint })`.** It runs arbitrary shell, so it is **off by default**: a session
   has it only when the runner is built with `commands: true` (one runner per agent
   that should have it). stdout and stderr are bounded and the cut stated on
   `truncated`. `exitCode` is the one the backend reported, or absent — never
-  inferred from AgentCore's `isError` (reported separately, as `isError`).
+  inferred from AgentCore's `isError` (reported separately, as `isError`); a
+  process ended before it exited names the signal on `terminatedBy`. On POSIX
+  `localCodeRunner` runs each command, and each code run, in a process group of
+  its own, and a timeout or an abort kills the WHOLE group with SIGKILL — so
+  nothing the command started writes afterwards. On Windows only the process
+  itself can be stopped, and the timeout error says work it started may still
+  be running.
   A `checkpoint` line is looked for in the **whole** stdout, before the cut, and
   `checkpointSeen` proves only that the command got that far.
 - **Paths.** Both runners apply one rule, `sandboxPath`: relative to the working
   directory and never above it. An absolute path, a `..` that climbs out, a
   backslash, a leading `~` or a NUL is refused (`'path-refused'`) before anything
   is read or sent. `localCodeRunner` also refuses a symbolic link that leads out.
-- **A gone session.** On AgentCore a `ResourceNotFoundException`, or a service
-  error saying the session is "not active", is one `SessionExpiredError` on every
-  verb. Start a new session: nothing reconnects, because a session name is not an
-  address.
+- **A gone session.** On AgentCore a service error naming the session as "not
+  active", or a `ResourceNotFoundException` on a call that addresses nothing but
+  the session (code, a command, a write), is one `SessionExpiredError`. On a
+  READ the same exception may mean the file, so it is `'file-not-returned'`,
+  naming both possibilities — never offered as proof the session is gone. Start
+  a new session after `SessionExpiredError`: nothing reconnects, because a
+  session name is not an address.
 
 The shapes: `readFile` takes `CodeReadOptions` (`maxBytes`, `signal`) and
 returns a `CodeFile`; `runCommand` takes `CodeCommandOptions` and returns a
@@ -581,9 +600,10 @@ agent is repeatedly writing the same missing operation; the most frequent
 shapes are a measured backlog of tools worth implementing. The remaining facts
 — language, staged-input count, output size, truncation and success — let you
 prioritize that backlog without sending the model-written code or the customer
-data embedded in it to an observability provider. `ok`, `exitCode` and `reason`
-are recorded exactly as the runner supplied them, so a failed program, an
-unconfirmed run and an unreported outcome stay three different rows.
+data embedded in it to an observability provider. `ok`, `exitCode`,
+`serviceError` and `terminatedBy` are recorded exactly as the runner supplied
+them, so a failed program, an unconfirmed run, a stopped process and an
+unreported outcome stay different rows.
 
 ### Why it is a plain tool — and what the chart form buys you
 

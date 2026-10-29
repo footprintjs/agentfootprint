@@ -14,7 +14,7 @@ What one shell command produced — only what the backend reported.
 
 > `readonly` `optional` **checkpointSeen?**: `boolean`
 
-Defined in: [src/provider-contract/types.ts:1361](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1361)
+Defined in: [src/provider-contract/types.ts:1364](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1364)
 
 Present IFF a `checkpoint` was asked for: whether stdout held that line.
 
@@ -60,10 +60,21 @@ Defined in: [src/provider-contract/types.ts:1344](https://github.com/footprintjs
 
 ***
 
+### terminatedBy?
+
+> `readonly` `optional` **terminatedBy?**: `string`
+
+Defined in: [src/provider-contract/types.ts:1360](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1360)
+
+The signal that ended the command before it exited, when the runner knows
+ it (`'SIGKILL'`). There is no `exitCode` then, and none is made up.
+
+***
+
 ### truncated?
 
 > `readonly` `optional` **truncated?**: [`CodeTruncation`](/docs/api/interfaces/CodeTruncation)
 
-Defined in: [src/provider-contract/types.ts:1359](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1359)
+Defined in: [src/provider-contract/types.ts:1362](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1362)
 
 Present IFF output was cut — see [CodeTruncation](/docs/api/interfaces/CodeTruncation).

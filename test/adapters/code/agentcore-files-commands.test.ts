@@ -233,7 +233,7 @@ describe('agentCoreCodeRunner.stageInputs — AgentCore’s 100 MB per-call limi
 // ─── 3. AF_STAGED_INPUTS, filled as localCodeRunner fills it ─────────────
 
 describe('agentCoreCodeRunner — AF_STAGED_INPUTS reaches the code and the commands', () => {
-  it('stages, then sets the manifest in the runtime ONCE, then runs the code unchanged', async () => {
+  it('stages, then sets the manifest before EVERY execution, and runs the code unchanged', async () => {
     const { session, invokes } = await open(
       (input) => {
         if (toolOf(input) === 'writeFiles') return written();
@@ -247,18 +247,83 @@ describe('agentCoreCodeRunner — AF_STAGED_INPUTS reaches the code and the comm
     const second = await session.execute({ code: 'print(42)' });
 
     const sent = invokes();
-    expect(sent.map(toolOf)).toEqual(['writeFiles', 'executeCode', 'executeCode', 'executeCode']);
-    const setup = (sent[1]?.['arguments'] as { code: string; language: string }) ?? {};
-    expect(setup.code).toBe(
-      manifestSetupCode('python', JSON.stringify({ dataset: 'af-staged-inputs/dataset.json' })),
+    // A setup before each run: what this process sent before is not what the
+    // runtime holds now.
+    expect(sent.map(toolOf)).toEqual([
+      'writeFiles',
+      'executeCode',
+      'executeCode',
+      'executeCode',
+      'executeCode',
+    ]);
+    const setup = manifestSetupCode(
+      'python',
+      JSON.stringify({ dataset: 'af-staged-inputs/dataset.json' }),
     );
-    expect(setup.language).toBe('python');
+    expect(sent[1]?.['arguments']).toEqual({ code: setup, language: 'python' });
+    expect(sent[3]?.['arguments']).toEqual({ code: setup, language: 'python' });
     // The caller's code goes out byte for byte — no prelude, no shifted lines.
     expect(sent[2]?.['arguments']).toEqual({ code: 'print(42)', language: 'python' });
-    expect(sent[3]?.['arguments']).toEqual({ code: 'print(42)', language: 'python' });
+    expect(sent[4]?.['arguments']).toEqual({ code: 'print(42)', language: 'python' });
     expect(first.stdout).toBe('42\n');
     expect(second.stdout).toBe('42\n');
   });
+
+  it('a run that CLEARS the variable cannot hide the declared paths from the next run', async () => {
+    // A runtime that keeps its environment between runs, as AgentCore's does:
+    // the setup sets the variable, user code may change or delete it.
+    const env = new Map<string, string>();
+    const { session } = await open((input) => {
+      if (toolOf(input) === 'writeFiles') return written();
+      const code = (input['arguments'] as { code: string }).code;
+      if (code.includes(MANIFEST_SET_MARKER)) {
+        const literal = /environ\["AF_STAGED_INPUTS"\] = (".*")$/m.exec(code)?.[1] ?? '""';
+        env.set(STAGED_INPUTS_ENV, JSON.parse(literal) as string);
+        return setupConfirmed();
+      }
+      if (code === 'del os.environ["AF_STAGED_INPUTS"]') env.delete(STAGED_INPUTS_ENV);
+      if (code === 'os.environ["AF_STAGED_INPUTS"] = "{}"') env.set(STAGED_INPUTS_ENV, '{}');
+      return ok(`${env.get(STAGED_INPUTS_ENV) ?? '<unset>'}\n`);
+    });
+    await session.stageInputs?.([{ name: 'rows', fileName: 'rows.csv', data: 'a\n1' }]);
+    const declared = JSON.stringify({ rows: 'af-staged-inputs/rows.csv' });
+    await session.execute({ code: 'os.environ["AF_STAGED_INPUTS"] = "{}"' });
+    expect((await session.execute({ code: 'print' })).stdout).toBe(`${declared}\n`);
+    await session.execute({ code: 'del os.environ["AF_STAGED_INPUTS"]' });
+    expect((await session.execute({ code: 'print' })).stdout).toBe(`${declared}\n`);
+  });
+
+  it.skipIf(!hasProgram('python3'))(
+    'REAL Python, one persistent namespace: a cleared manifest is back for the next run',
+    async () => {
+      // Every call replays the session's code so far in ONE interpreter, so
+      // state carries between runs exactly as it does in a live kernel.
+      const history: string[] = [];
+      const { session } = await open(
+        (input) => {
+          if (toolOf(input) === 'writeFiles') return written();
+          history.push((input['arguments'] as { code: string }).code);
+          const replay =
+            'import io, contextlib\nns = {}\nlast = ""\n' +
+            `for code in ${JSON.stringify(history)}:\n` +
+            '    buf = io.StringIO()\n' +
+            '    with contextlib.redirect_stdout(buf):\n' +
+            '        exec(code, ns)\n' +
+            '    last = buf.getvalue()\n' +
+            'print(last, end="")';
+          const stdout = execFileSync('python3', ['-c', replay], { encoding: 'utf8' });
+          return ok(stdout);
+        },
+        { language: 'python' },
+      );
+      await session.stageInputs?.([{ name: 'rows', fileName: 'rows.csv', data: 'a\n1' }]);
+      await session.execute({ code: 'import os\nos.environ["AF_STAGED_INPUTS"] = "{}"' });
+      const next = await session.execute({
+        code: 'import os\nprint(os.environ["AF_STAGED_INPUTS"])',
+      });
+      expect(JSON.parse(next.stdout)).toEqual({ rows: 'af-staged-inputs/rows.csv' });
+    },
+  );
 
   it('a NEW input changes the manifest, so it is set again before the next run', async () => {
     const { session, invokes } = await open((input) => {
@@ -427,17 +492,42 @@ describe('agentCoreCodeRunner.readFile — one file, paired by the URI the servi
     expect(file?.data).toBe('x');
   });
 
-  it('a URI is read ONE way: a literal %XX in the path is not matched by a URI that decodes elsewhere', async () => {
+  it('a URI is read ONE way: decoded, segment by segment — no raw reading to fall back on', async () => {
     // Asked for the file literally named `a%41.csv`. Decoded, `file:///a%41.csv`
-    // names `aA.csv` — another file — so it is not accepted on its literal reading.
+    // names `aA.csv` — another file — so it is not accepted.
     const ambiguous = await refusal(read([{ uri: 'file:///a%41.csv', text: 'x' }], 'a%41.csv'));
     expect(ambiguous?.reason).toBe('uri-mismatch');
-    // The service's encoding of that same name pairs.
+    // The URI form of that same name pairs.
     const encoded = await read([{ uri: 'file:///a%2541.csv', text: 'x' }], 'a%41.csv');
     expect(encoded?.data).toBe('x');
-    // A `%` that is no escape at all is read as written.
-    const raw = await read([{ uri: 'file:///100%.csv', text: 'y' }], '100%.csv');
-    expect(raw?.data).toBe('y');
+    // A `%` that is no escape is not a URI at all — it is refused, not read raw.
+    const invalid = await refusal(read([{ uri: 'file:///100%.csv', text: 'y' }], '100%.csv'));
+    expect(invalid?.reason).toBe('uri-mismatch');
+    expect((await read([{ uri: 'file:///100%25.csv', text: 'y' }], '100%.csv'))?.data).toBe('y');
+    // An encoded slash is a character inside ONE name, never a separator.
+    const slash = await refusal(read([{ uri: 'file:///a%2Fb.csv', text: 'z' }], 'a/b.csv'));
+    expect(slash?.reason).toBe('uri-mismatch');
+  });
+
+  it('a raw FRAGMENT or QUERY is refused: it is a URI component, never part of a file name', async () => {
+    // The two shapes a review probe found accepted: `#old` and `?old` read as
+    // part of the name, when the URI's file path is `/report.csv`.
+    for (const name of ['report.csv#old', 'report.csv?old']) {
+      const err = await refusal(read([{ uri: `file:///${name}`, text: 'old copy' }], name));
+      expect(err).toBeInstanceOf(CodeSandboxError);
+      expect(err?.reason).toBe('uri-mismatch');
+      expect(String(err?.message)).toMatch(/query or fragment/);
+    }
+    // And a file really named with them arrives escaped, and pairs.
+    expect(
+      (await read([{ uri: 'file:///report.csv%23old', text: 'h' }], 'report.csv#old'))?.data,
+    ).toBe('h');
+    expect(
+      (await read([{ uri: 'file:///report.csv%3Fold', text: 'q' }], 'report.csv?old'))?.data,
+    ).toBe('q');
+    // Nor does a raw `#` hide behind an otherwise matching path.
+    const behind = await refusal(read([{ uri: 'file:///report.csv#', text: 'x' }], 'report.csv'));
+    expect(behind?.reason).toBe('uri-mismatch');
   });
 
   it('FAILS CLOSED on a file with NO uri', async () => {
@@ -722,7 +812,7 @@ describe('agentCoreCodeRunner.execute — ok is the service’s word, or absent'
 
   it('an error flag with NO exit status is a service error — the run is unconfirmed, not failed', async () => {
     const flagged = await run(result({ content: [], isError: true }));
-    expect(flagged).toEqual({ ok: false, reason: 'service-error', stdout: '', stderr: '' });
+    expect(flagged).toEqual({ ok: false, serviceError: true, stdout: '', stderr: '' });
     // With an exit status, the program's own exit explains it: no reason.
     const exited = await run(
       result({ content: [], structuredContent: { exitCode: 3 }, isError: true }),
@@ -775,6 +865,9 @@ describe('agentCoreCodeRunner — every form of a gone session is SessionExpired
 
   for (const [form, respond] of forms) {
     for (const [verb, call] of verbs) {
+      // A READ names a file as well as the session, so a bare "not found"
+      // there is not proof the session is gone — pinned separately below.
+      if (verb === 'readFile' && /ResourceNotFound|resourceNotFound/.test(form)) continue;
       it(`${form} → SessionExpiredError (${verb})`, async () => {
         const { session } = await open(respond, { commands: true });
         const err = await call(session)?.catch((e: unknown) => e);
@@ -788,6 +881,27 @@ describe('agentCoreCodeRunner — every form of a gone session is SessionExpired
       });
     }
   }
+
+  it('a ResourceNotFoundException on a READ is not claimed as a gone session — file or session, unknown', async () => {
+    for (const respond of [
+      (() => thrown('ResourceNotFoundException', 'Not found')) as Respond,
+      (() => [{ resourceNotFoundException: { message: 'Not found' } }]) as Respond,
+    ]) {
+      const { session } = await open(respond);
+      const err = await session.readFile?.('out/a.csv', { maxBytes: 10 }).catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(SessionExpiredError);
+      expect(err).toBeInstanceOf(CodeSandboxError);
+      expect(err).toMatchObject({ reason: 'file-not-returned', path: 'out/a.csv' });
+      expect((err as Error).message).toMatch(/file is missing or the session is gone/);
+    }
+    // A read whose error NAMES the session as not active is still an expiry.
+    const { session } = await open(() =>
+      thrown('ValidationException', `Session ${SESSION} is not active`),
+    );
+    await expect(session.readFile?.('a.csv', { maxBytes: 10 })).rejects.toBeInstanceOf(
+      SessionExpiredError,
+    );
+  });
 
   it('a message that echoes "inactive" without naming a session is not an expiry', async () => {
     const { session } = await open(

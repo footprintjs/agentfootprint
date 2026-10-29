@@ -86,8 +86,9 @@ export function fileContent(path: string, data: string | Uint8Array): AgentCoreF
 
 // ── Reading a file back ──────────────────────────────────────────────────
 
-/** How AgentCore names a file it returns: `file:///` + the path asked for
- *  (read from a real `readFiles` answer: `report.csv` → `file:///report.csv`). */
+/** How AgentCore names a file it returns: `file:///` + the path asked for,
+ *  percent-encoded (read from a published real `readFiles` answer:
+ *  `report.csv` → `file:///report.csv`; the shape is not in AWS's docs). */
 const FILE_URI_PREFIX = 'file:///';
 
 /**
@@ -124,6 +125,13 @@ export function pairReadFile(
       refuse(
         'uri-missing',
         'a file came back without a URI, so it cannot be paired with the path asked for.',
+      );
+    }
+    if (hasQueryOrFragment(resource.uri as string)) {
+      refuse(
+        'uri-mismatch',
+        'a file came back under a URI with a query or fragment, which is not part of any file ' +
+          'name (a literal ? or # in a name arrives as %3F or %23).',
       );
     }
     if (!uriNames(resource.uri as string, path)) {
@@ -168,23 +176,40 @@ export function pairReadFile(
 }
 
 /**
- * Does `uri` name `path`? Under ONE reading of the URI, never whichever of two
- * happens to match: when it holds valid percent escapes it is read decoded
- * (`my%20report.csv` is `my report.csv`), and only when it holds none — or
- * holds a `%` that is not an escape — is it read as written. So a request for
- * a file literally named `a%41.csv` is never answered by a URI that, decoded,
- * names `aA.csv`.
+ * Does `uri` name `path`? ONE declared form, read ONE way (RFC 8089's file
+ * URI, RFC 3986's path syntax): `file:///` followed by a path whose segments
+ * are percent-encoded.
+ *
+ * - A raw `?` or `#` starts a query or a fragment, which is never part of a
+ *   file name, so a URI carrying one is refused outright. A name that really
+ *   contains `?` or `#` arrives as `%3F` / `%23`.
+ * - Each segment is decoded on its own. An invalid escape refuses the URI, and
+ *   a decoded `/` (an encoded `%2F`) is a character inside one name, so it can
+ *   never stand in for the separator.
+ * - Only the decoded path is compared. There is no second, raw reading to fall
+ *   back on when the first does not match.
  */
 export function uriNames(uri: string, path: string): boolean {
   if (!uri.startsWith(FILE_URI_PREFIX)) return false;
   const named = uri.slice(FILE_URI_PREFIX.length);
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(named);
-  } catch {
-    return named === path;
+  if (hasQueryOrFragment(named)) return false;
+  const segments: string[] = [];
+  for (const encoded of named.split('/')) {
+    let segment: string;
+    try {
+      segment = decodeURIComponent(encoded);
+    } catch {
+      return false;
+    }
+    if (segment.includes('/')) return false;
+    segments.push(segment);
   }
-  return decoded === path;
+  return segments.join('/') === path;
+}
+
+/** A raw `?` or `#` in a URI: a query or a fragment component. */
+function hasQueryOrFragment(uriTail: string): boolean {
+  return uriTail.includes('?') || uriTail.includes('#');
 }
 
 function isBytes(value: unknown): value is Uint8Array {
@@ -294,25 +319,33 @@ const SAYS_INACTIVE = /\bnot active\b|\binactive\b/i;
 const NAMES_A_SESSION = /\bsession\b/i;
 
 /**
- * When `err` means the session itself is gone, the service's name for the
- * signal that said so; otherwise `undefined`.
+ * What a service error says about the session: `'session'` when it means the
+ * session itself is gone, `'file-or-session'` when it could mean that or a
+ * missing file, `undefined` otherwise.
  *
- * Three forms, all from AgentCore, whether thrown by the SDK or carried as a
- * stream member: a `ResourceNotFoundException` (on a session that started, the
- * missing resource is the session), and any modelled exception — a
- * `ValidationException` above all — whose words name a session and say it is
- * "not active" or "inactive".
+ * - A modelled exception — a `ValidationException` above all — whose words
+ *   name a session and say it is "not active" or "inactive": `'session'`.
+ * - A `ResourceNotFoundException`, thrown by the SDK or carried on the stream:
+ *   on a call that addresses nothing but the session (code, a command, a
+ *   write) the missing resource is the session, so `'session'`. A READ also
+ *   names a file, and AgentCore does not say which resource was missing, so
+ *   `'file-or-session'` — never taken as proof the session is gone.
  */
-export function sessionExpiryEvidence(err: unknown): string | undefined {
-  const name = errorName(err);
-  if (name === 'ResourceNotFoundException') return name;
+export function sessionExpiryEvidence(
+  err: unknown,
+  tool: AgentCoreInvokeInput['name'],
+): 'session' | 'file-or-session' | undefined {
+  const name = errorNameOf(err);
   const message = errorMessage(err);
   if (
     MODELLED_EXCEPTIONS.has(name) &&
     SAYS_INACTIVE.test(message) &&
     NAMES_A_SESSION.test(message)
   ) {
-    return name;
+    return 'session';
+  }
+  if (name === 'ResourceNotFoundException') {
+    return tool === 'readFiles' ? 'file-or-session' : 'session';
   }
   return undefined;
 }
@@ -331,7 +364,7 @@ export function serviceRefusal(
   err: unknown,
   tool: AgentCoreInvokeInput['name'],
 ): Error | undefined {
-  const name = errorName(err);
+  const name = errorNameOf(err);
   if (!MODELLED_EXCEPTIONS.has(name)) return undefined;
   const refusal = new Error(
     `agentCoreCodeRunner: the service refused ${tool} (${name}). Its message is not repeated ` +
@@ -341,7 +374,8 @@ export function serviceRefusal(
   return refusal;
 }
 
-function errorName(err: unknown): string {
+/** The `name` an error carries — an SDK exception's class name — or `''`. */
+export function errorNameOf(err: unknown): string {
   const name = (err as { name?: unknown } | null)?.name;
   return typeof name === 'string' ? name : '';
 }

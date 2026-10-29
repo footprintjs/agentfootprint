@@ -12,7 +12,10 @@
  *
  * What a child process DOES give you:
  *   • a separate process and heap — a crash or an OOM takes the child, not you;
- *   • kill on timeout, so runaway code has a ceiling;
+ *   • kill on timeout, so runaway code has a ceiling — on POSIX the child
+ *     runs in a process group of its own and the WHOLE group is killed
+ *     (SIGKILL), so nothing it started keeps running; on Windows only the
+ *     child itself can be stopped, and the timeout error says so;
  *   • no inherited stdin, so nothing can block waiting for a terminal;
  *   • an environment ALLOWLIST — `process.env` is not inherited (only `PATH`,
  *     so the interpreter can be found), so an `AWS_SECRET_ACCESS_KEY` in your
@@ -171,6 +174,9 @@ export interface FsModuleLike {
 
 /** The slice of `node:child_process` this adapter touches. */
 export interface ChildProcessModuleLike {
+  /** Used when present (the real module always has it): only `spawn` can give
+   *  a child a process group of its own. */
+  readonly spawn?: SpawnLike;
   readonly execFile?: (
     file: string,
     args: readonly string[],
@@ -179,15 +185,50 @@ export interface ChildProcessModuleLike {
       env?: Record<string, string>;
       maxBuffer?: number;
       killSignal?: string;
-      signal?: AbortSignal;
+      detached?: boolean;
     },
     callback: (
-      error: (Error & { code?: number | string; killed?: boolean }) | null,
+      error: (Error & { code?: number | string; killed?: boolean; signal?: string | null }) | null,
       stdout: string,
       stderr: string,
     ) => void,
   ) => unknown;
 }
+
+/** The part of the child `execFile` / `spawn` hands back that ending it needs. */
+interface ChildLike {
+  readonly pid?: number;
+  kill?(signal?: string): boolean;
+  readonly stdout?: { destroy?(): void } | null;
+  readonly stderr?: { destroy?(): void } | null;
+}
+
+/** A readable end of a spawned child's pipe, as far as collecting it goes. */
+interface PipeLike {
+  on(event: 'data', listener: (chunk: Uint8Array) => void): unknown;
+  destroy?(): void;
+}
+
+/** The child `spawn` hands back, as far as this adapter uses it. */
+interface SpawnedLike extends ChildLike {
+  readonly stdout?: PipeLike | null;
+  readonly stderr?: PipeLike | null;
+  on(event: 'error', listener: (error: Error & { code?: string }) => void): unknown;
+  on(event: 'close', listener: (code: number | null, signal: string | null) => void): unknown;
+}
+
+/** The slice of `node:child_process` · `spawn` the runner uses — preferred
+ *  over `execFile`, which does not pass `detached` on to the child. */
+type SpawnLike = (
+  file: string,
+  args: readonly string[],
+  options: {
+    cwd?: string;
+    env?: Record<string, string>;
+    detached?: boolean;
+    stdio?: readonly ['ignore', 'pipe', 'pipe'];
+  },
+) => SpawnedLike;
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_CHARS = 8_000;
@@ -275,8 +316,8 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
             {
               timedOut: (ms) =>
                 new Error(
-                  `localCodeRunner: the code did not finish within ${ms}ms and the ` +
-                    'process was killed. Raise `timeoutMs`, or have the code do less per call.',
+                  `localCodeRunner: the code did not finish within ${ms}ms and ${STOPPED}. ` +
+                    'Raise `timeoutMs`, or have the code do less per call.',
                 ),
               notRunnable: (code) =>
                 new Error(
@@ -290,12 +331,14 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
           // it is not passed off as the code's stderr.
           const bounded = boundOutput(raw.stdout, raw.stderr, maxOutputChars, raw.overflowed);
           return {
-            // Known either way: an exit status, or a process the operating
-            // system ended (no exit status at all — never a made-up one).
+            // Known either way: an exit status, or a process that was ended
+            // before it exited (no exit status at all — never a made-up one;
+            // the signal that ended it, when known, says how).
             ok: raw.exitCode === 0,
             stdout: bounded.stdout,
             stderr: bounded.stderr,
             ...(raw.exitCode !== undefined && { exitCode: raw.exitCode }),
+            ...(raw.signal !== undefined && { terminatedBy: raw.signal }),
             ...(bounded.truncated !== undefined && { truncated: bounded.truncated }),
           };
         },
@@ -354,8 +397,7 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
                 timedOut: (ms) =>
                   new CodeSandboxError(
                     'timed-out',
-                    `localCodeRunner: the command did not finish within ${ms}ms and its ` +
-                      'process was killed.',
+                    `localCodeRunner: the command did not finish within ${ms}ms and ${STOPPED}.`,
                   ),
                 notRunnable: (code) =>
                   new Error(
@@ -373,6 +415,7 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
                 stderr: raw.stderr,
                 ...(raw.exitCode !== undefined && { exitCode: raw.exitCode }),
                 ...(raw.overflowed !== undefined && { overflowed: raw.overflowed }),
+                ...(raw.signal !== undefined && { terminatedBy: raw.signal }),
               },
               bounds,
             );
@@ -593,10 +636,12 @@ function resolveChildProcess(options: LocalCodeRunnerOptions): ChildProcessModul
 interface ChildOutcome {
   readonly stdout: string;
   readonly stderr: string;
-  /** The child's exit status. Absent when it did not exit on its own — the
-   *  operating system ended it with a signal, or the runner ended it when its
-   *  output passed the buffer ceiling — and none is made up. */
+  /** The child's exit status. Absent when it did not exit on its own — a
+   *  signal ended it, from the operating system or from the runner at the
+   *  output ceiling — and none is made up. */
   readonly exitCode?: number;
+  /** The signal that ended the child before it exited, when known. */
+  readonly signal?: string;
   /** The stream whose output passed the buffer ceiling. The child was ended
    *  there, and that stream's tail — and its full length — are lost. */
   readonly overflowed?: 'stdout' | 'stderr';
@@ -604,7 +649,7 @@ interface ChildOutcome {
 
 /** The two refusals whose words depend on what was run. */
 interface ChildRefusals {
-  /** The child outlived its ceiling and was killed. */
+  /** The child outlived its ceiling and was ended. */
   readonly timedOut: (ms: number) => Error;
   /** The program itself could not be started (ENOENT and friends). */
   readonly notRunnable: (code: string) => Error;
@@ -619,6 +664,147 @@ const CHILD_BUFFER_BYTES = 32 * 1024 * 1024;
 const BUFFER_OVERFLOW = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
 
 /**
+ * Whether a child gets a process group of its own, so that ending it ends
+ * everything it started. POSIX only: Windows has no process group to signal,
+ * and there only the child itself can be stopped.
+ */
+const OWN_PROCESS_GROUP = process.platform !== 'win32';
+
+/** What ending a child at its deadline did, in words that are true of it. */
+const STOPPED = OWN_PROCESS_GROUP
+  ? 'its process group was killed'
+  : 'its process was stopped; work it started may still be running';
+
+/**
+ * Process groups this runner started and has not seen end. A group lives in
+ * its own session, so a signal sent to the host's group — Ctrl-C in a
+ * terminal — never reaches it. These are killed when the host exits.
+ */
+const liveGroups = new Set<number>();
+let exitHookArmed = false;
+
+function trackGroup(pid: number): void {
+  liveGroups.add(pid);
+  if (exitHookArmed) return;
+  exitHookArmed = true;
+  process.once('exit', () => {
+    for (const group of liveGroups) killGroup(group);
+  });
+}
+
+function killGroup(pid: number): void {
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    // Already gone: nothing left to stop.
+  }
+}
+
+/**
+ * End a child and EVERYTHING it started, then release its pipes.
+ *
+ * Signalling only the direct child (the shell, or the interpreter) leaves its
+ * own children running: a `sh -c` command that started a Node script would
+ * keep writing files after the caller was told it had been killed. The whole
+ * group goes, with SIGKILL, which none of them can ignore. The pipes are
+ * closed so that a process which left the group cannot hold the caller open.
+ */
+function endChild(child: ChildLike | undefined): void {
+  if (child === undefined) return;
+  if (OWN_PROCESS_GROUP && typeof child.pid === 'number') {
+    killGroup(child.pid);
+    liveGroups.delete(child.pid);
+  } else {
+    try {
+      child.kill?.('SIGKILL');
+    } catch {
+      // Already gone.
+    }
+  }
+  try {
+    child.stdout?.destroy?.();
+    child.stderr?.destroy?.();
+  } catch {
+    // A stream the runtime already closed.
+  }
+}
+
+/** The error a child that exited non-zero, or was ended by a signal, reports:
+ *  the fields `execFile` carries, and a message that never quotes the
+ *  command line (the runtime's own does — it is the code). */
+function childFailure(
+  code: number | null,
+  signal: string | null,
+): Error & { code?: number | string; killed?: boolean; signal?: string | null } {
+  return Object.assign(new Error('the child process did not exit cleanly'), {
+    ...(code !== null && { code }),
+    signal,
+    killed: signal !== null,
+  });
+}
+
+/**
+ * `execFile`'s callback contract, built on `spawn` — because only `spawn`
+ * passes `detached` on, and a child in a process group of its own is what
+ * lets a timeout end everything it started. Same results: stdout and stderr
+ * as text, a failure carrying the exit `code` or the `signal`, a spawn error
+ * (ENOENT …) carrying its string code, and `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`
+ * — the child ended with `killSignal` — when a stream passes `maxBuffer`
+ * bytes, with what was collected up to the ceiling. stdin is not connected:
+ * nothing can block waiting for input that never comes.
+ */
+function execFileOn(spawn: SpawnLike): NonNullable<ChildProcessModuleLike['execFile']> {
+  return (file, args, options, callback) => {
+    const max = options.maxBuffer ?? CHILD_BUFFER_BYTES;
+    const chunks = { stdout: [] as Uint8Array[], stderr: [] as Uint8Array[] };
+    const sizes = { stdout: 0, stderr: 0 };
+    let overflow: (Error & { code: string }) | undefined;
+    let done = false;
+    const text = (stream: 'stdout' | 'stderr'): string =>
+      Buffer.concat(chunks[stream]).toString('utf8');
+    const reply = (error: Parameters<typeof callback>[0]): void => {
+      if (done) return;
+      done = true;
+      callback(error, text('stdout'), text('stderr'));
+    };
+    const child = spawn(file, args, {
+      ...(options.cwd !== undefined && { cwd: options.cwd }),
+      ...(options.env !== undefined && { env: options.env }),
+      ...(options.detached === true && { detached: true }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const collect = (stream: 'stdout' | 'stderr') => (chunk: Uint8Array) => {
+      if (overflow !== undefined) return;
+      const room = max - sizes[stream];
+      if (chunk.byteLength > room) {
+        chunks[stream].push(chunk.subarray(0, Math.max(room, 0)));
+        sizes[stream] = max;
+        overflow = Object.assign(new RangeError(`${stream} maxBuffer length exceeded`), {
+          code: BUFFER_OVERFLOW,
+        });
+        try {
+          child.kill?.(options.killSignal ?? 'SIGKILL');
+        } catch {
+          // Already gone.
+        }
+        return;
+      }
+      chunks[stream].push(chunk);
+      sizes[stream] += chunk.byteLength;
+    };
+    child.stdout?.on('data', collect('stdout'));
+    child.stderr?.on('data', collect('stderr'));
+    child.on('error', (error) => reply(error));
+    child.on('close', (code, signal) => {
+      if (overflow !== undefined) reply(overflow);
+      else if (code === 0 && signal === null) reply(null);
+      else reply(childFailure(code, signal));
+    });
+    return child;
+  };
+}
+
+/**
  * One child process, promisified.
  *
  * A NON-ZERO EXIT IS NOT A REJECTION. Code that fails is a normal answer here —
@@ -628,17 +814,16 @@ const BUFFER_OVERFLOW = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
  * (interpreter missing, timeout, abort), because that is not the code's answer.
  *
  * THE DEADLINE IS OURS (`lib/abort.ts`), not the runtime's `timeout`: that one
- * sends SIGTERM and then waits for the child to exit, so a child that ignores
+ * sends SIGTERM and then waits for the child to exit, so a child that ignored
  * SIGTERM ran on, and if it then exited 0 the call came back as a SUCCESS with
  * its output cut at the deadline. Here the deadline and the caller's signal
- * abort one controller, the runtime kills the child with SIGKILL (which cannot
- * be ignored) and answers at once, and a callback that finds the controller
- * aborted rejects — whatever exit status it was handed.
+ * abort one controller; the child's whole PROCESS GROUP is killed with SIGKILL
+ * (`endChild`), and the call rejects at once, whatever the child does next.
  *
- * An abort rejects with the caller's own reason, checked FIRST: the runtime
- * reports an aborted child with a string code (`ABORT_ERR`), which used to be
- * read as a missing interpreter. So did an output past the buffer ceiling
- * (`ERR_CHILD_PROCESS_STDIO_MAXBUFFER`); that is now a result, its cut stated.
+ * An abort rejects with the caller's own reason, never read as a missing
+ * interpreter. So did an output past the buffer ceiling
+ * (`ERR_CHILD_PROCESS_STDIO_MAXBUFFER`); that is now a result, its cut stated,
+ * with no exit status and `signal: 'SIGKILL'`.
  *
  * Nothing of the runtime's own error text is passed on: for a failed child it
  * is "Command failed: <the whole command line>", which is the code itself.
@@ -655,7 +840,7 @@ async function runChild(
   },
   refusals: ChildRefusals,
 ): Promise<ChildOutcome> {
-  const execFile = mod.execFile;
+  const execFile = typeof mod.spawn === 'function' ? execFileOn(mod.spawn.bind(mod)) : mod.execFile;
   if (typeof execFile !== 'function') {
     throw new Error('localCodeRunner: `node:child_process` resolved but `execFile` is missing.');
   }
@@ -663,12 +848,25 @@ async function runChild(
   const { controller, unlink } = linkedController(opts.signal);
   const disarm = armDeadline(controller, opts.timeoutMs, () => refusals.timedOut(opts.timeoutMs));
   return new Promise<ChildOutcome>((resolve, reject) => {
-    const settle = (): void => {
+    let child: ChildLike | undefined;
+    let settled = false;
+    const settle = (): boolean => {
+      if (settled) return false;
+      settled = true;
       disarm();
       unlink();
+      controller.signal.removeEventListener('abort', onAbort);
+      if (OWN_PROCESS_GROUP && typeof child?.pid === 'number') liveGroups.delete(child.pid);
+      return true;
+    };
+    // The deadline, or the caller: end the whole group and answer NOW. The
+    // child's own callback, whenever it comes, finds the call settled.
+    const onAbort = (): void => {
+      endChild(child);
+      if (settle()) reject(abortErrorOf(controller.signal));
     };
     try {
-      execFile(
+      child = execFile(
         file,
         args,
         {
@@ -676,16 +874,14 @@ async function runChild(
           env: opts.env,
           maxBuffer: CHILD_BUFFER_BYTES,
           killSignal: 'SIGKILL',
-          signal: controller.signal,
+          ...(OWN_PROCESS_GROUP && { detached: true }),
         },
         (error, stdout, stderr) => {
-          settle();
           if (controller.signal.aborted) {
-            // The deadline, or the caller: either way the child did not finish
-            // on its own, and an exit status handed over now proves nothing.
-            reject(abortErrorOf(controller.signal));
+            onAbort();
             return;
           }
+          if (!settle()) return;
           const out = String(stdout ?? '');
           const err = String(stderr ?? '');
           if (!error) {
@@ -693,9 +889,13 @@ async function runChild(
             return;
           }
           if (error.code === BUFFER_OVERFLOW) {
+            // The runtime ended the child itself (with our SIGKILL); end the
+            // rest of its group too, so nothing it started writes on.
+            endChild(child);
             resolve({
               stdout: out,
               stderr: err,
+              signal: 'SIGKILL',
               overflowed: /^stderr/.test(error.message) ? 'stderr' : 'stdout',
             });
             return;
@@ -708,17 +908,22 @@ async function runChild(
           }
           // A real non-zero exit, or a child the operating system ended: the
           // code ran and failed. That IS the result. The exit status is the
-          // child's own, or absent — never a stand-in.
+          // child's own, or absent — never a stand-in; the signal says how a
+          // child without one was ended.
           resolve({
             stdout: out,
             stderr: err,
             ...(typeof error.code === 'number' && { exitCode: error.code }),
+            ...(typeof error.signal === 'string' && { signal: error.signal }),
           });
         },
-      );
+      ) as ChildLike | undefined;
     } catch (err) {
-      settle();
-      reject(err);
+      if (settle()) reject(err);
+      return;
     }
+    if (OWN_PROCESS_GROUP && typeof child?.pid === 'number' && !settled) trackGroup(child.pid);
+    if (controller.signal.aborted) onAbort();
+    else if (!settled) controller.signal.addEventListener('abort', onAbort, { once: true });
   });
 }

@@ -4,7 +4,7 @@ title: CodeRunFacts
 
 # Interface: CodeRunFacts
 
-Defined in: [src/core/codeRunnerTool.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L169)
+Defined in: [src/core/codeRunnerTool.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L163)
 
 What one finished code run is worth reporting, minus the code itself.
 
@@ -14,7 +14,7 @@ What one finished code run is worth reporting, minus the code itself.
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L181)
+Defined in: [src/core/codeRunnerTool.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L174)
 
 The program's exit status — exactly when the runner supplied one.
 
@@ -24,7 +24,7 @@ The program's exit status — exactly when the runner supplied one.
 
 > `readonly` **language**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L171)
+Defined in: [src/core/codeRunnerTool.ts:165](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L165)
 
 ***
 
@@ -32,12 +32,11 @@ Defined in: [src/core/codeRunnerTool.ts:171](https://github.com/footprintjs/agen
 
 > `readonly` `optional` **ok?**: `boolean`
 
-Defined in: [src/core/codeRunnerTool.ts:179](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L179)
+Defined in: [src/core/codeRunnerTool.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L172)
 
 What the runner REPORTED (`CodeResult.ok`). ABSENT when it reported
- nothing — unknown, never recorded as success. `false` is a failed
- program when `exitCode` is present, and an unconfirmed run when `reason`
- is `'service-error'`.
+ nothing — unknown, never recorded as success. A `false` is told apart by
+ the three fields below.
 
 ***
 
@@ -45,18 +44,18 @@ What the runner REPORTED (`CodeResult.ok`). ABSENT when it reported
 
 > `readonly` **outputChars**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:173](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L173)
+Defined in: [src/core/codeRunnerTool.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L167)
 
 ***
 
-### reason?
+### serviceError?
 
-> `readonly` `optional` **reason?**: `"service-error"`
+> `readonly` `optional` **serviceError?**: `true`
 
-Defined in: [src/core/codeRunnerTool.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L184)
+Defined in: [src/core/codeRunnerTool.ts:177](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L177)
 
-`'service-error'`: the runner flagged an error with no exit status, so
- whether the code ran is not confirmed. Absent otherwise.
+`true`: the runner flagged an error with no exit status, so whether the
+ code ran is not confirmed — not a failed program.
 
 ***
 
@@ -64,7 +63,7 @@ Defined in: [src/core/codeRunnerTool.ts:184](https://github.com/footprintjs/agen
 
 > `readonly` **shapeHash**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L185)
+Defined in: [src/core/codeRunnerTool.ts:181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L181)
 
 ***
 
@@ -72,7 +71,18 @@ Defined in: [src/core/codeRunnerTool.ts:185](https://github.com/footprintjs/agen
 
 > `readonly` **stagedInputs**: `number`
 
-Defined in: [src/core/codeRunnerTool.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L172)
+Defined in: [src/core/codeRunnerTool.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L166)
+
+***
+
+### terminatedBy?
+
+> `readonly` `optional` **terminatedBy?**: `string`
+
+Defined in: [src/core/codeRunnerTool.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L180)
+
+The signal that ended the process before it exited, when the runner
+ knows it (`'SIGKILL'`): no exit status exists, and none is recorded.
 
 ***
 
@@ -80,7 +90,7 @@ Defined in: [src/core/codeRunnerTool.ts:172](https://github.com/footprintjs/agen
 
 > `readonly` **tool**: `string`
 
-Defined in: [src/core/codeRunnerTool.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L170)
+Defined in: [src/core/codeRunnerTool.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L164)
 
 ***
 
@@ -88,4 +98,4 @@ Defined in: [src/core/codeRunnerTool.ts:170](https://github.com/footprintjs/agen
 
 > `readonly` **truncated**: `boolean`
 
-Defined in: [src/core/codeRunnerTool.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L174)
+Defined in: [src/core/codeRunnerTool.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/codeRunnerTool.ts#L168)

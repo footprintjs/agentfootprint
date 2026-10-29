@@ -397,7 +397,6 @@
       "CodeReadOptions",
       "CodeResult",
       "CodeRunFacts",
-      "CodeRunReason",
       "CodeRunner",
       "CodeRunnerToolOptions",
       "CodeRunnerToolScope",

@@ -9,7 +9,7 @@
  * between its size check and its read, a child the runtime reports as aborted.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import * as realFs from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -245,8 +245,50 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
     // The runner ended the child at the ceiling: no exit status exists, and
     // the length before that cut was never seen, so no `ofChars` either.
     expect('exitCode' in (out ?? {})).toBe(false);
+    expect(out?.terminatedBy).toBe('SIGKILL');
     expect(out?.truncated).toEqual({ stdout: true });
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'TIMEOUT ends the whole process GROUP: a child the command started never writes afterwards',
+    async () => {
+      // The review probe: the shell starts Node, which writes a file 300 ms
+      // later; the `; :` keeps the shell from handing its process over.
+      // Killing only the shell left Node running, and the file appeared after
+      // the caller was told the command had been killed.
+      const s = await session({ commands: true });
+      const late = join(root, 'late.txt');
+      const writer = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(
+        late,
+      )}, "late"), 300)`;
+      const err = await s
+        .runCommand?.(`'${process.execPath}' -e '${writer}'; :`, { timeoutMs: 80 })
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(CodeSandboxError);
+      expect((err as Error).message).toMatch(/process group was killed/);
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(existsSync(late)).toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'ABORT ends the whole process group too — no write lands after the caller stopped it',
+    async () => {
+      const s = await session({ commands: true });
+      const late = join(root, 'aborted.txt');
+      const writer = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(
+        late,
+      )}, "late"), 300)`;
+      const controller = new AbortController();
+      const pending = s.runCommand?.(`'${process.execPath}' -e '${writer}'; :`, {
+        signal: controller.signal,
+      });
+      setTimeout(() => controller.abort(new Error('stopped by the person')), 80);
+      await expect(pending).rejects.toThrow('stopped by the person');
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(existsSync(late)).toBe(false);
+    },
+  );
 
   it('ABORT comes back as the caller’s own reason', async () => {
     const s = await session({ commands: true });
@@ -259,6 +301,30 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
 });
 
 // ─── execute: the same honesty, fixed in the shared child runner ─────────
+
+describe('localCodeRunner.execute — the same group handling on the code path', () => {
+  it.skipIf(process.platform === 'win32')(
+    'a TIMED-OUT run leaves nothing running: a process the code spawned never writes afterwards',
+    async () => {
+      const s = await session();
+      const late = join(root, 'spawned.txt');
+      const writer = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(
+        late,
+      )}, "late"), 300)`;
+      const code =
+        `require("child_process").spawn(process.execPath, ["-e", ${JSON.stringify(writer)}], ` +
+        '{ stdio: "ignore" }); setTimeout(() => {}, 10000);';
+      const err = await s
+        .execute({ code, language: 'javascript', timeoutMs: 150 })
+        .catch((e: unknown) => e);
+      expect((err as Error).message).toMatch(
+        /did not finish within 150ms and its process group was killed/,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(existsSync(late)).toBe(false);
+    },
+  );
+});
 
 describe('localCodeRunner.execute — no invented exit status, no misnamed abort', () => {
   /** A child process whose callback reports exactly `error`. */
@@ -278,6 +344,8 @@ describe('localCodeRunner.execute — no invented exit status, no misnamed abort
     const result = await s.execute({ code: 'x', language: 'javascript' });
     expect(result.ok).toBe(false);
     expect('exitCode' in result).toBe(false);
+    // How it ended, as the operating system said: the signal, not a number.
+    expect(result.terminatedBy).toBe('SIGKILL');
     expect(result.stdout).toBe('partial');
   });
 
