@@ -49,7 +49,7 @@ The repo has four documentation locations and they are not equivalent. Getting t
 | `docs-next/content/docs/**.mdx` (hand-written) | 118 | **Yes — the truth source.** This is what the published site renders and what a reader sees. |
 | `docs-next/content/docs/api/**` (TypeDoc-generated) | 796 | **No — excluded.** |
 | `docs/api-reference/**` (TypeDoc-generated) | 0 | **No — excluded.** |
-| `docs/**.md` + `README.md` (repo-internal prose) | 69 | **No** — but tracked as its own state, "written but not published". |
+| `docs/**.md` + `README.md` (repo-internal prose) | 70 | **No** — but tracked as its own state, "written but not published". |
 
 Both generated trees are produced **from the source**, so every exported symbol appears in them by construction. Counting either as documentation would mark **116** currently-undocumented symbols as documented, collapse most of this report to zero, and hand back a clean bill of health that means nothing. False reassurance in the exact place the author is trying to establish trust is worse than having no check, so both are excluded.
 
@@ -691,7 +691,7 @@ Prose about these exists in the repo (`docs/`, `README.md`) but nothing on the s
 | `stageRole` | function | `agentfootprint` | `docs/design/honesty/inputs.md`, `docs/proposals/005-trajectory-assembler.md` |
 | `toolContractCheckup` | function | `agentfootprint` | `docs/proposals/010-contextual-error-types.md` |
 | `INJECTION_KEYS` | const | `agentfootprint` | `docs/design/2026-09-findings-ledger-worklog.md`, `docs/design/honesty/README.md`, `docs/design/honesty/choice.md` |
-| `DefineToolOptions` | interface | `agentfootprint` | `docs/design/2026-10-script-artifact.md` |
+| `DefineToolOptions` | interface | `agentfootprint` | `docs/design/2026-10-script-artifact.md`, `docs/design/2026-10-value-binding.md` |
 | `EmitEvent` | interface | `agentfootprint` | `docs/proposals/001-lens-subflow-recorder.md` |
 | `FlowchartAsToolOptions` | interface | `agentfootprint` | `docs/design/2026-09-recorded-not-built.md` |
 | `FlowchartHandle` | interface | `agentfootprint` `agentfootprint/observe` | `docs/MENTAL_MODEL.md`, `docs/design/local-observability-and-pii.md` |
