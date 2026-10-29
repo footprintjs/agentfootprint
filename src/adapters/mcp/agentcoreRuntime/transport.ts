@@ -47,7 +47,9 @@
  * (`joinableRetry`), so the 429 rule joins the transport's series INSIDE the
  * session and the rewrite. One request is one series — one attempt count, one
  * waiting total, one deadline — so the two retries can never multiply requests,
- * and every attempt, a 429's included, lands in the same runtime session.
+ * and every attempt, a 429's included, lands in the same runtime session. The
+ * client's request ledger joins the same way, so a call the agent dispatched
+ * gets this series' attempts in its run (`mcp/requestLedger.ts`).
  *
  * ── What it does NOT do ──────────────────────────────────────────────────────
  * Deploy or manage a runtime (a control-plane job), or host one (that is
@@ -64,10 +66,11 @@ import {
 } from '../../../mcp/gatewayTransport.js';
 import {
   joinableRetry,
+  joinedSpec,
   retryingFetchFor,
   retryRule,
   type RetryDefaults,
-  type RetryRule,
+  type SeriesSpec,
   type ThrottleFetch,
   type ThrottleRetryOptions,
 } from '../../../mcp/throttleRetry.js';
@@ -261,7 +264,7 @@ export function agentCoreRuntimeMcpTransport(
   return {
     transport: 'http',
     url,
-    fetch: sessionedFetch(session, send, busy === undefined ? [] : [busy]),
+    fetch: sessionedFetch(session, send, { rules: busy === undefined ? [] : [busy] }),
   };
 }
 
@@ -273,14 +276,14 @@ export function agentCoreRuntimeMcpTransport(
  * refusal is about THAT session coming up), and only the final answer binds
  * anything. Joinable: a rule `retryingFetch` offers (`mcpClient`'s 429 retry) is
  * rebuilt into this same series, inside the session and the rewrite — never
- * wrapped around them as a second loop.
+ * wrapped around them as a second loop — and so is the client's request ledger.
  */
 function sessionedFetch(
   session: SessionStrategy,
   send: ThrottleFetch,
-  rules: readonly RetryRule[],
+  spec: SeriesSpec,
 ): ThrottleFetch {
-  const retried = retryingFetchFor(send, rules);
+  const retried = retryingFetchFor(send, spec);
   const sessioned: ThrottleFetch = async (input, init) => {
     const headers = new Headers(init?.headers);
     const step = session.request(headers, (init?.method ?? 'GET').toUpperCase());
@@ -290,7 +293,7 @@ function sessionedFetch(
     // ONE rule for both auth paths, after the retry has read the original.
     return step.settle(await safeAnswer(response));
   };
-  return joinableRetry(sessioned, (rule) => sessionedFetch(session, send, [...rules, rule]));
+  return joinableRetry(sessioned, (join) => sessionedFetch(session, send, joinedSpec(spec, join)));
 }
 
 /** Where a runtime's MCP endpoint is, as {@link agentCoreRuntimeUrl} needs it. */
