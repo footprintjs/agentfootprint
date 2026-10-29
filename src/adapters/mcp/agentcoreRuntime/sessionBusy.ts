@@ -17,11 +17,12 @@
  * it reaches the model as a failed tool call, a moment after the session it was
  * waiting for came up.
  *
- * ── Why asking again is safe ─────────────────────────────────────────────────
- * The refusal is the PLATFORM's, about the session, made before the request
- * reached the MCP server: nothing ran. That is the license the retry series
- * asks of every refusal it repeats — for a 429 it is an assumption, not proof
- * (see `mcp/throttleRetry.ts` · `RetryDecision`).
+ * ── What asking again relies on ──────────────────────────────────────────────
+ * AWS's contract returns this refusal while the service is provisioning or
+ * tearing down the session: the PLATFORM's answer, about the session, not the
+ * MCP server's. The retry series relies on that, as it relies on a 429 being a
+ * rejection before execution: an assumption with a basis, not proof that
+ * nothing ran (see `mcp/throttleRetry.ts` · `RetryDecision`).
  *
  * ── What it must NOT match ───────────────────────────────────────────────────
  * `ConflictException` shares the code -32005 ("Resource conflict - Resource
