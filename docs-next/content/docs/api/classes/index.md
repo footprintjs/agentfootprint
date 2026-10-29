@@ -2,7 +2,7 @@
 title: Classes
 ---
 
-51 exported from `agentfootprint`.
+53 exported from `agentfootprint`.
 
 - [`Agent`](/docs/api/classes/Agent)
 - [`AgentBuilder`](/docs/api/classes/AgentBuilder)
@@ -10,6 +10,7 @@ title: Classes
 - [`ArtifactDetailError`](/docs/api/classes/ArtifactDetailError)
 - [`ArtifactIntegrityError`](/docs/api/classes/ArtifactIntegrityError)
 - [`CheckInRecorder`](/docs/api/classes/CheckInRecorder)
+- [`CodeSandboxError`](/docs/api/classes/CodeSandboxError)
 - [`CompactionUnmeasurableError`](/docs/api/classes/CompactionUnmeasurableError)
 - [`Conditional`](/docs/api/classes/Conditional)
 - [`ConditionalBuilder`](/docs/api/classes/ConditionalBuilder)
@@ -47,6 +48,7 @@ title: Classes
 - [`RunnerBase`](/docs/api/classes/RunnerBase)
 - [`Sequence`](/docs/api/classes/Sequence)
 - [`SequenceBuilder`](/docs/api/classes/SequenceBuilder)
+- [`SessionExpiredError`](/docs/api/classes/SessionExpiredError)
 - [`StaleDecisionError`](/docs/api/classes/StaleDecisionError)
 - [`ToolTeardownTimeoutError`](/docs/api/classes/ToolTeardownTimeoutError)
 - [`UnknownParentRefError`](/docs/api/classes/UnknownParentRefError)

@@ -165,7 +165,9 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
   },
   {
     adapter: 'agentCoreCodeRunner',
-    sources: ['src/adapters/code/agentcore.ts'],
+    // The SDK is loaded by the client seam; `agentcore.ts` (the runner) and
+    // `agentcoreWire.ts` (the wire rules) never touch it.
+    sources: ['src/adapters/code/agentcoreClient.ts'],
     sdkPackage: '@aws-sdk/client-bedrock-agentcore',
     client: 'BedrockAgentCoreClient',
     commands: [
@@ -173,14 +175,25 @@ export const AWS_COMMAND_PINS: readonly AwsAdapterPin[] = [
       'InvokeCodeInterpreterCommand',
       'StopCodeInterpreterSessionCommand',
     ],
+    // Read off a failure to decide it means "the session is gone"
+    // (`agentcoreWire.ts` · `sessionExpiryEvidence`) and, on Stop, "already gone".
+    errorNames: ['ResourceNotFoundException', 'ValidationException'],
     note:
       'Verified against a real install of 3.1108.0 before this adapter shipped (9.7.0) — the ' +
       'three names, and three SHAPES the design could only guess at: Invoke answers with ' +
       '`stream: AsyncIterable<CodeInterpreterStreamOutput>` (an event stream, NOT a body, and ' +
       'seven of its nine union members are modelled EXCEPTIONS); Stop takes ' +
       '`{ codeInterpreterIdentifier, sessionId }` (the id, not a URI); and the payload lands ' +
-      'as `result.structuredContent { stdout, stderr, exitCode }`. Assertion (2) re-checks the ' +
-      'names wherever the peer dep is installed.',
+      'as `result.structuredContent { stdout, stderr, exitCode }`. The file and command tools ' +
+      'were read out of a real install of 3.1159.0 before they were written: `ToolName` holds ' +
+      '`writeFiles`, `readFiles` and `executeCommand`; `ToolArguments` carries them as ' +
+      '`content: InputContentBlock[]` (`{ path, text?, blob?: Uint8Array }` — bytes travel as ' +
+      'a blob, never base64 in text), `paths: string[]` and `command: string`; a read answers ' +
+      'with `result.content[].resource: ResourceContent { type, uri?, mimeType?, text?, ' +
+      'blob? }`; and `ToolResultStructuredContent.exitCode` is optional, which is why an ' +
+      'absent one stays absent. The shapes are pinned at compile time against transcribed ' +
+      'copies of those types (test/type-regressions/AgentCoreCodeInterpreter.sdk.test.ts) and ' +
+      'against the SDK schema members below wherever the peer dep is installed.',
   },
   {
     adapter: 'agentCoreRuntimeMcpTransport',

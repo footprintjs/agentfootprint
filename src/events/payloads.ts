@@ -2417,8 +2417,22 @@ export interface ToolsCodeRunPayload {
   readonly outputChars: number;
   /** True when the output hit `maxOutputChars` and was cut. */
   readonly truncated: boolean;
-  /** Whether the program ran to completion. */
-  readonly ok: boolean;
+  /**
+   * Whether the program ran to completion, as the code runner REPORTED it.
+   * ABSENT when the runner reported neither an exit status nor an error —
+   * the outcome is unknown, and an absent `ok` is never success. A `false`
+   * is told apart by the three fields below.
+   */
+  readonly ok?: boolean;
+  /** The program's exit status — exactly when the code runner reported one;
+   *  never inferred, never defaulted. */
+  readonly exitCode?: number;
+  /** `true`: the code runner flagged an error and reported no exit status, so
+   *  whether the code ran is NOT confirmed — not a failed program. */
+  readonly serviceError?: true;
+  /** The signal that ended the process before it exited, when the code runner
+   *  knows it (`'SIGKILL'`): no exit status exists, and none is recorded. */
+  readonly terminatedBy?: string;
   /** A stable hash of the normalized call shape. Never the code. */
   readonly shapeHash: string;
 }

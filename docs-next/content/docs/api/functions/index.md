@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-154 exported from `agentfootprint`.
+157 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -26,7 +26,9 @@ title: Functions
 - [`buildAgentMessageApiChart`](/docs/api/functions/buildAgentMessageApiChart)
 - [`canGetArtifactStream`](/docs/api/functions/canGetArtifactStream)
 - [`canPutArtifactStream`](/docs/api/functions/canPutArtifactStream)
+- [`canReadCodeFiles`](/docs/api/functions/canReadCodeFiles)
 - [`canResume`](/docs/api/functions/canResume)
+- [`canRunCodeCommands`](/docs/api/functions/canRunCodeCommands)
 - [`canStageCodeInputs`](/docs/api/functions/canStageCodeInputs)
 - [`canStreamArtifacts`](/docs/api/functions/canStreamArtifacts)
 - [`chartWalkPutInput`](/docs/api/functions/chartWalkPutInput)
@@ -133,6 +135,7 @@ title: Functions
 - [`runArtifactStoreConformance`](/docs/api/functions/runArtifactStoreConformance)
 - [`runbookAsTool`](/docs/api/functions/runbookAsTool)
 - [`s3Artifacts`](/docs/api/functions/s3Artifacts)
+- [`sandboxPath`](/docs/api/functions/sandboxPath)
 - [`selectCommentaryKey`](/docs/api/functions/selectCommentaryKey)
 - [`selfConsistency`](/docs/api/functions/selfConsistency)
 - [`semanticsForModel`](/docs/api/functions/semanticsForModel)
