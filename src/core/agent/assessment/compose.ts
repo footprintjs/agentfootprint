@@ -37,10 +37,20 @@
  * `.answerValidation()`, which judges exact bytes.
  */
 
-import type { AnswerAssessment, AssessmentCheck, AssessmentReason } from './types.js';
+import { namedCalls, readDisplayName } from '../../../lib/displayName.js';
+import type {
+  AnswerAssessment,
+  AssessmentCheck,
+  AssessmentReason,
+  AssessmentReasonSource,
+} from './types.js';
 
-/** Bumped whenever any word of the table below changes. */
-export const STANDING_LINE_VERSION = 1;
+/**
+ * Bumped whenever any word of the tables below changes. 2: the named clauses
+ * (`NAMED_REASON_WORDS`) and the assumed clause's named form — said only for a
+ * call whose tool declares a `displayName`; every version-1 line is unchanged.
+ */
+export const STANDING_LINE_VERSION = 2;
 
 /**
  * The line's first words, one per standing — the owner's words. They are
@@ -254,26 +264,149 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'check-unreachable': "the app's answer checks could not reach a verdict on this answer",
 };
 
-/** The clause for one assumed value — its value only in the tool's own view. */
-function assumedClause(line: StandingAssumedValue): string {
+/**
+ * The same clauses with their calls NAMED — one per reason that rests on
+ * calls, `{who}` being the calls in the app's own words (`lib/displayName.ts`
+ * · `namedCalls`: the declared names, the rest counted — "loading the attached
+ * data and 1 other call"). Used only when at least one of the reason's calls
+ * declares a `displayName`; otherwise the clause above is said, word for word.
+ * Each says what the record holds about those calls — never which part of the
+ * answer leans on them, and never that the rest of it is unaffected. Written
+ * with no pronoun that must agree with `{who}`, which may name one call or
+ * several.
+ */
+const NAMED_REASON_WORDS: Readonly<
+  Partial<Record<Exclude<AssessmentReason, 'argument-assumed'>, (who: string) => string>>
+> = {
+  'argument-unverified': (who) =>
+    `${who} ran with a value from the model, with no source on the record`,
+  'argument-read': (who) =>
+    `${who} ran with a value read into your words: the quoted words are on the record, the value is not in them`,
+  'value-contingent': (who) =>
+    `a value came from ${who}, whose results the model itself had set aside`,
+  'coverage-gap': (who) => `${who} declared ground that was not checked or cannot be covered`,
+  'declared-absent': (who) => `${who} reported no matching results`,
+  'empty-undeclared': (who) => `${who} came back empty without saying what was searched`,
+  'period-not-held': (who) =>
+    `${who} read data that does not reach the time the question asked about`,
+  'period-partly-held': (who) =>
+    `${who} read data that covers only part of the time the question asked about`,
+  'period-unknown': (who) => `${who} could not say what time the data covers`,
+  'period-undeclared': (who) => `${who} did not say what time was covered`,
+  'period-differs-from-asked': (who) =>
+    `${who} read a different stretch of time than the one asked about`,
+  'period-beyond-retention': (who) =>
+    `${who} asked about time older than the source is declared to keep`,
+  'sources-conflict': (who) => `results from ${who} disagree`,
+  'declaration-overclaimed': (who) => `${who} declared more than was checked`,
+};
+
+/**
+ * What the line may NAME — given only when a tool the reasons rest on
+ * declares a `displayName`: each reason's source (`AnswerAssessment` ·
+ * `reasons[].source`, the fold's own projection) and the app's words for each
+ * tool (registered name → display name). Without it the line is the bytes it
+ * always was.
+ */
+export interface StandingNames {
+  readonly sources: ReadonlyMap<AssessmentReason, AssessmentReasonSource>;
+  readonly displayNames: ReadonlyMap<string, string>;
+}
+
+// FOLD · the one reader of the line's display names off a RECORD (`turn_end.standingLineNames`)
+// consumers read this and never re-derive it: answer-account/account.ts · appendedStandingLine
+/**
+ * The words a record kept for the line — registered tool name → display name,
+ * as `turn_end.standingLineNames` holds them — or `undefined` unless every
+ * entry is one a person may read, exactly as the stage filed it (the rule
+ * `defineTool` holds a `displayName` to, trimmed). A fresh map, entry by
+ * entry.
+ */
+export function standingNamesFrom(value: unknown): ReadonlyMap<string, string> | undefined {
+  if (!isRecord(value)) return undefined;
+  const names = new Map<string, string>();
+  for (const [tool, words] of Object.entries(value)) {
+    const read = readDisplayName(words);
+    if (read === undefined || read !== words) return undefined;
+    names.set(tool, read);
+  }
+  return names.size > 0 ? names : undefined;
+}
+
+/** The fold's sources keyed by reason — what {@link StandingNames} carries. */
+export function sourcesByReason(
+  a: AnswerAssessment,
+): ReadonlyMap<AssessmentReason, AssessmentReasonSource> {
+  return new Map(a.reasons.map((r) => [r.reason, r.source] as const));
+}
+
+// FOLD · the one choice of which display names the standing line may use
+// consumers read this and never re-derive it: assessment/stage.ts · assessAnswerStage (to name
+// the calls and file the names on turn_end), answer-account/account.ts · appendedStandingLine
+// (the line rebuilt from the names the record kept)
+/**
+ * The display names the line may use for `a`: for every tool a `not-sure`
+ * reason's calls name, and every tool whose rule assumed a value, the app's
+ * words when its tool declares them — read through `displayNameOf`, the
+ * agent's own tools. Empty unless the standing is `not-sure` (only that line
+ * names reasons) and a tool declared a name: the line then says what it always
+ * said.
+ */
+export function standingDisplayNames(
+  a: AnswerAssessment,
+  assumed: readonly StandingAssumedValue[],
+  displayNameOf: (toolName: string) => string | undefined,
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  if (a.standing !== 'not-sure') return names;
+  const tools = [
+    ...a.reasons.flatMap((r) => (r.source.kind === 'calls' ? r.source.calls : [])),
+    ...assumed,
+  ].map((c) => c.toolName);
+  for (const tool of tools) {
+    if (names.has(tool)) continue;
+    const words = displayNameOf(tool);
+    if (words !== undefined) names.set(tool, words);
+  }
+  return names;
+}
+
+/** The clause for one assumed value — its value only in the tool's own view; the tool in the app's words when it declares them. */
+function assumedClause(line: StandingAssumedValue, displayName: string | undefined): string {
+  const by = displayName === undefined ? `${line.toolName}'s rule` : `the rule of ${displayName}`;
   return line.hidden
-    ? `${line.argument} was assumed by ${line.toolName}'s rule (its value is hidden by the tool's view), not given by you`
-    : `${line.argument} = ${JSON.stringify(line.value)} was assumed by ${
-        line.toolName
-      }'s rule, not given by you`;
+    ? `${line.argument} was assumed by ${by} (its value is hidden by the tool's view), not given by you`
+    : `${line.argument} = ${JSON.stringify(line.value)} was assumed by ${by}, not given by you`;
 }
 
 /** One clause per distinct (tool, argument, shown value), in the order the rows were filed. */
-function assumedClauses(lines: readonly StandingAssumedValue[]): string[] {
+function assumedClauses(
+  lines: readonly StandingAssumedValue[],
+  names: StandingNames | undefined,
+): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const line of lines) {
     const key = JSON.stringify([line.toolName, line.argument, line.hidden ? '' : line.value]);
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(assumedClause(line));
+    out.push(assumedClause(line, names?.displayNames.get(line.toolName)));
   }
   return out;
+}
+
+/** The clause for one reason: its calls named in the app's words when one declares them, else today's words. */
+function reasonClause(
+  reason: Exclude<AssessmentReason, 'argument-assumed'>,
+  names: StandingNames | undefined,
+): string {
+  const named = NAMED_REASON_WORDS[reason];
+  const source = names?.sources.get(reason);
+  if (named === undefined || names === undefined || source?.kind !== 'calls') {
+    return REASON_WORDS[reason];
+  }
+  const who = namedCalls(source.calls, source.unnamed ?? 0, (tool) => names.displayNames.get(tool));
+  return who === undefined ? REASON_WORDS[reason] : named(who);
 }
 
 /** The "not sure" clauses, in the fold's reason order — every assumed one, the rest capped. */
@@ -281,6 +414,7 @@ function reasonClauses(
   data: AnswerAssessmentData,
   assumed: readonly StandingAssumedValue[],
   rewritten: boolean,
+  names: StandingNames | undefined,
 ): string[] {
   const clauses: string[] = [];
   let counted = 0;
@@ -288,7 +422,7 @@ function reasonClauses(
   for (const reason of data.reasons) {
     if (reason === 'argument-assumed') {
       // Never cut (see MAX_CLAUSES): the line owns the assumed sentence.
-      clauses.push(...assumedClauses(assumed));
+      clauses.push(...assumedClauses(assumed, names));
       // A before-tool rewrite with no declared origin fires the same reason and
       // names no row the block would print: said once, without a value.
       if (rewritten || assumed.length === 0) {
@@ -299,7 +433,7 @@ function reasonClauses(
       continue;
     }
     if (counted < MAX_CLAUSES) {
-      clauses.push(REASON_WORDS[reason]);
+      clauses.push(reasonClause(reason, names));
       counted += 1;
     } else {
       folded += 1;
@@ -319,7 +453,11 @@ function reasonClauses(
  * `assumed` is this turn's assumed values (empty unless the inputs layer filed
  * `default` rows); `rewritten` says a before-tool middleware rewrote a ruled
  * argument without declaring where the value came from (the fold's other
- * `argument-assumed` witness).
+ * `argument-assumed` witness). `names` lets a `not-sure` line name the calls a
+ * reason rests on in the app's words — only calls whose tool declares a
+ * `displayName`, the rest counted; never the registered name. Without it, or
+ * when no such call is behind a reason, the clause is today's, word for word.
+ * Naming never changes the standing: the opening is read from `data` alone.
  *
  * @example
  * ```ts
@@ -329,19 +467,31 @@ function reasonClauses(
  *   false,
  * );
  * // 'Not sure — window = "2h" was assumed by search_logs\'s rule, not given by you.'
+ *
+ * standingLineOf(
+ *   { assessment: 'unknown', standing: 'not-sure', reasons: ['declared-absent'], checked: [] },
+ *   [],
+ *   false,
+ *   {
+ *     sources: new Map([['declared-absent', { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'load_attachment' }] }]]),
+ *     displayNames: new Map([['load_attachment', 'loading the attached data']]),
+ *   },
+ * );
+ * // 'Not sure — loading the attached data reported no matching results.'
  * ```
  */
 export function standingLineOf(
   data: AnswerAssessmentData,
   assumed: readonly StandingAssumedValue[],
   rewritten: boolean,
+  names?: StandingNames,
 ): string {
   const opening = STANDING_LINE_OPENINGS[data.standing];
   switch (data.standing) {
     case 'ask':
       return `${opening}the run stopped to ask a question before it could answer.`;
     case 'not-sure':
-      return `${opening}${reasonClauses(data, assumed, rewritten).join('; ')}.`;
+      return `${opening}${reasonClauses(data, assumed, rewritten, names).join('; ')}.`;
     case 'known':
       return `${opening}the app's answer checks passed this exact answer.`;
     case 'consistent': {

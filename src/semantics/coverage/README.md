@@ -913,6 +913,33 @@ bytes, which is why it is opt-in; the recording half runs either way.
 It is **not** enforcement of the model's prose. It does not check that the model
 stated the limits, and it does not refuse an answer that did not.
 
+### Which call declared an item — in the app's words only
+
+**The rule.** When a declaring call's tool declares a `displayName` (the app's own
+words for what a call of it does), the block marks each item with the calls that
+declared it — the declared names named, the rest counted, by the ONE naming the
+standing line uses (`../../lib/displayName.ts` · `namedCalls`) — and a `Period:` or
+"In progress" line names its call by those words instead of the registered name.
+An item no declaring call names is the bytes it always was; an agent whose tools
+declare no `displayName` gets the block it always got.
+
+**Why.** The block folds every call's declarations into ONE boundary, so a person
+could not tell which call left which ground unchecked — and the standing line now
+names the call a doubt came from. Both name a call the same way, in the words the app
+declared, and an item none of whose declaring calls has such words gets no mark at all
+— never a registered name in their place. (A `Period:` or "In progress" line of a tool
+without a `displayName` keeps its registered name, as before.)
+
+```text
+Checked:
+- the files attached to this chat (loading the attached data)
+- the hosts in the estate
+```
+
+The typed answer's data twin (`coverageOfAnswer`) is unchanged: its items carry no
+source. The time layer's own lines (`Period:` checks and `Clocks`, under `.time()`)
+keep the registered name.
+
 ### A typed answer carries them as data
 
 An answer with an output schema is JSON, and JSON followed by a block of prose

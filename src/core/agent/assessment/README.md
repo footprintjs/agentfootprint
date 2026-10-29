@@ -1,11 +1,14 @@
 **Mixed** — the answer's standing, folded from the run's committed record: known · consistent with the record · not sure (with the reasons) · ask · not assessed — read after the run, and (honesty layer 4, the answer layer) inside it.
-Fold: `assess.ts` (the one fold) and `reasons.ts` (the closed reason table).
+Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `sources.ts` (what each reason rests on).
 Map: `witness.ts` (the answer layer's two committed witness rows, filed by the Route decider).
 Walker: `stage.ts` (the answer layer's one stage, at the head of the final branch).
 Lens: `compose.ts` (the standing as data, and as one line for the person under its own arm).
 
 **The law.** The standing is folded from the rows, never from the model's
 confidence, and "known" needs a row that supports it.
+
+**And every reason says what it rests on** — `reasons[].source`: specific
+calls, the answer itself, or the run as a whole (`sources.ts`, below).
 
 ```ts
 import { assessAnswer } from 'agentfootprint/observe';
@@ -192,6 +195,81 @@ account's "It found" — which reads this run's calls through their EVENTS, a do
 that is always there — calls it "returned a result". The fold may over-report;
 it never hides.
 
+## What a reason rests on — `reasons[].source`
+
+**The rule.** Every reason carries `source`, one of `{ kind: 'calls', calls:
+{ toolCallId, toolName }[], unnamed? }`, `{ kind: 'answer' }` or `{ kind: 'run' }`.
+The KIND is declared once per reason in `REASONS` (`reasons.ts`), never decided
+per run; the calls of a `calls` reason are read off the very rows its witnesses
+point at (`sources.ts` · `reasonSourceOf`) — a result's own call, a coverage,
+argument, period or middleware row's own call, a conflict's readings, the results
+a contingent value came from, every call this turn of a tool an answer check names
+(`declaration-overclaimed`: it may over-report, it never hides). A call the record
+does not name in full — no id, or no tool name for it — is counted in `unnamed`,
+never dropped and never guessed. Names and ids only: never an argument, a result
+or a value.
+
+| Rests on | Reasons |
+|---|---|
+| `calls` | `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
+| `answer` | `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
+| `run` | `asked`, `argument-asked`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
+
+**Why.** "Not sure — a tool said nothing matched" did not say which tool: when an
+answer rested on one call's rows and another call reported no matching results, a reader could not
+tell which part the doubt touched. The source is a projection of what is recorded —
+which claim depends on which call is NOT on the record, so naming a source never
+says the rest of the answer is unaffected, and it never moves the standing. An
+empty list of calls never stands for "the run": that is a kind of its own.
+
+**The app's words for a reason's calls.** A tool may declare `displayName`
+(`defineTool({ displayName })` — one plain line, at most 60 characters,
+`lib/displayName.ts`). The line names a reason's calls ONLY by it — the declared
+ones named, the rest counted — and a reason none of whose calls declares one keeps
+today's words, byte for byte. The registered name (`schema.name`) is the model's
+vocabulary; an app may forbid showing it, so the line never names a reason's calls
+by it. Where `displayName` is used today: the line's reason clauses and its assumed
+clause, and the limits block's items and its `Period:` / "In progress" lines. Still
+printing the registered name — a known follow-up: the time layer's limits lines
+(under `.time()`), the answer account's rows, and, for a tool that declares no
+`displayName`, the assumed clause and the `Period:` / "In progress" lines (today's
+words, unchanged).
+The words the line used ride `turn_end.standingLineNames`, so the answer account
+rebuilds the very line from the record. The limits block marks each item's
+declaring calls the same way (`semantics/coverage/answer.ts` ·
+`composeAnswerWithCoverage`), and the account's "How sure" counts each reason's
+calls off the same `source` — one owner of "which calls".
+
+```ts
+const loadAttachment = defineTool({ name: 'load_attachment', displayName: 'loading the attached data', … });
+// load_attachment returned absent(…); list_runs returned one draft run
+(await agent.assessment())?.reasons;
+// [{ reason: 'declared-absent', layer: 3, witness: [...],
+//    source: { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'load_attachment' }] } }]
+text; // 'One draft run: run-1.\n\n---\n\nNot sure — loading the attached data reported no matching results.'
+```
+
+The named clauses (`compose.ts` · `NAMED_REASON_WORDS`; `{who}` = the declared
+names, then "and N other call(s)") — `STANDING_LINE_VERSION` 2:
+
+| Reason | Without a declared name (unchanged) | Named |
+|---|---|---|
+| `declared-absent` | a tool said nothing matched | {who} reported no matching results |
+| `coverage-gap` | a tool said there is ground it did not check or cannot cover | {who} declared ground that was not checked or cannot be covered |
+| `empty-undeclared` | a lookup came back empty without saying what it searched | {who} came back empty without saying what was searched |
+| `period-not-held` | a tool's data does not reach the time the question asked about | {who} read data that does not reach the time the question asked about |
+| `period-partly-held` | a tool's data covers only part of the time the question asked about | {who} read data that covers only part of the time the question asked about |
+| `period-unknown` | a tool could not say what time its data covers | {who} could not say what time the data covers |
+| `period-undeclared` | a tool did not say what time its result covers | {who} did not say what time was covered |
+| `period-differs-from-asked` | a tool read a different stretch of time than the one asked about | {who} read a different stretch of time than the one asked about |
+| `period-beyond-retention` | the time asked about is older than a tool declares its source keeps | {who} asked about time older than the source is declared to keep |
+| `sources-conflict` | two results the answer stood on disagree | results from {who} disagree |
+| `argument-unverified` | a value a call ran with came from the model, with no source on the record | {who} ran with a value from the model, with no source on the record |
+| `argument-read` | a value a call ran with was read into your words: … | {who} ran with a value read into your words: … |
+| `value-contingent` | a value a call ran with was taken from a result the model itself had set aside | a value came from {who}, whose results the model itself had set aside |
+| `declaration-overclaimed` | a tool declaration overstates what was checked | {who} declared more than was checked |
+| `argument-assumed` | window = "2h" was assumed by search_logs's rule, not given by you | window = "2h" was assumed by the rule of {name}, not given by you |
+
 ## How the turn ended
 
 The standing is about an answer, so the turn's end is settled first:
@@ -333,6 +411,15 @@ it at the study's freeze (adopted Q12).
   ran — only an unfinished one is on the record.
 - **The line's reasons carry no counts** — it names which kinds of reason fired;
   `agent.assessment()` and the account have the counts and the rows.
+- **Where a declared name does not reach yet.** The before-tool rewrite clause
+  ("a before-tool rule set a value a call ran with …") stays anonymous: its reason
+  mixes rewrite and default rows, and the line does not split them. The time
+  layer's own limits lines (`Period:` checks, `Clocks`, under `.time()`) keep the
+  registered name. A typed answer's limits as data (`turn_end.answerCoverage`)
+  carry no per-item source. A reason's `source` is not on the event or on
+  `turn_end.answerAssessment` — their fields are pinned and unchanged; read
+  `agent.assessment()` or `assessAnswer(recording)`. A later, versioned projection
+  can carry it.
 - **In the run, no app declarations.** The layer folds without `rowsAt`;
   `assessAnswer(record, declarations)`, `agent.assessment(declarations)` and the
   account take them and can say more about the same run.

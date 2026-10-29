@@ -1,5 +1,5 @@
 /**
- * 116 — Files in and out of a code sandbox, and commands, exactly and bounded.
+ * 117 — Files in and out of a code sandbox, and commands, exactly and bounded.
  *
  * A code runner holds data so the model does not have to. That only works if
  * the data moves in and out EXACTLY — bytes as bytes, a file whole or not at
@@ -21,7 +21,7 @@
  * here needs AWS; swap the stand-in for real credentials and the calls are the
  * same.
  *
- * Run:  npx tsx examples/features/116-code-files-and-commands.ts
+ * Run:  npx tsx examples/features/117-code-files-and-commands.ts
  */
 
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -37,7 +37,7 @@ import {
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
-  id: 'features/116-code-files-and-commands',
+  id: 'features/117-code-files-and-commands',
   title: 'Files in and out of a code sandbox, and commands',
   group: 'features',
   description:
@@ -48,13 +48,13 @@ export const meta: ExampleMeta = {
 };
 
 export async function run(): Promise<unknown> {
-  const workdir = mkdtempSync(join(tmpdir(), 'af-example-116-'));
+  const workdir = mkdtempSync(join(tmpdir(), 'af-example-117-'));
   try {
     // #region files-in-out
     // `commands: true` is the opt-in: without it the session has no
     // `runCommand` at all — it runs arbitrary shell.
     const runner = localCodeRunner({ cwd: workdir, commands: true, maxOutputChars: 200 });
-    const session = await runner.start({ key: 'example-116' });
+    const session = await runner.start({ key: 'example-117' });
 
     // 1. IN — text as text, bytes as bytes. The manifest reaches the code AND
     //    the commands as AF_STAGED_INPUTS.
@@ -107,7 +107,7 @@ export async function run(): Promise<unknown> {
       commands: true,
       _client: inMemoryAgentCore(),
     });
-    const remote = await sandbox.start({ key: 'example-116' });
+    const remote = await sandbox.start({ key: 'example-117' });
     await remote.stageInputs?.([{ name: 'rows', fileName: 'rows.csv', data: 'region,total\n' }]);
     const listed = await remote.runCommand?.('ls af-staged-inputs');
     console.log('5. UNKNOWN — command exit status:', listed?.exitCode ?? '(not reported)');

@@ -701,6 +701,12 @@ export interface AnswerMountDeps {
   readonly standingLine?: true;
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
   readonly validated?: true;
+  /**
+   * A tool's `displayName` (the app's words), read through the agent's own
+   * tools — present only where a tool can declare one; the line names a
+   * reason's calls in those words (`assessment/stage.ts`).
+   */
+  readonly displayNameOf?: (toolName: string) => string | undefined;
 }
 
 /**

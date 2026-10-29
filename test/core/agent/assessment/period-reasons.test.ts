@@ -66,6 +66,7 @@ describe('UNIT — one reason per verdict', () => {
           reason,
           layer: 3,
           witness: [{ kind: 'state', key: 'findingsLedger', path: '/0/verdict' }],
+          source: { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'backup_runs' }] },
         });
         expect(a.standing).toBe('not-sure');
       } else {
@@ -110,6 +111,7 @@ describe('UNIT — which rows the fold reads', () => {
         reason: 'period-not-held',
         layer: 3,
         witness: [{ kind: 'state', key: 'findingsLedger', path: '/0/verdict' }],
+        source: { kind: 'calls', calls: [{ toolCallId: 'c1', toolName: 'backup_runs' }] },
       },
     ]);
     expect(a.checked).toEqual([

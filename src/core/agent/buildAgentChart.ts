@@ -298,6 +298,14 @@ export interface AgentChartDeps {
   readonly releaseOutputTokens?: true;
   /** The evidence gate's `'rails'` posture: a refused answer is recorded flagged and ends the branch (`prepareFinalFor`). */
   readonly evidenceRails?: true;
+  /**
+   * A tool's `displayName` (the app's words for a call), read through the
+   * agent's own tools — present only where a tool can declare one. The prose
+   * limits block names an item's declaring calls in those words
+   * (`stages/prepareFinal.ts` · `prepareFinalFor`). Absent → the stage the
+   * chart has always mounted.
+   */
+  readonly displayNameOf?: (toolName: string) => string | undefined;
 
   /**
    * The time layer (`.time()`) is armed: under `attachCoverageLimits`, the
