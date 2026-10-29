@@ -217,25 +217,35 @@ describe.runIf(CAN_RUN_THE_STEP)('publish.yml · verdict, run as written', () =>
     expect(outcome.calls.find((call) => call.includes(jobsOfRun(501)))).toContain('filter=latest');
   });
 
-  it('says yes when an older green run tested this tree, though a newer one tested another', () => {
+  it('judges the newest run: green on this tree, it counts whatever an older run did', () => {
     const world = releaseMerge();
-    world[RUNS] = { total_count: 2, workflow_runs: [ciRun(501), ciRun(502)] };
-    world[jobsOfRun(502)] = greenJobs(OTHER_TREE);
+    world[RUNS] = {
+      total_count: 2,
+      workflow_runs: [ciRun(501), ciRun(499, { conclusion: 'failure' })],
+    };
     const outcome = runVerdict(world);
     expect(outcome.output, outcome.log).toBe('tested=true\n');
     expect(outcome.summary).toContain('/actions/runs/501');
   });
 
-  it('passes over a run whose jobs cannot be read, and judges the next', () => {
-    const world = releaseMerge();
-    world[RUNS] = { total_count: 2, workflow_runs: [ciRun(501), ciRun(502)] };
-    const outcome = runVerdict(world); // no answer for run 502's jobs
-    expect(outcome.output, outcome.log).toBe('tested=true\n');
-  });
-
   // Each world differs from the yes-world in ONE way. Each must leave `tested`
   // unset — so `build` runs every gate — and exit 0.
   const declines: Array<[string, (world: World) => void]> = [
+    [
+      'the newest run failed, though an older green run tested this exact tree',
+      (w) => (w[RUNS] = { workflow_runs: [ciRun(501), ciRun(502, { conclusion: 'failure' })] }),
+    ],
+    [
+      'the newest run tested another tree, though an older green run tested this one',
+      (w) => {
+        w[RUNS] = { workflow_runs: [ciRun(501), ciRun(502)] };
+        w[jobsOfRun(502)] = greenJobs(OTHER_TREE);
+      },
+    ],
+    [
+      'the jobs of the newest run cannot be read',
+      (w) => (w[RUNS] = { workflow_runs: [ciRun(501), ciRun(502)] }), // no answer for 502's jobs
+    ],
     [
       'main moved after CI ran, so the run tested another tree',
       (w) => (w[jobsOfRun(501)] = greenJobs(OTHER_TREE)),

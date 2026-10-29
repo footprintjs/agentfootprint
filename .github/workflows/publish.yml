@@ -172,11 +172,13 @@ jobs:
   #   1. the commit is the merge of a pull request from `release/next` on this
   #      repository into main (squash, merge commit or rebase: the tree
   #      decides, not the merge method);
-  #   2. a CI run on that pull request's final head finished green: every job,
-  #      in its latest attempt — a flaky job that went green on a re-run there
-  #      counts, as a re-run of a failed job here would;
-  #   3. every CI job named in GATES RAN and passed. A job renamed, removed or
-  #      skipped is not a pass;
+  #   2. the NEWEST CI run on that pull request's final head — the run its
+  #      checks showed — finished green in every job of its latest attempt. A
+  #      flaky job that went green on a re-run counts, as a re-run of a failed
+  #      job here would; a newer run that failed is never outweighed by an
+  #      older green one;
+  #   3. every CI job named in GATES RAN and passed in that run. A job
+  #      renamed, removed or skipped is not a pass;
   #   4. the tree that run tested, as its `tested-tree` job recorded it, is
   #      byte for byte the tree of the commit being published. A pull request
   #      run tests the merge ref, whose tree is the squash commit's only while
@@ -244,44 +246,40 @@ jobs:
           PR_HEAD="$(jq -r '.[0].head.sha' <<<"$PR")"
           [[ "$PR_HEAD" =~ $hex40 ]] || run_gates "#$NUMBER names no head commit"
 
-          # 2. Its finished, all-green CI runs on that head, newest first.
-          RUNS="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$PR_HEAD&status=success&per_page=100")" ||
+          # 2. The newest CI run on that head, from this repository: finished,
+          #    and green. Older runs do not count, green or not.
+          RUNS="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$PR_HEAD&per_page=100")" ||
             run_gates "could not list the CI runs of #$NUMBER"
-          IDS="$(jq -r --arg repo "$REPO" --arg head "$PR_HEAD" '
+          NEWEST="$(jq -c --arg repo "$REPO" --arg head "$PR_HEAD" '
             [.workflow_runs[] | select(.event == "pull_request" and .head_sha == $head
-              and .head_repository.full_name == $repo
-              and .status == "completed" and .conclusion == "success")]
-            | sort_by(.id) | reverse | .[].id' <<<"$RUNS")"
-          [ -n "$IDS" ] || run_gates "#$NUMBER has no finished, all-green CI run on its head $PR_HEAD"
+              and .head_repository.full_name == $repo)] | max_by(.id) // empty' <<<"$RUNS")"
+          [ -n "$NEWEST" ] || run_gates "#$NUMBER has no CI run on its head $PR_HEAD"
+          RUN="$(jq -r '.id' <<<"$NEWEST")"
+          jq -e '.status == "completed" and .conclusion == "success"' <<<"$NEWEST" >/dev/null ||
+            run_gates "the newest CI run of #$NUMBER, $RUN, is $(jq -r '"\(.status)/\(.conclusion // "none")"' <<<"$NEWEST")"
+          JOBS="$(gh api "repos/$REPO/actions/runs/$RUN/jobs?filter=latest&per_page=100")" ||
+            run_gates "could not read the jobs of CI run $RUN"
 
-          # Why each run was passed over, for the summary when none is taken.
-          SEEN=""
-          seen() { SEEN="${SEEN:+$SEEN; }run $RUN $1"; }
-          for RUN in $IDS; do
-            JOBS="$(gh api "repos/$REPO/actions/runs/$RUN/jobs?filter=latest&per_page=100")" ||
-              { seen "could not be read"; continue; }
-            # 3. Every gate job ran and passed. Skipped is not passed.
-            jq -e --argjson gates "$GATES" '
-              [.jobs[] | select(.conclusion == "success") | .name] as $passed
-              | all($gates[]; IN($passed[]))' <<<"$JOBS" >/dev/null ||
-              { seen "lacks a passed job named in GATES"; continue; }
-            # 4. The tree that run tested is the tree being published.
-            TESTED="$(jq -r '
-              [.jobs[] | select(.name == "tested-tree" and .conclusion == "success")
-                | (.steps // [])[].name | strings | capture("^tested tree (?<tree>[0-9a-f]{40})$").tree]
-              | if length == 1 then .[0] else "" end' <<<"$JOBS")"
-            if [ "$TESTED" = "$TREE" ]; then
-              URL="https://github.com/$REPO/actions/runs/$RUN"
-              echo "::notice::CI run $URL passed every gate on tree $TREE, the tree of $SHA (the merge of #$NUMBER). build does not run them again."
-              echo "**Gates:** CI run [$RUN]($URL) passed every gate on tree \`$TREE\`, the tree of \`$SHA\` (the merge of #$NUMBER), so \`build\` does not run them again." >> "$GITHUB_STEP_SUMMARY"
-              echo "tested=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            # Another tree: main moved after the run began. No tree: a run from
-            # before ci.yml recorded one.
-            seen "tested ${TESTED:-no recorded tree}"
-          done
-          run_gates "no CI run of #$NUMBER tested tree $TREE ($SEEN)"
+          # 3. Every gate job ran and passed. Skipped is not passed.
+          jq -e --argjson gates "$GATES" '
+            [.jobs[] | select(.conclusion == "success") | .name] as $passed
+            | all($gates[]; IN($passed[]))' <<<"$JOBS" >/dev/null ||
+            run_gates "CI run $RUN lacks a passed job named in GATES"
+
+          # 4. The tree that run tested is the tree being published. Another
+          #    tree: main moved after the run began. None: a run from before
+          #    ci.yml recorded one.
+          TESTED="$(jq -r '
+            [.jobs[] | select(.name == "tested-tree" and .conclusion == "success")
+              | (.steps // [])[].name | strings | capture("^tested tree (?<tree>[0-9a-f]{40})$").tree]
+            | if length == 1 then .[0] else "" end' <<<"$JOBS")"
+          [ "$TESTED" = "$TREE" ] ||
+            run_gates "CI run $RUN tested ${TESTED:-no recorded tree}, not $TREE"
+
+          URL="https://github.com/$REPO/actions/runs/$RUN"
+          echo "::notice::CI run $URL passed every gate on tree $TREE, the tree of $SHA (the merge of #$NUMBER). build does not run them again."
+          echo "**Gates:** CI run [$RUN]($URL) passed every gate on tree \`$TREE\`, the tree of \`$SHA\` (the merge of #$NUMBER), so \`build\` does not run them again." >> "$GITHUB_STEP_SUMMARY"
+          echo "tested=true" >> "$GITHUB_OUTPUT"
 
   build:
     needs: [plan, verdict]
