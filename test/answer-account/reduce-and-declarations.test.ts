@@ -92,7 +92,7 @@ describe('the declarations', () => {
 
   it('a valid set passes through; none is {}', () => {
     const d: AnswerAccountDeclarations = {
-      id: 'neo',
+      id: 'bot',
       version: '1',
       skills: { a: { label: 'a report' } },
       tools: { t: { rowsAt: 'volumes' } },

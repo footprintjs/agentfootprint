@@ -38,7 +38,7 @@ import {
 } from '../../src/answer-account/shown.js';
 import type { AnswerAccount, RowId } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-import { assertP1, assertP7, fixtureA, FLAGSHIP_RUN_ID, NEO_DECLARATIONS } from './helpers.js';
+import { assertP1, assertP7, fixtureA, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS } from './helpers.js';
 
 type E = { type: string; payload: Record<string, any>; meta: Record<string, any> };
 const SCOPE = { conversationId: 'review-fixes' };
@@ -149,7 +149,7 @@ describe('B1 — a gate_open verdict is not a refusal; deny and halt are', () =>
         },
         meta: rec.events[6]!.meta,
       });
-      const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+      const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
       expect(rowIds(a, 'understood').includes('understood.refused')).toBe(refused);
       expect(a.facts.routing.refusals.length).toBe(refused ? 1 : 0);
     },
@@ -192,7 +192,7 @@ describe('B2 — judge everything; cap only what is listed', () => {
       ...Array.from({ length: 30 }, (_, i) => ({ what: `scope item ${i}`, kind: 'scope' })),
       { what: 'whether that name is a storage array at all', kind: 'existence' },
     ];
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(a.signals[0]!.sentence.text).toBe(
       'get_array_inventory says it did not check whether that name is a storage array at all.',
     );
@@ -202,10 +202,10 @@ describe('B2 — judge everything; cap only what is listed', () => {
 
 describe('S1 — bounded whatever the run held (the reviewer’s size cases)', () => {
   const bounded = (a: AnswerAccount, rec: unknown) => {
-    const shown = showLeaves(a, rec as Recording, NEO_DECLARATIONS);
+    const shown = showLeaves(a, rec as Recording, HOST_APP_DECLARATIONS);
     expect(JSON.stringify(a).length).toBeLessThanOrEqual(128 * 1024);
     expect(JSON.stringify(shown).length).toBeLessThanOrEqual(MAX_SHOWN_BYTES);
-    assertP7(a, rec as Recording, NEO_DECLARATIONS);
+    assertP7(a, rec as Recording, HOST_APP_DECLARATIONS);
   };
 
   it('3,000 rejections of other ids, 1 KB each', () => {
@@ -216,7 +216,7 @@ describe('S1 — bounded whatever the run held (the reviewer’s size cases)', (
         payload: { requestedId: `x${i}-${'y'.repeat(1000)}` },
         meta: rec.events[6]!.meta,
       });
-    const a = accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, {
+    const a = accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(a.facts.routing.refusals).toHaveLength(12);
@@ -233,7 +233,7 @@ describe('S1 — bounded whatever the run held (the reviewer’s size cases)', (
         payload: { requestedId: 'array-inventory' },
         meta: rec.events[6]!.meta,
       });
-    const a = accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, {
+    const a = accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     const understood = rowText(a, 'understood');
@@ -265,7 +265,7 @@ describe('S1 — bounded whatever the run held (the reviewer’s size cases)', (
       rec.events.push({ ...witness, payload: { ...witness.payload, sourceId: id } });
     }
     history.unshift({ role: 'user', content: 'q' });
-    const a = accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, {
+    const a = accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(a.facts.inView).toHaveLength(50);
@@ -279,7 +279,9 @@ describe('S1 — bounded whatever the run held (the reviewer’s size cases)', (
     rec.events[5]!.payload.userPrompt = 'q'.repeat(1_000_000);
     rec.events[192]!.payload.finalContent = 'a'.repeat(1_000_000);
     bounded(
-      accountForAnswer(rec as unknown as Recording, NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID }),
+      accountForAnswer(rec as unknown as Recording, HOST_APP_DECLARATIONS, {
+        runId: FLAGSHIP_RUN_ID,
+      }),
       rec,
     );
   });
@@ -295,7 +297,7 @@ describe('S2 — the evidence line reads only the answer’s final verdict', () 
       action: 'revision-asked',
       unsupported: [{ value: 'FOO-123', shape: 'id' }],
     };
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(rowIds(a, 'how-sure')).toContain('howSure.evidence.notRecorded');
     expect(JSON.stringify(a)).not.toContain('FOO-123');
   });
@@ -303,14 +305,14 @@ describe('S2 — the evidence line reads only the answer’s final verdict', () 
   it('a revision-asked row as the answering iteration’s last row is not a verdict on the answer', () => {
     const rec = fixtureA() as unknown as { events: E[] };
     rec.events[189]!.payload.action = 'revision-asked';
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(rowIds(a, 'how-sure')).toContain('howSure.evidence.notRecorded');
   });
 
   it('no answering iteration on the record: not recorded, never the last row of any iteration', () => {
     const rec = fixtureA() as unknown as { events: E[] };
     rec.events = rec.events.filter((e) => !e.type.endsWith('stream.llm_start'));
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(rowIds(a, 'how-sure')).toContain('howSure.evidence.notRecorded');
   });
 });
@@ -325,7 +327,7 @@ describe('S4 — a call no event names is counted and kept (the reviewer’s H6)
       if (/tool_start|tools\.absent|findings\.declared/.test(e.type)) delete e.payload.toolName;
     for (const m of rec.snapshot.sharedState.history)
       if (m.toolCallId === 'toolu_01HRutzrsmgifaHQm73u6kuX') delete m.toolName;
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(a.unread).toBeGreaterThanOrEqual(1);
     const ids = a.rows.flatMap((r) => r.lines.map((l) => l.template.id));
     expect(ids).not.toContain('checked.noCalls');
@@ -368,7 +370,7 @@ describe('M1 — the mutation survivors', () => {
         action: 'flagged',
         unsupported: Array.from({ length: count }, (_, i) => ({ value: `V-${i}`, shape: 'id' })),
       };
-      return explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+      return explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     };
     expect(rowIds(at(12), 'how-sure')).toContain('howSure.evidence.flagged.atLeast');
     expect(at(12).facts.evidence.value?.capped).toBe(true);
@@ -387,10 +389,10 @@ describe('M1 — the mutation survivors', () => {
     };
     rec.events[52]!.payload.outcome = 'deny';
     rec.events[52]!.payload.changed = true;
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(a.facts.calls[0]).toMatchObject({
       outcome: 'ran',
-      withheldBy: 'seo:subject-carry',
+      withheldBy: 'host-app:subject-carry',
       emptiness: 'unknown',
     });
     expect(a.facts.calls[0]).not.toHaveProperty('rows');
@@ -401,7 +403,7 @@ describe('M1 — the mutation survivors', () => {
   it('a13 — `kind` on a checked item is refused by the reader: no chip, no signal', () => {
     const rec = fixtureA() as unknown as { events: E[] };
     rec.events[51]!.payload.checked[0].kind = 'existence';
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(a.signals.map((s) => s.id)).not.toContain('existence-not-checked');
     const checked = a.rows.find((r) => r.id === 'checked')!.lines;
     expect(checked.some((l) => l.chips?.some((c) => c.mark === 'kind'))).toBe(false);
@@ -446,9 +448,12 @@ describe('af-3 security — the conversation id never leaves in an account', () 
     const rec = fixtureA();
     const session = (rec.events[0] as unknown as E).meta.sessionId as string;
     expect(session).toMatch(/^a4fb6d65-/);
-    const a = accountForAnswer(rec, NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+    const a = accountForAnswer(rec, HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
     expect(a.run.value).not.toHaveProperty('sessionId');
-    const response = JSON.stringify({ account: a, shown: showLeaves(a, rec, NEO_DECLARATIONS) });
+    const response = JSON.stringify({
+      account: a,
+      shown: showLeaves(a, rec, HOST_APP_DECLARATIONS),
+    });
     expect(response).not.toContain(session);
     const p = {
       kind: 'event' as const,
@@ -526,7 +531,7 @@ describe('Round 2 — a listing cap never decides a fact', () => {
         payload: { toolName: `t${i}`, toolCallId: id, iteration: 1, basis: 'exploratory' },
       }),
     );
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     const expected = a.rows
       .find((r) => r.id === 'how-sure')!
       .lines.filter((l) => l.template.id.startsWith('howSure.expected'));
@@ -550,7 +555,7 @@ describe('Round 2 — a listing cap never decides a fact', () => {
         },
       });
     });
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(a.facts.calls.some((c) => c.toolCallId === 'more-52')).toBe(false); // not LISTED
     expect(a.signals.map((s) => s.sentence.text)).toContain(
       't52 says it did not check whether the name is a storage array.',
@@ -563,7 +568,7 @@ describe('Round 2 — a listing cap never decides a fact', () => {
       what: `existence ${i}`,
       kind: 'existence',
     }));
-    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, NEO_DECLARATIONS);
+    const a = explain(rec as unknown as Recording, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS);
     expect(a.signals.filter((s) => s.id === 'existence-not-checked')).toHaveLength(3); // listed
     const chip = a.rows
       .find((r) => r.id === 'anything-wrong')!

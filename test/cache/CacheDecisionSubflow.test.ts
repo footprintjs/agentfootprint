@@ -12,7 +12,7 @@
  * 7-pattern coverage:
  *   - unit:       individual policy evaluation cases
  *   - boundary:   empty/extreme inputs (0 injections, all-volatile, etc.)
- *   - scenario:   realistic Neo-shaped agents (always-on + skill + rule)
+ *   - scenario:   realistic host-app-shaped agents (always-on + skill + rule)
  *   - property:   contiguous-from-start invariant; no markers when all-volatile
  *   - security:   throwing predicate fail-closed; unknown policy fail-closed
  *   - performance: subflow body completes in <5ms for 100 injections
@@ -179,7 +179,7 @@ describe('CacheDecision subflow — boundary', () => {
 // ─── 3. Scenario — realistic agent shapes ─────────────────────────
 
 describe('CacheDecision subflow — scenario', () => {
-  it('Neo-like: base + 8 always-on steering → boundary at idx 8 (base + 8)', async () => {
+  it('Host-app-like: base + 8 always-on steering → boundary at idx 8 (base + 8)', async () => {
     const injections = Array.from({ length: 8 }, (_, i) =>
       makeInjection({
         id: `safety-${i}`,

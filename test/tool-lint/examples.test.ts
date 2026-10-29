@@ -4,7 +4,7 @@
  * integration-test layer; if an example silently breaks, the guide
  * silently lies).
  *
- *   02 — the Neo fcns twin pair is flagged confusable with a hint
+ *   02 — the host-app fcns twin pair is flagged confusable with a hint
  *   03 — before fails the gate, after passes under the SAME options
  *   04 — margins + flags from a live agent run, embedder lazy
  */
@@ -20,7 +20,7 @@ afterAll(() => {
   vi.restoreAllMocks();
 });
 
-describe('example 02 — lint the Neo catalog', () => {
+describe('example 02 — lint the host-app catalog', () => {
   it('flags the §7 acceptance pair and reports the field structural cases', async () => {
     const { report, fcnsPairFlagged, transcript } = await runLintExample();
     expect(fcnsPairFlagged).toBe(true);

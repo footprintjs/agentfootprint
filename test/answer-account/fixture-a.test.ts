@@ -4,7 +4,7 @@
  * of the whole account.
  *
  * Test types (Convention 3):
- *   - FUNCTIONAL — A (with neo's declarations), A0 (the record alone) and B
+ *   - FUNCTIONAL — A (with the app's declarations), A0 (the record alone) and B
  *                  (SYNTHETIC: every af-1 field declared) print exactly the
  *                  sentences, vouchers and one-liners the design fixes;
  *   - REGRESSION — the whole account (and its "show me" map) is pinned byte
@@ -16,15 +16,22 @@ import { describe, expect, it } from 'vitest';
 import { accountForAnswer } from '../../src/answer-account/account.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
 import type { AnswerAccount, RowId } from '../../src/answer-account/types.js';
-import { dump, fixtureA, fixtureB, FLAGSHIP_RUN_ID, golden, NEO_DECLARATIONS } from './helpers.js';
+import {
+  dump,
+  fixtureA,
+  fixtureB,
+  FLAGSHIP_RUN_ID,
+  golden,
+  HOST_APP_DECLARATIONS,
+} from './helpers.js';
 
 const rowOf = (account: AnswerAccount, id: RowId) => account.rows.find((r) => r.id === id)!;
 const said = (account: AnswerAccount, id: RowId) =>
   rowOf(account, id).lines.map((l) => [l.text, l.source] as const);
 
-describe('fixture A — the real run, with neo’s declarations', () => {
+describe('fixture A — the real run, with the app’s declarations', () => {
   const rec = fixtureA();
-  const account = accountForAnswer(rec, NEO_DECLARATIONS, { runId: rec.meta.origin.runId });
+  const account = accountForAnswer(rec, HOST_APP_DECLARATIONS, { runId: rec.meta.origin.runId });
 
   it('reads its own run only, and says which', () => {
     expect(account.scope).toBe('own-run');
@@ -142,7 +149,7 @@ describe('fixture A — the real run, with neo’s declarations', () => {
   it('REGRESSION — the account, its text and its show-me map are byte-stable', () => {
     golden('turn2.A.txt', dump(account));
     golden('turn2.A.account.json', account);
-    golden('turn2.A.shown.json', showLeaves(account, rec, NEO_DECLARATIONS));
+    golden('turn2.A.shown.json', showLeaves(account, rec, HOST_APP_DECLARATIONS));
   });
 });
 
@@ -182,7 +189,7 @@ describe('fixture A0 — the same run, the record alone', () => {
 });
 
 describe('fixture B — SYNTHETIC: every af-1 field declared', () => {
-  const account = accountForAnswer(fixtureB(), NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
+  const account = accountForAnswer(fixtureB(), HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID });
 
   it('the label is the recorded title (library); items print their short forms with kind chips', () => {
     const pick = rowOf(account, 'understood').lines[0]!;

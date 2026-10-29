@@ -34,7 +34,7 @@ import {
   fixtureB,
   FLAGSHIP_RUN_ID,
   linesOf,
-  NEO_DECLARATIONS,
+  HOST_APP_DECLARATIONS,
 } from '../helpers.js';
 
 type E = { type: string; payload: Record<string, unknown>; meta: Record<string, unknown> };
@@ -119,7 +119,7 @@ const CASES = Number(process.env.AF_ACCOUNT_CASES ?? 120);
 const LONG = { timeout: 120_000 };
 const baseA = (): Rec => fixtureA() as unknown as Rec;
 const explain = (rec: Rec, withDecl = true): AnswerAccount =>
-  accountForAnswer(rec as unknown as Recording, withDecl ? NEO_DECLARATIONS : undefined, {
+  accountForAnswer(rec as unknown as Recording, withDecl ? HOST_APP_DECLARATIONS : undefined, {
     runId: FLAGSHIP_RUN_ID,
   });
 const signalKeys = (a: AnswerAccount) =>
@@ -134,7 +134,7 @@ describe('P1 + P7 — every damaged recording', () => {
     for (let seed = 1; seed <= CASES; seed++) {
       const { rec, how } = damage(baseA(), seed);
       for (const withDecl of [true, false]) {
-        const decl = withDecl ? NEO_DECLARATIONS : {};
+        const decl = withDecl ? HOST_APP_DECLARATIONS : {};
         const account = explain(rec, withDecl);
         try {
           assertP1(account, rec as unknown as Recording, decl);
@@ -147,13 +147,13 @@ describe('P1 + P7 — every damaged recording', () => {
   });
 
   it('P7 over the undamaged fixtures A, A0 and B', () => {
-    assertP7(explain(baseA()), fixtureA(), NEO_DECLARATIONS);
+    assertP7(explain(baseA()), fixtureA(), HOST_APP_DECLARATIONS);
     assertP7(explain(baseA(), false), fixtureA(), {});
     const b = fixtureB();
     assertP7(
-      accountForAnswer(b, NEO_DECLARATIONS, { runId: FLAGSHIP_RUN_ID }),
+      accountForAnswer(b, HOST_APP_DECLARATIONS, { runId: FLAGSHIP_RUN_ID }),
       b,
-      NEO_DECLARATIONS,
+      HOST_APP_DECLARATIONS,
     );
   });
 });
@@ -375,9 +375,9 @@ describe('P1 + P7 + bounds — amplified damage (B1 · B2 · S1)', () => {
       const { rec, how, kind, verdict, failed, empty } = amplify(seed);
       const account = explain(rec);
       try {
-        assertP1(account, rec as unknown as Recording, NEO_DECLARATIONS);
-        assertP7(account, rec as unknown as Recording, NEO_DECLARATIONS);
-        const shown = showLeaves(account, rec as unknown as Recording, NEO_DECLARATIONS);
+        assertP1(account, rec as unknown as Recording, HOST_APP_DECLARATIONS);
+        assertP7(account, rec as unknown as Recording, HOST_APP_DECLARATIONS);
+        const shown = showLeaves(account, rec as unknown as Recording, HOST_APP_DECLARATIONS);
         expect(JSON.stringify(shown).length).toBeLessThanOrEqual(64 * 1024);
         if (kind === 'permission-verdict') {
           // B1 — only deny / halt refuse.

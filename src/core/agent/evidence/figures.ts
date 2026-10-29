@@ -77,7 +77,12 @@ import type { EvidenceShape, FigureDerivation, UnsupportedValue } from './types.
 export { FIGURE_UNITS } from './figureUnits.js';
 import { FIGURE_UNITS } from './figureUnits.js';
 import { numericRangesOf } from './numericRanges.js';
-import { decimalsOf, MAX_ROUNDING_SPELLING_CHARS, roundsTo } from './numberPrecision.js';
+import {
+  decimalsOf,
+  MAX_ROUNDING_SPELLING_CHARS,
+  roundsTo,
+  scientificDecimalOf,
+} from './numberPrecision.js';
 
 /** A number (thousands separators allowed) followed, glued or one space apart, by a unit. */
 const FIGURE_RE = new RegExp(
@@ -120,7 +125,16 @@ interface Carried {
   readonly roundingSource?: { readonly spelling?: string; readonly allowed: boolean };
   /** The field it sat under, when it sat under one. */
   readonly key?: string;
+  /**
+   * Read off a scientific spelling in text under `decimalRounding`
+   * (`1.12e-02`): a source for the exact decimal rule only. The figures
+   * dial's own derivations compare doubles and never see it.
+   */
+  readonly decimalOnly?: true;
 }
+
+/** A carried number the figures dial's derivations may use. */
+const figureSource = (carried: Carried): boolean => carried.decimalOnly !== true;
 
 /** One reconstructed value. */
 interface Derived {
@@ -237,6 +251,7 @@ class Fold {
             at,
             ...(tokenSource !== undefined && { roundingSource: tokenSource }),
           });
+        else if (this.roundingShapes !== undefined) this.addScientific(t, at, this.roundingShapes);
       }
       return;
     }
@@ -247,6 +262,27 @@ class Fold {
     } else if (isPlainObject(node)) {
       for (const [k, v] of Object.entries(node)) this.walk(v, at === '' ? k : `${at}.${k}`, k);
     }
+  }
+
+  /**
+   * Under `decimalRounding`: a standalone scientific token in text
+   * (`numberPrecision.ts` · `scientificDecimalOf`) is a number this result
+   * carries, for the exact decimal rule only (`decimalOnly`). Its own
+   * spelling is the rounding source — `roundsTo` reads the exponent exactly —
+   * and a declared ID shape keeps it out of rounding, as for any source.
+   * Within the bounds the double it parses to is finite.
+   */
+  addScientific(token: string, at: string, shapes: readonly EvidenceShape[]): void {
+    if (scientificDecimalOf(token) === undefined) return;
+    this.addCarried({
+      x: Number(token),
+      at,
+      roundingSource: {
+        spelling: token,
+        allowed: !shapes.some((shape) => shape.match.test(token)),
+      },
+      decimalOnly: true,
+    });
   }
 
   /** The column derivations of one list. */
@@ -465,10 +501,10 @@ export function explainFigure(
   const f = Number(value);
   if (!Number.isFinite(f)) return undefined;
   const d = decimalsOf(value);
-  const rounded = roundedFrom(value, basis);
+  const rounded = roundedFrom(value, basis, figureSource);
   if (rounded !== undefined) return rounded;
   for (const c of basis.carried) {
-    if (Math.abs(c.x) < 1000) continue;
+    if (!figureSource(c) || Math.abs(c.x) < 1000) continue;
     for (const s of SCALES) {
       if (roundsTo(c.x / s.by, f, d)) {
         return { derivation: 'unit-scale', from: `${shown(c.x)} at ${c.at} ÷ ${s.label}` };
@@ -476,7 +512,12 @@ export function explainFigure(
     }
   }
   for (const c of basis.carried) {
-    if (c.key !== undefined && PERCENT_FIELD.test(c.key) && roundsTo(100 - c.x, f, d)) {
+    if (
+      figureSource(c) &&
+      c.key !== undefined &&
+      PERCENT_FIELD.test(c.key) &&
+      roundsTo(100 - c.x, f, d)
+    ) {
       return { derivation: 'complement', from: `100 − ${shown(c.x)} at ${c.at}` };
     }
   }

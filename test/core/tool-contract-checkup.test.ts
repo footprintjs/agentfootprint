@@ -2,7 +2,7 @@
  * toolContractCheckup — diff an agent's tool schemas against a server catalog.
  *
  * Convention-3 tiers: unit (each divergence code), functional (aligned → ok/empty),
- * integration (a Neo-shaped catalog: aligned + one drift), property (identical sides
+ * integration (a host-app-shaped catalog: aligned + one drift), property (identical sides
  * never diverge), security (malformed entries don't throw).
  */
 import { describe, it, expect } from 'vitest';
@@ -76,7 +76,7 @@ describe('toolContractCheckup — unit (one divergence at a time)', () => {
   });
 });
 
-describe('toolContractCheckup — integration (Neo-shaped catalog)', () => {
+describe('toolContractCheckup — integration (host-app-shaped catalog)', () => {
   it("aligned schemas (server mirrors the agent) → ok — proves there's no drift", () => {
     const agent = [
       tool('influx_get_io_profile', ['initiator_id'], ['initiator_id', 'switch_name']),

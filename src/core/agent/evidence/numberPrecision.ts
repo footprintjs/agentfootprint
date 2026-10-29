@@ -1,4 +1,5 @@
-/** The shared precision rule for existing figures and opt-in plain decimals. */
+/** The shared precision rule for existing figures and opt-in plain decimals,
+ * and the one exact reading of a number written in scientific notation. */
 /** Decimal places the answer wrote the value with. */
 export function decimalsOf(value: string): number {
   const dot = value.indexOf('.');
@@ -28,6 +29,71 @@ function decimalOf(spelling: string): Decimal | undefined {
     coefficient: match[1] === '-' ? -magnitude : magnitude,
     scale: fractional.length - exponent,
   };
+}
+
+/**
+ * One whole token in scientific notation: `1.12e-02`, `3.358E+03`, `-5e7`.
+ * Anchored, so a lookalike glued to letters or structure — a hash
+ * (`9f3e10ab`), a version (`1.2e3-rc`), an id (`host-1e5`) — never matches:
+ * the tokenizer's boundaries decide what stands alone.
+ */
+const SCIENTIFIC = /^[-+]?\d+(?:\.\d+)?e[-+]?\d+$/i;
+
+/** The decimal a scientific spelling states, read exactly. */
+export interface ScientificDecimal {
+  /** The value with no exponent and no trailing fractional zero:
+   *  `1.12e-02` → `0.0112`, `3.358e+03` → `3358`. */
+  readonly exact: string;
+  /** The value at the precision the spelling was written with, only when
+   *  that is a fraction: `1.120e-2` → `0.01120`. A whole number
+   *  (`3.358e+03`) has none — it is matched exactly, never rounded. */
+  readonly written?: string;
+}
+
+/**
+ * Read one standalone scientific spelling as the decimal it states — exactly,
+ * through `decimalOf` (BigInt, no Number conversion) and within its bounds:
+ * the spelling at most `MAX_ROUNDING_SPELLING_CHARS` characters, its exponent
+ * within ±400, and the decimal it states within the same character bound.
+ * `undefined` for any other token; outside the bounds a token stays a
+ * spelling only.
+ *
+ * @example
+ * ```ts
+ * scientificDecimalOf('1.12e-02'); // { exact: '0.0112', written: '0.0112' }
+ * scientificDecimalOf('1.2E+21');  // { exact: '1200000000000000000000' }
+ * scientificDecimalOf('9f3e10ab'); // undefined — a hash, not a number
+ * ```
+ */
+export function scientificDecimalOf(spelling: string): ScientificDecimal | undefined {
+  if (!SCIENTIFIC.test(spelling)) return undefined;
+  const decimal = decimalOf(spelling);
+  if (decimal === undefined) return undefined;
+  const exact = plainOf(withoutTrailingZeros(decimal));
+  const written = decimal.scale > 0 ? plainOf(decimal) : undefined;
+  // `written` keeps every fractional digit `exact` drops, so it is the longer.
+  if ((written ?? exact).length > MAX_ROUNDING_SPELLING_CHARS) return undefined;
+  return written === undefined ? { exact } : { exact, written };
+}
+
+/** The same value with every trailing fractional zero dropped. */
+function withoutTrailingZeros({ coefficient, scale }: Decimal): Decimal {
+  let reduced = coefficient;
+  let places = scale;
+  while (places > 0 && reduced % 10n === 0n) {
+    reduced /= 10n;
+    places -= 1;
+  }
+  return { coefficient: reduced, scale: places };
+}
+
+/** `coefficient × 10^-scale` written out, with exactly `max(scale, 0)` fractional digits. */
+function plainOf({ coefficient, scale }: Decimal): string {
+  const sign = coefficient < 0n ? '-' : '';
+  const digits = (coefficient < 0n ? -coefficient : coefficient).toString();
+  if (scale <= 0) return digits === '0' ? '0' : `${sign}${digits}${'0'.repeat(-scale)}`;
+  const padded = digits.padStart(scale + 1, '0');
+  return `${sign}${padded.slice(0, -scale)}.${padded.slice(-scale)}`;
 }
 
 /** True inside the answer's inclusive half-unit rounding interval.

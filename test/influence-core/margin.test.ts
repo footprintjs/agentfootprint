@@ -19,7 +19,7 @@ const DISTINCT_CATALOG = [
   { name: 'send_email', text: '!!! ### 0101010101 zzzzzz qqqq 9999 ****' },
 ];
 
-// Deliberate near-twins (the Neo confusable pair shape).
+// Deliberate near-twins (the host-app confusable pair shape).
 const TWIN_CATALOG = [
   {
     name: 'get_fcns_database',

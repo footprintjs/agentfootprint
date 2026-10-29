@@ -248,7 +248,7 @@ with no verifier:
 ```ts
 nodeHost({
   port: 8080,
-  allowedHosts: ['neo.corp.example'],          // every name people use to reach it
+  allowedHosts: ['bot.corp.example'],          // every name people use to reach it
   // allowedOrigins: ['https://app.corp.example'], // only if a page on ANOTHER origin calls it
 });
 ```
@@ -327,7 +327,7 @@ so call the same guard there. `doorGuard({ name, ...rules })` returns a
 the method and headers (`DoorRequest`):
 
 ```ts
-const guard = doorGuard({ name: 'sign-in', allowedHosts: ['neo.corp.example'] });
+const guard = doorGuard({ name: 'sign-in', allowedHosts: ['bot.corp.example'] });
 
 onUnhandled: (req, res) => {
   const refusal = guard.check(req);
@@ -1945,7 +1945,7 @@ somebody else's API), plus `userIdClaim` (default `'sub'`), `rolesClaim`
 (default `'roles'`; a claim name, or a path such as `['realm_access', 'roles']`
 for Keycloak — a dotted name is never split), `rolesFormat` (default `'list'`:
 an array gives one role per entry and a single string is ONE role, so
-`"Not neo-users"` never satisfies a check for `neo-users`; `'space-delimited'`
+`"Not bot-users"` never satisfies a check for `bot-users`; `'space-delimited'`
 keeps the old split for a claim that really is a list), `algorithms` (default:
 the RSA and ECDSA families — symmetric
 algorithms are deliberately excluded, because with a *public* key an accepted
@@ -2124,7 +2124,7 @@ const identity = { signIn: signIns };
 await standingAgent({
   agent,
   sessions,
-  host: nodeHost({ port: 8080, allowedHosts: ['neo.corp.example'], signIn: { identity } }),
+  host: nodeHost({ port: 8080, allowedHosts: ['bot.corp.example'], signIn: { identity } }),
   identity,
 });
 ```
@@ -2282,11 +2282,11 @@ IDENTITY_ISSUER=https://login.microsoftonline.com/<tenant>/v2.0
 IDENTITY_AUDIENCE=<API client id>
 IDENTITY_USER_ID_CLAIM=oid
 IDENTITY_REQUIRED_SCOPE=access_as_user
-IDENTITY_PUBLIC_URL=https://neo.corp.example      # these three together, or none:
+IDENTITY_PUBLIC_URL=https://bot.corp.example      # these three together, or none:
 IDENTITY_CLIENT_ID=<web client id>                # browser sign-in
-IDENTITY_CLIENT_KEY_FILE=/run/secrets/neo-web.pem # or IDENTITY_CLIENT_SECRET_FILE
+IDENTITY_CLIENT_KEY_FILE=/run/secrets/bot-web.pem # or IDENTITY_CLIENT_SECRET_FILE
 IDENTITY_SCOPE=openid profile api://<API client id>/access_as_user
-IDENTITY_COOKIE_KEY_FILE=/run/secrets/neo-cookie-key
+IDENTITY_COOKIE_KEY_FILE=/run/secrets/bot-cookie-key
 ```
 
 ### Behind an authenticating proxy — `proxy-token`
@@ -2368,9 +2368,9 @@ AD's bind-name rules.
 
 ```sh
 IDENTITY_STRATEGY=directory-password
-IDENTITY_PUBLIC_URL=https://neo.corp.example
+IDENTITY_PUBLIC_URL=https://bot.corp.example
 IDENTITY_LDAP_URL=ldaps://dc1.corp.example:636
-IDENTITY_LDAP_CA_FILE=/etc/neo/corp-root-ca.pem
+IDENTITY_LDAP_CA_FILE=/etc/bot/corp-root-ca.pem
 IDENTITY_LDAP_DOMAIN=corp.example
 IDENTITY_LDAP_NETBIOS_DOMAIN=CORP
 IDENTITY_LDAP_BASE_DN=DC=corp,DC=example

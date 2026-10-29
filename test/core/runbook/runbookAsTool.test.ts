@@ -180,7 +180,7 @@ const POSTURE_DEFAULT = {
 } as const;
 
 /** The chart for ONE subject — the decider whose branches speak the verdict
- *  vocabulary, with filter-rule evidence per decision (the NEO shape).
+ *  vocabulary, with filter-rule evidence per decision (the host-app shape).
  *
  *  `labelledDefault: false` reproduces the pre-9.82.0 call shape (a bare
  *  string default), which is how the "unnamed default" test proves the
@@ -213,7 +213,7 @@ function subjectChart(subject: Subject, index: number, labelledDefault = true) {
 }
 
 /** The triage-shaped procedure: inner tool call → bounded fan-out with one
- *  decider pass per subject (isolated branch subflows, the NEO shape) →
+ *  decider pass per subject (isolated branch subflows, the host-app shape) →
  *  rowset + coverage + report collected on the root state. */
 function triageProcedure(tools: ToolDispatch, labelledDefault = true) {
   return flowChart<TriageState>(

@@ -242,5 +242,5 @@ Read:
   Whether the misses cost answer quality on harder questions is the next
   measurement; this pass shows none on these eight.
 - Policy stays: the model's call is never substituted; the dial is off unless
-  the host names it (`SEO_TOOL_CHOICE=advisory|top-2` there).
+  the host names it (the host app's tool-choice setting, `advisory|top-2`, there).
 
