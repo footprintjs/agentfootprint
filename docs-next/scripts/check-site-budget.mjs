@@ -310,7 +310,18 @@ const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_490_000, records: 2_000 };
 // measurement, the rule every raise here follows: 232.1 MB. Files, deferred
 // demo, page, runtime JS and duplicate budgets hold unchanged; search gzip holds
 // at its ceiling, so the next docs page will need its own raise there.
-const OUTPUT_LIMITS = { bytes: 232_100_000, files: 8_270, duplicateRscBytes: 0 };
+// RAISED 2026-10-29, bytes only, for #257 (code in an answer: the "Show the
+// script the answer was computed with" section of build/evidence-gate and ten
+// generated API pages for its public types — ToolScript, ScriptRow,
+// ScriptShownRow, ScriptLabel, ScriptBlockVerdict, ScriptsVerdict,
+// UnmatchedReason, ShownScript, TurnEndScripts, ScriptTravelOptions), under the
+// 2026-09-27 ruling (raise when it bites; docs-site cleanup planned). CI
+// measured main at e1846a708 at 230.53 MB across 5,814 files, and the branch
+// merged with main at 232.16 MB across 5,874 files (+60 files: ten API routes),
+// duplicate RSC pairs 0, 0.06 MB over the old ceiling. ~2% over that
+// measurement, the rule every raise here follows: 236.8 MB. Files, deferred
+// demo, page, runtime JS, search and duplicate budgets hold unchanged.
+const OUTPUT_LIMITS = { bytes: 236_800_000, files: 8_270, duplicateRscBytes: 0 };
 // Raised for 9.61.0: 394.1 KB → 400.3 KB. The skill-graph demo imports
 // `defineTool` from 'agentfootprint', so the library's MAIN ENTRY and its
 // whole transitive graph ride this chunk — and this release added the
