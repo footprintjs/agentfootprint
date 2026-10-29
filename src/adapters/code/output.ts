@@ -22,14 +22,30 @@ export interface BoundedOutput {
   readonly truncated?: CodeTruncation;
 }
 
-/** Cut each stream to `max` characters, saying whether — and from how much — it cut. */
-export function boundOutput(stdout: string, stderr: string, max: number): BoundedOutput {
+/**
+ * Cut each stream to `max` characters, saying whether — and from how much — it
+ * cut.
+ *
+ * `overflowed` names a stream the BACKEND already cut (a child whose output
+ * passed its buffer ceiling): that stream is marked cut even when it fits
+ * `max`, and `ofChars` is left out, because the length before that cut was
+ * never seen — a number here would understate it.
+ */
+export function boundOutput(
+  stdout: string,
+  stderr: string,
+  max: number,
+  overflowed?: 'stdout' | 'stderr',
+): BoundedOutput {
   const out = cut(stdout, max);
   const err = cut(stderr, max);
+  const stdoutCut = out.cut || overflowed === 'stdout';
+  const stderrCut = err.cut || overflowed === 'stderr';
   const truncated = {
-    ...(out.cut && { stdout: true }),
-    ...(err.cut && { stderr: true }),
-    ...((out.cut || err.cut) && { ofChars: Math.max(stdout.length, stderr.length) }),
+    ...(stdoutCut && { stdout: true }),
+    ...(stderrCut && { stderr: true }),
+    ...((out.cut || err.cut) &&
+      overflowed === undefined && { ofChars: Math.max(stdout.length, stderr.length) }),
   };
   return {
     stdout: out.text,
@@ -52,6 +68,8 @@ export interface CommandReport {
   readonly exitCode?: number;
   /** Only when the backend reported one. */
   readonly isError?: boolean;
+  /** A stream the backend itself cut before handing it over. */
+  readonly overflowed?: 'stdout' | 'stderr';
 }
 
 /** A command's options, checked once. */
@@ -70,7 +88,12 @@ export interface CommandBounds {
  * printed after `maxOutputChars` characters is the common case, not the edge.
  */
 export function commandResult(report: CommandReport, bounds: CommandBounds): CodeCommandResult {
-  const bounded = boundOutput(report.stdout, report.stderr, bounds.maxOutputChars);
+  const bounded = boundOutput(
+    report.stdout,
+    report.stderr,
+    bounds.maxOutputChars,
+    report.overflowed,
+  );
   return {
     stdout: bounded.stdout,
     stderr: bounded.stderr,

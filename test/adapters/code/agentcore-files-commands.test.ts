@@ -427,6 +427,19 @@ describe('agentCoreCodeRunner.readFile — one file, paired by the URI the servi
     expect(file?.data).toBe('x');
   });
 
+  it('a URI is read ONE way: a literal %XX in the path is not matched by a URI that decodes elsewhere', async () => {
+    // Asked for the file literally named `a%41.csv`. Decoded, `file:///a%41.csv`
+    // names `aA.csv` — another file — so it is not accepted on its literal reading.
+    const ambiguous = await refusal(read([{ uri: 'file:///a%41.csv', text: 'x' }], 'a%41.csv'));
+    expect(ambiguous?.reason).toBe('uri-mismatch');
+    // The service's encoding of that same name pairs.
+    const encoded = await read([{ uri: 'file:///a%2541.csv', text: 'x' }], 'a%41.csv');
+    expect(encoded?.data).toBe('x');
+    // A `%` that is no escape at all is read as written.
+    const raw = await read([{ uri: 'file:///100%.csv', text: 'y' }], '100%.csv');
+    expect(raw?.data).toBe('y');
+  });
+
   it('FAILS CLOSED on a file with NO uri', async () => {
     const err = await refusal(read([{ type: 'text', text: 'a,b' }]));
     expect(err).toBeInstanceOf(CodeSandboxError);
@@ -630,6 +643,35 @@ describe('agentCoreCodeRunner.runCommand — bounded output, reported exit statu
     expect((err as Error).message).not.toContain('sleep 999');
   });
 
+  it('ONE deadline covers the manifest setup AND the code — not one each', async () => {
+    // Each call answers in 70 ms; the run's timeoutMs is 100. Two separate
+    // deadlines would both pass; one deadline for the whole execution cannot.
+    const runner = agentCoreCodeRunner({
+      identifier: IDENTIFIER,
+      _client: {
+        startSession: () => Promise.resolve({ sessionId: SESSION }),
+        invoke: (input) =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve(
+                  input.name === 'executeCode' && input.arguments.code.includes('AF_STAGED_INPUTS')
+                    ? { stdout: `${MANIFEST_SET_MARKER}\n`, stderr: '', exitCode: 0 }
+                    : { stdout: '', stderr: '', exitCode: 0 },
+                ),
+              70,
+            ),
+          ),
+        stopSession: () => Promise.resolve(),
+      },
+    });
+    const session = await runner.start({ key: 'k' });
+    await session.stageInputs?.([{ name: 'a', data: '1' }]);
+    await expect(session.execute({ code: 'print(1)', timeoutMs: 100 })).rejects.toMatchObject({
+      reason: 'timed-out',
+    });
+  });
+
   it('ABORT — the caller’s own reason comes back, and the request carried the signal', async () => {
     let seen: AbortSignal | undefined;
     const runner = agentCoreCodeRunner({
@@ -736,6 +778,16 @@ describe('agentCoreCodeRunner — every form of a gone session is SessionExpired
       });
     }
   }
+
+  it('a message that echoes "inactive" without naming a session is not an expiry', async () => {
+    const { session } = await open(
+      () => [{ validationException: { message: "Value 'grep inactive users.csv' is invalid" } }],
+      { commands: true },
+    );
+    const err = await session.runCommand?.('grep inactive users.csv').catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(SessionExpiredError);
+    expect((err as Error).name).toBe('ValidationException');
+  });
 
   it('a ValidationException that does NOT say "not active" is not an expiry', async () => {
     const { session } = await open(() =>

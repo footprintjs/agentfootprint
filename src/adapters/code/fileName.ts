@@ -8,7 +8,7 @@
  * and two names never become one file on either.
  */
 
-import { lazyRequire } from '../../lib/lazyRequire.js';
+import { sha256Hex } from '../../lib/sha256.js';
 
 /** Longest file name this adapter will write. Well inside every POSIX
  *  `NAME_MAX`, and the cap this adapter has always used. */
@@ -80,7 +80,10 @@ export function safeFileName(raw: string): string {
   // SHA-256 rather than the package's 32-bit FNV-1a: a name reaching this
   // adapter is caller data, and a 32-bit digest is a collision somebody can go
   // and find, which for a file the model then reads as data is the same defect
-  // this function exists to close.
+  // this function exists to close. `lib/sha256.ts` — the library's own,
+  // checked against `node:crypto` — so `agentCoreCodeRunner`, which may run
+  // where there is no `node:crypto`, encodes a name exactly as the local runner
+  // does.
   const digest = sha256Hex(raw).slice(0, 32);
   return `${encoded.slice(0, FILE_NAME_MAX - digest.length - 2)}_z${digest}`;
 }
@@ -95,18 +98,4 @@ function encodeFileName(raw: string): string {
     else out += `_u${raw.charCodeAt(i).toString(16).padStart(4, '0')}`;
   }
   return out;
-}
-
-/**
- * SHA-256, hex.
- *
- * `node:crypto` rather than a fallback: this is only ever reached from
- * `stageInputs`, which has already required `node:fs` and written to a
- * temp directory. A runtime with a filesystem but no crypto is not a shape
- * this adapter can be in, and pretending otherwise with a weaker digest would
- * quietly widen the very collision the digest is here to close.
- */
-function sha256Hex(text: string): string {
-  const crypto = lazyRequire<typeof import('node:crypto')>('node:crypto');
-  return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 }

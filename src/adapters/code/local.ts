@@ -84,7 +84,7 @@ import type {
 } from '../../provider-contract/types.js';
 import { STAGED_INPUTS_ENV } from '../../provider-contract/types.js';
 import { CodeSandboxError, readBound, sandboxPath } from '../../provider-contract/codeSandbox.js';
-import { abortErrorOf, throwIfAborted } from '../../lib/abort.js';
+import { abortErrorOf, armDeadline, linkedController, throwIfAborted } from '../../lib/abort.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import { safeFileName } from './fileName.js';
 import { boundOutput, commandBounds, commandResult, payloadBytes } from './output.js';
@@ -151,7 +151,13 @@ export interface FsModuleLike {
   readonly writeFileSync?: (path: string, data: string | Uint8Array) => void;
   readonly rmSync?: (path: string, options?: { recursive?: boolean; force?: boolean }) => void;
   readonly realpathSync?: (path: string) => string;
-  readonly openSync?: (path: string, flags: string) => number;
+  readonly openSync?: (path: string, flags: string | number) => number;
+  /** The open flags a read uses where the platform has them. */
+  readonly constants?: {
+    readonly O_RDONLY?: number;
+    readonly O_NONBLOCK?: number;
+    readonly O_NOFOLLOW?: number;
+  };
   readonly fstatSync?: (fd: number) => { isFile(): boolean; readonly size: number };
   readonly readSync?: (
     fd: number,
@@ -171,8 +177,8 @@ export interface ChildProcessModuleLike {
     options: {
       cwd?: string;
       env?: Record<string, string>;
-      timeout?: number;
       maxBuffer?: number;
+      killSignal?: string;
       signal?: AbortSignal;
     },
     callback: (
@@ -279,13 +285,10 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
                 ),
             },
           );
-          // A failed run with nothing on stderr still says why: the runtime's
-          // own message stands in for the empty stream, as it always has.
-          const bounded = boundOutput(
-            raw.stdout,
-            raw.failure !== undefined && raw.stderr.length === 0 ? raw.failure : raw.stderr,
-            maxOutputChars,
-          );
+          // The child's own streams only. The runtime's message for a failed
+          // child ("Command failed: <the command line>") quotes the code, so
+          // it is not passed off as the code's stderr.
+          const bounded = boundOutput(raw.stdout, raw.stderr, maxOutputChars, raw.overflowed);
           return {
             // Known either way: an exit status, or a process the operating
             // system ended (no exit status at all — never a made-up one).
@@ -369,6 +372,7 @@ export function localCodeRunner(options: LocalCodeRunnerOptions = {}): CodeRunne
                 stdout: raw.stdout,
                 stderr: raw.stderr,
                 ...(raw.exitCode !== undefined && { exitCode: raw.exitCode }),
+                ...(raw.overflowed !== undefined && { overflowed: raw.overflowed }),
               },
               bounds,
             );
@@ -484,7 +488,7 @@ function readWithin(fs: FsModuleLike, root: string, relative: string, maxBytes: 
   }
   let fd: number;
   try {
-    fd = open(real, 'r');
+    fd = open(real, readFlags(fs));
   } catch (err) {
     throw notReturned(relative, errnoOf(err));
   }
@@ -512,6 +516,19 @@ function readWithin(fs: FsModuleLike, root: string, relative: string, maxBytes: 
   } finally {
     close(fd);
   }
+}
+
+/**
+ * How a read opens its file: read-only, and — where the platform has the flags
+ * — NON-BLOCKING, so a named pipe the session's code made cannot freeze this
+ * process waiting for a writer (the `isFile` check after the open refuses it),
+ * and NO-FOLLOW, so a link swapped in after the real-path check is not
+ * followed. Plain `'r'` where the platform has neither.
+ */
+function readFlags(fs: FsModuleLike): string | number {
+  const c = fs.constants;
+  if (c?.O_NONBLOCK === undefined) return 'r';
+  return (c.O_RDONLY ?? 0) | c.O_NONBLOCK | (c.O_NOFOLLOW ?? 0);
 }
 
 /**
@@ -576,12 +593,13 @@ function resolveChildProcess(options: LocalCodeRunnerOptions): ChildProcessModul
 interface ChildOutcome {
   readonly stdout: string;
   readonly stderr: string;
-  /** The child's exit status. Absent when the operating system ended it with
-   *  a signal: there is no exit status then, and none is made up. */
+  /** The child's exit status. Absent when it did not exit on its own — the
+   *  operating system ended it with a signal, or the runner ended it when its
+   *  output passed the buffer ceiling — and none is made up. */
   readonly exitCode?: number;
-  /** The runtime's own description of a failed run (non-zero exit, or a
-   *  signal), for a caller that wants one when stderr is empty. */
-  readonly failure?: string;
+  /** The stream whose output passed the buffer ceiling. The child was ended
+   *  there, and that stream's tail — and its full length — are lost. */
+  readonly overflowed?: 'stdout' | 'stderr';
 }
 
 /** The two refusals whose words depend on what was run. */
@@ -592,6 +610,14 @@ interface ChildRefusals {
   readonly notRunnable: (code: string) => Error;
 }
 
+/** How much one child's stdout or stderr may hold before it is ended. The CUT
+ *  is the adapter's to make and report (`maxOutputChars`); this only bounds
+ *  memory. */
+const CHILD_BUFFER_BYTES = 32 * 1024 * 1024;
+
+/** The runtime's code for an output that passed `maxBuffer`. */
+const BUFFER_OVERFLOW = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+
 /**
  * One child process, promisified.
  *
@@ -601,9 +627,21 @@ interface ChildRefusals {
  * with `error: true`. What DOES reject is the runner failing to run at all
  * (interpreter missing, timeout, abort), because that is not the code's answer.
  *
- * An abort rejects with the caller's own reason (`lib/abort.ts`), checked
- * FIRST: the runtime reports an aborted child with a string code
- * (`ABORT_ERR`), which used to be read as a missing interpreter.
+ * THE DEADLINE IS OURS (`lib/abort.ts`), not the runtime's `timeout`: that one
+ * sends SIGTERM and then waits for the child to exit, so a child that ignores
+ * SIGTERM ran on, and if it then exited 0 the call came back as a SUCCESS with
+ * its output cut at the deadline. Here the deadline and the caller's signal
+ * abort one controller, the runtime kills the child with SIGKILL (which cannot
+ * be ignored) and answers at once, and a callback that finds the controller
+ * aborted rejects — whatever exit status it was handed.
+ *
+ * An abort rejects with the caller's own reason, checked FIRST: the runtime
+ * reports an aborted child with a string code (`ABORT_ERR`), which used to be
+ * read as a missing interpreter. So did an output past the buffer ceiling
+ * (`ERR_CHILD_PROCESS_STDIO_MAXBUFFER`); that is now a result, its cut stated.
+ *
+ * Nothing of the runtime's own error text is passed on: for a failed child it
+ * is "Command failed: <the whole command line>", which is the code itself.
  */
 async function runChild(
   mod: ChildProcessModuleLike,
@@ -622,49 +660,65 @@ async function runChild(
     throw new Error('localCodeRunner: `node:child_process` resolved but `execFile` is missing.');
   }
   throwIfAborted(opts.signal);
+  const { controller, unlink } = linkedController(opts.signal);
+  const disarm = armDeadline(controller, opts.timeoutMs, () => refusals.timedOut(opts.timeoutMs));
   return new Promise<ChildOutcome>((resolve, reject) => {
-    execFile(
-      file,
-      args,
-      {
-        cwd: opts.cwd,
-        env: opts.env,
-        timeout: opts.timeoutMs,
-        // Generous, because the CUT is ours to make and to report — letting the
-        // runtime's own buffer overflow would surface as an error whose message
-        // says nothing about how much was lost.
-        maxBuffer: 32 * 1024 * 1024,
-        ...(opts.signal && { signal: opts.signal }),
-      },
-      (error, stdout, stderr) => {
-        if (!error) {
-          resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? ''), exitCode: 0 });
-          return;
-        }
-        if (opts.signal?.aborted) {
-          reject(abortErrorOf(opts.signal));
-          return;
-        }
-        if (error.killed === true) {
-          reject(refusals.timedOut(opts.timeoutMs));
-          return;
-        }
-        if (typeof error.code === 'string') {
-          // ENOENT and friends — the interpreter itself is not here. Naming it
-          // beats handing the model a traceback it cannot act on.
-          reject(refusals.notRunnable(error.code));
-          return;
-        }
-        // A real non-zero exit, or a child the operating system ended: the
-        // code ran and failed. That IS the result. The exit status is the
-        // child's own, or absent — never a stand-in.
-        resolve({
-          stdout: String(stdout ?? ''),
-          stderr: String(stderr ?? ''),
-          ...(typeof error.code === 'number' && { exitCode: error.code }),
-          failure: error.message,
-        });
-      },
-    );
+    const settle = (): void => {
+      disarm();
+      unlink();
+    };
+    try {
+      execFile(
+        file,
+        args,
+        {
+          cwd: opts.cwd,
+          env: opts.env,
+          maxBuffer: CHILD_BUFFER_BYTES,
+          killSignal: 'SIGKILL',
+          signal: controller.signal,
+        },
+        (error, stdout, stderr) => {
+          settle();
+          if (controller.signal.aborted) {
+            // The deadline, or the caller: either way the child did not finish
+            // on its own, and an exit status handed over now proves nothing.
+            reject(abortErrorOf(controller.signal));
+            return;
+          }
+          const out = String(stdout ?? '');
+          const err = String(stderr ?? '');
+          if (!error) {
+            resolve({ stdout: out, stderr: err, exitCode: 0 });
+            return;
+          }
+          if (error.code === BUFFER_OVERFLOW) {
+            resolve({
+              stdout: out,
+              stderr: err,
+              overflowed: /^stderr/.test(error.message) ? 'stderr' : 'stdout',
+            });
+            return;
+          }
+          if (typeof error.code === 'string') {
+            // ENOENT and friends — the interpreter itself is not here. Naming it
+            // beats handing the model a traceback it cannot act on.
+            reject(refusals.notRunnable(error.code));
+            return;
+          }
+          // A real non-zero exit, or a child the operating system ended: the
+          // code ran and failed. That IS the result. The exit status is the
+          // child's own, or absent — never a stand-in.
+          resolve({
+            stdout: out,
+            stderr: err,
+            ...(typeof error.code === 'number' && { exitCode: error.code }),
+          });
+        },
+      );
+    } catch (err) {
+      settle();
+      reject(err);
+    }
   });
 }

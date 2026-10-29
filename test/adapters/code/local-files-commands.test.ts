@@ -10,6 +10,7 @@
  */
 
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import * as realFs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -138,6 +139,20 @@ describe('localCodeRunner.readFile — one file from the working directory, whol
     });
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'a NAMED PIPE the code made is refused — the read never waits for a writer',
+    async () => {
+      execFileSync('mkfifo', [join(root, 'pipe.csv')]);
+      const s = await session();
+      // A blocking open here would freeze this whole process, not just fail
+      // the test: the refusal has to come before any wait.
+      await expect(s.readFile?.('pipe.csv', { maxBytes: 100 })).rejects.toMatchObject({
+        reason: 'file-not-returned',
+        path: 'pipe.csv',
+      });
+    },
+  );
+
   it('a read must name its bound', async () => {
     const s = await session();
     await expect(
@@ -207,6 +222,32 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
     expect((err as Error).message).not.toContain('sleep 5');
   });
 
+  it('TIMEOUT is a real bound: a child that ignores SIGTERM is killed, never reported as success', async () => {
+    const s = await session({ commands: true });
+    const started = Date.now();
+    const err = await s
+      .runCommand?.('trap "" TERM; echo before; sleep 3; echo after; exit 0', { timeoutMs: 200 })
+      .catch((e: unknown) => e);
+    // Before this, the runtime's own timeout sent SIGTERM, waited for the
+    // child, and — the child having ignored it and exited 0 — answered
+    // `exitCode: 0` with stdout cut at the deadline.
+    expect(err).toBeInstanceOf(CodeSandboxError);
+    expect((err as CodeSandboxError).reason).toBe('timed-out');
+    expect(Date.now() - started).toBeLessThan(2_500);
+  });
+
+  it('output past the buffer ceiling is a stated CUT with no exit status — not a missing shell', async () => {
+    const s = await session({ commands: true });
+    const out = await s.runCommand?.("head -c 34000000 /dev/zero | tr '\\0' x", {
+      maxOutputChars: 10,
+    });
+    expect(out?.stdout).toBe('x'.repeat(10));
+    // The runner ended the child at the ceiling: no exit status exists, and
+    // the length before that cut was never seen, so no `ofChars` either.
+    expect('exitCode' in (out ?? {})).toBe(false);
+    expect(out?.truncated).toEqual({ stdout: true });
+  });
+
   it('ABORT comes back as the caller’s own reason', async () => {
     const s = await session({ commands: true });
     const controller = new AbortController();
@@ -256,5 +297,13 @@ describe('localCodeRunner.execute — no invented exit status, no misnamed abort
     const s = await session();
     const result = await s.execute({ code: 'process.exit(4)', language: 'javascript' });
     expect(result).toMatchObject({ ok: false, exitCode: 4 });
+  });
+
+  it('an empty stderr stays empty — the runtime’s "Command failed: <the code>" is not passed off as it', async () => {
+    const s = await session();
+    const code = 'const secretMarker = 41; process.exit(secretMarker + 1)';
+    const result = await s.execute({ code, language: 'javascript' });
+    expect(result).toMatchObject({ ok: false, exitCode: 42, stderr: '' });
+    expect(JSON.stringify(result)).not.toContain('secretMarker');
   });
 });

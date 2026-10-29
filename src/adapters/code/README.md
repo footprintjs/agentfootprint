@@ -43,7 +43,13 @@ are two rules, and the first difference between them is the escape.
 **4. Bounded, and the bound is stated.** Output is cut at `maxOutputChars` per
 stream and the cut reported on `truncated` (`output.ts`, shared). A staging call
 whose request body would pass AgentCore's 100 MB per-call limit is refused before
-it is sent (`request-too-large`), measured exactly as the SDK serializes it.
+it is sent (`request-too-large`), measured exactly as the SDK serializes it. A
+deadline is a real bound: one per verb (AgentCore's setup call and the code share
+it), and `localCodeRunner` ends a child at its deadline with SIGKILL, which
+cannot be ignored, and never reports a child it stopped as a success. Output
+past the local runner's 32 MiB buffer is a stated cut with no exit status. A
+local read never opens anything that could make it wait: a named pipe is
+refused, not read.
 
 **5. Commands are opt-in.** `runCommand` runs arbitrary shell, so a session has
 it only when the runner is built with `commands: true` (`canRunCodeCommands`).

@@ -167,17 +167,24 @@ export function pairReadFile(
   };
 }
 
-/** Does `uri` name `path`? Literally, or once percent-decoded — one path per
- *  read, so the two readings can only ever name the same file. */
+/**
+ * Does `uri` name `path`? Under ONE reading of the URI, never whichever of two
+ * happens to match: when it holds valid percent escapes it is read decoded
+ * (`my%20report.csv` is `my report.csv`), and only when it holds none — or
+ * holds a `%` that is not an escape — is it read as written. So a request for
+ * a file literally named `a%41.csv` is never answered by a URI that, decoded,
+ * names `aA.csv`.
+ */
 export function uriNames(uri: string, path: string): boolean {
   if (!uri.startsWith(FILE_URI_PREFIX)) return false;
   const named = uri.slice(FILE_URI_PREFIX.length);
-  if (named === path) return true;
+  let decoded: string;
   try {
-    return decodeURIComponent(named) === path;
+    decoded = decodeURIComponent(named);
   } catch {
-    return false;
+    return named === path;
   }
+  return decoded === path;
 }
 
 function isBytes(value: unknown): value is Uint8Array {
@@ -280,8 +287,11 @@ const MODELLED_EXCEPTIONS: ReadonlySet<string> = new Set([
   'ValidationException',
 ]);
 
-/** Words a service uses for a session that is gone. */
+/** Words a service uses for a session that is gone — both halves required, so
+ *  a validation message that merely echoes a request containing "inactive"
+ *  is not read as a dead session. */
 const SAYS_INACTIVE = /\bnot active\b|\binactive\b/i;
+const NAMES_A_SESSION = /\bsession\b/i;
 
 /**
  * When `err` means the session itself is gone, the service's name for the
@@ -290,13 +300,20 @@ const SAYS_INACTIVE = /\bnot active\b|\binactive\b/i;
  * Three forms, all from AgentCore, whether thrown by the SDK or carried as a
  * stream member: a `ResourceNotFoundException` (on a session that started, the
  * missing resource is the session), and any modelled exception — a
- * `ValidationException` above all — whose words say the session is "not
- * active" or "inactive".
+ * `ValidationException` above all — whose words name a session and say it is
+ * "not active" or "inactive".
  */
 export function sessionExpiryEvidence(err: unknown): string | undefined {
   const name = errorName(err);
   if (name === 'ResourceNotFoundException') return name;
-  if (MODELLED_EXCEPTIONS.has(name) && SAYS_INACTIVE.test(errorMessage(err))) return name;
+  const message = errorMessage(err);
+  if (
+    MODELLED_EXCEPTIONS.has(name) &&
+    SAYS_INACTIVE.test(message) &&
+    NAMES_A_SESSION.test(message)
+  ) {
+    return name;
+  }
   return undefined;
 }
 

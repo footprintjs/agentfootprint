@@ -260,17 +260,17 @@ function openSession(plan: SessionPlan): CodeSession {
     staged.size > 0 ? JSON.stringify(Object.fromEntries(staged)) : undefined;
 
   /**
-   * One invoke under the caller's bounds. A deadline or the caller's own
-   * signal stops the WAIT at once (`lib/abort.ts`); what the service does
-   * with a request it already received is its own business, and the timeout
-   * error says so. A gone session becomes `SessionExpiredError`; a modelled
-   * service error on a file or command call is rewritten without the
-   * service's words (they can quote what was sent).
+   * One deadline and one cancellation for a whole verb. A verb that makes two
+   * calls — the manifest setup, then the code — spends ONE `timeoutMs`, not
+   * one each. A deadline or the caller's own signal stops the WAIT at once
+   * (`lib/abort.ts`); what the service does with a request it already
+   * received is its own business, and the timeout error says so.
    */
-  const invoke = async (
-    input: AgentCoreInvokeInput,
+  const withinBounds = async <T>(
+    verb: AgentCoreInvokeInput['name'],
     bounds: InvokeBounds,
-  ): Promise<AgentCoreInvokeAnswer> => {
+    work: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> => {
     throwIfAborted(bounds.signal);
     const { controller, unlink } = linkedController(bounds.signal);
     const disarm =
@@ -282,25 +282,37 @@ function openSession(plan: SessionPlan): CodeSession {
             () =>
               new CodeSandboxError(
                 'timed-out',
-                `agentCoreCodeRunner: ${input.name} did not answer within ${bounds.timeoutMs}ms ` +
+                `agentCoreCodeRunner: ${verb} did not answer within ${bounds.timeoutMs}ms ` +
                   'and was abandoned. The session was not stopped, so what was sent may still ' +
                   'be running in it — whether it finished is not known.',
               ),
           );
     try {
-      return await untilAborted(
-        api.invoke(input, { abortSignal: controller.signal }),
-        controller.signal,
-      );
+      return await work(controller.signal);
+    } finally {
+      disarm?.();
+      unlink();
+    }
+  };
+
+  /**
+   * One invoke under `signal`. A gone session becomes `SessionExpiredError`;
+   * a modelled service error on a file or command call is rewritten without
+   * the service's words (they can quote what was sent).
+   */
+  const invoke = async (
+    input: AgentCoreInvokeInput,
+    signal: AbortSignal,
+  ): Promise<AgentCoreInvokeAnswer> => {
+    throwIfAborted(signal);
+    try {
+      return await untilAborted(api.invoke(input, { abortSignal: signal }), signal);
     } catch (err) {
-      if (controller.signal.aborted) throw abortErrorOf(controller.signal);
+      if (signal.aborted) throw abortErrorOf(signal);
       const evidence = sessionExpiryEvidence(err);
       if (evidence !== undefined) throw new SessionExpiredError(BACKEND, sessionId, evidence);
       if (input.name === 'executeCode') throw err;
       throw serviceRefusal(err, input.name) ?? err;
-    } finally {
-      disarm?.();
-      unlink();
     }
   };
 
@@ -311,7 +323,7 @@ function openSession(plan: SessionPlan): CodeSession {
    */
   const exposeManifest = async (
     language: string | undefined,
-    bounds: InvokeBounds,
+    signal: AbortSignal,
   ): Promise<void> => {
     const json = manifestJson();
     if (json === undefined) return;
@@ -331,7 +343,7 @@ function openSession(plan: SessionPlan): CodeSession {
         name: 'executeCode',
         arguments: { code: manifestSetupCode(runtime, json), ...(language ? { language } : {}) },
       },
-      bounds,
+      signal,
     );
     // The setup prints one line once the variable is set — it proves that
     // checkpoint and nothing else, which is all that is asked of it.
@@ -355,15 +367,17 @@ function openSession(plan: SessionPlan): CodeSession {
         ...(exec.timeoutMs !== undefined && { timeoutMs: exec.timeoutMs }),
         ...(exec.signal && { signal: exec.signal }),
       };
-      await exposeManifest(language, bounds);
-      const answer = await invoke(
-        {
-          ...target,
-          name: 'executeCode',
-          arguments: { code: exec.code, ...(language ? { language } : {}) },
-        },
-        bounds,
-      );
+      const answer = await withinBounds('executeCode', bounds, async (signal) => {
+        await exposeManifest(language, signal);
+        return invoke(
+          {
+            ...target,
+            name: 'executeCode',
+            arguments: { code: exec.code, ...(language ? { language } : {}) },
+          },
+          signal,
+        );
+      });
       const bounded = boundOutput(answer.stdout, answer.stderr, maxOutputChars);
       const ok = reportedOutcome(answer);
       return {
@@ -396,7 +410,9 @@ function openSession(plan: SessionPlan): CodeSession {
           { bytes, limit: AGENTCORE_MAX_REQUEST_BYTES },
         );
       }
-      const answer = await invoke({ ...target, name: 'writeFiles', arguments: { content } }, {});
+      const answer = await withinBounds('writeFiles', {}, (signal) =>
+        invoke({ ...target, name: 'writeFiles', arguments: { content } }, signal),
+      );
       if (answer.isError === true) {
         throw new CodeSandboxError(
           'write-failed',
@@ -415,9 +431,11 @@ function openSession(plan: SessionPlan): CodeSession {
       refuseIfStopped('read files');
       const maxBytes = readBound(readOptions);
       const relative = sandboxPath(path);
-      const answer = await invoke(
-        { ...target, name: 'readFiles', arguments: { paths: [relative] } },
+      const answer = await withinBounds(
+        'readFiles',
         { ...(readOptions.signal && { signal: readOptions.signal }) },
+        (signal) =>
+          invoke({ ...target, name: 'readFiles', arguments: { paths: [relative] } }, signal),
       );
       return pairReadFile(relative, answer, maxBytes);
     },
@@ -429,18 +447,23 @@ function openSession(plan: SessionPlan): CodeSession {
         refuseIfStopped('run commands');
         const bounds = commandBounds(command, commandOptions, maxOutputChars);
         const json = manifestJson();
-        const answer = await invoke(
-          {
-            ...target,
-            name: 'executeCommand',
-            arguments: {
-              command: json === undefined ? command : withManifestExport(command, json),
-            },
-          },
+        const answer = await withinBounds(
+          'executeCommand',
           {
             ...(bounds.timeoutMs !== undefined && { timeoutMs: bounds.timeoutMs }),
             ...(bounds.signal && { signal: bounds.signal }),
           },
+          (signal) =>
+            invoke(
+              {
+                ...target,
+                name: 'executeCommand',
+                arguments: {
+                  command: json === undefined ? command : withManifestExport(command, json),
+                },
+              },
+              signal,
+            ),
         );
         return commandResult(answer, bounds);
       },
