@@ -267,10 +267,14 @@ function firstWait(): { readonly onRetry: () => void; readonly entered: Promise<
   return { onRetry: () => resolve(), entered };
 }
 
+/**
+ * Wait, on the CLOCK, until `condition` holds — up to five seconds. A count of
+ * event-loop ticks is not a wait: on a loaded runner two thousand `setImmediate`
+ * turns can pass before a 5 ms backoff timer fires (CI, Node 24).
+ */
 async function until(condition: () => boolean): Promise<void> {
-  for (let i = 0; i < 2000 && !condition(); i++) {
-    await new Promise<void>((r) => setImmediate(r));
-  }
+  const deadline = Date.now() + 5_000;
+  while (!condition() && Date.now() < deadline) await sleep(5);
   expect(condition(), 'the condition never held').toBe(true);
 }
 
