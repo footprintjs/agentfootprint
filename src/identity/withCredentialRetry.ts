@@ -25,6 +25,11 @@
  *     `issued` is success; `authorization-required` is a HUMAN flow (3LO
  *     consent), not a transient fault — retrying it would hammer the IdP
  *     without the user having authorized anything.
+ *   • The request's `signal` (`CredentialRequest.signal`) is passed through to
+ *     the wrapped provider, ends the backoff wait, and is checked immediately
+ *     before every attempt, the first included: a request whose signal has
+ *     fired never asks the provider (again), and the call rejects with the
+ *     abort. An attempt already running is the provider's to stop.
  *   • After retries exhaust, the LAST error is rethrown — the call site
  *     behaves byte-identically to an unwrapped provider (fail-closed:
  *     `agentfootprint.credential.failed` emit + error tool result; the tool
@@ -46,6 +51,7 @@
  *   const agent = Agent.create({ provider, model, credentials }).tools([...]).build();
  */
 
+import { abortErrorOf, throwIfAborted } from '../lib/abort.js';
 import { sleep } from '../lib/sleep.js';
 import { defaultShouldRetry, type WithRetryOptions } from '../resilience/withRetry.js';
 import type { CredentialProvider, CredentialRequest, CredentialResult } from './types.js';
@@ -81,6 +87,11 @@ export function withCredentialRetry(
     async getCredential(req: CredentialRequest): Promise<CredentialResult> {
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        // Immediately before EVERY attempt, the first included: a request whose
+        // signal has fired never asks the provider — not before the first
+        // attempt, and not after a wait or an `onRetry` that cancelled it (a
+        // zero wait never consults the signal).
+        throwIfAborted(req.signal);
         try {
           // Both result branches return as-is (same object — the wrapper never
           // clones or serializes the credential): `issued` is success;
@@ -88,14 +99,16 @@ export function withCredentialRetry(
           return await provider.getCredential(req);
         } catch (err) {
           lastError = err;
+          // A failure that lands after the abort is the abort, whatever
+          // `shouldRetry` says: nobody is waiting for the credential (`lib/abort.ts`).
+          throwIfAborted(req.signal);
           if (attempt >= maxAttempts || !shouldRetry(err, attempt)) {
             throw err;
           }
           const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempt - 1));
           onRetry?.(err, attempt + 1, delay);
-          // `CredentialRequest` carries no AbortSignal (port contract), so the
-          // wait has none to honour. If the port ever grows one, pass it here.
-          await sleep(delay);
+          // The request's signal (`CredentialRequest.signal`) ends the wait too.
+          await sleep(delay, req.signal, abortErrorOf);
         }
       }
       // Unreachable — the last attempt either returned or threw above.

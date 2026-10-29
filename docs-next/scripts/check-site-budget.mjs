@@ -36,6 +36,16 @@ const ROUTES = [
   },
 ];
 
+// RAISED 2026-10-29 (search gzip), for #248 (mcpClient reads every page of a
+// paged tool list: the McpToolListIncompleteError, McpOutputUncheckedError and
+// McpJsonSchemaValidator section of build/mcp-client) and #251 (the gateway's
+// cancellation guarantee in infrastructure/tools-and-gateways and
+// identity-and-credentials), under the owner's 2026-09-27 named-growth rule.
+// Main at 76b0e123 already sat within 1 KB of the 2,435,000 B ceiling (CI
+// 2.43 MB), so each branch crossed it alone. EXPORT=true measured #248 at
+// 9,851,842 B raw, 2,437,745 B gzip, 1,166 records, and #251 at 9,845,047 B raw,
+// 2,435,457 B gzip, 1,166 records. 2,490,000 B is about 2% over the larger.
+// Export, route and other search limits hold.
 // RAISED 2026-10-23 (search gzip), for PR 4's typed-negative delivery guide,
 // example and four public API types, under the owner's 2026-09-27 named-growth
 // rule. EXPORT=true measured 9,656,244 B raw, 2,386,208 B gzip, 1,154 records:
@@ -66,7 +76,7 @@ const ROUTES = [
 // 2.155 MB ceiling, so the package was tagged but not published. ~2% over the
 // measurement, the rule every raise here follows. Owner-approved raise;
 // docs-site cleanup planned.
-const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_435_000, records: 2_000 };
+const SEARCH_LIMITS = { raw: 12_000_000, gzip: 2_490_000, records: 2_000 };
 // Search gzip raised 2.11 -> 2.155 MB (2026-09-27) — growth this release can
 // name: the answer's standing (`assessAnswer()` / `agent.assessment()`), its
 // section on the recordings page and its Agent API entry. Measured with

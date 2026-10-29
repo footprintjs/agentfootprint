@@ -72,6 +72,53 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 - `connectionRefusals.ts`, `sdkLoadFailure.ts` — the two refusals, authored once.
 - `types.ts`, `index.ts`.
 
+## A cancelled request is never sent for a late credential (`gatewayTransport.ts`)
+
+**The rule.** The gateway's vending fetch (`createVendingFetch`) treats the
+credential as a wait like any other, under `lib/abort.ts`. The request's own
+signal is resolved the way fetch resolves it: `init.signal` when the init names
+one (`null` meaning none), otherwise a `Request` input's own signal. On the MCP
+path it carries the transport's signal and, for a dispatched call or under a
+deadline, the cancellation the retry series links in. The vending fetch honours
+it in three places:
+
+- an aborted request asks no provider;
+- the provider is handed the signal (`CredentialRequest.signal`), and the wait
+  for the credential is raced against it, so it ends at the abort, with the
+  abort;
+- the signal is checked again once the credential arrives, before the request
+  is handed on.
+
+The guarantee is the gateway's: it stops waiting at the abort and never uses a
+late credential. A provider that ignores the signal may still finish its own
+work, and its late credential is dropped unused. `withCredentialRetry` checks
+the signal immediately before every attempt, the first included, so a cancelled
+request never asks its provider again, even after a zero-length wait or an
+`onRetry` that cancelled it. With no abort, the provider is asked and the request
+is sent exactly as before. A request with no signal asks the provider with no
+`signal` key at all.
+
+Only the gateway route passes a signal so far. The agent's own credential
+resolution (declare-and-push in `toolCalls`, `toolDispatch`) and `mcpServe`'s
+`needs` still call `getCredential` without one.
+
+**Why.** The vend used to be deaf. A stalled provider stayed pending after the
+call was cancelled, and a credential that arrived after a timeout still sent the
+request, so the server could run a call the caller had given up on.
+
+```ts
+// A provider that does its own I/O hands the signal on, and stops with it:
+const credentials: CredentialProvider = {
+  id: 'vault',
+  async getCredential({ service, signal }) {
+    const res = await fetch(`${VAULT}/token/${service}`, { signal });
+    return { status: 'issued', credential: bearer((await res.json()).token) };
+  },
+};
+// One that ignores it may finish its own work, but the gateway rejects at the
+// abort and sends nothing when the credential arrives later.
+```
+
 ## A retried call is in the run that made it
 
 The retry series is the one retry owner, and it runs inside the transport's

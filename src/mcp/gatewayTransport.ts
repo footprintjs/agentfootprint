@@ -35,6 +35,7 @@
  */
 
 import { isCredentialIssued, type CredentialProvider } from '../identity/types.js';
+import { throwIfAborted, untilAborted } from '../lib/abort.js';
 import type { McpGatewayTransport } from './types.js';
 
 /** Options for {@link gatewayTransport}. */
@@ -170,12 +171,34 @@ export class GatewayAuthorizationRequiredError extends Error {
   }
 }
 
+/**
+ * The signal `fetch(input, init)` would honour — fetch's own rule, as
+ * `new Request(input, init)` applies it: an `init` that names a `signal`
+ * replaces the Request's, and `null` there means no signal at all; otherwise a
+ * Request input keeps its own.
+ */
+function effectiveSignal(
+  input: string | URL | Request,
+  init: RequestInit | undefined,
+): AbortSignal | undefined {
+  if (init?.signal !== undefined) return init.signal ?? undefined;
+  return typeof Request !== 'undefined' && input instanceof Request ? input.signal : undefined;
+}
+
 /** Just the part of `fetch` this module needs, so it is trivially injectable in tests. */
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 /**
  * Build the `fetch` the MCP SDK will use: one that vends a credential, applies
  * it to this one request, and keeps nothing.
+ *
+ * The vend is a wait, and it honours the request's abort signal — resolved as
+ * fetch resolves it (`init.signal`, else a Request input's own): the provider
+ * is handed it (`CredentialRequest.signal`), the wait ends at the abort with the
+ * abort, and the signal is checked again once the credential arrives. So an
+ * aborted or timed-out request is never sent: the gateway stops waiting and
+ * never uses a late credential. A provider that ignores cancellation may still
+ * finish its own work.
  *
  * Exported for tests — the secrecy invariant is asserted against this function
  * directly, because that is where a leak would happen and driving a whole SDK
@@ -188,11 +211,27 @@ export function createVendingFetch(
   baseFetch: FetchLike = globalThis.fetch.bind(globalThis),
 ): FetchLike {
   return async (input, init) => {
-    const result = await transport.credentials.getCredential({
-      service: transport.service,
-      ...(transport.scopes !== undefined && { scopes: transport.scopes }),
-      ...(transport.mode !== undefined && { mode: transport.mode }),
-    });
+    // The request's own signal, as fetch itself resolves it: the transport's,
+    // plus — for a dispatched call or under a deadline — the cancellation the
+    // retry series links in; or a Request input's own.
+    const signal = effectiveSignal(input, init);
+    // An aborted request asks no provider and sends nothing (`lib/abort.ts`).
+    throwIfAborted(signal);
+    // The provider gets the signal, to stop its own work. The wait is raced
+    // against it, so a provider that ignores it cannot hold the request open.
+    const result = await untilAborted(
+      transport.credentials.getCredential({
+        service: transport.service,
+        ...(transport.scopes !== undefined && { scopes: transport.scopes }),
+        ...(transport.mode !== undefined && { mode: transport.mode }),
+        ...(signal !== undefined && { signal }),
+      }),
+      signal,
+    );
+    // Checked again once the credential is here, before the request is handed
+    // on: a credential that lands after the abort is never used, so an aborted
+    // or timed-out request is never sent, however late the provider answers.
+    throwIfAborted(signal);
     if (!isCredentialIssued(result)) {
       throw new GatewayAuthorizationRequiredError(transport.service, result.authorizationUrl);
     }
