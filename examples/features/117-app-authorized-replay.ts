@@ -11,9 +11,9 @@
  * the FIRST call of each tool with HTTP 429. `search_tickets` is declared
  * repeatable on 429, so it is sent again and answers; `create_ticket` makes
  * changes and the call carries no idempotency key, so the side-effect guard
- * never sends it again. A 429 does not prove that nothing ran, so under
- * 'app-authorized' that call fails as "may have run" (footprintjs's
- * `UnknownEffectError`, the 429 its cause) — never as a plain "try again".
+ * never sends it again: its 429 reaches the model as the server sent it — a
+ * received refusal is an answer, though not proof that nothing ran, so the
+ * record keeps its effect `unknown`.
  *
  * Run:  npm run example examples/features/117-app-authorized-replay.ts
  */
@@ -64,7 +64,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
         replies: [
           { toolCalls: [{ id: 'c1', name: 'search_tickets', args: { q: 'printer' } }] },
           { toolCalls: [{ id: 'c2', name: 'create_ticket', args: { title: 'Printer down' } }] },
-          { content: 'No open ticket was found, and opening one may or may not have worked.' },
+          { content: 'No open ticket was found, and opening one was refused for now.' },
         ],
       }),
     model: 'mock',
@@ -95,11 +95,12 @@ export async function run(input: string, provider?: LLMProvider): Promise<unknow
   assert.equal(search?.attempts[0]?.effect, 'unknown');
   assert.equal(search?.attempts[1]?.effect, 'applied');
   assert.equal(search?.end.effect, 'unknown');
-  // create_ticket: the side-effect guard — no key, so it is never sent again,
-  // and the call fails as "may have run": a 429 does not prove nothing ran.
+  // create_ticket: the side-effect guard — no key, so it is never sent again.
+  // The 429 was received — an answer, its effect unknown — so it is not "may have run".
   assert.equal(create?.attempts.length, 1);
   assert.equal(create?.attempts[0]?.reason, 'changes-without-key');
-  assert.equal(create?.end.mayHaveRun, true);
+  assert.equal(create?.attempts[0]?.effect, 'unknown');
+  assert.equal(create?.end.mayHaveRun, undefined);
   // #endregion record
   assert.equal(server.callsOf('search_tickets'), 2);
   assert.equal(server.callsOf('create_ticket'), 1);

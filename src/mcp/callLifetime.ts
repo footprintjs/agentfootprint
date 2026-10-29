@@ -27,15 +27,19 @@
  *      verdict in the request's shared replay facts (`replay.ts` ·
  *      `RequestReplay`) before it settles the series' wait.
  *   5. "MAY HAVE RUN" IS RAISED HERE — footprintjs's law, under the
- *      `'app-authorized'` policy. When an attempt ended without an answer and
- *      its effect is unknown (a single one is enough), and the call then does
- *      not complete, the call fails with footprintjs's `UnknownEffectError` —
- *      its own error as the `cause` — never with that error alone, which reads
- *      as "failed, try again". An answer the server gave (a 5xx, a tool error)
- *      after no such attempt is delivered as it came. Under `'compatibility'`
- *      the caller sees the error it always did; the record still says the
- *      effect is unknown. A cancellation never raises it: a call its caller
- *      cancelled ends with the caller's reason, as it always did.
+ *      `'app-authorized'` policy (`replay.ts` · `RequestReplay.uncertain`).
+ *      A received refusal or error is preserved: a 429, a 503, a JSON-RPC or
+ *      tool error — or a chain in which every attempt received one — keeps the
+ *      server's error as it came, its effect still `unknown`. A call that
+ *      genuinely lacked an answer somewhere — an attempt with no response at
+ *      all, or a request the HTTP layer accepted whose JSON-RPC answer never
+ *      came — and then fails, fails with footprintjs's `UnknownEffectError`,
+ *      its final error (a later refusal's, or the timeout) as the `cause`:
+ *      that error alone would read as "failed, try again". A call that
+ *      completes returns normally. Under `'compatibility'` the caller sees the
+ *      error it always did; the record still says the effect is unknown. A
+ *      cancellation never raises it: a call its caller cancelled ends with the
+ *      caller's reason, as it always did.
  *
  * In dev mode, a ticket that no request was bound to by the time the call
  * settled, when a `tools/call` request DID go out, is named once per connection: the SDK copied
@@ -58,8 +62,8 @@ export interface OpenCall {
   /**
    * The call failed with `error` (`verdict` says how far it got): the error it
    * fails with — `error` itself, or, under `'app-authorized'`, footprintjs's
-   * `UnknownEffectError` with `error` as its `cause` when an attempt ended
-   * without an answer, its effect unknown, and the call did not complete.
+   * `UnknownEffectError` with `error` as its `cause` when the call genuinely
+   * lacked an answer somewhere (see 5 above).
    */
   failed(error: unknown, verdict: CallVerdict): unknown;
   /**
@@ -114,6 +118,7 @@ export function openCall(
     close: (verdict) => {
       // The verdict first: settling the series' wait files its record.
       ledger?.replayOf(params)?.settle(verdict, mayHaveRun);
+      ledger?.release(params);
       settled?.abort(callSettled());
       link?.unlink();
       if (ticket !== undefined && ledger !== undefined) {

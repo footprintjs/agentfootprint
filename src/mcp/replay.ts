@@ -46,10 +46,13 @@
  *       always did.
  *   'app-authorized' — opt-in now, the default in the next major: a 429 or a
  *       network failure is repeated only when the app's entry for the tool
- *       names it. A call that does not complete after ANY attempt that ended
- *       without an answer, its effect unknown, fails with footprintjs's
- *       `UnknownEffectError` (`callLifetime.ts`) — never with the attempt's own
- *       error, which reads as "failed, try again".
+ *       names it. What the caller sees follows footprintjs's law
+ *       (`RequestReplay` · `uncertain`, `callLifetime.ts`): a received refusal
+ *       or error keeps the server's error as it came, its effect still
+ *       `unknown`; a call that genuinely lacked an answer somewhere — an
+ *       attempt with no response, or a request accepted over HTTP whose
+ *       JSON-RPC answer never came — and then fails, fails with
+ *       `UnknownEffectError`, its final error the cause.
  *
  * Under both, the adapter the app chose retries its own refusal within the
  * budget — AgentCore's session-busy reply — as the ADAPTER's policy, on an
@@ -443,29 +446,65 @@ export type CallVerdict = 'completed' | 'tool-error' | 'failed';
 
 /**
  * @internal One `tools/call` request's replay facts, shared by the series that
- * sends it and the call that waits for it — the ledger hands both the same
- * object (`requestLedger.ts`). The series writes what it sent and whether,
- * under `'app-authorized'`, an attempt ended without an answer and its effect
- * is unknown; the call writes how it settled. Each is written once, in that
- * order.
+ * sends it, the ledger that watches its answer, and the call that waits for it
+ * — the ledger hands all three the same object (`requestLedger.ts`).
+ *
+ * TWO LAYERS, KEPT APART. The series sees HTTP: whether an attempt got a
+ * response at all, and the status of the one it delivered. A response is not
+ * the MCP call's answer — a 202, or a stream, can be accepted and never carry
+ * it — so the ledger watches the connection's incoming messages for the
+ * JSON-RPC response to THIS request's id. And "its effect is unknown" is not
+ * "it lacked an answer": a received 429 or error is an answer whose effect is
+ * unknown.
+ *
+ * Each fact is written once, by its owner: the series (what it sent, whether an
+ * attempt lacked any response, what it delivered, the policy), the ledger (the
+ * logical answer), the call (how it settled).
  */
 export class RequestReplay {
   private requests = 0;
-  private uncertainUnanswered = false;
+  private appAuthorized = false;
+  private attemptUnanswered = false;
+  private delivered: number | undefined;
+  private logical: 'unwatched' | 'awaited' | 'answered';
   private settled: CallVerdict | undefined;
   private failedAsMayHaveRun = false;
+
+  /**
+   * @param id the request's JSON-RPC id, how its answer is found.
+   * @param watched whether the connection's incoming messages are observed —
+   *   without that, the logical layer is unknown and never decides anything.
+   */
+  constructor(readonly id: string | number, watched: boolean) {
+    this.logical = watched ? 'awaited' : 'unwatched';
+  }
 
   /** The series sent the request once more. */
   sentOne(): void {
     this.requests += 1;
   }
 
+  /** The series runs under the `'app-authorized'` policy. */
+  appAuthorizedPolicy(): void {
+    this.appAuthorized = true;
+  }
+
   /**
-   * Under `'app-authorized'`: an attempt ended without an answer and its effect
-   * is unknown, so a call that does not complete fails as "may have run".
+   * The series: an attempt genuinely lacked an answer — no response arrived
+   * (a lost connection, a timeout, a cut). A received refusal is never this.
    */
-  unansweredUnknown(): void {
-    this.uncertainUnanswered = true;
+  noAnswer(): void {
+    this.attemptUnanswered = true;
+  }
+
+  /** The series handed the MCP SDK a response with this status. */
+  deliveredStatus(status: number): void {
+    this.delivered = status;
+  }
+
+  /** The ledger: the JSON-RPC response to this request's id arrived. */
+  answered(): void {
+    if (this.logical === 'awaited') this.logical = 'answered';
   }
 
   /** The call settled; `mayHaveRun` when it failed as "may have run". The first word stands. */
@@ -479,9 +518,21 @@ export class RequestReplay {
     return this.requests;
   }
 
-  /** A call that does not complete fails as "may have run" (`unansweredUnknown`). */
+  /**
+   * Under `'app-authorized'`, a call that does not complete fails as "may have
+   * run" when the call genuinely lacked an answer somewhere: an attempt got no
+   * response, or the HTTP layer accepted the request (a 2xx) and the JSON-RPC
+   * response never came. A chain of received refusals and errors is an answer
+   * throughout: it keeps the server's error.
+   */
   get uncertain(): boolean {
-    return this.uncertainUnanswered;
+    return this.appAuthorized && (this.attemptUnanswered || this.acceptedWithoutAnswer);
+  }
+
+  /** The HTTP layer took the request (2xx), and the logical answer never arrived. */
+  private get acceptedWithoutAnswer(): boolean {
+    const status = this.delivered;
+    return this.logical === 'awaited' && status !== undefined && status >= 200 && status < 300;
   }
 
   get verdict(): CallVerdict | undefined {

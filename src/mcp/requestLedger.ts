@@ -39,11 +39,13 @@
  * send that bypassed the ledger would quietly lose every call's attempts.
  *
  * Each `tools/call` in flight also gets ONE `RequestReplay` (`replay.ts`), the
- * facts its series and its call share: the series' claim hands it over by the
- * request's id, the call finds it by its own params object (`replayOf`). The
- * series writes what it sent and whether it asked again after an attempt of
- * unknown effect; the call writes how it settled. When the SDK copied the
- * params, the call finds none — and fails with its own error, as before.
+ * facts its series, this ledger and its call share: the series' claim hands it
+ * over by the request's id, the call finds it by its own params object
+ * (`replayOf`). The series writes what HTTP showed (an attempt with no
+ * response, the status it delivered); this ledger writes whether the JSON-RPC
+ * answer to that id arrived — a 202, or a stream, is not that answer; the call
+ * writes how it settled. When the SDK copied the params, the call finds none —
+ * and fails with its own error, as before.
  *
  * What it does NOT do: retry, wait, or decide anything. The series is the one
  * retry owner; this only tells it whose attempts it is making, and when the SDK
@@ -73,6 +75,7 @@ export interface ClaimedRequest {
 
 type JsonRpcId = string | number;
 type Send = (message: unknown, options?: unknown) => Promise<unknown>;
+type OnMessage = (message: unknown, extra?: unknown) => void;
 
 /** One `tools/call` in flight. */
 interface InFlight {
@@ -96,6 +99,10 @@ export class RequestLedger {
   private readonly sending = new Map<JsonRpcId, InFlight>();
   /** Each `tools/call` request's replay facts, by the params object it was sent with. Collected with it. */
   private readonly replays = new WeakMap<object, RequestReplay>();
+  /** Requests whose JSON-RPC answer has not arrived yet — by id, until it does or the call settles. */
+  private readonly awaiting = new Map<JsonRpcId, RequestReplay>();
+  /** The connection's incoming messages reach `observe` — the logical layer is known. */
+  private observing = false;
   private calls = 0;
   private unboundNamed = false;
 
@@ -118,6 +125,14 @@ export class RequestLedger {
     return this.replays.get(params);
   }
 
+  /** The call that sent `params` settled: its answer is no longer awaited. */
+  release(params: object): void {
+    const replay = this.replays.get(params);
+    if (replay !== undefined && this.awaiting.get(replay.id) === replay) {
+      this.awaiting.delete(replay.id);
+    }
+  }
+
   /** How many `tools/call` requests the watched transport has sent — matched to a call or not. */
   get toolCallsSent(): number {
     return this.calls;
@@ -135,6 +150,12 @@ export class RequestLedger {
    * original bound to the instance itself. Returns the SAME object — or
    * `undefined` when it has no `send` to watch or refuses the property, and
    * then nothing is watched and no call should expect its attempts filed.
+   *
+   * Its incoming messages are watched too, for each request's JSON-RPC answer:
+   * an `onmessage` set before the client connects, which the MCP SDK's
+   * `Protocol.connect` keeps and calls before its own dispatch. Until a message
+   * has actually been seen there (the `initialize` answer, always first), the
+   * logical layer counts as unknown and decides nothing.
    */
   watch<T extends object>(transport: T): T | undefined {
     const send: unknown = Reflect.get(transport, 'send');
@@ -157,7 +178,34 @@ export class RequestLedger {
     } catch {
       return undefined;
     }
+    this.watchMessages(transport);
     return transport;
+  }
+
+  /** Observe incoming messages before whatever handled them already — never instead of it. */
+  private watchMessages(transport: object): void {
+    try {
+      const before: unknown = Reflect.get(transport, 'onmessage');
+      const handled = typeof before === 'function' ? (before as OnMessage) : undefined;
+      const observing: OnMessage = (message, extra) => {
+        this.observe(message);
+        handled?.(message, extra);
+      };
+      Reflect.set(transport, 'onmessage', observing);
+    } catch {
+      // A transport that refuses it keeps the logical layer unknown: nothing is decided on it.
+    }
+  }
+
+  /** One incoming message: the answer to a `tools/call` in flight, when it is one. */
+  private observe(message: unknown): void {
+    this.observing = true;
+    const id = responseIdOf(message);
+    if (id === undefined) return;
+    const replay = this.awaiting.get(id);
+    if (replay === undefined) return;
+    this.awaiting.delete(id);
+    replay.answered();
   }
 
   /**
@@ -213,8 +261,9 @@ export class RequestLedger {
       this.issued.delete(params as object);
       this.bound.add(ticket);
     }
-    const replay = new RequestReplay();
+    const replay = new RequestReplay(id, this.observing);
     if (params !== null && typeof params === 'object') this.replays.set(params, replay);
+    if (this.observing) this.awaiting.set(id, replay);
     this.sending.set(id, {
       ...(ticket !== undefined && { ticket }),
       cut: new AbortController(),
@@ -237,6 +286,19 @@ export class RequestLedger {
 /** The reason a series stops when the SDK cancelled its request — a fixed sentence. */
 function sdkCancelled(): Error {
   return Object.assign(new Error('The MCP SDK cancelled this request.'), { name: 'AbortError' });
+}
+
+/** The id of a JSON-RPC RESPONSE — a result or an error, never a request or a notification. */
+function responseIdOf(message: unknown): JsonRpcId | undefined {
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) return undefined;
+  const fields = message as {
+    readonly id?: unknown;
+    readonly method?: unknown;
+    readonly result?: unknown;
+    readonly error?: unknown;
+  };
+  if (fields.method !== undefined || !('result' in fields || 'error' in fields)) return undefined;
+  return typeof fields.id === 'string' || typeof fields.id === 'number' ? fields.id : undefined;
 }
 
 /** The id of a `tools/call` REQUEST — a response or a notification has none to claim. */

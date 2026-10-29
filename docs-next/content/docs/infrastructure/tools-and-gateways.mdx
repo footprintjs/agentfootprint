@@ -239,6 +239,9 @@ disk and read back still says what each call's retries did:
 An attempt's `outcome` is `answered`, `refused`, `failed`, `timed-out` or
 `cut`. A response received is `answered` whatever its status: a 503 is
 `answered` with `status: 503`, never a success, and it is still not retried.
+`answered` is what HTTP showed: a response arrived. It is not the MCP call's
+answer. A 202, or a stream, can be accepted and never carry the JSON-RPC
+result.
 `refused` is a response the retry policy recognises as a refusal (HTTP 429, or
 AgentCore Runtime's session-busy reply), recorded as the server sent it. It is
 not proof that nothing ran. Its
@@ -315,7 +318,7 @@ call.
 |---|---|---|
 | The adapter you chose retries its own refusal (AgentCore Runtime's session-busy reply) | Yes, within the budget: the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
 | Your entry for the tool names `throttle` (or `network`) | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on }` |
-| No entry, `policy: 'app-authorized'` | No: the refusal is returned | `reason: 'not-permitted'` |
+| No entry, `policy: 'app-authorized'` | No: the 429 is returned as the server sent it | `reason: 'not-permitted'`, `effect: 'unknown'` |
 | No entry, `policy: 'compatibility'` (the default in 11.x) | Yes, as before | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
 
 `network` is a request that failed without an answer: a lost connection, or a
@@ -349,18 +352,33 @@ is never proof that anything was written. The `end` counts the requests sent
 (`attempts`) and says what is known of the whole series. Uncertainty survives:
 once an attempt's effect is `unknown`, so is the series'. A later refusal does
 not resolve it, and a later success does not prove the operation happened only
-once. Under `'app-authorized'`, when an attempt ended without an answer and its
-effect is unknown (a single one is enough), a call that does not complete fails
-as "may have run": footprintjs's `UnknownEffectError`, with the call's own error
-as its `cause`, and `mayHaveRun: true` on the `end`. An answer the server gave,
-such as a 5xx or a tool error, with no such attempt before it, is delivered as
-it came. Under `'compatibility'` the caller sees the error it always did, and
-the record still says the effect is unknown.
+once.
+
+**What the caller sees under `'app-authorized'`.** The record is the same under
+both policies; what reaches the caller follows footprintjs's law:
+
+- **A received refusal or error is preserved.** A 429, a 503, a JSON-RPC or
+  tool error, or a chain in which every attempt received one, keeps the
+  server's error as it came. Its effect stays `unknown`, and the record says why
+  it was not sent again.
+- **A call that genuinely lacked an answer and then fails "may have run".** The
+  call lacked an answer if any attempt got no response at all, or if the
+  request was accepted over HTTP and its JSON-RPC answer never came. It then
+  fails with footprintjs's `UnknownEffectError`. The final error, whether a
+  later refusal or the timeout, is its `cause`, and the `end` says
+  `mayHaveRun: true`. A later refusal does not settle that uncertainty.
+- **A call that completes returns normally.** The series' effect still stays
+  `unknown` after an earlier unknown attempt.
+- **A cancellation keeps the caller's reason.** Once a request was sent, the
+  record says its effect is `unknown`.
+
+Under `'compatibility'` the caller sees the error it always did, and the record
+still says the effect is unknown.
 
 The example's run, read back from the saved recording: the search was sent
 again on your declaration and its effects stay unknown; the ticket was not sent
-again, because it makes changes and carried no key, and the call failed as "may
-have run".
+again, because it makes changes and carried no key, and its 429 reached the
+model as the server sent it.
 
 <CodeFile path="examples/features/117-app-authorized-replay.ts" region="record" title="examples/features/117-app-authorized-replay.ts (region: record)" />
 

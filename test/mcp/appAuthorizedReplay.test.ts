@@ -15,10 +15,10 @@
  *   R2  Scenario — a timeout, then a success: the series does not claim that
  *                  the operation happened once
  *   R3  Boundary — a generic 429 with no declaration (`app-authorized`): not
- *                  sent again; the record says why; the call fails as "may
- *                  have run" with the 429 as its cause
+ *                  sent again; the record says why; the caller gets the 429
+ *                  as the server sent it — a received refusal is an answer
  *   R4  Scenario — a generic 429 the app permitted: sent again, effects
- *                  unknown; when the budget is spent, "may have run"
+ *                  unknown; when the budget is spent, the 429 as it came
  *   R5  Scenario — the compatibility policy (the default): every retry records
  *                  the assumption; what the caller sees is unchanged
  *   R6  Security — the side-effect guard: a tool that makes changes is never
@@ -30,18 +30,27 @@
  *   R9  Unit     — the declaration is read once and refuses what it cannot mean
  *   R10 Unit     — the permission rule and the series' knowledge, as tables
  *   R11 Boundary — a call its caller cancels ends with the caller's reason,
- *                  even after a repeat that followed an unknown attempt
+ *                  even after a repeat that followed an unknown attempt; the
+ *                  record says `unknown`, never "may have run"
  *   R12 Security — a busy-shaped reply is never proof that nothing ran (Codex's
  *                  probes: a server that ran the call answers with the same
  *                  error, or with words that only contain it)
  *   R13 Boundary — `retryOnThrottle: false` turns off the 429 rule only: a
  *                  declared network repeat keeps its series, budget and record
- *   R14 Boundary — a single attempt of unknown effect: `app-authorized` fails
+ *   R14 Boundary — a single attempt with no response: `app-authorized` fails
  *                  as "may have run"; `compatibility` keeps today's error
+ *   R15 Boundary — the HTTP layer is not the MCP answer: a request accepted
+ *                  (202, or a stream with no result) whose JSON-RPC answer
+ *                  never comes fails as "may have run" — real SDK timeout
+ *   R16 Scenario — mandatory test 1's wiring control: the first request times
+ *                  out, the declared retry would pass the deadline, so ONE
+ *                  request is sent; one unknown attempt, no invented row
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { disableDevMode, enableDevMode, UnknownEffectError } from 'footprintjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 import { Agent, type Tool, type ToolExecutionContext } from '../../src/index.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
@@ -50,7 +59,7 @@ import { agentCoreRuntimeMcpTransport } from '../../src/adapters/mcp/agentcoreRu
 import { SESSION_BUSY_DOCUMENTATION } from '../../src/adapters/mcp/agentcoreRuntime/sessionBusy.js';
 import { staticTokens } from '../../src/identity/staticTokens.js';
 import { recordRun } from '../../src/recorders/observability/recordRun.js';
-import type { McpClient, McpReplayOptions } from '../../src/mcp/index.js';
+import type { McpClient, McpReplayOptions, McpSdk } from '../../src/mcp/index.js';
 import {
   COMPATIBILITY,
   permit,
@@ -443,14 +452,15 @@ describe('app-authorized replay — R3 a generic 429 with no declaration', () =>
         failure: 'rate-limited',
         attempts: 1,
         effect: 'unknown',
-        mayHaveRun: true,
       });
+      // A received refusal is an answer: it is not a call that may have run.
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
     } finally {
       await client.close();
     }
   });
 
-  it('the refusal is returned as the cause of "may have run" — a 429 does not prove nothing ran', async () => {
+  it('the caller gets the 429 as the server sent it — its effect unknown, never "may have run"', async () => {
     const endpoint = server(() => throttled());
     const client = await clientOver(endpoint, { policy: STRICT });
     try {
@@ -459,9 +469,8 @@ describe('app-authorized replay — R3 a generic 429 with no declaration', () =>
         () => undefined,
         (error: unknown) => error,
       );
-      expect(failure).toBeInstanceOf(UnknownEffectError);
-      expect(((failure as UnknownEffectError).cause as { code?: unknown }).code).toBe(429);
-      expect((failure as UnknownEffectError).attempts).toBe(1);
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+      expect((failure as { code?: unknown }).code).toBe(429);
       expect(endpoint.calls()).toBe(1);
     } finally {
       await client.close();
@@ -513,7 +522,7 @@ describe('app-authorized replay — R4 a generic 429 the app permitted', () => {
     }
   });
 
-  it('when the budget is spent, the call fails as "may have run" — the 429 its cause', async () => {
+  it('when the budget is spent, the 429 is returned as it came — every attempt received a refusal', async () => {
     const endpoint = server(() => throttled());
     const client = await clientOver(endpoint, replay);
     try {
@@ -524,16 +533,16 @@ describe('app-authorized replay — R4 a generic 429 the app permitted', () => {
         reason: 'exhausted',
         attempts: 3,
         effect: 'unknown',
-        mayHaveRun: true,
       });
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
 
       const [tool] = await client.tools();
       const failure = await (tool as Tool).execute({ q: 'printer' }, BARE).then(
         () => undefined,
         (error: unknown) => error,
       );
-      expect(failure).toBeInstanceOf(UnknownEffectError);
-      expect(((failure as UnknownEffectError).cause as { code?: unknown }).code).toBe(429);
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+      expect((failure as { code?: unknown }).code).toBe(429);
     } finally {
       await client.close();
     }
@@ -839,6 +848,41 @@ describe("app-authorized replay — R11 a cancelled call ends with its caller's 
       await client.close();
     }
   });
+
+  it('a cancelled run: the reason stands, the record says unknown, and the end never says "may have run"', async () => {
+    const endpoint = server(({ n, signal }) => (n === 1 ? timedOut() : hangs(signal)));
+    const client = await clientOver(endpoint, {
+      policy: STRICT,
+      tools: { search_tickets: { on: ['network'] } },
+    });
+    try {
+      const agent = agentCalling(await client.tools(), 'tc-cancel-run');
+      const rec = recordRun(agent);
+      const controller = new AbortController();
+      const run = agent.run({ message: 'go' }, { signal: controller.signal });
+      await until(() => endpoint.calls() === 2);
+      controller.abort(new Error('the person left'));
+      await expect(run).rejects.toThrow('the person left');
+      const events = (JSON.parse(JSON.stringify(rec.toRecording())) as { events: Row[] }).events;
+      rec.stop();
+
+      const evidence = evidenceIn(events);
+      // Both requests were sent: each may have run, so each is `unknown`.
+      expect(evidence.attempts.map((a) => [a.outcome, a.effect])).toEqual([
+        ['failed', 'unknown'],
+        ['cut', 'unknown'],
+      ]);
+      expect(evidence.end).toMatchObject({
+        outcome: 'cut',
+        reason: 'cancelled',
+        attempts: 2,
+        effect: 'unknown',
+      });
+      expect(evidence.end.mayHaveRun).toBeUndefined();
+    } finally {
+      await client.close();
+    }
+  });
 });
 
 // ─── R12 a busy-shaped reply is never proof ──────────────────────────
@@ -869,7 +913,9 @@ describe('app-authorized replay — R12 a busy-shaped reply is never proof that 
         expect.objectContaining({ reason: 'changes-without-key', effect: 'unknown' }),
       ]);
       expect(evidence.attempts[0]).not.toHaveProperty('guarantee');
-      expect(evidence.end).toMatchObject({ effect: 'unknown', mayHaveRun: true });
+      // The server's error is preserved: a received reply, its effect unknown.
+      expect(evidence.end).toMatchObject({ effect: 'unknown' });
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
     } finally {
       await client.close();
     }
@@ -893,8 +939,11 @@ describe('app-authorized replay — R12 a busy-shaped reply is never proof that 
         by: 'adapter',
         assumes: 'refused-before-execution',
       });
-      expect(evidence.end).toMatchObject({ effect: 'unknown', mayHaveRun: true });
-      expect(String(toolEndOf(events)?.result)).toContain('is unknown');
+      // Every attempt received a complete reply: the server's error is what the
+      // model reads, with the effect still unknown in the record.
+      expect(evidence.end).toMatchObject({ effect: 'unknown' });
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
+      expect(String(toolEndOf(events)?.result)).not.toContain('is unknown');
     } finally {
       await client.close();
     }
@@ -1122,6 +1171,161 @@ describe('app-authorized replay — R14 a single attempt of unknown effect', () 
     try {
       const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-noop')));
       expect(evidence.end).toMatchObject({ outcome: 'answered', effect: 'applied' });
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── R15 the HTTP layer is not the MCP answer ────────────────────────
+
+describe('app-authorized replay — R15 a request accepted over HTTP whose MCP answer never comes', () => {
+  /** The real SDK, with only `callTool`'s request timeout shortened (the injected `sdk` seam). */
+  class QuickTimeoutClient extends Client {
+    override callTool(...[params, schema, options]: Parameters<Client['callTool']>) {
+      return super.callTool(params, schema, { ...options, timeout: 60 });
+    }
+  }
+  const sdk = { Client: QuickTimeoutClient, StreamableHTTPClientTransport } as unknown as McpSdk;
+
+  const encoder = new TextEncoder();
+  /** A Server-Sent Events body that carries `events` and ends. */
+  const stream = (...events: readonly unknown[]): Response =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const event of events) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          }
+          controller.close();
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'text/event-stream' } },
+    );
+
+  const clientWith = (endpoint: Endpoint, replay?: McpReplayOptions): Promise<McpClient> =>
+    mcpClient({
+      name: 'tickets',
+      sdk,
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 1, jitter: 'none' },
+      ...(replay !== undefined && { replay }),
+    });
+
+  const failureOf = async (client: McpClient): Promise<unknown> => {
+    const [tool] = await client.tools();
+    return (tool as Tool).execute({ q: 'printer' }, BARE).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+  };
+
+  it('a 202 and no JSON-RPC answer: the SDK times out, and the call fails as "may have run"', async () => {
+    const endpoint = server(() => new Response(null, { status: 202 }));
+    const client = await clientWith(endpoint, { policy: STRICT });
+    try {
+      const events = await savedRun(agentCalling(await client.tools(), 'tc-accepted'));
+      const evidence = evidenceIn(events);
+      // The HTTP observation, kept as it was: a response arrived. It is not the answer.
+      expect(evidence.attempts).toEqual([
+        expect.objectContaining({ outcome: 'answered', status: 202, effect: 'unknown' }),
+      ]);
+      expect(evidence.end).toMatchObject({ attempts: 1, effect: 'unknown', mayHaveRun: true });
+      expect(String(toolEndOf(events)?.result)).toContain('is unknown');
+
+      const failure = await failureOf(client);
+      expect(failure).toBeInstanceOf(UnknownEffectError);
+      // The original timeout is the cause.
+      expect(((failure as UnknownEffectError).cause as { code?: unknown }).code).toBe(-32001);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('a stream that ends with no result — a notification, but never the answer — "may have run"', async () => {
+    const endpoint = server(() =>
+      stream({
+        jsonrpc: '2.0',
+        method: 'notifications/message',
+        params: { level: 'info', data: 'working' },
+      }),
+    );
+    const client = await clientWith(endpoint, { policy: STRICT });
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-stream')));
+      expect(evidence.attempts).toEqual([
+        expect.objectContaining({ outcome: 'answered', status: 200, effect: 'unknown' }),
+      ]);
+      expect(evidence.end).toMatchObject({ effect: 'unknown', mayHaveRun: true });
+      expect(await failureOf(client)).toBeInstanceOf(UnknownEffectError);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('a stream that DOES carry the answer — an error — keeps the server’s error as it came', async () => {
+    const endpoint = server(({ id }) =>
+      stream({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32000, message: 'The ticket store refused it' },
+      }),
+    );
+    const client = await clientWith(endpoint, { policy: STRICT });
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-answer')));
+      expect(evidence.end).toMatchObject({ effect: 'unknown' });
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
+      const failure = await failureOf(client);
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+      expect((failure as { code?: unknown }).code).toBe(-32000);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("under compatibility the caller sees the SDK's timeout as it always did", async () => {
+    const endpoint = server(() => new Response(null, { status: 202 }));
+    const client = await clientWith(endpoint);
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-compat')));
+      expect(evidence.end).toMatchObject({ effect: 'unknown' });
+      expect(evidence.end).not.toHaveProperty('mayHaveRun');
+      const failure = await failureOf(client);
+      expect(failure).not.toBeInstanceOf(UnknownEffectError);
+      expect((failure as { code?: unknown }).code).toBe(-32001);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── R16 mandatory test 1: the wiring control ────────────────────────
+
+describe('app-authorized replay — R16 a timeout, and the declared retry would pass the deadline', () => {
+  it('ONE request is sent: one unknown attempt, the end unknown and "may have run" — no invented row', async () => {
+    const endpoint = server(() => timedOut());
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      // The next wait (100 ms) would end past the deadline (25 ms): the retry is never sent.
+      retryOnThrottle: { baseDelayMs: 100, jitter: 'none', maxElapsedMs: 25 },
+      replay: { policy: STRICT, tools: { search_tickets: { on: ['network'] } } },
+    });
+    try {
+      const evidence = evidenceIn(await savedRun(agentCalling(await client.tools(), 'tc-r16')));
+      expect(endpoint.calls(), 'the server received exactly one request').toBe(1);
+      expect(evidence.attempts).toEqual([
+        expect.objectContaining({
+          attempt: 1,
+          outcome: 'failed',
+          reason: 'no-time-left',
+          effect: 'unknown',
+        }),
+      ]);
+      // A request never sent has no row — never a `none` invented for it.
+      expect(evidence.omitted).toBe(0);
+      expect(evidence.end).toMatchObject({ attempts: 1, effect: 'unknown', mayHaveRun: true });
     } finally {
       await client.close();
     }

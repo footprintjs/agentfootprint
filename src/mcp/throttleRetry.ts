@@ -70,9 +70,11 @@
  * always did. When the series ends on a refusal (attempts spent, a ceiling
  * reached, no time left, no permission), the refusal's response is delivered
  * as the server sent it: the caller sees the 429, never an error of ours. The
- * call decides what that means for it (`callLifetime.ts`): after a repeat that
- * followed an attempt of unknown effect, a call that does not complete fails as
- * "may have run".
+ * call decides what that means for it (`callLifetime.ts`): under
+ * 'app-authorized', a call that genuinely lacked an answer somewhere and does
+ * not complete fails as "may have run". This series reports the HTTP half of
+ * that — an attempt that got no response at all, and the status it delivered;
+ * a received refusal is an answer, its effect still unknown.
  *
  * ── A fetch that already retries is JOINED, never wrapped ────────────────────
  * A transport whose own fetch runs a series (AgentCore Runtime's session-busy
@@ -685,7 +687,9 @@ class Series {
     this.deadline = Number.isFinite(maxElapsedMs) ? this.startedAt + maxElapsedMs : undefined;
     const claimed = ledger?.claim(init?.body);
     const ticket = claimed?.ticket;
-    this.shared = claimed?.replay ?? new RequestReplay();
+    // A request no ledger claimed keeps its facts here, with no answer to watch.
+    this.shared = claimed?.replay ?? new RequestReplay('', false);
+    if (declaration.policy === 'app-authorized') this.shared.appAuthorizedPolicy();
     this.cancel = eitherSignal(this.signal, ticket?.signal, claimed?.cancelled);
     this.cutsInFlight = this.deadline !== undefined || claimed !== undefined;
     this.evidence =
@@ -698,6 +702,7 @@ class Series {
     const unwatch = this.watchCancel();
     try {
       const response = await attempt((t) => this.send(inner, t), this.policy(), this.options());
+      this.shared.deliveredStatus(response.status);
       this.evidence?.delivered();
       return response;
     } catch (error) {
@@ -886,12 +891,10 @@ class Series {
     if (this.inFlight === record.attempt) this.inFlight = undefined;
     const seen = this.seenOf(record, refused);
     const facts = this.factsOf(record);
-    // Under 'app-authorized', an attempt that ended without an answer and may
-    // have run means a call that does not complete fails as "may have run" —
-    // a single such attempt is enough (footprintjs's law).
-    if (facts.effect === 'unknown' && this.declaration.policy === 'app-authorized') {
-      this.shared.unansweredUnknown();
-    }
+    // An attempt that got no response at all — a lost connection, a timeout,
+    // a cut — genuinely lacked an answer. A received refusal (a 429, a busy
+    // reply) is an answer: its effect is unknown, but the server answered.
+    if (record.outcome !== 'ok' && seen?.refusal === undefined) this.shared.noAnswer();
     this.evidence?.attempt(record, seen, this.declined, facts);
     if (record.next !== 'retry') return;
     const waitMs = record.delayMs ?? 0;
@@ -955,6 +958,7 @@ class Series {
     // The series ended on a refusal — attempts spent, a ceiling reached, no
     // time left. The server's answer is delivered as it sent it.
     if (this.latest !== undefined && error === this.latest.refusal) {
+      this.shared.deliveredStatus(this.latest.response.status);
       this.evidence?.delivered();
       return this.latest.response;
     }

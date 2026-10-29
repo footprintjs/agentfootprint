@@ -136,7 +136,7 @@ sent:
 |---|---|---|
 | The adapter you chose retries its own refusal (AgentCore's session-busy) | Yes, within the budget — the adapter's policy | `effect: 'unknown'`, `permission: { by: 'adapter', assumes: 'refused-before-execution' }` |
 | Any other server, and your declaration names `throttle` for the tool | Yes | `effect: 'unknown'`, `permission: { by: 'declaration', on: 'throttle' }` |
-| Any other server, no declaration, `policy: 'app-authorized'` | No — the refusal is returned | `reason: 'not-permitted'` |
+| Any other server, no declaration, `policy: 'app-authorized'` | No — the 429 is returned as the server sent it | `reason: 'not-permitted'`, `effect: 'unknown'` |
 | Any other server, no declaration, `policy: 'compatibility'` (the 11.x default) | Yes — today's behaviour | `effect: 'unknown'`, `permission: { by: 'compatibility', assumes: 'refused-before-execution' }` |
 
 A request that failed in transport without an answer (footprintjs's `network`: a
@@ -157,14 +157,29 @@ were sent (`attempts`) and what is known of the whole series: once any attempt i
 success does not prove the operation happened once. `applied` means the call
 completed (the server answered, not with an error), never that anything was
 written; an answered attempt's effect comes from the call's verdict, so a ticketed
-request files when its call settles (or at once, when cancelled). Under
-`'app-authorized'`, footprintjs's law: when an attempt ended without an answer and
-its effect is unknown — a single one is enough — a call that does not complete
-fails as "may have run": `UnknownEffectError`, its own error as the `cause`
-(`callLifetime.ts`), and the `end` says `mayHaveRun: true`. An answer the server
-gave (a 5xx, a tool error) after no such attempt is delivered as it came. Under
-`'compatibility'` the caller sees the error it always did; the record still says
-the effect is unknown and names the policy's assumption.
+request files when its call settles (or at once, when cancelled).
+
+**What the caller sees under `'app-authorized'`** (footprintjs's law; the record is
+the same under both policies). Two layers are kept apart: a row's `outcome:
+'answered'` is the HTTP observation — a response arrived — and not the MCP call's
+answer, which the ledger watches for by JSON-RPC id (a 202, or a stream, can be
+accepted and never carry it). Then:
+
+- a received refusal or error — a 429, a 503, a JSON-RPC or tool error, or a chain
+  in which every attempt received one — keeps the server's error as it came; its
+  effect stays `unknown`, and the record says why it was not sent again;
+- a call that genuinely lacked an answer somewhere — an attempt with no response at
+  all, or a request accepted over HTTP whose JSON-RPC answer never came — and then
+  fails, fails as "may have run": `UnknownEffectError`, its final error (a later
+  refusal's, or the timeout) as the `cause` (`callLifetime.ts`), and the `end` says
+  `mayHaveRun: true`;
+- a call that completes returns normally, and the series' effect stays `unknown`
+  after an earlier unknown attempt;
+- a cancellation keeps the caller's reason; once a request was sent, the record
+  says its effect is `unknown`.
+
+Under `'compatibility'` the caller sees the error it always did; the record still
+says the effect is unknown and names the policy's assumption.
 
 ```ts
 const orders = await mcpClient({

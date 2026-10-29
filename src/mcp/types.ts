@@ -278,11 +278,14 @@ export interface McpClientOptions {
    * as the same identity. Each attempt's run record says what is known of its
    * effect — `unknown` for anything sent that did not complete, `applied` when
    * the call completed (never proof of a write) — and what permitted the next
-   * one. Under `'app-authorized'`, a call that does not complete after any
-   * attempt that ended without an answer, its effect unknown, fails as "may
-   * have run" (footprintjs's `UnknownEffectError`); under `'compatibility'`
-   * the caller sees the error it always did. Ignored for `stdio`, which has no
-   * retry series.
+   * one. Under `'app-authorized'`, a received refusal or error (a 429, a 503,
+   * a JSON-RPC or tool error) reaches the caller as the server sent it, its
+   * effect still unknown; a call that genuinely lacked an answer somewhere —
+   * a request with no response, or one accepted over HTTP whose JSON-RPC
+   * answer never came — and then fails, fails as "may have run"
+   * (footprintjs's `UnknownEffectError`, its final error as the `cause`).
+   * Under `'compatibility'` the caller sees the error it always did. Ignored
+   * for `stdio`, which has no retry series.
    */
   readonly replay?: McpReplayOptions;
 

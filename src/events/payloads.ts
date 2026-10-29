@@ -2428,10 +2428,14 @@ export interface ToolsCodeRunPayload {
 /**
  * What one attempt of an MCP request came to.
  *
- *   - `'answered'` — a response arrived and no retry rule refused it. It is
- *     delivered as it came, WHATEVER its status: a 503 is `answered` with
+ *   - `'answered'` — an HTTP response arrived and no retry rule refused it. It
+ *     is delivered as it came, WHATEVER its status: a 503 is `answered` with
  *     `status: 503`. A response received is not an operation that succeeded,
- *     so nothing here is called success; read `status`.
+ *     so nothing here is called success; read `status`. Nor is it the MCP
+ *     call's answer: it records the HTTP exchange. A `202 Accepted`, or a
+ *     stream that closes before the call's result, is `answered`, and the
+ *     JSON-RPC answer may still never come — the end's `mayHaveRun` says when
+ *     the call failed that way.
  *   - `'refused'` — a response the retry policy recognises as a refusal
  *     (`kind`): HTTP 429, or AgentCore Runtime's session-busy reply. It records
  *     the response the server sent, not proof that nothing ran: a 429 says the
@@ -2447,7 +2451,7 @@ export interface ToolsCodeRunPayload {
  *     or the call settling first. The request WAS sent; the server may already
  *     have received it and run it. A cut is never a "not run".
  *
- * The last three never had an answer, so they carry `remote: 'unknown'`.
+ * The last three never had a response, so they carry `remote: 'unknown'`.
  *
  * Every request the series sent is a row, or is counted in `omitted`: the rows
  * and `omitted` together are the requests the series sent. A request that was
@@ -2466,7 +2470,7 @@ export type ToolRequestOutcome = ToolRequestAttemptOutcome | 'cancelled';
 
 /**
  * Whether the server received and ran a request, when that is not known: the
- * attempt ended without an answer (`failed`, `timed-out`, `cut`), so the
+ * attempt ended without a response (`failed`, `timed-out`, `cut`), so the
  * request may have reached the server and run there, or not. The library never
  * records such a request as not run.
  */
@@ -2618,7 +2622,7 @@ export interface ToolRequestAttempt {
   /** `failed` and `timed-out` only. */
   readonly error?: ToolRequestError;
   /**
-   * `'unknown'` when the attempt ended without an answer (`failed`,
+   * `'unknown'` when the attempt ended without a response (`failed`,
    * `timed-out`, `cut`): it was sent, and whether the server received and ran
    * it is not known. Absent when a response arrived: the record keeps what the
    * server answered (`status`) — for a `refused` attempt that is the server's
@@ -2661,8 +2665,9 @@ export interface ToolRequestEnd {
   /** `failed` and `timed-out` only. */
   readonly error?: ToolRequestError;
   /**
-   * `'unknown'` when the request ended on an attempt with no answer (`failed`,
-   * `timed-out`, `cut`): whether the server ran that request is not known.
+   * `'unknown'` when the request ended on an attempt with no response
+   * (`failed`, `timed-out`, `cut`): whether the server ran that request is not
+   * known.
    */
   readonly remote?: ToolRequestRemote;
   /**
@@ -2680,12 +2685,17 @@ export interface ToolRequestEnd {
    */
   readonly effect?: ToolRequestEffect;
   /**
-   * The call failed as "may have run" (footprintjs's `UnknownEffectError`, the
-   * call's own error as its `cause`): under the `'app-authorized'` policy, an
-   * attempt ended without an answer and its effect is unknown, and the call
-   * did not complete. A single such attempt is enough. Under
-   * `'compatibility'` the caller sees the error it always did, and this is
-   * absent.
+   * The call failed as "may have run" (footprintjs's `UnknownEffectError`, its
+   * final error — a later refusal's, or the timeout — as the `cause`): under
+   * the `'app-authorized'` policy, the call genuinely lacked an answer
+   * somewhere and did not complete. Lacking an answer is not an unknown
+   * effect: it is an attempt that got no response at all (`remote:
+   * 'unknown'`), or a request accepted over HTTP (an `answered` 2xx) whose
+   * JSON-RPC answer never came. A received refusal or error IS an answer —
+   * its effect unknown, delivered as the server sent it — so a call whose
+   * every attempt received one has no `mayHaveRun`. Absent under
+   * `'compatibility'`, where the caller sees the error it always did, and
+   * for a call its caller cancelled, which ends with the caller's reason.
    */
   readonly mayHaveRun?: true;
 }

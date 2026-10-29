@@ -503,9 +503,10 @@ function wrapMcpTool(
       // still sending is cut, inside the call. Nothing is added to the request.
       //
       // How it settles is its verdict: `completed` when the server answered and
-      // not with an error (a result it then cannot decode still completed). A
-      // call that does not complete after its series asked again past an
-      // attempt of unknown effect fails as "may have run" (`callLifetime.ts`).
+      // not with an error (a result it then cannot decode still completed).
+      // Under 'app-authorized', a call that genuinely lacked an answer somewhere
+      // and does not complete fails as "may have run"; a received refusal or
+      // error is delivered as it came (`callLifetime.ts`).
       const call = openCall(params, ctx, signal, ledger, serverName);
       let verdict: CallVerdict = 'failed';
       try {
