@@ -53,8 +53,9 @@ mockMcpClient({ tools: [{ name: 'client_activity', inputSchema, _meta: { agentfo
 - `gatewayTransport.ts`, `transportUrl.ts`, `throttleRetry.ts` — transport.
   `throttleRetry.ts` runs each call as ONE footprintjs `attempt()` series; a
   transport fetch that already retries is joined, never wrapped.
-- `requestLedger.ts`, `seriesEvidence.ts` — which dispatched call a request
-  belongs to, and that request's series written down for the call's run.
+- `requestLedger.ts`, `seriesEvidence.ts`, `callLifetime.ts` — which dispatched
+  call a request belongs to, that request's series written down for the call's
+  run, and the call's own lifetime: what cancels it, and what its settling stops.
 - `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
   footprintjs's own helpers (same names and laws) until a release ships them.
 - `toolExtras.ts` — our own declarations, carried over MCP.
@@ -76,7 +77,15 @@ the JSON-RPC id the SDK assigned, and the series claims it from its own body.
 Identity at every hop, never content: two calls with the same arguments, or two
 runs on one client, cannot claim each other's request, and nothing is added to
 the wire. The series files ONE `agentfootprint.tools.request_attempts` when the
-request ends — and, for a cancellation, the moment the run's signal fires.
+request ends — and, for a cancellation, the moment it lands. Every request the
+series sent is a row, or counted in `omitted`, a cancelled one included.
+
+Cancellation never waits on attribution (`callLifetime.ts`): the call's
+`ctx.signal` and the client's reach the SDK request while the call runs, and the
+ledger stops any `tools/call` the SDK sends `notifications/cancelled` for. A call
+that settles before its series (the SDK's own timeout) cuts the series in a
+`finally`, inside the call, so nothing is filed after the run and nothing more is
+sent.
 
 ```ts
 // what a saved run gives back for a call throttled once, then answered

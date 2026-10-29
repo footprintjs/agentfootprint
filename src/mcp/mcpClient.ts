@@ -44,8 +44,6 @@
  */
 
 import type { Tool } from '../tools/tools.js';
-import { requestEvidenceOf } from '../tools/requestEvidence.js';
-import { eitherSignal } from '../lib/abort.js';
 import type {
   McpClient,
   McpClientOptions,
@@ -61,6 +59,7 @@ import { readToolResult, resultModeOf } from './toolResult.js';
 import { createVendingFetch } from './gatewayTransport.js';
 import { ledgeredFetch, retryingFetch, type RetryOnThrottle } from './throttleRetry.js';
 import { RequestLedger } from './requestLedger.js';
+import { openCall } from './callLifetime.js';
 import { refuseConflictingOptions } from './connectionRefusals.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { transportUrl } from './transportUrl.js';
@@ -349,12 +348,16 @@ async function buildTransport(
   );
 }
 
-/** `transport` with its sends watched by `ledger` — as it is when there is no ledger. */
+/**
+ * `transport` with its sends watched by `ledger` — the SAME object, its own
+ * `send` installed in place. As it is, with no ledger, when there is none or it
+ * cannot be watched: then no call expects its attempts filed.
+ */
 function watched(transport: unknown, ledger: RequestLedger | undefined): BuiltTransport {
   if (ledger === undefined || transport === null || typeof transport !== 'object') {
     return { transport };
   }
-  return { transport: ledger.watch(transport), ledger };
+  return ledger.watch(transport) === undefined ? { transport } : { transport, ledger };
 }
 
 /** The Node loader path for Streamable HTTP — reached only with no `sdk`. */
@@ -429,20 +432,21 @@ function wrapMcpTool(
         arguments: argsObj,
         ...(ctx?.time !== undefined && { _meta: callMetaOf(ctx.time) }),
       };
-      // A call the agent dispatched carries its run's evidence port. The ticket
-      // is keyed by THIS params object — the one the SDK hands the transport —
-      // so the retry series that sends it files its attempts into this call's
-      // run, and the run's cancellation (or the client's) ends that series,
-      // a wait included. Nothing is added to the request.
-      const sink = ledger === undefined ? undefined : requestEvidenceOf(ctx);
-      if (sink !== undefined) {
-        const cancel = eitherSignal(sink.signal, signal);
-        ledger?.issue(params, { sink, ...(cancel !== undefined && { signal: cancel }) });
+      // The call's lifetime (`callLifetime.ts`): its context's signal and the
+      // client's cancel the SDK request while it runs; a call the agent
+      // dispatched issues a ticket keyed by THIS params object — the one the
+      // SDK hands the transport — so the retry series that sends it files its
+      // attempts into the call's run; and however the call settles, a series
+      // still sending is cut, inside the call. Nothing is added to the request.
+      const call = openCall(params, ctx, signal, ledger, serverName);
+      try {
+        const result = call.signal
+          ? await connection.callTool(params, undefined, { signal: call.signal })
+          : await connection.callTool(params);
+        return readToolResult(result, mcp.name, serverName, resultMode);
+      } finally {
+        call.close();
       }
-      const result = signal
-        ? await connection.callTool(params, undefined, { signal })
-        : await connection.callTool(params);
-      return readToolResult(result, mcp.name, serverName, resultMode);
     },
   };
   return tool;

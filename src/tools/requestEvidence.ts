@@ -24,10 +24,17 @@
  * symbol is enumerable, so a wrapper that copies the context (`{ ...ctx }`)
  * keeps it; a filing from anyone else still passes the allow-list below.
  *
+ * The port only FILES. What cancels a call is the call's own context signal
+ * (`ctx.signal`), read by the MCP tool whether or not a port rides along — a
+ * cancellation must never depend on evidence being attributable.
+ *
  * THE ALLOW-LIST is the whole record: numbers, the library's own words, the
  * endpoint label the app declared or else the endpoint's ORIGIN. A filing with
  * anything else in it — a field nobody listed, a word outside its set, a URL
- * with a path — is refused whole, never trimmed into something it did not say.
+ * with a path, an array that is not a plain one — is refused whole, never
+ * trimmed into something it did not say. Values are read as DATA, through own
+ * property descriptors, so no getter, `toJSON` or array subclass a filing
+ * carries ever runs or reaches the record.
  */
 
 import { isDevMode } from 'footprintjs';
@@ -49,10 +56,8 @@ export type RequestEvidence = Omit<
   'toolCallId' | 'toolName' | 'iteration'
 >;
 
-/** Where one dispatched call's request evidence goes, and what cancels the call. */
+/** Where one dispatched call's request evidence goes. */
 export interface RequestEvidenceSink {
-  /** The run's signal — a cancelled run ends the call's retry series, a wait included. */
-  readonly signal?: AbortSignal;
   /** File the request's record. Never throws; a filing outside the allow-list is refused whole. */
   file(evidence: RequestEvidence): void;
 }
@@ -80,10 +85,8 @@ export interface RequestEvidenceCall {
 export function requestEvidenceFor(
   scope: EmitableScope,
   call: RequestEvidenceCall,
-  signal?: AbortSignal,
 ): RequestEvidencePort {
   const sink: RequestEvidenceSink = {
-    ...(signal !== undefined && { signal }),
     file: (evidence) => {
       const served = servedRequestEvidence(evidence);
       if (served === undefined) {
@@ -120,9 +123,13 @@ export function requestEvidenceOf(ctx: unknown): RequestEvidenceSink | undefined
     return undefined;
   }
   if (port === null || typeof port !== 'object') return undefined;
-  const { file, signal } = port as { readonly file?: unknown; readonly signal?: unknown };
+  let file: unknown;
+  try {
+    file = (port as { readonly file?: unknown }).file;
+  } catch {
+    return undefined;
+  }
   if (typeof file !== 'function') return undefined;
-  if (signal !== undefined && !isAbortSignal(signal)) return undefined;
   return port as RequestEvidenceSink;
 }
 
@@ -130,13 +137,13 @@ export function requestEvidenceOf(ctx: unknown): RequestEvidenceSink | undefined
 
 type Words<W extends string> = { readonly [K in W]: true };
 
-const ATTEMPT_OUTCOMES: Words<ToolRequestAttempt['outcome']> = {
+const OUTCOMES: Words<ToolRequestAttempt['outcome'] & ToolRequestEnd['outcome']> = {
   answered: true,
   refused: true,
   failed: true,
   'timed-out': true,
+  cancelled: true,
 };
-const END_OUTCOMES: Words<ToolRequestEnd['outcome']> = { ...ATTEMPT_OUTCOMES, cancelled: true };
 const REASONS: Words<ToolRequestAttempt['reason']> = {
   retryable: true,
   answered: true,
@@ -194,14 +201,10 @@ export function servedRequestEvidence(raw: unknown): RequestEvidence | undefined
     const evidence = record(raw, EVIDENCE_FIELDS);
     const { endpoint, origin } = evidence;
     if (endpoint !== undefined && origin !== undefined) throw new Refused();
-    const attempts = evidence.attempts;
-    if (!Array.isArray(attempts) || attempts.length > MAX_REQUEST_ATTEMPT_ROWS) {
-      throw new Refused();
-    }
     return {
       ...(endpoint !== undefined && { endpoint: label(endpoint) }),
       ...(origin !== undefined && { origin: originOnly(origin) }),
-      attempts: attempts.map(servedAttempt),
+      attempts: plainArray(evidence.attempts, MAX_REQUEST_ATTEMPT_ROWS).map(servedAttempt),
       omitted: count(evidence.omitted),
       end: servedEnd(evidence.end),
     };
@@ -218,7 +221,7 @@ function servedAttempt(raw: unknown): ToolRequestAttempt {
   if (attempt < 1) throw new Refused();
   return {
     attempt,
-    outcome: word(ATTEMPT_OUTCOMES, row.outcome),
+    outcome: word(OUTCOMES, row.outcome),
     reason: word(REASONS, row.reason),
     ...(row.status !== undefined && { status: status(row.status) }),
     ...(row.kind !== undefined && { kind: word(KINDS, row.kind) }),
@@ -232,7 +235,7 @@ function servedAttempt(raw: unknown): ToolRequestAttempt {
 function servedEnd(raw: unknown): ToolRequestEnd {
   const end = record(raw, END_FIELDS);
   return {
-    outcome: word(END_OUTCOMES, end.outcome),
+    outcome: word(OUTCOMES, end.outcome),
     reason: word(REASONS, end.reason),
     ...(end.status !== undefined && { status: status(end.status) }),
     ...(end.kind !== undefined && { kind: word(KINDS, end.kind) }),
@@ -245,6 +248,30 @@ function servedEnd(raw: unknown): ToolRequestEnd {
 function servedError(raw: unknown): ToolRequestError {
   const error = record(raw, new Set(['message', 'code']));
   return { message: word(SENTENCES, error.message), code: word(CATEGORIES, error.code) };
+}
+
+/**
+ * A PLAIN array's elements, copied by index into a fresh array: its prototype
+ * exactly `Array.prototype` (no subclass, so no `toJSON` or species of its own),
+ * every index from 0 to `length - 1` an own data property (no hole, no getter),
+ * and no other own key — a property riding on the array is refused, not
+ * dropped. At most `max` elements.
+ */
+function plainArray(raw: unknown, max: number): unknown[] {
+  if (!Array.isArray(raw) || Object.getPrototypeOf(raw) !== Array.prototype) throw new Refused();
+  const length = Object.getOwnPropertyDescriptor(raw, 'length')?.value as unknown;
+  if (typeof length !== 'number' || !Number.isSafeInteger(length) || length > max) {
+    throw new Refused();
+  }
+  const keys = Reflect.ownKeys(raw);
+  if (keys.length !== length + 1) throw new Refused();
+  const out: unknown[] = [];
+  for (let i = 0; i < length; i++) {
+    const descriptor = Object.getOwnPropertyDescriptor(raw, String(i));
+    if (descriptor === undefined || !('value' in descriptor)) throw new Refused();
+    out.push(descriptor.value);
+  }
+  return out;
 }
 
 /** A plain object whose every own key is listed; read once, by key. */
@@ -310,10 +337,6 @@ function originOnly(value: unknown): string {
   }
   if (url.host === '' || `${url.protocol}//${url.host}` !== value) throw new Refused();
   return value;
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof AbortSignal !== 'undefined' && value instanceof AbortSignal;
 }
 
 const warned = new Set<string>();

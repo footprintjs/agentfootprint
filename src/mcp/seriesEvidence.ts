@@ -17,13 +17,18 @@
  * response as `ok` with the reason `succeeded`; here it is `answered`, with the
  * status the server sent — a 503 delivered is `answered` + `503`, never success.
  *
+ * EVERY REQUEST SENT IS COUNTED. Each attempt the series started is a row — or,
+ * past the cap, one more in `omitted` — so `rows + omitted` is the number of
+ * requests the series sent. An attempt a cancellation cuts in flight is a row
+ * too (`cancelled`), exactly as an attempt the deadline cuts is (`timed-out`).
+ *
  * WHEN IT FILES. When the series ends — and, for a cancellation, at the moment the
  * signal fires: a cancelled run stops waiting for its stage at once, so a record
  * filed when the series later unwinds would land after the run was saved. The
- * runner makes no record for a wait it was cut out of, so the end says it
- * (`during: 'wait'`); an attempt cut in flight is the end's too (`'request'`).
- * Anything the series reports after it has filed is not part of the request's
- * story any more and is ignored.
+ * runner makes no record for an attempt it abandons at that moment or for a wait
+ * it was cut out of, so those are written here: the cut attempt's row and
+ * `during: 'request'`, or `during: 'wait'`. Anything the series reports after it
+ * has filed is not part of the request's story any more and is ignored.
  */
 
 import type { AttemptRecord } from 'footprintjs';
@@ -57,9 +62,6 @@ export type DeclineReason = Extract<
   'exhausted' | 'wait-limit' | 'no-time-left' | 'not-replayable' | 'not-retryable'
 >;
 
-/** What the request was doing when it was cut: sending, or waiting to send again. */
-export type SeriesPhase = 'request' | 'wait';
-
 const FAILED: ToolRequestError['message'] =
   'The request failed before an answer arrived. Its error is not kept.';
 const OUT_OF_TIME: ToolRequestError['message'] =
@@ -74,51 +76,92 @@ export class SeriesEvidence {
 
   constructor(private readonly sink: RequestEvidenceSink, private readonly where: RequestWhere) {}
 
-  /**
-   * One attempt as the runner recorded it. A cancelled attempt has no row: the
-   * end says it was cut in flight.
-   */
+  /** One attempt as the runner recorded it. */
   attempt(record: AttemptRecord, seen: AttemptSeen | undefined, declined?: DeclineReason): void {
-    if (this.filed || record.outcome === 'aborted') return;
-    const row = rowOf(record, seen, declined);
-    this.last = row;
-    if (this.rows.length < MAX_REQUEST_ATTEMPT_ROWS) this.rows.push(row);
-    else this.omitted += 1;
-  }
-
-  /** The caller's signal ended the request. */
-  cancelled(during: SeriesPhase): void {
-    this.file({ outcome: 'cancelled', reason: 'cancelled', during });
+    if (this.filed) return;
+    this.add(rowOf(record, seen, declined));
   }
 
   /**
-   * The series ended — it delivered an answer or a refusal, or it threw. The end
-   * is the last attempt's when that attempt ended it. When none did — the
-   * deadline cut a wait, or passed before the first request, or (never seen,
-   * kept so nothing goes unfiled) something else stopped the series — it says so.
+   * The caller's cancellation cut attempt `n` in flight: it was sent, so it is a
+   * row — then the request's end.
    */
-  ended(during: SeriesPhase, outOfTime = false): void {
+  cutInFlight(n: number): void {
+    if (this.filed) return;
+    this.add({ attempt: n, outcome: 'cancelled', reason: 'cancelled' });
+    this.file({ outcome: 'cancelled', reason: 'cancelled', during: 'request' });
+  }
+
+  /**
+   * The caller's cancellation landed with no attempt in flight: between two —
+   * `during: 'wait'` — or before the first, when nothing was sent and there is
+   * no `during`. A request that had already ended keeps its own end.
+   */
+  cancelled(): void {
     const last = this.last;
     if (last !== undefined && last.reason !== 'retryable') {
       this.file(endOf(last));
       return;
     }
+    this.file({
+      outcome: 'cancelled',
+      reason: 'cancelled',
+      ...(last !== undefined && { during: 'wait' as const }),
+    });
+  }
+
+  /**
+   * The series delivered a response. It is the last attempt's — an answer, or a
+   * refusal it will not ask again after. A refusal it MEANT to ask again after
+   * is delivered when the deadline lands inside the wait: the runner's wait
+   * ends early, the series stops, and the end says so (`no-time-left`, during
+   * the `wait`).
+   */
+  delivered(): void {
+    const last = this.last;
+    if (last === undefined) {
+      this.file(UNACCOUNTED);
+      return;
+    }
     this.file(
-      outOfTime
-        ? {
-            outcome: 'timed-out',
-            reason: 'no-time-left',
-            failure: 'timeout',
-            during,
-            error: { message: OUT_OF_TIME, code: 'timeout' },
-          }
-        : {
-            outcome: 'failed',
-            reason: 'not-retryable',
-            failure: 'unknown',
-            error: { message: FAILED, code: 'unknown' },
-          },
+      last.reason === 'retryable'
+        ? { ...endOf(last), reason: 'no-time-left', during: 'wait' }
+        : endOf(last),
     );
+  }
+
+  /**
+   * The series threw. The end is the last attempt's when that attempt ended it
+   * (a failure, a timed-out request). The rest is defensive — footprintjs 10.6's
+   * runner never throws without a record but for a cancellation, which is filed
+   * as one: a deadline that had passed before the first request (`timed-out`,
+   * no `during`, nothing sent) or one a future runner reports from inside a wait
+   * (`during: 'wait'`); anything else is filed as a failure the record cannot
+   * account for, so a request is never left unfiled.
+   */
+  threw(outOfTime: boolean): void {
+    const last = this.last;
+    if (last !== undefined && last.reason !== 'retryable') {
+      this.file(endOf(last));
+      return;
+    }
+    if (!outOfTime) {
+      this.file(UNACCOUNTED);
+      return;
+    }
+    this.file({
+      outcome: 'timed-out',
+      reason: 'no-time-left',
+      failure: 'timeout',
+      ...(last !== undefined && { during: 'wait' as const }),
+      error: { message: OUT_OF_TIME, code: 'timeout' },
+    });
+  }
+
+  private add(row: ToolRequestAttempt): void {
+    this.last = row;
+    if (this.rows.length < MAX_REQUEST_ATTEMPT_ROWS) this.rows.push(row);
+    else this.omitted += 1;
   }
 
   private file(end: ToolRequestEnd): void {
@@ -131,6 +174,14 @@ export class SeriesEvidence {
     }
   }
 }
+
+/** An end no attempt accounts for — never seen; kept so a request is never left unfiled. */
+const UNACCOUNTED: ToolRequestEnd = {
+  outcome: 'failed',
+  reason: 'not-retryable',
+  failure: 'unknown',
+  error: { message: FAILED, code: 'unknown' },
+};
 
 /** One record as a row — see the module note for what a row may say. */
 export function rowOf(
@@ -148,7 +199,9 @@ export function rowOf(
     ...((outcome === 'answered' || outcome === 'refused') &&
       seen?.status !== undefined && { status: seen.status }),
     ...(refusal !== undefined && { kind: refusal.kind }),
-    ...(outcome !== 'answered' && record.category !== undefined && { failure: record.category }),
+    ...(outcome !== 'answered' &&
+      outcome !== 'cancelled' &&
+      record.category !== undefined && { failure: record.category }),
     ...(reason === 'retryable' && { waitMs: record.delayMs ?? 0 }),
     ...(refusal?.retryAfterMs !== undefined && { retryAfterMs: refusal.retryAfterMs }),
     ...((outcome === 'failed' || outcome === 'timed-out') && {
@@ -168,8 +221,12 @@ function outcomeOf(
       return 'timed-out';
     case 'failed':
       return seen?.refusal !== undefined ? 'refused' : 'failed';
+    case 'aborted':
+      // Cut in flight by the series' cancellation. The cancellation itself files
+      // this row first (`cutInFlight`), so the record is seen only if it did not.
+      return 'cancelled';
     default:
-      // `paused` cannot happen inside a fetch, and `aborted` never becomes a row.
+      // `paused` cannot happen inside a fetch.
       return 'failed';
   }
 }
@@ -210,7 +267,7 @@ function endOf(last: ToolRequestAttempt): ToolRequestEnd {
     ...(status !== undefined && { status }),
     ...(kind !== undefined && { kind }),
     ...(failure !== undefined && { failure }),
-    ...(outcome === 'timed-out' && { during: 'request' as const }),
+    ...((outcome === 'timed-out' || outcome === 'cancelled') && { during: 'request' as const }),
     ...(error !== undefined && { error }),
   };
 }

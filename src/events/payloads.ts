@@ -2417,7 +2417,8 @@ export interface ToolsCodeRunPayload {
 // ─── tools.request_attempts — an MCP request's retry series ────────────────
 
 /**
- * What one attempt of an MCP request came to.
+ * What one attempt of an MCP request came to — and, on `end`, how the request
+ * ended.
  *
  *   - `'answered'` — a response arrived and no retry rule refused it. It is
  *     delivered as it came, WHATEVER its status: a 503 is `answered` with
@@ -2429,14 +2430,18 @@ export interface ToolsCodeRunPayload {
  *   - `'failed'` — the request threw before an answer arrived (a dropped
  *     connection, a DNS failure). Never retried: the server may have run it.
  *   - `'timed-out'` — the call's deadline (`maxElapsedMs`) cut the request.
+ *   - `'cancelled'` — the call was cancelled while the request was in flight:
+ *     the run's or the client's signal, the MCP SDK cancelling it (its own
+ *     timeout), or the call settling first. It was sent, so it is counted; the
+ *     server may have received it.
+ *
+ * Every attempt the series started is a row, or is counted in `omitted`: the
+ * rows and `omitted` together are the requests the series sent.
  */
-export type ToolRequestAttemptOutcome = 'answered' | 'refused' | 'failed' | 'timed-out';
+export type ToolRequestOutcome = 'answered' | 'refused' | 'failed' | 'timed-out' | 'cancelled';
 
-/**
- * How an MCP request ended: its last attempt's outcome — or `'cancelled'`, when
- * the caller's signal (the run's, or the client's) ended it.
- */
-export type ToolRequestOutcome = ToolRequestAttemptOutcome | 'cancelled';
+/** An attempt's outcome — the same words as the request's (`ToolRequestOutcome`). */
+export type ToolRequestAttemptOutcome = ToolRequestOutcome;
 
 /**
  * Why the request went on after an attempt, or ended with it.
@@ -2533,9 +2538,14 @@ export interface ToolRequestEnd {
   /** The failure's category, as on an attempt. */
   readonly failure?: ToolRequestFailureCategory;
   /**
-   * `cancelled` and `timed-out`: what the request was doing when it was cut —
-   * an attempt in flight (`'request'`; the attempt after the last one listed),
-   * or a wait before asking again (`'wait'`).
+   * Present when the request was CUT, and says what it was doing then.
+   * `'request'` — its LAST attempt was in flight (`cancelled`, `timed-out`);
+   * that attempt is the last row, or, past 100 attempts, the last one counted
+   * in `omitted`. `'wait'` — it was waiting to ask again, so no request was in
+   * flight: a cancellation cut the wait (`cancelled`), or the deadline left no
+   * time to finish it and the last refusal was delivered (`refused`,
+   * `no-time-left`). Absent when nothing was cut — and when the request was
+   * cancelled before any attempt started, so that nothing was sent.
    */
   readonly during?: 'request' | 'wait';
   /** `failed` and `timed-out` only. */
@@ -2548,9 +2558,12 @@ export interface ToolRequestEnd {
  *
  * Filed by `mcpClient`'s retry series for a call the agent dispatched, ONCE per
  * request, when the request ends — and at the moment of a cancellation, so a
- * run cancelled during a wait still carries it when it is saved. The framework
- * stamps `toolCallId`, `toolName` and `iteration` from the dispatch, so two
- * calls, or two runs, sharing one MCP connection never mix their attempts.
+ * run cancelled during a wait still carries it when it is saved. A call that
+ * settles before its series (the MCP SDK's own timeout, say) cancels the series
+ * there and then, inside the call, so it is never filed after its run, and no
+ * request is sent after it. The framework stamps `toolCallId`, `toolName` and
+ * `iteration` from the dispatch, so two calls, or two runs, sharing one MCP
+ * connection never mix their attempts.
  *
  * ALLOW-LISTED, field by field: numbers, the library's own words, the
  * endpoint label the app declared, or else the endpoint's origin. Never the
@@ -2569,7 +2582,11 @@ export interface ToolsRequestAttemptsPayload {
   readonly endpoint?: string;
   /** Otherwise the endpoint's ORIGIN — scheme, host and port, nothing else. */
   readonly origin?: string;
-  /** The attempts, in order — at most 100. */
+  /**
+   * The attempts, in order — at most 100. Every attempt the series started is
+   * here or counted in `omitted`, a cancelled one included: `attempts.length +
+   * omitted` is the number of requests the series sent.
+   */
   readonly attempts: readonly ToolRequestAttempt[];
   /** Attempts made past the first 100, counted and not listed. `0` when every attempt is listed. */
   readonly omitted: number;

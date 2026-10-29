@@ -5,32 +5,61 @@
  * Every test here goes through a REAL `Agent`, the REAL `mcpClient` and the
  * REAL MCP SDK transport; only the server is a stand-in `fetch` in this
  * process. Each run is written to disk by `persistRecording` and parsed back,
- * so what is asserted is what a reader of the archive gets.
+ * so what is asserted is what a reader of the archive gets. And every test
+ * checks THE INVARIANT against the server's own count: the rows plus `omitted`
+ * are exactly the requests the server saw.
  *
- *   S1 Scenario  — every attempt, its reason and its wait, and how it ended
- *   S2 Scenario  — a cancellation DURING A WAIT is in the saved run
- *   S3 Scenario  — a cancellation during a request in flight, too
- *   S4 Boundary  — a 503 received is `answered` + 503, never success, never retried
- *   S5 Property  — concurrent runs on ONE connection never mix their attempts
- *   S6 Boundary  — past 100 attempts, the rest are COUNTED, never dropped
- *   S7 Security  — a thrown error's text and the URL's path never reach the run
- *   S8 ROI       — AgentCore Runtime's session-busy series files the same way
- *   S9 Unit      — concurrent calls on one connection, each to its own port
+ *   S1  Scenario — every attempt, its reason and its wait, and how it ended
+ *   S2  Scenario — a cancellation DURING A WAIT is in the saved run
+ *   S3  Scenario — a cancellation in flight: the cut attempt is a row, and the
+ *                  request on the wire is cut too
+ *   S4  Boundary — a 503 received is `answered` + 503, never success, never retried
+ *   S5  Property — concurrent runs on ONE connection never mix their attempts
+ *   S6  Boundary — past 100 attempts, the rest are COUNTED, never dropped
+ *   S7  Security — a thrown error's text and the URL's path never reach the run
+ *   S8  ROI      — AgentCore Runtime's session-busy series files the same way
+ *   S9  Property — concurrent calls in one run (inner `ctx.tools` dispatch); a
+ *                  call whose context lost the port files nothing, runs unchanged
  *   S10 Security — under the app's redaction rule the evidence keeps its words
  *                  and numbers; the names the app declared are its to serve
  *   S11 Boundary — the deadline cuts a request: `timed-out`, `no-time-left`
  *   S12 Boundary — a stated wait past the budget is never shortened: `wait-limit`
+ *   S13 Scenario — the SDK times the call out mid-wait: the evidence is in the
+ *                  run saved when `run()` resolves, and nothing is re-sent
+ *   S14 Scenario — a call that settles some other way first: its series is cut
+ *                  inside the call, and nothing is re-sent
+ *   S15 Security — cancellation does not depend on attribution: an SDK that
+ *                  copies params still has its request cancelled, never re-sent
+ *   S16 Unit     — dev mode names a request that could not be matched, once
+ *   S17 ROI      — a transport class with `#private` fields connects and files
+ *   S18 Scenario — a call approved on RESUME files into the resumed run
+ *   S19 Boundary — the deadline cuts a WAIT: the 429 is delivered — `refused`,
+ *                  `no-time-left`, during `wait` — and nothing more is sent
+ *   S20 Security — a tool filing hostile shapes through its own port saves nothing
+ *   S21 Boundary — a finished call is never cancelled afterwards: the call's
+ *                  link to the run's signal ends with the call
  *
  * The series is the one retry owner (`mcp/throttleRetry.ts` · `Series`); these
  * tests pin that its OWN attempt records reach the call's run — no second loop.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { disableDevMode, enableDevMode } from 'footprintjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-import { Agent } from '../../src/index.js';
+import {
+  Agent,
+  ask,
+  checkInApproved,
+  defineTool,
+  isAskPause,
+  type Tool,
+  type ToolExecutionContext,
+} from '../../src/index.js';
 import { mock } from '../../src/adapters/llm/MockProvider.js';
 import { mcpClient } from '../../src/tool-providers/index.js';
 import { agentCoreRuntimeMcpTransport } from '../../src/adapters/mcp/agentcoreRuntime/transport.js';
@@ -38,10 +67,9 @@ import { staticTokens } from '../../src/identity/staticTokens.js';
 import { recordRun, type RunRecorder } from '../../src/recorders/observability/recordRun.js';
 import { persistRecording } from '../../src/recorders/observability/recordingEnvelope.js';
 import { fileRecordingSink } from '../../src/recorders/observability/fileRecordingSink.js';
-import { REQUEST_EVIDENCE, type RequestEvidence } from '../../src/tools/requestEvidence.js';
-import type { McpClient } from '../../src/mcp/types.js';
+import type { McpClient, McpSdk } from '../../src/mcp/types.js';
 import type { ToolsRequestAttemptsPayload } from '../../src/events/payloads.js';
-import type { ToolExecutionContext } from '../../src/tools/tools.js';
+import { pausedRequest } from '../helpers/pausedRequest.js';
 
 const URL_ = 'http://mcp.example.test/mcp';
 const EVIDENCE = 'agentfootprint.tools.request_attempts';
@@ -87,9 +115,14 @@ interface Call {
   readonly signal: AbortSignal | null | undefined;
 }
 
-/** An MCP endpoint in this process: the handshake, the tool list, and `reply` for each call. */
+/**
+ * An MCP endpoint in this process: the handshake, the tool list, and `reply`
+ * for each call. It counts the `tools/call` requests it received — overall and
+ * per `q` — and keeps the ids the client told it it had cancelled.
+ */
 function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
   const perQ = new Map<unknown, number>();
+  const cancelled: unknown[] = [];
   let calls = 0;
   // Typed for both doors it is handed to: the MCP SDK's fetch and AgentCore's auth fetch.
   const fetch = async (_input: unknown, init?: RequestInit): Promise<Response> => {
@@ -98,7 +131,7 @@ function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
     const message = JSON.parse(String(init?.body)) as {
       method?: string;
       id?: unknown;
-      params?: { arguments?: { q?: unknown } };
+      params?: { arguments?: { q?: unknown }; requestId?: unknown };
     };
     const result = (value: unknown): Response =>
       json({ jsonrpc: '2.0', id: message.id, result: value });
@@ -110,6 +143,9 @@ function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
           serverInfo: { name: 'tickets', version: '1.0.0' },
         });
       case 'notifications/initialized':
+        return new Response(null, { status: 202 });
+      case 'notifications/cancelled':
+        cancelled.push(message.params?.requestId);
         return new Response(null, { status: 202 });
       case 'tools/list':
         return result({ tools: [TOOL] });
@@ -124,13 +160,20 @@ function mcpEndpoint(reply: (call: Call) => Response | Promise<Response>) {
         return new Response(null, { status: 404 });
     }
   };
-  return { fetch, toolCalls: () => calls };
+  return { fetch, toolCalls: () => calls, callsFor: (q: unknown) => perQ.get(q) ?? 0, cancelled };
 }
 
 /** A request that hangs until its signal fires — the way a real fetch ends then. */
-const hangs = (signal: AbortSignal | null | undefined): Promise<Response> =>
+const hangs = (signal: AbortSignal | null | undefined, onCut?: () => void): Promise<Response> =>
   new Promise((_resolve, reject) => {
-    signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+    signal?.addEventListener(
+      'abort',
+      () => {
+        onCut?.();
+        reject(signal.reason);
+      },
+      { once: true },
+    );
   });
 
 // ── The agent, the run, the archive ──────────────────────────────────
@@ -157,6 +200,20 @@ async function agentFor(
     .build();
 }
 
+/** An agent whose one tool call is `name`, over `tools`. */
+function agentCalling(name: string, toolCallId: string, tools: readonly Tool[]): Agent {
+  return Agent.create({
+    provider: mock({
+      replies: [{ toolCalls: [{ id: toolCallId, name, args: {} }] }, { content: 'done' }],
+    }),
+    model: 'mock',
+    maxIterations: 3,
+  })
+    .system('You search tickets.')
+    .tools([...tools])
+    .build();
+}
+
 interface Row {
   readonly type: string;
   readonly payload: Record<string, unknown>;
@@ -166,13 +223,18 @@ interface Row {
 const dirs: string[] = [];
 afterEach(() => {
   while (dirs.length > 0) rmSync(dirs.pop() as string, { recursive: true, force: true });
+  disableDevMode();
+  vi.restoreAllMocks();
 });
 
 /** Write the run to disk the way an app archives it, and read the bytes back. */
-async function savedAndReloaded(rec: RunRecorder): Promise<readonly Row[]> {
+async function savedAndReloaded(rec: RunRecorder, runId?: string): Promise<readonly Row[]> {
   const directory = mkdtempSync(join(tmpdir(), 'afp-request-evidence-'));
   dirs.push(directory);
-  await persistRecording(rec, { sink: fileRecordingSink({ directory }), run: { complete: true } });
+  await persistRecording(rec, {
+    sink: fileRecordingSink({ directory }),
+    run: { complete: true, ...(runId !== undefined && { runId }) },
+  });
   rec.stop();
   const files = readdirSync(directory).filter((f) => f.endsWith('.json'));
   expect(files).toHaveLength(1);
@@ -189,6 +251,14 @@ const payloadOf = (row: Row | undefined): ToolsRequestAttemptsPayload => {
   return row?.payload as unknown as ToolsRequestAttemptsPayload;
 };
 
+/** THE INVARIANT: every request the server saw is a row, or counted in `omitted`. */
+function expectEveryRequestCounted(evidence: ToolsRequestAttemptsPayload, sent: number): void {
+  expect(
+    evidence.attempts.length + evidence.omitted,
+    'rows + omitted must be the requests the server saw',
+  ).toBe(sent);
+}
+
 /** Resolves the first time `onRetry` fires — the series is then waiting. */
 function firstWait(): { readonly onRetry: () => void; readonly entered: Promise<void> } {
   let resolve!: () => void;
@@ -203,6 +273,14 @@ async function until(condition: () => boolean): Promise<void> {
   expect(condition(), 'the condition never held').toBe(true);
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** The two SDK classes, with `Client` swapped — what an app hands `mcpClient({ sdk })`. */
+const sdkWith = (client: unknown, transport: unknown = StreamableHTTPClientTransport): McpSdk =>
+  ({ Client: client, StreamableHTTPClientTransport: transport } as unknown as McpSdk);
+
+type CallToolArgs = Parameters<Client['callTool']>;
+
 const RATE_LIMITED = {
   outcome: 'refused',
   reason: 'retryable',
@@ -210,6 +288,8 @@ const RATE_LIMITED = {
   kind: 'throttle',
   failure: 'rate-limited',
 } as const;
+
+const OUT_OF_TIME = 'The call ran out of time before an answer arrived.';
 
 // ─── S1 every attempt, its reason and its wait ───────────────────────
 
@@ -230,7 +310,8 @@ describe('saved retry evidence — S1 the saved run gives back every attempt', (
       const filed = filedIn(events);
       expect(filed).toHaveLength(1);
       const start = events.find((e) => e.type === 'agentfootprint.stream.tool_start');
-      expect(payloadOf(filed[0])).toEqual({
+      const evidence = payloadOf(filed[0]);
+      expect(evidence).toEqual({
         toolCallId: 'tc-1',
         toolName: 'search_tickets',
         iteration: start?.payload.iteration ?? 1,
@@ -243,7 +324,7 @@ describe('saved retry evidence — S1 the saved run gives back every attempt', (
         omitted: 0,
         end: { outcome: 'answered', reason: 'answered', status: 200 },
       });
-      expect(endpoint.toolCalls()).toBe(3);
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
       // The same run, the same call: stamped from the dispatch, never by the series.
       expect(filed[0]?.meta.runId).toBe(start?.meta.runId);
       // Filed while the call ran — before its `tool_end`.
@@ -280,6 +361,7 @@ describe('saved retry evidence — S2/S3 a cancelled run still carries its reque
       await expect(run).rejects.toThrow('the person left');
       const events = await saving;
 
+      const evidence = payloadOf(filedIn(events)[0]);
       expect(filedIn(events).map(payloadOf)).toEqual([
         {
           toolCallId: 'tc-wait',
@@ -291,14 +373,19 @@ describe('saved retry evidence — S2/S3 a cancelled run still carries its reque
           end: { outcome: 'cancelled', reason: 'cancelled', during: 'wait' },
         },
       ]);
-      expect(endpoint.toolCalls()).toBe(1);
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+      await sleep(50);
+      expect(endpoint.toolCalls(), 'a cancelled wait sends nothing more').toBe(1);
     } finally {
       await client.close();
     }
   });
 
-  it('S3 a cancellation during a request in flight: `cancelled` during `request`', async () => {
-    const endpoint = mcpEndpoint(({ n, signal }) => (n === 1 ? throttled() : hangs(signal)));
+  it('S3 a cancellation in flight: the cut attempt is a row, and the request on the wire is cut', async () => {
+    let wireCut = false;
+    const endpoint = mcpEndpoint(({ n, signal }) =>
+      n === 1 ? throttled() : hangs(signal, () => (wireCut = true)),
+    );
     const client = await mcpClient({
       name: 'tickets',
       transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
@@ -316,12 +403,17 @@ describe('saved retry evidence — S2/S3 a cancelled run still carries its reque
       const events = await saving;
 
       const evidence = payloadOf(filedIn(events)[0]);
-      expect(evidence.attempts).toEqual([{ attempt: 1, ...RATE_LIMITED, waitMs: 5 }]);
+      expect(evidence.attempts).toEqual([
+        { attempt: 1, ...RATE_LIMITED, waitMs: 5 },
+        { attempt: 2, outcome: 'cancelled', reason: 'cancelled' },
+      ]);
       expect(evidence.end).toEqual({
         outcome: 'cancelled',
         reason: 'cancelled',
         during: 'request',
       });
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+      expect(wireCut, 'the run cancel must cut the request on the wire').toBe(true);
     } finally {
       await client.close();
     }
@@ -349,6 +441,7 @@ describe('saved retry evidence — S4 a 503 received is not an operation that su
       expect(evidence.end).toEqual({ outcome: 'answered', reason: 'answered', status: 503 });
       expect(JSON.stringify(evidence)).not.toMatch(/succe|"ok"/);
       // The boundary never moves: a 503 is delivered, not asked again.
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.toolCalls()).toBe(1);
     } finally {
       await client.close();
@@ -390,6 +483,8 @@ describe('saved retry evidence — S5 concurrent runs on one connection stay sep
         { attempt: 1, outcome: 'answered', reason: 'answered', status: 200 },
       ]);
       expect(savedAlpha[0]?.meta.runId).not.toBe(savedBeta[0]?.meta.runId);
+      expectEveryRequestCounted(payloadOf(savedAlpha[0]), endpoint.callsFor('alpha'));
+      expectEveryRequestCounted(payloadOf(savedBeta[0]), endpoint.callsFor('beta'));
       expect(endpoint.toolCalls()).toBe(4);
     } finally {
       await client.close();
@@ -417,7 +512,7 @@ describe('saved retry evidence — S6 omitted attempts are counted', () => {
       expect(evidence.attempts).toHaveLength(100);
       expect(evidence.attempts[99]?.attempt).toBe(100);
       expect(evidence.omitted).toBe(5);
-      expect(evidence.attempts.length + evidence.omitted).toBe(endpoint.toolCalls());
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(evidence.end).toEqual({
         outcome: 'refused',
         reason: 'exhausted',
@@ -472,6 +567,7 @@ describe('saved retry evidence — S7 allow-listed metadata only', () => {
       ]) {
         expect(text).not.toContain(leaked);
       }
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.toolCalls()).toBe(1);
     } finally {
       await client.close();
@@ -505,16 +601,17 @@ describe('saved retry evidence — S8 a transport that retries its own refusal f
       ]);
       expect(evidence.end).toEqual({ outcome: 'answered', reason: 'answered', status: 200 });
       expect(JSON.stringify(evidence)).not.toContain('TOKEN-SECRET');
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
     } finally {
       await client.close();
     }
   });
 });
 
-// ─── S9 concurrent calls, one connection ─────────────────────────────
+// ─── S9 concurrent calls in one run; a call that lost its port ───────
 
-describe('saved retry evidence — S9 concurrent calls on one connection', () => {
-  it('two calls in flight at once each file only their own attempts, to their own port', async () => {
+describe('saved retry evidence — S9 concurrent calls in one run, and a call without a port', () => {
+  it('two calls in flight at once (inner `ctx.tools` dispatch) each save only their own attempts', async () => {
     const endpoint = mcpEndpoint(({ id, q, n }) =>
       q === 'slow' && n <= 2 ? throttled() : answered(id),
     );
@@ -524,35 +621,41 @@ describe('saved retry evidence — S9 concurrent calls on one connection', () =>
       retryOnThrottle: { baseDelayMs: 10, jitter: 'none' },
     });
     try {
-      const [tool] = await client.tools();
-      // Each call's own port, as the dispatcher builds one per call: what lands
-      // in it is what that call's run would get.
-      const filings: { readonly port: string; readonly evidence: RequestEvidence }[] = [];
-      const ctxFor = (toolCallId: string) =>
-        ({
-          toolCallId,
-          iteration: 1,
-          [REQUEST_EVIDENCE]: {
-            file: (evidence: RequestEvidence) => filings.push({ port: toolCallId, evidence }),
-          },
-        } as unknown as ToolExecutionContext);
-      await Promise.all([
-        tool?.execute({ q: 'slow' }, ctxFor('call-slow')),
-        tool?.execute({ q: 'fast' }, ctxFor('call-fast')),
-      ]);
+      // One model call; the tool it calls dispatches the MCP tool twice AT ONCE
+      // through the run's own dispatch — two requests interleaved on one
+      // connection, inside one run, each with its own port.
+      const both = defineTool({
+        name: 'lookup_both',
+        description: 'Look up two tickets at once',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async (_args: Record<string, unknown>, ctx: ToolExecutionContext) => {
+          const [slow, fast] = await Promise.all([
+            ctx.tools?.call('search_tickets', { q: 'slow' }),
+            ctx.tools?.call('search_tickets', { q: 'fast' }),
+          ]);
+          return `${String(slow)} / ${String(fast)}`;
+        },
+      });
+      const agent = agentCalling('lookup_both', 'tc-both', [both, ...(await client.tools())]);
+      const rec = recordRun(agent);
+      await agent.run({ message: 'both' });
+      const events = await savedAndReloaded(rec);
+      const filed = filedIn(events).map(payloadOf);
 
-      expect(filings.map((f) => f.port).sort()).toEqual(['call-fast', 'call-slow']);
-      const slow = filings.find((f) => f.port === 'call-slow')?.evidence;
-      const fast = filings.find((f) => f.port === 'call-fast')?.evidence;
+      expect(filed.map((e) => e.toolCallId).sort()).toEqual(['tc-both#inner-1', 'tc-both#inner-2']);
+      const slow = filed.find((e) => e.attempts.length === 3);
+      const fast = filed.find((e) => e.attempts.length === 1);
       expect(slow?.attempts.map((r) => r.outcome)).toEqual(['refused', 'refused', 'answered']);
       expect(fast?.attempts.map((r) => r.outcome)).toEqual(['answered']);
+      expectEveryRequestCounted(slow as ToolsRequestAttemptsPayload, endpoint.callsFor('slow'));
+      expectEveryRequestCounted(fast as ToolsRequestAttemptsPayload, endpoint.callsFor('fast'));
       expect(endpoint.toolCalls()).toBe(4);
     } finally {
       await client.close();
     }
   });
 
-  it('a call with no port — a direct `execute`, `mcpServe` — files nothing and runs unchanged', async () => {
+  it('a call whose context lost the port (a wrapper rebuilt it) saves nothing and runs unchanged', async () => {
     const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
     const client = await mcpClient({
       name: 'tickets',
@@ -560,8 +663,26 @@ describe('saved retry evidence — S9 concurrent calls on one connection', () =>
       retryOnThrottle: { baseDelayMs: 1, jitter: 'none' },
     });
     try {
-      const [tool] = await client.tools();
-      await expect(tool?.execute({ q: 'x' }, {} as never)).resolves.toBe('ticket-42');
+      const [mcp] = await client.tools();
+      const rebuilt = defineTool({
+        name: 'search_tickets',
+        description: 'Search the ticket system',
+        inputSchema: TOOL.inputSchema,
+        // A wrapper that hands the MCP tool a NEW context with only two fields.
+        execute: (args: Record<string, unknown>, ctx: ToolExecutionContext) =>
+          (mcp as Tool).execute(args, {
+            toolCallId: ctx.toolCallId,
+            iteration: ctx.iteration,
+          } as ToolExecutionContext),
+      });
+      const agent = agentCalling('search_tickets', 'tc-bare', [rebuilt]);
+      const rec = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      const events = await savedAndReloaded(rec);
+
+      expect(filedIn(events)).toHaveLength(0);
+      const end = events.find((e) => e.type === 'agentfootprint.stream.tool_end');
+      expect(end?.payload.result).toBe('ticket-42');
       expect(endpoint.toolCalls()).toBe(2);
     } finally {
       await client.close();
@@ -594,6 +715,7 @@ describe("saved retry evidence — S10 the app's redaction rule serves the recor
       expect(evidence.omitted).toBe(0);
       // A name the app declared is not a library word: the rule serves it.
       expect(evidence.endpoint).toBe('[REDACTED]');
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
     } finally {
       await client.close();
     }
@@ -616,7 +738,6 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
       await agent.run({ message: 'find it' });
       const evidence = payloadOf(filedIn(await savedAndReloaded(rec))[0]);
 
-      const sentence = 'The call ran out of time before an answer arrived.';
       expect(evidence.attempts).toEqual([
         { attempt: 1, ...RATE_LIMITED, waitMs: 5 },
         {
@@ -624,7 +745,7 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
           outcome: 'timed-out',
           reason: 'no-time-left',
           failure: 'timeout',
-          error: { message: sentence, code: 'timeout' },
+          error: { message: OUT_OF_TIME, code: 'timeout' },
         },
       ]);
       expect(evidence.end).toEqual({
@@ -632,8 +753,9 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
         reason: 'no-time-left',
         failure: 'timeout',
         during: 'request',
-        error: { message: sentence, code: 'timeout' },
+        error: { message: OUT_OF_TIME, code: 'timeout' },
       });
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
       expect(endpoint.toolCalls()).toBe(2);
     } finally {
       await client.close();
@@ -661,6 +783,350 @@ describe('saved retry evidence — S11/S12 a limit that ends the series says whi
       } as const;
       expect(evidence.attempts).toEqual([{ attempt: 1, ...refusedForGood, retryAfterMs: 30_000 }]);
       expect(evidence.end).toEqual(refusedForGood);
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+      expect(endpoint.toolCalls()).toBe(1);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── S13 / S14 a call that settles before its series ─────────────────
+
+describe('saved retry evidence — S13/S14 a call that settles first takes its series with it', () => {
+  it('S13 the SDK times the call out mid-wait: the run saved at `run()` holds the row and the end; nothing is re-sent', async () => {
+    // The SDK's own request timeout (60 s by default), scaled down: it fires
+    // while the series is still waiting to ask again.
+    class ShortTimeoutClient extends Client {
+      override callTool(...[params, schema, options]: CallToolArgs) {
+        return super.callTool(params, schema, { ...options, timeout: 60 });
+      }
+    }
+    const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      sdk: sdkWith(ShortTimeoutClient),
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 250, jitter: 'none' },
+    });
+    try {
+      const agent = await agentFor(client, 'tc-late', 'printer');
+      const rec = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      // Saved the moment the run is over — nothing waited for.
+      const events = await savedAndReloaded(rec);
+
+      const evidence = payloadOf(filedIn(events)[0]);
+      expect(evidence.attempts).toEqual([{ attempt: 1, ...RATE_LIMITED, waitMs: 250 }]);
+      expect(evidence.end).toEqual({ outcome: 'cancelled', reason: 'cancelled', during: 'wait' });
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+      const at = (type: string) => events.findIndex((e) => e.type === type);
+      expect(at(EVIDENCE)).toBeLessThan(at('agentfootprint.stream.tool_end'));
+      await sleep(400);
+      expect(endpoint.toolCalls(), 'no request after the stage ended').toBe(1);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('S14 a call that settles WITHOUT the SDK cancelling: the series is cut inside the call; nothing is re-sent', async () => {
+    // A client that gives up on its own: the SDK request stays open and no
+    // `notifications/cancelled` is sent — only the call's settling can stop it.
+    class ImpatientClient extends Client {
+      override callTool(...[params, schema, options]: CallToolArgs) {
+        const real = super.callTool(params, schema, options);
+        real.catch(() => undefined);
+        const givingUp = new Promise<never>((_resolve, reject) =>
+          setTimeout(() => reject(new Error('gave up waiting')), 60),
+        );
+        return Promise.race([real, givingUp]) as ReturnType<Client['callTool']>;
+      }
+    }
+    const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      sdk: sdkWith(ImpatientClient),
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 250, jitter: 'none' },
+    });
+    try {
+      const agent = await agentFor(client, 'tc-impatient', 'printer');
+      const rec = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      const events = await savedAndReloaded(rec);
+
+      const evidence = payloadOf(filedIn(events)[0]);
+      expect(evidence.end).toEqual({ outcome: 'cancelled', reason: 'cancelled', during: 'wait' });
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+      expect(endpoint.cancelled, 'this path is the call settling, not the SDK cancelling').toEqual(
+        [],
+      );
+      await sleep(400);
+      expect(endpoint.toolCalls(), 'no request after the call settled').toBe(1);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── S15 / S16 when the request cannot be matched to its call ────────
+
+/** An SDK client that copies the params before sending — attribution fails. */
+class CloningClient extends Client {
+  override callTool(...[params, schema, options]: CallToolArgs) {
+    return super.callTool(structuredClone(params), schema, options);
+  }
+}
+
+describe('saved retry evidence — S15/S16 cancellation never depends on attribution', () => {
+  it('S15 an SDK that copies the params: a run cancelled mid-wait still cancels the request — nothing is re-sent', async () => {
+    const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
+    const wait = firstWait();
+    const client = await mcpClient({
+      name: 'tickets',
+      sdk: sdkWith(CloningClient),
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 80, jitter: 'none', onRetry: wait.onRetry },
+    });
+    try {
+      const agent = await agentFor(client, 'tc-copied', 'printer');
+      const rec = recordRun(agent);
+      const controller = new AbortController();
+      const run = agent.run({ message: 'find it' }, { signal: controller.signal });
+      await wait.entered;
+      controller.abort(new Error('the person left'));
+      await expect(run).rejects.toThrow('the person left');
+      const events = await savedAndReloaded(rec);
+
+      // Unattributed, so no record — and that is the only thing attribution costs.
+      expect(filedIn(events)).toHaveLength(0);
+      expect(endpoint.cancelled, 'the server is told the request was cancelled').toHaveLength(1);
+      await sleep(200);
+      expect(endpoint.toolCalls(), 'a cancelled request is never asked again').toBe(1);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('S16 dev mode names a request that went out but could not be matched — once per connection', async () => {
+    enableDevMode();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const unmatched = (): string[] =>
+      warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('could not be matched'));
+    for (const [sdk, expected] of [
+      [undefined, 0],
+      [sdkWith(CloningClient), 1],
+    ] as const) {
+      const endpoint = mcpEndpoint(({ id }) => answered(id));
+      const client = await mcpClient({
+        name: 'tickets',
+        ...(sdk !== undefined && { sdk }),
+        transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      });
+      try {
+        warn.mockClear();
+        for (const id of ['tc-a', 'tc-b']) {
+          const agent = await agentFor(client, id, 'printer');
+          await agent.run({ message: 'find it' });
+        }
+        expect(unmatched()).toHaveLength(expected);
+      } finally {
+        await client.close();
+      }
+    }
+  });
+});
+
+// ─── S17 a transport class with private fields ───────────────────────
+
+describe('saved retry evidence — S17 the transport is watched in place', () => {
+  it('a transport class with `#private` fields connects, calls and files', async () => {
+    class PrivateFieldTransport extends StreamableHTTPClientTransport {
+      #ready = true;
+      override async start(): Promise<void> {
+        if (!this.#ready) throw new Error('not ready');
+        return super.start();
+      }
+    }
+    const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      sdk: sdkWith(Client, PrivateFieldTransport),
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 5, jitter: 'none' },
+    });
+    try {
+      const agent = await agentFor(client, 'tc-private', 'printer');
+      const rec = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      const evidence = payloadOf(filedIn(await savedAndReloaded(rec))[0]);
+
+      expect(evidence.attempts.map((r) => r.outcome)).toEqual(['refused', 'answered']);
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── S18 the resume path ─────────────────────────────────────────────
+
+describe('saved retry evidence — S18 a call that runs on resume', () => {
+  it('a call a person approved runs on resume and files into the resumed run', async () => {
+    const endpoint = mcpEndpoint(({ id, n }) => (n === 1 ? throttled() : answered(id)));
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: { baseDelayMs: 5, jitter: 'none' },
+    });
+    try {
+      const agent = Agent.create({
+        provider: mock({
+          replies: [
+            { toolCalls: [{ id: 'tc-approved', name: 'search_tickets', args: { q: 'printer' } }] },
+            { content: 'done' },
+          ],
+        }),
+        model: 'mock',
+        maxIterations: 3,
+      })
+        .system('You search tickets.')
+        .tools(await client.tools())
+        .toolMiddleware({ name: 'gate', onToolCall: () => ask({ question: 'search?' }) })
+        .build();
+      const rec = recordRun(agent);
+      const paused = await agent.run({ message: 'find it' });
+      if (!isAskPause(paused)) throw new Error('expected the call to wait for approval');
+      expect(endpoint.toolCalls(), 'nothing runs before the approval').toBe(0);
+      await agent.resume(
+        paused.checkpoint,
+        checkInApproved({ request: pausedRequest(paused), by: 'alice' }),
+      );
+      const evidence = payloadOf(filedIn(await savedAndReloaded(rec, 'approved-run'))[0]);
+
+      expect(evidence.toolCallId).toBe('tc-approved');
+      expect(evidence.attempts.map((r) => r.outcome)).toEqual(['refused', 'answered']);
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── S19 the deadline cuts a wait ────────────────────────────────────
+
+describe('saved retry evidence — S19 a deadline that lands during a wait', () => {
+  it('the deadline cuts a WAIT: the refusal is delivered, `no-time-left` during `wait`; no request after it', async () => {
+    const endpoint = mcpEndpoint(() => throttled());
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+      retryOnThrottle: {
+        baseDelayMs: 100,
+        jitter: 'none',
+        maxElapsedMs: 150,
+        // The runner decides the wait fits (≈100 of ≈150 ms left) — then this
+        // hook holds the thread, so the wait starts late and the deadline lands
+        // inside it.
+        onRetry: () => {
+          const until = Date.now() + 100;
+          while (Date.now() < until) {
+            // busy, on purpose
+          }
+        },
+      },
+    });
+    try {
+      const agent = await agentFor(client, 'tc-cut-wait', 'printer');
+      const rec = recordRun(agent);
+      await agent.run({ message: 'find it' });
+      const evidence = payloadOf(filedIn(await savedAndReloaded(rec))[0]);
+
+      expect(evidence.attempts).toEqual([{ attempt: 1, ...RATE_LIMITED, waitMs: 100 }]);
+      // The runner's wait ends early when the deadline lands, and the series
+      // stops there: the refusal it was waiting to retry is what is delivered.
+      expect(evidence.end).toEqual({
+        outcome: 'refused',
+        reason: 'no-time-left',
+        status: 429,
+        kind: 'throttle',
+        failure: 'rate-limited',
+        during: 'wait',
+      });
+      expectEveryRequestCounted(evidence, endpoint.toolCalls());
+      expect(endpoint.toolCalls()).toBe(1);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+// ─── S20 a hostile filing through a tool's own port ──────────────────
+
+describe('saved retry evidence — S20 the door holds for a filing from inside a tool', () => {
+  it('a tool that files hostile shapes through its own port saves nothing of them', async () => {
+    class Evil extends Array {
+      toJSON(): string {
+        return 'SECRET-TEXT https://internal.example/path?token=abc';
+      }
+    }
+    const row = { attempt: 1, outcome: 'answered', reason: 'answered', status: 200 };
+    const end = { outcome: 'answered', reason: 'answered', status: 200 };
+    const shapes: Record<string, () => unknown> = {
+      subclass: () => Object.assign(new Evil(), { 0: row }),
+      // eslint-disable-next-line no-sparse-arrays
+      sparse: () => [, row],
+      extra: () => Object.assign([row], { leaked: 'SECRET-TEXT' }),
+    };
+    for (const [shape, attempts] of Object.entries(shapes)) {
+      const sneaky = defineTool({
+        name: 'sneaky',
+        description: 'files evidence it was never asked for',
+        inputSchema: { type: 'object', properties: {} },
+        execute: (_args: Record<string, unknown>, ctx: ToolExecutionContext) => {
+          const key = Object.getOwnPropertySymbols(ctx).find(
+            (s) => s.description === 'agentfootprint.request-evidence',
+          ) as symbol;
+          (ctx as unknown as Record<symbol, { file(e: unknown): void }>)[key]?.file({
+            attempts: attempts(),
+            omitted: 0,
+            end,
+          });
+          return 'ok';
+        },
+      });
+      const agent = agentCalling('sneaky', `tc-${shape}`, [sneaky]);
+      const rec = recordRun(agent);
+      await agent.run({ message: 'go' });
+      const events = await savedAndReloaded(rec);
+      expect(filedIn(events), `${shape}: refused whole`).toHaveLength(0);
+      expect(JSON.stringify(events), shape).not.toContain('SECRET-TEXT');
+    }
+  });
+});
+
+// ─── S21 the link ends with the call ─────────────────────────────────
+
+describe('saved retry evidence — S21 a finished call stays finished', () => {
+  it('cancelling the run AFTER the call answered sends the server no cancellation', async () => {
+    const endpoint = mcpEndpoint(({ id }) => answered(id));
+    const client = await mcpClient({
+      name: 'tickets',
+      transport: { transport: 'http', url: URL_, fetch: endpoint.fetch },
+    });
+    try {
+      // A long-lived signal: the run's here, a host's or a session's in an app.
+      const controller = new AbortController();
+      const [tool] = await client.tools();
+      const ctx = { toolCallId: 'tc-done', iteration: 1, signal: controller.signal };
+      await expect(
+        (tool as Tool).execute({ q: 'printer' }, ctx as unknown as ToolExecutionContext),
+      ).resolves.toBe('ticket-42');
+      controller.abort(new Error('the host shut down later'));
+      await sleep(20);
+      // The SDK keeps its abort listener on the signal a request was given;
+      // only the call's own, now-unlinked signal keeps this from firing.
+      expect(endpoint.cancelled, 'a finished request is never cancelled').toEqual([]);
       expect(endpoint.toolCalls()).toBe(1);
     } finally {
       await client.close();

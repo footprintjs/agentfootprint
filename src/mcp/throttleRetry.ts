@@ -103,7 +103,6 @@ import {
   type AttemptSeen,
   type DeclineReason,
   type RequestWhere,
-  type SeriesPhase,
 } from './seriesEvidence.js';
 
 /**
@@ -559,8 +558,10 @@ class Series {
   /** The transport's own signal — what the request carried before this series existed. */
   private readonly signal: AbortSignal | undefined;
   /**
-   * What ends the series as a CANCELLATION: the transport's signal, or the
-   * call's (the run's, the client's) when a dispatched call sent this request.
+   * What ends the series as a CANCELLATION: the transport's signal; the MCP
+   * SDK cancelling this request (`notifications/cancelled`, seen by the ledger,
+   * whether or not the request was matched to a call); and, for a call the
+   * agent dispatched, the call's own — its signal, the client's, its settling.
    */
   private readonly cancel: AbortSignal | undefined;
   /** Whether a request in flight is cut by more than the transport's own signal. */
@@ -576,8 +577,8 @@ class Series {
   private seen: { readonly attempt: number; readonly status: number } | undefined;
   /** Why `retryOn` last said no. */
   private declined: DeclineReason | undefined;
-  /** Sending, or waiting to send again — what a cancellation cuts. */
-  private phase: SeriesPhase = 'request';
+  /** The attempt sent and not yet recorded — what a cancellation cuts in flight. */
+  private inFlight: number | undefined;
 
   constructor(
     private readonly rules: readonly BoundRule[],
@@ -590,9 +591,10 @@ class Series {
     this.replayable = isReplayable(input, init);
     const { maxElapsedMs } = this.owner;
     this.deadline = Number.isFinite(maxElapsedMs) ? this.startedAt + maxElapsedMs : undefined;
-    const ticket = ledger?.claim(init?.body);
-    this.cancel = eitherSignal(this.signal, ticket?.signal);
-    this.cutsInFlight = this.deadline !== undefined || ticket?.signal !== undefined;
+    const claimed = ledger?.claim(init?.body);
+    const ticket = claimed?.ticket;
+    this.cancel = eitherSignal(this.signal, ticket?.signal, claimed?.cancelled);
+    this.cutsInFlight = this.deadline !== undefined || claimed !== undefined;
     this.evidence =
       ticket === undefined ? undefined : new SeriesEvidence(ticket.sink, whereOf(rules, input));
   }
@@ -601,7 +603,7 @@ class Series {
     const unwatch = this.watchCancel();
     try {
       const response = await attempt((t) => this.send(inner, t), this.policy(), this.options());
-      this.evidence?.ended(this.phase);
+      this.evidence?.delivered();
       return response;
     } catch (error) {
       return this.settle(error);
@@ -613,15 +615,25 @@ class Series {
   /**
    * File a cancellation the MOMENT it lands. A cancelled run stops waiting for
    * its stage at once; a record filed when this series later unwinds would land
-   * after the run was saved. The runner records nothing for a wait it was cut
-   * out of, so this is also the only place a cut wait is written down.
+   * after the run was saved. The runner records nothing for the attempt it
+   * abandons then, or for a wait it was cut out of, so this is also the only
+   * place those are written down.
    */
   private watchCancel(): () => void {
-    const { cancel, evidence } = this;
-    if (cancel === undefined || evidence === undefined || cancel.aborted) return () => undefined;
-    const onAbort = (): void => evidence.cancelled(this.phase);
+    const { cancel } = this;
+    if (cancel === undefined || this.evidence === undefined || cancel.aborted) {
+      return () => undefined;
+    }
+    const onAbort = (): void => this.fileCancellation();
     cancel.addEventListener('abort', onAbort, { once: true });
     return () => cancel.removeEventListener('abort', onAbort);
+  }
+
+  /** A cancellation, written down: the attempt it cut in flight, or the wait. */
+  private fileCancellation(): void {
+    const { evidence, inFlight } = this;
+    if (inFlight !== undefined) evidence?.cutInFlight(inFlight);
+    else evidence?.cancelled();
   }
 
   /**
@@ -665,7 +677,8 @@ class Series {
    */
   private async send(inner: ThrottleFetch, t: AttemptContext): Promise<Response> {
     this.attemptNo = t.attempt;
-    this.phase = 'request';
+    // From here the request is SENT — counted, as a row, however the attempt ends.
+    this.inFlight = t.attempt;
     this.seen = undefined;
     // The previous attempt's refusal will not be delivered: release its body, so
     // a keep-alive connection is not pinned by an unread stream.
@@ -759,10 +772,9 @@ class Series {
    */
   private report(record: AttemptRecord): void {
     const refused = this.latest;
+    if (this.inFlight === record.attempt) this.inFlight = undefined;
     this.evidence?.attempt(record, this.seenOf(record, refused), this.declined);
-    if (record.next !== 'retry') return;
-    this.phase = 'wait';
-    if (refused === undefined) return;
+    if (record.next !== 'retry' || refused === undefined) return;
     const waitMs = record.delayMs ?? 0;
     this.waitedMs += waitMs;
     const { rule, verdict } = refused;
@@ -797,17 +809,17 @@ class Series {
     // The caller's cancellation wins: the call ends with their reason, and the
     // refusal nobody is waiting for any more is released.
     if (this.cancel?.aborted) {
-      this.evidence?.cancelled(this.phase);
+      this.fileCancellation();
       this.supersede();
       throw abortErrorOf(this.cancel);
     }
     // The series ended on a refusal — attempts spent, a ceiling reached, no
     // time left. The server's answer is delivered as it sent it.
     if (this.latest !== undefined && error === this.latest.refusal) {
-      this.evidence?.ended(this.phase);
+      this.evidence?.delivered();
       return this.latest.response;
     }
-    this.evidence?.ended(this.phase, this.deadline !== undefined && Date.now() >= this.deadline);
+    this.evidence?.threw(this.deadline !== undefined && Date.now() >= this.deadline);
     throw error;
   }
 

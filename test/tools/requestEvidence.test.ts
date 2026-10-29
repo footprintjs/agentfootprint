@@ -71,6 +71,16 @@ describe('request evidence door — P1 what passes', () => {
     expect(served?.attempts[0]).not.toBe(WELL_FORMED.attempts[0]);
   });
 
+  it('a cancelled attempt is a row like any other', () => {
+    const served = servedRequestEvidence(
+      filing((d) => {
+        d.attempts = [{ attempt: 1, outcome: 'cancelled', reason: 'cancelled' }];
+        d.end = { outcome: 'cancelled', reason: 'cancelled', during: 'request' };
+      }),
+    );
+    expect(served?.attempts).toEqual([{ attempt: 1, outcome: 'cancelled', reason: 'cancelled' }]);
+  });
+
   it('an origin — scheme, host and port — passes in place of a label', () => {
     const served = servedRequestEvidence(
       filing((d) => {
@@ -171,6 +181,47 @@ describe('request evidence door — P5 anything else is refused whole', () => {
     expect(servedRequestEvidence(filing((d) => (d.attempts = [new Row()])))).toBeUndefined();
   });
 
+  // The shapes a hostile filing took through a tool's own port (review probe
+  // P10): each one survived a `.map` over `attempts` and reached the record.
+  const row = { attempt: 1, outcome: 'answered', reason: 'answered', status: 200 };
+  const HOSTILE_ARRAYS: ReadonlyArray<readonly [string, () => unknown]> = [
+    [
+      'an Array subclass whose toJSON writes raw text',
+      () => {
+        class Evil extends Array {
+          toJSON(): string {
+            return 'SECRET-TEXT https://internal.example/path?token=abc';
+          }
+        }
+        return Object.assign(new Evil(), { 0: row });
+      },
+    ],
+    // eslint-disable-next-line no-sparse-arrays
+    ['a sparse array (a hole saves as `null`)', () => [, row]],
+    ['an array with a property riding on it', () => Object.assign([row], { leaked: 'x' })],
+    ['an array with a symbol key', () => Object.assign([row], { [Symbol('x')]: 'x' })],
+    [
+      'an array whose element is a getter',
+      () => {
+        const arr: unknown[] = [];
+        Object.defineProperty(arr, 0, { enumerable: true, get: () => row });
+        return arr;
+      },
+    ],
+    [
+      'an array whose prototype was swapped',
+      () => Object.setPrototypeOf([row], Object.create(Array.prototype)),
+    ],
+    ['an array-like object', () => ({ 0: row, length: 1 })],
+  ];
+
+  for (const [what, attempts] of HOSTILE_ARRAYS) {
+    it(`refuses ${what} as \`attempts\``, () => {
+      const raw = { ...structuredClone(WELL_FORMED), attempts: attempts() };
+      expect(servedRequestEvidence(raw)).toBeUndefined();
+    });
+  }
+
   it('never throws — a hostile proxy is refused, not propagated', () => {
     const hostile = new Proxy(
       {},
@@ -208,9 +259,6 @@ describe('request evidence door — P1 the port on a call’s context', () => {
     expect(requestEvidenceOf(undefined)).toBeUndefined();
     expect(requestEvidenceOf({ toolCallId: 'c' })).toBeUndefined();
     expect(requestEvidenceOf({ [REQUEST_EVIDENCE]: { file: 'not a function' } })).toBeUndefined();
-    expect(
-      requestEvidenceOf({ [REQUEST_EVIDENCE]: { file: () => undefined, signal: 'abort' } }),
-    ).toBeUndefined();
     const hostile = new Proxy(
       {},
       {
