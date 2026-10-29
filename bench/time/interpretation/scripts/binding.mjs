@@ -2,11 +2,16 @@
 // call that runs. Not product code.
 //
 // EVERY ARGUMENT IS SCOPE-BEARING BY DEFAULT. The digest covers every argument the call sends,
-// except those the tool's declaration explicitly marks `inert` (Tool.search · role: 'inert'). A tool
-// with no Tool.search binds all of its arguments, and an argument a declaration leaves out stays
-// bound (defence in depth: the library refuses a partial declaration today). The sampling step is in
-// the digest whatever role its argument carries. The digest is a SHA-256 over canonical JSON (sorted
-// keys, no whitespace), so it holds no text of the request, and equal scopes give equal digests.
+// except those the app's LOCAL declaration marks `inert` (it changes the bytes, not the ground) or
+// `continuation` (a page number, cursor or offset: a slice of the same confirmed scope). A
+// declaration is local only when it says so (`origin: 'local'`). A remote one (over MCP, or from a
+// ToolProvider) exempts nothing: its marks are ignored, not refused, so its arguments stay bound.
+// A tool with no Tool.search binds all of its arguments, and an argument a declaration leaves out
+// stays bound (defence in depth: the library refuses a partial declaration today). The sampling step
+// is in the digest whatever role its argument carries. The digest is a SHA-256 over canonical JSON
+// (sorted keys, no whitespace), so it holds no text of the request, and equal scopes give equal
+// digests. A continuation left out means page 2 of a confirmed call keeps its digest, while any
+// other change still makes a new one.
 //
 // OWN KEYS ONLY, NO PROTOTYPE SETTER. Arguments are read from the call's OWN enumerable keys, each
 // value from its own data descriptor (no getter runs), into a null-prototype record. An argument
@@ -18,7 +23,7 @@
 // bound by a stand-in that another value would share. Asking again would not make it bindable.
 import { createHash } from 'node:crypto';
 
-export const BINDING_VERSION = '1.2.0';
+export const BINDING_VERSION = '1.3.0';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const own = (o, k) => o !== null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
@@ -48,10 +53,17 @@ export function canonical(value) {
   throw new NotBindable(`${value === undefined ? 'undefined' : typeof value === 'object' ? 'an object that is not plain' : `a ${typeof value}`} is not JSON data`);
 }
 
-/** The arguments a declaration marks `inert`: the only ones left out of the digest. */
-export function inertArguments(declaration) {
+/** The roles a LOCAL declaration may use to leave an argument out of the digest. */
+const UNBOUND_ROLES = new Set(['inert', 'continuation']);
+
+/**
+ * The arguments left out of the digest: those the app's local declaration marks `inert` or
+ * `continuation`. A remote declaration's marks are ignored, not refused: every argument stays bound.
+ */
+export function unboundArguments(declaration) {
+  if (declaration?.origin !== 'local') return new Set();
   const args = declaration?.search?.arguments ?? [];
-  return new Set(args.filter((a) => a.role === 'inert').map((a) => a.name));
+  return new Set(args.filter((a) => UNBOUND_ROLES.has(a.role)).map((a) => a.name));
 }
 
 /** A hash of the tool's `period` and `search` declarations: a changed declaration is a new scope. */
@@ -61,11 +73,11 @@ export function declarationVersion(declaration) {
 
 /** What the digest covers: everything the call will run with that the person could have meant. */
 export function scopeOf(call, declaration) {
-  const inert = inertArguments(declaration);
+  const unbound = unboundArguments(declaration);
   const args = call.args ?? {};
   if (!isPlainObject(args)) throw new NotBindable('the arguments are not a plain object');
   const bound = Object.create(null); // no inherited "__proto__" setter
-  for (const name of Object.keys(args)) if (!inert.has(name)) bound[name] = ownValue(args, name);
+  for (const name of Object.keys(args)) if (!unbound.has(name)) bound[name] = ownValue(args, name);
   return {
     tool: call.tool,
     declaration: declarationVersion(declaration),

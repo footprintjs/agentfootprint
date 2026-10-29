@@ -19,8 +19,9 @@ test('a tool with no Tool.search binds every argument: a changed customer or nod
   assert.equal(atDispatch(ok, call, declaration).outcome, 'run', 'the identical call reuses the confirmation');
 });
 
-test('the same argument marked inert: a changed customer does not ask again; a bound argument still does', () => {
+test('the same argument marked inert by the app: a changed customer does not ask again; a bound argument still does', () => {
   const declaration = {
+    origin: 'local',
     period,
     search: { arguments: [{ name: 'customer', role: 'inert' }, { name: 'node', role: 'population' }, { name: 'window', role: 'period' }] },
   };
@@ -38,7 +39,7 @@ test('a partial Tool.search that leaves an argument out still binds it (defence 
 });
 
 test('the sampling step is in the digest whatever role its argument carries', () => {
-  const declaration = { period: { ...period, sampling: { argument: 'every', units: 'mh' } }, search: { arguments: [{ name: 'every', role: 'inert' }] } };
+  const declaration = { origin: 'local', period: { ...period, sampling: { argument: 'every', units: 'mh' } }, search: { arguments: [{ name: 'every', role: 'inert' }] } };
   const sampled = { ...call, args: { ...call.args, every: '5m' }, sampling: '5m' };
   const ok = confirm(declaration, sampled);
   assert.equal(atDispatch(ok, { ...sampled, args: { ...sampled.args, every: '10m' }, sampling: '10m' }, declaration).outcome, 'ask-again');
@@ -98,7 +99,7 @@ test('parsed JSON: __proto__ nested in an argument value is in the digest; marke
   const nested = (customer) => ({ ...call, args: JSON.parse(`{"window":"2h","filter":{"__proto__":{"customer":"${customer}"}}}`) });
   const declaration = { period };
   assert.equal(atDispatch(confirm(declaration, nested('A')), nested('B'), declaration).outcome, 'ask-again');
-  const inert = { period, search: { arguments: [{ name: '__proto__', role: 'inert' }] } };
+  const inert = { origin: 'local', period, search: { arguments: [{ name: '__proto__', role: 'inert' }] } };
   assert.equal(atDispatch(confirm(inert, parsed('A')), parsed('B'), inert).outcome, 'run');
 });
 
@@ -115,4 +116,45 @@ test('only JSON data is bound: anything else is refused at dispatch, and no gett
   }
   const inherited = Object.assign(Object.create({ customer: 'acme' }), { window: '2h' });
   assert.equal(atDispatch(new Set(), { ...call, args: inherited }, declaration).outcome, 'refused');
+});
+
+// A continuation (a page number, cursor or offset) the app's LOCAL declaration marks selects a slice
+// of the same confirmed scope, so it is left out of the digest. Every other argument stays bound.
+const pagedArguments = [
+  { name: 'customer', role: 'population' }, { name: 'node', role: 'population' },
+  { name: 'window', role: 'period' }, { name: 'page', role: 'continuation' },
+];
+const paged = { origin: 'local', period, search: { arguments: pagedArguments } };
+const page = (n, args = {}) => withArgs(call, { page: n, ...args });
+const movedBounds = { ...executed, from: '2026-10-27T07:45:00Z', to: '2026-10-27T09:45:00Z' };
+
+test('continuation: page 2 of a confirmed call runs, as does a cursor the tool returned', () => {
+  const ok = confirm(paged, page(1));
+  assert.equal(atDispatch(ok, page(2), paged).outcome, 'run', 'a page number, even one the model chose');
+  assert.equal(atDispatch(ok, page('cursor-the-tool-returned'), paged).outcome, 'run');
+  assert.equal(atDispatch(ok, call, paged).outcome, 'run', 'the first call with no page is the same scope');
+});
+
+test('continuation: page 2 with a changed customer, node or bounds asks again', () => {
+  const ok = confirm(paged, page(1));
+  assert.equal(atDispatch(ok, page(2, { customer: 'globex' }), paged).outcome, 'ask-again');
+  assert.equal(atDispatch(ok, page(2, { node: 9 }), paged).outcome, 'ask-again');
+  assert.equal(atDispatch(ok, { ...page(2), executed: movedBounds }, paged).outcome, 'ask-again');
+  assert.equal(atDispatch(ok, page(2, { customer: 'globex' }), paged, { canAsk: false }).outcome, 'refused');
+});
+
+test('continuation from a remote declaration is ignored, not refused: the page stays bound', () => {
+  const remote = { ...paged, origin: 'remote' };
+  const ok = confirm(remote, page(1));
+  assert.equal(atDispatch(ok, page(1), remote).outcome, 'run', 'the confirmed call itself still runs');
+  assert.equal(atDispatch(ok, page(2), remote).outcome, 'ask-again');
+  const remoteInert = { origin: 'remote', period, search: { arguments: [{ name: 'customer', role: 'inert' }] } };
+  assert.equal(atDispatch(confirm(remoteInert, call), withArgs(call, { customer: 'globex' }), remoteInert).outcome, 'ask-again', 'a remote inert alike');
+});
+
+test('without the role, a page change asks again: a page the app does not vouch for stays bound', () => {
+  const asPage = { ...paged, search: { arguments: pagedArguments.map((a) => (a.name === 'page' ? { ...a, role: 'page' } : a)) } };
+  assert.equal(atDispatch(confirm(asPage, page(1)), page(2), asPage).outcome, 'ask-again');
+  const undeclared = { origin: 'local', period }; // no Tool.search at all
+  assert.equal(atDispatch(confirm(undeclared, page(1)), page(2), undeclared).outcome, 'ask-again');
 });
