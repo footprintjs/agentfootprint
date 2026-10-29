@@ -6,7 +6,7 @@ title: defineTool
 
 > **defineTool**\<`TArgs`, `TResult`\>(`options`): [`Tool`](/docs/api/interfaces/Tool)\<`TArgs`, `TResult`\>
 
-Defined in: [src/tools/tools.ts:1188](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1188)
+Defined in: [src/tools/tools.ts:1191](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1191)
 
 Ergonomic builder for `Tool`. Equivalent to constructing an object
 literal with `schema` + `execute`, but flatter and safer — the name

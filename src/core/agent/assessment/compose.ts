@@ -285,7 +285,7 @@ const NAMED_REASON_WORDS: Readonly<
   'value-contingent': (who) =>
     `a value came from ${who}, whose results the model itself had set aside`,
   'coverage-gap': (who) => `${who} declared ground that was not checked or cannot be covered`,
-  'declared-absent': (who) => `${who} found nothing`,
+  'declared-absent': (who) => `${who} reported no matching results`,
   'empty-undeclared': (who) => `${who} came back empty without saying what was searched`,
   'period-not-held': (who) =>
     `${who} read data that does not reach the time the question asked about`,
@@ -477,7 +477,7 @@ function reasonClauses(
  *     displayNames: new Map([['load_attachment', 'loading the attached data']]),
  *   },
  * );
- * // 'Not sure — loading the attached data found nothing.'
+ * // 'Not sure — loading the attached data reported no matching results.'
  * ```
  */
 export function standingLineOf(

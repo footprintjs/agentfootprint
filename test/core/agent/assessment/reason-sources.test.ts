@@ -4,8 +4,8 @@
  * calls, the answer itself, or the run as a whole — the KIND declared once per
  * reason in `REASONS`, the calls read off the rows the reason's witnesses point
  * at. A tool may declare `displayName` (the app's words); the standing line
- * names a call only by it, and the limits block marks an item's declaring
- * calls the same way.
+ * names a reason's calls only by it, and the limits block marks an item's
+ * declaring calls the same way.
  *
  * Test types (Convention 3):
  *   - UNIT      — the table declares a kind for every reason (pinned); the
@@ -17,7 +17,7 @@
  *                 one clean → the reason lists only the absent call; a run-level
  *                 reason → `run`; an answer-level reason → `answer`; the line
  *                 names a declared call ("Not sure — loading the attached data
- *                 found nothing"), names the declared ones and counts the rest,
+ *                 reported no matching results"), names the declared ones and counts the rest,
  *                 and the answer account still finds the line it appended;
  *   - BOUNDARY  — no `displayName` → the delivered text is byte-identical to
  *                 an agent's that never heard of one; a name on a tool no reason
@@ -39,7 +39,9 @@ import { mock } from '../../../../src/llm-providers.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../../../../src/observe.js';
 import type { Recording } from '../../../../src/recorders/observability/recordRun.js';
 import { REASONS } from '../../../../src/core/agent/assessment/reasons.js';
+import { reasonSourceOf } from '../../../../src/core/agent/assessment/sources.js';
 import {
+  sourcesByReason,
   standingLineOf,
   STANDING_LINE_OPENINGS,
   type AnswerAssessmentData,
@@ -305,6 +307,17 @@ describe('UNIT — the calls are read off the rows the witnesses point at', () =
         'declaration-overclaimed',
       ),
     ).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
+    // Both at once: the tool that ran is named, the one that did not is counted beside it.
+    expect(
+      sourceOf(
+        fold({ history, answerValidation: overclaimed(['inventory', 'archive']) }),
+        'declaration-overclaimed',
+      ),
+    ).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 1,
+    });
   });
 
   it('an answer-level and a run-level reason carry their kind and nothing else', () => {
@@ -314,6 +327,114 @@ describe('UNIT — the calls are read off the rows the witnesses point at', () =
     });
     expect(sourceOf(a, 'value-unsupported')).toEqual({ kind: 'answer' });
     expect(sourceOf(a, 'stopped-early')).toEqual({ kind: 'run' });
+  });
+});
+
+describe('UNIT — a list that names some calls and not others never loses one', () => {
+  // A conflict's readings and a contingent value's carriers are LISTS of calls. An entry
+  // with no call id is counted in `unnamed` — beside the named ones, never dropped — and
+  // only a KNOWN id is said once. Read through the public fold, then rendered as the line.
+  const history = [user('q'), toolMsg('c1', 'inventory', [{ id: 'x' }])];
+  const reading = (toolCallId?: string) => ({
+    ...(toolCallId !== undefined && { toolCallId }),
+    subject: { kind: 'host', id: 'x' },
+    predicate: 'state',
+  });
+  const conflict = (witnesses: readonly unknown[]) => ({
+    kind: 'conflict',
+    key: 'host:x|state',
+    iteration: 1,
+    witnesses,
+  });
+  const carrier = (toolCallId?: string) => ({
+    ...(toolCallId !== undefined && { toolCallId }),
+    standing: 'noise',
+  });
+  const contingent = (carriers: readonly unknown[]) => ({
+    kind: 'contingent',
+    declaredOn: 'answer',
+    value: 'x',
+    iteration: 2,
+    carriers,
+  });
+  /** The line the layer would append for `a`, the inventory call named in the app's words. */
+  const lineOf = (a: AnswerAssessment) =>
+    standingLineOf(
+      {
+        assessment: a.assessment,
+        standing: a.standing,
+        reasons: a.reasons.map((r) => r.reason),
+        checked: [],
+      },
+      [],
+      false,
+      { sources: sourcesByReason(a), displayNames: new Map([['inventory', 'checking inventory']]) },
+    );
+
+  it('conflict, mixed: the named reading, the repeated one said once, and every unnamed one counted', () => {
+    const a = fold({
+      history,
+      findingsLedger: [conflict([reading('c1'), reading('c1'), reading(), reading()])],
+    });
+    expect(sourceOf(a, 'sources-conflict')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 2,
+    });
+    expect(lineOf(a)).toBe(
+      'Not sure — results from checking inventory and 2 other calls disagree.',
+    );
+  });
+
+  it('conflict, all unnamed: the fold places no such row in this turn — and its readings are still counted', () => {
+    // A conflict counts for this turn only when one of its readings names a call of the
+    // turn (`assess.ts` · `readConflicts`), so a row naming none fires nothing at all…
+    const a = fold({ history, findingsLedger: [conflict([reading(), reading()])] });
+    expect(a.reasons.map((r) => r.reason)).toEqual([]);
+    // …and the projection, asked of that row directly, counts both readings.
+    const source = reasonSourceOf(
+      'sources-conflict',
+      'calls',
+      [{ kind: 'state', key: 'findingsLedger', path: '/0/kind' }],
+      { state: { history, findingsLedger: [conflict([reading(), reading()])] }, turnResults: [] },
+    );
+    expect(source).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
+    expect(
+      standingLineOf(
+        { assessment: 'unknown', standing: 'not-sure', reasons: ['sources-conflict'], checked: [] },
+        [],
+        false,
+        {
+          sources: new Map([['sources-conflict', source]]),
+          displayNames: new Map([['inventory', 'checking inventory']]),
+        },
+      ),
+    ).toBe('Not sure — two results the answer stood on disagree.');
+  });
+
+  it('contingent, mixed: the named carrier, and the unnamed one counted beside it', () => {
+    const a = fold({ history, findingsLedger: [contingent([carrier('c1'), carrier()])] });
+    expect(sourceOf(a, 'value-contingent')).toEqual({
+      kind: 'calls',
+      calls: [{ toolCallId: 'c1', toolName: 'inventory' }],
+      unnamed: 1,
+    });
+    expect(lineOf(a)).toBe(
+      'Not sure — a value came from checking inventory and 1 other call, whose results the model itself had set aside.',
+    );
+  });
+
+  it('contingent, an empty carrier list: the row still rests on calls — one counted, never "the run"', () => {
+    const a = fold({ history, findingsLedger: [contingent([])] });
+    expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 1 });
+  });
+
+  it('contingent, all unnamed: every carrier counted, and the line keeps its own words', () => {
+    const a = fold({ history, findingsLedger: [contingent([carrier(), carrier()])] });
+    expect(sourceOf(a, 'value-contingent')).toEqual({ kind: 'calls', calls: [], unnamed: 2 });
+    expect(lineOf(a)).toBe(
+      'Not sure — a value a call ran with was taken from a result the model itself had set aside.',
+    );
   });
 });
 
@@ -376,7 +497,7 @@ describe('UNIT — the rule and the naming', () => {
         sources,
         displayNames: new Map([['load_attachment', LOADING]]),
       }),
-    ).toBe(`Not sure — ${LOADING} found nothing.`);
+    ).toBe(`Not sure — ${LOADING} reported no matching results.`);
   });
 });
 
@@ -445,7 +566,7 @@ describe('SCENARIO — a reason names where it came from, from a real run', () =
   });
 });
 
-describe('SCENARIO — the line names a call only in the app’s words', () => {
+describe('SCENARIO — the line names a reason’s calls only in the app’s words', () => {
   const lineAgent = (tools: readonly Tool[], calls: readonly { id: string; name: string }[]) => {
     let b = Agent.create({
       provider: callsThen(calls, 'One draft run: run-1.'),
@@ -459,9 +580,11 @@ describe('SCENARIO — the line names a call only in the app’s words', () => {
     { id: 'c2', name: 'list_runs' },
   ];
 
-  it('displayName appears in the line: "Not sure — loading the attached data found nothing."', async () => {
+  it('displayName appears in the line: "Not sure — loading the attached data reported no matching results."', async () => {
     const r = await runOnce(lineAgent([loadAttachment(LOADING), listRuns()], both));
-    expect(r.text).toBe(`One draft run: run-1.${LINE}Not sure — ${LOADING} found nothing.`);
+    expect(r.text).toBe(
+      `One draft run: run-1.${LINE}Not sure — ${LOADING} reported no matching results.`,
+    );
     // The registered name is never printed.
     expect(r.text).not.toContain('load_attachment');
     // The record keeps the words the line used, so a reader rebuilds the very line.
@@ -487,13 +610,13 @@ describe('SCENARIO — the line names a call only in the app’s words', () => {
     ];
     const oneNamed = await runOnce(lineAgent([loadAttachment(LOADING), searchArchive()], calls));
     expect(oneNamed.text.split(LINE)[1]).toBe(
-      `Not sure — ${LOADING} and 1 other call found nothing.`,
+      `Not sure — ${LOADING} and 1 other call reported no matching results.`,
     );
     const twoNamed = await runOnce(
       lineAgent([loadAttachment(LOADING), searchArchive('searching the archive')], calls),
     );
     expect(twoNamed.text.split(LINE)[1]).toBe(
-      `Not sure — ${LOADING} and searching the archive found nothing.`,
+      `Not sure — ${LOADING} and searching the archive reported no matching results.`,
     );
   });
 
@@ -544,7 +667,9 @@ describe('SCENARIO — the line names a call only in the app’s words', () => {
     const r = await runOnce(lineAgent([loadAttachment(LOADING), listRuns()], both));
     const account = accountForAnswer(r.recording);
     expect(account.answer.value).toBe('One draft run: run-1.');
-    expect(account.facts.limitsBlock.value).toBe(`Not sure — ${LOADING} found nothing.`);
+    expect(account.facts.limitsBlock.value).toBe(
+      `Not sure — ${LOADING} reported no matching results.`,
+    );
     // The account's "How sure" counts the calls behind each reason off the same source.
     const howSure = account.rows.find((row) => row.id === 'how-sure')!;
     expect(howSure.lines.map((l) => l.text)).toContain('1 call declared that nothing matched.');

@@ -36,8 +36,11 @@
  *   (`declaration-overclaimed`) — every call of that tool this turn: it may
  *   over-report, it never hides (the fold's rule for "rests on").
  *
- * A row that names no call, or a call whose tool's name the record does not
- * hold, is COUNTED in `unnamed`, never dropped and never guessed.
+ * A row that names no call, a call whose tool's name the record does not
+ * hold, and every entry of a list (a conflict's readings, a contingent value's
+ * carriers, an answer check's tools) that names no call — beside the entries
+ * that do — is COUNTED in `unnamed`, never dropped and never guessed. Only a
+ * known call id is said once.
  */
 
 import type { AssessmentPointer, AssessmentReason, AssessmentReasonSource } from './types.js';
@@ -67,20 +70,25 @@ function rowAt(state: Readonly<Record<string, unknown>>, key: string, path: stri
   return Array.isArray(rows) && Number.isInteger(index) ? rows[index] : undefined;
 }
 
-/** The call ids a list of `{ toolCallId }` entries names, in order. */
-function idsIn(list: unknown): CallRef[] {
+/**
+ * One reference per entry of a list of `{ toolCallId }` entries, in order. An
+ * entry that names no call is an ANONYMOUS reference — counted in `unnamed`,
+ * never dropped: a conflict whose one reading names its call and whose other
+ * does not still rests on both.
+ */
+function refsIn(list: unknown): CallRef[] {
   if (!Array.isArray(list)) return [];
-  return list.flatMap((entry: unknown) => {
+  return list.map((entry: unknown) => {
     const id = isRecord(entry) ? str(entry.toolCallId) : undefined;
-    return id === undefined ? [] : [{ id }];
+    return id === undefined ? {} : { id };
   });
 }
 
 /** The calls one committed row names, read for `reason`. */
 function callsOfRow(reason: AssessmentReason, row: unknown): CallRef[] {
   if (!isRecord(row)) return [];
-  if (row.kind === 'conflict') return idsIn(row.witnesses);
-  if (row.kind === 'contingent') return idsIn(row.carriers);
+  if (row.kind === 'conflict') return refsIn(row.witnesses);
+  if (row.kind === 'contingent') return refsIn(row.carriers);
   if (reason === 'value-contingent' && row.kind === 'argument') {
     const result = str(row.result);
     return result === undefined ? [] : [{ id: result }];
@@ -94,16 +102,25 @@ function callsOfRow(reason: AssessmentReason, row: unknown): CallRef[] {
 
 /**
  * An answer check that names the TOOLS it is about (`tools`) and no call —
- * every call of those tools among this turn's results.
+ * every call of each named tool among this turn's results. A tool no call of
+ * this turn ran, and an entry that is not a tool name, is an ANONYMOUS
+ * reference each: counted, never dropped beside the tools that matched.
  */
 function callsOfCheck(check: unknown, read: SourceRead): CallRef[] {
   if (!isRecord(check) || !Array.isArray(check.tools)) return [];
-  const tools = new Set(check.tools.filter((t): t is string => typeof t === 'string'));
-  return read.turnResults.flatMap((r) =>
-    r.toolName !== undefined && tools.has(r.toolName)
-      ? [{ ...(r.toolCallId !== undefined && { id: r.toolCallId }), name: r.toolName }]
-      : [],
-  );
+  const names = [
+    ...new Set(check.tools.flatMap((t: unknown) => (str(t) === undefined ? [] : [t as string]))),
+  ];
+  const malformed: CallRef[] = check.tools
+    .filter((t: unknown) => str(t) === undefined)
+    .map(() => ({}));
+  const matched = names.flatMap((name): CallRef[] => {
+    const calls = read.turnResults.filter((r) => r.toolName === name);
+    return calls.length === 0
+      ? [{ name }]
+      : calls.map((r) => ({ ...(r.toolCallId !== undefined && { id: r.toolCallId }), name }));
+  });
+  return [...matched, ...malformed];
 }
 
 /** The calls one witness names. */
@@ -180,7 +197,8 @@ export function reasonSourceOf(
   const listed = new Set<string>();
   // A call the record names by id but not by tool — counted once per id.
   const nameless = new Set<string>();
-  // A row that names no call at all — counted once per row.
+  // A reference that names no call — a row that names none, or a list entry with no
+  // call id beside entries that have one — counted once each, never merged.
   let anonymous = 0;
   for (const w of witness) {
     const refs = callsOfWitness(reason, w, read);
