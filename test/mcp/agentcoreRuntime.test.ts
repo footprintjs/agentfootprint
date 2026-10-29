@@ -37,6 +37,7 @@ import {
 import { staticTokens } from '../../src/identity/staticTokens.js';
 import type { ThrottleRetryInfo } from '../../src/mcp/throttleRetry.js';
 import type { Tool } from '../../src/tools/tools.js';
+import { LocalSessionHandleLostError } from '../../src/tools/toolSessions.js';
 import { fakeAgentCoreRuntime, type FakeRuntime } from './fixtures/fakeAgentCoreRuntime.js';
 
 const ARN = 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/orders_mcp-a1b2c3';
@@ -1186,12 +1187,17 @@ describe("agentCoreRuntimeMcpTransport — P5 'reuse' owns its session key", () 
     expect(runtimeOf('note:alice card 4242')).not.toBe(runtimeOf('read'));
   });
 
-  it('a handle the transport never issued is answered 404 here — never sent', async () => {
+  it('a handle the transport never issued fails with LocalSessionHandleLostError — never sent, never a 404', async () => {
     const platform = perProcessPlatform();
     const transport = reuseOver(platform);
-    const res = await post(transport, 'read', 's-1');
-    expect(res.status).toBe(404);
-    expect(await res.json()).toMatchObject({ error: { message: 'Session not found' } });
+    const failure = await post(transport, 'read', 's-1').catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(LocalSessionHandleLostError);
+    expect(failure).toMatchObject({
+      evidence: 'transport-forgot-handle',
+      remote: 'unknown',
+      message:
+        'The session for the call this result answers could not be reached from here, so that call was not sent.',
+    });
     expect(platform.sent).toEqual([]);
   });
 
@@ -1204,15 +1210,29 @@ describe("agentCoreRuntimeMcpTransport — P5 'reuse' owns its session key", () 
     await post(transport, 'read', active); // used: now the most recent
     await post(transport, 'open'); // one past the ceiling
     expect((await post(transport, 'read', active)).status).toBe(200);
-    expect((await post(transport, 'read', idle)).status).toBe(404);
+    const sentBefore = platform.sent.length;
+    // Forgotten by this process — not ended by any server: the typed error,
+    // nothing sent, and no stop for a runtime session whose id went with it.
+    await expect(post(transport, 'read', idle)).rejects.toBeInstanceOf(LocalSessionHandleLostError);
+    expect(platform.sent).toHaveLength(sentBefore);
   });
 
-  it("a client's DELETE (its close()) forgets its connection", async () => {
+  it("a client's DELETE (its terminate()) forgets its connection FIRST, then stops its runtime session", async () => {
     const platform = perProcessPlatform();
     const transport = reuseOver(platform);
     const handle = (await post(transport, 'open')).headers.get('mcp-session-id') ?? '';
-    await post(transport, '', handle, 'DELETE');
-    expect((await post(transport, 'read', handle)).status).toBe(404);
+    const opened = platform.sent[0]!.runtimeId;
+    const answer = await post(transport, '', handle, 'DELETE');
+    // The DELETE became StopRuntimeSession for THAT connection's runtime session.
+    const stop = platform.sent[1]!;
+    expect(stop.runtimeId).toBe(opened);
+    expect(JSON.parse(stop.body)).toEqual({ clientToken: expect.any(String) });
+    expect(answer.status).toBe(204);
+    // Forgotten: nothing more is ever sent under the handle.
+    await expect(post(transport, 'read', handle)).rejects.toBeInstanceOf(
+      LocalSessionHandleLostError,
+    );
+    expect(platform.sent).toHaveLength(2);
   });
 
   it('every attempt of one refused request goes to the SAME runtime session', async () => {
@@ -1739,5 +1759,364 @@ describe('agentCoreRuntimeMcpTransport — P7 ROI', () => {
     const res = (await outer?.(transport.url, { method: 'POST', body: '{}' })) as Response;
     expect(res.status).toBe(200);
     expect(throttles).toHaveLength(1);
+  });
+});
+
+// ─── terminate() under 'reuse': StopRuntimeSession ──────────────────────
+
+/**
+ * A SigV4 SDK module with BOTH commands: invokes land on the fake platform; a
+ * stop is recorded and answered by `stop`. `sign` is the client's own async
+ * signing work, run before the command's finalizeRequest steps — the order the
+ * AWS SDK's stack runs them in (its signer sits at high priority, right after
+ * its retry middleware) — and then the request handler.
+ */
+function sdkWithStop(
+  runtime: FakeRuntime,
+  stop: (input: Record<string, unknown>) => Promise<unknown> = async () => ({ statusCode: 200 }),
+  sign: () => Promise<void> = async () => undefined,
+) {
+  const stops: Record<string, unknown>[] = [];
+  const handled: string[] = [];
+  const Invoke = runtime.sdk['InvokeAgentRuntimeCommand'] as new (input: unknown) => unknown;
+  const Base = runtime.sdk['BedrockAgentCoreClient'] as new (config?: unknown) => {
+    send(command: unknown): Promise<unknown>;
+  };
+  type Step = {
+    mw: (next: (a: unknown) => Promise<unknown>) => (a: unknown) => Promise<unknown>;
+    opts: { step: string };
+  };
+  class StackedInvoke extends (Invoke as new (input: unknown) => object) {
+    readonly middlewareStack = {
+      added: [] as Step[],
+      add(mw: Step['mw'], opts: Step['opts']) {
+        this.added.push({ mw, opts });
+      },
+    };
+  }
+  class StopRuntimeSessionCommand {
+    readonly middlewareStack = {
+      added: [] as Step[],
+      add(mw: Step['mw'], opts: Step['opts']) {
+        this.added.push({ mw, opts });
+      },
+    };
+    constructor(readonly input: Record<string, unknown>) {}
+  }
+  class Client extends Base {
+    /** The app's own stack: never added to. */
+    readonly middlewareStack = {
+      added: [] as Step[],
+      add(mw: Step['mw'], opts: Step['opts']) {
+        this.added.push({ mw, opts });
+      },
+    };
+    override async send(command: unknown): Promise<unknown> {
+      await sign();
+      const added =
+        (command as { middlewareStack?: { added: Step[] } }).middlewareStack?.added ?? [];
+      let handler = async (_args: unknown): Promise<unknown> => {
+        if (command instanceof StopRuntimeSessionCommand) {
+          handled.push('stop');
+          stops.push(command.input);
+          return stop(command.input);
+        }
+        handled.push('invoke');
+        return super.send(command);
+      };
+      for (const { mw, opts } of added.filter((a) => a.opts.step === 'finalizeRequest').reverse()) {
+        handler = mw(handler);
+      }
+      return handler({ request: {} });
+    }
+  }
+  return {
+    module: {
+      BedrockAgentCoreClient: Client,
+      InvokeAgentRuntimeCommand: StackedInvoke,
+      StopRuntimeSessionCommand,
+    },
+    Client,
+    stops,
+    handled,
+  };
+}
+
+/** A service exception as the real SDK throws it. */
+function serviceException(name: string, status: number): Error {
+  return Object.assign(new Error(`${name}: arn:aws:iam::123456789012:role/secret`), {
+    name,
+    $fault: status >= 500 ? 'server' : 'client',
+    $metadata: { httpStatusCode: status },
+    $response: { statusCode: status, headers: {} },
+  });
+}
+
+describe("agentCoreRuntimeMcpTransport — 'reuse' terminate() is StopRuntimeSession", () => {
+  it('SigV4: a DELETE becomes StopRuntimeSession for THAT connection’s runtime session id, and the handle is forgotten first', async () => {
+    const runtime = lookupRuntime();
+    const sdk = sdkWithStop(runtime);
+    const client = await mcpClient({
+      name: 'orders',
+      transport: agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        session: 'reuse',
+        qualifier: 'prod',
+        sdk: sdk.module,
+      }),
+    });
+    await client.tools();
+    const opened = runtime.attempts[0]!.runtimeSessionId;
+    const outcome = await client.terminate!();
+    expect(outcome).toMatchObject({ remote: 'terminated', resolved: true, status: 204 });
+    expect(sdk.stops).toEqual([
+      {
+        runtimeSessionId: opened,
+        agentRuntimeArn: ARN,
+        qualifier: 'prod',
+        clientToken: expect.any(String),
+      },
+    ]);
+  });
+
+  it('bearer: POST /runtimes/{arn}/stopruntimesession with a vended token and that runtime session id', async () => {
+    const runtime = lookupRuntime();
+    const seen: { url: string; runtimeId: string | null; auth: string | null }[] = [];
+    const https = async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes('/stopruntimesession')) {
+        const headers = new Headers(init?.headers);
+        seen.push({
+          url,
+          runtimeId: headers.get('x-amzn-bedrock-agentcore-runtime-session-id'),
+          auth: headers.get('authorization'),
+        });
+        return new Response(JSON.stringify({ statusCode: 200 }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return runtime.https(input, init);
+    };
+    const client = await mcpClient({
+      name: 'orders',
+      transport: agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        session: 'reuse',
+        auth: { bearer: staticTokens({ runtime: 'tok-1' }), fetch: https },
+      }),
+    });
+    await client.tools();
+    const opened = runtime.attempts[0]!.runtimeSessionId;
+    expect(await client.terminate!()).toMatchObject({ remote: 'terminated', resolved: true });
+    expect(seen).toEqual([
+      {
+        url: `https://bedrock-agentcore.${REGION}.amazonaws.com/runtimes/${encodeURIComponent(
+          ARN,
+        )}/stopruntimesession`,
+        runtimeId: opened,
+        auth: 'Bearer tok-1',
+      },
+    ]);
+  });
+
+  it('ResourceNotFoundException → already-gone; AccessDeniedException → failed, with its class and never its message', async () => {
+    for (const [name, status, remote] of [
+      ['ResourceNotFoundException', 404, 'already-gone'],
+      ['AccessDeniedException', 403, 'failed'],
+    ] as const) {
+      const runtime = lookupRuntime();
+      const sdk = sdkWithStop(runtime, async () => {
+        throw serviceException(name, status);
+      });
+      const client = await mcpClient({
+        name: 'orders',
+        transport: agentCoreRuntimeMcpTransport({
+          agentRuntimeArn: ARN,
+          region: REGION,
+          session: 'reuse',
+          sdk: sdk.module,
+        }),
+      });
+      await client.tools();
+      const outcome = await client.terminate!();
+      expect(outcome).toMatchObject({ remote, status });
+      expect(JSON.stringify(outcome)).not.toContain('secret');
+    }
+  });
+
+  it('a 409 RetryableConflictException while the platform starts or stops the session is retried in the series', async () => {
+    const runtime = lookupRuntime();
+    let conflicts = 1;
+    const sdk = sdkWithStop(runtime, async () => {
+      if (conflicts-- > 0) throw serviceException('RetryableConflictException', 409);
+      return { statusCode: 200 };
+    });
+    const client = await mcpClient({
+      name: 'orders',
+      transport: agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        session: 'reuse',
+        retry: { baseDelayMs: 1 },
+        sdk: sdk.module,
+      }),
+    });
+    await client.tools();
+    expect(await client.terminate!()).toMatchObject({ remote: 'terminated', resolved: true });
+    expect(sdk.stops).toHaveLength(2);
+    expect(new Set(sdk.stops.map((s) => s['clientToken'])).size).toBe(1);
+  });
+
+  it("under 'per-call' there is nothing to stop: no-session, and nothing is sent", async () => {
+    const runtime = lookupRuntime();
+    const sdk = sdkWithStop(runtime);
+    const client = await mcpClient({
+      name: 'orders',
+      transport: agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        sdk: sdk.module,
+      }),
+    });
+    await client.tools();
+    expect(await client.terminate!()).toMatchObject({ remote: 'no-session', resolved: true });
+    expect(sdk.stops).toEqual([]);
+  });
+
+  it("a GET is still answered 405 under 'reuse', and a stop needs the SDK's StopRuntimeSessionCommand — without it the ending is failed, never thrown", async () => {
+    const runtime = lookupRuntime();
+    const transport = agentCoreRuntimeMcpTransport({
+      agentRuntimeArn: ARN,
+      region: REGION,
+      session: 'reuse',
+      sdk: runtime.sdk,
+    });
+    const opened = (await transport.fetch!(transport.url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 't', version: '1' },
+        },
+      }),
+    })) as Response;
+    const handle = opened.headers.get('mcp-session-id') as string;
+    const get = (await transport.fetch!(transport.url, {
+      method: 'GET',
+      headers: { 'mcp-session-id': handle },
+    })) as Response;
+    expect(get.status).toBe(405);
+    // The two-command module this transport always took: the stop cannot be sent.
+    await expect(
+      transport.fetch!(transport.url, { method: 'DELETE', headers: { 'mcp-session-id': handle } }),
+    ).rejects.toThrow(/StopRuntimeSessionCommand/);
+  });
+
+  it('settings state the strategies as data — never a credential', () => {
+    expect(
+      agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        session: 'reuse',
+        sdk: lookupRuntime().sdk,
+      }).settings,
+    ).toEqual({ auth: 'sigv4', session: 'reuse' });
+    expect(
+      agentCoreRuntimeMcpTransport({
+        agentRuntimeArn: ARN,
+        region: REGION,
+        auth: { bearer: staticTokens({ runtime: 'SECRET-TOKEN' }), scopes: ['orders:read'] },
+      }).settings,
+    ).toEqual({
+      auth: 'bearer',
+      session: 'per-call',
+      service: 'runtime',
+      scopes: ['orders:read'],
+      mode: 'machine',
+      credentials: 'static-tokens',
+    });
+  });
+});
+
+describe('agentCoreRuntimeMcpTransport — the send gate on SigV4 runs after signing', () => {
+  async function pooledOver(sdk: ReturnType<typeof sdkWithStop>, appClient?: unknown) {
+    const { mcpClientPool } = await import('../../src/tool-providers/index.js');
+    const pool = mcpClientPool({
+      name: 'orders',
+      transport: () =>
+        agentCoreRuntimeMcpTransport({
+          agentRuntimeArn: ARN,
+          region: REGION,
+          session: 'reuse',
+          sdk: sdk.module,
+          ...(appClient !== undefined && { client: appClient as never }),
+        }),
+    });
+    const identity = { principal: 'alice', conversationId: 'c1' };
+    const [tool] = await pool
+      .toolProvider()
+      .list({ iteration: 1, callerIdentity: identity } as never);
+    return { pool, identity, tool: tool as Tool };
+  }
+
+  it('a binding that went stale DURING signing is refused by the step after the signer — the request handler never sends it', async () => {
+    const runtime = lookupRuntime();
+    let signing: (() => void) | undefined;
+    let gateSigning = false;
+    const sdk = sdkWithStop(runtime, undefined, () =>
+      gateSigning ? new Promise<void>((resolve) => (signing = resolve)) : Promise.resolve(),
+    );
+    const { pool, identity, tool } = await pooledOver(sdk);
+    const before = runtime.calls().length;
+    gateSigning = true;
+    const call = tool.execute({ id: '7712' }, { identity } as never).catch((e: unknown) => e);
+    await vi.waitFor(() => expect(signing).toBeDefined());
+    pool.permissionsChanged({ principal: 'alice' });
+    signing!();
+    expect(await call).toMatchObject({ reason: 'stale-tools' });
+    expect(runtime.calls().length).toBe(before);
+  });
+
+  it('a deadline that passed during signing is refused the same way', async () => {
+    const runtime = lookupRuntime();
+    let signing: (() => void) | undefined;
+    let gateSigning = false;
+    const sdk = sdkWithStop(runtime, undefined, () =>
+      gateSigning ? new Promise<void>((resolve) => (signing = resolve)) : Promise.resolve(),
+    );
+    const { identity, tool } = await pooledOver(sdk);
+    const before = runtime.calls().length;
+    gateSigning = true;
+    const caller = new AbortController();
+    const call = tool
+      .execute({ id: '7712' }, { identity, signal: caller.signal } as never)
+      .catch((e: unknown) => e);
+    await vi.waitFor(() => expect(signing).toBeDefined());
+    caller.abort(new Error('the caller timed out'));
+    signing!();
+    expect(await call).toBeInstanceOf(Error);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(runtime.calls().length).toBe(before);
+  });
+
+  it('an AWS client the app passed keeps its own middleware stack: the step is on each command, never the client', async () => {
+    const runtime = lookupRuntime();
+    const sdk = sdkWithStop(runtime);
+    const appClient = new sdk.Client({ region: REGION, maxAttempts: 1 });
+    const { identity, tool } = await pooledOver(sdk, appClient);
+    await expect(tool.execute({ id: '7712' }, { identity } as never)).resolves.toBe(
+      'order 7712: shipped',
+    );
+    expect(appClient.middlewareStack.added).toEqual([]);
   });
 });

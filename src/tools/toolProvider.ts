@@ -102,6 +102,22 @@ export interface ToolDispatchContext {
     readonly conversationId: string;
   };
   /**
+   * The identity the CALLER named in `run({ identity })` — the same fact a
+   * tool's `ToolExecutionContext.identity` carries. **Absent when the run's
+   * identity was derived** (from a `sessionId`, or the per-run default), which
+   * {@link identity} is not: it falls back to `{ conversationId: sessionId }` or
+   * `{ conversationId: runId }`, and a derived tuple is not an authenticated
+   * identity — a session id is caller data.
+   *
+   * A provider that keys anything live on the caller (a client per
+   * conversation, `mcpClientPool`'s provider) reads only this one.
+   */
+  readonly callerIdentity?: {
+    readonly tenant?: string;
+    readonly principal?: string;
+    readonly conversationId: string;
+  };
+  /**
    * Optional abort signal propagated from the agent's `run({ env })` /
    * AbortController. Async providers (network discovery, MCP catalog
    * fetch, registry pull) MUST honor this — abandon the in-flight

@@ -94,6 +94,20 @@ import { refuseConflictingOptions } from './connectionRefusals.js';
 import { sdkLoadFailure } from './sdkLoadFailure.js';
 import { transportUrl } from './transportUrl.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
+import {
+  rememberHalfOpen,
+  type ClientListing,
+  type ClientPort,
+  type PooledClientSeam,
+} from './clientPort.js';
+import type { RequestGuard } from './requestGuard.js';
+import {
+  DeleteWatch,
+  endSession,
+  outcomeWithout,
+  type Ending,
+  type TerminableTransport,
+} from './terminate.js';
 
 // Version-less identity. The MCP `clientInfo` field is informational
 // (server logs it); a hardcoded number drifts every release. Consumers
@@ -126,6 +140,26 @@ const DEFAULT_CLIENT_INFO = {
  *   transport fails to connect.
  */
 export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): Promise<McpClient> {
+  return (await connectClient(opts)).client;
+}
+
+/**
+ * @internal The MCP client pool's way to open a client (`mcp/pool/`): an
+ * ordinary `mcpClient` — the same discovery, checks, ledger and retry series —
+ * plus what only a pool asks for (`clientPort.ts`), and the port back.
+ */
+export async function openPooledClient(
+  opts: McpClientOptions,
+  seam: PooledClientSeam,
+): Promise<{ readonly client: McpClient; readonly port: ClientPort }> {
+  return connectClient(opts, seam);
+}
+
+/** The one construction path behind `mcpClient` and the pool's opener. */
+async function connectClient(
+  opts: McpClientOptions | McpConnectionOptions,
+  seam?: PooledClientSeam,
+): Promise<{ readonly client: McpClient; readonly port: ClientPort }> {
   const name = opts.name ?? 'mcp';
   const resultMode = resultModeOf(opts.resultMode, name);
   // Before anything connects: an option that names a behaviour which cannot
@@ -138,13 +172,22 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
   // The validator a tool's own output checks use (`callChecks.ts`), refused by
   // name now when it is not one.
   const validator = validatorOption(opts.jsonSchemaValidator, `mcpClient[${name}]`);
-  const { connection, ledger, kit } = await openConnection(opts, replay, name, validator);
+  const { connection, ledger, kit, ending } = await openConnection(
+    opts,
+    replay,
+    name,
+    validator,
+    seam,
+  );
   const unlisted = new Set<string>();
 
   // Tool cache so consumers calling `.tools()` more than once don't
   // hammer the server. `.refresh()` invalidates it.
   let cache: readonly Tool[] | null = null;
   let closed = false;
+  // The one ending this client gets (`terminate.ts`): `terminate()` asks for it
+  // once, and every later call answers the same outcome.
+  let ended: Ending | undefined;
 
   const ensureOpen = (op: string): void => {
     if (closed) {
@@ -154,13 +197,13 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
     }
   };
 
-  const buildTools = async (): Promise<readonly Tool[]> => {
+  const listWith = async (signal: AbortSignal | undefined): Promise<ClientListing> => {
     // Every page of the server's list (`toolList.ts`). `signal` rides each
     // page in the SDK's trailing options argument, never in the params — see
     // `wrapMcpTool`.
     // Each page request is counted in this connection's listings, whatever it
     // settles to (`listingGenerations.ts`).
-    const listing = await listEveryPage(connection, opts.signal, kit.listings);
+    const listing = await listEveryPage(connection, signal, kit.listings);
     // A list that did not end cannot say which entries name nothing.
     if (listing.incomplete === undefined) noteUnlisted(replay, listing.tools, name, unlisted);
     // Every tool carries the checks of the list it came from (`callChecks.ts`):
@@ -182,10 +225,28 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
     if (listing.incomplete !== undefined) {
       throw new McpToolListIncompleteError(listing.incomplete, name, listing.pages, tools);
     }
-    return tools;
+    return { tools, listed: listing.tools };
+  };
+  const buildTools = async (): Promise<readonly Tool[]> => (await listWith(opts.signal)).tools;
+
+  const closeLocally = async (): Promise<void> => {
+    try {
+      await connection.close();
+    } finally {
+      // Nothing this connection sent is awaited any more, however it closed.
+      ledger?.close();
+    }
+  };
+  // The remote session ended, then the local side — at most once.
+  const end = (): Ending => {
+    if (ended !== undefined) return ended;
+    closed = true;
+    cache = null;
+    ended = ending(closeLocally);
+    return ended;
   };
 
-  return {
+  const client: McpClient = {
     name,
     async tools(): Promise<readonly Tool[]> {
       ensureOpen('tools');
@@ -201,14 +262,37 @@ export async function mcpClient(opts: McpClientOptions | McpConnectionOptions): 
       if (closed) return;
       closed = true;
       cache = null;
-      try {
-        await connection.close();
-      } finally {
-        // Nothing this connection sent is awaited any more, however it closed.
-        ledger?.close();
-      }
+      await closeLocally();
+    },
+    async terminate() {
+      if (ended !== undefined) return ended.outcome;
+      ensureOpen('terminate');
+      return end().outcome;
     },
   };
+  const port: ClientPort = {
+    async listing(signal) {
+      ensureOpen('tools');
+      const listing = await listWith(signal);
+      cache = listing.tools;
+      return listing;
+    },
+    bind: (listed) =>
+      // No listing generation: this connection's SDK holds no checks for a
+      // definition it did not list, so the tool always runs its own.
+      wrapMcpTool(
+        name,
+        connection,
+        listed,
+        opts.signal,
+        resultMode,
+        ledger,
+        strict,
+        checksFor(listed, kit, undefined),
+      ),
+    end,
+  };
+  return { client, port };
 }
 
 // ─── Getting a connection ──────────────────────────────────────────
@@ -219,6 +303,21 @@ interface OpenConnection {
   readonly ledger?: RequestLedger;
   /** What its tools' own checks run with, and its list requests counted (`callChecks.ts`). */
   readonly kit: CallCheckKit;
+  /** How this connection's remote session is ended, given its local close (`terminate.ts`). */
+  readonly ending: (close: () => Promise<void>) => Ending;
+}
+
+/** An ending that sends nothing: the local close, and the outcome that says why. */
+function endingWithout(remote: 'no-session' | 'unavailable'): OpenConnection['ending'] {
+  return (close) => {
+    const settled = Promise.resolve()
+      .then(close)
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+    return { outcome: settled.then(() => outcomeWithout(remote)), settled };
+  };
 }
 
 /**
@@ -235,19 +334,22 @@ async function openConnection(
   replay: ReplayDeclaration,
   name: string,
   validator: McpJsonSchemaValidator | undefined,
+  seam: PooledClientSeam | undefined,
 ): Promise<OpenConnection> {
   // A client built elsewhere: the library loads nothing, so only the caller's
   // validator can check a tool's output itself, and errors take the SDK's shape.
   // Its list requests are counted per client: every mcpClient over it shares one
   // count, as they share the SDK's one set of checks (`listingGenerations.ts`).
+  // The library did not build its transport, so it cannot end the session.
   if (opts.connection !== undefined) {
     const kit = callCheckKit(name, listingsOf(opts.connection), validator);
-    return { connection: opts.connection, kit };
+    return { connection: opts.connection, kit, ending: endingWithout('unavailable') };
   }
   if (opts._client !== undefined) {
     return {
       connection: opts._client,
       kit: callCheckKit(name, listingsOf(opts._client), validator),
+      ending: endingWithout('unavailable'),
     };
   }
   // `refuseConflictingOptions` has already refused the case where this is
@@ -262,6 +364,7 @@ async function openConnection(
     replay,
     name,
     validator,
+    seam,
   );
 }
 
@@ -276,19 +379,32 @@ async function resolveClient(
   replay?: ReplayDeclaration,
   name = 'mcp',
   validator?: McpJsonSchemaValidator,
+  seam?: PooledClientSeam,
 ): Promise<OpenConnection> {
   if (sdk !== undefined) assertSdk(sdk, transport.transport);
   const mod: McpSdkExports = sdk ?? loadClientModule();
 
   // A caller's validator is the client's too, so one validator checks every
-  // page; without one, the options are exactly what they always were.
-  const options: { capabilities: Record<string, unknown>; jsonSchemaValidator?: unknown } =
+  // page; without one, the options are exactly what they always were. A pooled
+  // client hears the server's tools-changed notice with the SDK's automatic
+  // refresh OFF: the notice only makes the pool list again, through this
+  // client's own discovery, which counts every listing (`listingGenerations.ts`).
+  const options: {
+    capabilities: Record<string, unknown>;
+    jsonSchemaValidator?: unknown;
+    listChanged?: unknown;
+  } =
     validator === undefined
       ? { capabilities: {} }
       : { capabilities: {}, jsonSchemaValidator: validator };
+  if (seam !== undefined) {
+    options.listChanged = {
+      tools: { autoRefresh: false, debounceMs: 0, onChanged: () => seam.onToolsChanged() },
+    };
+  }
   const client: McpSdkClient = new mod.Client(clientInfo ?? DEFAULT_CLIENT_INFO, options);
 
-  const built = await buildTransport(transport, retryOnThrottle, sdk, replay, name);
+  const built = await buildTransport(transport, retryOnThrottle, sdk, replay, name, seam);
   // With the SDK loaded here, so is what a tool's own checks run with: its
   // default validator and its own error class. With `sdk`, the loader is never
   // touched (`callChecks.ts`).
@@ -297,12 +413,36 @@ async function resolveClient(
       ? callCheckKit(name, listingsOf(client), validator, loadCheckModules(validator))
       : callCheckKit(name, listingsOf(client), validator);
   // Same rule as callTool: options ride beside the transport, never inside it.
-  if (signal) await client.connect(built.transport, { signal });
-  else await client.connect(built.transport);
+  // A pooled client connects under the pool's own signal and open deadline;
+  // its lifetime signal (`signal`) rides every later request.
+  const connectSignal = seam?.connectSignal ?? signal;
+  try {
+    if (connectSignal) await client.connect(built.transport, { signal: connectSignal });
+    else await client.connect(built.transport);
+  } catch (error) {
+    // A pooled open that failed may still have opened a session on the server:
+    // the pool can end it once the open's work has settled (`clientPort.ts`).
+    if (seam !== undefined) {
+      const transport = built.transport as { readonly sessionId?: string };
+      rememberHalfOpen(error, {
+        hasSession: () => transport?.sessionId !== undefined,
+        end: () =>
+          built.ending(async () => {
+            try {
+              await client.close();
+            } finally {
+              built.ledger?.close();
+            }
+          }),
+      });
+    }
+    throw error;
+  }
   return {
     connection: client,
     kit,
     ...(built.ledger !== undefined && { ledger: built.ledger }),
+    ending: built.ending,
   };
 }
 
@@ -396,10 +536,11 @@ function loadClientModule(): McpSdkExports {
   }
 }
 
-/** The SDK transport, and the ledger its retry series files each call's attempts through. */
+/** The SDK transport, the ledger its retry series files each call's attempts through, and how its session ends. */
 interface BuiltTransport {
   readonly transport: unknown;
   readonly ledger?: RequestLedger;
+  readonly ending: OpenConnection['ending'];
 }
 
 async function buildTransport(
@@ -408,6 +549,7 @@ async function buildTransport(
   sdk?: McpSdk,
   replay?: ReplayDeclaration,
   name = 'mcp',
+  seam?: PooledClientSeam,
 ): Promise<BuiltTransport> {
   if (t.transport === 'stdio') {
     // Deliberately NOT served by `sdk`: stdio spawns a subprocess, so it can
@@ -432,14 +574,22 @@ async function buildTransport(
       );
     }
     // No fetch, so no retry series: a stdio call has no attempts to file.
-    return {
-      transport: new stdioMod.StdioClientTransport({
-        command: t.command,
-        args: t.args ? [...t.args] : [],
-        ...(t.env && { env: { ...t.env } }),
-        ...(t.cwd !== undefined && { cwd: t.cwd }),
-      }),
-    };
+    // stdio has no session id to end: its ending is the local close.
+    const stdio = new stdioMod.StdioClientTransport({
+      command: t.command,
+      args: t.args ? [...t.args] : [],
+      ...(t.env && { env: { ...t.env } }),
+      ...(t.cwd !== undefined && { cwd: t.cwd }),
+    });
+    if (seam === undefined) return { transport: stdio, ending: endingWithout('no-session') };
+    // A pooled client's sends are watched, so the pool's gate is asked at
+    // `send()` — on stdio, which writes without waiting, the last boundary.
+    const ledger = new RequestLedger({
+      server: name,
+      strict: replay?.policy === 'app-authorized',
+      guardFor: seam.guardFor,
+    });
+    return watched(stdio, ledger, endingWithout('no-session'));
   }
 
   // http + gateway transports both ride Streamable HTTP. They differ only in
@@ -474,7 +624,19 @@ async function buildTransport(
   const ledger = new RequestLedger({
     server: name,
     strict: replay?.policy === 'app-authorized',
+    ...(seam !== undefined && { guardFor: seam.guardFor }),
   });
+  // The pass-through fetch every transport the library builds carries: it
+  // changes no request, and reads a `DELETE`'s answer for `terminate()`
+  // (`terminate.ts`), because the SDK treats a 405 as success. A pooled client's
+  // requests also cross the pool's gate here, before anything else of ours.
+  const watch = new DeleteWatch();
+  const outermost = (inner: ThrottleFetch | undefined): ThrottleFetch =>
+    watch.fetch(
+      seam === undefined
+        ? inner
+        : seam.wrapFetch(inner ?? platformFetch, (body) => guardOfCall(ledger, body)),
+    );
   if (t.transport === 'gateway') {
     // The consumer's own `fetch` (9.32.0) goes UNDERNEATH the vending, not
     // beside it: `createVendingFetch` resolves the credential, applies it to
@@ -485,11 +647,14 @@ async function buildTransport(
     // the seam existed.
     const gatewayFetch = retried(createVendingFetch(t, t.fetch));
     const ledgered = gatewayFetch && ledgeredFetch(gatewayFetch, ledger, replay);
+    const sdkTransport = new httpMod.StreamableHTTPClientTransport(
+      transportUrl(t.url, 'mcpClient'),
+      { fetch: outermost(ledgered ?? gatewayFetch) },
+    );
     return watched(
-      new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
-        fetch: ledgered ?? gatewayFetch,
-      }),
-      ledgered && ledger,
+      sdkTransport,
+      ledgered !== undefined || seam !== undefined ? ledger : undefined,
+      sessionEnding(sdkTransport, watch),
     );
   }
   // Both options ride the SAME SDK transport, and both are forwarded when both
@@ -498,14 +663,27 @@ async function buildTransport(
   // final word over the bytes — see `McpHttpTransport.fetch`.
   const httpFetch = retried(t.fetch);
   const ledgered = httpFetch && ledgeredFetch(httpFetch, ledger, replay);
-  const fetch = ledgered ?? httpFetch;
+  const sdkTransport = new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
+    ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
+    fetch: outermost(ledgered ?? httpFetch),
+  });
   return watched(
-    new httpMod.StreamableHTTPClientTransport(transportUrl(t.url, 'mcpClient'), {
-      ...(t.headers && { requestInit: { headers: { ...t.headers } } }),
-      ...(fetch && { fetch }),
-    }),
-    ledgered && ledger,
+    sdkTransport,
+    ledgered !== undefined || seam !== undefined ? ledger : undefined,
+    sessionEnding(sdkTransport, watch),
   );
+}
+
+/** The guard of the pooled tool call `body` belongs to, by its ledger claim. */
+function guardOfCall(ledger: RequestLedger, body: unknown): RequestGuard | undefined {
+  return ledger.claim(body)?.guard;
+}
+
+/** How an SDK Streamable HTTP transport's session ends: its own `terminateSession()`. */
+function sessionEnding(transport: unknown, watch: DeleteWatch): OpenConnection['ending'] {
+  const terminable = transport as TerminableTransport;
+  if (typeof terminable?.terminateSession !== 'function') return endingWithout('unavailable');
+  return (close) => endSession(terminable, watch, close);
 }
 
 /**
@@ -513,12 +691,21 @@ async function buildTransport(
  * `send` installed in place. As it is, with no ledger, when there is none or it
  * cannot be watched: then no call expects its attempts filed.
  */
-function watched(transport: unknown, ledger: RequestLedger | undefined): BuiltTransport {
+function watched(
+  transport: unknown,
+  ledger: RequestLedger | undefined,
+  ending: OpenConnection['ending'],
+): BuiltTransport {
   if (ledger === undefined || transport === null || typeof transport !== 'object') {
-    return { transport };
+    return { transport, ending };
   }
-  return ledger.watch(transport) === undefined ? { transport } : { transport, ledger };
+  return ledger.watch(transport) === undefined
+    ? { transport, ending }
+    : { transport, ledger, ending };
 }
+
+/** The platform's fetch, looked up at call time so a later polyfill still wins. */
+const platformFetch: ThrottleFetch = (input, init) => globalThis.fetch(input, init);
 
 /** The Node loader path for Streamable HTTP — reached only with no `sdk`. */
 function loadHttpModule(transport: 'http' | 'gateway'): McpHttpExports {
@@ -567,17 +754,13 @@ function noteUnlisted(
 
 // ─── Tool wrapping ─────────────────────────────────────────────────
 
-function wrapMcpTool(
-  serverName: string,
-  connection: McpConnection,
-  mcp: McpListedTool,
-  signal?: AbortSignal,
-  resultMode?: McpClientOptions['resultMode'],
-  ledger?: RequestLedger,
-  strict = false,
-  checks?: CallChecks,
-): Tool {
-  const tool: Tool = {
+/**
+ * @internal What a listed MCP tool looks like as a `Tool`, less its `execute`:
+ * its schema, its provenance and the declarations its `_meta` carries. The ONE
+ * shape both an `mcpClient` tool and an MCP client pool's bound tool take.
+ */
+export function mcpToolShape(serverName: string, mcp: McpListedTool): Omit<Tool, 'execute'> {
+  return {
     schema: {
       name: mcp.name,
       description: mcp.description ?? `MCP tool: ${mcp.name}`,
@@ -598,6 +781,21 @@ function wrapMcpTool(
       tool: mcp.name,
       inputSchema: mcp.inputSchema,
     }),
+  };
+}
+
+function wrapMcpTool(
+  serverName: string,
+  connection: McpConnection,
+  mcp: McpListedTool,
+  signal?: AbortSignal,
+  resultMode?: McpClientOptions['resultMode'],
+  ledger?: RequestLedger,
+  strict = false,
+  checks?: CallChecks,
+): Tool {
+  const tool: Tool = {
+    ...mcpToolShape(serverName, mcp),
     execute: async (args, ctx) => {
       // The agent passes args as `unknown` per Tool contract. MCP
       // expects a JSON object — non-object inputs become `{}` rather

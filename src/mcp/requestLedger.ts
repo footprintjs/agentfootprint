@@ -69,6 +69,7 @@
 
 import type { RequestEvidenceSink } from '../tools/requestEvidence.js';
 import { takeMarker } from './callMarker.js';
+import type { RequestGuard } from './requestGuard.js';
 import { RequestReplay } from './replay.js';
 import { McpReplayUnavailableError } from './replayUnavailable.js';
 
@@ -88,6 +89,11 @@ export interface ClaimedRequest {
   readonly cancelled: AbortSignal;
   /** What this request's series and its call share (`replay.ts` · `RequestReplay`). */
   readonly replay: RequestReplay;
+  /**
+   * The send gate of the pooled call this request belongs to (`requestGuard.ts`)
+   * — absent for a call no pool made.
+   */
+  readonly guard?: RequestGuard;
 }
 
 /** How a connection's ledger is set up. */
@@ -96,6 +102,13 @@ export interface RequestLedgerOptions {
   readonly server: string;
   /** The `'app-authorized'` policy is in force: see the module note. */
   readonly strict: boolean;
+  /**
+   * A pooled client's guard for a message that is not a matched `tools/call` —
+   * its open, its listing, its ending (`mcp/pool/`). Asked for every message;
+   * a request it guards is checked before it is sent, and every message's send
+   * is counted under it. Absent for a client no pool built.
+   */
+  readonly guardFor?: (message: unknown) => RequestGuard | undefined;
 }
 
 type JsonRpcId = string | number;
@@ -116,6 +129,8 @@ export interface MatchedRequest {
 export interface IssuedCall {
   readonly marker: string;
   readonly ticket?: RequestTicket;
+  /** The pooled call's send gate, when a pool made the call (`requestGuard.ts`). */
+  readonly guard?: RequestGuard;
   /** Set once, by the watched `send`: a marker matches ONE request. */
   readonly request?: MatchedRequest;
 }
@@ -128,6 +143,7 @@ interface InFlight {
   readonly ticket?: RequestTicket;
   readonly cut: AbortController;
   readonly replay: RequestReplay;
+  readonly guard?: RequestGuard;
 }
 
 /** The method whose requests a tool call issues markers for. */
@@ -147,6 +163,12 @@ export class RequestLedger {
   private readonly sending = new Map<JsonRpcId, InFlight>();
   /** Matched requests whose JSON-RPC answer is awaited (`strict` only) — by id. */
   private readonly awaiting = new Map<JsonRpcId, RequestReplay>();
+  /**
+   * A pooled call's guard by its request's id, until the call settles: the SDK's
+   * `notifications/cancelled` for that request is work started for the call, and
+   * is counted under it (`requestGuard.ts`).
+   */
+  private readonly guards = new Map<JsonRpcId, RequestGuard>();
   private initializeId: JsonRpcId | undefined;
   private initializeAnswered = false;
   private markers = 0;
@@ -161,11 +183,12 @@ export class RequestLedger {
    * is where its attempts are filed, when the call carries the run's evidence
    * port.
    */
-  issue(ticket?: RequestTicket): IssuedCall {
+  issue(ticket?: RequestTicket, guard?: RequestGuard): IssuedCall {
     this.markers += 1;
     const call: Issued = {
       marker: `call-${this.markers}`,
       ...(ticket !== undefined && { ticket }),
+      ...(guard !== undefined && { guard }),
     };
     this.issued.set(call.marker, call);
     return call;
@@ -175,6 +198,9 @@ export class RequestLedger {
   settle(call: IssuedCall): void {
     if (this.issued.get(call.marker) === call) this.issued.delete(call.marker);
     const request = call.request;
+    if (request !== undefined && this.guards.get(request.id) === call.guard) {
+      this.guards.delete(request.id);
+    }
     if (request !== undefined && this.awaiting.get(request.id) === request.replay) {
       this.awaiting.delete(request.id);
     }
@@ -185,6 +211,7 @@ export class RequestLedger {
     this.issued.clear();
     this.sending.clear();
     this.awaiting.clear();
+    this.guards.clear();
   }
 
   /**
@@ -297,6 +324,7 @@ export class RequestLedger {
       ...(entry.ticket !== undefined && { ticket: entry.ticket }),
       cancelled: entry.cut.signal,
       replay: entry.replay,
+      ...(entry.guard !== undefined && { guard: entry.guard }),
     };
   }
 
@@ -305,12 +333,21 @@ export class RequestLedger {
     this.cancelIfAsked(message);
     this.noteInitialize(message);
     const id = requestIdOf(message);
-    if (id === undefined) return original(message, options);
+    if (id === undefined) return this.sendOther(original, message, options);
     // The marker comes out before anything else: the server never sees it.
     const taken = takeMarker(message);
     const call = taken.marker === undefined ? undefined : this.issued.get(taken.marker);
     // One request per marker: a second message carrying it is not this call's.
     const matched = call !== undefined && call.request === undefined ? call : undefined;
+    // A pooled call's send gate, asked here — the last boundary on a transport
+    // whose `send` writes without waiting (stdio). Refused, nothing is sent and
+    // the marker stays unused.
+    const guard = matched?.guard;
+    try {
+      guard?.check();
+    } catch (refusal) {
+      return Promise.reject(refusal);
+    }
     if (matched === undefined && this.options.strict) {
       return Promise.reject(
         new McpReplayUnavailableError(
@@ -330,17 +367,55 @@ export class RequestLedger {
       ...(matched?.ticket !== undefined && { ticket: matched.ticket }),
       cut: new AbortController(),
       replay,
+      ...(guard !== undefined && { guard }),
     };
+    if (guard !== undefined) this.guards.set(id, guard);
     this.sending.set(id, entry);
     const release = (): void => {
       if (this.sending.get(id) === entry) this.sending.delete(id);
     };
     try {
-      return Promise.resolve(original(taken.message, options)).finally(release);
+      const sent = Promise.resolve(original(taken.message, options)).finally(release);
+      guard?.track(sent);
+      return sent;
     } catch (err) {
       release();
       throw err;
     }
+  }
+
+  /**
+   * Any message but a `tools/call`: sent as it always was — unless a pool
+   * guards it (`guardFor`), and then a REQUEST is checked first and refused
+   * unsent, and every message's send is counted under the guard.
+   * Notifications are never refused: a `notifications/cancelled` is the
+   * courtesy that tells the server to stop.
+   */
+  private sendOther(original: Send, message: unknown, options: unknown): Promise<unknown> {
+    // A cancellation is counted under the call it cancels; anything else under
+    // the pool's guard for the client's current work.
+    const guard = this.cancelledGuard(message) ?? this.options.guardFor?.(message);
+    if (guard === undefined) return original(message, options);
+    if (isRequest(message)) {
+      try {
+        guard.check();
+      } catch (refusal) {
+        return Promise.reject(refusal);
+      }
+    }
+    const sent = Promise.resolve(original(message, options));
+    guard.track(sent);
+    return sent;
+  }
+
+  /** The guard of the pooled call a `notifications/cancelled` names, if any. */
+  private cancelledGuard(message: unknown): RequestGuard | undefined {
+    if (message === null || typeof message !== 'object' || Array.isArray(message)) return undefined;
+    const { method, params } = message as { readonly method?: unknown; readonly params?: unknown };
+    if (method !== CANCELLED || params === null || typeof params !== 'object') return undefined;
+    const requestId = (params as { readonly requestId?: unknown }).requestId;
+    if (typeof requestId !== 'string' && typeof requestId !== 'number') return undefined;
+    return this.guards.get(requestId);
   }
 
   /** The `initialize` request: its answer is the one that proves the observer is in place. */
@@ -390,6 +465,13 @@ function responseIdOf(message: unknown): JsonRpcId | undefined {
   };
   if (fields.method !== undefined || !('result' in fields || 'error' in fields)) return undefined;
   return typeof fields.id === 'string' || typeof fields.id === 'number' ? fields.id : undefined;
+}
+
+/** A JSON-RPC request — a method and an id. A notification or a response is not one. */
+function isRequest(message: unknown): boolean {
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) return false;
+  const { method, id } = message as { readonly method?: unknown; readonly id?: unknown };
+  return typeof method === 'string' && (typeof id === 'string' || typeof id === 'number');
 }
 
 /** The id of a `tools/call` REQUEST — a response or a notification has none to claim. */

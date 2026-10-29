@@ -219,8 +219,98 @@ await connection.connect(transport);
 catalog = await mcpClient({ name: 'catalog', connection, jsonSchemaValidator });
 ```
 
+## Ending a session is `terminate()`; `close()` stays local (`terminate.ts`)
+
+**The rule.** `close()` does not end the remote session; `terminate()` does, and
+says whether it did. `terminate` is an optional capability on `McpClient`, asked
+with `canTerminate(client)`, so a hand-written client keeps compiling;
+`mcpClient()` and `mockMcpClient()` provide it. It sends the transport's own
+session termination (the Streamable HTTP `DELETE` carrying `Mcp-Session-Id`),
+reads the answer through the pass-through `fetch` every library-built transport
+carries (the SDK treats a 405 as success), and closes locally whatever happened.
+The wait is bounded by `TOOL_TEARDOWN_TIMEOUT_MS` (the tool-session tier's
+`withTimeout`, shared): at the deadline the request is aborted and the outcome is
+`'timed-out'`. At most once per client. `resolved` is true only for
+`'terminated'`, `'already-gone'` and `'no-session'`; a local settlement and a
+remote resolution are reported apart. The pass-through `fetch` changes no
+request: a transport with no retry series hands the platform `fetch` the same
+URL and the same `init`.
+
+**Why.** Nothing ended a remote session: `close()` only aborts the requests in
+flight, so a `'reuse'` runtime session ran until the platform's idle timeout, and
+nothing said so.
+
+```ts
+if (canTerminate(client)) {
+  const { remote, resolved } = await client.terminate();
+  if (!resolved) log.warn(`remote session left to its own timeout (${remote})`);
+}
+```
+
+## A client per conversation (`pool/`)
+
+**The rule.** `mcpClientPool()` holds one client per authenticated conversation
+for one server, keyed by `identityNamespace` of the identity the CALLER named
+(`ToolDispatchContext.callerIdentity`, or the identity app code passes to
+`acquire` and `terminate`) — never a derived identity, never a value from a
+request or the model. Each pooled client is an ordinary `mcpClient`: discovery
+stays `mcpClient`'s (every page, the per-tool checks, counted per client object),
+so each incarnation has a list and a listing count of its own.
+
+- **One open per key**, under the pool's own signal and `initTimeoutMs` — a
+  caller that gives up detaches alone; the operation that started the open keeps
+  its charge until the open's work settles. A failure is not cached.
+- **Three budgets**: open clients (`maxClients`, `maxClientsPerPrincipal`),
+  endings (`maxEnding`), and operations outstanding on any client
+  (`maxOperations`). Every listing, call, acquire and ending is admitted before
+  anything is sent; its own setup (the open, a revalidating listing) runs inside
+  its slot. A slot is released only when the work under it has SETTLED — its
+  request answered, and every `send()`, credential vend, `fetch` and AWS `send`
+  under it settled (`requestGuard.ts`, `pool/work.ts`) — never at an abort. A
+  full budget is `PoolFullError` at once, naming the budget: there is no queue.
+- **Ending reserves an ending slot and an operation slot first**; otherwise the
+  client stays in the open set, counted, reported deferred, and is ended once
+  slots free. A busy client is never ended. Every end goes through `terminate()`.
+- **Definitions per client incarnation** by default; shared only under the app's
+  `definitions.share` names AND a matching `configHash`, the tenant always in the
+  context. Every bound tool re-checks its binding after each wait and at the send
+  gate — before every attempt, after a credential arrives, after signing.
+- **A server's 404 for its own session** (a JSON-RPC error to a request that
+  carried the session id) is `SessionExpiredError`; a handle this process lost
+  is `LocalSessionHandleLostError`, nothing sent, its ending unresolved.
+
+**Why.** A `'reuse'` session saves the cold start only if every conversation has
+a client of its own. An app-side map keyed by a session id is caller data,
+unbounded, blind to calls in flight, and never ends the remote sessions.
+
+```ts
+const orders = mcpClientPool({
+  name: 'orders',
+  transport: () => agentCoreRuntimeMcpTransport({ agentRuntimeArn, region, session: 'reuse' }),
+});
+const agent = Agent.create({ provider, model }).toolProvider(orders.toolProvider()).build();
+await agent.run({ message, identity: { tenant, principal, conversationId } });
+await orders.terminate({ tenant, principal, conversationId }); // the conversation ended
+```
+
+What the budgets do not bound: response bytes, a caller's own allocations,
+waiters joined on admitted work, or total memory; and no number here bounds a
+remote session whose ending was not confirmed. An open aborted at its deadline
+whose `initialize` answer never reached the client (a retry series gives the
+request up at the abort) leaves a server session nothing here can name; one
+whose answer did reach it is ended. What the pool remembers of a key after its
+client left is bounded (4096 keys), so a long-idle key's incarnation count starts
+again.
+
 ## Files
 - `mcpClient.ts`, `mockMcpClient.ts` — inbound.
+- `terminate.ts` — `canTerminate` and the one ending procedure: the remote answer
+  read by a pass-through `fetch`, the wait bounded, the local close.
+- `clientPort.ts` — what the pool asks of a client it opens, and the port back.
+- `requestGuard.ts` — a pooled operation's send gate and work count, carried on
+  each request's `init` and asked at every boundary that waits.
+- `pool/` — `mcpClientPool`: options, the identity key, the operation budget
+  (`work.ts`), the client sets, definitions, bound tools, leases and the record.
 - `toolList.ts` — every page of a `tools/list` answer, and the typed refusal
   (`McpToolListIncompleteError`) when a list cannot be read to its end.
 - `callChecks.ts` — the SDK's three per-tool call checks, carried by every tool

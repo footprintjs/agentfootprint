@@ -86,7 +86,7 @@ describe('event registry — names + exhaustiveness', () => {
   // them by name. Completeness is proven by
   // `test/events/unit/emitted-events-are-registered.test.ts`, which derives
   // the emitted set from src/ instead of trusting a hand-maintained number.
-  it('ALL_EVENT_TYPES has exactly 126 entries (Tier 1+2+3 combined)', () => {
+  it('ALL_EVENT_TYPES has exactly 127 entries (Tier 1+2+3 combined)', () => {
     // 69 = 8 composition + 9 agent + 7 stream + 5 context + 4 memory
     //    + 6 tools + 3 skill (skill.rejected added with the read_skill gate)
     //    + 4 permission + 4 credential + 1 fallback
@@ -253,7 +253,10 @@ describe('event registry — names + exhaustiveness', () => {
     // +1 findings.negative_claim: bounded warning metadata for observe-only prose.
     // +1 tools.request_attempts: one MCP request's retry series, filed into the
     // run that dispatched the call — allow-listed rows, an omitted count, the end.
-    expect(ALL_EVENT_TYPES.length).toBe(126);
+    // +1 tools.mcp_client: one use of an MCP client pool — a listing or a call,
+    // the client it touched, why a replacement opened, a refusal's word; ids,
+    // digests and outcomes only, never an identity, a session id or a result.
+    expect(ALL_EVENT_TYPES.length).toBe(127);
   });
 
   it('every entry in ALL_EVENT_TYPES is a key of AgentfootprintEventMap', () => {

@@ -29,6 +29,7 @@
     "tool-providers",
     "tool-discovery",
     "mcp-client",
+    "mcp-client-pool",
     "mcp-serve",
     "sequence-governance",
     "loop-moments",

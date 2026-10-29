@@ -1,0 +1,146 @@
+---
+title: A client per conversation
+description: mcpClientPool() keeps one MCP client per authenticated conversation for one server — opened once, bounded, never closed while a call is in flight, and ended remotely with the outcome reported.
+---
+
+> A `'reuse'` session keeps a server warm for one conversation. That only works
+> when every conversation has an MCP client of its own. `mcpClientPool()` builds,
+> finds, bounds and ends those clients, so a host serving many people does not
+> have to.
+
+## When to use it
+
+Use a pool when an MCP server keeps state per session and you serve more than one
+person: AgentCore Runtime with `session: 'reuse'`, or any stateful Streamable HTTP
+server. One `mcpClient` shared by everyone puts every user in one session. A
+client per run pays the cold start on every turn and leaves a session behind
+whenever a run throws.
+
+For a stateless server, the default `'per-call'` session and a plain `mcpClient`
+are enough.
+
+## One pool per server
+
+Pass a function of the identity as `transport`: each client then gets a transport,
+and a session map, of its own.
+
+<CodeFile path="examples/features/120-mcp-client-pool.ts" region="pool" title="examples/features/120-mcp-client-pool.ts (region: pool)" />
+
+An agent takes the pool's `toolProvider()`. Each iteration it lists that
+conversation's tools, bound to it. A bound tool takes a lease on its
+conversation's client for one call, opening the client first when the
+conversation has none. Nothing is held between calls.
+
+<CodeFile path="examples/features/120-mcp-client-pool.ts" region="agent" title="examples/features/120-mcp-client-pool.ts (region: agent)" />
+
+The client is keyed by the identity the **caller** named in `run({ identity })`.
+A run that named none is refused (`no-identity`), because an identity derived
+from a session id is not an authenticated one. A missing `principal` is refused
+unless you pass `requirePrincipal: false`; pass `requireTenant: true` on a
+multitenant host. Verify the caller at your door before you name the identity.
+
+## Tool lists: per client, unless you declare a share
+
+By default each conversation lists its own client's tools, and that list belongs
+to one client. A replacement client lists again, and a tool bound to the old
+client is sent only if the new list holds the same definition.
+
+When you know that conversations see the same list, say so. The pool checks the
+transport's own configuration too, and never shares across tenants.
+
+<CodeFile path="examples/features/120-mcp-client-pool.ts" region="share" title="examples/features/120-mcp-client-pool.ts (region: share)" />
+
+Never share a server whose list changes as a session goes on. Every list stops
+being served after `pool.permissionsChanged({ tenant, principal? })`,
+`pool.toolsChanged()`, the server's own tools-changed notice, or
+`definitionTtlMs`. A tool bound to it is then refused (`stale-tools`) before
+anything is sent.
+
+## Full means refused, never queued
+
+Three budgets apply: open clients (`maxClients`, and `maxClientsPerPrincipal`),
+clients being ended (`maxEnding`), and operations outstanding on any client
+(`maxOperations`). An operation stays charged until its work has settled, not
+just until its caller timed out. When a budget is full, `PoolFullError` comes at
+once, and its `limit` names the budget.
+
+<CodeFile path="examples/features/120-mcp-client-pool.ts" region="full" title="examples/features/120-mcp-client-pool.ts (region: full)" />
+
+<CodeFile path="examples/features/120-mcp-client-pool.ts" region="ending" title="examples/features/120-mcp-client-pool.ts (region: ending)" />
+
+A client in use is never evicted, closed for idleness or ended. To keep a
+conversation's client through a whole turn, hold `pool.acquire(identity)` around
+`agent.run()` and `release()` it after (it is `AsyncDisposable`).
+
+## Ending a conversation
+
+`pool.terminate({ tenant, principal, conversationId? })` ends the remote session
+and reports what the server answered. `close()` on a client ends only the local
+side; `terminate()` ends the remote session, and says whether it did.
+
+<CodeFile path="examples/features/120-mcp-client-pool.ts" region="terminate" title="examples/features/120-mcp-client-pool.ts (region: terminate)" />
+
+`resolved` is `true` only for `'terminated'`, `'already-gone'` and `'no-session'`.
+After `'not-offered'`, `'failed'`, `'timed-out'` or `'handle-lost'`, the remote
+session lives until the server's own timeout; `stats().unresolvedEndings` counts
+those. On AgentCore Runtime under `'reuse'`, an ending is `StopRuntimeSession`.
+
+## What the record says
+
+In a run, every listing and every call through the pool files one
+`agentfootprint.tools.mcp_client` event: the server, `at` (`'list'` or
+`'call'`), the client it touched (`opened`, `joined`, `reused`, `not-needed`,
+`refused`, `expired`, `handle-lost`), why a replacement opened (`previous`), a
+refusal's word, and the conversation as `keyHash`, a short digest. It never
+carries an identity value, a session id, an argument or a result.
+
+Outside a run, endings, deferred endings, revoked leases and work that settled
+after its caller was answered reach your `onEvent` as an `McpPoolReport`
+(`kind`, `reason` — an `McpPoolEndReason` — the remote outcome, `durationMs`).
+`stats()` returns an `McpPoolStats`: counts only, including the work still
+charged past its deadline (`unsettled`) and the endings never confirmed
+(`unresolvedEndings`).
+
+## Gotchas
+
+- **Two failures that look alike stay two.** A server's 404 for the session it
+  issued is `SessionExpiredError`. A handle this process lost is
+  `LocalSessionHandleLostError`, and nothing was sent. Neither call is repeated;
+  the next one opens a new client for the same conversation.
+- **The budgets bound client objects, endings and operations.** They do not bound
+  response sizes or total memory. Put per-caller limits at your door
+  (`AdmissionPolicy`).
+- **The pool lives in one process.** Send `permissionsChanged` to every process,
+  or put a version in the `authorization` name you declare.
+- **No timer is installed.** Idle clients are ended at the next pool call, or when
+  you call `pool.sweep()`. Set `idleMs` below your runtime's idle timeout.
+
+## What the package exports
+
+From `agentfootprint/providers`:
+
+| export | what it is |
+| --- | --- |
+| `mcpClientPool(options)` | Build a pool for one server. Returns an `McpClientPool`. |
+| `McpClientPoolOptions` | `name`, `transport` (or a function of the identity), the budgets, `initTimeoutMs`, `idleMs`, `maxLeaseMs`, `definitionTtlMs`, `definitions`, `requirePrincipal`, `requireTenant`, `onEvent`, and the connection options passed to every client. |
+| `MCP_POOL_DEFAULTS` | The defaults: 64 clients, 8 per principal, 8 endings, 256 operations, a 30 s open, 600 s idle, a 15-minute lease, a 600 s definitions limit. |
+| `MAX_DEFINITION_ENTRIES` | At most this many shared definition entries are kept (256). |
+| `MAX_SHARED_TOOLS` | A list longer than this (512 tools) is used by its own client and never shared. |
+| `McpPoolDefinitionSharing` / `McpPoolShareContext` | `definitions: { share }`, and the `configuration` and `authorization` names `share` returns. |
+| `McpPoolIdentity` | `{ tenant?, principal?, conversationId }`, the conversation a client is for. |
+| `McpPoolScope` | What `terminate` and `permissionsChanged` name. |
+| `McpPoolLease` | What `acquire` returns: `tools()`, `release()`, and `AsyncDisposable`. |
+| `McpPoolStats` / `McpPoolReport` / `McpPoolEndReason` | Counts, the reports `onEvent` receives, and why a client ended. |
+| `PoolFullError` / `McpPoolLimit` | A full budget, refused at once: `limit` is `'pool'`, `'principal'`, `'ending'` or `'operations'`. |
+| `McpPoolRefusedError` / `McpPoolRefusal` | A refusal before the call was sent: `reason`, `sent: false`. |
+| `canTerminate(client)` / `TerminableMcpClient` | Can a client end its remote session? |
+| `McpTerminateOutcome` | What ending a session came to. |
+| `McpTransportSettings` | A transport's comparable settings as data (`McpHttpTransport.settings`). |
+
+From `agentfootprint`: `SessionExpiredError` (a server ended the session) and
+`LocalSessionHandleLostError` (this process lost the handle; nothing was sent).
+
+## Related
+
+- [Connect to an MCP server](doc:mcp-client) — `mcpClient`, transports and `terminate()`
+- [Tool providers](doc:tool-providers) — composing two pools' providers into one

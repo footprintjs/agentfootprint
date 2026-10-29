@@ -36,6 +36,7 @@
 
 import { isCredentialIssued, type CredentialProvider } from '../identity/types.js';
 import { throwIfAborted, untilAborted } from '../lib/abort.js';
+import { guardOf, trackedBy } from './requestGuard.js';
 import type { McpGatewayTransport } from './types.js';
 
 /** Options for {@link gatewayTransport}. */
@@ -219,19 +220,27 @@ export function createVendingFetch(
     throwIfAborted(signal);
     // The provider gets the signal, to stop its own work. The wait is raced
     // against it, so a provider that ignores it cannot hold the request open.
-    const result = await untilAborted(
+    const vend = Promise.resolve(
       transport.credentials.getCredential({
         service: transport.service,
         ...(transport.scopes !== undefined && { scopes: transport.scopes }),
         ...(transport.mode !== undefined && { mode: transport.mode }),
         ...(signal !== undefined && { signal }),
       }),
-      signal,
     );
+    // A pooled request counts the vend itself, not the raced wait: a provider
+    // that ignores the abort is still work under the operation until it
+    // settles (`requestGuard.ts`).
+    const guard = guardOf(init);
+    guard?.track(vend);
+    const result = await untilAborted(vend, signal);
     // Checked again once the credential is here, before the request is handed
     // on: a credential that lands after the abort is never used, so an aborted
     // or timed-out request is never sent, however late the provider answers.
+    // A pooled request's send gate is asked here too: a binding that went
+    // stale while the credential was vended sends nothing.
     throwIfAborted(signal);
+    guard?.check();
     if (!isCredentialIssued(result)) {
       throw new GatewayAuthorizationRequiredError(transport.service, result.authorizationUrl);
     }
@@ -246,6 +255,6 @@ export function createVendingFetch(
 
     // The vended value exists only inside this call, on this Headers object,
     // for the duration of this request. Nothing above closes over it.
-    return baseFetch(input, { ...init, headers });
+    return trackedBy(init, baseFetch(input, { ...init, headers }));
   };
 }

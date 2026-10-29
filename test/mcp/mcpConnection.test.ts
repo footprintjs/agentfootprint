@@ -440,7 +440,7 @@ describe('mcpClient({ transport }) — the default arm, argument for argument', 
     });
   });
 
-  it('LAW: retryOnThrottle:false still passes NO fetch at all — pre-8.11.0 bytes', async () => {
+  it('LAW: retryOnThrottle:false passes only the pass-through fetch, which hands every request on untouched', async () => {
     await underRecordingLoader(async (mcp, seen) => {
       const client = await mcp.mcpClient({
         transport: { transport: 'http', url: 'https://example.invalid/mcp' },
@@ -448,10 +448,26 @@ describe('mcpClient({ transport }) — the default arm, argument for argument', 
       });
       await client.close();
 
-      // Not "a fetch that does nothing" — no key. `retryingFetch` returns its
-      // input untouched when retry is off, including `undefined`, and the
-      // spread drops the key entirely.
-      expect(seen.https[0]!.options).toEqual({});
+      // No retry series and nothing of ours on the request: the one key is the
+      // pass-through fetch every library-built transport carries since
+      // `terminate()` (it reads a DELETE's status, which the SDK hides for a
+      // 405). It hands each request to the platform fetch — the same URL, the
+      // same `init` object — so the bytes are the pre-8.11.0 bytes.
+      const options = seen.https[0]!.options as {
+        fetch?: (url: string, init?: RequestInit) => Promise<Response>;
+      };
+      expect(Object.keys(options)).toEqual(['fetch']);
+      const platform = vi.fn(async (_url: string, _init?: RequestInit) => new Response('{}'));
+      vi.stubGlobal('fetch', platform);
+      try {
+        const init: RequestInit = { method: 'POST', body: '{"jsonrpc":"2.0"}' };
+        await options.fetch!('https://example.invalid/mcp', init);
+        expect(platform).toHaveBeenCalledTimes(1);
+        expect(platform.mock.calls[0]![0]).toBe('https://example.invalid/mcp');
+        expect(platform.mock.calls[0]![1]).toBe(init);
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 

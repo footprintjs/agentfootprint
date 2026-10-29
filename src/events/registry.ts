@@ -99,6 +99,7 @@ import type {
   ToolSemanticsDeclaredPayload,
   ToolsCodeRunPayload,
   ToolsRequestAttemptsPayload,
+  ToolsMcpClientPayload,
   ToolEffectPayload,
   ToolRepeatedCallPayload,
   ToolResultRefusedPayload,
@@ -223,6 +224,7 @@ export const EVENT_NAMES = {
     semanticsDeclared: 'agentfootprint.tools.semantics_declared',
     codeRun: 'agentfootprint.tools.code_run',
     requestAttempts: 'agentfootprint.tools.request_attempts',
+    mcpClient: 'agentfootprint.tools.mcp_client',
   },
   skill: {
     activated: 'agentfootprint.skill.activated',
@@ -580,6 +582,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.tools.request_attempts': AgentfootprintEventEnvelope<
     'agentfootprint.tools.request_attempts',
     ToolsRequestAttemptsPayload
+  >;
+  'agentfootprint.tools.mcp_client': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.mcp_client',
+    ToolsMcpClientPayload
   >;
   'agentfootprint.tools.coverage_declared': AgentfootprintEventEnvelope<
     'agentfootprint.tools.coverage_declared',
@@ -941,6 +947,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.absent',
   'agentfootprint.tools.code_run',
   'agentfootprint.tools.request_attempts',
+  'agentfootprint.tools.mcp_client',
   'agentfootprint.tools.coverage_declared',
   'agentfootprint.tools.semantics_declared',
   'agentfootprint.validation.args_invalid',
