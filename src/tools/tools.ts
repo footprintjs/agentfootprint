@@ -25,6 +25,7 @@ import {
 } from '../integrity/column-types/types.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
+import { displayNameProblem } from '../lib/displayName.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './declare.js';
 import {
   assertToolSearch,
@@ -434,7 +435,36 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * byte-identical.
    */
   readonly effects?: 'read';
+  /**
+   * THE APP'S OWN WORDS for what a call of this tool does — "loading the
+   * attached data" — read by a PERSON. The registered name (`schema.name`) is
+   * the model's vocabulary, and an app may forbid showing it, so the text the
+   * library appends after an answer names a call ONLY by this: the standing
+   * line (`.answerLayer({ standingLine: true })`) says "Not sure — loading the
+   * attached data found nothing", and the limits block marks the items this
+   * call declared with it. A call whose tool declares none is counted ("and 1
+   * other call"), never named.
+   *
+   * One plain line of at most 60 characters (`lib/displayName.ts` — no control,
+   * line separator or invisible format character), stored trimmed; refused at
+   * `defineTool` and again at registration. Write it to read as the subject of
+   * a sentence ("loading the attached data", "the order lookup"). It names the
+   * call and changes nothing else: not the standing, not what the model sees.
+   * Omitted → byte-identical.
+   */
+  readonly displayName?: string;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
+}
+
+/**
+ * Refuse a `displayName` a person should not read, at definition time — the
+ * rule (`lib/displayName.ts` · `displayNameProblem`) asked for a tool built by
+ * `defineTool` and, at registration, for one assembled by hand.
+ */
+export function assertDisplayName(toolName: string, displayName: unknown): void {
+  if (displayName === undefined) return;
+  const problem = displayNameProblem(`defineTool('${toolName}'): \`displayName\``, displayName);
+  if (problem !== undefined) throw new Error(problem);
 }
 
 /** The tools whose `effects: 'read'` was written in `defineTool` — the app's own word. */
@@ -1110,6 +1140,9 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** `'read'` — this tool changes nothing (see {@link Tool.effects}). Omitted →
    *  byte-identical. */
   readonly effects?: 'read';
+  /** The app's own words for what a call of this tool does, read by a person
+   *  (see {@link Tool.displayName}). Omitted → byte-identical. */
+  readonly displayName?: string;
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
@@ -1226,6 +1259,8 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   });
   warnSearchReview(options.name, options.search);
   assertToolEffects(options.name, options.effects);
+  // The app's words reach a person verbatim — refused HERE, naming the tool.
+  assertDisplayName(options.name, options.displayName);
   const tool: Tool<TArgs, TResult> = {
     schema: {
       name: options.name,
@@ -1255,6 +1290,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     // Stored frozen, its value words a null-prototype map (`freezeSearch`).
     ...(options.search !== undefined && { search: freezeSearch(options.search) }),
     ...(options.effects !== undefined && { effects: options.effects }),
+    ...(options.displayName !== undefined && { displayName: options.displayName.trim() }),
     execute: options.execute,
   };
   // The app's own word — the one `effects: 'read'` a later check may honour.

@@ -369,7 +369,8 @@ to say where an object result keeps its rows.
 
 The result is an `AnswerAssessment`: `assessment` (the value — `known`,
 `unrefuted`, `unknown`, `not-applicable`), `standing` (the word above),
-`reasons` (each with its layer and a pointer to every row it rests on), `support`
+`reasons` (each with its layer, a pointer to every row it rests on and its
+`source` — below), `support`
 (the row "known" stands on, when one does), `checked`, and `turnFrom` (whether
 the turn could be found after the last message a person said). The family is
 reached by indexed access — `AnswerAssessment['reasons'][number]['reason']`.
@@ -395,6 +396,39 @@ Gotchas:
   committed state, so check how the run ended before you fold its recording.
 - **It measures claims within the record, not truth.** A tool that misstates
   what it searched produces an honest-looking standing.
+
+### What a reason rests on — `source`, and a tool's `displayName`
+
+Every reason says what it rests on: `source` is `{ kind: 'calls', calls: [{
+toolCallId, toolName }] }` — the calls its own rows name, so a call that came back
+clean is never listed — or `{ kind: 'answer' }` (a value in the answer no result
+carried, a claim in it, the app's checks on it) or `{ kind: 'run' }` (a pause still
+waiting, a limit, unfinished steps, a check that could not reach a verdict). Which
+kind a reason is never changes from run to run, and a source holds names and ids
+only — never an argument or a result.
+
+A tool may declare `displayName` — your words for what a call of it does, read by a
+person. The standing line names a reason's calls only in those words: "Not sure —
+loading the attached data found nothing." With several calls behind one reason it
+names the declared ones and counts the rest ("loading the attached data and 1 other
+call found nothing"). The limits block marks the items each call declared the same
+way. Without a `displayName` nothing changes, word for word — the line never falls
+back to the registered tool name, which your app may not want a person to see.
+
+<CodeFile path="examples/features/116-reason-sources.ts" region="reason-sources" title="examples/features/116-reason-sources.ts (region: reason-sources)" />
+
+Gotchas:
+
+- **It names where a doubt came from, not what it affects.** Which part of the
+  answer leans on which call is not on the record, so a named call never means the
+  rest of the answer is fine — and naming never changes the standing.
+- **One plain line, at most 60 characters.** `defineTool` refuses a `displayName`
+  with a control, line-separator or invisible format character (a bidi override
+  would reverse what the person reads); a hand-built tool is refused at
+  registration. Write it to read as the subject of a sentence.
+- **`source` is on `agent.assessment()` and `assessAnswer()`,** not on the event or
+  `turn_end.answerAssessment`, whose fields stay what they were. `turn_end`
+  carries `standingLineNames` — the words the line used — only when it named a call.
 
 ### The standing, in the run — `.answerLayer()`
 

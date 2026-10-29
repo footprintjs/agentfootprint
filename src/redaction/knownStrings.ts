@@ -1205,6 +1205,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   stagedInputs: true,
   stagedRefs: true,
   standing: true,
+  standingLineNames: true,
   standings: true,
   start: true,
   startsWith: true,

@@ -23,9 +23,36 @@ up into `core/` and are erased by `tsc`: `tools.ts` reads `CheckInDemand`
 (`core/checkin.ts`) and `runChain.ts` reads the middleware shapes
 (`core/agent/middleware/types.ts`).
 
+## A call is named to a person only in the app's words — `displayName`
+
+**The rule.** `defineTool({ displayName })` declares the app's own words for what a
+call of the tool does ("loading the attached data"). It is the ONLY name the text
+the library appends after an answer uses for a call — the standing line and the
+limits block (`../core/agent/assessment/README.md`, "What a reason rests on"). One
+plain line of at most 60 characters, stored trimmed, judged by the one rule
+(`../lib/displayName.ts` · `displayNameProblem`) at `defineTool` and again at
+registration, so a hand-built tool cannot bring a bidi override or a line break to
+a person's screen.
+
+**Why.** The registered name is the model's vocabulary, and an app may forbid
+showing it. So the library never falls back to it: a call whose tool declares no
+`displayName` is counted ("and 1 other call"), never named, and an agent whose
+tools declare none appends the bytes it always did. A remote tool's server cannot
+supply one: `mcpClient` never reads it from `_meta`.
+
+```ts
+const loadAttachment = defineTool({
+  name: 'load_attachment',
+  description: 'Load the files attached to this conversation',
+  displayName: 'loading the attached data',
+  execute: () => absent({ what: 'an attached data file', checked: ['the files attached to this chat'] }),
+});
+// .answerLayer({ standingLine: true }) → '…\n\n---\n\nNot sure — loading the attached data found nothing.'
+```
+
 ## Files
 
-- `tools.ts` — `Tool`, `ToolExecutionContext`, `defineTool` and the definition-time asserts.
+- `tools.ts` — `Tool`, `ToolExecutionContext`, `defineTool` and the definition-time asserts (`assertDisplayName` among them).
 - `declare.ts` — `askOrAssume` and `period` rules: `assertAskOrAssume`, `rulesOf`, `isMissing`.
 - `hostFilled.ts` — arguments the HOST fills from `ctx.credential` / `ctx.identity`: removed from the model's schema, a model-sent value refused by name, the credential scrubbed from what comes back. A decorator over `execute`, so every dispatch door gets it without knowing.
 - `toolArgsValidation.ts` — `validateToolArgs`, `validatePropertyValue`.

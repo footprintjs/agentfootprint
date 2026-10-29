@@ -57,6 +57,22 @@ fold, and they are the only ones the row settles itself:
   answer." — no standing is folded for an answer that does not exist
   (`agent.assessment()` resolves to `undefined` there).
 
+**Which calls, from one owner.** A reason's line counts the calls behind it off
+the reason's own `source` — the fold's one answer to "what does this rest on"
+(`core/agent/assessment/sources.ts` · `reasonSourceOf`), the same calls the
+standing line names and the limits block marks — never a second derivation
+here. A line the answer layer appended that named calls in the app's words (a
+tool's `displayName`) is found again from the record: the words ride
+`turn_end.standingLineNames`, the calls are the fold's, and the line is rebuilt
+whole (`account.ts` · `appendedStandingLine`; words the record does not hold in
+full and the line is not claimed).
+
+```ts
+// the line said 'Not sure — loading the attached data found nothing.'
+accountForAnswer(recording).answer.value;            // the model's own words, the line split off
+accountForAnswer(recording).facts.limitsBlock.value; // 'Not sure — loading the attached data found nothing.'
+```
+
 Fixture A was reduced before the fold existed: its state keeps `history` but not
 `coverageDeclared`. The fold never rebuilds that row from the events, but the
 absence envelope the model read is still in the committed `history`, and a call

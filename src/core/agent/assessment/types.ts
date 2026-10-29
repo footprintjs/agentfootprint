@@ -193,6 +193,38 @@ export type AssessmentCheck =
 export type HonestyLayer = 1 | 2 | 3 | 4;
 
 /**
+ * What a reason rests on — names and ids only, never a value or an argument.
+ * The KIND is declared once per reason (`reasons.ts` · `REASONS`), never
+ * inferred per run; the calls are read off the rows the reason's witnesses
+ * point at (`sources.ts` · `reasonSourceOf`) — a projection of what is
+ * recorded, never a guess at which claim leans on which call:
+ *
+ * - `calls` — specific tool calls: the calls those rows name, each once, in
+ *   witness order (`{ toolCallId, toolName }` — the record's own ids and the
+ *   tool's registered name). `unnamed` counts the calls the rows rest on that
+ *   the record does not name in full (no call id, or no tool name for it),
+ *   present only when there is one — so a `calls` reason with an empty list
+ *   still says it rests on calls, and an empty list never stands for "the
+ *   run";
+ * - `answer` — the answer itself: a value in it no evidence carried, a claim
+ *   in it, a check on its bytes;
+ * - `run` — the run as a whole: it paused for a person, a limit stopped it,
+ *   it skipped declared steps, a check could not reach a verdict.
+ *
+ * Naming a source never changes the standing, and never says the rest of the
+ * answer is unaffected: which claim depends on which call is not on the
+ * record.
+ */
+export type AssessmentReasonSource =
+  | {
+      readonly kind: 'calls';
+      readonly calls: readonly { readonly toolCallId: string; readonly toolName: string }[];
+      readonly unnamed?: number;
+    }
+  | { readonly kind: 'answer' }
+  | { readonly kind: 'run' };
+
+/**
  * One answer's assessment, folded from its committed record.
  *
  * `assessment` (the value) — precedence: a reason fired → `unknown`; else a
@@ -217,6 +249,8 @@ export interface AnswerAssessment {
     /** The honesty layer; absent for a reason that belongs to every layer (`asked`, `check-unreachable`). */
     readonly layer?: HonestyLayer;
     readonly witness: readonly AssessmentPointer[];
+    /** What it rests on — specific calls, the answer, or the run (see {@link AssessmentReasonSource}). */
+    readonly source: AssessmentReasonSource;
   }[];
   /** The row `known` stands on — present only when one does. */
   readonly support?: {

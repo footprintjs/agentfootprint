@@ -204,6 +204,15 @@ export interface AgentTurnEndPayload {
    * dispatcher carries the agent's `turn_end` but not the `answer.*` domain.
    */
   readonly answerAssessment?: AnswerAssessmentPayload;
+  /**
+   * The app's words the appended standing line named calls in — registered
+   * tool name → the tool's declared `displayName`. Present ONLY when the line
+   * (`.answerLayer({ standingLine: true })`) named a reason's calls by a
+   * declared name, so every other turn emits the exact payload it always did.
+   * The words are the app's own, already in `finalContent`; the record keeps
+   * them so a reader rebuilds the very line from the record.
+   */
+  readonly standingLineNames?: Readonly<Record<string, string>>;
   /** Runtime-composed typed negatives, with verification and delivery kept separate. */
   readonly answerNegatives?: AnswerNegativesPayload;
   /**

@@ -45,11 +45,12 @@
  */
 
 import { copyInProgressItem, IN_PROGRESS_SECTION_LABEL, inProgressLine } from './inProgress.js';
-import { mergeItems } from './items.js';
+import { mergeItems, sameItem } from './items.js';
 import { copyPeriod, periodLine, type DeclaredPeriod } from './period.js';
 import type { BoundPresentation } from '../../time/present.js';
 import type { Coverage, CoverageItem, DeclaredCoverage, InProgressItem } from './types.js';
 import { isRegExpWhitespace, trimTrailing } from '../../lib/linearText.js';
+import { namedCalls } from '../../lib/displayName.js';
 
 /**
  * One declaring call's period, as the answer's limits carry it (honesty step
@@ -152,11 +153,47 @@ const SECTIONS = [
   ['cannotCover', 'Cannot cover'],
 ] as const;
 
-function renderSection(label: string, items: readonly CoverageItem[]): string {
+function renderSection(
+  label: string,
+  items: readonly CoverageItem[],
+  sourceOf: (item: CoverageItem) => string | undefined = () => undefined,
+): string {
   return renderLines(
     label,
-    items.map((i) => `${i.what}${i.why !== undefined ? ` — ${i.why}` : ''}`),
+    items.map((i) => {
+      const source = sourceOf(i);
+      return `${i.what}${i.why !== undefined ? ` — ${i.why}` : ''}${
+        source !== undefined ? ` (${source})` : ''
+      }`;
+    }),
   );
+}
+
+/**
+ * The calls that declared `item` in one section, named in the app's words —
+ * the standing line's own naming (`lib/displayName.ts` · `namedCalls`: the
+ * declared names, the rest counted). One call that filed two rows (a
+ * `coverage(absent(…))`) is one call; a row that names no call is a call of
+ * its own. `undefined` when none of them declares a name: the item's line is
+ * then the bytes it always was.
+ */
+function itemSource(
+  declared: readonly DeclaredCoverage[],
+  key: (typeof SECTIONS)[number][0],
+  item: CoverageItem,
+  displayNameOf: (toolName: string) => string | undefined,
+): string | undefined {
+  const calls: { readonly toolName: string }[] = [];
+  const seen = new Set<string>();
+  for (const row of declared) {
+    if (!row[key].some((i) => sameItem(i, item))) continue;
+    if (row.toolCallId !== undefined) {
+      if (seen.has(row.toolCallId)) continue;
+      seen.add(row.toolCallId);
+    }
+    calls.push({ toolName: row.toolName });
+  }
+  return namedCalls(calls, 0, displayNameOf);
 }
 
 /** One labelled section of `- line` bullets, folded after the cap like every section. */
@@ -385,6 +422,14 @@ function copyItem(item: CoverageItem): CoverageItem {
  * zone: each `Period:` line renders its instants there, the zone named
  * (`period.ts` · `periodLine`). Absent → the lines are the declared instants
  * verbatim, as they always were.
+ *
+ * `displayNameOf` (a tool's `displayName`, the app's words — given only on an
+ * agent where a tool can declare one) names each item's declaring calls the
+ * way the standing line names a reason's calls (`lib/displayName.ts` ·
+ * `namedCalls`): `- PDF attachments (loading the attached data)`, the
+ * declared names named and the rest counted; and a `Period:` or "In progress"
+ * line names its call by the declared words instead of the registered name.
+ * An item no declaring call names stays the bytes it always was.
  */
 export function composeAnswerWithCoverage(
   answer: string,
@@ -393,6 +438,7 @@ export function composeAnswerWithCoverage(
   standing = '',
   presentation?: BoundPresentation,
   time?: TimeLimitLines,
+  displayNameOf?: (toolName: string) => string | undefined,
 ): string {
   const blocks: string[] = [];
   // The answer layer's standing line (honesty layer 4, its own opt-in arm)
@@ -400,7 +446,7 @@ export function composeAnswerWithCoverage(
   // on, the caller passes no "Assumed" block — the line owns that sentence
   // (one composer for one fact).
   if (standing !== '') blocks.push(standing);
-  const coverage = coverageBlock(declared, presentation, time);
+  const coverage = coverageBlock(declared, presentation, time, displayNameOf);
   if (coverage !== '') blocks.push(coverage);
   if (assumed !== '') blocks.push(assumed);
   if (blocks.length === 0) return answer;
@@ -415,14 +461,26 @@ function coverageBlock(
   declared: readonly DeclaredCoverage[],
   presentation: BoundPresentation | undefined,
   time?: TimeLimitLines,
+  displayNameOf?: (toolName: string) => string | undefined,
 ): string {
   const timeLines = (time?.period.length ?? 0) + (time?.clocks.length ?? 0);
   if (declared.length === 0 && timeLines === 0) return '';
   const folded = foldSections(declared);
+  // A call is named by the app's words only; with none declared, by its registered name, as always.
+  const callName = (toolName: string): string => displayNameOf?.(toolName) ?? toolName;
   const sections: string[] = [];
   for (const [key, label] of SECTIONS) {
     const items = folded[key];
-    if (items.length > 0) sections.push(renderSection(label, items));
+    if (items.length === 0) continue;
+    sections.push(
+      renderSection(
+        label,
+        items,
+        displayNameOf === undefined
+          ? undefined
+          : (item) => itemSource(declared, key, item, displayNameOf),
+      ),
+    );
   }
   // One `Period:` line per declaring call (honesty step 7b) — the period AS
   // THE TOOL DECLARED IT (`period.ts` · `periodLine`). No period declared →
@@ -432,7 +490,7 @@ function coverageBlock(
   // their own. Not armed → nothing is added, byte for byte.
   const periods = periodsOf(declared);
   const periodLines = [
-    ...periods.map((p) => periodLine(p.toolName, p, presentation)),
+    ...periods.map((p) => periodLine(callName(p.toolName), p, presentation)),
     ...(time?.period ?? []),
   ];
   if (periodLines.length > 0) sections.push(renderLines(PERIOD_SECTION_LABEL, periodLines));
@@ -447,7 +505,9 @@ function coverageBlock(
     sections.push(
       renderLines(
         IN_PROGRESS_SECTION_LABEL,
-        inProgress.flatMap((entry) => entry.items.map((i) => inProgressLine(entry.toolName, i))),
+        inProgress.flatMap((entry) =>
+          entry.items.map((i) => inProgressLine(callName(entry.toolName), i)),
+        ),
       ),
     );
   }

@@ -22,6 +22,7 @@
 
 import { foldState } from '../../core/agent/assessment/assess.js';
 import type {
+  AnswerAssessment,
   AssessmentCheck,
   AssessmentPointer,
   AssessmentReason,
@@ -283,34 +284,17 @@ const COUNTS_CALLS: ReadonlySet<AssessmentReason> = new Set([
   'period-beyond-retention',
 ]);
 
-/** The call a committed row names — the row a state witness points into (`/<index>/…`). */
-function rowCallId(
-  state: Readonly<Record<string, unknown>>,
-  w: { readonly key: string; readonly path: string },
-): string | undefined {
-  const rows = state[w.key];
-  const index = Number(w.path.split('/')[1]);
-  const row = Array.isArray(rows) && Number.isInteger(index) ? rows[index] : undefined;
-  return isRecord(row) ? str(row.toolCallId) : undefined;
-}
-
 /**
- * How many calls a reason's witnesses stand for: a coverage row names its call,
- * a result carries its call id, and a witness that names no call counts on its
- * own — never merged into another (the fold's own rule for the calls of a turn).
+ * How many calls a reason rests on — read off the reason's own `source`, the
+ * fold's one answer to "which calls" (`assessment/sources.ts` ·
+ * `reasonSourceOf`): the calls it names, plus those the record does not name
+ * in full, each counted once — never re-derived here. A reason that rests on
+ * the answer or the run stands for no call: its rows are counted instead.
  */
-function callsBehind(
-  witness: readonly AssessmentPointer[],
-  state: Readonly<Record<string, unknown>>,
-): number {
-  const ids = new Set<string>();
-  let unnamed = 0;
-  for (const w of witness) {
-    const id = w.kind === 'history' ? w.toolCallId : rowCallId(state, w);
-    if (id === undefined) unnamed += 1;
-    else ids.add(id);
-  }
-  return ids.size + unnamed;
+function callsBehind(r: AnswerAssessment['reasons'][number]): number {
+  return r.source.kind === 'calls'
+    ? r.source.calls.length + (r.source.unnamed ?? 0)
+    : r.witness.length;
 }
 
 const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
@@ -405,7 +389,7 @@ function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFac
           ctx.say(REASON_LINES[r.reason], {
             ...(COUNTED.has(r.reason) && {
               vars: {
-                n: n(COUNTS_CALLS.has(r.reason) ? callsBehind(r.witness, state) : r.witness.length),
+                n: n(COUNTS_CALLS.has(r.reason) ? callsBehind(r) : r.witness.length),
               },
             }),
             ...recordedAt(pointersOf(r.witness)),

@@ -52,6 +52,8 @@ import {
   assessmentDataOf,
   assumedValuesSourceOf,
   rewrittenBehind,
+  sourcesByReason,
+  standingDisplayNames,
   standingLineOf,
   type AnswerAssessmentData,
   type StandingAssumedValue,
@@ -65,6 +67,13 @@ export interface AnswerStageDeps {
   readonly standingLine?: true;
   /** `.answerValidation()` is armed: an answer its report withholds is never assessed. */
   readonly validated?: true;
+  /**
+   * The app's words for a call of a tool — its `displayName`, read through the
+   * agent's own tools (`lib/displayName.ts` · `readDisplayName`). Present only
+   * on an agent where a tool can declare one; the line then names a reason's
+   * calls in those words. Absent → the line is the bytes it always was.
+   */
+  readonly displayNameOf?: (toolName: string) => string | undefined;
 }
 
 /**
@@ -133,5 +142,18 @@ export async function assessAnswerStage(
   if (deps.standingLine !== true) return;
   const data = assessmentDataOf(assessed);
   const assumed = await assumedValuesOf(data, record);
-  scope.answerStandingLine = standingLineOf(data, assumed, rewrittenBehind(assessed));
+  // The app's words for the calls the reasons rest on — only tools that declare them.
+  const displayNames =
+    deps.displayNameOf === undefined
+      ? new Map<string, string>()
+      : standingDisplayNames(assessed, assumed, deps.displayNameOf);
+  scope.answerStandingLine = standingLineOf(
+    data,
+    assumed,
+    rewrittenBehind(assessed),
+    displayNames.size > 0 ? { sources: sourcesByReason(assessed), displayNames } : undefined,
+  );
+  // Filed for PrepareFinal (`turn_end.standingLineNames`): the words the record keeps, so a
+  // reader rebuilds the very line (`answer-account/account.ts` · `appendedStandingLine`).
+  if (displayNames.size > 0) scope.answerStandingNames = Object.fromEntries(displayNames);
 }
