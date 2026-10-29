@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.0] - 2026-10-29
+
+### Breaking
+
+- **`CodeResult.ok` is optional: an outcome the code runner did not report is unknown, never success.** `agentCoreCodeRunner` used to fill in `ok: true` when AgentCore reported neither an exit status nor an error flag. The model then read a clean run, and the run record kept `ok: true`. Now `ok` is set only when the backend reported which it was: an exit status, or its own `isError` verdict, including an explicit `isError: false`. Otherwise `ok` is absent, and `codeRunnerTool` tells the model the outcome is unknown (`[exit status unknown: …]`).
+
+  Three new optional fields say which kind of `false` a result is. They are on `CodeResult`, on `CodeRunFacts` and on the `agentfootprint.tools.code_run` event:
+
+  - `exitCode`: the program ran and exited with this status. It is there only when the runner supplied one, never inferred.
+  - `serviceError: true`: the backend flagged an error and reported no exit status, so the run is unconfirmed, not failed. `agentCoreCodeRunner` sets it for an `isError` answer with no exit code.
+  - `terminatedBy`: the signal that ended the process before it exited (`'SIGKILL'`). There is no exit status then.
+
+  `codeRunnerTool` writes `[exit N]` only when N was supplied, and `[exit non-zero]` is gone. A failure with no exit status reads `[not confirmed: …]` or `[no exit status reported (terminated by SIGKILL): …]`.
+
+  Migration:
+
+  1. `CodeResult.ok` is now `ok?: boolean`, and so are `CodeRunFacts.ok` and `ToolsCodeRunPayload.ok`. `const done: boolean = result.ok` no longer compiles.
+  2. Treat `ok === undefined` as unknown, never as success. Write `result.ok === true` where you mean "it worked". `!result.ok` is now also true for a result whose outcome is unknown.
+  3. To learn what happened, read `exitCode` for the status, `serviceError` for a run the backend could not confirm, and `terminatedBy` for a process stopped before it exited.
+  4. Update custom `CodeSession` and `CodeRunner` implementations. Set `ok` only when your backend reported an outcome; otherwise leave it out, and never guess `true`. Set `exitCode` exactly when the backend reports one, `serviceError: true` for an error flag with no exit status, and `terminatedBy` for a stopping signal.
+  5. A test double for `agentCoreCodeRunner`'s `_client` must now accept `invoke(input, { abortSignal })`. `input` is one of `executeCode`, `writeFiles`, `readFiles` or `executeCommand`. Its answer keeps a reported `isError: false`, and an answer with neither `exitCode` nor `isError` now gives a result with no `ok`.
+
+### Added
+
+- **Code runners move files in and out of the sandbox exactly and bounded, and run shell commands when the runner opts in.** The `CodeSession` port gains two optional verbs, feature-detected like `stageInputs` (`canReadCodeFiles`, `canRunCodeCommands`). `readFile(path, { maxBytes })` reads ONE file back: whole, or refused — a file over `maxBytes` is a `CodeSandboxError` with `reason: 'file-too-large'`, never a cut file; text or bytes is whichever the backend returned, never decided by the extension. `runCommand(command, { timeoutMs, signal, maxOutputChars, checkpoint })` runs one shell command with stdout and stderr bounded and the cut stated on `truncated`, and reports `exitCode` only when the backend reported one. A `checkpoint` line is looked for in the whole stdout, before the cut, and proves only that the command reached that line. `runCommand` runs arbitrary shell, so a session has it only when its runner is built with `commands: true` (default off; build one runner per agent that should have it).
+
+  `agentCoreCodeRunner` now stages inputs, so `codeRunnerTool({ wants })` works on AgentCore: one `writeFiles` call, text as `text` and bytes as a `blob` (never base64 inside text), refused before it is sent when the request would pass AgentCore's 100 MB per-call limit (`reason: 'request-too-large'`). `AF_STAGED_INPUTS` is filled as `localCodeRunner` fills it: set in the code's runtime by a setup call before EVERY execution, inside the same deadline, whose printed confirmation is checked (`reason: 'staged-inputs-unset'` when it is not). It is never skipped because it was set before: the runtime keeps state the code can change. It is also exported ahead of each command. `readFile` pairs the returned file with the path by the URI AgentCore put on it, read one way as a `file:///` URI (each segment percent-decoded; a raw `?` or `#` refused as a query or fragment, so a name holding one arrives as `%3F` / `%23`), and fails closed on a missing or different one (`'uri-missing'`, `'uri-mismatch'`). On AgentCore, a service error naming the session as "not active", or a `ResourceNotFoundException` on a call that addresses nothing but the session (code, a command, a write), is now one `SessionExpiredError` (it surfaced as the raw service error). On a read the same exception may mean the file, so it is `'file-not-returned'`, naming both possibilities, never proof the session is gone. `localCodeRunner` gains both verbs: `readFile` reads from its working directory and refuses a symbolic link that leads out of it; `runCommand` runs `sh -c` with the code's environment allowlist.
+
+  Both runners refuse the same paths by one rule, `sandboxPath`: an absolute path, a `..` that climbs above the working directory, a backslash, a leading `~` or a NUL, before anything is read or sent. A command reaches whatever the sandbox's network reaches: AgentCore's network mode is set on the code interpreter resource (the built-in `aws.codeinterpreter.v1` uses AWS's most restrictive defaults, Sandbox mode), and `localCodeRunner` has no network isolation. No command text and no file contents appear in any error; a modelled AgentCore error from a file or command call names the exception and leaves out the service's message, which can quote what was sent.
+
+### Changed
+
+- **MCP replay: `'compatibility'` stays the default in 12.0.0, and strict replay stays opt-in.** 11.5.0 said strict replay (`replay: { policy: 'app-authorized' }`) would become the default in the next major. That is superseded: 12.0.0 keeps compatibility as the default, as an interim policy rather than a permanent one. The reason: strict refuses tool calls it cannot observe and correlate, such as every tool call over `stdio` and every one through an MCP SDK whose `connect` replaces the transport's message handler (SDK 1.10 does when run; reading the source finds the same through 1.13), so as a default it would refuse calls for apps that never chose it.
+
+  Nothing else changes. `'compatibility'` keeps its stated retry assumption: a 429 is sent again for every tool, and each repeat records `permission: { by: 'compatibility', assumes: 'refused-before-execution' }`. It does not gain the strict observation or correlation guarantees. An explicit `'app-authorized'` stays strict and never falls back to compatibility, including when a request loses its match after the connection initialized. Its refusal, `McpReplayUnavailableError` with `sent: false`, concerns the tool invocation only: connecting and listing tools still happen. The check tests what a connection does, never an SDK version number. A strict default may come in a later major, after the supported transport and SDK combinations are measured; none is scheduled.
+
+### Fixed
+
+- **Code runners stop on time, and say what happened to a process they stopped.**
+
+  - `agentCoreCodeRunner`'s `execute` now honours `timeoutMs` and `signal`. It ignored both, so an aborted run kept waiting on the sandbox. The wait ends at the deadline with a `CodeSandboxError` (`reason: 'timed-out'`), which says the code may still be running in the session, or with the caller's own abort reason. One deadline covers the whole execution, including the setup call that exposes staged inputs.
+  - `localCodeRunner`'s timeout is now a real bound, and it stops the run's owned process group. The runtime's own timeout sent SIGTERM to the direct child and then waited. A child that ignored SIGTERM ran on, and if it then exited 0 the run came back as a success with its output cut at the deadline. A process the code or command had started kept running, and writing, after the caller was told it had been killed. Now, on POSIX, each run gets a process group of its own. At the deadline, on abort, at the 32 MiB output ceiling, and on any child `error` event, the owned group is killed with SIGKILL at that moment, not after its pipes close. A timed-out or aborted call fails at once (`CodeSandboxError`, `reason: 'timed-out'`, for a command). This is cleanup, not containment: a descendant that starts its own session or group is outside the owned group, and a host killed before its exit handlers run cannot clean up. The local runner is still not a sandbox. The message says "its process group was killed" (it said "the process was killed"). On Windows, where there is no process group to signal, only the process itself is stopped, and the message says that work it started may still be running. Groups the runner still owns are killed when the host process exits. A timeout past about 24.8 days no longer fires after 1 ms.
+  - `localCodeRunner` no longer blames a missing interpreter for an aborted child ("could not run … (ABORT_ERR)"); the abort comes back as the caller's reason.
+  - A runtime `error` event for a process that had already started is no longer reported as "could not run … install the interpreter" (or, without an error code, as a result with no outcome while the process ran on). It is a `CodeSandboxError` with `reason: 'error-after-start'`, which says the process started and its outcome is unknown, and the owned group is stopped. "Could not run" now means only that nothing started.
+  - Output past the 32 MiB buffer is no longer blamed on a missing interpreter either. It is a result: the output kept so far, the cut stated on `truncated`, no exit status, and `terminatedBy: 'SIGKILL'`.
+  - A child the operating system ended with a signal now has no `exitCode` instead of a made-up `1`, and `terminatedBy` names the signal (`ok` is still `false`).
+  - A failed child whose stderr was empty used to get the runtime's message ("Command failed: <the whole command line>") as its stderr, so the code itself reached the tool result. Now its stderr stays empty; the exit status line already says it failed.
+
 ## [11.5.0] - 2026-10-29
 
 ### Added
