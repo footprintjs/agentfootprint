@@ -909,7 +909,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // external `.toolProvider()` output, then per-skill inject.tools.
     // First occurrence wins.
     //
-    // Why dedupe matters: Neo wires `gatedTools(staticTools([listSkills,
+    // Why dedupe matters: the host app wires `gatedTools(staticTools([listSkills,
     // readSkill]), policy.isAllowed)` AND calls `.skills(registry)` —
     // the framework auto-attaches its own `read_skill` from the skill
     // registry, AND the consumer's toolProvider emits one too. Without

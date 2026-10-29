@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.2.0] - 2026-10-29
+
+### Added
+
+- **Tune how MCP calls wait before retrying — and one retry budget per call.** `retryOnThrottle` and `agentCoreRuntimeMcpTransport({ retry })` now take `baseDelayMs`, `multiplier`, `jitter` (`'none' | 'equal' | 'full'`), `maxDelayMs` (the most one of the library's own backoff waits may last — capped before the jitter draw, so capped waits still spread, and never applied to a server's `Retry-After`) and `maxElapsedMs` (a deadline for the whole call, requests included), beside `maxAttempts`, `maxWaitMs` and `onRetry`. `onRetry`, a notification before each wait, also says which refusal it answers: `kind` is `'throttle'` or `'session-busy'`. It is never told the call's arguments or the server's answer. Its `url` is the endpoint's origin only (scheme, host and port). Declare `endpointLabel` in the retry options (`retryOnThrottle`, the transport's `retry`, `retryingFetch`) to have `onRetry` name the endpoint as `endpoint`; with no label there is no `endpoint` field, and none is ever made up from the URL. `onRetry` is not told how the call ended; the attempt records the retry runner makes stay inside the library for now.
+
+  Each MCP call is now one retry series on footprintjs's `attempt()` runner. Under `mcpClient`, an AgentCore Runtime transport's session-busy retry and the client's 429 retry share that series instead of nesting, so they share one attempt count, one waiting total and one deadline: a call makes at most the transport's `retry.maxAttempts` requests whatever refusals it meets. A `Retry-After` is honoured whole: `maxDelayMs` caps only the library's own backoff, and a stated wait that would break `maxWaitMs` or the deadline is not begun — the 429 is delivered instead, never asked again early. Under `maxElapsedMs`, the deadline covers each request until its answer has been classified: a session-busy reply whose body stalls is cut at the deadline and its body released, while an answer handed back — a stream included — keeps streaming under the caller's own signal.
+
+### Changed
+
+- **AgentCore Runtime's session-busy retry now waits long enough for a session to start.** Its default backoff is 500 ms doubling with equal jitter (it was 200 ms): 3.75–7.5 s of waiting across its 5 attempts, so a runtime session that takes up to about 3.4 s to come up is waited out on every draw, still inside the 10 s waiting ceiling. Plain `mcpClient` 429 defaults are unchanged.
+
+  Also changed, under `mcpClient` with that transport: a 429 is retried inside the transport's series — in the same runtime session, within the transport's `retry.maxAttempts` (raise that to allow more), with `retryOnThrottle.maxAttempts` still limiting the 429 retries. For every MCP retry: a request whose signal is already aborted is not sent at all (it rejects with the abort's reason), a throwing `onRetry` no longer fails the call, `onRetry`'s `waitMs` is the exact wait (it can carry a fraction of a millisecond; it was rounded), and **`onRetry`'s `url` is now the endpoint's ORIGIN only** — scheme, host and port. It was the whole URL, path, user info, query and fragment included. A consumer reading `info.url` now gets the origin and nothing else; to tell endpoints apart, declare `endpointLabel` and read `info.endpoint`.
+
+- **`agent.shutdown()` now stops waiting for a sink's flush after 30 seconds by default.** Before, `shutdown()` waited for every enabled sink to finish flushing, however long that took. A sink whose write never settled (a hung network mount under the file sink, or a network call with no timeout) held `shutdown()` forever.
+
+  Now each sink's flush gets one deadline, `timeoutMs`. A sink still flushing at the deadline is reported by name through its own `onError` (on the console when it has none): its delivery is still in flight, either still delivering or stuck. The shutdown then goes on and stops the handles. The write itself is not cancelled; nothing can cancel it. **What this changes for you:** a slow but healthy sink whose flush takes longer than 30 s now has its tail reported instead of waited for.
+
+  - **Keep the old behaviour** (wait as long as it takes): `await agent.shutdown({ timeoutMs: Infinity })`.
+  - **Pick your own bound**, e.g. inside a Lambda's remaining time: `await agent.shutdown({ timeoutMs: 5_000 })`.
+
+  `Infinity` arms no timer at all. A finite `timeoutMs` of any size is honoured, even past the ~24.8 days one host timer can hold (Node would otherwise fire such a timer after 1 ms). A `timeoutMs` that is not a positive number makes the returned promise reject with a `TypeError` that names the field and the shape it takes, never the value passed; nothing is thrown synchronously. When a shutdown is already in flight, a second call joins it: its own `timeoutMs` is still checked, but the first call's deadline governs, as its `stop` already did.
+
+### Fixed
+
+- **The `footprintjs` peer range now says what agentfootprint needs: `^10.6.0`.** It read `^9.47.0 || ^10.0.0`, and that was already untrue: agentfootprint's saved-history cause tools (`src/trace-toolpack/storedCause*.ts`) use footprintjs APIs that older releases do not have, so on them its own code does not typecheck and its tests fail. Measured on agentfootprint 11.1.0's tree, per footprintjs release:
+
+  - **9.47.0, 10.0.0, 10.1.0** — `footprintjs/trace` has no `readStoredCapture` and no `StoredCaptureHistory` (6 type errors; 102–103 tests fail).
+  - **10.4.0** — `StoredCaptureHistory` has no `readSources` (4 type errors; 24 tests fail).
+  - **10.5.0** — `EngineReadSources` has no `ownership`, and its source envelope is still version 1 (8 type errors; 23 tests fail).
+  - **10.6.0** — every API is there: no type error, no failing test.
+
+  If your install resolved an older footprintjs, upgrade it to 10.6.0 or later. (MCP retries also run on footprintjs's `attempt()`, which arrived in 10.1.0.)
+
 ## [11.1.1] - 2026-10-28
 
 ### Fixed

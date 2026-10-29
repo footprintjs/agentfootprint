@@ -196,13 +196,13 @@ const scoped = await handle.artifactsForRequest({ sessionId, headers, signInKey:
 const door = signInDoor({
   passwords: localPasswords(process.env.IDENTITY_LOCAL_USERS!),
   store: memorySignIns(),
-  publicUrl: 'https://neo.corp.example',
+  publicUrl: 'https://bot.corp.example',
   production: false,
-  guard: { allowedHosts: ['neo.corp.example'] }, // the host's own list
+  guard: { allowedHosts: ['bot.corp.example'] }, // the host's own list
 });
 const host = nodeHost({
   port: 8080,
-  allowedHosts: ['neo.corp.example'],
+  allowedHosts: ['bot.corp.example'],
   signIn: door.hostSignIn,
   onUnhandled: (req, res) => void door.handle(req, res).then((ok) => ok || res.writeHead(404).end()),
 });
@@ -250,13 +250,13 @@ human security review (design Q5).
 ```ts
 const verifier = oidcIdentity({ issuer, audience, userIdClaim: 'oid', requiredScope, allowedClients: [clientId] });
 const door = signInDoor({
-  redirect: oidcSignIn({ verifier, clientId, credential: { kind: 'private-key', pem }, scope: 'openid api://neo/access_as_user' }),
+  redirect: oidcSignIn({ verifier, clientId, credential: { kind: 'private-key', pem }, scope: 'openid api://bot/access_as_user' }),
   verify: verifier.verify, // bearer callers use the same path
   store: memorySignIns(),
-  publicUrl: 'https://neo.corp.example',
+  publicUrl: 'https://bot.corp.example',
   production: true,
-  guard: { allowedHosts: ['neo.corp.example'] },
-  cookieKey: sealKeyFrom(readFileSync('/run/secrets/neo-cookie-key')),
+  guard: { allowedHosts: ['bot.corp.example'] },
+  cookieKey: sealKeyFrom(readFileSync('/run/secrets/bot-cookie-key')),
 });
 ```
 
