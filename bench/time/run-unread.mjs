@@ -30,6 +30,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
 import { shuffled } from '../inputs/labels.mjs';
+import { recordedDir } from '../recordedDir.mjs';
 import { ANCHOR, CASES, sheetProblems } from './cases.mjs';
 import { MAX_ITERATIONS, MAX_TOKENS, PRICES, buildAgent, buildTools } from './harness.mjs';
 import {
@@ -268,7 +269,7 @@ async function main() {
       seedDrawn: 'fresh, crypto.randomInt, at the start of this invocation',
     }),
     clock: { anchor: ANCHOR, realStart, offsetMs },
-    before: resolve(opts.before ?? ''),
+    before: recordedDir(opts.before ?? ''),
     agentArm: 'on',
     concurrency: opts.concurrency,
     maxIterations: MAX_ITERATIONS,

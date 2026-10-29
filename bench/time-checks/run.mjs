@@ -42,6 +42,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gunzipSync, gzipSync } from 'node:zlib';
 
 import { shuffled } from '../inputs/labels.mjs';
+import { recordedDir } from '../recordedDir.mjs';
 import { ANCHOR, ARMS, CASES, sheetProblems } from './cases.mjs';
 import { MAX_ITERATIONS, MAX_TOKENS, PRICES, buildAgent, buildTools, runCase } from './harness.mjs';
 import { aggregate, formatReport, readRun } from './metrics.mjs';
@@ -412,7 +413,7 @@ async function main() {
       seedDrawn: 'fresh, crypto.randomInt, at the start of this invocation',
     }),
     clock: { anchor: ANCHOR, realStart, offsetMs },
-    baseline: resolve(opts.baseline ?? ''),
+    baseline: recordedDir(opts.baseline ?? ''),
     concurrency: opts.concurrency,
     ...(opts.temperature !== undefined && { temperature: opts.temperature }),
     maxIterations: MAX_ITERATIONS,
