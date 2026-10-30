@@ -13,11 +13,14 @@
  * history content, and any event of another run.
  *
  * Bounds: a leaf over 2,048 serialized characters is `too-large`; the whole map
- * stops at 64 KB — no later pointer adds a key; one `#more` entry says the rest
- * is withheld as `too-large`.
+ * stops at its share of the op's body, measured in serialized UTF-8 bytes
+ * (`size.ts` · `SHOWN_BYTES`, 64 KiB less the body's frame) — no later pointer
+ * adds a key; one `#more` entry says the rest is withheld as `too-large`.
  */
 
 import { eventBelongsToRun } from '../bridge/eventMeta.js';
+import { jsonBytes } from '../lib/boundedJson.js';
+import { SHOWN_BYTES } from './size.js';
 import { pointerKey } from './render.js';
 import type {
   AnswerAccount,
@@ -30,7 +33,13 @@ import type {
 import { isRecord } from './view.js';
 
 export const MAX_LEAF_CHARS = 2048;
-export const MAX_SHOWN_BYTES = 64 * 1024;
+/**
+ * The map's size, in its own unit — serialized UTF-8 bytes (`size.ts` ·
+ * `SHOWN_BYTES`): what the account and the body's frame leave of the op's
+ * 192 KiB body. Each entry is measured as JSON writes it (`jsonBytes`), so a
+ * leaf of characters JSON writes six bytes wide costs six.
+ */
+export const MAX_SHOWN_BYTES = SHOWN_BYTES;
 
 /**
  * The one key added when the map reaches `MAX_SHOWN_BYTES`: every pointer with
@@ -38,7 +47,7 @@ export const MAX_SHOWN_BYTES = 64 * 1024;
  * start with a pointer kind), so it cannot collide with one.
  */
 export const SHOWN_MORE_KEY = '#more';
-const SENTINEL_BYTES = JSON.stringify({ [SHOWN_MORE_KEY]: { withheld: 'too-large' } }).length + 2;
+const SENTINEL_BYTES = jsonBytes({ [SHOWN_MORE_KEY]: { withheld: 'too-large' } }) + 2;
 
 const PREFIX = 'agentfootprint.';
 
@@ -369,7 +378,7 @@ export function showLeaves(
     } else {
       out = leaf(declarationValue(declarations, p.field));
     }
-    const size = JSON.stringify(key).length + JSON.stringify(out).length + 2;
+    const size = jsonBytes(key) + jsonBytes(out) + 2;
     if (bytes + size > MAX_SHOWN_BYTES - SENTINEL_BYTES) {
       // Past the cap nothing more is added — one sentinel says the rest is withheld.
       shown[SHOWN_MORE_KEY] = { withheld: 'too-large' };

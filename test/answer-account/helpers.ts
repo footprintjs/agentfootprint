@@ -353,6 +353,17 @@ export function assertP7(
       }
     }
   }
-  expect(JSON.stringify(account).length).toBeLessThanOrEqual(128 * 1024);
-  expect(response.length).toBeLessThanOrEqual(192 * 1024);
+  // README law 8 in its own unit: serialized UTF-8 bytes, never characters.
+  expect(utf8Bytes(account)).toBeLessThanOrEqual(128 * 1024);
+  expect(utf8Bytes(response)).toBeLessThanOrEqual(192 * 1024);
+}
+
+/**
+ * The size contract's own measure (README law 8): the UTF-8 bytes of the JSON
+ * — of `value` serialized, or of a text already serialized. A character is not
+ * a byte: JSON writes a control character as six, UTF-8 a BMP character as up
+ * to three.
+ */
+export function utf8Bytes(value: unknown): number {
+  return Buffer.byteLength(typeof value === 'string' ? value : JSON.stringify(value), 'utf8');
 }

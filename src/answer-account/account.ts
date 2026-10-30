@@ -47,6 +47,7 @@ import type {
   Sentence,
 } from './types.js';
 import { validateDeclarations } from './declarations.js';
+import { fitAccount } from './size.js';
 import {
   isRecord,
   keptOut,
@@ -456,7 +457,7 @@ function readRun(view: RecordingView, resumedLeg: boolean): AccountFact<RunFact>
 /**
  * The account of a run this record cannot tell about — said once per row, and
  * nothing is claimed about the run (no "did not run any tools", no "did not
- * finish"); the hosting op may map it to `summary.notAvailable@1`. Two causes:
+ * finish"); the hosting op may map it to `summary.notAvailable@1`. Three causes:
  *
  *   - `no-own-events` — the run owns NO event of this record (an
  *     options.runId that is not this recording's, or a recording with no
@@ -467,17 +468,37 @@ function readRun(view: RecordingView, resumedLeg: boolean): AccountFact<RunFact>
  *     about a placeholder. The kept-out values the account DOES handle — the
  *     question, the answer, a tool result, a call's outcome fields, the
  *     history — never get here: each is said to be kept out where it is read.
+ *   - `too-large` — the account would pass its size limit even with nothing
+ *     listed (`size.ts` · `fitAccount`): only a record built to be, every
+ *     text at its cut in characters JSON writes six bytes wide. Counted unread.
  */
 function notToldAccount(
   view: RecordingView,
   say: ReadContext['say'],
   unread: () => number,
-  cause: 'no-own-events' | 'kept-out',
+  cause: 'no-own-events' | 'kept-out' | 'too-large',
 ): AnswerAccount {
   const missing = {
     status: 'not-recorded' as const,
-    missing: cause === 'kept-out' ? ('redacted' as const) : ('no-event' as const),
+    missing:
+      cause === 'kept-out'
+        ? ('redacted' as const)
+        : cause === 'too-large'
+        ? ('unreadable' as const)
+        : ('no-event' as const),
   };
+  const scopeLine =
+    cause === 'kept-out'
+      ? 'scope.keptOut'
+      : cause === 'too-large'
+      ? 'scope.tooLarge'
+      : 'scope.noOwnEvents';
+  const rowLine =
+    cause === 'kept-out'
+      ? 'row.keptOut'
+      : cause === 'too-large'
+      ? 'row.tooLarge'
+      : 'row.notInRecord';
   const none = <T>(): AccountFact<T> => ({
     value: null,
     source: 'library',
@@ -487,11 +508,11 @@ function notToldAccount(
   const rows: Row[] = (Object.keys(HEADINGS) as RowId[]).map((id) =>
     row(id, [
       id === 'anything-wrong'
-        ? say(cause === 'kept-out' ? 'scope.keptOut' : 'scope.noOwnEvents', {
+        ? say(scopeLine, {
             ...missing,
             chips: [chip('not-recorded', 'chip.notRecorded')],
           })
-        : say(cause === 'kept-out' ? 'row.keptOut' : 'row.notInRecord', missing),
+        : say(rowLine, missing),
     ]),
   );
   return {
@@ -525,7 +546,7 @@ function notToldAccount(
     signals: [],
     unreachable: [],
     summary: {
-      sentence: say(cause === 'kept-out' ? 'scope.keptOut' : 'scope.noOwnEvents', missing),
+      sentence: say(scopeLine, missing),
       tone: 'unknown',
     },
     unread: unread(),
@@ -643,7 +664,7 @@ export function buildAccount(
   // Counts are judgements: over EVERY call. Only the listing (`facts.calls`) is capped.
   const all = calls.all.map((c) => c.fact);
   const count = (o: string) => all.filter((c) => c.outcome === o).length;
-  return {
+  const told: AnswerAccount = {
     kind: 'agentfootprint/answer-account',
     shape: 1,
     templates: { set: 'answer-account', version: ANSWER_ACCOUNT_TEMPLATE_SET_VERSION },
@@ -686,6 +707,9 @@ export function buildAccount(
     foreign: view.foreign,
     scope: view.scope,
   };
+  // README law 8, measured in its own unit — serialized UTF-8 bytes — by the one
+  // authority: the listings fitted and counted, never the judgements.
+  return fitAccount(told, () => notToldAccount(view, say, () => unread + 1, 'too-large'));
 }
 
 /**

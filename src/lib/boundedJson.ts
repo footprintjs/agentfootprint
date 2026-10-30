@@ -1,5 +1,49 @@
 /** Strict, bounded JSON data helpers shared by internal validation boundaries. */
-const encoder = new TextEncoder();
+import { isHighSurrogate, isLowSurrogate, utf8Length } from './utf8.js';
+
+/**
+ * The UTF-8 bytes `value` serializes to — `JSON.stringify` and all its
+ * escaping included: a control character or a lone surrogate is six bytes
+ * (`\u0001`), a quote or a backslash two, a BMP character up to three, an
+ * astral one four. THE measure for every bound stated in serialized bytes —
+ * {@link copyJson}'s, the answer account's (`answer-account/size.ts`). `0`
+ * for a value JSON writes nothing for (`undefined`, a function). The text
+ * JSON writes holds no lone surrogate (each is escaped), so its UTF-8 length
+ * is exact.
+ */
+export function jsonBytes(value: unknown): number {
+  const text = JSON.stringify(value);
+  return text === undefined ? 0 : utf8Length(text);
+}
+
+/**
+ * The longest prefix of `text`, in whole code points, whose JSON string form
+ * (its quotes excluded) is at most `maxBytes` UTF-8 bytes — `text` itself
+ * when it fits. Each code point is measured by JSON's own escaping
+ * ({@link jsonBytes}), never by a second table of it.
+ *
+ * @example
+ * ```ts
+ * cutToJsonBytes('abc', 2);              // 'ab'
+ * cutToJsonBytes('\u0001\u0001', 6);     // '\u0001' — JSON writes each as six bytes
+ * ```
+ */
+export function cutToJsonBytes(text: string, maxBytes: number): string {
+  // UTF-16 length is a lower bound on JSON content bytes. Avoid serializing
+  // an arbitrarily long identity when only its bounded prefix can be returned.
+  if (text.length <= maxBytes && jsonBytes(text) - 2 <= maxBytes) return text;
+  let used = 0;
+  let end = 0;
+  while (end < text.length) {
+    const width =
+      isHighSurrogate(text.charCodeAt(end)) && isLowSurrogate(text.charCodeAt(end + 1)) ? 2 : 1;
+    const bytes = jsonBytes(text.slice(end, end + width)) - 2;
+    if (used + bytes > maxBytes) break;
+    used += bytes;
+    end += width;
+  }
+  return text.slice(0, end);
+}
 
 export function ownData(value: unknown, allowed?: readonly string[]): Record<string, unknown> {
   if (
@@ -85,7 +129,7 @@ export function copyJson(
   };
   const string = (item: string) => {
     if (item.length > budget) throw new Error('JSON byte limit.');
-    spend(encoder.encode(JSON.stringify(item)).byteLength);
+    spend(jsonBytes(item));
   };
   const copy = (item: unknown, depth: number): unknown => {
     if (depth > maxDepth) throw new Error('JSON nesting limit.');

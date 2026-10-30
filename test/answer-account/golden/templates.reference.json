@@ -80,6 +80,15 @@
   ],
   "source": "library"
  },
+ "row.sizeBound@1": {
+  "text": "…and 2 more lines, not listed here: the account reached its size limit.",
+  "parts": [
+   {
+    "text": "…and 2 more lines, not listed here: the account reached its size limit."
+   }
+  ],
+  "source": "library"
+ },
  "items.keptOut@1": {
   "text": "Kept out of this record: 2 items.",
   "parts": [
@@ -2945,6 +2954,24 @@
   "parts": [
    {
     "text": "Not told: this record keeps out values this report reads."
+   }
+  ],
+  "source": "library"
+ },
+ "scope.tooLarge@1": {
+  "text": "This record is too large to explain within the size limit of this report, so nothing about the answer is told from it.",
+  "parts": [
+   {
+    "text": "This record is too large to explain within the size limit of this report, so nothing about the answer is told from it."
+   }
+  ],
+  "source": "library"
+ },
+ "row.tooLarge@1": {
+  "text": "Not told: this record is too large to explain within the size limit of this report.",
+  "parts": [
+   {
+    "text": "Not told: this record is too large to explain within the size limit of this report."
    }
   ],
   "source": "library"

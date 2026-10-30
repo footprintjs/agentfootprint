@@ -42,7 +42,7 @@ import { accountForAnswer, recordRun } from '../../src/observe.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
 import type { AnswerAccountDeclarations } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-import { fixtureA, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS } from './helpers.js';
+import { fixtureA, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS, utf8Bytes } from './helpers.js';
 
 interface Case {
   readonly name: string;
@@ -394,11 +394,11 @@ function problemOf(c: Case, recording: Recording): string | undefined {
       c.runId !== undefined ? { runId: c.runId } : undefined,
     );
     if (account.rows.length !== 7) return `${account.rows.length} rows`;
-    const size = JSON.stringify(account).length;
-    if (size > 128 * 1024) return `an account of ${size} characters`;
+    const size = utf8Bytes(account);
+    if (size > 128 * 1024) return `an account of ${size} bytes`;
     const shown = showLeaves(account, recording, c.declarations);
-    const op = JSON.stringify({ account, shown }).length;
-    if (op > 192 * 1024) return `a response of ${op} characters`;
+    const op = utf8Bytes({ account, shown });
+    if (op > 192 * 1024) return `a response of ${op} bytes`;
     return undefined;
   } catch (error) {
     return `threw ${String(error).slice(0, 160)}`;

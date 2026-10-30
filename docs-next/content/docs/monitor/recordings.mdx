@@ -312,7 +312,10 @@ account.rows.map((row) => row.heading.text); // ['You asked', 'It understood', �
 
 It reads only the answer's own run (by the agentfootprint run id on the
 recording, or the one you pass as `{ runId }`), it is pure — the same recording
-gives the same bytes — and it stays under 128 KB whatever the run held.
+gives the same bytes — and its serialized JSON stays within 128 KiB of UTF-8
+bytes. If listings exceed the limit, their omitted lines or facts are counted;
+if the rest cannot fit, the account says it cannot explain the record within
+this limit.
 
 The result is an `AnswerAccount`: the seven rows, the typed facts they were
 filled from (each with its voucher and a pointer to the leaf of the record it

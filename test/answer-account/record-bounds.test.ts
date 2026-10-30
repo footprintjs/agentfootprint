@@ -10,8 +10,7 @@
  * pointer into that event, multiplied a recording of a few kilobytes into an
  * account of megabytes. And the standing fact listed one pointer per witness
  * row the fold read, with no cap. Both are bounded where they are made: an
- * identity is cut at `FACT_TEXT_CHARS` (law 8's "ids cut at 200 characters
- * in the facts"), and a fact's pointer list at `MAX_CALLS` (the
+ * identity is cut at 200 serialized bytes (law 8), and a fact's pointer list at `MAX_CALLS` (the
  * `limitsData` precedent).
  *
  * Found by a single-point damage sweep over every payload, meta and state leaf
@@ -26,10 +25,10 @@ import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer, recordRun } from '../../src/observe.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
 import { MAX_CALLS } from '../../src/answer-account/facts/calls.js';
-import { FACT_TEXT_CHARS } from '../../src/answer-account/facts/common.js';
+import { POINTER_ID_BYTES } from '../../src/answer-account/size.js';
 import type { RecordPointer } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-import { fixtureA } from './helpers.js';
+import { fixtureA, utf8Bytes } from './helpers.js';
 
 const LONG = 'y'.repeat(50_000);
 
@@ -55,8 +54,8 @@ function pointersOf(value: unknown, out: RecordPointer[] = []): RecordPointer[] 
 function expectWithinBound(recording: Recording): ReturnType<typeof accountForAnswer> {
   const account = accountForAnswer(recording);
   const shown = showLeaves(account, recording);
-  expect(JSON.stringify(account).length).toBeLessThanOrEqual(128 * 1024);
-  expect(JSON.stringify({ account, shown }).length).toBeLessThanOrEqual(192 * 1024);
+  expect(utf8Bytes(account)).toBeLessThanOrEqual(128 * 1024);
+  expect(utf8Bytes({ account, shown })).toBeLessThanOrEqual(192 * 1024);
   return account;
 }
 
@@ -97,17 +96,22 @@ describe('the account bound on a damaged record', () => {
     declaring = await declaringRecording();
   });
 
-  it('a 50,000-character runtimeStageId on an event many pointers name: cut in every pointer', () => {
-    const doc = copyOf(fixtureA());
-    const end = doc.events.find((e) => e.type === 'agentfootprint.stream.tool_end')!;
-    end.meta.runtimeStageId = LONG;
-    const account = expectWithinBound(doc as unknown as Recording);
-    const ids = pointersOf(account).flatMap((p) =>
-      p.kind === 'event' && p.runtimeStageId !== undefined ? [p.runtimeStageId] : [],
-    );
-    expect(ids.length).toBeGreaterThan(0);
-    expect(Math.max(...ids.map((id) => id.length))).toBeLessThanOrEqual(FACT_TEXT_CHARS);
-  });
+  it.each(['y', '\u0001', '\uffff', '\ud800'])(
+    'a long runtimeStageId (%s) is cut in every pointer by serialized bytes',
+    (unit) => {
+      const doc = copyOf(fixtureA());
+      const end = doc.events.find((e) => e.type === 'agentfootprint.stream.tool_end')!;
+      end.meta.runtimeStageId = unit.repeat(50_000);
+      const account = expectWithinBound(doc as unknown as Recording);
+      const ids = pointersOf(account).flatMap((p) =>
+        p.kind === 'event' && p.runtimeStageId !== undefined ? [p.runtimeStageId] : [],
+      );
+      expect(ids.length).toBeGreaterThan(0);
+      expect(
+        Math.max(...ids.map((id) => Buffer.byteLength(JSON.stringify(id), 'utf8') - 2)),
+      ).toBeLessThanOrEqual(POINTER_ID_BYTES);
+    },
+  );
 
   it('a 50,000-character toolCallId on a history message: cut in every pointer', () => {
     const doc = copyOf(declaring);
@@ -118,7 +122,9 @@ describe('the account bound on a damaged record', () => {
     const ids = pointersOf(account).flatMap((p) =>
       p.kind === 'history' && p.toolCallId !== undefined ? [p.toolCallId] : [],
     );
-    expect(Math.max(0, ...ids.map((id) => id.length))).toBeLessThanOrEqual(FACT_TEXT_CHARS);
+    expect(
+      Math.max(0, ...ids.map((id) => Buffer.byteLength(JSON.stringify(id), 'utf8') - 2)),
+    ).toBeLessThanOrEqual(POINTER_ID_BYTES);
   });
 
   it('2,000 coverage rows: the standing fact lists at most MAX_CALLS pointers, and every reason is still counted', () => {

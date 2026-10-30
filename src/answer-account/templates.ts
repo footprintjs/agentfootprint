@@ -59,6 +59,11 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'row.wrong': t('Anything wrong'),
   'row.more': t("…and {{count:n,'more tool call','more tool calls'}}."),
   'items.more': t("…and {{count:n,'more item','more items'}}."),
+  // README law 8, measured in its own unit (`size.ts` · `fitAccount`): the lines a row could
+  // not list within the account's size limit, counted — never dropped unsaid. Set 14.
+  'row.sizeBound': t(
+    "…and {{count:n,'more line','more lines'}}, not listed here: the account reached its size limit.",
+  ),
   // A declaration's items whose words the record keeps out (a redaction policy) — set 11.
   'items.keptOut': t("Kept out of this record: {{count:n,'item','items'}}."),
 
@@ -647,6 +652,13 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'This record keeps out values this report reads, so nothing about the answer can be told from it.',
   ),
   'row.keptOut': t('Not told: this record keeps out values this report reads.'),
+  // A record whose account would pass its size limit even with nothing listed (`size.ts`). Set 14.
+  'scope.tooLarge': t(
+    'This record is too large to explain within the size limit of this report, so nothing about the answer is told from it.',
+  ),
+  'row.tooLarge': t(
+    'Not told: this record is too large to explain within the size limit of this report.',
+  ),
   'scope.unfiltered': t(
     'Which run these events belong to is not recorded, so this report reads every event in the record.',
   ),

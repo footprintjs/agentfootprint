@@ -13,7 +13,9 @@ import {
   readEmptiness,
   type EmptinessReading,
 } from '../../core/agent/emptiness.js';
+import { cutToJsonBytes } from '../../lib/boundedJson.js';
 import { isSaidByPerson, type AuthoredMessage } from '../../lib/saidByPerson.js';
+import { POINTER_ID_BYTES } from '../size.js';
 import { sentence, v, type SentenceSpec } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type {
@@ -36,7 +38,7 @@ export interface ReadContext {
   say(id: TemplateId, spec?: SentenceSpec): Sentence;
   /** Count one row the account passed over because its shape did not fit. */
   noteUnread(): void;
-  /** Items (and their characters) already printed — the account's size bound. */
+  /** Items (and their characters) already printed — the readability budget. */
   readonly budget: { itemChars: number; items: number };
 }
 
@@ -45,7 +47,7 @@ export interface ReadContext {
  * flagged values. Each item rides a sentence (its text three times: `text`,
  * `parts`, `vars`, plus pointers, about 1 KB of structure), so both the count
  * and the characters are bounded; past either, items fold into `items.more@1`
- * and the account stays under 128 KB by construction.
+ * for readability. `size.ts` separately enforces the serialized-byte bound.
  */
 export const ITEM_BUDGET = { items: 12, chars: 3_000 } as const;
 
@@ -66,17 +68,16 @@ export interface AccountInternals {
 /**
  * Long text the account prints in TOTAL, past the first `SHORT_TEXT_CHARS` of
  * each value: once spent, every later value is cut at `SHORT_TEXT_CHARS` (marked
- * `clipped`, followed by `part.clipped@1`). With the item budget it keeps the
- * account under 128 KB by construction.
+ * `clipped`, followed by `part.clipped@1`). This keeps ordinary accounts
+ * readable; `size.ts` separately enforces the serialized-byte bound.
  */
 export const LONG_TEXT_BUDGET = 3_000;
 export const SHORT_TEXT_CHARS = 300;
 
 /**
  * A text value a call's FACT carries is cut here (the sentence that prints it
- * carries up to 2,000) — and so is every identity a POINTER copies from the
- * record ({@link boundedPointer}): ids and names are cut at 200 characters
- * (README law 8).
+ * carries up to 2,000). A cut that keeps an ordinary account readable; the
+ * account's size bound itself is measured in bytes (`../size.ts`).
  */
 export const FACT_TEXT_CHARS = 200;
 
@@ -139,13 +140,14 @@ export const jsonPointer = (...keys: readonly (string | number)[]): string =>
 
 /**
  * An identity a pointer copies from the record — an event's `runtimeStageId`,
- * a history message's `toolCallId` — cut at {@link FACT_TEXT_CHARS}. Short in
- * every record this library writes; a saved record can hold anything, and an
- * id rides EVERY pointer into its event, so one long id would multiply into
- * the account. The pointer still lands: "show me" finds a leaf by its index
- * and path (`pointerKey.ts`), never by this id.
+ * a history message's `toolCallId` — cut at `POINTER_ID_BYTES` SERIALIZED
+ * bytes (`../size.ts`): short in every record this library writes, but a
+ * saved record can hold anything, and an id rides EVERY pointer into its
+ * event. Measured in the contract's unit, so a character JSON writes six
+ * bytes wide costs six. The pointer still lands: "show me" finds a leaf by its
+ * index and path (`pointerKey.ts`), never by this id.
  */
-const identity = (id: string): string => id.slice(0, FACT_TEXT_CHARS);
+const identity = (id: string): string => cutToJsonBytes(id, POINTER_ID_BYTES);
 
 /**
  * A pointer the account did not build itself — the standing fold's witnesses

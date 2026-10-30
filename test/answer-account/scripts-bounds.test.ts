@@ -17,9 +17,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { Agent, codeRunnerTool } from '../../src/index.js';
-import { mock } from '../../src/llm-providers.js';
-import { accountForAnswer, recordRun } from '../../src/observe.js';
+import { accountForAnswer } from '../../src/observe.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
 import { MAX_LISTED_CALLS } from '../../src/answer-account/facts/checked.js';
 import { FACT_TEXT_CHARS } from '../../src/answer-account/facts/common.js';
@@ -27,113 +25,8 @@ import { MAX_CODE_REGIONS } from '../../src/core/agent/evidence/codeRegions.js';
 import { MAX_ATTACHED_SCRIPTS } from '../../src/core/agent/scripts/attachment.js';
 import { scriptRowIsWellFormed } from '../../src/core/agent/scripts/rows.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-
-const PROGRAM = 'print(41 + 1)';
-const FULL = 'print("the whole program, longer than what is shown")';
-/** A provider's call id and a tool name at the length a hostile or careless provider might use. */
-const callId = (i: number) => `call-${i}-`.padEnd(200, 'x');
-const TOOL = 'run_code'.padEnd(64, '_');
-
-async function matchedRecording(): Promise<Recording> {
-  const agent = Agent.create({
-    provider: mock({
-      replies: [
-        { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: PROGRAM } }] },
-        { content: `It printed 42.\n\n\`\`\`python\n${PROGRAM}\n\`\`\`` },
-      ] as never,
-    }),
-    model: 'mock',
-  })
-    .namesAndNumbersFromEvidence({ posture: 'assist', code: 'match' })
-    .tool(
-      codeRunnerTool({
-        runner: {
-          id: 'answering',
-          start: () =>
-            Promise.resolve({
-              id: 's1',
-              execute: () => Promise.resolve({ ok: true, exitCode: 0, stdout: '42', stderr: '' }),
-              stop: () => Promise.resolve(),
-            }),
-        },
-      }),
-    )
-    .scriptTravelsWithTheAnswer({ which: 'all' })
-    .build();
-  const recorder = recordRun(agent);
-  await agent.run({ message: 'compute' });
-  const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
-  recorder.stop();
-  return recording;
-}
-
-type Doc = {
-  events: Array<{ type: string; payload: Record<string, unknown> }>;
-  snapshot: { sharedState: Record<string, unknown> };
-};
-
-const lastOf = (doc: Doc, type: string) =>
-  [...doc.events].reverse().find((e) => e.type === `agentfootprint.${type}`)!;
-
-/** `recording` filled with `blocks` shown-block verdicts and `attached` attached scripts. */
-function filled(recording: Recording, blocks: number, attached: number): Recording {
-  const doc = JSON.parse(JSON.stringify(recording)) as Doc;
-  const state = doc.snapshot.sharedState;
-  const turn = state.turnNumber as number;
-  const ledger = (state.findingsLedger as Array<Record<string, unknown>>).filter(
-    (r) => r.kind !== 'script',
-  );
-  // One row per dispatch, every extra line its label allows: a withheld result and a rewrite.
-  for (let d = 1; d <= 16; d++) {
-    ledger.push({
-      kind: 'script',
-      toolCallId: callId(d),
-      dispatch: d,
-      tool: TOOL,
-      argument: 'code',
-      language: 'python',
-      bytes: PROGRAM.length,
-      lines: 1,
-      text: PROGRAM,
-      outcome: 'completed-with-failure',
-      exitCode: 1,
-      resultWithheld: 'over-ceiling',
-      rewritten: true,
-      turn,
-      iteration: 1,
-    });
-  }
-  state.findingsLedger = ledger;
-  const scripts = lastOf(doc, 'agent.evidence_checked').payload.scripts as Record<string, unknown>;
-  scripts.blocks = Array.from({ length: blocks }, (_, i) => ({
-    block: i + 1,
-    label: 'completed-with-failure',
-    exitCode: 1,
-    toolCallId: callId((i % 16) + 1),
-    tool: TOOL,
-    dispatch: (i % 16) + 1,
-  }));
-  const end = lastOf(doc, 'agent.turn_end').payload;
-  end.scripts = {
-    shown: Array.from({ length: attached }, (_, i) => ({
-      toolCallId: callId(i + 1),
-      dispatch: i + 1,
-      tool: TOOL,
-      language: 'python',
-      label: 'completed-with-failure',
-      exitCode: 1,
-      resultWithheld: 'over-ceiling',
-      rewritten: true,
-      bytes: FULL.length,
-      lines: 1,
-      truncated: { shownBytes: 10 },
-      text: FULL.slice(0, 10),
-    })),
-    omitted: 3,
-    withheldFromText: true,
-  };
-  return doc as unknown as Recording;
-}
+import { filled, lastOf, matchedRecording, type Doc } from './fixtures/writerCaps.js';
+import { utf8Bytes } from './helpers.js';
 
 const idsOf = (account: ReturnType<typeof accountForAnswer>) =>
   account.rows.flatMap((r) => r.lines.map((l) => l.template.id));
@@ -157,8 +50,8 @@ describe('script lines within the account bound', () => {
     const at = filled(recording, MAX_CODE_REGIONS, MAX_ATTACHED_SCRIPTS);
     const account = accountForAnswer(at);
     const shown = showLeaves(account, at);
-    expect(JSON.stringify(account).length).toBeLessThanOrEqual(128 * 1024);
-    expect(JSON.stringify({ account, shown }).length).toBeLessThanOrEqual(192 * 1024);
+    expect(utf8Bytes(account)).toBeLessThanOrEqual(128 * 1024);
+    expect(utf8Bytes({ account, shown })).toBeLessThanOrEqual(192 * 1024);
     const ids = idsOf(account);
     expect(ids.filter((id) => id === 'howSure.script.shown.completedWithFailure')).toHaveLength(
       MAX_LISTED_CALLS,
