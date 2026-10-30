@@ -1,5 +1,6 @@
 /** Shared runner and policy canaries; neither arm gets a second citation checker. */
 import { observation, scenarios, systemText, scriptedReply } from './fixture.mjs';
+import { answerCheck } from './answerCheck.mjs';
 import { MODEL } from './budget.mjs';
 import { sha256, pinnedModule } from './identity.mjs';
 export function modules(directory, arm) {
@@ -167,7 +168,7 @@ export async function runArm({ api, arm, scenarioId, budget, transport, partitio
     plantedFidelity =
       value.answer === `${scenario.key} ${scenario.expected}` && reads === scenario.reads;
   } catch {
-    /* A non-JSON answer is not promoted to a successful fixture. */
+    /* A non-JSON answer is not promoted to a successful fixture; answerCheck names the form. */
   }
   return {
     arm,
@@ -176,6 +177,8 @@ export async function runArm({ api, arm, scenarioId, budget, transport, partitio
     calls: frames.length,
     reads,
     plantedFidelity,
+    // Closed labels only (answerCheck.mjs): why a strict `false` failed, never the reply itself.
+    answerCheck: answerCheck(answer, scenario, reads),
     referenceRefusals: rows.filter((r) => r.kind === 'reference-refusal').length,
     recordedIdentifiedStandingRows: standing.filter((r) => r.unknownId !== true).length,
     recordedUnknownStandingRows: standing.filter((r) => r.unknownId === true).length,
