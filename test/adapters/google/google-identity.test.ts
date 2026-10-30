@@ -216,7 +216,14 @@ describe('nothing this throws may carry a secret', () => {
       .catch((e: unknown) => e);
     expect((error as Error).name).toBe('GoogleCredentialsUnavailableError');
     expect(String(error)).toMatch(/application-default login/);
-    expect(String(error)).not.toContain('/Users/someone/');
+    // The account name is the secret, not the path around it: it must be
+    // absent in every form — inside the path or bare, in the message or the
+    // stack — and no cause may carry the library's text onward.
+    const err = error as Error;
+    for (const rendered of [String(err), err.message, err.stack ?? '']) {
+      expect(rendered).not.toMatch(/someone/i);
+    }
+    expect(err.cause).toBeUndefined();
   });
 });
 
