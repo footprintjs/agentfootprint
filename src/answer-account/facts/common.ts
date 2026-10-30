@@ -72,6 +72,14 @@ export interface AccountInternals {
 export const LONG_TEXT_BUDGET = 3_000;
 export const SHORT_TEXT_CHARS = 300;
 
+/**
+ * A text value a call's FACT carries is cut here (the sentence that prints it
+ * carries up to 2,000) — and so is every identity a POINTER copies from the
+ * record ({@link boundedPointer}): ids and names are cut at 200 characters
+ * (README law 8).
+ */
+export const FACT_TEXT_CHARS = 200;
+
 function spendText(
   vars: Readonly<Record<string, SentenceVar>>,
   budget: { longChars: number },
@@ -129,6 +137,31 @@ const segment = (key: string | number): string =>
 export const jsonPointer = (...keys: readonly (string | number)[]): string =>
   keys.map((k) => `/${segment(k)}`).join('');
 
+/**
+ * An identity a pointer copies from the record — an event's `runtimeStageId`,
+ * a history message's `toolCallId` — cut at {@link FACT_TEXT_CHARS}. Short in
+ * every record this library writes; a saved record can hold anything, and an
+ * id rides EVERY pointer into its event, so one long id would multiply into
+ * the account. The pointer still lands: "show me" finds a leaf by its index
+ * and path (`pointerKey.ts`), never by this id.
+ */
+const identity = (id: string): string => id.slice(0, FACT_TEXT_CHARS);
+
+/**
+ * A pointer the account did not build itself — the standing fold's witnesses
+ * (`core/agent/assessment/assess.ts`) — with its identity cut as the
+ * builders below cut theirs.
+ */
+export function boundedPointer(p: RecordPointer): RecordPointer {
+  if (p.kind === 'history' && p.toolCallId !== undefined) {
+    return { ...p, toolCallId: identity(p.toolCallId) };
+  }
+  if (p.kind === 'event' && p.runtimeStageId !== undefined) {
+    return { ...p, runtimeStageId: identity(p.runtimeStageId) };
+  }
+  return p;
+}
+
 export function at(event: ViewEvent, ...keys: readonly (string | number)[]): RecordPointer {
   const runtimeStageId = str(event.meta.runtimeStageId);
   return {
@@ -136,7 +169,7 @@ export function at(event: ViewEvent, ...keys: readonly (string | number)[]): Rec
     index: event.index,
     type: event.type,
     path: jsonPointer(...keys),
-    ...(runtimeStageId !== undefined && { runtimeStageId }),
+    ...(runtimeStageId !== undefined && { runtimeStageId: identity(runtimeStageId) }),
   };
 }
 
@@ -148,7 +181,7 @@ export function derived(event: ViewEvent, path: string): RecordPointer {
     index: event.index,
     type: event.type,
     path,
-    ...(runtimeStageId !== undefined && { runtimeStageId }),
+    ...(runtimeStageId !== undefined && { runtimeStageId: identity(runtimeStageId) }),
   };
 }
 
@@ -162,7 +195,7 @@ export const historyAt = (index: number, path: string, toolCallId?: string): Rec
   kind: 'history',
   index,
   path,
-  ...(toolCallId !== undefined && { toolCallId }),
+  ...(toolCallId !== undefined && { toolCallId: identity(toolCallId) }),
 });
 
 export function declarationAt(

@@ -20,6 +20,8 @@ import { accountForAnswer, recordRun } from '../../src/observe.js';
 import { showLeaves } from '../../src/answer-account/shown.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import type { CodeResult } from '../../src/provider-contract/types.js';
+import type { RedactionPolicy } from 'footprintjs';
+import { conversationRedaction } from '../../src/doors/security.js';
 import { assertP1, assertP7, linesOf } from './helpers.js';
 
 const PROGRAM = 'print("SECRET-PROGRAM-TEXT", 41 + 1)';
@@ -40,6 +42,7 @@ async function accountOf(o: {
   readonly result: CodeResult;
   readonly answer: string;
   readonly travel?: { maxBytes?: number };
+  readonly redact?: RedactionPolicy;
 }) {
   const agent = Agent.create({
     provider: mock({
@@ -49,6 +52,7 @@ async function accountOf(o: {
       ] as never,
     }),
     model: 'mock',
+    ...(o.redact !== undefined && { redact: o.redact }),
   })
     .tool(codeRunnerTool({ runner: runner(o.result) }))
     .namesAndNumbersFromEvidence({ posture: 'assist', code: 'match' })
@@ -145,5 +149,21 @@ describe('INTEGRATION — one line per shown and per attached script', () => {
     );
     assertP1(account, recording);
     assertP7(account, recording);
+  });
+
+  it('a record served under a redaction policy: the account refuses to tell — no placeholder is read as a call or a tool', async () => {
+    // Under any policy the value-kind rule serves every string that is not a
+    // library word as the placeholder, at every depth — `turn_end.scripts`
+    // and `evidence_checked.scripts` included. The account never reaches a
+    // script line there: its readers touch a kept-out call id first, and the
+    // whole account says it is kept out (law 11, `view.ts` · the guard).
+    const { account, texts } = await accountOf({
+      result: { ok: true, exitCode: 0, stdout: '42', stderr: '' },
+      answer: `It printed 42.\n\n${fenced(PROGRAM)}`,
+      redact: conversationRedaction(),
+    });
+    expect(account.summary.sentence.template.id).toBe('scope.keptOut');
+    expect(texts.filter((t) => /script/i.test(t))).toEqual([]);
+    expect(texts.join('\n')).not.toContain('REDACTED');
   });
 });

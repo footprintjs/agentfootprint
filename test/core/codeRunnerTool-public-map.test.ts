@@ -106,6 +106,52 @@ describe('codeRunsOf — the published map, with neither script option on', () =
     expect(events).toEqual([expect.objectContaining({ tool: 'run_code', exitCode: 7 })]);
   });
 
+  it('a decorated runner handed a context of its own: code_run still fires once, from the map, as before', async () => {
+    // `{ ...runner }` keeps the runner's map (a symbol key), so the dispatch
+    // loop recognizes a code runner — and the decorator hands the runner a
+    // context it built itself: every public field, none of the library's
+    // symbol-keyed ports (`Object.entries` reads string keys only), so this
+    // dispatch's slot never reaches the runner. The event fires as it always
+    // did, from the map's entry for the call id; the script record, armed or
+    // not, never attests from that map.
+    const inner = codeRunnerTool({ runner: runner(failing) });
+    const decorated = {
+      ...inner,
+      execute: (args: { code: string }, ctx: object) =>
+        inner.execute(args, Object.fromEntries(Object.entries(ctx)) as never),
+    };
+    for (const armed of [false, true]) {
+      const events: Array<Record<string, unknown>> = [];
+      const built = Agent.create({
+        provider: mock({
+          replies: [
+            { toolCalls: [{ id: 'c1', name: 'run_code', args: { code: 'print(1)' } }] },
+            { content: 'Done.' },
+          ] as never,
+        }),
+        model: 'mock',
+      })
+        .tool(decorated as never)
+        .watch({
+          id: 'code-runs',
+          onEmit: (e: { name: string; payload?: Record<string, unknown> }) => {
+            if (e.name === 'agentfootprint.tools.code_run') events.push(e.payload ?? {});
+          },
+        });
+      const agent = (armed ? built.scriptTravelsWithTheAnswer() : built).build();
+      await agent.run('go');
+      expect(events).toEqual([expect.objectContaining({ tool: 'run_code', exitCode: 7 })]);
+      expect(codeRunsOf(inner)?.size).toBe(0);
+      if (armed) {
+        const ledger = (agent.getLastSnapshot()?.sharedState as { findingsLedger?: unknown[] })
+          ?.findingsLedger;
+        const rows = (ledger ?? []).filter((r) => (r as { kind?: unknown }).kind === 'script');
+        // The map's entry is keyed by an id another run may share: never attested from.
+        expect(rows).toEqual([expect.objectContaining({ outcome: 'returned' })]);
+      }
+    }
+  });
+
   it('a code runner resumed after a check-in: code_run fires once, and the map keeps its entry, as before', async () => {
     const tool = codeRunnerTool({ runner: runner(failing), checkIn: 'always' });
     const events: unknown[] = [];

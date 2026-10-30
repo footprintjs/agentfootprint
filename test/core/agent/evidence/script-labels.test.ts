@@ -23,6 +23,8 @@ import {
 } from '../../../../src/index.js';
 import type { PermissionChecker } from '../../../../src/provider-contract/types.js';
 import { scriptLabelOf, labelWords } from '../../../../src/core/agent/scripts/label.js';
+import { scriptRowIsWellFormed } from '../../../../src/core/agent/scripts/rows.js';
+import { witnessRowIsWellFormed } from '../../../../src/core/agent/assessment/witness.js';
 import {
   answer,
   callCode,
@@ -263,6 +265,34 @@ describe('the rule, unit by unit — and its words', () => {
     expect(scriptLabelOf({ settlement: 'not-entered' })).toEqual({ label: 'submitted' });
   });
 
+  it('an exit code is a whole number: anything else a runner reports is no exit code', () => {
+    // The writer's rule is the readers' (`label.ts` · `isExitCode`): a row
+    // labelled from a fractional or non-finite "exit code" would be one the
+    // checkpoint door refuses (`scriptRowIsWellFormed`), and it proves no exit.
+    for (const exitCode of [1.5, Number.NaN, Number.POSITIVE_INFINITY, -0.5]) {
+      expect(scriptLabelOf({ settlement: 'returned', facts: { exitCode } })).toEqual({
+        label: 'returned',
+      });
+      expect(scriptLabelOf({ settlement: 'returned', facts: { exitCode, ok: false } })).toEqual({
+        label: 'reported-failure',
+      });
+    }
+    // A negative whole number is an exit code (a signal, on some runtimes).
+    expect(scriptLabelOf({ settlement: 'returned', facts: { exitCode: -9 } })).toEqual({
+      label: 'completed-with-failure',
+      exitCode: -9,
+    });
+  });
+
+  it('a runner that reports a fractional exit code files a row the checkpoint door admits', async () => {
+    const { row } = await rowAfter(
+      runnerAnswering({ ok: true, exitCode: 1.5, stdout: '3600', stderr: '' }),
+    );
+    expect(row).toMatchObject({ outcome: 'reported-success' });
+    expect(row.exitCode).toBeUndefined();
+    expect(scriptRowIsWellFormed(JSON.parse(JSON.stringify(row)))).toBe(true);
+  });
+
   it('only completed and completed-with-failure carry an exit number, and only the recorded one', () => {
     expect(labelWords('completed')).toBe('completed, exit 0');
     expect(labelWords('completed-with-failure', 7)).toBe('completed with failure, exit 7');
@@ -274,6 +304,82 @@ describe('the rule, unit by unit — and its words', () => {
       'outcome-unknown',
     ] as const) {
       expect(labelWords(label, 0)).not.toMatch(/exit \d/);
+    }
+  });
+});
+
+describe('one rule for one shape — the label writes it, every reader of a saved record checks it', () => {
+  const row = {
+    kind: 'script',
+    toolCallId: 'c1',
+    dispatch: 1,
+    tool: 'run_code',
+    argument: 'code',
+    bytes: 8,
+    lines: 1,
+    text: 'print(1)',
+    outcome: 'completed',
+    exitCode: 0,
+    turn: 1,
+    iteration: 1,
+  };
+  const shown = {
+    kind: 'script-shown',
+    turn: 1,
+    iteration: 2,
+    block: 1,
+    label: 'completed',
+    exitCode: 0,
+    toolCallId: 'c1',
+    tool: 'run_code',
+    dispatch: 1,
+  };
+
+  it('a script row: an exit code exactly where its label proves one, as the label writes it', () => {
+    expect(scriptRowIsWellFormed(row)).toBe(true);
+    expect(scriptRowIsWellFormed({ ...row, outcome: 'completed-with-failure', exitCode: 7 })).toBe(
+      true,
+    );
+    for (const bad of [
+      { ...row, exitCode: 7 },
+      { ...row, outcome: 'completed-with-failure', exitCode: 0 },
+      { ...row, outcome: 'completed-with-failure', exitCode: 1.5 },
+      { ...row, outcome: 'returned', exitCode: 0 },
+      { ...row, outcome: 'completed', exitCode: undefined },
+    ]) {
+      expect(scriptRowIsWellFormed(bad), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('a script-shown witness row: the block verdict rule, through the checkpoint door', () => {
+    expect(witnessRowIsWellFormed(shown)).toBe(true);
+    expect(
+      witnessRowIsWellFormed({
+        kind: 'script-shown',
+        turn: 1,
+        iteration: 2,
+        block: 2,
+        label: 'unmatched',
+        reason: 'no-submission-this-turn',
+      }),
+    ).toBe(true);
+    for (const bad of [
+      { ...shown, exitCode: 7 },
+      { ...shown, label: 'returned' },
+      { ...shown, block: 0 },
+      { ...shown, dispatch: 0 },
+      { ...shown, alsoMatches: 2 },
+      { ...shown, label: 'unmatched', reason: 'no-submission-this-turn' },
+      {
+        kind: 'script-shown',
+        turn: 1,
+        iteration: 2,
+        block: 2,
+        label: 'unmatched',
+        reason: 'lost',
+      },
+    ]) {
+      expect(witnessRowIsWellFormed(bad), JSON.stringify(bad)).toBe(false);
     }
   });
 });

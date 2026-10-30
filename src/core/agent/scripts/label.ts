@@ -22,7 +22,7 @@
  * | the record says | label |
  * |---|---|
  * | an explicit `exitCode: 0` | `completed` |
- * | an explicit non-zero `exitCode` | `completed-with-failure` |
+ * | an explicit non-zero `exitCode` (a whole number — {@link isExitCode}) | `completed-with-failure` |
  * | `serviceError` and no exit code | `outcome-unknown` |
  * | `ok: true`, no exit code | `reported-success` |
  * | `ok: false`, no exit code, no service error (a stopped process included) | `reported-failure` |
@@ -73,6 +73,29 @@ export interface ScriptOutcome {
 }
 
 /**
+ * Whether `value` is an exit code: a whole number, as a process reports one
+ * (a negative one included — a signal, on some runtimes). THE rule for every
+ * writer and reader of a script's exit code — the label below, and the
+ * readers of a saved record (`rows.ts` · `scriptRowIsWellFormed`,
+ * `attachment.ts` · `recordedScripts`, `match.ts` · `recordedBlocks`), so the
+ * writer never files a row the checkpoint door refuses. A runner that reports
+ * anything else (`1.5`, `NaN`) reported no exit code.
+ */
+export const isExitCode = (value: unknown): value is number => Number.isInteger(value);
+
+/**
+ * Whether a recorded label and exit code agree, as {@link scriptLabelOf}
+ * writes them: an exit code rides exactly the two labels one proves — `0` on
+ * `completed`, any other on `completed-with-failure` — and no other label.
+ * A record where they disagree holds a value no writer of this library files.
+ */
+export function exitCodeFits(label: unknown, exitCode: unknown): boolean {
+  if (label === 'completed') return exitCode === 0;
+  if (label === 'completed-with-failure') return isExitCode(exitCode) && exitCode !== 0;
+  return exitCode === undefined;
+}
+
+/**
  * The label of one call — execution evidence first, then settlement. `facts`
  * is ABSENT when the tool filed none (a declared tool that is not
  * `codeRunnerTool`, or a call that never reached its runner).
@@ -83,7 +106,7 @@ export function scriptLabelOf(input: {
 }): ScriptOutcome {
   const facts = input.facts;
   if (facts !== undefined) {
-    if (typeof facts.exitCode === 'number') {
+    if (isExitCode(facts.exitCode)) {
       return {
         label: facts.exitCode === 0 ? 'completed' : 'completed-with-failure',
         exitCode: facts.exitCode,

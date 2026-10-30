@@ -54,9 +54,11 @@
 import { utf8Length, utf8Prefix } from '../../../lib/utf8.js';
 import { codeRegionsOf } from '../evidence/codeRegions.js';
 import { inertCode } from './inert.js';
-import { labelWords, SCRIPT_LABELS } from './label.js';
+import { exitCodeFits, labelWords, SCRIPT_LABELS } from './label.js';
+import { MAX_SCRIPT_BYTES } from './rows.js';
 import type {
   ResolvedScriptTravel,
+  ScriptLabel,
   ScriptRow,
   ScriptTravelOptions,
   ShownScript,
@@ -230,11 +232,11 @@ export function attachmentBoundary(before: string): AttachmentBoundary {
 // ─── Reading a record back (the answer account) ───────────────────────
 //
 // A saved `turn_end.scripts` is JSON a reader is handed, not a value this
-// library holds: every field is checked before anything is rebuilt from it,
-// and a value no writer of this library files makes the reader refuse
-// (`undefined`) rather than guess.
+// library holds. ONE reader reads it ({@link recordedScripts}) for every
+// reader of a record — the account's lines and its rebuild of the appended
+// block alike — and it refuses exactly what no writer of this library files,
+// so no reader trusts a field another reader checked differently.
 
-/** The boundary a record states, checked — no fence string is built here. */
 export type RecordedBoundary =
   | { readonly kind: 'clean' }
   | { readonly kind: 'closed'; readonly char: 'backtick' | 'tilde'; readonly length: number }
@@ -253,11 +255,10 @@ const isCount = (value: unknown): value is number =>
  * — a fence longer than the text cannot be in it), a `withheldFromText` that
  * is not `true`, or both at once.
  */
-export function recordedBoundary(
-  scripts: unknown,
-  within: number = Number.MAX_SAFE_INTEGER,
+function recordedBoundary(
+  scripts: Readonly<Record<string, unknown>>,
+  within: number,
 ): RecordedBoundary | undefined {
-  if (!isObject(scripts)) return undefined;
   const withheld = scripts.withheldFromText;
   const closed = scripts.closedFence;
   if (withheld !== undefined && withheld !== true) return undefined;
@@ -283,40 +284,116 @@ export function rebuildBoundary(
   return { kind: 'closed', fence: (recorded.char === 'tilde' ? '~' : '`').repeat(recorded.length) };
 }
 
+/** The label an attached script can carry: a call that never reached the tool is never attached (`reached`). */
+export type AttachedLabel = Exclude<ScriptLabel, 'submitted'>;
+
+/** An attached script as a reader gets it back: its label, by type, one an attached script can carry. */
+export type RecordedScript = ShownScript & { readonly label: AttachedLabel };
+
 /**
- * One `turn_end.scripts.shown` entry, checked field by field — a fresh copy,
- * or `undefined` when any field the text is rebuilt from is missing or of a
- * shape no writer of this library files.
+ * One `turn_end.scripts.shown` entry, checked against what `shownFrom` writes
+ * — a fresh copy, or `undefined` when any field is one no writer of this
+ * library files: a call that never reached the tool (`submitted` is never
+ * attached), an exit code its label does not carry (`label.ts` ·
+ * `exitCodeFits`), a program over `MAX_SCRIPT_BYTES`, or a text whose UTF-8
+ * length is not the bytes it says it shows (`truncated.shownBytes` when cut,
+ * and then fewer than `bytes`; else `bytes`).
  */
-export function shownScriptOf(value: unknown): ShownScript | undefined {
+function shownScriptOf(value: unknown): RecordedScript | undefined {
   if (!isObject(value)) return undefined;
   const v = value;
-  if (typeof v.toolCallId !== 'string' || typeof v.tool !== 'string') return undefined;
-  if (typeof v.text !== 'string' || !isCount(v.bytes) || !isCount(v.lines)) return undefined;
-  if (!isCount(v.dispatch) || v.dispatch < 1) return undefined;
-  if (!(SCRIPT_LABELS as readonly unknown[]).includes(v.label)) return undefined;
-  if (v.language !== undefined && typeof v.language !== 'string') return undefined;
-  if (v.exitCode !== undefined && !Number.isInteger(v.exitCode)) return undefined;
-  if (v.resultWithheld !== undefined && v.resultWithheld !== 'over-ceiling') return undefined;
-  if (v.rewritten !== undefined && v.rewritten !== true) return undefined;
-  if (v.truncated !== undefined && !(isObject(v.truncated) && isCount(v.truncated.shownBytes))) {
+  const { toolCallId, tool, text, bytes, lines, dispatch, label, exitCode } = v;
+  if (typeof toolCallId !== 'string' || typeof tool !== 'string') return undefined;
+  if (typeof text !== 'string' || !isCount(bytes) || !isCount(lines)) return undefined;
+  if (!isCount(dispatch) || dispatch < 1) return undefined;
+  if (label === 'submitted' || !(SCRIPT_LABELS as readonly unknown[]).includes(label)) {
     return undefined;
   }
+  if (!exitCodeFits(label, exitCode)) return undefined;
+  if (v.language !== undefined && typeof v.language !== 'string') return undefined;
+  if (v.resultWithheld !== undefined && v.resultWithheld !== 'over-ceiling') return undefined;
+  if (v.rewritten !== undefined && v.rewritten !== true) return undefined;
+  if (bytes > MAX_SCRIPT_BYTES) return undefined;
+  const cut = v.truncated;
+  let shownBytes = bytes;
+  if (cut !== undefined) {
+    if (!isObject(cut) || !isCount(cut.shownBytes) || cut.shownBytes >= bytes) return undefined;
+    shownBytes = cut.shownBytes;
+  }
+  // A UTF-8 encoding is never shorter than the string's length in code
+  // units: a longer string is refused before it is measured.
+  if (text.length > shownBytes || utf8Length(text) !== shownBytes) return undefined;
   return {
-    toolCallId: v.toolCallId,
-    dispatch: v.dispatch,
-    tool: v.tool,
+    toolCallId,
+    dispatch,
+    tool,
     ...(v.language !== undefined && { language: v.language as string }),
-    label: v.label as ShownScript['label'],
-    ...(v.exitCode !== undefined && { exitCode: v.exitCode as number }),
+    label: label as AttachedLabel,
+    ...(exitCode !== undefined && { exitCode: exitCode as number }),
     ...(v.resultWithheld !== undefined && { resultWithheld: 'over-ceiling' as const }),
     ...(v.rewritten !== undefined && { rewritten: true as const }),
-    bytes: v.bytes,
-    lines: v.lines,
-    ...(v.truncated !== undefined && {
-      truncated: { shownBytes: (v.truncated as { shownBytes: number }).shownBytes },
-    }),
-    text: v.text,
+    bytes,
+    lines,
+    ...(cut !== undefined && { truncated: { shownBytes } }),
+    text,
+  };
+}
+
+/** One attached script read back, at its position in the record's `shown`. */
+export interface RecordedShown {
+  readonly index: number;
+  readonly script: RecordedScript;
+}
+
+/** A saved `turn_end.scripts`, read back. */
+export interface RecordedScripts {
+  /** The entries a writer of this library files, at their record position. */
+  readonly shown: readonly RecordedShown[];
+  /**
+   * What no writer files, counted once each: an entry that does not read
+   * back, every entry past `MAX_ATTACHED_SCRIPTS` (the writer attaches no
+   * more), an `omitted` that is not a whole number, a boundary
+   * ({@link RecordedBoundary}) that is not one a writer states, or a
+   * `scripts` value that is not `{ shown: [...] }`. Zero means every field
+   * was read back — only then can the attached text be rebuilt.
+   */
+  readonly unread: number;
+  /** `omitted`, when the record's is a whole number. */
+  readonly omitted?: number;
+  /** The rendering boundary, when the record's is one a writer states. */
+  readonly boundary?: RecordedBoundary;
+}
+
+/**
+ * A saved `turn_end.scripts` — THE reader of the shape for a reader of a
+ * record. `undefined` when the event carries no scripts arm. `within` is the
+ * length of the answer the block was appended to (a fence longer than it is
+ * refused). Bounded by the writer's cap: no reader iterates more entries
+ * than a writer attaches.
+ */
+export function recordedScripts(
+  value: unknown,
+  within: number = Number.MAX_SAFE_INTEGER,
+): RecordedScripts | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value) || !Array.isArray(value.shown)) return { shown: [], unread: 1 };
+  const all: readonly unknown[] = value.shown;
+  const shown: RecordedShown[] = [];
+  let unread = Math.max(0, all.length - MAX_ATTACHED_SCRIPTS);
+  for (let index = 0; index < Math.min(all.length, MAX_ATTACHED_SCRIPTS); index++) {
+    const script = shownScriptOf(all[index]);
+    if (script === undefined) unread += 1;
+    else shown.push({ index, script });
+  }
+  const omitted = isCount(value.omitted) ? value.omitted : undefined;
+  if (omitted === undefined) unread += 1;
+  const boundary = recordedBoundary(value, within);
+  if (boundary === undefined) unread += 1;
+  return {
+    shown,
+    unread,
+    ...(omitted !== undefined && { omitted }),
+    ...(boundary !== undefined && { boundary }),
   };
 }
 

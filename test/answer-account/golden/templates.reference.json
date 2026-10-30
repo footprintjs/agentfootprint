@@ -2344,6 +2344,15 @@
   ],
   "source": "library"
  },
+ "howSure.script.shown.more@1": {
+  "text": "…and 2 more scripts shown in the answer, not listed here.",
+  "parts": [
+   {
+    "text": "…and 2 more scripts shown in the answer, not listed here."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.script.attached.returned@1": {
   "text": "The script under the answer was attached by the library from the record of lookup_volumes's call call value (tool call returned; execution not confirmed; bytes value bytes).",
   "parts": [
@@ -2499,6 +2508,15 @@
   "parts": [
    {
     "text": "2 more scripts of this turn were not attached: over the bound or past the cap."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.script.attached.more@1": {
+  "text": "…and 2 more attached scripts, not listed here.",
+  "parts": [
+   {
+    "text": "…and 2 more attached scripts, not listed here."
    }
   ],
   "source": "library"

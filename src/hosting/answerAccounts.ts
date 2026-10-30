@@ -242,8 +242,10 @@ export function explainRecording(
     return deepFreeze({ account, shown });
   } catch {
     // `accountForAnswer` throws only on a caller error (a non-object
-    // recording); anything else is caught per sentence inside it. Either way
-    // this record cannot be explained, which is the one not-found.
+    // recording): content it cannot read is counted, never thrown — pinned
+    // over every leaf of real recordings, damaged one at a time
+    // (`test/answer-account/damaged-records.test.ts`). A throw here means this
+    // record cannot be explained, which is the one not-found.
     return null;
   }
 }

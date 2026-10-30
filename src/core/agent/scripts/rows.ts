@@ -42,7 +42,13 @@
 import { utf8Length } from '../../../lib/utf8.js';
 import type { ToolScript } from '../../../tools/script.js';
 import type { FindingsLedger, FindingsRow } from '../findings/types.js';
-import { SCRIPT_LABELS, scriptLabelOf, type CallSettlement, type RunnerOutcome } from './label.js';
+import {
+  exitCodeFits,
+  SCRIPT_LABELS,
+  scriptLabelOf,
+  type CallSettlement,
+  type RunnerOutcome,
+} from './label.js';
 import type { ScriptRow } from './types.js';
 
 /** A program longer than this (UTF-8 bytes) keeps a row with no text. Design § 4.4. */
@@ -246,7 +252,6 @@ const isCount = (v: unknown): boolean => typeof v === 'number' && Number.isInteg
  */
 export function scriptRowIsWellFormed(r: Readonly<Record<string, unknown>>): boolean {
   const label = r.outcome;
-  const completedLabel = label === 'completed' || label === 'completed-with-failure';
   return (
     r.kind === 'script' &&
     typeof r.toolCallId === 'string' &&
@@ -264,8 +269,8 @@ export function scriptRowIsWellFormed(r: Readonly<Record<string, unknown>>): boo
         (r.bytes as number) <= MAX_SCRIPT_BYTES)) &&
     typeof label === 'string' &&
     (SCRIPT_LABELS as readonly string[]).includes(label) &&
-    // An exit code rides exactly the two labels that one proves.
-    (completedLabel ? Number.isInteger(r.exitCode) : r.exitCode === undefined) &&
+    // An exit code rides exactly the two labels that one proves, as the label writes it.
+    exitCodeFits(label, r.exitCode) &&
     (r.serviceError === undefined || (r.serviceError === true && label === 'outcome-unknown')) &&
     (r.resultWithheld === undefined || r.resultWithheld === 'over-ceiling') &&
     (r.rewritten === undefined || r.rewritten === true) &&

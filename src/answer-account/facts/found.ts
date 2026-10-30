@@ -14,9 +14,16 @@
 
 import { chip, n, v } from '../render.js';
 import type { AccountSource, RecordPointer, Sentence } from '../types.js';
-import { at, declarationAt, emptinessSource, historyAt, type ReadContext } from './common.js';
+import {
+  at,
+  declarationAt,
+  emptinessSource,
+  FACT_TEXT_CHARS,
+  historyAt,
+  type ReadContext,
+} from './common.js';
 import { isRecord, str } from '../view.js';
-import { endPointer, FACT_TEXT_CHARS, type CallRead, type CallsRead } from './calls.js';
+import { endPointer, type CallRead, type CallsRead } from './calls.js';
 import type { BeforePauseCall, PausedLegRead } from './pausedLeg.js';
 import {
   anchorPointer,

@@ -47,12 +47,12 @@ import type { SentenceVar } from '../types.js';
 import { isRecord, str } from '../view.js';
 import {
   COVERAGE_STATE_KEY,
-  FACT_TEXT_CHARS,
   readStateCoverage,
   type CallsRead,
   type CoverageRead,
 } from './calls.js';
 import {
+  FACT_TEXT_CHARS,
   historyAt,
   historyOf,
   isPersonEntry,

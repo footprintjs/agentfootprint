@@ -507,6 +507,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.script.unmatched': t(
     'A script shown matches no submission of this turn on the record; its contents were checked as prose.',
   ),
+  // Laws 7 and 8: every block is judged; the first MAX_LISTED_CALLS are listed.
+  'howSure.script.shown.more': t(
+    "…and {{count:n,'more script shown in the answer','more scripts shown in the answer'}}, not listed here.",
+  ),
   'howSure.script.attached.returned': t(
     "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (tool call returned; execution not confirmed; {{bytes}} bytes).",
   ),
@@ -533,6 +537,9 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'howSure.script.attached.omitted': t(
     "{{count:n,'more script of this turn was','more scripts of this turn were'}} not attached: over the bound or past the cap.",
+  ),
+  'howSure.script.attached.more': t(
+    "…and {{count:n,'more attached script','more attached scripts'}}, not listed here.",
   ),
 
   // ── Anything wrong: signals ──────────────────────────────────────────

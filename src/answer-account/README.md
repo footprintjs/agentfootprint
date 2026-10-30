@@ -172,10 +172,15 @@ declared key that holds no list and no ticket (`unreachable.empty.noList`).
    account that says so, and claims nothing about that run.
 8. **Bounded by construction** — ≤ 50 calls in the facts, 5 per row, a shared
    item budget and a shared long-text budget (`facts/common.ts` · `ITEM_BUDGET`,
-   `LONG_TEXT_BUDGET`), at most 12 pointers per sentence, model-chosen ids and
-   names cut at 200 characters in the facts (refusals ≤ 12, in-view ≤ 50),
+   `LONG_TEXT_BUDGET`), at most 12 pointers per sentence and 50 per fact,
+   model-chosen ids and names cut at 200 characters in the facts and in every
+   pointer (`FACT_TEXT_CHARS`, `boundedPointer`; refusals ≤ 12, in-view ≤ 50),
    every string var ≤ 2,000 characters: the account stays ≤ 128 KB, the op's
-   response ≤ 192 KB.
+   response ≤ 192 KB. On ANY record — a saved one is JSON anyone could have
+   edited, so no bound may lean on a writer's own cap: a list is read to that
+   cap and the rest counted, and an identity a pointer copies from the record
+   is cut where it is copied. Pinned over every leaf of five real recordings,
+   damaged one at a time (`test/answer-account/damaged-records.test.ts`).
 9. **Show me = allow-listed leaves** (`shown.ts` · `SHOW_ME_ALLOW_LIST`); the
    deny list (injection bodies, tool args and results, a decision's `why`,
    `resumeInput`, the live heap, history content) wins. An emptiness leaf is a

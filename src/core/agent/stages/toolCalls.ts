@@ -3146,15 +3146,18 @@ export function buildToolCallsHandler(
    * — what the script row attests, whichever runner filed them (a wrapper that
    * hands its context to a code runner included). Asked at BOTH execute
    * boundaries — the batch loop and `resolveCredentialAndExecute` — right
-   * after `tool.execute` returns.
+   * after `tool.execute` returns. Only the slot is ever attested from.
    *
-   * The published map (`codeRunsOf`) is kept exactly as it always was: at the
-   * batch boundary (`takeListed`) the dispatched tool's entry for this call id
-   * is taken off it; the resume boundary leaves it, as it always did. The
-   * event fires when the dispatched tool is itself a code runner, as it always
-   * did, carrying the dispatch's own facts — never a same-id entry another run
-   * filed. The code itself is never on this channel: generated code quotes the
-   * data it was handed.
+   * The published surfaces are kept exactly as they were. The map
+   * (`codeRunsOf`): at the batch boundary (`takeListed`) the dispatched tool's
+   * entry for this call id is taken off it; the resume boundary leaves it.
+   * The event fires when the dispatched tool is itself a code runner, as it
+   * always did, carrying the dispatch's own facts. When the slot is empty
+   * there — a decorator kept the runner's map but handed the runner a context
+   * of its own, so the runner filed by the call id alone — it fires as it
+   * always did, from the map's entry: the one case the slot cannot reach, and
+   * the facts it carries are the map's, never attested. The code itself is
+   * never on this channel: generated code quotes the data it was handed.
    */
   const takeCodeRun = (
     scope: TypedScope<AgentState>,
@@ -3165,15 +3168,15 @@ export function buildToolCallsHandler(
     const facts = slot.facts;
     slot.facts = undefined;
     const listed = codeRunsOf(tool);
-    if (call.takeListed && listed?.get(call.toolCallId) !== undefined) {
-      listed.delete(call.toolCallId);
-    }
-    if (facts !== undefined && listed !== undefined) {
+    const filed = call.takeListed ? listed?.get(call.toolCallId) : undefined;
+    if (filed !== undefined) listed?.delete(call.toolCallId);
+    const told = facts ?? filed;
+    if (told !== undefined && listed !== undefined) {
       // `tool` is the name the model CALLED, not the one the runner's closure
       // was built with: a runner re-exposed under another schema name must be
       // recognizable by the name its calls carry (a content exporter withholds
       // that tool's arguments — the program). Same bytes whenever they agree.
-      typedEmit(scope, 'agentfootprint.tools.code_run', { ...facts, tool: call.toolName });
+      typedEmit(scope, 'agentfootprint.tools.code_run', { ...told, tool: call.toolName });
     }
     return facts;
   };

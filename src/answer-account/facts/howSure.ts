@@ -32,8 +32,15 @@ import { chip, joinAnd, n, v } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { AnswerFacts, EvidenceFact, AccountFact, RecordPointer, Sentence } from '../types.js';
 import { isRecord, keptOut, num, str, type ViewEvent } from '../view.js';
-import { at, emptinessSource, stateAt, takeItem, type ReadContext } from './common.js';
-import type { CallsRead } from './calls.js';
+import {
+  at,
+  boundedPointer,
+  emptinessSource,
+  stateAt,
+  takeItem,
+  type ReadContext,
+} from './common.js';
+import { MAX_CALLS, type CallsRead } from './calls.js';
 import { MAX_LISTED_CALLS } from './checked.js';
 import { scriptLines } from './scripts.js';
 
@@ -214,8 +221,12 @@ function evidenceLines(ctx: ReadContext, e: ViewEvent, fact: EvidenceFact): Sent
 type StandingFact = AnswerFacts['standing'];
 
 /** Witness rows as the account's pointers — the fold's witnesses are all in the recording. */
+/**
+ * The fold's witnesses as the account's pointers — each identity cut as the
+ * account's own builders cut theirs (`common.ts` · `boundedPointer`).
+ */
 function pointersOf(witness: readonly AssessmentPointer[]): RecordPointer[] {
-  return [...witness];
+  return witness.map(boundedPointer);
 }
 
 const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
@@ -405,12 +416,16 @@ function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFac
       lines.push(ctx.say('howSure.standing.notAssessed', { status: 'not-applicable' }));
       break;
   }
-  const factPointers =
+  // A fact lists at most MAX_CALLS pointers (law 8, the `limitsData`
+  // precedent): one per witness row would grow with the record. The lines
+  // above count every row; only the listing is capped.
+  const factPointers = (
     a.standing === 'known'
       ? [stateAt('answerValidation', 'status')]
       : a.standing === 'consistent'
       ? pointersOf(ran.flatMap((c) => c.witness))
-      : reasonPointers;
+      : reasonPointers
+  ).slice(0, MAX_CALLS);
   return {
     lines,
     fact: {

@@ -90,7 +90,11 @@ describes.**
   `codeRunsOf(tool)` map, which is filled and emptied exactly as before. A row
   attests from the slot, never from the map: the map is keyed by the
   provider's id, and when two agents shared a tool it let one run's facts
-  attest another run's script.
+  attest another run's script. `agentfootprint.tools.code_run` keeps its
+  published firing set: it carries the slot's facts, and when a decorator
+  kept the runner's map but handed the runner a context of its own (so the
+  slot never reached it), it fires from the map's entry, as it always did.
+  That entry is never attested from.
 
 Why: a row is an attestation ("this program ran, and exited 7"). One read from
 a live object, or a fact found by an id two calls share, can attach one call's
@@ -110,7 +114,35 @@ outcome to another call's program.
 
 Only an explicit exit code proves the program reached an exit; `ok` is a
 verdict and never prints an exit number. A reader must not promote a label to
-its neighbour.
+its neighbour. An exit code is a whole number (`label.ts` · `isExitCode`): a
+runner that reports `1.5` or `NaN` reported none. `exitCodeFits` is the same
+rule read back — `0` on `completed`, any other on `completed-with-failure`,
+none on the rest.
+
+## Reading a saved record — one reader per shape
+
+A recording or a checkpoint comes back as JSON anyone could have edited. Each
+saved shape has ONE reader, owned by the module that writes it, and every
+reader of a record goes through it:
+
+| shape | reader | read by |
+|---|---|---|
+| a `script` row | `rows.ts` · `scriptRowIsWellFormed` | the checkpoint door, the account |
+| a block verdict (`evidence_checked.scripts`, a `script-shown` row) | `match.ts` · `blockVerdictOf` / `recordedBlocks` | the checkpoint door (`assessment/witness.ts`), the account |
+| `turn_end.scripts` | `attachment.ts` · `recordedScripts` | the account's lines and its rebuild of the appended block |
+
+**The rule: a reader refuses exactly what no writer of this library files —
+and never iterates past the writer's cap.** A label and an exit code that
+disagree, a cut that shows the whole program, a text whose UTF-8 length is not
+the bytes it says, a count that is not a whole number, a `submitted` call
+attached, more entries than `MAX_CODE_REGIONS` or `MAX_ATTACHED_SCRIPTS`: each
+is counted unread and never becomes a line, and the attached block is rebuilt
+only from a record read back whole.
+
+Why: two readers that check one shape differently drift. One rebuilds the
+appended text from fields the other never checked (a fence length of `-1`
+throws), or prints "exit 0" for a `completed` entry whose recorded exit code
+is 7.
 
 ## The match (`code: 'match'`)
 

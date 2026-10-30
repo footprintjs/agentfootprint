@@ -39,14 +39,8 @@
  * (`AgentState.turnNumber`): the fold reads this turn's witness rows only.
  */
 
-import { SCRIPT_LABELS } from '../scripts/label.js';
+import { blockVerdictOf } from '../scripts/match.js';
 import type { ScriptBlockVerdict, ScriptLabel, UnmatchedReason } from '../scripts/types.js';
-
-const UNMATCHED_REASONS: readonly UnmatchedReason[] = Object.freeze([
-  'no-submission-this-turn',
-  'over-size',
-  'kept-out',
-]);
 
 /** The evidence gate's posture — the `.namesAndNumbersFromEvidence()` vocabulary. */
 export type WitnessPosture = 'assist' | 'guard' | 'rails';
@@ -240,22 +234,10 @@ export function witnessRowIsWellFormed(r: Readonly<Record<string, unknown>>): bo
     );
   }
   if (r.kind === 'script-shown') {
-    const unmatched = r.label === 'unmatched';
-    return (
-      isCount(r.block) &&
-      (unmatched || (SCRIPT_LABELS as readonly unknown[]).includes(r.label)) &&
-      (unmatched
-        ? typeof r.reason === 'string' &&
-          (UNMATCHED_REASONS as readonly string[]).includes(r.reason) &&
-          r.toolCallId === undefined &&
-          r.dispatch === undefined
-        : r.reason === undefined &&
-          typeof r.toolCallId === 'string' &&
-          typeof r.tool === 'string' &&
-          Number.isInteger(r.dispatch) &&
-          (r.dispatch as number) >= 1) &&
-      (r.exitCode === undefined || Number.isInteger(r.exitCode))
-    );
+    // The verdict's fields, by the ONE rule every reader of the shape uses
+    // (`scripts/match.ts` · `blockVerdictOf`) — an exit code its label does
+    // not carry included. A row never carries `alsoMatches`.
+    return r.alsoMatches === undefined && blockVerdictOf(r) !== undefined;
   }
   if (r.kind === 'steps-unfinished') {
     return (

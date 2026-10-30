@@ -23,9 +23,8 @@ import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/cove
 import { scriptRowsOfTurn } from '../core/agent/scripts/rows.js';
 import {
   rebuildBoundary,
-  recordedBoundary,
+  recordedScripts,
   scriptsBlock,
-  shownScriptOf,
 } from '../core/agent/scripts/attachment.js';
 import { scriptRowIsWellFormed } from '../core/agent/scripts/rows.js';
 import type { ScriptRow } from '../core/agent/scripts/types.js';
@@ -61,6 +60,7 @@ import {
   at,
   countedFields,
   derived,
+  FACT_TEXT_CHARS,
   makeSay,
   stateAt,
   type AccountInternals,
@@ -68,7 +68,7 @@ import {
 } from './facts/common.js';
 import { readAsked } from './facts/asked.js';
 import { readUnderstood } from './facts/understood.js';
-import { FACT_TEXT_CHARS, MAX_CALLS, readCalls } from './facts/calls.js';
+import { MAX_CALLS, readCalls } from './facts/calls.js';
 import { answeringIteration, readInView } from './facts/inView.js';
 import { readCheckedRows } from './facts/checked.js';
 import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
@@ -206,19 +206,18 @@ function appendedScriptsOpenings(
   state: Readonly<Record<string, unknown>> | undefined,
   within: number,
 ): readonly string[] {
-  const scripts = end.payload.scripts;
-  if (!isRecord(scripts) || !Array.isArray(scripts.shown)) return [];
-  // Every field the text is rebuilt from is checked first; a value no writer
-  // of this library files rebuilds nothing (the How-sure lines count it unread).
-  const recorded = recordedBoundary(scripts, within);
-  const boundary = recorded === undefined ? undefined : rebuildBoundary(recorded, within);
+  // The one reader of the shape (`attachment.ts` · `recordedScripts`): the
+  // text is rebuilt only from a record read back whole — a value no writer
+  // of this library files rebuilds nothing (the How-sure lines count it).
+  const read = recordedScripts(end.payload.scripts, within);
+  if (read === undefined || read.unread > 0) return [];
+  const { boundary: recorded, omitted } = read;
+  if (recorded === undefined || omitted === undefined) return [];
+  const boundary = rebuildBoundary(recorded, within);
   if (boundary === undefined) return [];
-  const omitted = num(scripts.omitted);
-  if (omitted === undefined || !Number.isInteger(omitted) || omitted < 0) return [];
-  if (scripts.shown.length > 0) {
-    const first = shownScriptOf(scripts.shown[0]);
-    if (first === undefined) return [];
-    const only = { shown: [first], omitted: 0 };
+  const first = read.shown[0];
+  if (first !== undefined) {
+    const only = { shown: [first.script], omitted: 0 };
     // Up to and including the first label line: the closed fence, if any, then it.
     const lines = scriptsBlock(only, boundary).split('\n');
     return [lines.slice(0, boundary.kind === 'closed' ? 3 : 1).join('\n')];

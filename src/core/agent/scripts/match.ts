@@ -43,10 +43,17 @@
  * judged answer of design § 4.4. Earlier turns add nothing.
  */
 
-import { codeRegionsOf, type CodeRegion } from '../evidence/codeRegions.js';
+import { codeRegionsOf, MAX_CODE_REGIONS, type CodeRegion } from '../evidence/codeRegions.js';
 import { utf8Length } from '../../../lib/utf8.js';
+import { exitCodeFits, SCRIPT_LABELS } from './label.js';
 import { MAX_SCRIPT_BYTES, type TurnScripts } from './rows.js';
-import type { ScriptBlockVerdict, ScriptRow, ScriptsVerdict } from './types.js';
+import type {
+  ScriptBlockVerdict,
+  ScriptLabel,
+  ScriptRow,
+  ScriptsVerdict,
+  UnmatchedReason,
+} from './types.js';
 
 /** One answer, read for its scripts. */
 export interface ShownScripts {
@@ -155,4 +162,102 @@ export function copyScriptsVerdict(verdict: ScriptsVerdict): ScriptsVerdict {
     regionsDropped: verdict.regionsDropped,
     ...(verdict.scriptsDropped !== undefined && { scriptsDropped: verdict.scriptsDropped }),
   };
+}
+
+// ─── Reading a record back ────────────────────────────────────────────
+//
+// A saved verdict is JSON a reader is handed, not a value this library holds.
+// ONE rule reads its fields for every reader of the shape — the answer
+// account (`evidence_checked.scripts`) and the checkpoint door's
+// `script-shown` witness row (`assessment/witness.ts`) — and it refuses
+// exactly what no writer of this library files.
+
+/** Every reason a block can be unmatched for. */
+export const UNMATCHED_REASONS: readonly UnmatchedReason[] = Object.freeze([
+  'no-submission-this-turn',
+  'over-size',
+  'kept-out',
+]);
+
+const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const isPositive = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1;
+
+/**
+ * One block verdict's fields, checked as {@link readShownScripts} writes them
+ * — a fresh copy, or `undefined` when any field is one no writer of this
+ * library files: a position or a dispatch that is not a whole number from 1,
+ * a label outside the vocabulary, an exit code its label does not carry
+ * (`label.ts` · `exitCodeFits`), an unmatched block that names a call, a
+ * matched one without its call. Fields beside these (a witness row's `kind`,
+ * `turn`, `iteration`) are not read.
+ */
+export function blockVerdictOf(value: unknown): ScriptBlockVerdict | undefined {
+  if (!isObject(value)) return undefined;
+  const { block, label, reason, toolCallId, tool, dispatch, exitCode, alsoMatches } = value;
+  if (!isPositive(block)) return undefined;
+  if (label === 'unmatched') {
+    const named =
+      toolCallId !== undefined ||
+      tool !== undefined ||
+      dispatch !== undefined ||
+      exitCode !== undefined ||
+      alsoMatches !== undefined;
+    if (named || !(UNMATCHED_REASONS as readonly unknown[]).includes(reason)) return undefined;
+    return { block, label: 'unmatched', reason: reason as UnmatchedReason };
+  }
+  if (reason !== undefined || !(SCRIPT_LABELS as readonly unknown[]).includes(label)) {
+    return undefined;
+  }
+  if (!exitCodeFits(label, exitCode)) return undefined;
+  if (typeof toolCallId !== 'string' || typeof tool !== 'string') return undefined;
+  if (!isPositive(dispatch)) return undefined;
+  if (alsoMatches !== undefined && !isPositive(alsoMatches)) return undefined;
+  return {
+    block,
+    label: label as ScriptLabel,
+    ...(exitCode !== undefined && { exitCode: exitCode as number }),
+    toolCallId,
+    tool,
+    dispatch,
+    ...(alsoMatches !== undefined && { alsoMatches }),
+  };
+}
+
+/** One block verdict read back, at its position in the record's `blocks`. */
+export interface RecordedBlock {
+  readonly index: number;
+  readonly verdict: ScriptBlockVerdict;
+}
+
+/** A saved `evidence_checked.scripts`, read back. */
+export interface RecordedBlocks {
+  /** The verdicts a writer of this library files, at their record position. */
+  readonly blocks: readonly RecordedBlock[];
+  /**
+   * What no writer files, counted once each: a verdict that does not read
+   * back, every verdict past `MAX_CODE_REGIONS` (the writer reads no more
+   * blocks), or a `scripts` value that is not `{ blocks: [...] }`.
+   */
+  readonly unread: number;
+}
+
+/**
+ * A saved `evidence_checked.scripts` — THE reader of the shape for a reader
+ * of a record. `undefined` when the event carries no scripts arm. Bounded by
+ * the writer's cap: no reader iterates more verdicts than a writer files.
+ */
+export function recordedBlocks(value: unknown): RecordedBlocks | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value) || !Array.isArray(value.blocks)) return { blocks: [], unread: 1 };
+  const all: readonly unknown[] = value.blocks;
+  const blocks: RecordedBlock[] = [];
+  let unread = Math.max(0, all.length - MAX_CODE_REGIONS);
+  for (let index = 0; index < Math.min(all.length, MAX_CODE_REGIONS); index++) {
+    const verdict = blockVerdictOf(all[index]);
+    if (verdict === undefined) unread += 1;
+    else blocks.push({ index, verdict });
+  }
+  return { blocks, unread };
 }
