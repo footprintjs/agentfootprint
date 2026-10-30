@@ -227,9 +227,21 @@ const check = verifyAuditBundle(bundle); // offline: no agent needed
 - **Verify offline.** `verifyAuditBundle` is a pure function over the JSON and names
   the exact record a change broke. The serialization rules are exported as
   `canonicalJson`, so an auditor can write an independent verifier.
-- **Bounded payloads by default.** Tool arguments are recorded as key names, results
-  as a type, prompts and content as `[N chars]`. `payloadMode: 'verbatim'` records
-  everything, for access-controlled stores.
+- **Bounded payloads by default.** Declared structure is kept and content becomes
+  a marker. Tool arguments are recorded as key names and results as a type.
+  Prompts, answers and tool prose become markers such as `[N chars]`.
+  Registered events use their declared shapes even when sent through `emit()`;
+  every kept leaf checks its runtime kind, and a container keeps only its
+  declared fields as values. Unknown fields and wrong kinds become markers.
+  **Unregistered** app events become whole-field markers with their keys kept.
+  This is not a blanket PII guarantee: ids, names and app-declared labels remain.
+  Each record's `meta` also keeps the caller's session, principal and tenant;
+  decision evidence keeps the engine's value summaries (redaction-aware);
+  policy telemetry tags and app lifecycle reason words stay; a suggested tool
+  name stays once the strategy has seen that tool run. These are explicit
+  contract limitations, not evidence that their text is free of private data.
+  `payloadMode: 'verbatim'` retains payload content, sanitized, for
+  access-controlled stores.
 - **Long runs.** `audit.drain()` returns the records since the last drain; pass the
   segments together (`verifyAuditBundle([seg1, seg2])`) and they verify end to end.
 - **Runtime.** Hashing uses `node:crypto` (Node 20+, Bun, Deno). Browsers have no

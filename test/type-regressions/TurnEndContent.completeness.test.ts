@@ -205,9 +205,7 @@ interface Exporter {
 const EXPORTERS: readonly Exporter[] = [
   {
     name: 'audit chain (bounded)',
-    // KNOWN GAP, pre-existing and reported apart: the bounded mode sanitizes
-    // these two (strings capped at 256 characters) but does not bound them.
-    carries: ['answerCoverage', 'answerNegatives'],
+    carries: [],
     output: async (events) => {
       const audit = auditExport();
       for (const e of events) audit.exportEvent(e);

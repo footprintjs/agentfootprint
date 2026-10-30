@@ -118,8 +118,9 @@ const line = toWireJson(event); // not JSON.stringify(event)
 ```
 
 ## What a span-MAPPING exporter may carry (`otel.ts`)
-`file` / `cloudwatch` / `agentcore` / `audit` serialize the whole envelope and
-inherit every field. `otelObservability` MAPS selected signals onto spans, so
+`file` / `cloudwatch` / `agentcore` serialize the whole envelope and inherit
+every field, and so does `audit` under `payloadMode: 'verbatim'` (its default
+bounded mode is below). `otelObservability` MAPS selected signals onto spans, so
 each thing it carries is placed on purpose, and the rule for placing one is:
 
 - **Structure is exported, content is not.** Ids, enums, counts, check names
@@ -188,9 +189,94 @@ agent.emit('agentfootprint.eval.score', {
 });
 ```
 
+## What the audit chain's bounded mode keeps (`audit.ts`, `auditShapes.ts`, `auditBounding.ts`)
+`auditExport()` chains every event. In its default `payloadMode: 'bounded'` a
+record follows the span exporter's rule: **structure is kept, content is a
+marker.** Content is every string or value the run composed from what it read
+or produced, whoever wrote it: a person, the model, a tool, the data, or the
+app's code at run time. Structure is ids, names, kinds, codes and telemetry
+tags, verdicts, counts, timestamps the library takes, the library's own
+sentences built from those, and the words the app declared up front (labels,
+descriptions, step notes, hints, display names).
+
+**Bounding is closed by default.** It used to be a list of the content fields
+someone remembered, and every other field rode through as written, so a new
+content field leaked until someone noticed. Now:
+
+- **Every registered event has a shape** (`auditShapes.ts` · `eventShapes`,
+  total over the event registry) that names every field of its payload,
+  with a checked rule or a marker. A new event type, or a new field on a payload, does
+  not compile until it is classified.
+- **What a shape does not name is a marker:** a field the payload type does
+  not declare, a value that is not the declared shape, and every field of an
+  event type the registry does not declare (a consumer's own `emit`).
+- **Every kept leaf checks its runtime kind.** Counts accept numbers, flags
+  accept booleans, and names accept strings; closed enums accept only their
+  declared words. Every container is spelled out field by field (`shapeOf`,
+  `listOf`, `recordOf`, `orList`), including objects whose declared children
+  are only numbers. Undeclared children and wrong kinds become markers. A
+  `when` rule states why it chooses between two checked rules.
+- **Names cannot select inherited behavior.** Dispatch and field lookup use
+  maps, and every output key is an own data property, including `__proto__`.
+- **`BOUND_FIELDS` (`audit.ts`) is a declaration:** the conversation fields
+  replaced whole, which the redaction vocabulary is pinned against. The shapes
+  apply the very rule functions it names.
+
+These checks hold the boundary:
+
+- `test/type-regressions/AuditBoundingDepth.test.ts` walks every shape beside
+  its payload type with the TypeScript checker, verifies every leaf kind and
+  closed enum, and
+  pins the fate of every leaf of every event (`audit-bounding-fates.snapshot.json`;
+  a deliberate change updates it with `-u`).
+- `audit-bounded-sweep.test.ts` damages every shape position at runtime and
+  pins the named exceptions in `auditKeptByContract.ts`. The public Agent
+  regressions also inject extra provider fields and inherited event names.
+- `EventContent.completeness.test.ts` runs a canary in every content leaf
+  through every exporter.
+- `TurnEndContent.completeness.test.ts` does the same for `turn_end`.
+
+**What a bounded record still carries, by contract:**
+
+- **Each record's `meta`:** run and stage ids, paths, and indices. When the
+  caller named them, also `sessionId`, `principal` and `tenant`, the who of an
+  audit record.
+- **Decision evidence, as the engine summarized it:** `decide()` evidence on
+  `composition.route_decided` and a skill guard's conditions on
+  `context.evaluated`. It holds a summary of each value a rule read; under an
+  agent's `redact` a selected key is the placeholder.
+- **The app's own words:** a policy's telemetry `reason` tag, and the reason
+  word an app attaches to a lifecycle event it emits itself
+  (`skill.deactivated`, `tools.offered`, `permission.gate_closed`). An app
+  that writes a run's value into one of them carries that value.
+- **A `tryInsteadTool` name**, but only once the strategy has seen that tool
+  run (the rule `otel.ts` uses).
+
+Sanitizing caps a string's length; it does not hide what the string says.
+
+**Channels that do not bound content:**
+
+- the audit chain under `payloadMode: 'verbatim'`;
+- `file`, `cloudwatch` and `agentcore`, which ship the whole envelope;
+- the bug-report bundle's recording;
+- `xray`: its `stream.llm_end` case puts the whole `llm_end` payload,
+  the model's draft `content` included, into the segment's metadata.
+
+```ts
+const audit = auditExport(); // bounded
+// a tools.absent record, as chained:
+// { toolName: 'orders_search', toolCallId: 'call-1', iteration: 1,
+//   lookedFor: '[31 chars]', checked: [{ what: '[24 chars]' }],
+//   tryInsteadTool: { tool: 'archive_search', why: '[40 chars]' } } // archive_search ran earlier
+```
+
 ## Files
 - `otel.ts`, `xray.ts`, `cloudwatch.ts`, `agentcore.ts`, `file.ts` — exporters.
 - `audit.ts` — a tamper-evident bundle.
+- `auditShapes.ts` — what its bounded mode keeps of each event: one shape per
+  registered event type.
+- `auditBounding.ts` — how it bounds: the markers, the sanitizer and the
+  combinators the shapes are built from.
 - `githubBugReporter.ts`, `githubDeviceSignIn.ts` — filing a report as the
   reporter, not as the library.
 - `deliveryErrors.ts` — where an exporter's own failures go.
