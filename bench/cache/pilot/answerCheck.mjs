@@ -5,11 +5,12 @@
  * independent axes, so a format miss never hides a wrong answer:
  *   form   — the reply's shape: bare JSON, one fenced block, an object with other bytes around it, no
  *            JSON object, or no answer at all (the run stopped).
- *   answer — the extracted `answer`: exact, the live status in other words, the static table's
+ *   answer — the extracted `answer`: exact, a supported literal form of the live status, the static table's
  *            status, a superseded reading's status, something else, or missing.
  *   reads  — the served lookups compared with the scenario's count.
- * A diagnosis, not a grade: `reworded` means the reply names only the live status, not that it
- * is correct prose.
+ * A bounded lexical diagnosis, not semantic proof: each non-exact status label requires the
+ * complete answer to use the fixture key and one of the explicit forms below. Other prose is
+ * `other`, even when a person could understand it. No word-level negation blacklist is used.
  *
  * Retention: the reply is read in memory here. Only string constants from the three sets below
  * are returned, so no reply text, key name or value can reach the report or the journal.
@@ -100,19 +101,20 @@ function answerValue(value, scenario) {
   const { answer } = value;
   if (answer === `${scenario.key} ${scenario.expected}`) return 'exact';
   if (typeof answer !== 'string') return 'other';
-  const superseded = scenario.readings.slice(0, -1);
-  const known = new Set([scenario.expected, scenario.tableStatus, ...superseded]);
-  const named = new Set(
-    answer
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((word) => known.has(word)),
-  );
-  if (named.size !== 1) return 'other';
-  const [status] = named;
+  // Bound before normalization. Literal grade above is unchanged; this cap affects labels only.
+  if (answer.length > 256) return 'other';
+  // Only horizontal whitespace may vary. Keep key case exact; status case may vary. A single
+  // terminal period is accepted. Lower-case separators: space, is, colon, status is, status:.
+  const text = answer.replace(/[ \t]+/g, ' ').replace(/^ | $/g, '');
+  const match =
+    /^([A-Za-z][A-Za-z0-9]*)(?: (?:is |status is )?| ?: ?| status: ?)([A-Za-z]+)\.?$/.exec(text);
+  // Non-multiline anchors account for the whole answer, including its punctuation.
+  if (!match || match[1] !== scenario.key) return 'other';
+  const status = match[2].toLowerCase();
   if (status === scenario.expected) return 'reworded';
   if (status === scenario.tableStatus) return 'table-status';
-  return 'superseded-status';
+  if (scenario.readings.slice(0, -1).includes(status)) return 'superseded-status';
+  return 'other';
 }
 
 function readCount(reads, scenario) {

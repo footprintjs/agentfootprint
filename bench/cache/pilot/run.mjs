@@ -36,12 +36,12 @@ export async function pilot({
   let journal;
   try {
     // One fixed durable live identity, independent of --out. No resume/reset.
-    // The 20261020 (aborted smoke) and 20261029 (first paid run, L-63) journals are records;
-    // this kit never opens them. A run of this kit needs its own owner approval.
+    // The 20261020 smoke, 20261029 paid run and earlier L-63 kit journals are records;
+    // this P2 kit never opens them. A run of this kit needs its own owner approval.
     if (execute) {
       const state = join(homedir(), '.local/state/agentfootprint/pilots');
       mkdirSync(state, { recursive: true });
-      journal = openJournal(join(state, 'findings-cache-phase-c-l63.ndjson'));
+      journal = openJournal(join(state, 'findings-cache-phase-c-l63-p2.ndjson'));
     }
     const events = [],
       results = [];

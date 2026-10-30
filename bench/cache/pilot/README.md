@@ -17,12 +17,12 @@ review of the final kit/manifest and cap tests.
   was reported complete: 4 runs, 8 calls, $0.1117057 measured. Its journal,
   `findings-cache-phase-c-20261029.ndjson`, stays as its record. All four runs
   reported `plantedFidelity: false`; see [The answer check (L-63)](#the-answer-check-l-63).
-- **This kit (L-63 re-freeze): no approval yet.** It changes the prompt, the
+- **This kit (L-63 P2 re-freeze): no approval yet.** It changes the prompt, the
   planted keys and the report, so its manifest and payload hashes are new. A paid
   run of this exact head and manifest needs owner approval. The previous kit
   was reported to cost about $0.11 for one replicate (4 runs, 8 calls); that
   historical amount is not a cap or a forecast for the revised kit. The model,
-  cap and per-call reservation are unchanged. It writes its own journal, `findings-cache-phase-c-l63.ndjson`.
+  cap and per-call reservation are unchanged. It writes its own journal, `findings-cache-phase-c-l63-p2.ndjson`.
 
 No approval covers a second run, another model, customer data or an automatic
 retry.
@@ -84,21 +84,37 @@ another form”, and no test could see the difference.** This kit fixes the clas
 - **Each result adds `answerCheck`**, three closed labels computed in memory by
   `answerCheck.mjs`. They say why a `false` failed:
 
-  | Axis     | Labels                                                                                    |
-  | -------- | ----------------------------------------------------------------------------------------- |
+  | Axis     | Labels                                                                                       |
+  | -------- | -------------------------------------------------------------------------------------------- |
   | `form`   | `bare-json` · `fenced-json` · `embedded-json` · `no-json-object` · `no-answer` (run stopped) |
-  | `answer` | `exact` · `reworded` · `table-status` · `superseded-status` · `other` · `missing`         |
-  | `reads`  | `expected` · `fewer` · `more`                                                             |
+  | `answer` | `exact` · `reworded` · `table-status` · `superseded-status` · `other` · `missing`            |
+  | `reads`  | `expected` · `fewer` · `more`                                                                |
 
   `embedded-json` means a parseable object with other bytes around it, such as
   prose or an array wrapper; it does not claim those bytes are prose.
   `no-json-object` includes valid JSON scalars with no object to inspect.
   The axes are independent, so a fence around the table’s status reports both
   `fenced-json` and `table-status`. `plantedFidelity` is true exactly when the
-  labels are `bare-json`, `exact` and `expected`. `reworded` means the answer
-  names only the live status among the fixture statuses, not as the exact
-  `<key> <status>`. It does not check the key, negation or semantic meaning and
-  is a diagnosis, not a grade.
+  labels are `bare-json`, `exact` and `expected`.
+
+  The three non-exact status labels are **bounded lexical diagnostics, never
+  semantic proof**. They accept only a whole answer of at most 256 JavaScript
+  string code units (before whitespace normalization) in one of these forms:
+  `<key> <status>`, `<key> is <status>`, `<key>: <status>`,
+  `<key> status is <status>` or `<key> status: <status>`. Spaces or tabs may
+  repeat or surround the answer. Whitespace after a colon is optional;
+  whitespace before it is allowed only in the `<key>: <status>` form. One
+  period immediately after the status is optional. The fixture key is
+  case-sensitive, the separator words must be lower case, and status case may
+  vary. No newline or other whitespace is accepted.
+
+  Within those forms, the status chooses `reworded` (live), `table-status` or
+  `superseded-status`. A wrong/missing key, key-token suffix, negation,
+  contraction, condition, question or extra clause is `other`; this is enforced
+  by the whole-answer grammar, not by a blacklist. Understandable prose outside
+  those forms is also `other`. These labels do not establish assertion truth or
+  general correctness. The exact literal grade is unchanged and independent;
+  a non-exact supported form still fails it.
 
 - **No answer text is retained.** The reply is read only inside `answerCheck`.
   It returns only string constants from the three sets above, so no reply text,
@@ -121,7 +137,8 @@ another form”, and no test could see the difference.** This kit fixes the clas
 - **Realistic replies are pinned** in `test/cache/findings-pilot-runner.test.ts`:
   a fence, prose with JSON, reworded answers, the table’s and the superseded
   status, a missing member, extra reads, a stopped run, and both reads batched
-  in one turn (as the live model did). Each case pins its labels.
+  in one turn (as the live model did). Wrong-key, negated and conditional answers
+  are refused across all three status labels; each case pins its labels.
 
 The report’s `schema` is now `2`, which adds `results[].answerCheck`.
 
@@ -236,17 +253,19 @@ private file):
 node --env-file=<approved env file> bench/cache/pilot/run.mjs \
   --consumer /path/to/reviewed-pilot-consumer \
   --out /path/to/new-private-summary.json \
-  --approve-manifest fc03414ee8793cada10c248d3f4effe96a3286eb0d2b65f47ea919f12754572b \
+  --approve-manifest 3aff914e2e3dba57423708b98b7d9700dfcc40dca41d669eb2d03feb57c9d0b4 \
   --execute
 ```
 
 Never inspect or print the environment file or its values. CI does not execute
 this command, and the kit does not schedule a future call. For this kit, the
 live journal’s identity is fixed at
-`~/.local/state/agentfootprint/pilots/findings-cache-phase-c-l63.ndjson`,
+`~/.local/state/agentfootprint/pilots/findings-cache-phase-c-l63-p2.ndjson`,
 irrespective of the checkout, manifest revision or report path. If that file
-already exists, the run stops before any call. The 2026-10-20 smoke’s journal and
-the 2026-10-29 run’s journal beside it are records that this kit never opens. Do
+already exists, the run stops before any call. The 2026-10-20 smoke’s journal,
+the 2026-10-29 run’s journal and the earlier `findings-cache-phase-c-l63.ndjson`
+identity beside it are records that this kit never opens. This P2 correction
+supersedes the earlier L-63 manifest without authorizing another run. Do
 not delete any journal to repeat the pilot; another run needs its own approval
 and journal identity.
 

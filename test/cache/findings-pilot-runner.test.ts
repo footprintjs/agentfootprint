@@ -731,7 +731,7 @@ describe('findings pilot answer check (L-63): a format miss is not a wrong answe
 describe('findings pilot rehearsal is derived from served evidence (L-63)', () => {
   it.each([
     [{ status: 'amber' }, 'other'],
-    [{ key: 'k999' }, 'reworded'],
+    [{ key: 'k999' }, 'other'],
   ])(
     'a damaged fixture %j fails the real-engine rehearsal despite the planted expectation',
     async (damage, answer) => {
@@ -849,4 +849,94 @@ describe('findings pilot prompt asks for exactly what the check reads (L-63)', (
       );
     },
   );
+});
+
+// P2: these are complete lexical forms, not a vocabulary of suspicious words.
+const diagnosticStatuses = [
+  ['lookup', 'expected', 'reworded'],
+  ['lookup', 'tableStatus', 'table-status'],
+  ['conflict', 'expected', 'reworded'],
+  ['conflict', 'tableStatus', 'table-status'],
+  ['conflict', 'superseded', 'superseded-status'],
+] as const;
+const unsupportedAnswers = [
+  'k999 {status}',
+  '{status}',
+  '{KEY} {status}',
+  'x{key} {status}',
+  '{key}x {status}',
+  '{key}0 {status}',
+  '_{key} {status}',
+  '{key}_ {status}',
+  '{key}-k999 {status}',
+  'k999-{key} {status}',
+  '{key} {status}ish',
+  '{key} {status}_other',
+  '{key} is not {status}',
+  'not {key} {status}',
+  '{key} no {status}',
+  '{key} is never {status}',
+  "{key} isn't {status}",
+  '{key} isn’t {status}',
+  "{key} ain't {status}",
+  "{key}'s not {status}",
+  '{key} is non-{status}',
+  '{key} is {status} only if checked',
+  'if true {key} is {status}',
+  '{key} is {status} unless checked',
+  'maybe {key} is {status}',
+  '{key} could be {status}',
+  '{key} is {status}?',
+  '{key} is {status}, probably',
+  '{key} is {status}. This is conditional.',
+  'The status for {key} is {status}',
+  '"{key} is {status}"',
+  '{key} is {status}\n',
+  '{key}\nis {status}',
+  '{key} is {status}\r',
+  '{key} is {status}\u0000',
+  '{key}\u00a0is {status}',
+  '{key} is {status}\u2028',
+  '{key} is {status}..',
+];
+describe.each(diagnosticStatuses)('bounded diagnostic grammar (P2): %s %s', (id, field, label) => {
+  const scenario = scenarioOf(id);
+  const status = field === 'superseded' ? scenario.readings[0] : scenario[field];
+  const expand = (pattern: string) =>
+    pattern
+      .replaceAll('{key}', scenario.key)
+      .replaceAll('{KEY}', scenario.key.toUpperCase())
+      .replaceAll('{status}', status);
+  it.each(unsupportedAnswers)('does not classify unsupported whole answer %j', (pattern) => {
+    const answer = expand(pattern);
+    expect(answerCheck(JSON.stringify({ answer }), scenario, scenario.reads)).toEqual({
+      form: 'bare-json',
+      answer: 'other',
+      reads: 'expected',
+    });
+  });
+  it.each([
+    '{key} is {status}',
+    '{key}: {status}',
+    '{key}:{status}',
+    '{key} : {status}',
+    '{key} status is {status}',
+    '{key} status: {status}',
+    '{key} status:{status}',
+    '\t{key}\tis\t{status}.\t',
+  ])('recognizes only a supported literal form %j', (pattern) => {
+    const answer = expand(pattern).replace(status, status.toUpperCase());
+    expect(answerCheck(JSON.stringify({ answer }), scenario, scenario.reads)).toEqual({
+      form: 'bare-json',
+      answer: label,
+      reads: 'expected',
+    });
+  });
+  it('has a fixed 256-character whole-answer bound before normalization', () => {
+    const answer = `${scenario.key} is ${status}`.padStart(256, ' ');
+    expect(answerCheck(JSON.stringify({ answer }), scenario, scenario.reads).answer).toBe(label);
+    expect(
+      answerCheck(JSON.stringify({ answer: ' ' + answer }), scenario, scenario.reads).answer,
+    ).toBe('other');
+  });
 });
