@@ -42,7 +42,7 @@ export interface AccountTemplate {
 }
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 13;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 14;
 
 const t = (text: string, voucher: TemplateVoucher = 'library', version = 1): AccountTemplate =>
   Object.freeze({ version, text, voucher });
@@ -59,6 +59,11 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'row.wrong': t('Anything wrong'),
   'row.more': t("…and {{count:n,'more tool call','more tool calls'}}."),
   'items.more': t("…and {{count:n,'more item','more items'}}."),
+  // README law 8, measured in its own unit (`size.ts` · `fitAccount`): the lines a row could
+  // not list within the account's size limit, counted — never dropped unsaid. Set 14.
+  'row.sizeBound': t(
+    "…and {{count:n,'more line','more lines'}}, not listed here: the account reached its size limit.",
+  ),
   // A declaration's items whose words the record keeps out (a redaction policy) — set 11.
   'items.keptOut': t("Kept out of this record: {{count:n,'item','items'}}."),
 
@@ -327,6 +332,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "Names and numbers: the answer's were looked up in what the tools returned.",
   ),
   'howSure.check.answerChecks': t("The app's answer checks: they ran on this answer."),
+  // Code in an answer (`code: 'match'`) — set 14.
+  'howSure.check.scriptMatch': t(
+    "Scripts shown: {{ran}} of {{count:of,'fenced block','fenced blocks'}} were compared with this turn's submitted programs.",
+  ),
   // The inputs layer (honesty layer 2) — set 3.
   'howSure.check.argumentRules': t(
     "Argument rules: {{ran}} of {{count:of,'ruled argument','ruled arguments'}} had a verdict on the record.",
@@ -396,6 +405,10 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'howSure.reason.derivedFromReading': t(
     "A time in the answer is the library's own spelling of your words — an implied year, an offset or a converted form — not something you said or a tool returned.",
   ),
+  // Code in an answer (`code: 'match'`) — set 14.
+  'howSure.reason.scriptUnmatched': t(
+    'A script shown in the answer matches no submission of this turn on the record.',
+  ),
   'howSure.reason.stoppedEarly': t('The run stopped before the model finished.'),
   // The answer layer's witness (honesty layer 4) — set 5.
   'howSure.reason.stepsUnfinished': t(
@@ -458,6 +471,80 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'howSure.evidence.notRecorded': t(
     "Whether the answer's names and numbers were checked is not recorded.",
+  ),
+  // Code in an answer — set 14. One line per script the answer SHOWED (`code: 'match'`) and per
+  // script the library ATTACHED (`.scriptTravelsWithTheAnswer()`). The match is the library's
+  // fact, the outcome the tool's runner's: a sentence takes the weaker, the library's. An exit
+  // number is printed only from a recorded exit code; no line joins a script to a value.
+  'howSure.script.shown.submitted': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; it was submitted, and the call has not returned.',
+  ),
+  'howSure.script.shown.returned': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; the tool call returned; execution is not confirmed.',
+  ),
+  'howSure.script.shown.reportedSuccess': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; the runner reported success; no exit code was recorded.',
+  ),
+  'howSure.script.shown.reportedFailure': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; the runner reported failure; no exit code was recorded.',
+  ),
+  'howSure.script.shown.completed': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; it completed, exit 0.',
+  ),
+  'howSure.script.shown.completedWithFailure': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; it completed with failure, exit {{exit}}.',
+  ),
+  'howSure.script.shown.unknown': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; its outcome is unknown: the call ended before the runner reported.',
+  ),
+  'howSure.script.shown.unknownService': t(
+    'The script shown is the one submitted to {{tool:code}} on call {{call:code}}; its outcome is unknown: the service reported an error, and whether the program ran is not known.',
+  ),
+  'howSure.script.shown.withheld': t(
+    "The script shown is the one submitted to {{tool:code}} on call {{call:code}}; its result was withheld over the tool's ceiling; the execution itself completed, exit 0.",
+  ),
+  'howSure.script.withheld': t(
+    "The result of call {{call:code}} was withheld over the tool's ceiling; that does not change what its execution record says.",
+  ),
+  'howSure.script.rewritten': t(
+    'A before-tool rule changed the script of call {{call:code}} before dispatch; the script shown is the one submitted to the tool.',
+  ),
+  'howSure.script.unmatched': t(
+    'A script shown matches no submission of this turn on the record; its contents were checked as prose.',
+  ),
+  // Laws 7 and 8: every block is judged; the first MAX_LISTED_CALLS are listed.
+  'howSure.script.shown.more': t(
+    "…and {{count:n,'more script shown in the answer','more scripts shown in the answer'}}, not listed here.",
+  ),
+  'howSure.script.attached.returned': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (tool call returned; execution not confirmed; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.reportedSuccess': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (runner reported success; no exit code; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.reportedFailure': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (runner reported failure; no exit code; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.completed': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (completed, exit 0; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.completedWithFailure': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (completed with failure, exit {{exit}}; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.unknown': t(
+    "The script under the answer was attached by the library from the record of {{tool:code}}'s call {{call:code}} (outcome unknown; {{bytes}} bytes).",
+  ),
+  'howSure.script.attached.cut': t(
+    'The attached script of call {{call:code}} shows {{shown}} of its {{bytes}} bytes — not the whole program.',
+  ),
+  'howSure.script.attached.notInText': t(
+    "{{count:n,'attached script is','attached scripts are'}} named under the answer, not printed: the formatting above could have shown part of a program as ordinary text. The programs are on the record.",
+  ),
+  'howSure.script.attached.omitted': t(
+    "{{count:n,'more script of this turn was','more scripts of this turn were'}} not attached: over the bound or past the cap.",
+  ),
+  'howSure.script.attached.more': t(
+    "…and {{count:n,'more attached script','more attached scripts'}}, not listed here.",
   ),
 
   // ── Anything wrong: signals ──────────────────────────────────────────
@@ -565,6 +652,13 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     'This record keeps out values this report reads, so nothing about the answer can be told from it.',
   ),
   'row.keptOut': t('Not told: this record keeps out values this report reads.'),
+  // A record whose account would pass its size limit even with nothing listed (`size.ts`). Set 14.
+  'scope.tooLarge': t(
+    'This record is too large to explain within the size limit of this report, so nothing about the answer is told from it.',
+  ),
+  'row.tooLarge': t(
+    'Not told: this record is too large to explain within the size limit of this report.',
+  ),
   'scope.unfiltered': t(
     'Which run these events belong to is not recorded, so this report reads every event in the record.',
   ),

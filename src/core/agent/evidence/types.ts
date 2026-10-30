@@ -8,6 +8,7 @@
  */
 
 import type { AnswerGroundingReading } from '../../../integrity/prior-turn-evidence/check.js';
+import type { ScriptsVerdict } from '../scripts/types.js';
 
 /**
  * How hard the check pushes back. **Same three words as the skill-graph
@@ -166,6 +167,25 @@ export interface NamesAndNumbersOptions {
    * The library's internal framing and validation remain in force. The text
    * is request-only and never becomes evidence, user history or an exemption. */
   readonly recoveryInstruction?: EvidenceRecoveryInstruction;
+  /**
+   * How a fenced code block in a PROSE answer is read. Default `'check'` —
+   * today's behaviour, byte for byte: the whole answer is prose.
+   *
+   * `'match'` — each fenced block (```` ``` ```` or `~~~`, at column 0, closed)
+   * is compared, byte for byte after removing only the Markdown wrapper,
+   * against the programs this TURN's calls of a declared code-running tool
+   * (`Tool.script`, which `codeRunnerTool` declares) submitted to the tool. A
+   * block that matches one is script content: it yields no value to ground
+   * and is labelled with that call's recorded outcome (`completed, exit 0`,
+   * `outcome unknown`, …). A block that matches none stays prose, checked as
+   * today, and is labelled `unmatched`. Code is never evidence: a value in the
+   * prose that also sits in the script still needs a tool result.
+   *
+   * Inline spans, unclosed fences and indented code are prose. A typed answer
+   * is not scanned. There is no `'skip'`: exempting every fence would be an
+   * exemption by formatting. See `core/agent/scripts/README.md`.
+   */
+  readonly code?: 'check' | 'match';
 }
 
 /**
@@ -208,6 +228,12 @@ export interface UnsupportedValue {
   /** Which rule made it a candidate: `'identifier'`, `'number'`, or the name
    *  of a declared {@link EvidenceShape}. */
   readonly shape: string;
+  /**
+   * Under `code: 'match'` only: `'code'` when every occurrence of the value is
+   * inside a fenced block that matched no submission (checked as prose all the
+   * same), `'prose'` otherwise. Absent under `'check'`.
+   */
+  readonly region?: 'prose' | 'code';
 }
 
 /**
@@ -234,6 +260,8 @@ export interface ResolvedEvidenceGate {
   /** Present only when true: an absent dial preserves resolved default bytes. */
   readonly decimalRounding?: true;
   readonly recoveryInstruction?: EvidenceRecoveryInstruction;
+  /** Present only for `code: 'match'`: an absent field is `'check'`, byte for byte. */
+  readonly code?: 'match';
   /**
    * Set by the agent, never by `resolveEvidenceGate`: a posture that can
    * revise under an ENFORCING answer validation. The revision and every later
@@ -318,4 +346,11 @@ export interface EvidenceVerdict {
    * no posture changes because of it.
    */
   readonly grounding: AnswerGroundingReading;
+  /**
+   * Under `code: 'match'` on a prose answer: the verdict on each fenced block
+   * (matched → its call's label, or `unmatched` with a reason), the script
+   * rows of earlier turns counted, and blocks past the cap counted. Never the
+   * code. Absent under `'check'` and on a typed answer.
+   */
+  readonly scripts?: ScriptsVerdict;
 }

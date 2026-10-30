@@ -31,9 +31,9 @@
  *
  * A call a paused batch never dispatched (9.113.0) lands as its two
  * brackets, each carrying `notDispatched: { pausedCall: { toolCallId,
- * toolName } }` and neither carrying `error` — identifiers only, so the field
- * rides VERBATIM in both payload modes (it is not in `BOUND_FIELDS`). The
- * chained record therefore says the call never ran — neither that it
+ * toolName } }` and neither carrying `error` — identifiers only. Bounded mode
+ * checks each field by its declared shape; verbatim mode sanitizes the payload.
+ * The chained record therefore says the call never ran — neither that it
  * succeeded nor that it failed; the bounded `result` (`[type: string]`) never
  * had to say it.
  *
@@ -83,6 +83,9 @@
  *                             `tool_end`'s `changedArgKeys` is names already
  *   - tool results          → `'[type: …]'` (typeof only) — `result` and,
  *                             when a rule changed it, `modelResult` alike
+ *   - an attached script's program (`turn_end.scripts.shown[].text`)
+ *                           → `'[N chars]'`; checked labels, ids, counts and
+ *                             rendering-boundary flags retain their shapes
  *   - an evaluation's `explanation` → `'[N chars]'` (a judge's reason can
  *                             quote the answer it graded)
  *   - userPrompt / LLM content / thinking blocks / history
@@ -119,15 +122,15 @@
  *     fail-fast reason, a check's `rationale` and `tellLLM`, a fallback's or a
  *     credential failure's message, and a router's own reason
  *
- * What the shapes keep is structure, sanitized (strings capped at 256 chars,
- * lists at 32 items, cycles broken): ids, names, kinds, codes and telemetry
- * tags, verdicts, counts, timestamps the library takes, the library's own
- * sentences built from those, and the words the app declared up front
- * (labels, descriptions, step notes, hints, display names, rule ids). `kept`
- * never covers a container that can hold text: such a container is spelled
- * out field by field, so every text leaf is classified by name
- * (`test/type-regressions/AuditBoundingDepth.test.ts` walks every shape
- * beside its type and pins every leaf's fate).
+ * What the shapes keep is checked structure: a number, boolean or string
+ * must arrive as that kind, and a closed enum must be one of its declared
+ * words. Every container is classified field by field, even if its declared
+ * type contains only counts. Unknown children and wrong kinds are markers.
+ * Strings are capped at 256 characters and lists at 32 items. This retains
+ * ids, names, kinds, codes, telemetry tags, verdicts, counts, library times
+ * and the words the app declared up front (labels, descriptions, step notes,
+ * hints, display names, rule ids). The type walker and runtime damage sweep
+ * check both halves; `auditKeptByContract.ts` names the exceptions below.
  *
  * What a bounded record still carries, by contract:
  *
@@ -217,7 +220,13 @@ import {
   unknownEventShape,
   type BoundRule,
 } from './auditBounding.js';
-import { boundAnswerCoverage, boundAnswerNegatives, eventShapes } from './auditShapes.js';
+import {
+  boundAnswerCoverage,
+  boundAnswerNegatives,
+  boundMeta,
+  boundScripts,
+  eventShapeTable,
+} from './auditShapes.js';
 
 // ─── Public types ─────────────────────────────────────────────────────
 
@@ -429,6 +438,29 @@ export function boundedFieldRules(): Readonly<Record<string, Readonly<Record<str
   return BOUND_FIELDS;
 }
 
+/** Content leaves inside a field that also carries labels, ids and counts.
+ * The function is the same rule the event shape applies, never a second sanitizer. */
+const BOUND_LEAVES: Readonly<
+  Record<
+    string,
+    Readonly<Record<string, { readonly bound: BoundRule; readonly leaves: readonly string[] }>>
+  >
+> = {
+  'agentfootprint.agent.turn_end': {
+    scripts: { bound: boundScripts, leaves: ['shown[].text'] },
+  },
+};
+
+/** The bounded content leaves, pinned against the redaction vocabulary's value-kind rule.
+ * @internal */
+export function boundedContentLeaves(): readonly string[] {
+  return Object.entries(BOUND_LEAVES).flatMap(([eventType, fields]) =>
+    Object.entries(fields).flatMap(([field, rule]) =>
+      rule.leaves.map((leaf) => `${eventType} · ${field}.${leaf}`),
+    ),
+  );
+}
+
 // ─── Strategy factory ────────────────────────────────────────────────
 
 /** Excluded by default — high-volume content deltas. */
@@ -451,15 +483,25 @@ export function auditExport(opts: AuditExportOptions = {}): AuditExportStrategy 
   const seenRunIds = new Set<string>();
   let stopped = false;
   // Bounded mode: the tools this strategy has seen run (a `tryInsteadTool`
-  // name is kept only for one of them) and the whole-event shapes.
+  // name is kept only for one of them) and the whole-event shapes — a `Map`,
+  // because an event's name is the emitter's to choose.
   const toolRuns = createToolRunTracker();
-  const shapes = eventShapes(toolRuns.ran);
+  const shapes = eventShapeTable(toolRuns.ran);
 
   /** An event's payload in bounded mode: its shape — closed by default, an
-   *  event type the registry does not declare included. */
+   *  event type the registry does not declare (any name at all) included. */
   function boundEvent(eventType: string, payload: unknown): unknown {
-    const shape: BoundRule | undefined = (shapes as Readonly<Record<string, BoundRule>>)[eventType];
-    return (shape ?? unknownEventShape)(payload);
+    const shape: BoundRule = shapes.get(eventType) ?? unknownEventShape;
+    return shape(payload);
+  }
+
+  /** A record's meta: its shape in bounded mode (`EventMeta`, each field
+   *  checked), sanitized in verbatim mode; anything but an object, none. */
+  function recordMetaOf(metaRest: unknown): Record<string, unknown> {
+    const bounded = payloadMode === 'bounded' ? boundMeta(metaRest) : sanitizeJson(metaRest);
+    return bounded !== null && typeof bounded === 'object' && !Array.isArray(bounded)
+      ? (bounded as Record<string, unknown>)
+      : {};
   }
 
   function append(
@@ -533,14 +575,12 @@ export function auditExport(opts: AuditExportOptions = {}): AuditExportStrategy 
         appendGenesis(runId, timestamp);
       }
 
-      // wallClockMs lives on `timestamp`; the rest of the meta rides
-      // along sanitized (runtimeStageId, paths, turn/iter indices, …).
+      // wallClockMs lives on `timestamp`; the rest of the meta rides along
+      // (runtimeStageId, paths, turn/iter indices, …) — by its shape in bounded
+      // mode, sanitized in verbatim mode.
       const { wallClockMs: _lifted, ...metaRest } = meta ?? {};
       void _lifted;
-      const recordMeta = {
-        ...(sanitizeJson(metaRest) as Record<string, unknown>),
-        runId,
-      } as AuditRecord['meta'];
+      const recordMeta = { ...recordMetaOf(metaRest), runId } as AuditRecord['meta'];
 
       toolRuns.observe(event.type, event.payload);
       const payload =

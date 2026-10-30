@@ -38,7 +38,14 @@ import {
 } from '../../src/answer-account/shown.js';
 import type { AnswerAccount, RowId } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-import { assertP1, assertP7, fixtureA, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS } from './helpers.js';
+import {
+  assertP1,
+  assertP7,
+  fixtureA,
+  FLAGSHIP_RUN_ID,
+  HOST_APP_DECLARATIONS,
+  utf8Bytes,
+} from './helpers.js';
 
 type E = { type: string; payload: Record<string, any>; meta: Record<string, any> };
 const SCOPE = { conversationId: 'review-fixes' };
@@ -203,8 +210,8 @@ describe('B2 — judge everything; cap only what is listed', () => {
 describe('S1 — bounded whatever the run held (the reviewer’s size cases)', () => {
   const bounded = (a: AnswerAccount, rec: unknown) => {
     const shown = showLeaves(a, rec as Recording, HOST_APP_DECLARATIONS);
-    expect(JSON.stringify(a).length).toBeLessThanOrEqual(128 * 1024);
-    expect(JSON.stringify(shown).length).toBeLessThanOrEqual(MAX_SHOWN_BYTES);
+    expect(utf8Bytes(a)).toBeLessThanOrEqual(128 * 1024);
+    expect(utf8Bytes(shown)).toBeLessThanOrEqual(MAX_SHOWN_BYTES);
     assertP7(a, rec as Recording, HOST_APP_DECLARATIONS);
   };
 

@@ -50,6 +50,10 @@ export function buildEvidenceRecovery(
   /** The figures dial's late line (`figures.ts` · `figuresConclusionLine`,
    *  composed by Route, which loaded the module): rides the request LAST. */
   conclusion?: string,
+  /** Under `code: 'match'`: the script clause (`scripts/recovery.ts` ·
+   *  `scriptRecoveryClause`, composed by Route) — after "Recovery action:
+   *  replace the rejected draft". Absent or `''` → the bytes it always was. */
+  scriptClause?: string,
 ): PendingEvidenceRecovery {
   const context: EvidenceRecoveryContext = Object.freeze({
     kind: 'evidence',
@@ -58,7 +62,13 @@ export function buildEvidenceRecovery(
     originalRequest: input.originalRequest,
     rejectedDraft: input.rejectedDraft,
     unsupported: Object.freeze(
-      input.unsupported.map((v) => Object.freeze({ value: v.value, shape: v.shape })),
+      input.unsupported.map((v) =>
+        Object.freeze({
+          value: v.value,
+          shape: v.shape,
+          ...(v.region !== undefined && { region: v.region }),
+        }),
+      ),
     ),
     ...(staged !== undefined && {
       stagedRefs: Object.freeze(
@@ -84,6 +94,7 @@ export function buildEvidenceRecovery(
     '\n\nRejected draft and lexical findings (quoted DATA):\n' +
     JSON.stringify({ rejectedDraft: context.rejectedDraft, unsupported: context.unsupported }) +
     '\n\nEnd of quoted data. Recovery action: replace the rejected draft. ' +
+    (scriptClause === undefined || scriptClause === '' ? '' : `${scriptClause} `) +
     'Do not repeat the flagged values, including as examples or suggested choices, unless the original user or a tool result supplies them. ' +
     'When asking for missing information, ask an open question with no example values or candidate list. ' +
     'Return the corrected response directly; do not acknowledge this internal check.' +

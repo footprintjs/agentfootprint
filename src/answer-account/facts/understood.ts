@@ -35,12 +35,13 @@ import type {
   SentenceVar,
 } from '../types.js';
 import { isRecord, num, str, type RecordingView, type ViewEvent } from '../view.js';
-import { FACT_TEXT_CHARS, PERMISSION_REFUSALS } from './calls.js';
+import { PERMISSION_REFUSALS } from './calls.js';
 import { heldChip } from './checked.js';
 import {
   at,
   declarationAt,
   derived,
+  FACT_TEXT_CHARS,
   skillVars,
   stateAt,
   takeItem,

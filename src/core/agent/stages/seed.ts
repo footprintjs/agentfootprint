@@ -1,3 +1,4 @@
+import { withoutEarlierScriptText } from '../scripts/rows.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
 import type { NegativeCheckpoint } from '../negativeClaims/checkpoint.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
@@ -757,12 +758,23 @@ function seedFrom(
   // honesty layer is armed the count is raised to what the stored
   // conversation already stamped (`turnNumberFor`): a window strategy trims
   // the stored history, and the count alone repeats.
-  scope.turnNumber = turnNumberFor(
+  const turnNumber = turnNumberFor(
     history,
     resume,
     resumeLedger,
     deps.honestyLayers !== undefined || deps.negativeClaimsArmed === true,
   );
+  scope.turnNumber = turnNumber;
+  // THE SCRIPT RECORD'S BOUND, at the turn boundary: a restored `script` row
+  // of an EARLIER turn keeps its facts — ids, counts, outcome — and loses its
+  // text (`scripts/rows.ts` · `withoutEarlierScriptText`), so the eligible
+  // script text stays one turn's worth whatever the conversation's length.
+  // Rewritten only when such a row still holds text: every other restore is
+  // the copy above, byte for byte.
+  if (resumeLedger && resumeLedger.length > 0) {
+    const kept = withoutEarlierScriptText(resumeLedger, turnNumber);
+    if (kept !== resumeLedger) scope.findingsLedger = [...kept];
+  }
   if (deps.negativeClaimsArmed === true) {
     const prior = resume?.negatives;
     scope.negativeClaimState = createNegativeRuntimeState(

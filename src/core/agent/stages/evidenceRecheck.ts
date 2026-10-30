@@ -29,6 +29,7 @@ import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types
 import { typedEmit } from '../../../recorders/core/typedEmit.js';
 import { MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { buildEvidenceRecovery } from '../evidence/recovery.js';
+import { copyScriptsVerdict } from '../scripts/match.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from '../evidence/types.js';
 import { findStagedRefs } from '../stagedRefs.js';
 import type { AgentState } from '../types.js';
@@ -107,6 +108,7 @@ export function buildEvidenceRecheckStage(
       gate.recoveryInstruction,
       match,
       pending.conclusion,
+      pending.scriptClause,
     );
     scope.evidenceRecoveryUsed = false;
     const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
@@ -135,6 +137,8 @@ export function buildEvidenceRecheckStage(
         stagedRefs: match.refs.map((r) => ({ ref: r.ref, kind: r.kind })),
         spenderTools: [...match.tools],
       }),
+      // Under `code: 'match'`: the draft's fenced blocks, as the match read them.
+      ...(pending.scripts !== undefined && { scripts: copyScriptsVerdict(pending.scripts) }),
     });
 
     // Close this iteration's bracket before the loop turns — every recorder

@@ -430,6 +430,17 @@ function copyItem(item: CoverageItem): CoverageItem {
  * declared names named and the rest counted; and a `Period:` or "In progress"
  * line names its call by the declared words instead of the registered name.
  * An item no declaring call names stays the bytes it always was.
+ *
+ * `scripts` (`.scriptTravelsWithTheAnswer()`) is a third, already-composed
+ * block — the programs this turn's calls SUBMITTED to a declared code-running
+ * tool, each in the library's own fence under a label line read from its
+ * execution record (`core/agent/scripts/attachment.ts` · `scriptsBlock`) —
+ * appended LAST, after the standing line and the limits block, under the same
+ * separator. Absent → the bytes it always was. Given as a function, it is
+ * handed the exact text it will follow — the model's answer, the separator and
+ * every block above — so the attachment can set a rendering boundary first
+ * (`core/agent/scripts/attachment.ts` · `scriptsBlockAfter`): whatever block
+ * that text leaves open must not take the programs in.
  */
 export function composeAnswerWithCoverage(
   answer: string,
@@ -439,6 +450,7 @@ export function composeAnswerWithCoverage(
   presentation?: BoundPresentation,
   time?: TimeLimitLines,
   displayNameOf?: (toolName: string) => string | undefined,
+  scripts: string | ((before: string) => string) = '',
 ): string {
   const blocks: string[] = [];
   // The answer layer's standing line (honesty layer 4, its own opt-in arm)
@@ -449,11 +461,22 @@ export function composeAnswerWithCoverage(
   const coverage = coverageBlock(declared, presentation, time, displayNameOf);
   if (coverage !== '') blocks.push(coverage);
   if (assumed !== '') blocks.push(assumed);
-  if (blocks.length === 0) return answer;
   // The model's answer: trimmed in one pass, never `/\s+$/` (lib/linearText.ts).
   const body = trimTrailing(answer, isRegExpWhitespace);
+  // The scripts the library attached from the record, after everything else —
+  // composed knowing the exact text they follow.
+  const tail = typeof scripts === 'function' ? scripts(textBefore(body, blocks)) : scripts;
+  if (tail !== '') blocks.push(tail);
+  if (blocks.length === 0) return answer;
   const joined = blocks.join('\n\n');
   return body.length > 0 ? `${body}\n\n---\n\n${joined}` : joined;
+}
+
+/** The text a block appended after `blocks` follows, as the composer writes it. */
+function textBefore(body: string, blocks: readonly string[]): string {
+  const joined = blocks.join('\n\n');
+  if (body.length === 0) return joined;
+  return blocks.length === 0 ? `${body}\n\n---` : `${body}\n\n---\n\n${joined}`;
 }
 
 /** The coverage block alone — `''` when the declarations say nothing. */

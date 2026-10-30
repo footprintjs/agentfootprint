@@ -13,11 +13,14 @@
  * history content, and any event of another run.
  *
  * Bounds: a leaf over 2,048 serialized characters is `too-large`; the whole map
- * stops at 64 KB — no later pointer adds a key; one `#more` entry says the rest
- * is withheld as `too-large`.
+ * stops at its share of the op's body, measured in serialized UTF-8 bytes
+ * (`size.ts` · `SHOWN_BYTES`, 64 KiB less the body's frame) — no later pointer
+ * adds a key; one `#more` entry says the rest is withheld as `too-large`.
  */
 
 import { eventBelongsToRun } from '../bridge/eventMeta.js';
+import { jsonBytes } from '../lib/boundedJson.js';
+import { SHOWN_BYTES } from './size.js';
 import { pointerKey } from './render.js';
 import type {
   AnswerAccount,
@@ -30,7 +33,13 @@ import type {
 import { isRecord } from './view.js';
 
 export const MAX_LEAF_CHARS = 2048;
-export const MAX_SHOWN_BYTES = 64 * 1024;
+/**
+ * The map's size, in its own unit — serialized UTF-8 bytes (`size.ts` ·
+ * `SHOWN_BYTES`): what the account and the body's frame leave of the op's
+ * 192 KiB body. Each entry is measured as JSON writes it (`jsonBytes`), so a
+ * leaf of characters JSON writes six bytes wide costs six.
+ */
+export const MAX_SHOWN_BYTES = SHOWN_BYTES;
 
 /**
  * The one key added when the map reaches `MAX_SHOWN_BYTES`: every pointer with
@@ -38,7 +47,7 @@ export const MAX_SHOWN_BYTES = 64 * 1024;
  * start with a pointer kind), so it cannot collide with one.
  */
 export const SHOWN_MORE_KEY = '#more';
-const SENTINEL_BYTES = JSON.stringify({ [SHOWN_MORE_KEY]: { withheld: 'too-large' } }).length + 2;
+const SENTINEL_BYTES = jsonBytes({ [SHOWN_MORE_KEY]: { withheld: 'too-large' } }) + 2;
 
 const PREFIX = 'agentfootprint.';
 
@@ -69,6 +78,13 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
     // shows them, and which tool's rule assumed a value — never the value (an argument's value).
     '/answerCoverage/{checked,notChecked,cannotCover}/*/{what,why,short,kind}',
     '/answerCoverage/assumed/*/{toolName,argument}',
+    // The scripts the library attached: the call, its label and its counts — never `text`
+    // (a tool argument: the program).
+    '/scripts/shown/*/{toolCallId,dispatch,tool,language,label,exitCode,resultWithheld,rewritten,bytes,lines}',
+    '/scripts/shown/*/truncated/shownBytes',
+    '/scripts/omitted',
+    '/scripts/closedFence/{char,length}',
+    '/scripts/withheldFromText',
   ),
   'middleware.decision': list('/{middleware,moment,outcome,changed,toolName,toolCallId}'),
   'permission.check': list('/{target,result,policyRuleId}'),
@@ -109,7 +125,10 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
   'findings.declared': list('/{toolName,toolCallId,basis,expect}'),
   'agent.evidence_checked': list(
     '/{posture,candidates,lookedUp,action,afterRevision,evidenceTruncated}',
-    '/unsupported/*/value',
+    '/unsupported/*/{value,region}',
+    // The script match's verdict on each block the answer showed — never the code.
+    '/scripts/blocks/*/{block,label,exitCode,toolCallId,tool,dispatch,alsoMatches,reason}',
+    '/scripts/{earlierTurnRows,regionsDropped,scriptsDropped}',
   ),
 });
 
@@ -134,6 +153,10 @@ export const SHOWN_STATE_PATHS: Readonly<Record<string, readonly string[]>> = Ob
   // PERSON's own message, the skill ids and the scorer's numbers.
   turnRoute: list('/{by,from,to}', '/witness/text'),
   entryScores: list('/*/{id,score}'),
+  // A call's script row (`core/agent/scripts/`): its label and counts — never `text`.
+  findingsLedger: list(
+    '/*/{dispatch,outcome,bytes,lines,exitCode,serviceError,resultWithheld,rewritten}',
+  ),
 });
 const HISTORY_PATHS = ['/toolName', '/toolCallId', '#emptiness'];
 
@@ -144,6 +167,8 @@ const DENIED: Readonly<Record<string, readonly string[]>> = {
   'stream.tool_end': ['result', 'modelResult'],
   'middleware.decision': ['why'],
   'pause.resume': ['resumeInput'],
+  // An attached script's program is a tool argument, whatever list names it.
+  'agent.turn_end': ['text'],
 };
 
 const segments = (path: string): string[] =>
@@ -353,7 +378,7 @@ export function showLeaves(
     } else {
       out = leaf(declarationValue(declarations, p.field));
     }
-    const size = JSON.stringify(key).length + JSON.stringify(out).length + 2;
+    const size = jsonBytes(key) + jsonBytes(out) + 2;
     if (bytes + size > MAX_SHOWN_BYTES - SENTINEL_BYTES) {
       // Past the cap nothing more is added — one sentinel says the rest is withheld.
       shown[SHOWN_MORE_KEY] = { withheld: 'too-large' };

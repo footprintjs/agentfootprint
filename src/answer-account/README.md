@@ -170,18 +170,27 @@ declared key that holds no list and no ticket (`unreachable.empty.noList`).
    permission verdict refuses a call only when it is `deny` or `halt`
    (`gate_open` lets it run). A run id that owns no event of the record gets an
    account that says so, and claims nothing about that run.
-8. **Bounded by construction** — ≤ 50 calls in the facts, 5 per row, a shared
-   item budget and a shared long-text budget (`facts/common.ts` · `ITEM_BUDGET`,
-   `LONG_TEXT_BUDGET`), at most 12 pointers per sentence, model-chosen ids and
-   names cut at 200 characters in the facts (refusals ≤ 12, in-view ≤ 50),
-   every string var ≤ 2,000 characters: the account stays ≤ 128 KB, the op's
-   response ≤ 192 KB.
+8. **Bounded in serialized UTF-8 bytes.** The account is at most 128 KiB and
+   the op's `{ account, shown }` body at most 192 KiB, including JSON escaping,
+   punctuation and every repeated pointer (`size.ts`, `lib/boundedJson.ts`).
+   The field caps keep ordinary accounts readable: 50 calls in the facts,
+   five per row, shared item and long-text budgets, 12 pointers per sentence,
+   50 per fact, 200 characters per fact name, and 2,000 per sentence variable.
+   Pointer identities have a 200-byte JSON-content budget; their index/path
+   still resolve the original leaf. When a complete account exceeds its
+   byte budget, its listings are fitted fairly and each omitted line or fact
+   is counted. Counts, checks and statuses still judge every item. If even
+   the unlisted part exceeds the budget, the account says it cannot explain
+   this record within the limit and counts it unread. On ANY saved record,
+   a list is read to its cap and the rest counted. Tests include Unicode,
+   JSON escapes and repeated pointers combined at the writer caps.
 9. **Show me = allow-listed leaves** (`shown.ts` · `SHOW_ME_ALLOW_LIST`); the
    deny list (injection bodies, tool args and results, a decision's `why`,
    `resumeInput`, the live heap, history content) wins. An emptiness leaf is a
    derived `{ rows, at }`, never the rows — `at` is where the reader took the
-   count (the fact's `countedAt`: the rowset, or the ticket's `rows`). Past 64 KB no pointer adds a key;
-   one `#more` entry says the rest is withheld.
+   count (the fact's `countedAt`: the rowset, or the ticket's `rows`). The map's
+   serialized-byte budget reserves the account and the body frame within
+   192 KiB; one `#more` entry says further leaves are withheld.
 10. **A tool's own words are printed as the tool wrote them** — `lookedFor`,
     `what`, `short`. An author who interpolates the caller's arguments into
     them puts those arguments in the report too (the af-1 "never interpolate"

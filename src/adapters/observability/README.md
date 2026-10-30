@@ -205,25 +205,33 @@ content field leaked until someone noticed. Now:
 
 - **Every registered event has a shape** (`auditShapes.ts` · `eventShapes`,
   total over the event registry) that names every field of its payload,
-  `kept` or a marker. A new event type, or a new field on a payload, does
+  with a checked rule or a marker. A new event type, or a new field on a payload, does
   not compile until it is classified.
 - **What a shape does not name is a marker:** a field the payload type does
   not declare, a value that is not the declared shape, and every field of an
   event type the registry does not declare (a consumer's own `emit`).
-- **`kept` never covers a container that can hold text.** Such a container is
-  spelled out field by field (`shapeOf`, `listOf`, `recordOf`, `orList`), so
-  every text leaf is classified by name. A `custom` rule decides by value and
-  states its reason.
+- **Every kept leaf checks its runtime kind.** Counts accept numbers, flags
+  accept booleans, and names accept strings; closed enums accept only their
+  declared words. Every container is spelled out field by field (`shapeOf`,
+  `listOf`, `recordOf`, `orList`), including objects whose declared children
+  are only numbers. Undeclared children and wrong kinds become markers. A
+  `when` rule states why it chooses between two checked rules.
+- **Names cannot select inherited behavior.** Dispatch and field lookup use
+  maps, and every output key is an own data property, including `__proto__`.
 - **`BOUND_FIELDS` (`audit.ts`) is a declaration:** the conversation fields
   replaced whole, which the redaction vocabulary is pinned against. The shapes
   apply the very rule functions it names.
 
-Three pins hold this:
+These checks hold the boundary:
 
 - `test/type-regressions/AuditBoundingDepth.test.ts` walks every shape beside
-  its payload type with the TypeScript checker, refuses a `kept` over text, and
+  its payload type with the TypeScript checker, verifies every leaf kind and
+  closed enum, and
   pins the fate of every leaf of every event (`audit-bounding-fates.snapshot.json`;
   a deliberate change updates it with `-u`).
+- `audit-bounded-sweep.test.ts` damages every shape position at runtime and
+  pins the named exceptions in `auditKeptByContract.ts`. The public Agent
+  regressions also inject extra provider fields and inherited event names.
 - `EventContent.completeness.test.ts` runs a canary in every content leaf
   through every exporter.
 - `TurnEndContent.completeness.test.ts` does the same for `turn_end`.

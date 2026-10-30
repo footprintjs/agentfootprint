@@ -28,7 +28,13 @@ import {
 } from '../../src/answer-account/shown.js';
 import type { AnswerAccount, RecordPointer } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
-import { assertP7, fixtureA, FLAGSHIP_RUN_ID, HOST_APP_DECLARATIONS } from './helpers.js';
+import {
+  assertP7,
+  fixtureA,
+  FLAGSHIP_RUN_ID,
+  HOST_APP_DECLARATIONS,
+  utf8Bytes,
+} from './helpers.js';
 
 const ev = (type: string, path: string, index = 0): RecordPointer => ({
   kind: 'event',
@@ -119,30 +125,33 @@ describe('the leaves', () => {
     });
   });
 
-  it('the map stops at 64 KB: no later pointer adds a key; one #more entry says the rest is withheld', () => {
-    const rec = fixtureA() as unknown as {
-      events: { type: string; payload: Record<string, unknown>; meta: Record<string, unknown> }[];
-    };
-    const pointers: RecordPointer[] = [];
-    for (let i = 0; i < 80; i++) {
-      rec.events.push({
-        type: 'agentfootprint.agent.turn_start',
-        payload: { userPrompt: `${i}-${'x'.repeat(2000)}` },
-        meta: { runId: FLAGSHIP_RUN_ID },
-      });
-      pointers.push(ev('agent.turn_start', '/userPrompt', rec.events.length - 1));
-    }
-    const shown = showLeaves(fakeAccount(pointers), rec as unknown as Recording);
-    expect(JSON.stringify(shown).length).toBeLessThanOrEqual(MAX_SHOWN_BYTES);
-    expect(shown[SHOWN_MORE_KEY]).toEqual({ withheld: 'too-large' });
-    const kept = Object.keys(shown).filter((k) => k !== SHOWN_MORE_KEY);
-    expect(kept.length).toBeLessThan(40); // the rest added NO key
-    // A prefix of the pointers is shown; from the first one that did not fit, none is.
-    const present = pointers.map((p) => pointerKey(p) in shown);
-    const cut = present.indexOf(false);
-    expect(cut).toBeGreaterThan(0);
-    expect(present.slice(cut).every((x) => !x)).toBe(true);
-  });
+  it.each(['x', '\uffff', '\u{10FFFF}'])(
+    'the map budgets serialized UTF-8 bytes (%s): a prefix and one counted boundary',
+    (unit) => {
+      const rec = fixtureA() as unknown as {
+        events: { type: string; payload: Record<string, unknown>; meta: Record<string, unknown> }[];
+      };
+      const pointers: RecordPointer[] = [];
+      for (let i = 0; i < 80; i++) {
+        rec.events.push({
+          type: 'agentfootprint.agent.turn_start',
+          payload: { userPrompt: `${i}-${unit.repeat(Math.floor(2000 / unit.length))}` },
+          meta: { runId: FLAGSHIP_RUN_ID },
+        });
+        pointers.push(ev('agent.turn_start', '/userPrompt', rec.events.length - 1));
+      }
+      const shown = showLeaves(fakeAccount(pointers), rec as unknown as Recording);
+      expect(utf8Bytes(shown)).toBeLessThanOrEqual(MAX_SHOWN_BYTES);
+      expect(shown[SHOWN_MORE_KEY]).toEqual({ withheld: 'too-large' });
+      const kept = Object.keys(shown).filter((k) => k !== SHOWN_MORE_KEY);
+      expect(kept.length).toBeLessThan(40); // the rest added NO key
+      // A prefix of the pointers is shown; from the first one that did not fit, none is.
+      const present = pointers.map((p) => pointerKey(p) in shown);
+      const cut = present.indexOf(false);
+      expect(cut).toBeGreaterThan(0);
+      expect(present.slice(cut).every((x) => !x)).toBe(true);
+    },
+  );
 });
 
 describe('BOUNDS — the synthetic worst case (200 calls × 60 items × 5 KB strings)', () => {
@@ -217,8 +226,8 @@ describe('BOUNDS — the synthetic worst case (200 calls × 60 items × 5 KB str
       '…and 195 more tool calls.',
     );
     expect(account.answer.clipped).toBe(true);
-    const size = JSON.stringify(account).length;
-    const response = JSON.stringify({ account, shown: showLeaves(account, recording) }).length;
+    const size = utf8Bytes(account);
+    const response = utf8Bytes({ account, shown: showLeaves(account, recording) });
     expect(size).toBeLessThanOrEqual(128 * 1024);
     expect(response).toBeLessThanOrEqual(192 * 1024);
   });

@@ -49,7 +49,17 @@ import {
   stepInProgress,
   type StepPlanFor,
 } from '../../../injection-engine/skillSteps.js';
-import { checkAnswer, evidenceRefusalSentence, MAX_REPORTED_VALUES } from '../evidence/gate.js';
+import {
+  checkAnswer,
+  clip,
+  evidenceRefusalSentence,
+  MAX_REPORTED_VALUES,
+} from '../evidence/gate.js';
+import { readAnswer } from '../evidence/extract.js';
+import { scriptRowsOfTurn } from '../scripts/rows.js';
+import { scriptJudge } from '../scripts/judge.js';
+import { copyScriptsVerdict } from '../scripts/match.js';
+import { scriptRecoveryClause } from '../scripts/recovery.js';
 import { noteAnswerEvidence } from './answerEvidence.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
 import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
@@ -62,6 +72,7 @@ import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.j
 import { contextErrorIdentity } from '../../../integrity/finding/types.js';
 import {
   groundedRowFrom,
+  scriptShownRowsFrom,
   stepsUnfinishedRowFrom,
   type StepsUnfinishedRow,
 } from '../assessment/witness.js';
@@ -835,7 +846,7 @@ function judgeEvidence(
   // THE ONE JUDGE of this run's evidence, bound to what the run read: asked
   // here of the draft, and by answer validation of the exact candidate it
   // delivers (`answerEvidence.ts`) — never a verdict carried across forms.
-  const judge = (text: string): EvidenceVerdict =>
+  const judgeProse = (text: string): EvidenceVerdict =>
     checkAnswer(text, {
       gate,
       evidence,
@@ -846,7 +857,49 @@ function judgeEvidence(
       exempt,
       ...(typedAnswer === true && { typed: true }),
     });
+  // `code: 'match'` on a PROSE answer: the script match in front of the same
+  // judge (`scripts/judge.ts`) — matched blocks are cut out of the text the
+  // gate reads, the verdict carries `scripts` and each flagged value's
+  // `region`. Reads this turn's `script` rows (and the drop count) only here,
+  // under the arm; a typed answer is read as today (design § 12).
+  const turnScripts =
+    gate.code === 'match' && typedAnswer !== true
+      ? scriptRowsOfTurn(
+          scope.findingsLedger as readonly unknown[] | undefined,
+          scope.turnNumber as number,
+        )
+      : undefined;
+  const judge =
+    turnScripts === undefined
+      ? judgeProse
+      : scriptJudge({
+          judgeProse,
+          valuesIn: (text) =>
+            new Set(
+              readAnswer(text, gate, {
+                ...(figures !== undefined && {
+                  figures: figures.figureCheckOf(text, history, gate).numbers,
+                }),
+                exactTokens: evidence.values,
+              }).candidates.map((c) => clip(c.value)),
+            ),
+          turn: turnScripts,
+          ...(scope.scriptsDropped !== undefined && {
+            scriptsDropped: scope.scriptsDropped as number,
+          }),
+        });
   const verdict = judge(answer);
+  /** The script match's verdict on this draft's blocks, as plain data — absent unarmed. */
+  const scripts = verdict.scripts === undefined ? undefined : copyScriptsVerdict(verdict.scripts);
+  // The answer layer's witness for the blocks the answer showed — filed only
+  // for an answer that STANDS (the grounded, flagged and refused exits below).
+  const fileScriptsShown = (): void => {
+    if (answerLayer !== true || scripts === undefined || scripts.blocks.length === 0) return;
+    recordFindings(
+      scope,
+      scriptShownRowsFrom(scripts.blocks, { turn: scope.turnNumber as number, iteration }),
+    );
+  };
 
   // ── THE CLAIM SEAM'S RECENCY READ (9.83.0) — `prior-turn-evidence` ──
   // Judged on EVERY outcome, clean or flagged, and before the branch below
@@ -930,7 +983,9 @@ function judgeEvidence(
       ...(verdict.computed !== undefined && {
         computed: verdict.computed.slice(0, MAX_REPORTED_VALUES),
       }),
+      ...(scripts !== undefined && { scripts }),
     });
+    fileScriptsShown();
     // The answer layer's witness (honesty layer 4): the clean verdict, on the
     // record — a flagged or refused one is committed already (below).
     if (answerLayer === true) {
@@ -964,11 +1019,21 @@ function judgeEvidence(
   if (mayRevise) {
     const values = verdict.unsupported.slice(0, MAX_REPORTED_VALUES);
     const conclusion = gate.figures ? figures?.figuresConclusionLine(values) : undefined;
+    // Under `code: 'match'`: keep the script, fix the values — the clause names
+    // the calls by the record (`scripts/recovery.ts`).
+    const scriptClause =
+      scripts === undefined || turnScripts === undefined
+        ? undefined
+        : scriptRecoveryClause(scripts, values, [
+            ...new Set(turnScripts.current.map((row) => row.tool)),
+          ]);
     scope.evidenceUnsupported = {
       values,
       candidates: verdict.candidates,
       lookedUp: verdict.lookedUp,
       ...(conclusion !== undefined && { conclusion }),
+      ...(scripts !== undefined && { scripts }),
+      ...(scriptClause !== undefined && scriptClause !== '' && { scriptClause }),
     };
     return 'evidence-recheck';
   }
@@ -995,7 +1060,9 @@ function judgeEvidence(
     ...(verdict.computed !== undefined && {
       computed: verdict.computed.slice(0, MAX_REPORTED_VALUES),
     }),
+    ...(scripts !== undefined && { scripts }),
   });
+  fileScriptsShown();
   if (!refused) {
     // Only on the shipping path: a refusal raises a teaching error at the
     // boundary, and warning about an answer nobody receives is noise.

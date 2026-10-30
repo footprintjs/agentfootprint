@@ -292,6 +292,16 @@ export interface AgentChartDeps {
    */
   readonly coverageLimitsAsData?: boolean;
 
+  /**
+   * `.scriptTravelsWithTheAnswer()` — the final stage carries this turn's
+   * recorded programs on `turn_end.scripts` and, on a prose answer (`typed`
+   * unset), appends them after the `---` separator (`stages/prepareFinal.ts` ·
+   * `prepareFinalFor`). Absent → the stage the chart has always mounted.
+   */
+  readonly scriptTravel?: import('./scripts/types.js').ResolvedScriptTravel & {
+    readonly typed?: true;
+  };
+
   /** Opt-in terminal guard and one committed token; absent preserves the original final stage. */
   readonly hasAnswerValidation?: boolean;
   /** Output middleware owns delivery: publish only the final captured answer. */

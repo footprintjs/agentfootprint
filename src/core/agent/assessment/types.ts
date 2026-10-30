@@ -126,6 +126,12 @@ export type AssessmentPointer =
  *   steps finished: the one teaching nudge was already spent, or a limit
  *   forced the answer (a `steps-unfinished` witness row of this turn, filed
  *   while the answer layer is armed — honesty layer 4).
+ * - `script-unmatched` — a fenced block the answer showed matches no program
+ *   a call of this turn submitted to a declared code-running tool (a
+ *   `script-shown` witness row of this turn with `label: 'unmatched'`, filed
+ *   under `.namesAndNumbersFromEvidence({ code: 'match' })` while the answer
+ *   layer is armed). Its own reason, apart from an unsupported value: a
+ *   script can fail to match while every number in the answer is in a result.
  */
 export type AssessmentReason =
   | 'asked'
@@ -147,6 +153,7 @@ export type AssessmentReason =
   | 'value-unsupported'
   | 'value-survived-revision'
   | 'derived-from-reading'
+  | 'script-unmatched'
   | 'stopped-early'
   | 'steps-unfinished'
   | 'negative-prose-unverified'
@@ -181,6 +188,10 @@ export type AssessmentReason =
  * - `result-period` — this turn's calls the results layer filed a period
  *   verdict on (honesty layer 3), of the same — every `period` row IS a
  *   verdict, `covered` included; present only when the layer filed one.
+ * - `script-match` — the fenced blocks of this turn's answer the script match
+ *   read (`of`), and the ones it reached a verdict on (`ran` — matched or
+ *   missed: every block reaches one); present only when the answer showed a
+ *   block under `code: 'match'`. A matched block supports nothing.
  */
 export type AssessmentCheck =
   | 'argument-rules'
@@ -189,6 +200,7 @@ export type AssessmentCheck =
   | 'tool-coverage'
   | 'result-shape'
   | 'names-and-numbers'
+  | 'script-match'
   | 'answer-checks';
 
 /** The honesty layer a reason or a check belongs to: 1 choose · 2 inputs · 3 results · 4 answer. */

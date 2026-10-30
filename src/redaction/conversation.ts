@@ -69,6 +69,7 @@ export const CONVERSATION_FEATURES: readonly string[] = Object.freeze([
   'structured output (schema retries, the output fallback)',
   'memory (episodic, semantic, summarize, top-k) and retrieval (RAG)',
   'the evidence gate (names and numbers)',
+  'code in an answer (a script submitted, shown and attached)',
   'a tool’s declared coverage and described results (absent, coverage, describedResult)',
   'compaction (the window folding the conversation)',
   'a person approving a call (check-in)',
@@ -129,12 +130,21 @@ const NAMES = {
     'pausedAskArgs',
     'pausedCheckInArgs',
     'pausedCredentialArgs',
+    // A code-running call that asked from inside `execute`: its program as
+    // proposed and as handed to the tool, carried to the row that settles it.
+    'pausedScriptPrograms',
     // A consent request's record: its nonce lets whoever holds it confirm a
     // guess of the paused call's arguments against the request id
     // (`core/consentRequest.ts`), so it is kept out with them.
     'pausedRequest',
     'policyHaltArgs',
     'claimFacts',
+    // The findings ledger — and with it every `script` row's `text`, the program
+    // a code-running call submitted (`core/agent/scripts/`). The row's field is
+    // kept out by THIS name: `text` itself is too generic to name (it would hide
+    // structure on every event), and an attached script's `text` on
+    // `turn_end.scripts` is a model-written string the value-kind rule already
+    // serves as the placeholder.
     'findingsLedger',
     'findingsRequest',
     // The opt-in verifier's private evidence/selected executed scope. Resume

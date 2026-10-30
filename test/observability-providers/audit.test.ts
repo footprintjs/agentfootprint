@@ -48,13 +48,17 @@ import {
 } from '../../src/index.js';
 import { MockProvider } from '../../src/adapters/llm/MockProvider.js';
 import {
+  bool,
   charsMarker,
-  custom,
-  kept,
+  either,
   listOf,
   nullOr,
+  num,
+  oneOf,
   orList,
   recordOf,
+  str,
+  when,
 } from '../../src/adapters/observability/auditBounding.js';
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -1094,7 +1098,7 @@ describe('auditExport — security: content beside structure, event by event', (
       a: '[4 chars]',
       b: '[1 chars]',
     });
-    expect(recordOf(kept)('EDGE')).toBe('[4 chars]');
+    expect(recordOf(str)('EDGE')).toBe('[4 chars]');
     // A declared "none" stays; anything else by the rule.
     expect(nullOr(charsMarker)(null)).toBeNull();
     expect(nullOr(charsMarker)('EDGE')).toBe('[4 chars]');
@@ -1102,8 +1106,34 @@ describe('auditExport — security: content beside structure, event by event', (
     const long = Array.from({ length: 34 }, (_, i) => `EDGE-${i}`);
     expect(listOf(charsMarker)(long)).toHaveLength(33);
     expect((listOf(charsMarker)(long) as unknown[])[32]).toBe('…+2 more');
-    // A custom rule is its rule.
-    expect(custom('why', charsMarker)('EDGE')).toBe('[4 chars]');
+    // A rule chosen by the value, its reason written down.
+    const named = when('a value that names itself', (v) => v === 'self', str, charsMarker);
+    expect(named('self')).toBe('self');
+    expect(named('EDGE')).toBe('[4 chars]');
+  });
+
+  it('SECURITY: a kept leaf keeps only the kind it declares — anything else is a marker', () => {
+    // A number, a boolean, a string: each kept as that kind, and only as that kind.
+    expect(num(3)).toBe(3);
+    expect(num(Number.NaN)).toBeNull();
+    expect(num('EDGE-NUM')).toBe('[8 chars]');
+    expect(num({ leak: 'EDGE' })).toBe('[type: object]');
+    expect(bool(false)).toBe(false);
+    expect(bool('true')).toBe('[4 chars]');
+    expect(str('tool-1')).toBe('tool-1');
+    expect(str(['EDGE'])).toBe('[type: object]');
+    expect(str('x'.repeat(300))).toHaveLength(256);
+    // An enum keeps only the words it lists — a string outside them is a marker.
+    const verdict = oneOf('allow', 'deny');
+    expect(verdict('deny')).toBe('deny');
+    expect(verdict('EDGE-NOT-A-WORD')).toBe('[15 chars]');
+    expect(verdict(1)).toBe('[type: number]');
+    // A value of one of several kinds goes to the alternative that takes its kind.
+    const wordOrCount = either(oneOf('unknown'), num);
+    expect(wordOrCount('unknown')).toBe('unknown');
+    expect(wordOrCount(4)).toBe(4);
+    expect(wordOrCount('EDGE')).toBe('[4 chars]');
+    expect(wordOrCount({ n: 4 })).toBe('[type: object]');
   });
 
   it("SECURITY: payloadMode 'verbatim' still carries every event whole (documented opt-in)", () => {

@@ -8,7 +8,7 @@
  * format, published from `agentfootprint/observe`: a reader that re-derived it
  * would drift the day a pointer kind is added. (Stamping the key on every
  * pointer instead was measured and refused: +3.1 KB on the flagship's 34 KB
- * account, and a pointer-heavy account would cross its 128 KB cap.)
+ * account, and a pointer-heavy account would cross its 128 KiB cap.)
  *
  * @example
  * ```ts

@@ -110,6 +110,9 @@ import { resolveAct, type ActOptions } from './act.js';
 import { resolveCompactionOptions } from './window/options.js';
 import { summarizeOldest } from './window/strategies/summarizeOldest.js';
 import { assertAgentRecipe } from '../../recipes/defineAgentRecipe.js';
+import { resolveScriptTravel } from './scripts/attachment.js';
+import type { ResolvedScriptTravel, ScriptTravelOptions } from './scripts/types.js';
+import { scriptOf } from '../../tools/script.js';
 import {
   asyncConfigureRefusal,
   duplicateRecipeRefusal,
@@ -343,6 +346,9 @@ export class AgentBuilder {
    *  function the final branch mounts — which is what makes the feature
    *  byte-identical when unused. The recording half is unconditional. */
   private limitsTravelValue = false;
+  /** `.scriptTravelsWithTheAnswer()` — resolved at the call site; undefined
+   *  for every agent that did not ask, which keeps it byte-identical. */
+  private scriptTravelValue?: ResolvedScriptTravel;
   /** `.inputsLayer()` (honesty layer 2). False for every agent that did not
    *  ask for it; a REGISTERED ruled tool arms the layer on its own, so this
    *  is for ruled tools a ToolProvider serves — and for declared sources
@@ -1924,6 +1930,64 @@ export class AgentBuilder {
       );
     }
     this.limitsTravelValue = true;
+    return this;
+  }
+
+  /**
+   * Make the script a code-running call SUBMITTED travel with the answer,
+   * attached by the library from the run record and labelled from the
+   * execution record — so "always show the script" holds without the model's
+   * cooperation, and the model never retypes a program that would then need
+   * checking.
+   *
+   * A tool is code-running because it DECLARES so (`Tool.script`;
+   * `codeRunnerTool` declares `{ argument: 'code', language }`). Each call of
+   * one files a `script` row: the program handed to the tool (after any
+   * before-tool middleware) and what its runner reported. With this on:
+   *
+   * - `turn_end.scripts` carries the attached scripts as data on every answer
+   *   — a host with its own renderer reads it and never parses the text;
+   * - a PROSE answer also carries them as text after its `---` separator, one
+   *   block per script: a label line ("Script submitted to run_code on call c1
+   *   — completed, exit 0. Attached by the library from the run record:"),
+   *   then the program in the library's own fence, byte for byte. A typed
+   *   answer (`.outputSchema()`) gets the data only.
+   *
+   * The label says only what the record proves: `completed, exit 0` needs an
+   * explicit exit code; a bare runner verdict reads "runner reported success;
+   * no exit code"; a timeout, a cancellation or a service error with no exit
+   * code reads "outcome unknown"; a tool that returned without runner facts
+   * reads "tool call returned; execution not confirmed". A result withheld
+   * over the tool's ceiling does not undo a completed execution — both are
+   * said. A program over `maxBytes` (default 4,000 UTF-8 bytes) is cut at a
+   * code-point boundary and says it is incomplete.
+   *
+   * `which: 'last'` (default) attaches the last call of the turn that reached
+   * the tool; `'all'` every such call, at most 8, the rest counted on
+   * `turn_end.scripts.omitted`. The attached text is part of the answer the
+   * app chose to show: `run()` returns it and memory keeps it.
+   *
+   * Refused at build when no registered tool declares `script` (and no
+   * `ToolProvider` could serve one): an arm that could never attach anything
+   * is a misconfiguration, not a no-op.
+   *
+   * @example
+   * ```ts
+   * const agent = Agent.create({ provider, model })
+   *   .tool(codeRunnerTool({ runner: localCodeRunner() }))
+   *   .namesAndNumbersFromEvidence({ posture: 'guard', code: 'match' })
+   *   .scriptTravelsWithTheAnswer({ which: 'last', maxBytes: 4000 })
+   *   .build();
+   * ```
+   */
+  scriptTravelsWithTheAnswer(opts?: ScriptTravelOptions): this {
+    if (this.scriptTravelValue !== undefined) {
+      throw new Error(
+        'AgentBuilder.scriptTravelsWithTheAnswer: already set. One agent attaches its scripts ' +
+          'one way — pass `which` and `maxBytes` in the one call.',
+      );
+    }
+    this.scriptTravelValue = resolveScriptTravel(opts);
     return this;
   }
 
@@ -3980,6 +4044,38 @@ export class AgentBuilder {
     // the mounted graph (member ids) and the final injection list (each
     // member's contributed tool names). Refusals live in the resolver.
     const mapsPlan = this.resolveMapsPlan(injections);
+    // The script record (`.scriptTravelsWithTheAnswer()`, `code: 'match'`) needs
+    // a tool that DECLARES it runs a program — never inferred from a name.
+    const declaresScript = [
+      ...this.registry.map((entry) => entry.tool),
+      ...injections.flatMap((injection) => injection.inject?.tools ?? []),
+    ].some((tool) => scriptOf(tool) !== undefined);
+    if (
+      this.scriptTravelValue !== undefined &&
+      !declaresScript &&
+      this.toolProviderRef === undefined
+    ) {
+      throw new Error(
+        'AgentBuilder.scriptTravelsWithTheAnswer: no registered tool declares `script`, so no ' +
+          'call of this agent can ever file a program to attach. Register a code-running tool ' +
+          "that declares one (`codeRunnerTool` does; a hand-built tool declares `script: { argument: 'code' }`), " +
+          'or drop this option.',
+      );
+    }
+    if (
+      this.evidenceGate?.code === 'match' &&
+      !declaresScript &&
+      this.toolProviderRef === undefined &&
+      isDevMode()
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "agentfootprint: .namesAndNumbersFromEvidence({ code: 'match' }) on an agent where no " +
+          'registered tool declares `script` — every fenced block the model shows is then a miss, ' +
+          'read as prose. Register a code-running tool that declares `script` (codeRunnerTool ' +
+          "does), or drop `code: 'match'`.",
+      );
+    }
     // The claim contract (9.61.0) — refused here rather than at `.claims()`,
     // because `.outputSchema()` may legitimately be declared after it.
     // A contract with no typed stratum to read would check nothing, and a
@@ -4051,6 +4147,7 @@ export class AgentBuilder {
       this.answerValidationConfig,
       this.systemPromptCacheExplicit,
       negativeClaims,
+      this.scriptTravelValue,
     );
     // Attach the observers collected by `.watch()` so they receive events
     // from the very first run. Mirrors what consumers would do post-build

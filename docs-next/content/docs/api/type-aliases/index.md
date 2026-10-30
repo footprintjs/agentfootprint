@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-145 exported from `agentfootprint`.
+148 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -106,6 +106,8 @@ title: Type Aliases
 - [`RunbookPresentation`](/docs/api/type-aliases/RunbookPresentation)
 - [`RunbookProcedure`](/docs/api/type-aliases/RunbookProcedure)
 - [`RunConfigFn`](/docs/api/type-aliases/RunConfigFn)
+- [`ScriptBlockVerdict`](/docs/api/type-aliases/ScriptBlockVerdict)
+- [`ScriptLabel`](/docs/api/type-aliases/ScriptLabel)
 - [`SemanticIssueCode`](/docs/api/type-aliases/SemanticIssueCode)
 - [`SequenceOutput`](/docs/api/type-aliases/SequenceOutput)
 - [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)
@@ -144,6 +146,7 @@ title: Type Aliases
 - [`ToolResultOutcome`](/docs/api/type-aliases/ToolResultOutcome)
 - [`ToolResultStatus`](/docs/api/type-aliases/ToolResultStatus)
 - [`ToolWants`](/docs/api/type-aliases/ToolWants)
+- [`UnmatchedReason`](/docs/api/type-aliases/UnmatchedReason)
 - [`UntilGuard`](/docs/api/type-aliases/UntilGuard)
 - [`Watcher`](/docs/api/type-aliases/Watcher)
 - [`WindowRefusalReason`](/docs/api/type-aliases/WindowRefusalReason)

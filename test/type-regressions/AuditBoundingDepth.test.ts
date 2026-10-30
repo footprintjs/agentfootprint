@@ -7,16 +7,22 @@
  * content field leaked until someone noticed. Now every event has a shape
  * that names every field (`auditShapes.ts`, exhaustive by type at compile
  * time) and marks whatever it does not name. What compile time cannot see is
- * a `kept` laid over a whole container: a field added INSIDE it would ride
- * through. This file closes that gap and pins the result.
+ * whether a rule fits the type beneath it: a rule kept a value whole, and a
+ * whole container rode through with whatever it held. This file closes that
+ * gap and pins the result.
  *
  * WHAT A GREEN RUN PROVES:
  *
- *   1. `kept` never covers a container that can hold text — a non-literal
- *      string, or an `unknown`, at any depth. Such a container is spelled out
- *      field by field (`shapeOf`, `listOf`, `recordOf`, `orList`), so every
- *      text leaf of every payload is classified by name. A `custom` rule
- *      decides by value and carries its reason.
+ *   1. Every rule says what it is (`ruleKind`), and every rule AGREES with the
+ *      type it bounds, at every depth: a leaf checks at runtime the kind its
+ *      declared type promises — a number, a boolean, a string — and an enum
+ *      (`oneOf`) lists exactly the words a closed union declares, so a value
+ *      outside them is a marker; a string kept whole sits only where the type
+ *      is an open string. A container is spelled out (`shapeOf`, `listOf`,
+ *      `recordOf`), never kept whole. The same holds for each record's `meta`
+ *      (`EventMeta`) and for `decide()` evidence (footprintjs's own types).
+ *      The runtime half — every rule handed what its kind forbids — is
+ *      `test/observability-providers/audit-bounded-sweep.test.ts`.
  *   2. The fields `audit.ts` · `BOUND_FIELDS` declares (the conversation names
  *      the redaction vocabulary is pinned against) are bounded by the very rule
  *      functions it names.
@@ -36,18 +42,33 @@ import { describe, expect, it } from 'vitest';
 
 import { auditExport, boundedFieldRules } from '../../src/adapters/observability/audit';
 import {
+  acceptedKinds,
   charsMarker,
-  kept,
   ruleKind,
   type BoundRule,
+  type ValueKind,
 } from '../../src/adapters/observability/auditBounding';
-import { eventShapes } from '../../src/adapters/observability/auditShapes';
+import { boundMeta, eventShapes } from '../../src/adapters/observability/auditShapes';
 import type { AgentfootprintEvent } from '../../src/events/registry';
 
 const ROOT = resolve(__dirname, '../..');
+/** Names `DecideEvidence` — footprintjs's own decide()/select() evidence types. */
+const BY_CONTRACT = join(ROOT, 'src/adapters/observability/auditKeptByContract.ts');
 
-/** Every registered event's payload type, from the source. */
-function payloadTypes(): { checker: ts.TypeChecker; payloads: Map<string, ts.Type> } {
+interface Types {
+  readonly checker: ts.TypeChecker;
+  /** Every registered event's payload type. */
+  readonly payloads: Map<string, ts.Type>;
+  /** The envelope's `meta` (`EventMeta`). */
+  readonly meta: ts.Type | undefined;
+  /** What `composition.route_decided.evidence` holds when it is decide() evidence. */
+  readonly decideEvidence: ts.Type | undefined;
+  /** What a decide() filter's threshold holds, as the record keeps it. */
+  readonly decideThreshold: ts.Type | undefined;
+}
+
+/** Every registered event's payload type, the meta and decide() evidence — from the source. */
+function payloadTypes(): Types {
   const config = ts.getParsedCommandLineOfConfigFile(
     join(ROOT, 'tsconfig.json'),
     {},
@@ -60,7 +81,7 @@ function payloadTypes(): { checker: ts.TypeChecker; payloads: Map<string, ts.Typ
   );
   if (!config) throw new Error('tsconfig.json did not parse');
   const registry = join(ROOT, 'src/events/registry.ts');
-  const program = ts.createProgram([registry], { ...config.options, noEmit: true });
+  const program = ts.createProgram([registry, BY_CONTRACT], { ...config.options, noEmit: true });
   const checker = program.getTypeChecker();
   const file = program.getSourceFile(registry);
   let map: ts.Type | undefined;
@@ -73,12 +94,23 @@ function payloadTypes(): { checker: ts.TypeChecker; payloads: Map<string, ts.Typ
   });
   if (map === undefined) throw new Error('AgentfootprintEventMap not found');
   const payloads = new Map<string, ts.Type>();
+  let meta: ts.Type | undefined;
   for (const event of checker.getPropertiesOfType(map)) {
     const envelope = typeOf(checker, event);
     const payload = checker.getPropertyOfType(envelope, 'payload');
     if (payload) payloads.set(event.name, typeOf(checker, payload));
+    const metaSymbol = checker.getPropertyOfType(envelope, 'meta');
+    if (metaSymbol && meta === undefined) meta = typeOf(checker, metaSymbol);
   }
-  return { checker, payloads };
+  let decideEvidence: ts.Type | undefined;
+  let decideThreshold: ts.Type | undefined;
+  program.getSourceFile(BY_CONTRACT)?.forEachChild((node) => {
+    if (!ts.isTypeAliasDeclaration(node)) return;
+    if (node.name.text === 'DecideEvidence') decideEvidence = checker.getTypeAtLocation(node.name);
+    if (node.name.text === 'DecideThreshold')
+      decideThreshold = checker.getTypeAtLocation(node.name);
+  });
+  return { checker, payloads, meta, decideEvidence, decideThreshold };
 }
 
 function typeOf(checker: ts.TypeChecker, symbol: ts.Symbol): ts.Type {
@@ -86,7 +118,7 @@ function typeOf(checker: ts.TypeChecker, symbol: ts.Symbol): ts.Type {
   return decl ? checker.getTypeOfSymbolAtLocation(symbol, decl) : checker.getTypeOfSymbol(symbol);
 }
 
-const { checker, payloads } = payloadTypes();
+const { checker, payloads, meta, decideEvidence, decideThreshold } = payloadTypes();
 
 const parts = (t: ts.Type): ts.Type[] =>
   (t.isUnion() ? t.types : [t]).filter(
@@ -107,54 +139,183 @@ const isLeaf = (t: ts.Type) =>
     0 || isText(t);
 const isList = (t: ts.Type) => checker.isArrayType(t) || checker.isTupleType(t);
 
-/** Whether a value of `t` can hold text anywhere: a non-literal string, or an `unknown`. */
-function holdsText(t: ts.Type, depth = 0, seen = new Set<ts.Type>()): boolean {
-  if (depth > 10) return true;
-  return parts(t).some((p) => {
-    if (isOpen(p) || isText(p)) return true;
-    if (isLeaf(p) || seen.has(p)) return false;
-    seen.add(p);
-    if (isList(p))
-      return checker
-        .getTypeArguments(p as ts.TypeReference)
-        .some((e) => holdsText(e, depth + 1, seen));
-    return (
-      checker.getIndexInfosOfType(p).some((i) => holdsText(i.type, depth + 1, seen)) ||
-      checker.getPropertiesOfType(p).some((s) => holdsText(typeOf(checker, s), depth + 1, seen))
-    );
-  });
-}
+const isNull = (t: ts.Type) => (t.flags & ts.TypeFlags.Null) !== 0;
+const isNumberish = (t: ts.Type) => (t.flags & ts.TypeFlags.NumberLike) !== 0;
+const isBoolish = (t: ts.Type) => (t.flags & ts.TypeFlags.BooleanLike) !== 0;
+const isStringish = (t: ts.Type) => (t.flags & ts.TypeFlags.StringLike) !== 0 || isText(t);
+const isObject = (t: ts.Type) => !isLeaf(t) && !isOpen(t) && !isList(t);
+const literalOf = (t: ts.Type): string | number | boolean | undefined =>
+  t.isStringLiteral() || t.isNumberLiteral()
+    ? t.value
+    : t.flags & ts.TypeFlags.BooleanLiteral
+    ? (t as unknown as { intrinsicName: string }).intrinsicName === 'true'
+    : undefined;
+/** The value kind a declared type part holds — what `either` dispatches on at runtime. */
+const kindOfType = (t: ts.Type): ValueKind | undefined =>
+  isNull(t)
+    ? 'null'
+    : isStringish(t)
+    ? 'string'
+    : isNumberish(t)
+    ? 'number'
+    : isBoolish(t)
+    ? 'boolean'
+    : isList(t)
+    ? 'array'
+    : isOpen(t)
+    ? undefined
+    : 'object';
+const show = (types: readonly ts.Type[]) => types.map((t) => checker.typeToString(t)).join(' | ');
+const elementsOf = (t: ts.Type) => checker.getTypeArguments(t as ts.TypeReference);
 
-/** Where `kept` covers a container (or an `unknown`) that can hold text. */
-function keptOverText(t: ts.Type, rule: BoundRule, at: string, out: string[], depth = 0): void {
-  if (depth > 12) return;
-  if (rule === kept) {
-    if (parts(t).some((p) => isOpen(p) || (!isLeaf(p) && holdsText(p)))) out.push(at);
+/**
+ * Positions whose declared type is `unknown`, and the type the value has when
+ * the rule keeps any of it: `decide()` evidence as footprintjs declares it, and
+ * its filters' thresholds (`unknown` there too) as the record keeps them.
+ */
+const OPEN_DECLARED = new Map<string, ts.Type | undefined>([
+  ['agentfootprint.composition.route_decided.evidence', decideEvidence],
+  [
+    'agentfootprint.composition.route_decided.evidence.rules[].conditions[].threshold',
+    decideThreshold,
+  ],
+]);
+
+/**
+ * Where a rule disagrees with the type it bounds. `declared` is the type's
+ * union members, `undefined` aside. A leaf must check the very kind its type
+ * promises; an enum must list a closed union's words exactly; a container must
+ * be spelled out; an `unknown` may only be a marker (or a position whose kept
+ * type is named in `OPEN_DECLARED`).
+ */
+function disagreements(
+  declaredParts: readonly ts.Type[],
+  rule: BoundRule,
+  at: string,
+  out: string[],
+  depth = 0,
+): void {
+  if (depth > 16 || declaredParts.length === 0) return;
+  const k = ruleKind(rule);
+  if (k === undefined) {
+    out.push(`${at}: a rule that does not say what it is`);
     return;
   }
-  const kind = ruleKind(rule);
-  if (kind === undefined || kind.kind === 'custom') return; // a marker hides it all; custom says why
-  for (const p of parts(t)) {
-    if (kind.kind === 'nullOr') {
-      if (!(p.flags & ts.TypeFlags.Null)) keptOverText(p, kind.inner, at, out, depth + 1);
-    } else if (kind.kind === 'list' || kind.kind === 'orList') {
-      if (isList(p))
-        for (const e of checker.getTypeArguments(p as ts.TypeReference))
-          keptOverText(e, kind.item, `${at}[]`, out, depth + 1);
-      else if (kind.kind === 'orList') keptOverText(p, kind.item, at, out, depth + 1);
-    } else if (kind.kind === 'record') {
-      for (const i of checker.getIndexInfosOfType(p))
-        keptOverText(i.type, kind.value, `${at}{*}`, out, depth + 1);
-    } else if (kind.kind === 'shape' && !isLeaf(p) && !isList(p)) {
-      for (const s of checker.getPropertiesOfType(p))
-        keptOverText(
-          typeOf(checker, s),
-          kind.fields[s.name] ?? charsMarker,
-          `${at}.${s.name}`,
+  if (k.kind === 'marker') return; // a marker keeps nothing of any value
+  let declared = declaredParts;
+  if (declared.some(isOpen)) {
+    const instead = OPEN_DECLARED.get(at);
+    if (instead === undefined) {
+      out.push(`${at}: only a marker may bound an unknown value, not ${k.kind}`);
+      return;
+    }
+    declared = parts(instead);
+  }
+  switch (k.kind) {
+    case 'byContract':
+      disagreements(declared, k.inner, at, out, depth + 1);
+      return;
+    case 'leaf': {
+      const fits =
+        k.accepts === 'number' ? isNumberish : k.accepts === 'boolean' ? isBoolish : isStringish;
+      const misfit = declared.filter((p) => !fits(p));
+      if (misfit.length > 0) out.push(`${at}: a ${k.accepts} leaf over ${show(misfit)}`);
+      else if (k.accepts === 'string' && declared.every((p) => p.isStringLiteral()))
+        out.push(`${at}: a string leaf over the closed union ${show(declared)} — use oneOf`);
+      return;
+    }
+    case 'oneOf': {
+      const misfit = declared.filter((p) => literalOf(p) === undefined && !isStringish(p));
+      if (misfit.length > 0) {
+        out.push(`${at}: oneOf over ${show(misfit)}`);
+        return;
+      }
+      const words = declared
+        .map(literalOf)
+        .filter((v): v is string | number | boolean => v !== undefined);
+      const open = declared.some((p) => literalOf(p) === undefined);
+      const listed = [...k.values];
+      const strange = listed.filter((v) => !words.includes(v));
+      const unlisted = open ? [] : words.filter((v) => !listed.includes(v));
+      if (strange.length > 0 || unlisted.length > 0)
+        out.push(
+          `${at}: oneOf lists [${listed.join(', ')}]; the type declares [${words.join(', ')}]` +
+            (open ? ' and any other string' : ''),
+        );
+      return;
+    }
+    case 'shape': {
+      // One rule per field serves every union member that has it (`AnyKeyOf`):
+      // a field is checked against the union of its types across members.
+      const byField = new Map<string, ts.Type[]>();
+      for (const p of declared) {
+        if (!isObject(p)) {
+          out.push(`${at}: a shape over ${show([p])}`);
+          continue;
+        }
+        for (const s of checker.getPropertiesOfType(p))
+          byField.set(s.name, [...(byField.get(s.name) ?? []), ...parts(typeOf(checker, s))]);
+      }
+      for (const [name, types] of byField)
+        disagreements(
+          [...new Set(types)],
+          k.fields.get(name) ?? charsMarker,
+          `${at}.${name}`,
           out,
           depth + 1,
         );
+      return;
     }
+    case 'list':
+      for (const p of declared) {
+        if (!isList(p)) out.push(`${at}: a list over ${show([p])}`);
+        else
+          for (const e of elementsOf(p)) disagreements(parts(e), k.item, `${at}[]`, out, depth + 1);
+      }
+      return;
+    case 'orList':
+      for (const p of declared.filter(isList))
+        for (const e of elementsOf(p)) disagreements(parts(e), k.item, `${at}[]`, out, depth + 1);
+      disagreements(
+        declared.filter((p) => !isList(p)),
+        k.item,
+        at,
+        out,
+        depth + 1,
+      );
+      return;
+    case 'record':
+      for (const p of declared) {
+        const index = isObject(p) ? checker.getIndexInfosOfType(p) : [];
+        if (index.length === 0)
+          out.push(`${at}: a record over ${show([p])}, which names its keys — use shapeOf`);
+        for (const i of index) disagreements(parts(i.type), k.value, `${at}{*}`, out, depth + 1);
+      }
+      return;
+    case 'nullOr':
+      disagreements(
+        declared.filter((p) => !isNull(p)),
+        k.inner,
+        at,
+        out,
+        depth + 1,
+      );
+      return;
+    case 'either': {
+      const byAlternative = new Map<BoundRule, ts.Type[]>();
+      for (const p of declared) {
+        const kind = kindOfType(p);
+        const alt = k.alternatives.find((a) => kind !== undefined && acceptedKinds(a).has(kind));
+        if (alt === undefined) out.push(`${at}: no alternative accepts ${show([p])}`);
+        else byAlternative.set(alt, [...(byAlternative.get(alt) ?? []), p]);
+      }
+      for (const [alt, ps] of byAlternative) disagreements(ps, alt, at, out, depth + 1);
+      return;
+    }
+    case 'when':
+      disagreements(declared, k.then, at, out, depth + 1);
+      disagreements(declared, k.otherwise, at, out, depth + 1);
+      return;
   }
 }
 
@@ -254,9 +415,17 @@ describe('the bounded audit chain is closed at every depth', () => {
     expect([...payloads.keys()].sort()).toEqual(Object.keys(shapes).sort());
   });
 
-  it('never keeps a container that can hold text: every text leaf is classified by name', () => {
+  it('every rule agrees with the type it bounds: each leaf checks its declared kind, each enum lists its words, no container is kept whole', () => {
     const out: string[] = [];
-    for (const [type, payload] of payloads) keptOverText(payload, shapes[type]!, type, out);
+    for (const [type, payload] of payloads) disagreements(parts(payload), shapes[type]!, type, out);
+    expect(out).toEqual([]);
+  });
+
+  it("each record's meta agrees with EventMeta, and decide() evidence with footprintjs's types", () => {
+    expect(meta, 'EventMeta found').toBeDefined();
+    expect(decideEvidence, 'DecideEvidence found').toBeDefined();
+    const out: string[] = [];
+    disagreements(parts(meta!), boundMeta, 'meta', out);
     expect(out).toEqual([]);
   });
 
@@ -265,7 +434,7 @@ describe('the bounded audit chain is closed at every depth', () => {
     for (const [type, fields] of Object.entries(boundedFieldRules())) {
       const kind = ruleKind(shapes[type]!);
       for (const [field, rule] of Object.entries(fields))
-        if (kind?.kind !== 'shape' || kind.fields[field] !== rule)
+        if (kind?.kind !== 'shape' || kind.fields.get(field) !== rule)
           mismatched.push(`${type}.${field}`);
     }
     expect(mismatched).toEqual([]);

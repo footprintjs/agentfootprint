@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { copyJson, ownData, readOwnList } from '../../src/lib/boundedJson.js';
+import {
+  copyJson,
+  cutToJsonBytes,
+  jsonBytes,
+  ownData,
+  readOwnList,
+} from '../../src/lib/boundedJson.js';
 
 describe('shared bounded JSON copy preserves the answer-validation contract', () => {
   it('keeps own prototype-named data and detaches every shared child', () => {
@@ -108,6 +114,67 @@ describe('readOwnList — a list read the way copyJson reads an array, by a read
       new (class Rows extends Array {})(),
     ]) {
       expect(readOwnList(value, 10)).toBeUndefined();
+    }
+  });
+});
+
+describe('jsonBytes — the one serialized-size measure: UTF-8 bytes of the JSON, escaping included', () => {
+  /** An independent measure: what a host would write. */
+  const wire = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
+
+  it('counts what JSON writes, not characters: escapes, UTF-8 width, surrogates', () => {
+    for (const [text, bytes] of [
+      ['abc', 5],
+      ['\u0001', 8], // "\u0001": six bytes and the quotes
+      ['"', 4], // "\""
+      ['\\', 4], // "\\\\"
+      ['\n', 4], // "\\n"
+      ['\u00e9', 4], // two UTF-8 bytes
+      ['\uffff', 5], // three UTF-8 bytes
+      ['\u{10FFFF}', 6], // four UTF-8 bytes, two code units
+      ['\ud800', 8], // a lone surrogate JSON escapes
+      ['\u2028', 5], // written raw by JSON, three UTF-8 bytes
+    ] as const) {
+      expect(jsonBytes(text), JSON.stringify(text)).toBe(bytes);
+      expect(jsonBytes(text)).toBe(wire(text));
+    }
+    expect(jsonBytes(undefined)).toBe(0);
+    const value = { a: ['\u0001'.repeat(3), '\uffff', { b: null, c: 1.5 }], d: true };
+    expect(jsonBytes(value)).toBe(wire(value));
+  });
+
+  it('is the measure copyJson spends: a string at the exact byte boundary', () => {
+    const text = '\u0001'.repeat(10);
+    expect(() => copyJson(text, jsonBytes(text), false)).not.toThrow();
+    expect(() => copyJson(text, jsonBytes(text) - 1, false)).toThrow('JSON byte limit.');
+  });
+});
+
+describe('cutToJsonBytes — the longest prefix, in whole code points, within a serialized size', () => {
+  it('cuts by what JSON writes: six bytes a control character, four an astral one, never half of one', () => {
+    expect(cutToJsonBytes('abc', 2)).toBe('ab');
+    expect(cutToJsonBytes('abc', 3)).toBe('abc');
+    expect(cutToJsonBytes('\u0001\u0001', 11)).toBe('\u0001');
+    expect(cutToJsonBytes('\u0001\u0001', 12)).toBe('\u0001\u0001');
+    expect(cutToJsonBytes('\u{10FFFF}x', 3)).toBe('');
+    expect(cutToJsonBytes('\u{10FFFF}x', 4)).toBe('\u{10FFFF}');
+    expect(cutToJsonBytes('\ud800x', 6)).toBe('\ud800');
+  });
+
+  it('every cut is within its size and a prefix — and nothing longer would be', () => {
+    const units = ['a', '\u0001', '"', '\u00e9', '\uffff', '\u{10FFFF}', '\ud800', '\u2028'];
+    let seed = 7;
+    const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648);
+    for (let round = 0; round < 300; round++) {
+      const text = Array.from({ length: next() % 40 }, () => units[next() % units.length]).join('');
+      const max = next() % 120;
+      const cut = cutToJsonBytes(text, max);
+      expect(text.startsWith(cut)).toBe(true);
+      expect(jsonBytes(cut) - 2).toBeLessThanOrEqual(max);
+      if (cut.length < text.length) {
+        const unit = text.codePointAt(cut.length)! > 0xffff ? 2 : 1;
+        expect(jsonBytes(text.slice(0, cut.length + unit)) - 2).toBeGreaterThan(max);
+      }
     }
   });
 });

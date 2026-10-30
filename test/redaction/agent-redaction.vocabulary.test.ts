@@ -31,6 +31,7 @@ import {
   allow,
   askHuman,
   checkInApproved,
+  codeRunnerTool,
   coverage,
   defineRAG,
   defineTool,
@@ -48,7 +49,11 @@ import {
   unpackRecording,
 } from '../../src/doors/observe.js';
 import { conversationRedaction } from '../../src/doors/security.js';
-import { boundedContentFieldNames } from '../../src/adapters/observability/audit.js';
+import {
+  boundedContentFieldNames,
+  boundedContentLeaves,
+} from '../../src/adapters/observability/audit.js';
+import { keepKnownValues } from '../../src/redaction/knownStrings.js';
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
 import type { AnswerAccount } from '../../src/answer-account/types.js';
 import { CONVERSATION_FEATURES } from '../../src/redaction/conversation.js';
@@ -322,6 +327,86 @@ const CASES: readonly FeatureCase[] = [
         .namesAndNumbersFromEvidence()
         .build(),
     drive: (agent) => agent.run({ message: 'count them' }),
+  },
+  {
+    // A code-running call's program rides `script` rows (`findingsLedger`), the
+    // matched block on the answer, and the attached copy on `turn_end.scripts`
+    // and in the answer itself.
+    feature: 'code in an answer (a script submitted, shown and attached)',
+    canaries: ['CANARY-SCRIPT-CODE'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            {
+              toolCalls: [
+                { id: 'c1', name: 'run_code', args: { code: 'print("CANARY-SCRIPT-CODE")' } },
+              ],
+            },
+            {
+              content: 'It printed the value.\n\n```python\nprint("CANARY-SCRIPT-CODE")\n```',
+            },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          codeRunnerTool({
+            runner: {
+              id: 'answering',
+              start: () =>
+                Promise.resolve({
+                  id: 's1',
+                  execute: () =>
+                    Promise.resolve({ ok: true, exitCode: 0, stdout: 'done', stderr: '' }),
+                  stop: () => Promise.resolve(),
+                }),
+            },
+          }),
+        )
+        .namesAndNumbersFromEvidence({ code: 'match' })
+        .scriptTravelsWithTheAnswer()
+        .answerLayer()
+        .build(),
+    drive: (agent) => agent.run({ message: 'print it' }),
+  },
+  {
+    // A code-running call that asked a person from INSIDE `execute`: its
+    // program, as proposed and as handed to the tool, waits on the pause
+    // carrier (`pausedScriptPrograms`) for the row that settles it.
+    feature: 'code in an answer — a call paused from inside execute',
+    canaries: ['CANARY-SCRIPT-PAUSED'],
+    build: (redact) =>
+      create(
+        mock({
+          chunkDelayMs: 0,
+          replies: [
+            {
+              toolCalls: [
+                { id: 'c1', name: 'run_code', args: { code: 'print("CANARY-SCRIPT-PAUSED")' } },
+              ],
+            },
+          ],
+        }),
+        redact,
+      )
+        .tool(
+          defineTool<{ code: string }, string>({
+            name: 'run_code',
+            description: 'Runs a program after a person says so.',
+            inputSchema: {
+              type: 'object',
+              properties: { code: { type: 'string' } },
+              required: ['code'],
+            },
+            script: { argument: 'code', language: 'python' },
+            execute: () => askHuman({ question: 'Run it?' }) as never,
+          }),
+        )
+        .scriptTravelsWithTheAnswer()
+        .build(),
+    drive: (agent) => agent.run({ message: 'print it' }),
   },
   {
     // A GUARDING gate keeps the draft's unsupported values (`evidenceUnsupported`).
@@ -1060,6 +1145,40 @@ describe('the vocabulary agrees with the audit export on what is content', () =>
       (policy.keys ?? []).includes(name) || (policy.patterns ?? []).some((p) => p.test(name));
     const missing = boundedContentFieldNames().filter((name) => !kept(name));
     expect(missing).toEqual([]);
+  });
+
+  it('every content LEAF the audit bounds inside a record field is kept out by its kind, not its name', () => {
+    // `turn_end.scripts` holds the library's words (labels, counts) beside one
+    // content leaf per script, the program. The audit bounds the leaf; the
+    // vocabulary keeps it out with the value-kind rule — a model-written string
+    // is the placeholder under ANY policy — and names nothing, because a name
+    // would hide the labels too (and `evidence_checked.scripts`, which holds no
+    // content, shares it).
+    expect(boundedContentLeaves()).toEqual([
+      'agentfootprint.agent.turn_end · scripts.shown[].text',
+    ]);
+    const policy = conversationRedaction();
+    expect((policy.keys ?? []).includes('scripts')).toBe(false);
+    const served = keepKnownValues({
+      scripts: {
+        shown: [
+          {
+            toolCallId: 'c1',
+            tool: 'run_code',
+            label: 'completed',
+            exitCode: 0,
+            bytes: 26,
+            lines: 1,
+            text: 'print("CANARY-LEAF-SCRIPT")',
+          },
+        ],
+        omitted: 0,
+      },
+    });
+    expect(JSON.stringify(served)).not.toContain('CANARY-LEAF-SCRIPT');
+    expect(served).toMatchObject({
+      scripts: { shown: [{ label: 'completed', exitCode: 0, bytes: 26, lines: 1 }], omitted: 0 },
+    });
   });
 });
 

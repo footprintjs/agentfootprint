@@ -123,6 +123,10 @@ import {
 } from '../src/injection-engine/skillToolDescriptors.js';
 import { presentArtifact } from '../src/artifacts/present.js';
 import { standingLineOf } from '../src/core/agent/assessment/compose.js';
+import { scriptRecoveryClause } from '../src/core/agent/scripts/recovery.js';
+import { scriptsBlock, scriptsOfAnswer } from '../src/core/agent/scripts/attachment.js';
+import { scriptRowFor } from '../src/core/agent/scripts/rows.js';
+import type { ScriptLabel, ScriptRow } from '../src/core/agent/scripts/types.js';
 import { resolveToolWants } from '../src/artifacts/wants.js';
 import { parkCard } from '../src/maps/engagement/parkCard.js';
 import {
@@ -734,6 +738,38 @@ const LEDGER_PIECE: Surface = {
   channel: 'system-text',
   lifetime: 'request-ephemeral',
 };
+
+/**
+ * The evidence revision's script clause (`code: 'match'`): one clause of the
+ * request-only recovery instruction (`evidence/recovery.ts` ·
+ * `buildEvidenceRecovery`), served on the ONE revision request as a system
+ * piece (`evidenceRecoveryPiece`) and never written into `history`.
+ */
+const RECOVERY_CLAUSE: Surface = {
+  channel: 'system-text',
+  lifetime: 'request-ephemeral',
+};
+
+/** A script row as the dispatch loop files it, for the attachment rows below. */
+function scriptRowLabelled(
+  label: ScriptLabel,
+  facts: Parameters<typeof scriptRowFor>[0]['facts'],
+  settlement: Parameters<typeof scriptRowFor>[0]['settlement'],
+  id: string,
+): ScriptRow {
+  const row = scriptRowFor({
+    script: { argument: 'code', language: 'python' },
+    tool: 'run_code',
+    toolCallId: id,
+    iteration: 1,
+    turn: 1,
+    proposed: `print("${label}")`,
+    settlement,
+    ...(facts !== undefined && { facts }),
+  });
+  if (row === undefined || row.outcome !== label) throw new Error(`no ${label} row`);
+  return { ...row, dispatch: Number(id.replace(/\D/g, '')) || 1 };
+}
 
 /**
  * The inputs layer's sentence on a ruled property (honesty layer 2). It rides
@@ -2301,6 +2337,112 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
         ).af_coverage.note,
       ),
     ],
+  },
+  {
+    id: "code in an answer — the evidence revision's script clause (code: 'match')",
+    module: 'src/core/agent/scripts/recovery.ts',
+    surface: RECOVERY_CLAUSE,
+    lifetimeBecause:
+      'one clause of the evidence recovery instruction, which `evidenceRecoveryPiece` serves as ' +
+      'a system piece on the ONE revision request only (`pending.iteration === iteration`) and ' +
+      'never writes into `history`; each clause is a past fact about a named, finished call',
+    drivenBy: ['test/core/agent/evidence/script-recovery.test.ts'],
+    reaches: [
+      /matched no submission to `run_code` recorded this turn/,
+      /was not checked\. Keep it\./,
+      /\(runner reported success; no exit code\)/,
+      /\(outcome unknown\)/,
+      /were not checked\. Keep them\./,
+    ],
+    compose: async () => {
+      const verdictOf = (blocks: Parameters<typeof scriptRecoveryClause>[0]['blocks']) => ({
+        blocks,
+        earlierTurnRows: 0,
+        regionsDropped: 0,
+      });
+      return [
+        scriptRecoveryClause(
+          verdictOf([{ block: 1, label: 'unmatched', reason: 'no-submission-this-turn' }]),
+          [{ region: 'code' }],
+          ['run_code'],
+        ),
+        scriptRecoveryClause(
+          verdictOf([
+            {
+              block: 1,
+              label: 'completed-with-failure',
+              exitCode: 7,
+              toolCallId: 'c1',
+              tool: 'run_code',
+            },
+          ]),
+          [{ region: 'prose' }],
+          ['run_code'],
+        ),
+        scriptRecoveryClause(
+          verdictOf([{ block: 1, label: 'reported-success', toolCallId: 'c1', tool: 'run_code' }]),
+          [{ region: 'prose' }],
+          ['run_code'],
+        ),
+        scriptRecoveryClause(
+          verdictOf([
+            { block: 1, label: 'outcome-unknown', toolCallId: 'c1', tool: 'run_code' },
+            { block: 2, label: 'completed', exitCode: 0, toolCallId: 'c2', tool: 'run_code' },
+          ]),
+          [{ region: 'prose' }],
+          ['run_code'],
+        ),
+      ];
+    },
+  },
+  {
+    id: 'code in an answer — the attached scripts appended to a prose answer (.scriptTravelsWithTheAnswer())',
+    module: 'src/core/agent/scripts/attachment.ts',
+    surface: INJECTED_TURN,
+    lifetimeBecause:
+      'appended after the answer, so it is part of the assistant turn a continued conversation ' +
+      'carries (`agent.checkpoint()` keeps the answer) and every later call re-reads it — each ' +
+      'label line names the call it is about and says, in the past tense, what that call’s ' +
+      'record held',
+    drivenBy: ['test/core/agent/evidence/script-artifact.test.ts'],
+    reaches: [
+      /^Script submitted to `run_code` on call `c1` — completed, exit 0\. Attached by the library/m,
+      /— completed with failure, exit 7\./,
+      /— runner reported success; no exit code\./,
+      /— runner reported failure; no exit code\./,
+      /— tool call returned; execution not confirmed\./,
+      /— outcome unknown\./,
+      /\[incomplete: showing \d+ of \d+ bytes — not the whole program\]/,
+      /is over the bound and is not shown/,
+    ],
+    compose: async () => {
+      const travel = { which: 'all' as const, maxBytes: 4_000 };
+      const rows = [
+        scriptRowLabelled('completed', { exitCode: 0 }, 'returned', 'c1'),
+        scriptRowLabelled('completed-with-failure', { exitCode: 7 }, 'returned', 'c2'),
+        scriptRowLabelled('reported-success', { ok: true }, 'returned', 'c3'),
+        scriptRowLabelled('reported-failure', { ok: false }, 'returned', 'c4'),
+        scriptRowLabelled('returned', undefined, 'returned', 'c5'),
+        scriptRowLabelled('outcome-unknown', undefined, 'threw', 'c6'),
+      ];
+      const big: ScriptRow = {
+        ...scriptRowFor({
+          script: { argument: 'code' },
+          tool: 'run_code',
+          toolCallId: 'c7',
+          iteration: 1,
+          turn: 1,
+          proposed: 'x'.repeat(40_000),
+          settlement: 'returned',
+          facts: { exitCode: 0 },
+        })!,
+        dispatch: 7,
+      };
+      return [
+        scriptsBlock(scriptsOfAnswer([...rows, big], travel)),
+        scriptsBlock(scriptsOfAnswer([rows[0]!], { which: 'last', maxBytes: 5 })),
+      ];
+    },
   },
   {
     id: 'answer layer — the standing line appended to a prose answer (honesty layer 4)',

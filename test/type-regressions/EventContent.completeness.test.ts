@@ -305,7 +305,7 @@ const CANARY_PAYLOAD: {
     posture: 'guard',
     candidates: 4,
     lookedUp: 3,
-    unsupported: [{ value: leaf(c, 'unsupported[].value'), shape: 'number' }],
+    unsupported: [{ value: leaf(c, 'unsupported[].value'), shape: 'number', region: 'prose' }],
     action: 'flagged',
     afterRevision: false,
     evidenceTruncated: false,
@@ -320,6 +320,23 @@ const CANARY_PAYLOAD: {
         from: leaf(c, 'computed[].from'),
       },
     ],
+    scripts: {
+      blocks: [
+        {
+          block: 1,
+          label: 'completed',
+          exitCode: 0,
+          toolCallId: 'call-1',
+          tool: 'run_code',
+          dispatch: 1,
+          alsoMatches: 0,
+        },
+        { block: 2, label: 'unmatched', reason: 'no-submission-this-turn' },
+      ],
+      earlierTurnRows: 0,
+      regionsDropped: 0,
+      scriptsDropped: 0,
+    },
   }),
   'agentfootprint.agent.handoff': (c) => ({
     fromAgentId: 'triage',

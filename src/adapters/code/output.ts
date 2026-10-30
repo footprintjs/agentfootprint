@@ -12,6 +12,10 @@ import type {
   CodeCommandResult,
   CodeTruncation,
 } from '../../provider-contract/types.js';
+import { utf8Length } from '../../lib/utf8.js';
+
+// The one UTF-8 measure lives in `lib/utf8.ts`; re-exported for this folder's readers.
+export { isHighSurrogate, isLowSurrogate, utf8Length } from '../../lib/utf8.js';
 
 /** stdout and stderr after the cut, and what the cut took. */
 export interface BoundedOutput {
@@ -161,30 +165,7 @@ export function commandBounds(
   };
 }
 
-/** UTF-8 byte length of a string, without encoding it. */
-export function utf8Length(text: string): number {
-  let bytes = 0;
-  for (let i = 0; i < text.length; i++) {
-    const unit = text.charCodeAt(i);
-    if (unit < 0x80) bytes += 1;
-    else if (unit < 0x800) bytes += 2;
-    else if (isHighSurrogate(unit) && isLowSurrogate(text.charCodeAt(i + 1))) {
-      bytes += 4;
-      i++;
-    } else bytes += 3; // other BMP, and a lone surrogate (written as U+FFFD, 3 bytes)
-  }
-  return bytes;
-}
-
 /** Bytes of a staged or returned payload: a string's UTF-8 length, bytes as they are. */
 export function payloadBytes(data: string | Uint8Array): number {
   return typeof data === 'string' ? utf8Length(data) : data.byteLength;
-}
-
-export function isHighSurrogate(unit: number): boolean {
-  return unit >= 0xd800 && unit <= 0xdbff;
-}
-
-export function isLowSurrogate(unit: number): boolean {
-  return unit >= 0xdc00 && unit <= 0xdfff;
 }
