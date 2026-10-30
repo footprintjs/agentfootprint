@@ -36,11 +36,12 @@ export async function pilot({
   let journal;
   try {
     // One fixed durable live identity, independent of --out. No resume/reset.
-    // The 20261020 journal is the aborted smoke's record; this run never opens it.
+    // The 20261020 (aborted smoke) and 20261029 (first paid run, L-63) journals are records;
+    // this kit never opens them. A run of this kit needs its own owner approval.
     if (execute) {
       const state = join(homedir(), '.local/state/agentfootprint/pilots');
       mkdirSync(state, { recursive: true });
-      journal = openJournal(join(state, 'findings-cache-phase-c-20261029.ndjson'));
+      journal = openJournal(join(state, 'findings-cache-phase-c-l63.ndjson'));
     }
     const events = [],
       results = [];
@@ -107,7 +108,7 @@ export async function pilot({
       };
     };
     const report = {
-      schema: 1,
+      schema: 2, // 2 adds results[].answerCheck (L-63)
       mode: execute ? 'live' : 'rehearsal',
       manifestHash,
       status,
@@ -126,6 +127,7 @@ export async function pilot({
       limitations: [
         'Two paired synthetic cases, one replicate each; not a general benchmark.',
         'Identity outcomes do not prove assertion truth.',
+        'answerCheck labels explain a failed literal check; they diagnose, they do not grade.',
         'Arm cache partitions differ to prevent cross-arm reuse.',
         'All run costs include the first cold call.',
         'Rehearsal usage is scripted, uncached, and proves no hit or saving.',

@@ -11,24 +11,38 @@ review of the final kit/manifest and cap tests.
   pilot. Its smoke on 2026-10-20 stopped after its first call. That smoke’s
   journal, `findings-cache-phase-c-20261020.ndjson`, stays as its record: one
   $0.40512 reservation, outcome unknown. It is never deleted, reopened or reused.
-- **2026-10-29, owner approval in chat:** one paid run of this re-frozen kit.
-  Haiku 4.5 only, at most $10, under the same 16-call cap ($6.48192 reserved).
-  No retry, no other model, no customer data. It writes its own journal,
-  `findings-cache-phase-c-20261029.ndjson`.
+- **2026-10-29, owner approval in chat:** one paid run of the kit as frozen at
+  manifest `63f2aef2…`. Haiku 4.5 only, at most $10, under the same 16-call cap
+  ($6.48192 reserved). No retry, no other model, no customer data. That run
+  was reported complete: 4 runs, 8 calls, $0.1117057 measured. Its journal,
+  `findings-cache-phase-c-20261029.ndjson`, stays as its record. All four runs
+  reported `plantedFidelity: false`; see [The answer check (L-63)](#the-answer-check-l-63).
+- **This kit (L-63 re-freeze): no approval yet.** It changes the prompt, the
+  planted keys and the report, so its manifest and payload hashes are new. A paid
+  run of this exact head and manifest needs owner approval. The previous kit
+  was reported to cost about $0.11 for one replicate (4 runs, 8 calls); that
+  historical amount is not a cap or a forecast for the revised kit. The model,
+  cap and per-call reservation are unchanged. It writes its own journal, `findings-cache-phase-c-l63.ndjson`.
 
-Neither approval covers a second run, another model, customer data or an
-automatic retry.
+No approval covers a second run, another model, customer data or an automatic
+retry.
 
 ## Frozen experiment
 
 `manifest.json` pins the model snapshot, both archive digests, the complete
-installed fixture, the kit/payload digests and the execution order. The candidate
+installed fixture, the kit/payload digests and the execution order. The kit
+also pins the bounded-JSON helper and its UTF-8 counter, in source and built
+form; a closure check refuses an unlisted local import in the kit’s tests. The candidate
 is the unpublished package from Phase B commit `201b07ae`; its package version
 still says 10.9.0 because release preparation is separate. The two packages have
 different bytes. No package version, public export or runtime API is changed here.
 
 Two small paired cases reuse `../verify-fixture.mjs`’s deterministic inventory:
-one live lookup, then a case where a second observation supersedes the first.
+one live lookup (`k064`), then a case where a second observation supersedes the
+first (`k145`). Each planted key’s static table status differs from every live
+reading: `k064` is red in the table and green live; `k145` is amber in the table,
+green on the first reading and red on the second. An answer taken from the table,
+or from the superseded reading, cannot pass.
 Order is baseline lookup → candidate lookup → candidate conflict → baseline
 conflict. There is one replicate per case, no warm-up calls. Fixed, equally long
 arm labels partition the cache so one group cannot warm the other’s prefix.
@@ -39,11 +53,77 @@ history collapse can still change the later prefix; a cache miss is a result.
 Five unchanged enforcement modules are SHA-pinned in **both** installs. Before
 any paid transport is even constructed, each package runs the same four $0
 canaries: valid, unserved, ambiguous and same-batch IDs. A mismatch refuses the
-experiment. Recorded standing identity outcomes, refusal counts, extra calls and
-literal planted-answer fidelity are reported; they do not certify assertion
-truth or semantic correctness in general.
+experiment. Recorded standing identity outcomes, refusal counts, extra calls,
+literal planted-answer fidelity and its `answerCheck` labels are reported; they
+do not certify assertion truth or semantic correctness in general.
 Package/SDK entries load from absolute paths inside the admitted install;
 the unverified consumer root’s name and exports cannot redirect module loading.
+
+## The answer check (L-63)
+
+**What the old result cannot establish.** The 2026-10-29 paid run was reported
+to have `plantedFidelity: false` for all four runs, with the expected read counts
+and identified standing rows. Those counts do not prove the assertions or
+answer were correct. A $0 replay of the frozen check established a bench
+ambiguity, not the actual cause of the paid-run failures. The check required the whole reply to
+`JSON.parse` with `answer` exactly `"<key> <status>"`. A code fence or one line
+of prose fails that check even when the status is right. The prompt said only
+“Finish with” JSON, invited a report and a citation in words, stated the format
+once before a ~7k-token table, and used an ambiguous `<relay key>` template. The
+scripted rehearsal wrote the check’s own literal string, so it could not catch
+any of this. The run kept no answers (by design), so the failing form cannot be
+recovered. A new run can measure this revised experiment, but cannot recover
+the old replies or settle why those old replies failed.
+
+The class of bug: **one boolean conflated “wrong answer” with “right answer in
+another form”, and no test could see the difference.** This kit fixes the class:
+
+- **The headline is unchanged.** `plantedFidelity` is still the strict literal
+  check. The prompts and planted keys changed, so scores from the two
+  experiments are not a controlled before/after comparison.
+- **Each result adds `answerCheck`**, three closed labels computed in memory by
+  `answerCheck.mjs`. They say why a `false` failed:
+
+  | Axis     | Labels                                                                                    |
+  | -------- | ----------------------------------------------------------------------------------------- |
+  | `form`   | `bare-json` · `fenced-json` · `embedded-json` · `no-json-object` · `no-answer` (run stopped) |
+  | `answer` | `exact` · `reworded` · `table-status` · `superseded-status` · `other` · `missing`         |
+  | `reads`  | `expected` · `fewer` · `more`                                                             |
+
+  `embedded-json` means a parseable object with other bytes around it, such as
+  prose or an array wrapper; it does not claim those bytes are prose.
+  `no-json-object` includes valid JSON scalars with no object to inspect.
+  The axes are independent, so a fence around the table’s status reports both
+  `fenced-json` and `table-status`. `plantedFidelity` is true exactly when the
+  labels are `bare-json`, `exact` and `expected`. `reworded` means the answer
+  names only the live status among the fixture statuses, not as the exact
+  `<key> <status>`. It does not check the key, negation or semantic meaning and
+  is a diagnosis, not a grade.
+
+- **No answer text is retained.** The reply is read only inside `answerCheck`.
+  It returns only string constants from the three sets above, so no reply text,
+  key name or value can reach the report or the journal. A test feeds replies
+  carrying sentinels in prose, in `answer`, in key names and in unclosed JSON,
+  and checks that no sentinel reaches the result. The JSON scan is bounded (64
+  object starts per reply). On the paid path the reply is also bounded by the
+  128 KiB response cap.
+- **The prompt asks for what the check reads.** The system block says the final
+  message must be exactly one JSON object and nothing else, with no prose and no
+  code fence. It uses a `<key>` template and gives one literal example of the
+  form (`k999`, a key outside the inventory, with a status no reading uses).
+  Each user question repeats the rule with its own key, after the table. Only
+  the library’s short findings DATA frame follows the question.
+- **The planted keys catch an answer taken from the table** (see above). In the
+  old kit both planted keys had the same table and live status.
+- **The rehearsal answers and writes its assertions from the readings it was
+  served**, including their keys, not from the scenario’s expected values.
+  A fixture serving a wrong key or status fails the strict answer check.
+- **Realistic replies are pinned** in `test/cache/findings-pilot-runner.test.ts`:
+  a fence, prose with JSON, reworded answers, the table’s and the superseded
+  status, a missing member, extra reads, a stopped run, and both reads batched
+  in one turn (as the live model did). Each case pins its labels.
+
+The report’s `schema` is now `2`, which adds `results[].answerCheck`.
 
 ## The spending cap is admission, not an after-the-fact counter
 
@@ -156,24 +236,25 @@ private file):
 node --env-file=<approved env file> bench/cache/pilot/run.mjs \
   --consumer /path/to/reviewed-pilot-consumer \
   --out /path/to/new-private-summary.json \
-  --approve-manifest 63f2aef2266db91e13594a7c671c0b08de97f7b10159ce649deb7a175ae97cd5 \
+  --approve-manifest fc03414ee8793cada10c248d3f4effe96a3286eb0d2b65f47ea919f12754572b \
   --execute
 ```
 
 Never inspect or print the environment file or its values. CI does not execute
-this command, and the kit does not schedule a future call. For the 2026-10-29
-approval, the live journal’s identity is fixed at
-`~/.local/state/agentfootprint/pilots/findings-cache-phase-c-20261029.ndjson`,
+this command, and the kit does not schedule a future call. For this kit, the
+live journal’s identity is fixed at
+`~/.local/state/agentfootprint/pilots/findings-cache-phase-c-l63.ndjson`,
 irrespective of the checkout, manifest revision or report path. If that file
-already exists, the run stops before any call. The 2026-10-20 smoke’s journal
-beside it is a record that this kit never opens. Do not delete either journal
-to repeat the pilot; another run needs its own approval and journal identity.
+already exists, the run stops before any call. The 2026-10-20 smoke’s journal and
+the 2026-10-29 run’s journal beside it are records that this kit never opens. Do
+not delete any journal to repeat the pilot; another run needs its own approval
+and journal identity.
 
 Only the bounded summary is saved: raw input/write/read/output token counts,
-per-run costs, missing usage, fixed reservations, request hashes, stability checks
-and policy outcomes. Requests and answers stay in memory for the checks and are
-never written to the summary or durable journal. Headers, keys and SDK error text
-are excluded too. Record actual spending alongside the reservation; reservations
+per-run costs, missing usage, fixed reservations, request hashes, stability checks,
+policy outcomes and the closed `answerCheck` labels. Requests and answers stay
+in memory for the checks and are never written to the summary or durable journal.
+Headers, keys and SDK error text are excluded too. Record actual spending alongside the reservation; reservations
 are not bills and never get refunded.
 Unfinished pairs and unknown usage are not complete cost/savings evidence.
 Small sample size, timing, arm partitioning and any fidelity/refusal difference
@@ -191,4 +272,6 @@ npx vitest run test/cache/findings-pilot-budget.test.ts test/cache/findings-pilo
 The tests include shared in-flight reservations, failed durable writes, an async
 journal refusal, timeout with a late response, unknown/partial usage, request
 limits, real SDK fake-network/no-retry behavior and a process exiting at
-transport entry. Its durable reservation remains, and reopening is refused.
+transport entry. Its durable reservation remains, and reopening is refused. The
+runner tests also replay realistic model replies through the real engine and pin
+each reply’s `answerCheck` labels (L-63).

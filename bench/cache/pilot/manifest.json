@@ -60,18 +60,21 @@
     "cacheRead": 100
   },
   "kit": {
-    "bench/cache/pilot/arms.mjs": "3a7030e63fae266fbd6c4eecc67c18a8cb87361d35bb06fc8a6bebe4ec285c3d",
+    "bench/cache/pilot/arms.mjs": "6fad73dd0855fff5be16c3c76e37901a17e0b7da410d1f21b7ae8fe253d2fc49",
+    "bench/cache/pilot/answerCheck.mjs": "319a662581201c5cc060645da15b8ebb690457c56d7d0de368dd905ac8c3b4ed",
     "bench/cache/pilot/budget.mjs": "1dab8a284e2ff4277335e636d020598a1d4c089dfdea07190eac05f6bb6caa0f",
     "bench/cache/pilot/usageEvidence.mjs": "4b588dc9a26631794c7e837cba9560dd1b750a51a3704aa454d305073377566c",
-    "bench/cache/pilot/fixture.mjs": "e7b36924eeea153d92012b709457dc2826bf867514f58018bd3ab21ed1165140",
-    "bench/cache/pilot/identity.mjs": "a7fd7d5379d02ce3164ac248d5f21476a614fa697473f2e2488b6dbf4f7fd4c1",
+    "bench/cache/pilot/fixture.mjs": "3d925c23192e19c2841fb7c7f92e43e1f5724a359e7f3550b0870b2f132e75b9",
+    "bench/cache/pilot/identity.mjs": "5f199e489ecc22ba9601054bdef800f2d11a34129d09562bf43b29816f535839",
     "bench/cache/pilot/inspect.mjs": "3f377689f5efbb1a129bb144be867f419cff02d0df69002d7e55bdbad57e2f09",
     "bench/cache/pilot/journal.mjs": "d3bbc4d304aca97f4c1b592bad1b7ebcadde9cfefd708e248482ed45c8636cda",
     "bench/cache/pilot/live.mjs": "a6eef524295fa867c79167f9e4c73339c09b24e64e941f6457dbba2d9a7c9e6f",
-    "bench/cache/pilot/run.mjs": "7ef0a489d430f1faf3db40838f63ef8e41aa3db62b1a9ae2c1e62ea4049479d7",
+    "bench/cache/pilot/run.mjs": "0ffb01dec02daf943be77d7a3c2fac3e536d95da0519088354ff4f782bd1fd04",
     "bench/cache/verify-fixture.mjs": "85de6d1da3147a5dedd061e7c2db50ae9cd36dddf6ae72d5dba67f6e7631d7da",
-    "dist/lib/boundedJson.js": "c8d8691525dc6c0a49c5150a5c9b37b7278f231177ad6c35311cbe6ba090c94c",
-    "src/lib/boundedJson.ts": "831938c9e19f11a3e22093b1caa6019ed9c103a124cc917f9ca5e178080e83b6"
+    "dist/lib/boundedJson.js": "f1d8b2a94eed3704140479f5a6f381558648d8391e21b24cee11eb58f3dc3ae6",
+    "src/lib/boundedJson.ts": "a6007fb5df09ac26b4853d808d26dc4838e3d88713753cba2654414b3a550edf",
+    "dist/lib/utf8.js": "7f84033e6dbcaf6821040b714831331912cf1df6e7d896d20727757c56d37591",
+    "src/lib/utf8.ts": "1c34064d9d63d411d2a679d82f1e77ffc3a7a3faa9866cccc7de00eb39c33636"
   },
-  "payloadSha256": "1610973aedc36324535126c359f4fb07f5a660c86bca8556b46eae62ff2fb3a3"
+  "payloadSha256": "252a003f044647e959fa5f30117202beb3aa9e320d1d9de3c4c0cd53dbfae005"
 }

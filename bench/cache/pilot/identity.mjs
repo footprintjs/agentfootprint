@@ -8,6 +8,7 @@ export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex'
 export const KIT_FILES = Object.freeze(
   [
     'arms.mjs',
+    'answerCheck.mjs',
     'budget.mjs',
     'usageEvidence.mjs',
     'fixture.mjs',
@@ -22,6 +23,8 @@ export const KIT_FILES = Object.freeze(
       'bench/cache/verify-fixture.mjs',
       'dist/lib/boundedJson.js',
       'src/lib/boundedJson.ts',
+      'dist/lib/utf8.js',
+      'src/lib/utf8.ts',
     ]),
 );
 export function kitHashes(root) {
