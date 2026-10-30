@@ -214,6 +214,8 @@ export const EVENT_CONTENT = {
   // a reason word the app attaches to a lifecycle event it emits itself
   'agentfootprint.tools.offered': 'structure',
   'agentfootprint.tools.repeated_call': 'structure',
+  // ids, digests, evidence and outcomes of one MCP client-pool use
+  'agentfootprint.tools.mcp_client': 'structure',
   'agentfootprint.tools.request_attempts': 'structure',
   'agentfootprint.tools.result_refused': 'structure',
   'agentfootprint.tools.semantics_declared': 'shape',

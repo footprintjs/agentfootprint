@@ -124,6 +124,7 @@ import {
   type ReplayTarget,
 } from './replay.js';
 import type { RequestLedger, RequestTicket } from './requestLedger.js';
+import { guardOf, withGuard, type RequestGuard } from './requestGuard.js';
 import {
   SeriesEvidence,
   type AttemptFacts,
@@ -671,6 +672,16 @@ class Series {
   private permitted: ToolRequestPermission | undefined;
   /** The attempt sent and not yet recorded — what a cancellation cuts in flight. */
   private inFlight: number | undefined;
+  /**
+   * The send gate of the pooled operation this request belongs to
+   * (`requestGuard.ts`) — on the request's `init`, or on its ledger claim.
+   * Absent for a request no pool sent.
+   */
+  private readonly gate: RequestGuard | undefined;
+  /** The attempt the gate stopped before it was sent: it has no row. */
+  private gateStopped: number | undefined;
+  /** The error the latest failed attempt ended with — what a gate stop ends the series on. */
+  private lastError: unknown;
 
   constructor(
     private readonly rules: readonly BoundRule[],
@@ -686,6 +697,7 @@ class Series {
     const { maxElapsedMs } = this.owner;
     this.deadline = Number.isFinite(maxElapsedMs) ? this.startedAt + maxElapsedMs : undefined;
     const claimed = ledger?.claim(init?.body);
+    this.gate = guardOf(init) ?? claimed?.guard;
     const ticket = claimed?.ticket;
     // A request no ledger claimed keeps its facts here, with no answer to watch.
     this.shared = claimed?.replay ?? new RequestReplay('', false);
@@ -779,6 +791,19 @@ class Series {
    * streaming for as long as the caller's own signal allows.
    */
   private async send(inner: ThrottleFetch, t: AttemptContext): Promise<Response> {
+    // A pooled operation's send gate, asked before every attempt — the first
+    // was asked by the pool's own fetch an instant before the series began; a
+    // later one is asked here, after the wait, before anything is sent. A
+    // binding that went stale or an operation out of time sends nothing more:
+    // the attempt is never sent, so it has no row (`report`).
+    if (t.attempt > 1 && this.gate !== undefined) {
+      try {
+        this.gate.check();
+      } catch (refusal) {
+        this.gateStopped = t.attempt;
+        throw refusal;
+      }
+    }
     this.attemptNo = t.attempt;
     // From here the request is SENT — counted, as a row, however the attempt ends.
     this.inFlight = t.attempt;
@@ -791,8 +816,16 @@ class Series {
     const cut = this.cutsInFlight ? linkedController(t.signal) : undefined;
     const signal = eitherSignal(this.signal, cut?.controller.signal);
     try {
-      const init = cut === undefined ? this.init : { ...this.init, ...(signal && { signal }) };
-      const response = await inner(this.input, init);
+      const sent = cut === undefined ? this.init : { ...this.init, ...(signal && { signal }) };
+      // The gate rides every attempt's `init`, so the vending fetch and the AWS
+      // command ask it after their own waits (`requestGuard.ts`).
+      const init =
+        this.gate !== undefined && guardOf(sent) === undefined ? withGuard(sent, this.gate) : sent;
+      const pending = inner(this.input, init);
+      // An attempt this series gives up on — a cut, a deadline — may still be
+      // running underneath: it stays counted under the operation until it settles.
+      this.gate?.track(pending);
+      const response = await pending;
       this.seen = { attempt: t.attempt, status: response.status };
       const refused = await this.recognise(response, signal);
       if (refused === undefined) return response;
@@ -836,6 +869,10 @@ class Series {
   private retryOn(error: unknown): boolean {
     this.plannedWaitMs = 0;
     this.permitted = undefined;
+    // An attempt the gate stopped was never sent: nothing follows it, and the
+    // failure the series ends on stays the last attempt that was.
+    if (this.gateStopped !== undefined) return this.decline('not-permitted');
+    this.lastError = error;
     const refused = this.latest;
     const refusal = refused !== undefined && error === refused.refusal ? refused : undefined;
     // What failed: a refusal a rule recognised, or a request that failed in
@@ -844,6 +881,9 @@ class Series {
     const failure: MetFailure | undefined =
       refusal === undefined ? thrownFailure(error) : refusalOf(refusal.rule);
     if (failure === undefined) return this.decline('not-retryable');
+    // The pooled operation's gate, asked before a repeat is planned: a stale
+    // binding or an operation out of time permits nothing more to be sent.
+    if (!this.gateAllows()) return this.decline('not-permitted');
     const decision = permit(this.declaration, this.target, failure);
     if (!decision.repeat) return this.decline(decision.declined);
     // A body we cannot send twice makes a retry a different request. Rare for
@@ -876,6 +916,17 @@ class Series {
     return false;
   }
 
+  /** Whether the pooled operation's gate lets another attempt be sent. True with no gate. */
+  private gateAllows(): boolean {
+    if (this.gate === undefined) return true;
+    try {
+      this.gate.check();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private elapsedAfter(waitMs: number): number {
     return Date.now() - this.startedAt + waitMs;
   }
@@ -887,6 +938,8 @@ class Series {
    * cost the run its evidence.
    */
   private report(record: AttemptRecord): void {
+    // Stopped by the gate before it was sent: no row, nothing to count.
+    if (record.attempt === this.gateStopped) return;
     const refused = this.latest;
     if (this.inFlight === record.attempt) this.inFlight = undefined;
     const seen = this.seenOf(record, refused);
@@ -956,14 +1009,21 @@ class Series {
       throw abortErrorOf(this.cancel);
     }
     // The series ended on a refusal — attempts spent, a ceiling reached, no
-    // time left. The server's answer is delivered as it sent it.
-    if (this.latest !== undefined && error === this.latest.refusal) {
+    // time left, or a pooled operation's gate that permits nothing more. The
+    // server's answer is delivered as it sent it.
+    const stopped = this.gateStopped !== undefined;
+    // A gate stop is the decision the record ends on — never a deadline the
+    // series did not reach, never an attempt that was not sent.
+    const stoppedBy = stopped ? 'not-permitted' : undefined;
+    if (this.latest !== undefined && (error === this.latest.refusal || stopped)) {
       this.shared.deliveredStatus(this.latest.response.status);
-      this.evidence?.delivered();
+      this.evidence?.delivered(stoppedBy);
       return this.latest.response;
     }
-    this.evidence?.threw(this.deadline !== undefined && Date.now() >= this.deadline);
-    throw error;
+    this.evidence?.threw(this.deadline !== undefined && Date.now() >= this.deadline, stoppedBy);
+    // A gate stop after a failure with no answer ends on that failure: the
+    // attempt that was sent is the one the caller hears about.
+    throw stopped ? this.lastError : error;
   }
 
   private supersede(): void {

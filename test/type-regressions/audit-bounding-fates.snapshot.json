@@ -1217,6 +1217,22 @@
     "toolCallId": "kept",
     "toolName": "kept"
   },
+  "agentfootprint.tools.mcp_client": {
+    "at": "kept",
+    "client": "kept",
+    "clientId": "kept",
+    "definitions": "kept",
+    "definitionsAgeMs": "kept",
+    "evidence": "kept",
+    "generation": "kept",
+    "initMs": "kept",
+    "keyHash": "kept",
+    "previous": "kept",
+    "refusal": "kept",
+    "revalidated": "kept",
+    "server": "kept",
+    "toolCallId": "kept"
+  },
   "agentfootprint.tools.offered": {
     "availableIds[]": "kept",
     "reason": "kept",

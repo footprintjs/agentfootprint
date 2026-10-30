@@ -1273,6 +1273,24 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       terminatedBy: kept,
       shapeHash: kept,
     }),
+    // One use of an MCP client pool: "ids, digests, evidence and outcomes only" —
+    // never an identity value, a session handle, an argument, a result or a server's text.
+    'agentfootprint.tools.mcp_client': eventShape<'agentfootprint.tools.mcp_client'>({
+      server: kept,
+      at: kept,
+      toolCallId: kept,
+      keyHash: kept,
+      clientId: kept,
+      generation: kept,
+      client: kept,
+      previous: kept,
+      evidence: kept,
+      refusal: kept,
+      initMs: kept,
+      definitions: kept,
+      definitionsAgeMs: kept,
+      revalidated: kept,
+    }),
     'agentfootprint.tools.request_attempts': eventShape<'agentfootprint.tools.request_attempts'>({
       toolCallId: kept,
       toolName: kept,

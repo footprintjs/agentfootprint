@@ -5402,6 +5402,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       integrityLedger: this.integrityLedgerHolder,
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
       ...(this.externalToolProvider && { providerToolCache }),
+      // The caller of THIS run, for `ToolDispatchContext.callerIdentity`: the
+      // instance's caller on its own run, the member's run on a mount — never a
+      // derived identity (the `hiddenSkillIdsNow` precedent).
+      ...(this.externalToolProvider && {
+        callerIdentity: (scope: object) =>
+          this.ownScopes.has(scope) ? this.lastRunIdentity : memberIdentityIn(scope),
+      }),
       toolClaimants,
       servedTools,
       ...(readSkillFor && { readSkillFor }),

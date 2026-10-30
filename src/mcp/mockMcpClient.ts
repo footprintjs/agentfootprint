@@ -31,7 +31,13 @@
 
 import type { Tool } from '../tools/tools.js';
 import { callMetaOf, readToolExtras } from './toolExtras.js';
-import type { McpClient, McpClientOptions, McpCallToolResult } from './types.js';
+import type {
+  McpClient,
+  McpClientOptions,
+  McpCallToolResult,
+  McpTerminateOutcome,
+} from './types.js';
+import { outcomeWithout } from './terminate.js';
 import { readToolResult, resultModeOf } from './toolResult.js';
 
 /** A scripted tool exposed by the mock MCP server. */
@@ -114,6 +120,7 @@ export function mockMcpClient(options: MockMcpClientOptions): McpClient {
 
   let cache: readonly Tool[] | null = null;
   let closed = false;
+  let ended: McpTerminateOutcome | undefined;
 
   const ensureOpen = (op: string): void => {
     if (closed) {
@@ -142,6 +149,16 @@ export function mockMcpClient(options: MockMcpClientOptions): McpClient {
       if (closed) return;
       closed = true;
       cache = null;
+    },
+    // In memory, no session id is ever issued: nothing remote to end, so the
+    // ending is resolved, and the client is closed (`terminate.ts`).
+    async terminate(): Promise<McpTerminateOutcome> {
+      if (ended !== undefined) return ended;
+      ensureOpen('terminate');
+      closed = true;
+      cache = null;
+      ended = outcomeWithout('no-session');
+      return ended;
     },
   };
 }

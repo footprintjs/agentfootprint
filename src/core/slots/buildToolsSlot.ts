@@ -38,6 +38,7 @@ import type { Tool } from '../../tools/tools.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
 import type { ToolNameChannel } from '../../events/payloads.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tools/toolProvider.js';
+import { emitListUses } from '../../tools/mcpClientUse.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import {
   ownsReservedArgument,
@@ -275,6 +276,16 @@ export interface ToolsSlotConfig {
    * tool list reshape per iteration.
    */
   readonly toolProvider?: ToolProvider;
+  /**
+   * The identity the CALLER named for the run this scope belongs to — the same
+   * fact a tool's `ctx.identity` carries — or `undefined` when the run's
+   * identity was derived. An ACCESSOR: the chart is built once and the caller
+   * changes per run. Fills `ToolDispatchContext.callerIdentity`; absent → the
+   * field is never set, byte-identical.
+   */
+  readonly callerIdentity?: (
+    scope: object,
+  ) => { tenant?: string; principal?: string; conversationId: string } | undefined;
   /**
    * Mutable cache the slot writes to after resolving `toolProvider.list(ctx)`.
    * The same cache reference is passed to `buildToolCallsHandler` so
@@ -557,11 +568,14 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     )
       .filter((inj) => inj.flavor === 'skill')
       .map((inj) => inj.id);
+    // The caller's own identity, never a derived one (`ToolDispatchContext.callerIdentity`).
+    const callerIdentity = config.callerIdentity?.(scope as object);
     const ctx: ToolDispatchContext = {
       iteration,
       ...(activatedIds.length > 0 && { activeSkillId: activatedIds[activatedIds.length - 1] }),
       ...(activeSkillIds.length > 0 && { activeSkillIds }),
       ...(identity && { identity }),
+      ...(callerIdentity !== undefined && { callerIdentity }),
       ...(env.signal && { signal: env.signal }),
     };
 
@@ -577,6 +591,9 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       const result = toolProvider.list(ctx);
       visibleTools = result instanceof Promise ? await result : result;
     } catch (err) {
+      // An MCP client pool's use of a client is recorded whether or not its
+      // listing succeeded (`tools/mcpClientUse.ts`).
+      emitListUses(scope, ctx);
       // Discovery failure is loud by design. Emit the typed event
       // with the providerId so consumers can route alerts; then
       // re-throw so a configured `reliability` rule decides whether
@@ -595,6 +612,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       throw err;
     }
 
+    emitListUses(scope, ctx);
     typedEmit(scope, 'agentfootprint.tools.discovery_completed', {
       providerId: toolProvider.id,
       iteration,
