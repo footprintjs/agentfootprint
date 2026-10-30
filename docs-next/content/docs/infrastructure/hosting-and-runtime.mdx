@@ -1550,8 +1550,9 @@ answer's recording ticket. The server reads the recording, builds the
 `AnswerAccountWireBody`, from `agentfootprint/hosting`) — the account, plus the
 record's values behind its "show me" links that pass an allow-list, keyed by
 `answerAccountPointerKey(pointer)` from `agentfootprint/observe`. A browser makes
-one request per Explain, receives at most 192 KB, and never parses or folds a
-recording itself.
+one request per Explain and never parses or folds a recording itself. The
+serialized `{ account, shown }` JSON body is at most 192 KiB of UTF-8 bytes;
+an outer transport envelope is not part of that bound.
 
 It is off until the host asks for it, with `answerAccounts` (typed
 `AnswerAccountsOptions`; `true` takes every default):

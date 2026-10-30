@@ -6,7 +6,7 @@ title: assertComposedOf
 
 > **assertComposedOf**(`toolName`, `composedOf`): `void`
 
-Defined in: [src/tools/tools.ts:741](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L741)
+Defined in: [src/tools/tools.ts:767](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L767)
 
 Refuse a `composedOf` list that could never be drift-checked, at definition
 time — the assertArgumentsFrom law applied to composition: the

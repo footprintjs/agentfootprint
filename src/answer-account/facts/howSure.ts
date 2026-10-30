@@ -32,9 +32,17 @@ import { chip, joinAnd, n, v } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { AnswerFacts, EvidenceFact, AccountFact, RecordPointer, Sentence } from '../types.js';
 import { isRecord, keptOut, num, str, type ViewEvent } from '../view.js';
-import { at, emptinessSource, stateAt, takeItem, type ReadContext } from './common.js';
-import type { CallsRead } from './calls.js';
+import {
+  at,
+  boundedPointer,
+  emptinessSource,
+  stateAt,
+  takeItem,
+  type ReadContext,
+} from './common.js';
+import { MAX_CALLS, type CallsRead } from './calls.js';
 import { MAX_LISTED_CALLS } from './checked.js';
+import { scriptLines } from './scripts.js';
 
 /** A flagged value is a name or a number from the answer; longer is clipped. */
 export const FLAGGED_VALUE_CHARS = 200;
@@ -213,8 +221,12 @@ function evidenceLines(ctx: ReadContext, e: ViewEvent, fact: EvidenceFact): Sent
 type StandingFact = AnswerFacts['standing'];
 
 /** Witness rows as the account's pointers — the fold's witnesses are all in the recording. */
+/**
+ * The fold's witnesses as the account's pointers — each identity cut as the
+ * account's own builders cut theirs (`common.ts` · `boundedPointer`).
+ */
 function pointersOf(witness: readonly AssessmentPointer[]): RecordPointer[] {
-  return [...witness];
+  return witness.map(boundedPointer);
 }
 
 const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
@@ -237,6 +249,7 @@ const REASON_LINES: Readonly<Record<AssessmentReason, TemplateId>> = {
   'value-unsupported': 'howSure.reason.valueUnsupported',
   'value-survived-revision': 'howSure.reason.valueSurvivedRevision',
   'derived-from-reading': 'howSure.reason.derivedFromReading',
+  'script-unmatched': 'howSure.reason.scriptUnmatched',
   'stopped-early': 'howSure.reason.stoppedEarly',
   'steps-unfinished': 'howSure.reason.stepsUnfinished',
   'negative-prose-unverified': 'howSure.reason.negativeProseUnverified',
@@ -304,6 +317,7 @@ const CHECK_LINES: Readonly<Record<AssessmentCheck, TemplateId>> = {
   'tool-coverage': 'howSure.check.toolCoverage',
   'result-shape': 'howSure.check.resultShape',
   'names-and-numbers': 'howSure.check.namesAndNumbers',
+  'script-match': 'howSure.check.scriptMatch',
   'answer-checks': 'howSure.check.answerChecks',
 };
 
@@ -402,12 +416,16 @@ function standingLines(ctx: ReadContext): { lines: Sentence[]; fact: StandingFac
       lines.push(ctx.say('howSure.standing.notAssessed', { status: 'not-applicable' }));
       break;
   }
-  const factPointers =
+  // A fact lists at most MAX_CALLS pointers (law 8, the `limitsData`
+  // precedent): one per witness row would grow with the record. The lines
+  // above count every row; only the listing is capped.
+  const factPointers = (
     a.standing === 'known'
       ? [stateAt('answerValidation', 'status')]
       : a.standing === 'consistent'
       ? pointersOf(ran.flatMap((c) => c.witness))
-      : reasonPointers;
+      : reasonPointers
+  ).slice(0, MAX_CALLS);
   return {
     lines,
     fact: {
@@ -434,6 +452,9 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
   const standing = standingLines(ctx);
   const lines: Sentence[] = [...standing.lines, ...expectationLines(ctx, calls)];
   const e = evidenceEvent(ctx);
+  // The scripts the answer showed and the library attached — beside the
+  // evidence lines, never joined to them (`./scripts.ts`).
+  const scripts = scriptLines(ctx, e);
   // The check ran, and the values it flagged are kept out of the record (a
   // redaction policy selects `unsupported`): said so — never "nothing flagged".
   if (e !== undefined && keptOut(e, 'unsupported')) {
@@ -445,6 +466,7 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
         pointers: [where],
       }),
     );
+    lines.push(...scripts);
     return {
       lines,
       standing: standing.fact,
@@ -489,6 +511,7 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
       ...fact,
       unsupported: unsupported.map((x) => x.slice(0, FLAGGED_VALUE_CHARS)),
     };
+    lines.push(...scripts);
     return {
       lines,
       standing: standing.fact,
@@ -510,6 +533,7 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
         ],
       }),
     );
+    lines.push(...scripts);
     return {
       lines,
       standing: standing.fact,
@@ -523,6 +547,7 @@ export function readHowSure(ctx: ReadContext, calls: CallsRead): HowSureRead {
       chips: [chip('not-recorded', 'chip.notRecorded')],
     }),
   );
+  lines.push(...scripts);
   return {
     lines,
     standing: standing.fact,

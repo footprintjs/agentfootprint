@@ -98,7 +98,11 @@ const agent = Agent.create({
   `agent-redaction.propagation.test.ts`. A feature added to the list needs a
   case there. One pin keeps the list honest: every field the audit's bounded
   mode treats as content (`adapters/observability/audit.ts` ·
-  `boundedContentFieldNames`) is on it.
+  `boundedContentFieldNames`) is on it. A field that holds the library's own
+  words beside one content leaf (`turn_end.scripts`: labels and counts beside
+  each program) is bounded at the leaf (`boundedContentLeaves`). It is never
+  named here, because a name would hide its labels too: the value-kind rule
+  keeps the leaf out, and the same test pins that.
 - **What stays readable on events.** Numbers, flags, and the library's own
   words — statuses, verdicts, stop words, event types, its fixed sentences, the
   messages' roles: the record still shows WHAT happened, without the words

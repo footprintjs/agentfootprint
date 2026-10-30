@@ -20,6 +20,14 @@ import {
   standingNamesFrom,
 } from '../core/agent/assessment/compose.js';
 import { ASSUMED_BLOCK_HEADING, COVERAGE_BLOCK_HEADING } from '../semantics/coverage/answer.js';
+import { scriptRowsOfTurn } from '../core/agent/scripts/rows.js';
+import {
+  rebuildBoundary,
+  recordedScripts,
+  scriptsBlock,
+} from '../core/agent/scripts/attachment.js';
+import { scriptRowIsWellFormed } from '../core/agent/scripts/rows.js';
+import type { ScriptRow } from '../core/agent/scripts/types.js';
 import type { Recording } from '../recorders/observability/recordRun.js';
 import { chip, clipFact, MAX_VAR_CHARS, saidBy, sentence } from './render.js';
 import { ANSWER_ACCOUNT_TEMPLATE_SET_VERSION, type TemplateId } from './templates.js';
@@ -39,6 +47,7 @@ import type {
   Sentence,
 } from './types.js';
 import { validateDeclarations } from './declarations.js';
+import { fitAccount } from './size.js';
 import {
   isRecord,
   keptOut,
@@ -52,6 +61,7 @@ import {
   at,
   countedFields,
   derived,
+  FACT_TEXT_CHARS,
   makeSay,
   stateAt,
   type AccountInternals,
@@ -59,7 +69,7 @@ import {
 } from './facts/common.js';
 import { readAsked } from './facts/asked.js';
 import { readUnderstood } from './facts/understood.js';
-import { FACT_TEXT_CHARS, MAX_CALLS, readCalls } from './facts/calls.js';
+import { MAX_CALLS, readCalls } from './facts/calls.js';
 import { answeringIteration, readInView } from './facts/inView.js';
 import { readCheckedRows } from './facts/checked.js';
 import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
@@ -178,9 +188,65 @@ function appendedStandingLine(
   );
 }
 
-/** Whether `text` opens the framework's appended section: the run's own line, or a block's heading. */
-function opensAppended(text: string, line: string | undefined): boolean {
+/**
+ * The opening of the scripts block THIS run attached
+ * (`.scriptTravelsWithTheAnswer()`), rebuilt from its record — never matched
+ * by words. The block is one function of `turn_end.scripts` (the shown
+ * scripts and the omitted count) and, for a program over the bound, of that
+ * call's committed `script` row (`core/agent/scripts/attachment.ts` ·
+ * `scriptsBlock`), behind the boundary the record states (`closedFence`: the
+ * block opens with the fence it closed; `withheldFromText`: each script is
+ * its label line alone). With a script shown, the block's text up to its
+ * first label line opens it; with none shown, the omission lines do —
+ * rebuilt for the last call that reached the tool and for every one (the
+ * record does not keep `which`). Anything the record does not hold in full,
+ * and the block is not claimed.
+ */
+function appendedScriptsOpenings(
+  end: ViewEvent,
+  state: Readonly<Record<string, unknown>> | undefined,
+  within: number,
+): readonly string[] {
+  // The one reader of the shape (`attachment.ts` · `recordedScripts`): the
+  // text is rebuilt only from a record read back whole — a value no writer
+  // of this library files rebuilds nothing (the How-sure lines count it).
+  const read = recordedScripts(end.payload.scripts, within);
+  if (read === undefined || read.unread > 0) return [];
+  const { boundary: recorded, omitted } = read;
+  if (recorded === undefined || omitted === undefined) return [];
+  const boundary = rebuildBoundary(recorded, within);
+  if (boundary === undefined) return [];
+  const first = read.shown[0];
+  if (first !== undefined) {
+    const only = { shown: [first.script], omitted: 0 };
+    // Up to and including the first label line: the closed fence, if any, then it.
+    const lines = scriptsBlock(only, boundary).split('\n');
+    return [lines.slice(0, boundary.kind === 'closed' ? 3 : 1).join('\n')];
+  }
+  if (omitted === 0 || state === undefined) return [];
+  const turn = num(state.turnNumber);
+  if (turn === undefined) return [];
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const current = scriptRowsOfTurn(ledger, turn).current;
+  // The rows come from saved state: rebuild only from rows this library writes.
+  if (!current.every((row) => scriptRowIsWellFormed(row as unknown as Record<string, unknown>))) {
+    return [];
+  }
+  const reached = current.filter((row) => row.outcome !== 'submitted');
+  const overSizeOf = (rows: readonly ScriptRow[]) => rows.filter((row) => row.text === undefined);
+  return [overSizeOf(reached.slice(-1)), overSizeOf(reached)].map((overSize) =>
+    scriptsBlock({ shown: [], omitted, overSize }, boundary),
+  );
+}
+
+/** Whether `text` opens the framework's appended section: the run's own line, a block's heading, or its scripts. */
+function opensAppended(
+  text: string,
+  line: string | undefined,
+  scripts: readonly string[] = [],
+): boolean {
   if (line !== undefined && (text === line || text.startsWith(`${line}\n\n`))) return true;
+  if (scripts.some((opening) => opening !== '' && text.startsWith(opening))) return true;
   return BLOCK_HEADINGS.some((heading) => text.startsWith(heading));
 }
 
@@ -195,14 +261,17 @@ function opensAppended(text: string, line: string | undefined): boolean {
 function splitAppended(
   content: string,
   line: string | undefined,
+  scripts: readonly string[] = [],
 ): { readonly model: string; readonly appended?: string } {
   let at = content.lastIndexOf(APPENDED_SEPARATOR);
   while (at >= 0) {
     const rest = content.slice(at + APPENDED_SEPARATOR.length);
-    if (opensAppended(rest, line)) return { model: content.slice(0, at), appended: rest };
+    if (opensAppended(rest, line, scripts)) return { model: content.slice(0, at), appended: rest };
     at = at === 0 ? -1 : content.lastIndexOf(APPENDED_SEPARATOR, at - 1);
   }
-  return opensAppended(content, line) ? { model: '', appended: content } : { model: content };
+  return opensAppended(content, line, scripts)
+    ? { model: '', appended: content }
+    : { model: content };
 }
 
 /** How many items one of the data's lists holds — `0` for a list the record does not carry. */
@@ -315,7 +384,11 @@ function readAnswer(view: RecordingView): {
   }
   const pointer = at(end, 'finalContent');
   const data = readLimitsData(end);
-  const { model, appended } = splitAppended(content, appendedStandingLine(end, view.state));
+  const { model, appended } = splitAppended(
+    content,
+    appendedStandingLine(end, view.state),
+    appendedScriptsOpenings(end, view.state, content.length),
+  );
   const answer: AccountFact<string> = {
     ...clipFact(model, MAX_ANSWER_CHARS),
     source: 'model',
@@ -384,7 +457,7 @@ function readRun(view: RecordingView, resumedLeg: boolean): AccountFact<RunFact>
 /**
  * The account of a run this record cannot tell about — said once per row, and
  * nothing is claimed about the run (no "did not run any tools", no "did not
- * finish"); the hosting op may map it to `summary.notAvailable@1`. Two causes:
+ * finish"); the hosting op may map it to `summary.notAvailable@1`. Three causes:
  *
  *   - `no-own-events` — the run owns NO event of this record (an
  *     options.runId that is not this recording's, or a recording with no
@@ -395,17 +468,37 @@ function readRun(view: RecordingView, resumedLeg: boolean): AccountFact<RunFact>
  *     about a placeholder. The kept-out values the account DOES handle — the
  *     question, the answer, a tool result, a call's outcome fields, the
  *     history — never get here: each is said to be kept out where it is read.
+ *   - `too-large` — the account would pass its size limit even with nothing
+ *     listed (`size.ts` · `fitAccount`): only a record built to be, every
+ *     text at its cut in characters JSON writes six bytes wide. Counted unread.
  */
 function notToldAccount(
   view: RecordingView,
   say: ReadContext['say'],
   unread: () => number,
-  cause: 'no-own-events' | 'kept-out',
+  cause: 'no-own-events' | 'kept-out' | 'too-large',
 ): AnswerAccount {
   const missing = {
     status: 'not-recorded' as const,
-    missing: cause === 'kept-out' ? ('redacted' as const) : ('no-event' as const),
+    missing:
+      cause === 'kept-out'
+        ? ('redacted' as const)
+        : cause === 'too-large'
+        ? ('unreadable' as const)
+        : ('no-event' as const),
   };
+  const scopeLine =
+    cause === 'kept-out'
+      ? 'scope.keptOut'
+      : cause === 'too-large'
+      ? 'scope.tooLarge'
+      : 'scope.noOwnEvents';
+  const rowLine =
+    cause === 'kept-out'
+      ? 'row.keptOut'
+      : cause === 'too-large'
+      ? 'row.tooLarge'
+      : 'row.notInRecord';
   const none = <T>(): AccountFact<T> => ({
     value: null,
     source: 'library',
@@ -415,11 +508,11 @@ function notToldAccount(
   const rows: Row[] = (Object.keys(HEADINGS) as RowId[]).map((id) =>
     row(id, [
       id === 'anything-wrong'
-        ? say(cause === 'kept-out' ? 'scope.keptOut' : 'scope.noOwnEvents', {
+        ? say(scopeLine, {
             ...missing,
             chips: [chip('not-recorded', 'chip.notRecorded')],
           })
-        : say(cause === 'kept-out' ? 'row.keptOut' : 'row.notInRecord', missing),
+        : say(rowLine, missing),
     ]),
   );
   return {
@@ -453,7 +546,7 @@ function notToldAccount(
     signals: [],
     unreachable: [],
     summary: {
-      sentence: say(cause === 'kept-out' ? 'scope.keptOut' : 'scope.noOwnEvents', missing),
+      sentence: say(scopeLine, missing),
       tone: 'unknown',
     },
     unread: unread(),
@@ -571,7 +664,7 @@ export function buildAccount(
   // Counts are judgements: over EVERY call. Only the listing (`facts.calls`) is capped.
   const all = calls.all.map((c) => c.fact);
   const count = (o: string) => all.filter((c) => c.outcome === o).length;
-  return {
+  const told: AnswerAccount = {
     kind: 'agentfootprint/answer-account',
     shape: 1,
     templates: { set: 'answer-account', version: ANSWER_ACCOUNT_TEMPLATE_SET_VERSION },
@@ -614,6 +707,9 @@ export function buildAccount(
     foreign: view.foreign,
     scope: view.scope,
   };
+  // README law 8, measured in its own unit — serialized UTF-8 bytes — by the one
+  // authority: the listings fitted and counted, never the judgements.
+  return fitAccount(told, () => notToldAccount(view, say, () => unread + 1, 'too-large'));
 }
 
 /**

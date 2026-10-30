@@ -378,7 +378,7 @@ describe('P1 + P7 + bounds — amplified damage (B1 · B2 · S1)', () => {
         assertP1(account, rec as unknown as Recording, HOST_APP_DECLARATIONS);
         assertP7(account, rec as unknown as Recording, HOST_APP_DECLARATIONS);
         const shown = showLeaves(account, rec as unknown as Recording, HOST_APP_DECLARATIONS);
-        expect(JSON.stringify(shown).length).toBeLessThanOrEqual(64 * 1024);
+        expect(Buffer.byteLength(JSON.stringify(shown), 'utf8')).toBeLessThanOrEqual(64 * 1024);
         if (kind === 'permission-verdict') {
           // B1 — only deny / halt refuse.
           const refused = verdict === 'deny' || verdict === 'halt';

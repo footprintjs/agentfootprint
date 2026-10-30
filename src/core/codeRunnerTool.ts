@@ -159,6 +159,31 @@ export const TOOL_SESSIONS: unique symbol = Symbol.for('agentfootprint.tools.ses
  */
 export const CODE_RUNS: unique symbol = Symbol.for('agentfootprint.tools.codeRuns');
 
+/**
+ * Where a code run's facts ALSO go when the AGENT dispatched the call: a slot
+ * the dispatch loop puts on that one call's execution context
+ * (`core/agent/stages/toolCalls.ts`, both execute boundaries) and reads back
+ * when `execute` returns. The published map above is filled exactly as
+ * before; the slot is the dispatch's own copy, the one the script record
+ * attests from and `agentfootprint.tools.code_run` carries.
+ *
+ * Why not the map alone: it is keyed by the provider's call id, and two runs —
+ * two agents sharing one tool object, or one run whose provider reuses an id —
+ * can hold the same id at once. A fact read back by id then reaches whichever
+ * dispatch reads first: one run's exit code attested another run's script.
+ * The slot is the dispatch's own object, so its facts can only reach it. A
+ * wrapper tool that hands the same context (or a spread of it) to this one
+ * keeps the slot. `Symbol.for`, for the CJS/ESM reason above.
+ *
+ * @internal Library plumbing between the dispatch loop and this tool.
+ */
+export const CODE_RUN_SLOT: unique symbol = Symbol.for('agentfootprint.tools.codeRunSlot');
+
+/** One dispatch's slot for the facts of the code it ran. @internal */
+export interface CodeRunSlot {
+  facts?: CodeRunFacts;
+}
+
 /** What one finished code run is worth reporting, minus the code itself. */
 export interface CodeRunFacts {
   readonly tool: string;
@@ -398,6 +423,10 @@ export function codeRunnerTool(
     ...(options.checkIn !== undefined && { checkIn: options.checkIn }),
     ...(options.needs && { needs: options.needs }),
     ...(wants !== undefined && { wants }),
+    // This tool RUNS what the model passes as `code` — declared, so the record
+    // can say which program a call submitted (`tools/script.ts`). The language
+    // is the fence's info string when the library shows the program.
+    script: { argument: 'code', language },
     execute: async (args, ctx): Promise<string> => {
       const key = requireKey(ctx, scope, name);
       const session = await acquire(key, ctx);
@@ -417,7 +446,7 @@ export function codeRunnerTool(
       const rendered = render(result, maxOutputChars, name, minted, stagedNames, wantNames);
       // Facts only, never `args.code` — generated code quotes the data it was
       // handed, so the code is the one part of this that must not travel.
-      codeRuns.set(ctx.toolCallId, {
+      const facts: CodeRunFacts = {
         tool: name,
         language,
         stagedInputs: stagedNames.length,
@@ -434,7 +463,12 @@ export function codeRunnerTool(
         ...(result.serviceError === true && { serviceError: true as const }),
         ...(result.terminatedBy !== undefined && { terminatedBy: result.terminatedBy }),
         shapeHash: fnv1a(codeShape(args.code)),
-      });
+      };
+      // The published map, by the call's id, exactly as always — and, for a
+      // call an agent dispatched, that dispatch's own slot as well.
+      const slot = (ctx as { readonly [CODE_RUN_SLOT]?: CodeRunSlot })[CODE_RUN_SLOT];
+      if (slot !== undefined) slot.facts = facts;
+      codeRuns.set(ctx.toolCallId, facts);
       return rendered;
     },
   });

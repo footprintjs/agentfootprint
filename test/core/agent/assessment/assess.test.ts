@@ -694,6 +694,8 @@ describe('UNIT — the reason table', () => {
       'value-survived-revision',
       // The time layer (step T7): a time value the library spelled from a reading.
       'derived-from-reading',
+      // Code in an answer (`code: 'match'`): a shown block matches no submission of the turn.
+      'script-unmatched',
       'stopped-early',
       // Honesty layer 4 (the answer layer's witness row, step 6).
       'steps-unfinished',

@@ -205,6 +205,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     reads:
       "findingsLedger: a time-derived row of this turn — the answer states a time value no tool result carried that the library itself spelled from a reading of the person's words (an implied year, an offset, the end-of-grain minute, the served time line)",
   },
+  {
+    reason: 'script-unmatched',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads:
+      "findingsLedger: a script-shown witness row of this turn with label 'unmatched' — a fenced block the answer showed equals no program this turn's calls submitted to a declared code-running tool (filed under code: 'match' while the answer layer is armed)",
+  },
   { reason: 'stopped-early', layer: 4, class: 'not-sure', source: 'run', reads: 'stoppedEarly' },
   {
     reason: 'steps-unfinished',

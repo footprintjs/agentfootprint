@@ -40,6 +40,15 @@ import { presentationZoneOf } from '../../../time/rows.js';
 import type { BoundPresentation } from '../../../time/present.js';
 import { withheldByOutputPolicy } from './outputAdmission.js';
 import { assistantReplayFields } from '../assistantReplay.js';
+import { scriptRowsOfTurn } from '../scripts/rows.js';
+import {
+  scriptsBlock,
+  scriptsBlockAfter,
+  scriptsOfAnswer,
+  turnEndScriptsOf,
+  type AttachmentBoundary,
+} from '../scripts/attachment.js';
+import type { ResolvedScriptTravel, ScriptRow, TurnEndScripts } from '../scripts/types.js';
 
 type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
 
@@ -68,6 +77,37 @@ type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
  * without a second state read and every other turn's payload keeps its bytes.
  */
 const RAILS_REFUSED = new WeakSet<object>();
+
+/**
+ * `.scriptTravelsWithTheAnswer()` — what travels with THIS capture, read once
+ * by `withScripts` from the turn's `script` rows and keyed by the stage's own
+ * scope (the `RAILS_REFUSED` channel). The data rides `turn_end.scripts`; the
+ * text is composed by the one composer, behind the rendering boundary the
+ * text before it leaves (`boundary`, set when the composer asks — what the
+ * data records). A typed answer gets the data only, its bytes never edited.
+ * Absent → every capture keeps its bytes.
+ */
+interface AttachedScripts {
+  readonly attached: TurnEndScripts & { readonly overSize: readonly ScriptRow[] };
+  readonly typed: boolean;
+  boundary?: AttachmentBoundary;
+}
+const SCRIPTS = new WeakMap<object, AttachedScripts>();
+
+/**
+ * The script block a prose composition appends — `''` without the arm, on a
+ * typed answer, or when nothing travels; otherwise the composer's callback,
+ * handed the exact text the block follows.
+ */
+function scriptTextOf(scope: object): '' | ((before: string) => string) {
+  const entry = SCRIPTS.get(scope);
+  if (entry === undefined || entry.typed || scriptsBlock(entry.attached) === '') return '';
+  return (before) => {
+    const { text, boundary } = scriptsBlockAfter(entry.attached, before);
+    entry.boundary = boundary;
+    return text;
+  };
+}
 
 const captureTurnPayload = (
   scope: TypedScope<AgentState>,
@@ -128,6 +168,7 @@ const captureTurnPayload = (
   // Value-conditional and projected (never the whole committed record): a turn
   // that finished normally emits the exact payload it always did.
   const cut = scope.stoppedEarly;
+  const attached = SCRIPTS.get(scope);
   typedEmit(scope, 'agentfootprint.agent.turn_end', {
     turnIndex: 0,
     finalContent: scope.finalContent,
@@ -154,13 +195,32 @@ const captureTurnPayload = (
     ...(answerAssessment !== undefined && { answerAssessment }),
     // The app's words the standing line named calls in — only when it named one.
     ...(standingLineNames !== undefined && { standingLineNames }),
+    // The scripts the library attached (`.scriptTravelsWithTheAnswer()`) —
+    // on every answer under the arm, a typed one included; absent otherwise.
+    ...(attached !== undefined && {
+      scripts: turnEndScriptsOf(attached.attached, attached.boundary),
+    }),
     // A refused answer rides for the record, flagged so no consumer shows it.
     ...(refused && { refused: { by: 'evidence-rails' as const } }),
   });
 };
 
 const prepareFinal = (scope: TypedScope<AgentState>, releaseTokens = false): void => {
-  captureTurnPayload(scope, scope.llmLatestContent, false, undefined, undefined, releaseTokens);
+  const scripts = scriptTextOf(scope);
+  const answer =
+    scripts === ''
+      ? scope.llmLatestContent
+      : composeAnswerWithCoverage(
+          scope.llmLatestContent,
+          [],
+          '',
+          '',
+          undefined,
+          undefined,
+          undefined,
+          scripts,
+        );
+  captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
 };
 export const prepareFinalStage = (scope: TypedScope<AgentState>): void => prepareFinal(scope);
 
@@ -269,16 +329,18 @@ const prepareFinalWithLimits = (
   displayNameOf?: DisplayNameOf,
 ): void => {
   const declared = scope.coverageDeclared;
+  const scripts = scriptTextOf(scope);
   const answer =
-    declared !== undefined && declared.length > 0
+    (declared !== undefined && declared.length > 0) || scripts !== ''
       ? composeAnswerWithCoverage(
           scope.llmLatestContent,
-          declared,
+          declared ?? [],
           '',
           '',
           undefined,
           undefined,
           displayNameOf,
+          scripts,
         )
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
@@ -334,16 +396,18 @@ const prepareFinalWithLimitsInZone = async (
 ): Promise<void> => {
   const declared = scope.coverageDeclared ?? [];
   const time = await timeLinesOf(scope);
+  const scripts = scriptTextOf(scope);
   const answer =
-    declared.length > 0 || time !== undefined
+    declared.length > 0 || time !== undefined || scripts !== ''
       ? composeAnswerWithCoverage(
           scope.llmLatestContent,
           declared,
           '',
           '',
-          await presentationOf(scope),
+          declared.length > 0 || time !== undefined ? await presentationOf(scope) : undefined,
           time,
           displayNameOf,
+          scripts,
         )
       : scope.llmLatestContent;
   captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
@@ -395,16 +459,20 @@ export function prepareFinalWithLimitsAndAssumedStage(
         : undefined,
     );
     const time = inZone ? await timeLinesOf(scope) : undefined;
+    const scripts = scriptTextOf(scope);
     const answer =
-      declared.length > 0 || assumed !== '' || time !== undefined
+      declared.length > 0 || assumed !== '' || time !== undefined || scripts !== ''
         ? composeAnswerWithCoverage(
             scope.llmLatestContent,
             declared,
             assumed,
             '',
-            inZone ? await presentationOf(scope) : undefined,
+            inZone && (declared.length > 0 || assumed !== '' || time !== undefined)
+              ? await presentationOf(scope)
+              : undefined,
             time,
             displayNameOf,
+            scripts,
           )
         : scope.llmLatestContent;
     captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
@@ -441,6 +509,14 @@ export interface FinalStageArms {
    * has always mounted, same reference, same bytes.
    */
   readonly displayNameOf?: DisplayNameOf;
+  /**
+   * `.scriptTravelsWithTheAnswer()` — the recorded programs of this turn's
+   * code-running calls travel with the answer: as `turn_end.scripts` always,
+   * and as text after the `---` separator on a prose answer (`typed` — the
+   * answer has an output schema — gets the data only). Absent → the stage
+   * each combination of arms has always mounted, same reference, same bytes.
+   */
+  readonly scriptTravel?: ResolvedScriptTravel & { readonly typed?: true };
 }
 
 /** A tool's registered name → the app's words for a call of it, when its tool declares them. */
@@ -456,7 +532,9 @@ export type DisplayNameOf = (toolName: string) => string | undefined;
 export function prepareFinalFor(
   arms: FinalStageArms,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
-  const composed = finalStageFor(arms);
+  const chosen = finalStageFor(arms);
+  const composed =
+    arms.scriptTravel === undefined ? chosen : withScripts(chosen, arms.scriptTravel);
   // Under answer validation its guard already stops a rails refusal before the capture.
   const stage =
     arms.evidenceRails === true && arms.hasAnswerValidation !== true
@@ -488,6 +566,36 @@ function withRailsRefusal(stage: FinalStage): FinalStage {
       RAILS_REFUSED.delete(scope);
     }
     scope.$break('evidence rails refused this answer');
+  };
+}
+
+/**
+ * `.scriptTravelsWithTheAnswer()` around whichever body was chosen: this
+ * turn's script rows (`scripts/rows.ts` · `scriptRowsOfTurn`, the last row of
+ * each call) composed ONCE into what travels (`scripts/attachment.ts`), handed
+ * to the body's capture through `SCRIPTS`. Three reads, only under the arm:
+ * the ledger, the turn, and the count of calls past the per-turn rows.
+ */
+function withScripts(
+  stage: FinalStage,
+  travel: ResolvedScriptTravel & { readonly typed?: true },
+): FinalStage {
+  return async (scope) => {
+    const rows = scriptRowsOfTurn(
+      scope.findingsLedger as readonly unknown[] | undefined,
+      scope.turnNumber as number,
+    ).current;
+    const attached = scriptsOfAnswer(
+      rows,
+      travel,
+      (scope.scriptsDropped as number | undefined) ?? 0,
+    );
+    SCRIPTS.set(scope, { attached, typed: travel.typed === true });
+    try {
+      await stage(scope);
+    } finally {
+      SCRIPTS.delete(scope);
+    }
   };
 }
 
@@ -630,8 +738,9 @@ export function prepareFinalWithAnswerLayerStage(
       );
     }
     const time = o.limits && o.inZone === true ? await timeLinesOf(scope) : undefined;
+    const scripts = scriptTextOf(scope);
     const answer =
-      declared.length > 0 || assumed !== '' || line !== '' || time !== undefined
+      declared.length > 0 || assumed !== '' || line !== '' || time !== undefined || scripts !== ''
         ? composeAnswerWithCoverage(
             scope.llmLatestContent,
             declared,
@@ -642,6 +751,7 @@ export function prepareFinalWithAnswerLayerStage(
               : undefined,
             time,
             o.displayNameOf,
+            scripts,
           )
         : scope.llmLatestContent;
     captureTurnPayload(

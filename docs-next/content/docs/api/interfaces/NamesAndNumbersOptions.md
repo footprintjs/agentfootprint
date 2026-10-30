@@ -4,17 +4,42 @@ title: NamesAndNumbersOptions
 
 # Interface: NamesAndNumbersOptions
 
-Defined in: [src/core/agent/evidence/types.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L87)
+Defined in: [src/core/agent/evidence/types.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L88)
 
 Options for `.namesAndNumbersFromEvidence()`.
 
 ## Properties
 
+### code?
+
+> `readonly` `optional` **code?**: `"check"` \| `"match"`
+
+Defined in: [src/core/agent/evidence/types.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L188)
+
+How a fenced code block in a PROSE answer is read. Default `'check'` —
+today's behaviour, byte for byte: the whole answer is prose.
+
+`'match'` — each fenced block (```` ``` ```` or `~~~`, at column 0, closed)
+is compared, byte for byte after removing only the Markdown wrapper,
+against the programs this TURN's calls of a declared code-running tool
+(`Tool.script`, which `codeRunnerTool` declares) submitted to the tool. A
+block that matches one is script content: it yields no value to ground
+and is labelled with that call's recorded outcome (`completed, exit 0`,
+`outcome unknown`, …). A block that matches none stays prose, checked as
+today, and is labelled `unmatched`. Code is never evidence: a value in the
+prose that also sits in the script still needs a tool result.
+
+Inline spans, unclosed fences and indented code are prose. A typed answer
+is not scanned. There is no `'skip'`: exempting every fence would be an
+exemption by formatting. See `core/agent/scripts/README.md`.
+
+***
+
 ### decimalRounding?
 
 > `readonly` `optional` **decimalRounding?**: `boolean`
 
-Defined in: [src/core/agent/evidence/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L162)
+Defined in: [src/core/agent/evidence/types.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L163)
 
 Opt-in precision-bounded rounding for plain decimals. Default false.
 Plain decimals become checked data even below minDigits. An exact result
@@ -28,7 +53,7 @@ acceptance. Numeric derivations use `computed` with `rounded` and `from`.
 
 > `readonly` `optional` **exempt?**: readonly (`string` \| `RegExp`)[]
 
-Defined in: [src/core/agent/evidence/types.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L101)
+Defined in: [src/core/agent/evidence/types.ts:102](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L102)
 
 Values (or patterns) that are never flagged, whatever the extractor
 thinks. A literal string is compared after normalisation; a RegExp is
@@ -44,7 +69,7 @@ constant your app knows is safe.
 
 > `readonly` `optional` **figures?**: `boolean`
 
-Defined in: [src/core/agent/evidence/types.ts:154](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L154)
+Defined in: [src/core/agent/evidence/types.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L155)
 
 The figures dial. Default `false` — off, byte-identical.
 
@@ -71,7 +96,7 @@ stay prose. See `figures.ts` for the derivation set and its bounds.
 
 > `readonly` `optional` **minDigits?**: `number`
 
-Defined in: [src/core/agent/evidence/types.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L112)
+Defined in: [src/core/agent/evidence/types.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L113)
 
 How many digits a BARE number needs before it is treated as data rather
 than prose. Default `4`.
@@ -88,7 +113,7 @@ positives that follow.
 
 > `readonly` `optional` **nudge?**: `boolean`
 
-Defined in: [src/core/agent/evidence/types.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L133)
+Defined in: [src/core/agent/evidence/types.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L134)
 
 The staged-refs nudge. Default `false` — off, byte-identical.
 
@@ -115,7 +140,7 @@ byte-identical requests.
 
 > `readonly` `optional` **posture?**: [`EvidencePosture`](/docs/api/type-aliases/EvidencePosture)
 
-Defined in: [src/core/agent/evidence/types.ts:89](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L89)
+Defined in: [src/core/agent/evidence/types.ts:90](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L90)
 
 Default `'assist'` — record and flag, change nothing.
 
@@ -125,7 +150,7 @@ Default `'assist'` — record and flag, change nothing.
 
 > `readonly` `optional` **recoveryInstruction?**: [`EvidenceRecoveryInstruction`](/docs/api/type-aliases/EvidenceRecoveryInstruction)
 
-Defined in: [src/core/agent/evidence/types.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L168)
+Defined in: [src/core/agent/evidence/types.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L169)
 
 Extra guidance after an evidence check requests revision. At most 4000
 UTF-16 code units; callbacks receive a frozen context and must return
@@ -139,6 +164,6 @@ is request-only and never becomes evidence, user history or an exemption.
 
 > `readonly` `optional` **shapes?**: readonly [`EvidenceShape`](/docs/api/interfaces/EvidenceShape)[]
 
-Defined in: [src/core/agent/evidence/types.ts:91](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L91)
+Defined in: [src/core/agent/evidence/types.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/evidence/types.ts#L92)
 
 Extra identifier shapes for this domain. Composes with the defaults.

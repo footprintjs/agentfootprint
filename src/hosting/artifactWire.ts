@@ -124,8 +124,9 @@ export interface ArtifactWireResult {
  * `answerAccountPointerKey(pointer)` (`agentfootprint/observe`). Nothing else
  * from the recording leaves the server.
  *
- * Bounded: the account is at most 128 KB serialized and `shown` at most 64 KB,
- * so a whole reply is at most 192 KB.
+ * Bounded in serialized JSON UTF-8 bytes: the account is at most 128 KiB;
+ * `shown` reserves the account and JSON frame so this `{ account, shown }`
+ * body is at most 192 KiB. An outer transport envelope is not part of this bound.
  */
 export interface AnswerAccountWireBody {
   readonly account: AnswerAccount;

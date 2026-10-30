@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-377 exported from `agentfootprint`.
+384 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -284,6 +284,10 @@ title: Interfaces
 - [`RunTime`](/docs/api/interfaces/RunTime)
 - [`S3ArtifactsOptions`](/docs/api/interfaces/S3ArtifactsOptions)
 - [`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder)
+- [`ScriptRow`](/docs/api/interfaces/ScriptRow)
+- [`ScriptShownRow`](/docs/api/interfaces/ScriptShownRow)
+- [`ScriptsVerdict`](/docs/api/interfaces/ScriptsVerdict)
+- [`ScriptTravelOptions`](/docs/api/interfaces/ScriptTravelOptions)
 - [`SelfConsistencyOptions`](/docs/api/interfaces/SelfConsistencyOptions)
 - [`SelfExplainInclude`](/docs/api/interfaces/SelfExplainInclude)
 - [`SelfExplainOptions`](/docs/api/interfaces/SelfExplainOptions)
@@ -303,6 +307,7 @@ title: Interfaces
 - [`ServedRequestOnly`](/docs/api/interfaces/ServedRequestOnly)
 - [`ServedView`](/docs/api/interfaces/ServedView)
 - [`ServerToolEntry`](/docs/api/interfaces/ServerToolEntry)
+- [`ShownScript`](/docs/api/interfaces/ShownScript)
 - [`SkillGraphOptions`](/docs/api/interfaces/SkillGraphOptions)
 - [`SlidingWindowOptions`](/docs/api/interfaces/SlidingWindowOptions)
 - [`SlidingWindowRecord`](/docs/api/interfaces/SlidingWindowRecord)
@@ -357,6 +362,7 @@ title: Interfaces
 - [`ToolResultContext`](/docs/api/interfaces/ToolResultContext)
 - [`ToolResultEnvelope`](/docs/api/interfaces/ToolResultEnvelope)
 - [`ToolResultMiddleware`](/docs/api/interfaces/ToolResultMiddleware)
+- [`ToolScript`](/docs/api/interfaces/ToolScript)
 - [`ToolSearch`](/docs/api/interfaces/ToolSearch)
 - [`ToolSemantics`](/docs/api/interfaces/ToolSemantics)
 - [`TopKOptions`](/docs/api/interfaces/TopKOptions)
@@ -365,6 +371,7 @@ title: Interfaces
 - [`TruncatedToolResult`](/docs/api/interfaces/TruncatedToolResult)
 - [`TryInsteadTool`](/docs/api/interfaces/TryInsteadTool)
 - [`Turn`](/docs/api/interfaces/Turn)
+- [`TurnEndScripts`](/docs/api/interfaces/TurnEndScripts)
 - [`UnsettledByAbsenceRow`](/docs/api/interfaces/UnsettledByAbsenceRow)
 - [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)
 - [`UnsupportedValuesContext`](/docs/api/interfaces/UnsupportedValuesContext)

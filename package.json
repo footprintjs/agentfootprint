@@ -516,6 +516,7 @@
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
     "ldapts": "^9.2.0",
+    "markdown-it": "14.3.3",
     "openai": "^7.4.0",
     "openid-client": "^6.8.8",
     "playwright-core": "^1.63.0",

@@ -93,8 +93,9 @@ export { MAX_REPORTED_VALUES };
 /** Longest a single value is quoted at. */
 const MAX_VALUE_CHARS = 64;
 
-/** Clip a value for display without letting it pretend to be complete. */
-function clip(v: string): string {
+/** Clip a value for display without letting it pretend to be complete — the
+ *  spelling every verdict reports a value under (`UnsupportedValue.value`). */
+export function clip(v: string): string {
   return v.length <= MAX_VALUE_CHARS ? v : `${v.slice(0, MAX_VALUE_CHARS - 1)}…`;
 }
 
@@ -140,6 +141,17 @@ export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): Resolved
         `\`6.3 TB\`) data whatever its digit count, and asks a number no result carried ` +
         `whether it is a rounding, sum, ratio or unit conversion of the numbers one did; ` +
         `absent or \`false\` is the gate as it was.`,
+    );
+  }
+
+  const code = opts.code ?? 'check';
+  if (code !== 'check' && code !== 'match') {
+    throw new Error(
+      `AgentBuilder.namesAndNumbersFromEvidence: code '${String(opts.code)}' is not a mode ` +
+        "this library has. Use 'check' (the default — a fenced block is read as prose, as " +
+        "always) or 'match' (a fenced block that equals a program this turn's code-running " +
+        'calls submitted is script content; any other block stays prose). There is no ' +
+        "'skip': exempting every fence would exempt any claim typed inside one.",
     );
   }
 
@@ -203,6 +215,7 @@ export function resolveEvidenceGate(opts: NamesAndNumbersOptions = {}): Resolved
     nudge,
     figures,
     ...(decimalRounding && { decimalRounding: true }),
+    ...(code === 'match' && { code: 'match' as const }),
     ...(opts.recoveryInstruction !== undefined && {
       recoveryInstruction: opts.recoveryInstruction,
     }),

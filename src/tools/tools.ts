@@ -27,6 +27,7 @@ import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
 import { displayNameProblem } from '../lib/displayName.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './declare.js';
+import { assertToolScript, copyToolScript, type ToolScript } from './script.js';
 import {
   assertToolSearch,
   freezeSearch,
@@ -435,6 +436,31 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
    * byte-identical.
    */
   readonly effects?: 'read';
+  /**
+   * THIS TOOL RUNS A PROGRAM, and `argument` is the ONE string argument that
+   * carries it (`language` is the program's language, the info string of the
+   * fence it is shown in). Declared, never inferred: the library never reads
+   * it off a tool's name, a property named `code` or the description, and a
+   * tool that runs code without declaring it has no submissions on the record.
+   *
+   * While `.namesAndNumbersFromEvidence({ code: 'match' })` or
+   * `.scriptTravelsWithTheAnswer()` is on, every call of the tool files one
+   * `script` row on the findings ledger: the program SUBMITTED to the tool
+   * (after any before-tool middleware) and what the runner reported. A fenced
+   * block the model shows is then matched, byte for byte, against this turn's
+   * submissions; the program itself is never evidence for a value.
+   * `codeRunnerTool` declares `{ argument: 'code', language }`. Refused at
+   * `defineTool` (and at the dispatch and MCP doors, `tools/script.ts`) when
+   * `argument` is not a declared string property of the input schema.
+   * Carried over MCP in `_meta.agentfootprint.script`. Omitted →
+   * byte-identical.
+   *
+   * @example
+   * ```ts
+   * script: { argument: 'query', language: 'sql' }
+   * ```
+   */
+  readonly script?: ToolScript;
   /**
    * THE APP'S OWN WORDS for what a call of this tool does — "loading the
    * attached data" — read by a PERSON. The registered name (`schema.name`) is
@@ -1143,6 +1169,10 @@ export interface DefineToolOptions<TArgs, TResult> {
   /** `'read'` — this tool changes nothing (see {@link Tool.effects}). Omitted →
    *  byte-identical. */
   readonly effects?: 'read';
+  /** This tool runs a program, carried by the one string argument `argument`
+   *  (see {@link Tool.script}). Refused here when that argument is not a
+   *  declared string property. Omitted → byte-identical. */
+  readonly script?: ToolScript;
   /** The app's own words for what a call of this tool does, read by a person
    *  (see {@link Tool.displayName}). Omitted → byte-identical. */
   readonly displayName?: string;
@@ -1264,6 +1294,13 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
   assertToolEffects(options.name, options.effects);
   // The app's words reach a person verbatim — refused HERE, naming the tool.
   assertDisplayName(options.name, options.displayName);
+  // The program's argument must be a declared string — refused HERE, naming the tool.
+  assertToolScript(
+    options.name,
+    options.script,
+    options.inputSchema ?? { type: 'object', properties: {} },
+    options.wants,
+  );
   const tool: Tool<TArgs, TResult> = {
     schema: {
       name: options.name,
@@ -1294,6 +1331,7 @@ export function defineTool<TArgs = Record<string, unknown>, TResult = unknown>(
     ...(options.search !== undefined && { search: freezeSearch(options.search) }),
     ...(options.effects !== undefined && { effects: options.effects }),
     ...(options.displayName !== undefined && { displayName: options.displayName.trim() }),
+    ...(options.script !== undefined && { script: copyToolScript(options.script) }),
     execute: options.execute,
   };
   // The app's own word — the one `effects: 'read'` a later check may honour.

@@ -33,6 +33,7 @@ import {
   at,
   countedFields,
   derived,
+  FACT_TEXT_CHARS,
   historyAt,
   historyOf,
   readEmptiness,
@@ -41,9 +42,6 @@ import {
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
-
-/** A text value a call's FACT carries is cut here (the sentence that prints it carries up to 2,000). */
-export const FACT_TEXT_CHARS = 200;
 
 /**
  * At most this many calls are LISTED in `facts.calls`; the rest are counted.

@@ -3,8 +3,9 @@
  * the Route decider computes that were EVENTS only until the answer layer
  * (honesty layer 4) needed them on the record.
  *
- * Pattern: Map. Two row types, their builders and their well-formedness check
- *          — the one owner of the `grounded` and `steps-unfinished` row kinds.
+ * Pattern: Map. Three row types, their builders and their well-formedness
+ *          check — the one owner of the `grounded`, `steps-unfinished` and
+ *          `script-shown` row kinds.
  *          `findings/types.ts` · `FindingsRow` imports the types; the rows
  *          are filed through the one writer (`findings/ledger.ts` ·
  *          `recordFindings`) by the Route decider, and ONLY while the answer
@@ -13,7 +14,8 @@
  * Role:    core/ layer leaf of the answer layer. Static on purpose: the
  *          checkpoint door (`core/runCheckpoint.ts` · `validateCheckpoint`,
  *          a synchronous door) asks `witnessRowIsWellFormed`, so this module
- *          imports nothing and stays small.
+ *          imports nothing but the script labels (`../scripts/label.ts`, a
+ *          leaf) and stays small.
  * Emits:   N/A. A witness row emits nothing of its own — the verdict's event
  *          (`agentfootprint.agent.evidence_checked`,
  *          `agentfootprint.skill.steps_unfinished`) already fired, beside the
@@ -36,6 +38,9 @@
  * restarts at 1 every run, so a witness row always carries `turn`
  * (`AgentState.turnNumber`): the fold reads this turn's witness rows only.
  */
+
+import { blockVerdictOf } from '../scripts/match.js';
+import type { ScriptBlockVerdict, ScriptLabel, UnmatchedReason } from '../scripts/types.js';
 
 /** The evidence gate's posture — the `.namesAndNumbersFromEvidence()` vocabulary. */
 export type WitnessPosture = 'assist' | 'guard' | 'rails';
@@ -100,10 +105,72 @@ export interface StepsUnfinishedRow {
   readonly action: 'accepted' | 'cut-short';
 }
 
+/**
+ * One fenced block the answer SHOWED, and the script match's verdict on it
+ * (`.namesAndNumbersFromEvidence({ code: 'match' })`, `scripts/match.ts`) —
+ * filed by the Route decider while the answer layer is armed, one row per
+ * block read, and only for the answer that STANDS (a draft sent back for
+ * revision files none). Names, enums and counts — never the code.
+ *
+ * The fold reads `label: 'unmatched'` as the reason `script-unmatched` (a
+ * script shown in the answer matches no submission of this turn on the
+ * record), and every row as the `script-match` check having reached a
+ * verdict. A matched block fires nothing and supports nothing.
+ */
+export interface ScriptShownRow {
+  readonly kind: 'script-shown';
+  /** `AgentState.turnNumber` when the row was filed — the conversation turn. */
+  readonly turn: number;
+  /** The iteration whose answer the match read. */
+  readonly iteration: number;
+  /** 1-based position among the answer's fenced blocks that were read. */
+  readonly block: number;
+  /** The matched call's label, or `'unmatched'`. */
+  readonly label: ScriptLabel | 'unmatched';
+  /** On `'unmatched'`: why. */
+  readonly reason?: UnmatchedReason;
+  /** On a match: the call it equals, and the name the model called. */
+  readonly toolCallId?: string;
+  readonly tool?: string;
+  /** On a match: the call's dispatch within the turn (`ScriptRow.dispatch`) — its identity. */
+  readonly dispatch?: number;
+  /** On a match: exactly the runner's exit code, when it supplied one. */
+  readonly exitCode?: number;
+}
+
 /** Either witness row. */
-export type AnswerWitnessRow = GroundedRow | StepsUnfinishedRow;
+export type AnswerWitnessRow = GroundedRow | StepsUnfinishedRow | ScriptShownRow;
 
 const POSTURES: readonly WitnessPosture[] = Object.freeze(['assist', 'guard', 'rails']);
+
+/** The script match's verdicts as rows — one per block read, ids and labels only. */
+export function scriptShownRowsFrom(
+  blocks: readonly ScriptBlockVerdict[],
+  at: { readonly turn: number; readonly iteration: number },
+): ScriptShownRow[] {
+  return blocks.map((b) =>
+    b.label === 'unmatched'
+      ? {
+          kind: 'script-shown',
+          turn: at.turn,
+          iteration: at.iteration,
+          block: b.block,
+          label: 'unmatched',
+          reason: b.reason,
+        }
+      : {
+          kind: 'script-shown',
+          turn: at.turn,
+          iteration: at.iteration,
+          block: b.block,
+          label: b.label,
+          toolCallId: b.toolCallId,
+          tool: b.tool,
+          dispatch: b.dispatch,
+          ...(b.exitCode !== undefined && { exitCode: b.exitCode }),
+        },
+  );
+}
 
 /** The gate's clean verdict as a row — built from the event's own counts. */
 export function groundedRowFrom(verdict: {
@@ -165,6 +232,12 @@ export function witnessRowIsWellFormed(r: Readonly<Record<string, unknown>>): bo
       isCount(r.lookedUp) &&
       (r.afterRevision === undefined || r.afterRevision === true)
     );
+  }
+  if (r.kind === 'script-shown') {
+    // The verdict's fields, by the ONE rule every reader of the shape uses
+    // (`scripts/match.ts` · `blockVerdictOf`) — an exit code its label does
+    // not carry included. A row never carries `alsoMatches`.
+    return r.alsoMatches === undefined && blockVerdictOf(r) !== undefined;
   }
   if (r.kind === 'steps-unfinished') {
     return (

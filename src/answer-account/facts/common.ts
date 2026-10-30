@@ -13,7 +13,9 @@ import {
   readEmptiness,
   type EmptinessReading,
 } from '../../core/agent/emptiness.js';
+import { cutToJsonBytes } from '../../lib/boundedJson.js';
 import { isSaidByPerson, type AuthoredMessage } from '../../lib/saidByPerson.js';
+import { POINTER_ID_BYTES } from '../size.js';
 import { sentence, v, type SentenceSpec } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type {
@@ -36,7 +38,7 @@ export interface ReadContext {
   say(id: TemplateId, spec?: SentenceSpec): Sentence;
   /** Count one row the account passed over because its shape did not fit. */
   noteUnread(): void;
-  /** Items (and their characters) already printed — the account's size bound. */
+  /** Items (and their characters) already printed — the readability budget. */
   readonly budget: { itemChars: number; items: number };
 }
 
@@ -45,7 +47,7 @@ export interface ReadContext {
  * flagged values. Each item rides a sentence (its text three times: `text`,
  * `parts`, `vars`, plus pointers, about 1 KB of structure), so both the count
  * and the characters are bounded; past either, items fold into `items.more@1`
- * and the account stays under 128 KB by construction.
+ * for readability. `size.ts` separately enforces the serialized-byte bound.
  */
 export const ITEM_BUDGET = { items: 12, chars: 3_000 } as const;
 
@@ -66,11 +68,18 @@ export interface AccountInternals {
 /**
  * Long text the account prints in TOTAL, past the first `SHORT_TEXT_CHARS` of
  * each value: once spent, every later value is cut at `SHORT_TEXT_CHARS` (marked
- * `clipped`, followed by `part.clipped@1`). With the item budget it keeps the
- * account under 128 KB by construction.
+ * `clipped`, followed by `part.clipped@1`). This keeps ordinary accounts
+ * readable; `size.ts` separately enforces the serialized-byte bound.
  */
 export const LONG_TEXT_BUDGET = 3_000;
 export const SHORT_TEXT_CHARS = 300;
+
+/**
+ * A text value a call's FACT carries is cut here (the sentence that prints it
+ * carries up to 2,000). A cut that keeps an ordinary account readable; the
+ * account's size bound itself is measured in bytes (`../size.ts`).
+ */
+export const FACT_TEXT_CHARS = 200;
 
 function spendText(
   vars: Readonly<Record<string, SentenceVar>>,
@@ -129,6 +138,32 @@ const segment = (key: string | number): string =>
 export const jsonPointer = (...keys: readonly (string | number)[]): string =>
   keys.map((k) => `/${segment(k)}`).join('');
 
+/**
+ * An identity a pointer copies from the record — an event's `runtimeStageId`,
+ * a history message's `toolCallId` — cut at `POINTER_ID_BYTES` SERIALIZED
+ * bytes (`../size.ts`): short in every record this library writes, but a
+ * saved record can hold anything, and an id rides EVERY pointer into its
+ * event. Measured in the contract's unit, so a character JSON writes six
+ * bytes wide costs six. The pointer still lands: "show me" finds a leaf by its
+ * index and path (`pointerKey.ts`), never by this id.
+ */
+const identity = (id: string): string => cutToJsonBytes(id, POINTER_ID_BYTES);
+
+/**
+ * A pointer the account did not build itself — the standing fold's witnesses
+ * (`core/agent/assessment/assess.ts`) — with its identity cut as the
+ * builders below cut theirs.
+ */
+export function boundedPointer(p: RecordPointer): RecordPointer {
+  if (p.kind === 'history' && p.toolCallId !== undefined) {
+    return { ...p, toolCallId: identity(p.toolCallId) };
+  }
+  if (p.kind === 'event' && p.runtimeStageId !== undefined) {
+    return { ...p, runtimeStageId: identity(p.runtimeStageId) };
+  }
+  return p;
+}
+
 export function at(event: ViewEvent, ...keys: readonly (string | number)[]): RecordPointer {
   const runtimeStageId = str(event.meta.runtimeStageId);
   return {
@@ -136,7 +171,7 @@ export function at(event: ViewEvent, ...keys: readonly (string | number)[]): Rec
     index: event.index,
     type: event.type,
     path: jsonPointer(...keys),
-    ...(runtimeStageId !== undefined && { runtimeStageId }),
+    ...(runtimeStageId !== undefined && { runtimeStageId: identity(runtimeStageId) }),
   };
 }
 
@@ -148,7 +183,7 @@ export function derived(event: ViewEvent, path: string): RecordPointer {
     index: event.index,
     type: event.type,
     path,
-    ...(runtimeStageId !== undefined && { runtimeStageId }),
+    ...(runtimeStageId !== undefined && { runtimeStageId: identity(runtimeStageId) }),
   };
 }
 
@@ -162,7 +197,7 @@ export const historyAt = (index: number, path: string, toolCallId?: string): Rec
   kind: 'history',
   index,
   path,
-  ...(toolCallId !== undefined && { toolCallId }),
+  ...(toolCallId !== undefined && { toolCallId: identity(toolCallId) }),
 });
 
 export function declarationAt(

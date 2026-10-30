@@ -677,8 +677,9 @@ caller/deployment gaps the siblings share: no session, not a ref, no store).
 The declarations are the host's, validated at boot; a body key other than
 `op`, `ref` and `sessionId` is refused by name. The reply is `{ account, shown }`
 through `artifactWireBody`, so every dialect serves it; `shown` is keyed by
-`answerAccountPointerKey(pointer)` (`agentfootprint/observe`), and the whole
-reply is at most 192 KB. On the field recording (5.3 MB) the parse costs about
+`answerAccountPointerKey(pointer)` (`agentfootprint/observe`). The serialized
+JSON body is at most 192 KiB in UTF-8 bytes; an outer transport envelope is
+not part of that bound. On the field recording (5.3 MB) the parse costs about
 6 ms of event loop and the fold plus show-me under 1 ms warm (3.4 ms cold);
 a miss answers over HTTP in about 18 ms and a hit in about 1 ms.
 

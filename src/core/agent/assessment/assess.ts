@@ -905,6 +905,7 @@ function readAnswerRows(state: Readonly<Record<string, unknown>>, g: Gathered): 
     }
   }
   readTimeDerived(state, g);
+  readScriptsShown(state, g);
   const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
   ledger.forEach((row: unknown, index) => {
     if (!isRecord(row) || (row.kind !== 'negative-claim' && row.kind !== 'negative-claim-note'))
@@ -961,6 +962,39 @@ function readTimeDerived(state: Readonly<Record<string, unknown>>, g: Gathered):
     if (!isRecord(row) || row.kind !== 'time-derived') return;
     if (turn !== undefined && row.turn !== turn) return;
     fire(g, 'derived-from-reading', statePointer('findingsLedger', index, 'values'));
+  });
+}
+
+/**
+ * The script match's verdicts on the blocks THIS turn's answer showed
+ * (`.namesAndNumbersFromEvidence({ code: 'match' })`, the `script-shown`
+ * witness rows): each block reached a verdict, so the `script-match` check ran
+ * on every one; an `unmatched` block fires `script-unmatched` — "not sure",
+ * its own reason (a script can miss while every number in the answer is in a
+ * result). A MATCHED block fires nothing and supports nothing: it says which
+ * call submitted the program, never that a value is right. Filed only under
+ * the arm while the answer layer is armed, so an unarmed record reads nothing.
+ * A record with no `turnNumber` reads every such row (it may over-report; it
+ * never hides).
+ */
+function readScriptsShown(state: Readonly<Record<string, unknown>>, g: Gathered): void {
+  const ledger = Array.isArray(state.findingsLedger) ? state.findingsLedger : [];
+  const turn = typeof state.turnNumber === 'number' ? state.turnNumber : undefined;
+  const witness: AssessmentPointer[] = [];
+  ledger.forEach((row: unknown, index) => {
+    if (!isRecord(row) || row.kind !== 'script-shown') return;
+    if (turn !== undefined && row.turn !== turn) return;
+    const at = statePointer('findingsLedger', index, 'label');
+    witness.push(at);
+    if (row.label === 'unmatched') fire(g, 'script-unmatched', at);
+  });
+  if (witness.length === 0) return;
+  g.checked.push({
+    layer: 4,
+    check: 'script-match',
+    ran: witness.length,
+    of: witness.length,
+    witness,
   });
 }
 

@@ -242,6 +242,7 @@ import { isValidatedDelivery } from './agent/stages/breakFinal.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
 import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
+import type { ResolvedScriptTravel } from './agent/scripts/types.js';
 import { checkerGoverns } from '../provider-contract/types.js';
 import { skillTarget } from '../security/skillTarget.js';
 import { buildInjectionEngineSubflow } from '../injection-engine/buildInjectionEngineSubflow.js';
@@ -613,6 +614,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * primitives does not consult it.
    */
   private readonly limitsTravelWithTheAnswerValue: boolean = false;
+  /**
+   * `.scriptTravelsWithTheAnswer()` — the resolved arm, or undefined for every
+   * agent that did not ask. With `code: 'match'` on the gate it arms the
+   * script record (`scriptRecordArmed`); alone it also picks the final stage.
+   */
+  private readonly scriptTravel?: ResolvedScriptTravel;
   private readonly skillGraphCascade?: {
     readonly turnRouting?: TurnRoutingPlan;
     readonly strictness: 'assist' | 'guard' | 'rails';
@@ -1143,6 +1150,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     answerValidationConfig?: ResolvedAnswerValidation,
     systemPromptCacheExplicit = false,
     negativeClaimsConfig?: ResolvedNegativeClaims,
+    scriptTravel?: ResolvedScriptTravel,
   ) {
     super();
     // Which conversation this instance's self-explain evidence belongs to —
@@ -1221,6 +1229,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         ? { ...evidenceGate, toolsOffAfterRevision: true }
         : evidenceGate;
     this.limitsTravelWithTheAnswerValue = limitsTravelWithTheAnswer === true;
+    this.scriptTravel = scriptTravel;
     this.appliedRecipes = recipes;
     this.skillGraphDeclared = skillGraphDeclared;
     this.mapsPlan = mapsPlan;
@@ -5171,6 +5180,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The time layer's rows ride the same ledger: a continued conversation
     // keeps its earlier turns' clocks (each turn files its own).
     if (this.timeOptions !== undefined) ledgerRestoreArmed = true;
+    // The script record's rows too: a continued conversation keeps each
+    // earlier call's facts — seed drops their text (`scripts/rows.ts`).
+    const scriptRecordArmed =
+      this.evidenceGate?.code === 'match' || this.scriptTravel !== undefined;
+    if (scriptRecordArmed) ledgerRestoreArmed = true;
 
     // The gate's admissible set, for the record (9.50.0): declared hops from
     // the cursor plus the open skills — the SAME two resolvers the read_skill
@@ -5773,6 +5787,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // The findings ledger (9.101.0) — the peel, the basis row and the
       // previous batch's standings all live in this handler under this gate.
       ...(this.findingsOptions !== undefined && { findings: true as const }),
+      // The script record — `code: 'match'` or `.scriptTravelsWithTheAnswer()`:
+      // one `script` row per call of a tool that declares `Tool.script`.
+      ...(scriptRecordArmed && { scriptRecord: true as const }),
       // The inputs layer (honesty layer 2) — the fills, the refusals and the
       // note; absent → a ruled tool's call is refused (fail closed).
       ...(inputsArmed && { inputsLayer: true as const }),
@@ -6133,6 +6150,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // gets the stage that appends nothing and carries the limits as data.
       ...(this.limitsTravelWithTheAnswerValue && !limitsAsData && { attachCoverageLimits: true }),
       ...(limitsAsData && { coverageLimitsAsData: true }),
+      // `.scriptTravelsWithTheAnswer()` — the recorded programs travel with the
+      // answer: data always, text on a prose answer only. Absent → the final
+      // stage this agent always mounted.
+      ...(this.scriptTravel !== undefined && {
+        scriptTravel: {
+          ...this.scriptTravel,
+          ...(this.outputSchemaParser !== undefined && { typed: true as const }),
+        },
+      }),
       // The time layer: the prose limits block renders its `Period:` lines in
       // the run's clock zone. Absent → the final stage it always mounted.
       ...(this.timeOptions !== undefined && { timeLayer: true as const }),

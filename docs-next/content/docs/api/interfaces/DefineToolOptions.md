@@ -4,7 +4,7 @@ title: DefineToolOptions<TArgs, TResult>
 
 # Interface: DefineToolOptions\<TArgs, TResult\>
 
-Defined in: [src/tools/tools.ts:1084](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1084)
+Defined in: [src/tools/tools.ts:1110](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1110)
 
 Convenience input for `defineTool` — flatter than `Tool` itself.
 Consumers describe the tool inline; the helper assembles `schema`.
@@ -29,7 +29,7 @@ properties: {} }` or omit and we'll default to that.
 
 > `readonly` `optional` **argumentsFrom?**: readonly `string`[]
 
-Defined in: [src/tools/tools.ts:1122](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1122)
+Defined in: [src/tools/tools.ts:1148](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1148)
 
 The declared argument grounds — see [Tool.argumentsFrom](/docs/api/interfaces/Tool#argumentsfrom).
 
@@ -39,7 +39,7 @@ The declared argument grounds — see [Tool.argumentsFrom](/docs/api/interfaces/
 
 > `readonly` `optional` **askOrAssume?**: `Readonly`\<`Record`\<`string`, `ArgumentRule`\>\>
 
-Defined in: [src/tools/tools.ts:1136](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1136)
+Defined in: [src/tools/tools.ts:1162](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1162)
 
 Per-argument rules — what the library does when a call leaves an argument
  out (see [Tool.askOrAssume](/docs/api/interfaces/Tool#askorassume)). Omitted → byte-identical.
@@ -50,7 +50,7 @@ Per-argument rules — what the library does when a call leaves an argument
 
 > `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/docs/api/type-aliases/ToolCapability)[]
 
-Defined in: [src/tools/tools.ts:1103](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1103)
+Defined in: [src/tools/tools.ts:1129](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1129)
 
 Declare what this tool touches (see [Tool.capabilities](/docs/api/interfaces/Tool#capabilities)). Consulted
  only when the configured checker declares it governs them.
@@ -61,7 +61,7 @@ Declare what this tool touches (see [Tool.capabilities](/docs/api/interfaces/Too
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)\<`TArgs`\>
 
-Defined in: [src/tools/tools.ts:1097](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1097)
+Defined in: [src/tools/tools.ts:1123](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1123)
 
 Demand a human check-in before this tool runs (see [Tool.checkIn](/docs/api/interfaces/Tool#checkin)).
  `'always'` or a `(args, ctx) => boolean` predicate.
@@ -72,7 +72,7 @@ Demand a human check-in before this tool runs (see [Tool.checkIn](/docs/api/inte
 
 > `readonly` `optional` **checkInComponent?**: [`AskComponent`](/docs/api/interfaces/AskComponent)
 
-Defined in: [src/tools/tools.ts:1100](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1100)
+Defined in: [src/tools/tools.ts:1126](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1126)
 
 The registered screen component that collects the check-in decision
  (see [Tool.checkInComponent](/docs/api/interfaces/Tool#checkincomponent)). Requires `checkIn`.
@@ -83,7 +83,7 @@ The registered screen component that collects the check-in decision
 
 > `readonly` `optional` **composedOf?**: readonly `string`[]
 
-Defined in: [src/tools/tools.ts:1126](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1126)
+Defined in: [src/tools/tools.ts:1152](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1152)
 
 The named ingredient tools this tool calls through `ctx.tools` — see
  [Tool.composedOf](/docs/api/interfaces/Tool#composedof). Drift-checked at agent build, when the catalog
@@ -95,7 +95,7 @@ The named ingredient tools this tool calls through `ctx.tools` — see
 
 > `readonly` **description**: `string`
 
-Defined in: [src/tools/tools.ts:1086](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1086)
+Defined in: [src/tools/tools.ts:1112](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1112)
 
 ***
 
@@ -103,7 +103,7 @@ Defined in: [src/tools/tools.ts:1086](https://github.com/footprintjs/agentfootpr
 
 > `readonly` `optional` **displayName?**: `string`
 
-Defined in: [src/tools/tools.ts:1148](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1148)
+Defined in: [src/tools/tools.ts:1178](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1178)
 
 The app's own words for what a call of this tool does, read by a person
  (see [Tool.displayName](/docs/api/interfaces/Tool#displayname)). Omitted → byte-identical.
@@ -114,7 +114,7 @@ The app's own words for what a call of this tool does, read by a person
 
 > `readonly` `optional` **effects?**: `"read"`
 
-Defined in: [src/tools/tools.ts:1145](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1145)
+Defined in: [src/tools/tools.ts:1171](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1171)
 
 `'read'` — this tool changes nothing (see [Tool.effects](/docs/api/interfaces/Tool#effects)). Omitted →
  byte-identical.
@@ -125,7 +125,7 @@ Defined in: [src/tools/tools.ts:1145](https://github.com/footprintjs/agentfootpr
 
 > `readonly` `optional` **gates?**: `boolean`
 
-Defined in: [src/tools/tools.ts:1129](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1129)
+Defined in: [src/tools/tools.ts:1155](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1155)
 
 Whether this tool's procedure can raise an approval gate — see
  [Tool.gates](/docs/api/interfaces/Tool#gates). Omitted → nothing declared, byte-identical.
@@ -136,7 +136,7 @@ Whether this tool's procedure can raise an approval gate — see
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/tools/tools.ts:1087](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1087)
+Defined in: [src/tools/tools.ts:1113](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1113)
 
 ***
 
@@ -144,7 +144,7 @@ Defined in: [src/tools/tools.ts:1087](https://github.com/footprintjs/agentfootpr
 
 > `readonly` **name**: `string`
 
-Defined in: [src/tools/tools.ts:1085](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1085)
+Defined in: [src/tools/tools.ts:1111](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1111)
 
 ***
 
@@ -152,7 +152,7 @@ Defined in: [src/tools/tools.ts:1085](https://github.com/footprintjs/agentfootpr
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/tools/tools.ts:1090](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1090)
+Defined in: [src/tools/tools.ts:1116](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1116)
 
 Declare a credential this tool needs (declare-and-push). Resolved by the
  framework before `execute` and injected as `ctx.credential`.
@@ -163,7 +163,7 @@ Declare a credential this tool needs (declare-and-push). Resolved by the
 
 > `readonly` `optional` **owner?**: `ToolOwner`
 
-Defined in: [src/tools/tools.ts:1120](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1120)
+Defined in: [src/tools/tools.ts:1146](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1146)
 
 The stamped identity edge — see [Tool.owner](/docs/api/interfaces/Tool#owner).
 
@@ -173,7 +173,7 @@ The stamped identity edge — see [Tool.owner](/docs/api/interfaces/Tool#owner).
 
 > `readonly` `optional` **period?**: [`ToolPeriod`](/docs/api/interfaces/ToolPeriod)
 
-Defined in: [src/tools/tools.ts:1139](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1139)
+Defined in: [src/tools/tools.ts:1165](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1165)
 
 Which argument sets the period the answer covers (see [Tool.period](/docs/api/interfaces/Tool#period)).
  Requires a rule on that argument. Omitted → byte-identical.
@@ -184,7 +184,7 @@ Which argument sets the period the answer covers (see [Tool.period](/docs/api/in
 
 > `readonly` `optional` **repeatedWhen?**: `"arguments"`
 
-Defined in: [src/tools/tools.ts:1133](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1133)
+Defined in: [src/tools/tools.ts:1159](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1159)
 
 Fingerprint the repeated-call ledger on arguments alone, ignoring this
  tool's own result — see [Tool.repeatedWhen](/docs/api/interfaces/Tool#repeatedwhen). Omitted →
@@ -196,7 +196,7 @@ Fingerprint the repeated-call ledger on arguments alone, ignoring this
 
 > `readonly` `optional` **resultCeiling?**: [`ToolResultCeiling`](/docs/api/interfaces/ToolResultCeiling)
 
-Defined in: [src/tools/tools.ts:1106](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1106)
+Defined in: [src/tools/tools.ts:1132](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1132)
 
 Refuse (never truncate) a result over this many chars, teaching the model
  to narrow (see [ToolResultCeiling](/docs/api/interfaces/ToolResultCeiling)). Omitted → byte-identical.
@@ -207,7 +207,7 @@ Refuse (never truncate) a result over this many chars, teaching the model
 
 > `readonly` `optional` **resultClass?**: [`ToolResultClass`](/docs/api/type-aliases/ToolResultClass)
 
-Defined in: [src/tools/tools.ts:1110](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1110)
+Defined in: [src/tools/tools.ts:1136](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1136)
 
 The declared class of this tool's results — `'triage'` or `'inventory'`
  (see [Tool.resultClass](/docs/api/interfaces/Tool#resultclass)). Keys the `check:semantics` per-class
@@ -219,7 +219,7 @@ The declared class of this tool's results — `'triage'` or `'inventory'`
 
 > `readonly` `optional` **resultColumns?**: `Readonly`\<`Record`\<`string`, [`ColumnType`](/docs/api/type-aliases/ColumnType) \| [`ColumnDeclaration`](/docs/api/interfaces/ColumnDeclaration)\>\>
 
-Defined in: [src/tools/tools.ts:1118](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1118)
+Defined in: [src/tools/tools.ts:1144](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1144)
 
 What this tool's ROWS contain — column name to type (see
  [Tool.resultColumns](/docs/api/interfaces/Tool#resultcolumns)). Needs the `checkColumnTypes` dial too.
@@ -231,7 +231,7 @@ What this tool's ROWS contain — column name to type (see
 
 > `readonly` `optional` **resultKind?**: `string`
 
-Defined in: [src/tools/tools.ts:1114](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1114)
+Defined in: [src/tools/tools.ts:1140](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1140)
 
 The artifact kind a PLACED result is minted under, in the consumer's
  vocabulary (see [Tool.resultKind](/docs/api/interfaces/Tool#resultkind)). Omitted →
@@ -239,11 +239,23 @@ The artifact kind a PLACED result is minted under, in the consumer's
 
 ***
 
+### script?
+
+> `readonly` `optional` **script?**: [`ToolScript`](/docs/api/interfaces/ToolScript)
+
+Defined in: [src/tools/tools.ts:1175](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1175)
+
+This tool runs a program, carried by the one string argument `argument`
+ (see [Tool.script](/docs/api/interfaces/Tool#script)). Refused here when that argument is not a
+ declared string property. Omitted → byte-identical.
+
+***
+
 ### search?
 
 > `readonly` `optional` **search?**: [`ToolSearch`](/docs/api/interfaces/ToolSearch)
 
-Defined in: [src/tools/tools.ts:1142](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1142)
+Defined in: [src/tools/tools.ts:1168](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1168)
 
 What one call of this tool searches, classified (see [Tool.search](/docs/api/interfaces/Tool#search)).
  Refused here when malformed. Omitted → byte-identical.
@@ -254,7 +266,7 @@ What one call of this tool searches, classified (see [Tool.search](/docs/api/int
 
 > `readonly` `optional` **wants?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/tools/tools.ts:1094](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1094)
+Defined in: [src/tools/tools.ts:1120](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1120)
 
 Declare artifact arguments: arg name → required artifact kind (see
  [Tool.wants](/docs/api/interfaces/Tool#wants)). The model passes the `art_…` ref; the framework
@@ -266,7 +278,7 @@ Declare artifact arguments: arg name → required artifact kind (see
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/tools/tools.ts:1149](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1149)
+Defined in: [src/tools/tools.ts:1179](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L1179)
 
 #### Parameters
 

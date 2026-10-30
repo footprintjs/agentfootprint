@@ -24,7 +24,6 @@
 import { toolBytesOf } from '../../lib/toolBytes.js';
 import { v } from '../render.js';
 import type { InViewFact, SentenceVar } from '../types.js';
-import { FACT_TEXT_CHARS } from './calls.js';
 import {
   isRecord,
   keptOut as isFieldKeptOut,
@@ -36,6 +35,7 @@ import {
 import {
   at,
   countedFields,
+  FACT_TEXT_CHARS,
   historyAt,
   historyOf,
   isPersonEntry,

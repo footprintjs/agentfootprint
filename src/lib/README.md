@@ -10,14 +10,17 @@ readers in folders that cannot import each other cannot answer the same
 question differently.
 Support: `canonicalJson.ts`, `fnv1a.ts`, `lazyRequire.ts`, `libraryVersion.ts`,
 `sqliteUnavailable.ts`, `embedderMismatch.ts`, `storedPreview.ts`, `sleep.ts`,
-`abort.ts`, `linearText.ts`.
+`abort.ts`, `linearText.ts`, `utf8.ts` (the one measure of a string in UTF-8
+bytes — a code runner's payload and a script on the record are bounded in it).
 Moved down from beside their first callers, so that no layer imports upward for
 a name both sides use (the layer table, `scripts/layering.config.cjs`):
 Map: `conventions.ts` (the builder↔recorder protocol — subflow and stage ids,
 injection keys, the receipt's scope key `RECEIPT_KEY`), `moments.ts` (the five
 places in the loop where a rule may speak), `traceToolNames.ts` (the trace tool
 names `.selfExplain()` reserves before the pack loads, and its "no run yet"
-answer). Fold: `stableJson.ts` and `sha256.ts`, the two halves of every
+answer), `scriptRecord.ts` (the vocabulary of a code call on the record — the
+label its execution record earns, the verdict on a shown block, the attached
+script — which the agent's script record and the event payloads share). Fold: `stableJson.ts` and `sha256.ts`, the two halves of every
 fingerprint the library mints (sorted-key JSON, then the hash). Support:
 `toolName.ts` (the LLM tool-name law `defineTool` checks), `humanizeLLMError.ts`.
 These loose files, `claim/` and `context-contract/` import nothing in `src/`

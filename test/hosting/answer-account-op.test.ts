@@ -810,9 +810,11 @@ describe('answer-account — the response is allow-listed and bounded', () => {
     const ref = await putFlagship(store, 's-flag');
     const body = bodyOf(await explain(host, 's-flag', ref));
     const text = JSON.stringify(body);
-    expect(JSON.stringify(body.account).length).toBeLessThanOrEqual(128 * 1024);
-    expect(JSON.stringify(body.shown).length).toBeLessThanOrEqual(64 * 1024);
-    expect(text.length).toBeLessThanOrEqual(192 * 1024);
+    // README law 8 in its own unit: serialized UTF-8 bytes.
+    const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
+    expect(bytes(body.account)).toBeLessThanOrEqual(128 * 1024);
+    expect(bytes(body.shown)).toBeLessThanOrEqual(64 * 1024);
+    expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(192 * 1024);
     const denied = deniedLeaves(fixtureA() as unknown as Recording, HOST_APP_DECLARATIONS);
     expect(denied.length).toBeGreaterThan(0);
     for (const leaf of denied) {

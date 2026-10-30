@@ -1780,6 +1780,12 @@ export interface AgentState {
     /** Under the figures dial: the late line for the revision request
      *  (`evidence/figures.ts` · `figuresConclusionLine`), composed by Route. */
     readonly conclusion?: string;
+    /** Under `code: 'match'`: the match's verdict on the draft's fenced
+     *  blocks, for the revision-asked event. Never the code. */
+    readonly scripts?: import('./scripts/types.js').ScriptsVerdict;
+    /** Under `code: 'match'`: the revision request's script clause
+     *  (`scripts/recovery.ts` · `scriptRecoveryClause`), composed by Route. */
+    readonly scriptClause?: string;
   };
   /** The one bounded revision has been spent this turn (9.35.0). Written by
    *  the EvidenceRecheck branch; reset at seed. Absent on an agent without
@@ -2277,6 +2283,41 @@ export interface AgentState {
    * assertions, and the current conflict set is a fold, not the rows.
    */
   findingsLedger?: FindingsLedger;
+  /**
+   * Calls of THIS run to a declared code-running tool (`Tool.script`) that
+   * filed no `script` row because the turn already held `MAX_SCRIPT_ROWS`
+   * (`scripts/rows.ts` · `recordScriptRow`). Written ONLY then — absent on
+   * every other run — and read only under `.namesAndNumbersFromEvidence({
+   * code: 'match' })` (the verdict's `scriptsDropped`) or
+   * `.scriptTravelsWithTheAnswer()` (`omitted`). Those calls are unmatchable.
+   */
+  scriptsDropped?: number;
+  /**
+   * The dispatch a PAUSED call of a declared code-running tool was filed under
+   * (`scripts/rows.ts` · `recordScriptRow`), carried across the checkpoint so
+   * the row that settles it on resume joins the same dispatch — one call, one
+   * dispatch, counted once. Ids and numbers only, never the program. Written
+   * at the pause, read and cleared by the resume; absent on every run that
+   * files no script row.
+   */
+  pausedScriptDispatch?: {
+    readonly dispatch: number;
+    readonly toolCallId: string;
+    readonly turn: number;
+  };
+  /**
+   * The program values of a call that paused from INSIDE `execute`
+   * (`pauseHere()` / `askHuman()`): its declared argument as the model
+   * proposed it and as `execute` was handed it, read before the tool ran. The
+   * resume settles that call without running it again, so the values travel
+   * here — never re-read from a carrier the tool may have edited. Content: named
+   * in the conversation redaction vocabulary. Written at that pause, read and
+   * cleared by its resume.
+   */
+  pausedScriptPrograms?: {
+    readonly proposed?: string;
+    readonly submitted?: string;
+  };
 
   // ── The honesty layers (`sf-inputs`, …) ───────────────────────
   /**

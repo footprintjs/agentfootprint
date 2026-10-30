@@ -46,6 +46,7 @@ import {
 import { firstEmail, patternFactExtractor } from '../../src/memory/facts/patternFactExtractor.js';
 import { placeBeforeTime } from '../../src/time/resolve.js';
 import { withoutQuery } from '../../src/ontology/skosJsonLd.js';
+import { codeRegionsOf } from '../../src/core/agent/evidence/codeRegions.js';
 import { countTextWork } from '../helpers/workCount.js';
 import { seeded, seededTexts } from '../helpers/seededText.js';
 import {
@@ -394,6 +395,34 @@ function codeShapeScansWork(code: string): number {
   const between = comments.result.replace(/(^|[^:])\/\/[^\n]*/g, '$1 ').replace(/#[^\n]*/g, ' ');
   return comments.work + countTextWork(() => replaceStringLiterals(between)).work;
 }
+
+// ─── An answer's fenced blocks (code: 'match') ─────────────────────
+
+describe('codeRegionsOf — the fenced blocks of an answer, in one pass', () => {
+  // Model-written text, read once: each line found with ONE `indexOf` from
+  // where the last ended, its fence run and its info string or closing spaces
+  // read once more. No regex runs over the answer (`evidence/codeRegions.ts`).
+  it.each([
+    ['one long run of backticks, no line break', '`'.repeat(N)],
+    ['openers that keep closing each other', '```\n'.repeat(N / 4)],
+    ['openers with an info string, never closed', `${'```x\n'.repeat(N / 5)}tail`],
+    ['one opener with a long info string', `\`\`\`${'a'.repeat(N)}\nbody`],
+    [
+      'a long opener whose info string holds a backtick at the end',
+      `${'`'.repeat(N / 2)}${'b'.repeat(N / 2)}\`\nx`,
+    ],
+    ['closing lines padded with spaces', `\`\`\`\nx\n\`\`\`${' '.repeat(N)}\n`],
+    ['tilde fences nested in a backtick block, never closed', `\`\`\`\n${'~~~\n'.repeat(N / 4)}`],
+    ['lone CRs, each a line of its own', '\r'.repeat(N)],
+    ['CR-ended openers that keep closing each other', '```\r'.repeat(N / 4)],
+    ['a block holding one long run of its own fence character', `\`\`\`\n${'`'.repeat(N)}\n\`\`\``],
+    ['a line of N spaces before a fence', `${' '.repeat(N)}\`\`\`\nx`],
+  ])('%s: linear counted work', (_name, text) => {
+    const { work } = countTextWork(() => codeRegionsOf(text));
+    expect(work).toBeGreaterThanOrEqual(text.length);
+    expect(work).toBeLessThanOrEqual(budget(text.length, 4));
+  });
+});
 
 // ─── A PEM bundle ───────────────────────────────────────────────────
 

@@ -190,6 +190,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'claim-exceeds-search',
         'derived-from-reading',
         'negative-prose-unverified',
+        'script-unmatched',
         'value-survived-revision',
         'value-unsupported',
       ].sort(),

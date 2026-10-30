@@ -335,7 +335,7 @@ describe('answer-account over HTTP — the recording from the field', () => {
       runId: FLAGSHIP_RUN_ID,
     });
     expect(body.account).toEqual(JSON.parse(JSON.stringify(expected)));
-    expect(got.body.length).toBeLessThanOrEqual(192 * 1024);
+    expect(Buffer.byteLength(got.body, 'utf8')).toBeLessThanOrEqual(192 * 1024);
   });
 
   it.skipIf(!haveField)(
@@ -357,8 +357,10 @@ describe('answer-account over HTTP — the recording from the field', () => {
       });
       expect(body.account).toEqual(JSON.parse(JSON.stringify(expected)));
       expect(body.account.summary.tone).toBe('warn');
-      expect(JSON.stringify(body.account).length).toBeLessThanOrEqual(128 * 1024);
-      expect(got.body.length).toBeLessThanOrEqual(192 * 1024);
+      expect(Buffer.byteLength(JSON.stringify(body.account), 'utf8')).toBeLessThanOrEqual(
+        128 * 1024,
+      );
+      expect(Buffer.byteLength(got.body, 'utf8')).toBeLessThanOrEqual(192 * 1024);
 
       // The named strings (design §7.4) ARE in the record — and never in the response.
       for (const secret of [

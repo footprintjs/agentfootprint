@@ -15,7 +15,6 @@ import { chip, MAX_VAR_CHARS, n, v } from '../render.js';
 import type { TemplateId } from '../templates.js';
 import type { Chip, RecordPointer, Sentence, SentenceVar } from '../types.js';
 import {
-  FACT_TEXT_CHARS,
   coverageHead,
   itemAt,
   type CallRead,
@@ -24,7 +23,7 @@ import {
   type CoverageRead,
   type CoverageSectionKey,
 } from './calls.js';
-import { at, historyAt, takeItem, type ReadContext } from './common.js';
+import { at, FACT_TEXT_CHARS, historyAt, takeItem, type ReadContext } from './common.js';
 import type { BeforePauseCall, PausedLegRead } from './pausedLeg.js';
 
 /** Calls listed per row before folding. */

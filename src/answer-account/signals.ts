@@ -28,10 +28,11 @@ import {
   at,
   declarationAt,
   emptinessSource,
+  FACT_TEXT_CHARS,
   type EmptinessReading,
   type ReadContext,
 } from './facts/common.js';
-import { FACT_TEXT_CHARS, itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
+import { itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
 import { heldChip } from './facts/checked.js';
 import { beforePausePointers, inViewPointers, inViewVars } from './facts/found.js';
 import type { PausedLegRead } from './facts/pausedLeg.js';
