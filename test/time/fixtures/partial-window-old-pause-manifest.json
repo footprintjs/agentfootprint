@@ -1,0 +1,11 @@
+{
+  "writerHead": "3f223c8c106034924877699e100b3d9e75c9daab",
+  "writerTree": "1b0ccf6b3b36b9533921a1e7ad2f94584d8b1f1c",
+  "writerVersion": "12.3.0",
+  "archiveSha256": "246986355eda3c6371dd54dc8082a64d4267cd84287fde745874c084c6413ee6",
+  "fixtureSha256": "aef111eaa43376e5bf3c64503f7dd0226b5bf8dcb28ce1568da99505ca7a8397",
+  "workerSha256": "2fc7c1d057fe79326800db798aa2b355fd08d4dc5dff249cb13db73759215930",
+  "writerNode": "22.16.0",
+  "secondRuntimeGeneration": "24.21.0",
+  "provenance": "Exact main independently built and packed locally; actual public Agent run/resume generated checkpoints. No state injection. Not a registry claim. Kept fixture pauses an inert separate bridge before target reproposal; target check-in never executes."
+}

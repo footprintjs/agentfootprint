@@ -45,6 +45,7 @@ import { stampInputRequest, type AwaitingInput } from '../../../tools/inputReque
 import {
   argumentAskDeclaration,
   bindAnswer,
+  confirmationField,
   initialAskState,
   judgeAskContextHook,
   nextAskRound,
@@ -57,8 +58,27 @@ import {
   type CallAsk,
   type WindowAskPlan,
 } from '../arguments/ask.js';
-import type { ArgumentResolution, BatchCall, ToolOf } from '../arguments/resolve.js';
-import { unansweredRefusal } from '../arguments/serve.js';
+import {
+  declareBatch,
+  timeDecisionsOf,
+  callWindowRowsOf,
+  type ArgumentResolution,
+  type BatchCall,
+  type ToolOf,
+} from '../arguments/resolve.js';
+import { withFills } from '../arguments/dispatch.js';
+import {
+  hasOneMaterializedWindow,
+  partialOriginOf,
+  snapshotPartialState,
+  validPartialFields,
+  validPartialSnapshot,
+  validPartialState,
+  type PartialOrigin,
+} from '../arguments/partialWindow.js';
+import { declaredSourcesOf } from '../honesty/sourceCorpus.js';
+import { periodFactsOf, rulesOf, isRefused } from '../../../tools/declare.js';
+import { timeRefusal, unansweredRefusal } from '../arguments/serve.js';
 import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
@@ -66,7 +86,7 @@ import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../../ti
 import type { ZoneName } from '../../../time/zone.js';
 import type { TimeAskMessages } from '../../../time/ask.js';
 import { timeAskOf } from '../../../time/readingAsk.js';
-import { isOpenForPerson } from '../../../time/windows.js';
+import { isOpenForPerson, turnWindowsOf } from '../../../time/windows.js';
 import { spellRange } from '../../../time/range.js';
 import type { TimePolicy } from '../../../time/resolve.js';
 import { defaultTimeAskMessages } from '../../../locales/timeAsk.js';
@@ -124,9 +144,10 @@ function windowPlanOf(
   scope: TypedScope<AgentState>,
   deps: ArgumentAskDeps,
   asks: readonly CallAsk[],
+  partial = false,
 ): WindowAskPlan | undefined {
   const reader = deps.time?.reader;
-  if (reader === undefined || !asks.some((a) => a.window === true)) return undefined;
+  if (reader === undefined || (!partial && !asks.some((a) => a.window === true))) return undefined;
   const clock = clockOf(scope.findingsLedger as FindingsLedger | undefined);
   const row = openReadingOf(scope);
   if (row === undefined || clock === undefined) return undefined;
@@ -154,6 +175,9 @@ function windowPlanOf(
 
 /** What the dispatch stage hands the ask — closures, never scope. */
 export interface ArgumentAskDeps {
+  /** Already refused calls do not acquire new obligations. */
+  readonly excludedCallIds?: readonly string[];
+  readonly argumentSources?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
   /** The run id a stamped request id carries; absent → the turn's start time. */
@@ -206,6 +230,7 @@ function batchOf(scope: TypedScope<AgentState>): BatchCall[] {
     id: c.id,
     name: c.name,
     args: { ...(c.args ?? {}) },
+    ...(c.argumentsFailure !== undefined && { argumentsFailure: c.argumentsFailure }),
   }));
 }
 
@@ -294,53 +319,230 @@ export function askBeforeDispatch(
   resolutions: ReadonlyMap<string, ArgumentResolution>,
   deps: ArgumentAskDeps,
 ): AskedBatch {
-  const asks: CallAsk[] = [...resolutions.values()].flatMap((r) =>
-    r.ask !== undefined && r.ask.length > 0
+  const iteration = scope.iteration as number;
+  const turn = scope.turnNumber as number;
+  const calls = batchOf(scope).filter((call) => !deps.excludedCallIds?.includes(call.id));
+  const entries = new Map(resolutions);
+  const time = askTimeOf(scope, deps);
+  const ledger = scope.findingsLedger as FindingsLedger | undefined;
+  const readings = readingsOf(ledger, turn);
+  const answers = answersOf(ledger, turn);
+  const open = readings.filter(
+    (row) => isOpenForPerson(row) && !answers.some((a) => a.mention === (row.mention ?? 0)),
+  );
+  const origins: PartialOrigin[] = [];
+  const refuse = (call: BatchCall, arguments_: readonly string[], expected: string) => {
+    entries.set(call.id, {
+      toolCallId: call.id,
+      iteration,
+      refused: unansweredRefusal(
+        call.name,
+        arguments_.map((argument) => ({ argument, expected })),
+      ),
+    });
+  };
+  if (
+    deps.time?.reader !== undefined &&
+    time !== undefined &&
+    (open.length > 0 || answers.length > 0)
+  ) {
+    for (const call of calls) {
+      if (entries.get(call.id)?.refused !== undefined) continue;
+      const origin = partialOriginOf(call, deps.toolOf, time);
+      if (origin === 'ambiguous') {
+        refuse(call, ['period'], 'one unambiguous declared period form');
+      } else if (origin !== undefined) {
+        if (open.length > 1) refuse(call, origin.arguments, 'one unambiguous time mention');
+        else {
+          origins.push(origin);
+          if (!entries.has(call.id)) entries.set(call.id, { toolCallId: call.id, iteration });
+        }
+      }
+    }
+  }
+  const asks: CallAsk[] = [...entries.values()].flatMap((r) =>
+    r.refused === undefined && r.ask !== undefined && r.ask.length > 0
       ? [
           {
             toolCallId: r.toolCallId,
             ask: r.ask,
-            // Declared sources: the person's words a reading was made of, for the field.
             ...(r.quoted !== undefined && { quoted: r.quoted }),
-            // The lazy word-driven ask: the period is asked as the open mention's window.
             ...(r.window === true && { window: true as const }),
           },
         ]
       : [],
   );
-  if (asks.length === 0) return { resolutions, answered: false };
-  const iteration = scope.iteration as number;
-  const calls = batchOf(scope);
   const stored = stateFor(scope, iteration);
-  let state =
-    stored ??
-    initialAskState(
-      iteration,
-      planAskFields(asks, calls, deps.toolOf, windowPlanOf(scope, deps, asks)),
-    );
+  // A resume mints a new execution run id; the native checkpoint keeps the seeded turn identity.
+  const owner = JSON.stringify([scope.turnStartMs, scope.$getValue('runIdentity')]);
+  const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;
+  const identity = { owner, turn, iteration, mention, origins };
+  if (
+    stored?.partial !== undefined &&
+    (!validPartialState(stored.partial, identity) || !validPartialSnapshot(stored))
+  ) {
+    throw new TypeError('argumentAsk: partial-window state does not match this batch');
+  }
+  if (
+    stored?.fields.some((field) => field.window?.role !== undefined) &&
+    stored.partial === undefined
+  ) {
+    throw new TypeError('argumentAsk: meaning role without partial-window owner');
+  }
+  if (asks.length === 0 && origins.length === 0 && stored === undefined)
+    return { resolutions: entries, answered: false };
+  const partial = origins.length > 0;
+  const fillAsks = asks.filter((ask) => ask.window === true);
+  const ordinaryAsks = partial ? asks.filter((ask) => ask.window !== true) : asks;
+  const ordinaryFields = planAskFields(
+    ordinaryAsks,
+    calls,
+    deps.toolOf,
+    partial ? undefined : windowPlanOf(scope, deps, asks),
+  );
+  let state = stored ?? initialAskState(iteration, ordinaryFields);
+  if (partial && state.partial === undefined) {
+    state = { ...state, partial: { version: 1, phase: 'complete-arguments', ...identity } };
+  }
+  if (state.partial !== undefined) {
+    const plan = windowPlanOf(scope, deps, asks, true);
+    if (
+      !validPartialFields(
+        state,
+        ordinaryFields,
+        plan === undefined
+          ? undefined
+          : confirmationField(plan, origins, fillAsks, calls, deps.toolOf),
+      )
+    ) {
+      throw new TypeError('argumentAsk: invalid partial-window phase');
+    }
+  }
   let answered = false;
   if (state.waiting !== undefined) {
-    // The re-run a resume makes: the answer comes back out of the one-shot interrupt.
     const input = interrupt(scope, pauseDataOf(state.waiting));
     const bound = bindAnswer(
       state,
       readAskAnswer(state.waiting, input),
       calls,
       deps.toolOf,
-      { turn: scope.turnNumber as number, iteration },
-      askTimeOf(scope, deps),
+      { turn, iteration },
+      time,
     );
-    recordFindings(scope, bound.rows, { turn: scope.turnNumber as number });
+    recordFindings(scope, bound.rows, { turn });
     state = bound.state;
     answered = true;
   }
-  const round = nextAskRound(state);
+  let round = nextAskRound(state);
+  if (round === undefined && state.partial?.phase === 'complete-arguments') {
+    const completed = withSettled(entries, state, calls);
+    const eligible = origins.filter(
+      (origin) => completed.get(origin.call.id)?.refused === undefined,
+    );
+    const plan = windowPlanOf(scope, deps, asks, true);
+    if ((eligible.length > 0 || fillAsks.length > 0) && open.length > 0) {
+      if (plan === undefined) {
+        for (const origin of eligible)
+          refuse(origin.call, origin.arguments, 'a confirmed time window');
+      } else {
+        // Existing ordinary fields retain their answers. The new native field has a distinct
+        // role: meaning acceptance does not assign its string to an endpoint.
+        const field = confirmationField(plan, origins, fillAsks, calls, deps.toolOf);
+        state = {
+          ...state,
+          partial: { ...state.partial, phase: 'confirm-meaning' },
+          fields: [...state.fields, field],
+          progress: [...state.progress, { rounds: 0 }],
+        };
+        round = nextAskRound(state);
+      }
+    }
+  }
   if (round !== undefined) {
     const waiting = stampRound(scope, state, round, deps);
-    scope.argumentAsk = withWaiting(state, waiting);
-    interrupt(scope, pauseDataOf(waiting)); // the pause: this pass's answer, if any, is spent
+    scope.argumentAsk = snapshotPartialState(withWaiting(state, waiting));
+    interrupt(scope, pauseDataOf(waiting));
   }
-  // Settled: the question is no longer out. Cleared only where this pass read a stored state.
   if (stored !== undefined) scope.argumentAsk = undefined;
-  return { resolutions: withSettled(resolutions, state, calls), answered };
+  const settled = withSettled(entries, state, calls);
+  if (partial && time !== undefined) {
+    const currentLedger = scope.findingsLedger as FindingsLedger | undefined;
+    const currentAnswers = answersOf(currentLedger, turn);
+    const currentReadings = readingsOf(currentLedger, turn);
+    const clock = clockOf(currentLedger);
+    const materialized = calls
+      .filter((c) => settled.get(c.id)?.refused === undefined)
+      .map((c) => ({ ...c, args: withFills(c.args, settled.get(c.id)) }));
+    for (const origin of origins) {
+      const call = materialized.find((c) => c.id === origin.call.id);
+      if (call === undefined) continue;
+      if (
+        !hasOneMaterializedWindow(call, deps.toolOf, time) ||
+        currentReadings.some(
+          (r) => isOpenForPerson(r) && !currentAnswers.some((a) => a.mention === (r.mention ?? 0)),
+        )
+      ) {
+        settled.set(call.id, {
+          toolCallId: call.id,
+          iteration,
+          refused: unansweredRefusal(
+            call.name,
+            origin.arguments.map((argument) => ({
+              argument,
+              expected: 'one readable range and a confirmed time window',
+            })),
+          ),
+        });
+      }
+    }
+    if (clock !== undefined) {
+      const sources =
+        deps.argumentSources === true
+          ? {
+              declared: new Map(
+                declaredSourcesOf(calls, deps.toolOf).map((source) => [source.toolCallId, source]),
+              ),
+            }
+          : undefined;
+      // Already window-filled members have their canonical filled row from bindAnswer. Rebind
+      // preserved partial/complete scopes against the freshly recorded meaning, never their provenance.
+      const compare = materialized.filter(
+        (c) =>
+          settled.get(c.id)?.refused === undefined &&
+          !(settled.get(c.id)?.fills ?? []).some(
+            (f) => f.source === 'window' || (f.source === 'answered' && f.window === true),
+          ),
+      );
+      const decisions = timeDecisionsOf(
+        declareBatch(compare, deps.toolOf, sources),
+        compare,
+        deps.toolOf,
+        {
+          now: clock.now,
+          zone: clock.zone,
+          turn: turnWindowsOf(currentReadings, clock, currentAnswers),
+          ...(deps.time?.appZone !== undefined && { appZone: deps.time.appZone }),
+        },
+        sources,
+      );
+      recordFindings(scope, callWindowRowsOf(decisions, compare, { turn, iteration }), { turn });
+      for (const call of compare) {
+        const decision = decisions.get(call.id);
+        const rules = rulesOf(deps.toolOf(call.name));
+        if (decision?.how === 'refused' && rules !== undefined && !isRefused(rules)) {
+          settled.set(call.id, {
+            toolCallId: call.id,
+            iteration,
+            refused: timeRefusal(
+              call.name,
+              decision.refused,
+              periodFactsOf(rules.period),
+              'argument' in decision ? decision.argument : undefined,
+            ),
+          });
+        }
+      }
+    }
+  }
+  return { resolutions: settled, answered };
 }

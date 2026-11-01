@@ -107,6 +107,7 @@ import {
 } from '../../../tools/declare.js';
 import { ARGUMENT_ASK_KIND, ASK_CONTEXT_KEY, isArgumentAskContext } from './askMarker.js';
 import type { ArgumentFill, BatchCall, ToolOf } from './resolve.js';
+import type { PartialOrigin, PartialWindowState } from './partialWindow.js';
 import { isMissing } from '../../../tools/declare.js';
 import { HIDDEN_VALUE, answeredRowOf, askedRowOf, shownQuote, type ArgumentRow } from './rows.js';
 
@@ -189,6 +190,10 @@ export interface WindowFill {
 
 /** The time half of a window field — the typed ask's `format`, its labels, and the mention asked about. */
 export interface WindowAskField {
+  /** New native pauses require the writer runtime/configuration. Absent means legacy fill. */
+  readonly role?: 'confirm-meaning';
+  /** These calls keep their selected arguments; other members retain the ordinary window-fill role. */
+  readonly confirmOnlyIds?: readonly string[];
   readonly format: 'time-range' | 'zone';
   /** One label per choice (`time-range` with choices only), in the reader's locale. */
   readonly labels?: readonly string[];
@@ -200,6 +205,8 @@ export interface WindowAskField {
 
 /** Per field (same positions as the fields): how often asked, and how it settled. */
 export interface AskProgress {
+  /** Meaning was accepted, but these missing-window calls could not read it. */
+  readonly refused?: Readonly<Record<string, string>>;
   /** How many declarations this field has been put in. */
   readonly rounds: number;
   /** The bound answer, raw, in the field's own spelling. */
@@ -235,6 +242,8 @@ export interface AskWaiting {
  * event or a lens view.
  */
 export interface ArgumentAskState {
+  /** Durable ownership of partial-origin calls, separate from ordinary argument progress. */
+  readonly partial?: PartialWindowState;
   /** The batch this ask belongs to — the iteration its calls were emitted in. */
   readonly iteration: number;
   readonly fields: readonly AskField[];
@@ -556,6 +565,45 @@ function windowFieldOf(
       ...(plan.labels !== undefined && { labels: plan.labels }),
       ...(plan.zones !== undefined && { zones: plan.zones }),
       mention: plan.mention,
+    },
+  };
+}
+
+/** One genuine native meaning field; valid members remain available for identity and exhaustion. */
+export function confirmationField(
+  plan: WindowAskPlan,
+  origins: readonly PartialOrigin[],
+  fillAsks: readonly CallAsk[],
+  calls: readonly BatchCall[],
+  toolOf: ToolOf,
+): AskField {
+  const members = new Map<string, Map<string, string[]>>();
+  const add = (name: string, argument: string, id: string) => {
+    const args = members.get(name) ?? new Map<string, string[]>();
+    members.set(name, args);
+    const ids = args.get(argument) ?? [];
+    if (!ids.includes(id)) ids.push(id);
+    args.set(argument, ids);
+  };
+  for (const origin of origins) {
+    for (const argument of origin.arguments) add(origin.call.name, argument, origin.call.id);
+  }
+  for (const ask of fillAsks) {
+    const call = calls.find((c) => c.id === ask.toolCallId);
+    if (call === undefined) continue;
+    for (const argument of formArgumentsOfTool(toolOf, call.name))
+      add(call.name, argument, call.id);
+  }
+  const field = windowFieldOf(plan, members);
+  return {
+    ...field,
+    question:
+      plan.question +
+      ' This confirms your time words; a separately completed tool range stays unchanged.',
+    window: {
+      ...field.window!,
+      role: 'confirm-meaning',
+      confirmOnlyIds: origins.map((o) => o.call.id),
     },
   };
 }
@@ -1091,7 +1139,12 @@ export function bindAnswer(
         return;
       }
       if ('fills' in bound) {
-        progress[index] = { rounds: was.rounds, answer, fills: bound.fills };
+        progress[index] = {
+          rounds: was.rounds,
+          answer,
+          fills: bound.fills,
+          ...('refused' in bound && { refused: bound.refused }),
+        };
         rows.push(...windowAnsweredRows(field, bound.fills, byId, toolOf, stamp));
         // The person's window for the mention — the only door a window of words becomes theirs.
         rows.push(timeAnswerRow({ mention: field.window.mention, ...bound.answered }, stamp));
@@ -1144,6 +1197,7 @@ export function bindAnswer(
 type WindowBinding =
   | {
       readonly fills: Readonly<Record<string, WindowFill>>;
+      readonly refused?: Readonly<Record<string, string>>;
       /** Per filled call, the decision its `call-window` row records. */
       readonly filled: Readonly<Record<string, WindowFilled>>;
       /** The window the person settled: the range, its zone, and whether it was the offered reading. */
@@ -1184,6 +1238,8 @@ function bindWindowAnswer(
   time: AskTime | undefined,
 ): WindowBinding {
   const window = field.window as WindowAskField;
+  if (window.role !== undefined && window.role !== 'confirm-meaning')
+    throw new TypeError('argumentAsk: unknown window role');
   if (time === undefined) return { expected: WINDOW_FORM_EXPECTATION };
   if (window.format === 'zone') {
     const reading = time.reading;
@@ -1217,12 +1273,14 @@ function bindWindowAnswer(
         question: ask.question,
         ...(ask.field.enum !== undefined && { choices: ask.field.enum }),
         window: {
+          ...window,
           format: 'time-range',
           ...(ask.field.labels !== undefined && { labels: ask.field.labels }),
           zones,
           mention: window.mention,
         },
       };
+      if (window.role === 'confirm-meaning') return { followUp };
       const choices = (ask.field.enum ?? []) as readonly string[];
       const kept = allowedChoices(choices, zones, field.members, toolOf, time);
       if (kept === undefined && field.members.length > 0) {
@@ -1240,6 +1298,30 @@ function bindWindowAnswer(
   const zone =
     at >= 0 ? window.zones?.[at] ?? time.zone : editedZone(range, window.zones, time.zone);
   if (zone === undefined) return { expected: WINDOW_FORM_EXPECTATION };
+  if (window.role === 'confirm-meaning') {
+    const fills: Record<string, WindowFill> = {};
+    const filled: Record<string, WindowFilled> = {};
+    const refused: Record<string, string> = {};
+    const confirmed = new Set(window.confirmOnlyIds);
+    for (const id of new Set(field.members.flatMap((m) => m.toolCallIds))) {
+      if (confirmed.has(id)) continue;
+      const members = field.members
+        .filter((m) => m.toolCallIds.includes(id))
+        .map((m) => ({ ...m, toolCallIds: [id] }));
+      const one = windowFills({ ...field, members }, range, zone, byId, toolOf, time);
+      if ('expected' in one) refused[id] = one.expected;
+      else {
+        Object.assign(fills, one.fills);
+        Object.assign(filled, one.filled);
+      }
+    }
+    return {
+      fills,
+      filled,
+      refused,
+      answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' },
+    };
+  }
   const bound = windowFills(field, range, zone, byId, toolOf, time);
   if (!('fills' in bound)) return bound;
   return {
@@ -1516,7 +1598,21 @@ export function settledCalls(state: ArgumentAskState): ReadonlyMap<string, Settl
   };
   state.fields.forEach((field, i) => {
     const p = state.progress[i];
+    if (field.window?.role !== undefined && field.window.role !== 'confirm-meaning')
+      throw new TypeError('argumentAsk: unknown window role');
+    if (
+      field.window?.role === 'confirm-meaning' &&
+      p.answer !== undefined &&
+      p.fills === undefined
+    ) {
+      throw new TypeError('argumentAsk: incomplete meaning progress');
+    }
     if (field.window !== undefined && p.fills !== undefined) {
+      for (const [id, expected] of Object.entries(p.refused ?? {})) {
+        for (const member of field.members.filter((m) => m.toolCallIds.includes(id))) {
+          entry(id).exhausted.push({ argument: member.argument, expected });
+        }
+      }
       for (const [id, fill] of Object.entries(p.fills)) {
         for (const [argument, value] of Object.entries(fill.values)) {
           entry(id).fills.push({

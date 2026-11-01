@@ -629,6 +629,32 @@ return import('./timeLayer.js').then((time) => {
 | d (axis, T2) | a dataset `interval` with more than six digits (`1000000m`) | **accepted** — the axis's shipped cap went with the merge |
 | T2 | a dataset `zone` that `Intl` takes but is not an IANA name (`PST`, `EST`, `+05:30`, `utc`, `EST5EDT`) | **refused at mint**; a ticket minted earlier with one reads `malformed` |
 
+## Partial tool bounds and pending person words
+
+The core ask owner distinguishes ordinary endpoint completion from confirmation
+of a person's time words. `core/agent/arguments/partialWindow.ts` classifies an
+original partially specified bounds form using the existing declaration and
+read-back owners. A readable complete alternative is not partial; ambiguous
+partial forms refuse. `stages/toolCalls.ts` enters the shared ask owner even
+when a default or kept answer leaves no ordinary question outstanding.
+
+`stages/argumentAsk.ts` carries the original call and declaration in detached
+batch-owned state. It completes ordinary fields, then uses an explicit native
+`confirm-meaning` window role. That answer records one real `time-answer` without
+filling the selected call's endpoints. All-missing members keep the existing
+fill/conversion route. The canonical binder then compares actual materialized
+arguments with the settled person window and appends the effective `call-window`
+before execution. Complete model-selected scopes are retained. A zone answer
+alone does not settle the words; invalid or mismatched native state cannot
+dispatch the waiting partial call.
+
+The native pause contract is deliberately breaking: save the exact writer
+runtime/artifact and agent configuration and resume that pause on the same
+configuration. Old ordinary partial pauses can be re-gated by the new reader;
+new confirmation-only pauses are unsafe on the old reader, which may overwrite
+the selected endpoints. There is no invented wire-version rejection. Host pause
+routing and admission must prevent incompatible downgrade before adoption.
+
 ## Not covered yet
 
 - The covering look-back the time ask fills is spelled at the turn's `now`; the person answers

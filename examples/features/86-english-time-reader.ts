@@ -116,7 +116,88 @@ function desk(served: string[], policy?: { dateOrder: 'MDY'; abbreviations: type
 
 const time = { now: '2026-10-09T15:40:00Z' };
 
+// #region partial-bounds
+/** Ordinary endpoint input and a person's confirmed window remain two facts. */
+async function partialBoundsExample(): Promise<void> {
+  const selected: unknown[] = [];
+  const series = defineTool({
+    name: 'series',
+    description: 'Read a synthetic interval.',
+    inputSchema: {
+      type: 'object',
+      required: ['start', 'stop'],
+      properties: { start: { type: 'string' }, stop: { type: 'string' } },
+    },
+    askOrAssume: { start: { ask: 'From when?' }, stop: { ask: 'Until when?' } },
+    period: {
+      forms: [
+        {
+          kind: 'bounds',
+          from: { argument: 'start', as: 'iso' },
+          to: { argument: 'stop', as: 'iso', edge: 'exclusive' },
+        },
+      ],
+    },
+    execute: (args) => {
+      selected.push(args);
+      return 'synthetic result';
+    },
+  });
+  let calls = 0;
+  const agent = Agent.create({
+    model: 'mock',
+    provider: mock({
+      respond: () =>
+        ++calls === 1
+          ? {
+              content: '',
+              toolCalls: [
+                { id: 'partial', name: 'series', args: { start: '2026-10-09T13:00:00Z' } },
+              ],
+            }
+          : { content: 'Done.' },
+    }),
+  })
+    .tool(series)
+    .time({ zone: 'UTC', reader: englishTimeReader() })
+    .build();
+  try {
+    const ordinary = await agent.run({
+      message: 'Read the last 2 hours',
+      time: { now: '2026-10-09T16:00:00Z' },
+    });
+    if (!isInputPause(ordinary)) throw new Error('Expected the missing stop');
+    const meaning = await agent.resume(ordinary.checkpoint, {
+      requestId: ordinary.awaitingInput.requestId,
+      values: { f1: '2026-10-09T15:00:00Z' },
+    });
+    check(selected.length === 0, 'no execution before time confirmation');
+    if (!isInputPause(meaning)) throw new Error('Expected time confirmation');
+    await agent.resume(meaning.checkpoint, {
+      requestId: meaning.awaitingInput.requestId,
+      values: { f1: '2026-10-09T14:00:00Z/2026-10-09T16:00:00Z' },
+    });
+    check(
+      JSON.stringify(selected) ===
+        JSON.stringify([{ start: '2026-10-09T13:00:00Z', stop: '2026-10-09T15:00:00Z' }]),
+      'the selected tool interval survives confirmation',
+    );
+    const effective = agent
+      .findings()
+      ?.filter((row) => row.kind === 'call-window' && row.toolCallId === 'partial')
+      .at(-1);
+    check(
+      effective?.kind === 'call-window' && effective.how === 'model-chosen',
+      'the differing scopes remain visible',
+    );
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion partial-bounds
+
 export async function run(input: string): Promise<string> {
+  await partialBoundsExample();
   // 1. "yesterday" is only PROPOSED: nothing is served, the call pauses on a one-click
   //    confirmation naming the window and its zone.
   const served: string[] = [];
