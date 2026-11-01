@@ -54,3 +54,6 @@ index-claude.html
 
 # Reviewed, commit-pinned dependency for the shared assertion extraction.
 !vendor/contextfootprint/*.tgz
+
+# Reviewed, commit-pinned Lens archive used only by the docs app.
+!docs-next/vendor/agentfootprint-lens/*.tgz
