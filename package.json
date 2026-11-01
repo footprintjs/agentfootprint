@@ -1,6 +1,6 @@
 {
   "name": "agentfootprint",
-  "version": "12.3.0",
+  "version": "13.0.0",
   "description": "TypeScript AI agent framework with recorded context, tool calls and decisions, plus configurable answer checks.",
   "license": "MIT",
   "type": "commonjs",
