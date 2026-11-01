@@ -119,6 +119,32 @@ Agent.create({ provider, model })
   .build();
 ```
 
+### A call with only a start or stop
+
+Completing a tool's missing endpoint does not confirm what the person's time
+words mean. The library first completes that ordinary argument, preserving
+the supplied endpoint. It then asks the native time question before anything
+in the batch runs. A default or kept answer can complete the tool arguments,
+but the time confirmation is still owed.
+
+The selected tool interval and the confirmed person interval remain separate.
+For example, a tool completed to 13:00–15:00 keeps those arguments when the
+person confirms 14:00–16:00. The record says `model-chosen` and includes both
+windows. Only equality of the whole normalized interval permits value binding;
+an ordinary endpoint answer retains its ordinary argument provenance.
+An all-missing sibling may use the confirmed window, while a complete baseline
+or drilldown interval keeps its own arguments. Invalid answers and cancellation
+permit no waiting collector to execute.
+
+<CodeFile path="examples/features/86-english-time-reader.ts" region="partial-bounds" />
+
+**Saved pauses:** bind a new native confirmation pause to its exact writer
+runtime/artifact and agent configuration. Resume it with that same configuration.
+An older reader can ignore its confirmation-only role and replace the selected
+endpoints, so downgrade resumption is unsafe and unsupported. Drain or explicitly
+abandon outstanding pauses before changing their runtime; hosts must enforce
+compatible routing during restarts and upgrades.
+
 ## The time ask
 
 A `requestInput` field with a `format` is a time field. `TimeFormat` is one of

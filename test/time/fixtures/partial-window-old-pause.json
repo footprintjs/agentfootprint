@@ -1,0 +1,3001 @@
+{
+  "dynamic": {
+    "ordinary": {
+      "outcome": {
+        "paused": true,
+        "checkpoint": {
+          "checkpointVersion": 2,
+          "sharedState": {
+            "userMessage": "Show metric series and cache paths in the last 2 hours",
+            "history": [
+              {
+                "role": "user",
+                "content": "Show metric series and cache paths in the last 2 hours"
+              }
+            ],
+            "runIdentity": {
+              "conversationId": "run-1793395449669-1"
+            },
+            "newMessages": [],
+            "turnNumber": 1,
+            "contextTokensRemaining": 32000,
+            "iteration": 1,
+            "maxIterations": 6,
+            "finalContent": "",
+            "totalInputTokens": 0,
+            "totalOutputTokens": 0,
+            "turnStartMs": 1793395449675,
+            "systemPromptInjections": [],
+            "messagesInjections": [
+              {
+                "contentSummary": "Show metric series and cache paths in the last 2 hours",
+                "contentHash": "ea037638",
+                "slot": "messages",
+                "source": "user",
+                "reason": "conversation history [0]",
+                "rawContent": "Show metric series and cache paths in the last 2 hours",
+                "asRole": "user",
+                "asRecency": "latest",
+                "position": 0
+              }
+            ],
+            "toolsInjections": [
+              {
+                "contentSummary": "metric_series: Read a synthetic interval.",
+                "contentHash": "2284c3c0",
+                "slot": "tools",
+                "source": "registry",
+                "sourceId": "metric_series",
+                "reason": "tool registry",
+                "rawContent": "metric_series: Read a synthetic interval.",
+                "position": 0
+              },
+              {
+                "contentSummary": "cache_paths: Read a synthetic interval.",
+                "contentHash": "8c0fbb83",
+                "slot": "tools",
+                "source": "registry",
+                "sourceId": "cache_paths",
+                "reason": "tool registry",
+                "rawContent": "cache_paths: Read a synthetic interval.",
+                "position": 1
+              },
+              {
+                "contentSummary": "checkpoint_bridge: An inert pause before the target proposal.",
+                "contentHash": "eb8d176b",
+                "slot": "tools",
+                "source": "registry",
+                "sourceId": "checkpoint_bridge",
+                "reason": "tool registry",
+                "rawContent": "checkpoint_bridge: An inert pause before the target proposal.",
+                "position": 2
+              }
+            ],
+            "llmLatestContent": "",
+            "llmLatestToolCalls": [
+              {
+                "id": "c1",
+                "name": "metric_series",
+                "args": {
+                  "start": "2026-10-09T13:00:00Z"
+                }
+              }
+            ],
+            "thinkingBlocks": [],
+            "pausedToolCallId": "",
+            "pausedToolName": "",
+            "pausedToolStartMs": 0,
+            "cumTokensInput": 0,
+            "cumTokensOutput": 0,
+            "cumEstimatedUsd": 0,
+            "costBudgetHit": false,
+            "activeInjections": [],
+            "activatedInjectionIds": [],
+            "dynamicToolSchemas": [
+              {
+                "name": "metric_series",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "cache_paths",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "checkpoint_bridge",
+                "description": "An inert pause before the target proposal.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            ],
+            "honestyLayers": {
+              "inputs": true,
+              "results": true
+            },
+            "deliveredMessageKeys": [],
+            "cacheMarkers": [
+              {
+                "field": "system",
+                "boundaryIndex": 0,
+                "ttl": "short",
+                "reason": "system stable prefix (1 entries, ending at base system prompt)"
+              },
+              {
+                "field": "messages",
+                "boundaryIndex": 0,
+                "ttl": "short",
+                "reason": "conversation tail through wire index 0 \u2014 the moving breakpoint: the next call repeats this prefix and appends after it"
+              }
+            ],
+            "cachingDisabled": false,
+            "skillHistory": [],
+            "findingsLedger": [
+              {
+                "kind": "clock",
+                "turn": 1,
+                "iteration": 1,
+                "now": "2026-10-09T16:00:00Z",
+                "nowSource": "app",
+                "zone": "UTC",
+                "zoneSource": "builder"
+              },
+              {
+                "kind": "time-reading",
+                "turn": 1,
+                "iteration": 1,
+                "reader": {
+                  "id": "agentfootprint/english",
+                  "version": "1.2.0",
+                  "kind": "rule",
+                  "locale": "en-US"
+                },
+                "tzdata": "2025b",
+                "mentions": 1,
+                "mention": 0,
+                "quote": "last 2 hours",
+                "parses": [
+                  {
+                    "relative": {
+                      "unit": "hour",
+                      "count": 2
+                    }
+                  }
+                ],
+                "candidates": [
+                  {
+                    "window": {
+                      "kind": "lookback",
+                      "duration": "2h"
+                    },
+                    "range": {
+                      "from": "2026-10-09T14:00:00Z",
+                      "to": "2026-10-09T16:00:00.001Z"
+                    },
+                    "zone": "UTC",
+                    "grain": "hour",
+                    "implied": [],
+                    "anchor": "message",
+                    "notes": [],
+                    "reading": {},
+                    "said": [],
+                    "reader": {
+                      "id": "agentfootprint/english",
+                      "kind": "rule"
+                    },
+                    "parse": 0
+                  }
+                ],
+                "choice": {
+                  "by": "open",
+                  "remaining": [
+                    0
+                  ],
+                  "open": [
+                    "confirm"
+                  ]
+                }
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "start",
+                "rule": "ask",
+                "period": true,
+                "source": "model",
+                "value": "2026-10-09T13:00:00Z"
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "stop",
+                "rule": "ask",
+                "period": true,
+                "asked": "missing"
+              },
+              {
+                "kind": "call-window",
+                "turn": 1,
+                "iteration": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "how": "unread"
+              }
+            ],
+            "activeByslot": {
+              "systemPrompt": [],
+              "messages": [],
+              "tools": []
+            },
+            "timeLine": {
+              "iteration": 1,
+              "text": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            },
+            "receipt": {
+              "requestMeasurement": {
+                "boundary": "initial-prepared-request",
+                "format": "json-utf8-v1",
+                "status": "measured",
+                "total": {
+                  "jsonChars": 1724,
+                  "jsonBytes": 1732
+                },
+                "slots": {
+                  "messages": {
+                    "jsonChars": 804,
+                    "jsonBytes": 812
+                  },
+                  "tools": {
+                    "jsonChars": 883,
+                    "jsonBytes": 883
+                  }
+                }
+              },
+              "system": {
+                "hash": "0e846ba7a999a439",
+                "chars": 0,
+                "pieces": []
+              },
+              "messages": {
+                "count": 2,
+                "entries": [
+                  {
+                    "role": "user",
+                    "hash": "1b0d3e3cc32fc51e"
+                  }
+                ],
+                "requestOnly": [
+                  {
+                    "role": "user",
+                    "hash": "5eed3ecc577c739d",
+                    "reason": "time-window-line"
+                  }
+                ]
+              },
+              "tools": {
+                "names": [
+                  "metric_series",
+                  "cache_paths",
+                  "checkpoint_bridge"
+                ],
+                "schemaHashes": {
+                  "metric_series": "2afe066f5c7e6131",
+                  "cache_paths": "acb941953d5370e8",
+                  "checkpoint_bridge": "50079f1c0819cce7"
+                },
+                "forced": null,
+                "withheld": null
+              },
+              "cache": {
+                "transform": "unchanged",
+                "transformHash": null,
+                "markersApplied": [],
+                "strategy": "none"
+              },
+              "params": {},
+              "basis": {
+                "epoch": 1,
+                "runId": "run-1793395449669-1",
+                "model": "mock",
+                "provider": "fixed-partial-window"
+              }
+            },
+            "argumentResolutions": [
+              {
+                "toolCallId": "c1",
+                "iteration": 1,
+                "ask": [
+                  "stop"
+                ]
+              }
+            ],
+            "argumentAsk": {
+              "iteration": 1,
+              "fields": [
+                {
+                  "type": "string",
+                  "question": "Until when?",
+                  "members": [
+                    {
+                      "toolName": "metric_series",
+                      "argument": "stop",
+                      "period": true,
+                      "toolCallIds": [
+                        "c1"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "progress": [
+                {
+                  "rounds": 1
+                }
+              ],
+              "waiting": {
+                "requestId": "run-1793395449669-1:arguments:1:1",
+                "fieldIndexes": [
+                  0
+                ],
+                "awaiting": {
+                  "id": "agentfootprint.arguments",
+                  "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+                  "fields": [
+                    {
+                      "id": "f1",
+                      "type": "string",
+                      "required": true,
+                      "description": "Until when?"
+                    }
+                  ],
+                  "context": {
+                    "agentfootprint": {
+                      "ask": "arguments",
+                      "fields": [
+                        {
+                          "id": "f1",
+                          "tool": "metric_series",
+                          "argument": "stop",
+                          "calls": [
+                            "c1"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "status": "awaiting_input",
+                  "requestId": "run-1793395449669-1:arguments:1:1",
+                  "supplied": {},
+                  "origins": {},
+                  "missing": [
+                    "f1"
+                  ],
+                  "origin": {
+                    "originalRequest": "Show metric series and cache paths in the last 2 hours",
+                    "toolCallId": "c1"
+                  }
+                }
+              }
+            }
+          },
+          "pausedStageId": "tool-calls",
+          "pausedExecution": {
+            "runId": "1793395449670-0000000001",
+            "runtimeStageId": "tool-calls#30"
+          },
+          "subflowPath": [],
+          "pauseData": {
+            "reason": "Before the next step can run, a few values are needed. Each field says what it is for.",
+            "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+            "awaitingInput": {
+              "id": "agentfootprint.arguments",
+              "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+              "fields": [
+                {
+                  "id": "f1",
+                  "type": "string",
+                  "required": true,
+                  "description": "Until when?"
+                }
+              ],
+              "context": {
+                "agentfootprint": {
+                  "ask": "arguments",
+                  "fields": [
+                    {
+                      "id": "f1",
+                      "tool": "metric_series",
+                      "argument": "stop",
+                      "calls": [
+                        "c1"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "status": "awaiting_input",
+              "requestId": "run-1793395449669-1:arguments:1:1",
+              "supplied": {},
+              "origins": {},
+              "missing": [
+                "f1"
+              ],
+              "origin": {
+                "originalRequest": "Show metric series and cache paths in the last 2 hours",
+                "toolCallId": "c1"
+              }
+            }
+          },
+          "subflowStates": {},
+          "executionCount": 31,
+          "visitCounts": {
+            "seed": 1,
+            "sf-results": 1,
+            "sf-results/declare-results": 1,
+            "sf-results/verify-results": 1,
+            "sf-results/record-results": 1,
+            "sf-results/resolve-results": 1,
+            "sf-injection-engine": 1,
+            "sf-injection-engine/gather": 1,
+            "sf-injection-engine/evaluate": 1,
+            "sf-injection-engine/route": 1,
+            "sf-injection-engine/delta": 1,
+            "context": 1,
+            "sf-system-prompt": 1,
+            "sf-system-prompt/compose": 1,
+            "sf-messages": 1,
+            "sf-messages/compose": 1,
+            "sf-tools": 1,
+            "sf-tools/discover": 1,
+            "sf-tools/compose": 1,
+            "sf-cache": 1,
+            "sf-cache/decide-cache-markers": 1,
+            "sf-cache/cache-gate": 1,
+            "sf-cache/apply-markers": 1,
+            "call-llm": 1,
+            "sf-inputs": 1,
+            "sf-inputs/declare-arguments": 1,
+            "sf-inputs/verify-arguments": 1,
+            "sf-inputs/record-arguments": 1,
+            "sf-inputs/resolve-arguments": 1,
+            "sf-route": 1,
+            "tool-calls": 1
+          },
+          "invokerStageId": "sf-route",
+          "pausedBy": "interrupt",
+          "pausedAt": 1793395449708
+        },
+        "pauseData": {
+          "reason": "Before the next step can run, a few values are needed. Each field says what it is for.",
+          "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+          "awaitingInput": {
+            "id": "agentfootprint.arguments",
+            "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+            "fields": [
+              {
+                "id": "f1",
+                "type": "string",
+                "required": true,
+                "description": "Until when?"
+              }
+            ],
+            "context": {
+              "agentfootprint": {
+                "ask": "arguments",
+                "fields": [
+                  {
+                    "id": "f1",
+                    "tool": "metric_series",
+                    "argument": "stop",
+                    "calls": [
+                      "c1"
+                    ]
+                  }
+                ]
+              }
+            },
+            "status": "awaiting_input",
+            "requestId": "run-1793395449669-1:arguments:1:1",
+            "supplied": {},
+            "origins": {},
+            "missing": [
+              "f1"
+            ],
+            "origin": {
+              "originalRequest": "Show metric series and cache paths in the last 2 hours",
+              "toolCallId": "c1"
+            }
+          }
+        },
+        "awaitingInput": {
+          "id": "agentfootprint.arguments",
+          "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+          "fields": [
+            {
+              "id": "f1",
+              "type": "string",
+              "required": true,
+              "description": "Until when?"
+            }
+          ],
+          "context": {
+            "agentfootprint": {
+              "ask": "arguments",
+              "fields": [
+                {
+                  "id": "f1",
+                  "tool": "metric_series",
+                  "argument": "stop",
+                  "calls": [
+                    "c1"
+                  ]
+                }
+              ]
+            }
+          },
+          "status": "awaiting_input",
+          "requestId": "run-1793395449669-1:arguments:1:1",
+          "supplied": {},
+          "origins": {},
+          "missing": [
+            "f1"
+          ],
+          "origin": {
+            "originalRequest": "Show metric series and cache paths in the last 2 hours",
+            "toolCallId": "c1"
+          }
+        }
+      },
+      "seen": [],
+      "requests": [
+        {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Show metric series and cache paths in the last 2 hours"
+            },
+            {
+              "role": "user",
+              "content": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            }
+          ],
+          "tools": [
+            {
+              "name": "metric_series",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "cache_paths",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "checkpoint_bridge",
+              "description": "An inert pause before the target proposal.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ],
+          "model": "mock"
+        }
+      ],
+      "index": 1,
+      "findings": [
+        {
+          "kind": "clock",
+          "turn": 1,
+          "iteration": 1,
+          "now": "2026-10-09T16:00:00Z",
+          "nowSource": "app",
+          "zone": "UTC",
+          "zoneSource": "builder"
+        },
+        {
+          "kind": "time-reading",
+          "turn": 1,
+          "iteration": 1,
+          "reader": {
+            "id": "agentfootprint/english",
+            "version": "1.2.0",
+            "kind": "rule",
+            "locale": "en-US"
+          },
+          "tzdata": "2025b",
+          "mentions": 1,
+          "mention": 0,
+          "quote": "last 2 hours",
+          "parses": [
+            {
+              "relative": {
+                "unit": "hour",
+                "count": 2
+              }
+            }
+          ],
+          "candidates": [
+            {
+              "window": {
+                "kind": "lookback",
+                "duration": "2h"
+              },
+              "range": {
+                "from": "2026-10-09T14:00:00Z",
+                "to": "2026-10-09T16:00:00.001Z"
+              },
+              "zone": "UTC",
+              "grain": "hour",
+              "implied": [],
+              "anchor": "message",
+              "notes": [],
+              "reading": {},
+              "said": [],
+              "reader": {
+                "id": "agentfootprint/english",
+                "kind": "rule"
+              },
+              "parse": 0
+            }
+          ],
+          "choice": {
+            "by": "open",
+            "remaining": [
+              0
+            ],
+            "open": [
+              "confirm"
+            ]
+          }
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "start",
+          "rule": "ask",
+          "period": true,
+          "source": "model",
+          "value": "2026-10-09T13:00:00Z"
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "stop",
+          "rule": "ask",
+          "period": true,
+          "asked": "missing"
+        },
+        {
+          "kind": "call-window",
+          "turn": 1,
+          "iteration": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "how": "unread"
+        }
+      ]
+    },
+    "kept": {
+      "outcome": {
+        "paused": true,
+        "checkpoint": {
+          "checkpointVersion": 2,
+          "sharedState": {
+            "userMessage": "Show metric series and cache paths in the last 2 hours",
+            "history": [
+              {
+                "role": "user",
+                "content": "Show metric series and cache paths in the last 2 hours"
+              },
+              {
+                "role": "assistant",
+                "content": "",
+                "toolCalls": [
+                  {
+                    "id": "c1",
+                    "name": "metric_series",
+                    "args": {
+                      "start": "2026-10-09T13:00:00Z"
+                    }
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "content": "metric_series was not run to completion on that call: its check-in consent gate needed a person\u2019s approval for those arguments, and this batch had already paused once \u2014 to ask the person for argument values \u2014 so there was no second pause to ask with. The person's answer for stop was kept for the next metric_series call that leaves it out, so the call may be proposed again without stop.",
+                "toolCallId": "c1",
+                "toolName": "metric_series"
+              },
+              {
+                "role": "assistant",
+                "content": "",
+                "toolCalls": [
+                  {
+                    "id": "bridge",
+                    "name": "checkpoint_bridge",
+                    "args": {}
+                  }
+                ]
+              }
+            ],
+            "runIdentity": {
+              "conversationId": "run-1793395449947-1"
+            },
+            "newMessages": [],
+            "turnNumber": 1,
+            "contextTokensRemaining": 32000,
+            "iteration": 2,
+            "maxIterations": 6,
+            "finalContent": "",
+            "totalInputTokens": 0,
+            "totalOutputTokens": 0,
+            "turnStartMs": 1793395449952,
+            "systemPromptInjections": [],
+            "messagesInjections": [
+              {
+                "contentSummary": "Show metric series and cache paths in the last 2 hours",
+                "contentHash": "ea037638",
+                "slot": "messages",
+                "source": "user",
+                "reason": "conversation history [0]",
+                "rawContent": "Show metric series and cache paths in the last 2 hours",
+                "asRole": "user",
+                "asRecency": "earlier",
+                "position": 0
+              },
+              {
+                "contentSummary": "",
+                "contentHash": "62db47c8",
+                "slot": "messages",
+                "source": "assistant",
+                "reason": "conversation history [1]",
+                "rawContent": "",
+                "asRole": "assistant",
+                "asRecency": "earlier",
+                "position": 1
+              },
+              {
+                "contentSummary": "metric_series was not run to completion on that call: its check-in consent gate\u2026",
+                "contentHash": "979b20b1",
+                "slot": "messages",
+                "source": "tool-result",
+                "reason": "conversation history [2]",
+                "rawContent": "metric_series was not run to completion on that call: its check-in consent gate needed a person\u2019s approval for those arguments, and this batch had already paused once \u2014 to ask the person for argument values \u2014 so there was no second pause to ask with. The person's answer for stop was kept for the next metric_series call that leaves it out, so the call may be proposed again without stop.",
+                "asRole": "tool",
+                "asRecency": "latest",
+                "position": 2,
+                "sourceId": "c1"
+              }
+            ],
+            "toolsInjections": [
+              {
+                "contentSummary": "metric_series: Read a synthetic interval.",
+                "contentHash": "2284c3c0",
+                "slot": "tools",
+                "source": "registry",
+                "sourceId": "metric_series",
+                "reason": "tool registry",
+                "rawContent": "metric_series: Read a synthetic interval.",
+                "position": 0
+              },
+              {
+                "contentSummary": "cache_paths: Read a synthetic interval.",
+                "contentHash": "8c0fbb83",
+                "slot": "tools",
+                "source": "registry",
+                "sourceId": "cache_paths",
+                "reason": "tool registry",
+                "rawContent": "cache_paths: Read a synthetic interval.",
+                "position": 1
+              },
+              {
+                "contentSummary": "checkpoint_bridge: An inert pause before the target proposal.",
+                "contentHash": "eb8d176b",
+                "slot": "tools",
+                "source": "registry",
+                "sourceId": "checkpoint_bridge",
+                "reason": "tool registry",
+                "rawContent": "checkpoint_bridge: An inert pause before the target proposal.",
+                "position": 2
+              }
+            ],
+            "llmLatestContent": "",
+            "llmLatestToolCalls": [
+              {
+                "id": "bridge",
+                "name": "checkpoint_bridge",
+                "args": {}
+              }
+            ],
+            "thinkingBlocks": [],
+            "pausedToolCallId": "bridge",
+            "pausedToolName": "checkpoint_bridge",
+            "pausedToolStartMs": 1793395449999,
+            "cumTokensInput": 0,
+            "cumTokensOutput": 0,
+            "cumEstimatedUsd": 0,
+            "costBudgetHit": false,
+            "activeInjections": [],
+            "activatedInjectionIds": [],
+            "dynamicToolSchemas": [
+              {
+                "name": "metric_series",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "cache_paths",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "checkpoint_bridge",
+                "description": "An inert pause before the target proposal.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            ],
+            "honestyLayers": {
+              "inputs": true,
+              "results": true
+            },
+            "deliveredMessageKeys": [],
+            "cacheMarkers": [
+              {
+                "field": "system",
+                "boundaryIndex": 0,
+                "ttl": "short",
+                "reason": "system stable prefix (1 entries, ending at base system prompt)"
+              },
+              {
+                "field": "messages",
+                "boundaryIndex": 2,
+                "ttl": "short",
+                "reason": "conversation tail through wire index 2 \u2014 the moving breakpoint: the next call repeats this prefix and appends after it"
+              }
+            ],
+            "cachingDisabled": false,
+            "skillHistory": [],
+            "findingsLedger": [
+              {
+                "kind": "clock",
+                "turn": 1,
+                "iteration": 1,
+                "now": "2026-10-09T16:00:00Z",
+                "nowSource": "app",
+                "zone": "UTC",
+                "zoneSource": "builder"
+              },
+              {
+                "kind": "time-reading",
+                "turn": 1,
+                "iteration": 1,
+                "reader": {
+                  "id": "agentfootprint/english",
+                  "version": "1.2.0",
+                  "kind": "rule",
+                  "locale": "en-US"
+                },
+                "tzdata": "2025b",
+                "mentions": 1,
+                "mention": 0,
+                "quote": "last 2 hours",
+                "parses": [
+                  {
+                    "relative": {
+                      "unit": "hour",
+                      "count": 2
+                    }
+                  }
+                ],
+                "candidates": [
+                  {
+                    "window": {
+                      "kind": "lookback",
+                      "duration": "2h"
+                    },
+                    "range": {
+                      "from": "2026-10-09T14:00:00Z",
+                      "to": "2026-10-09T16:00:00.001Z"
+                    },
+                    "zone": "UTC",
+                    "grain": "hour",
+                    "implied": [],
+                    "anchor": "message",
+                    "notes": [],
+                    "reading": {},
+                    "said": [],
+                    "reader": {
+                      "id": "agentfootprint/english",
+                      "kind": "rule"
+                    },
+                    "parse": 0
+                  }
+                ],
+                "choice": {
+                  "by": "open",
+                  "remaining": [
+                    0
+                  ],
+                  "open": [
+                    "confirm"
+                  ]
+                }
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "start",
+                "rule": "ask",
+                "period": true,
+                "source": "model",
+                "value": "2026-10-09T13:00:00Z"
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "stop",
+                "rule": "ask",
+                "period": true,
+                "asked": "missing"
+              },
+              {
+                "kind": "call-window",
+                "turn": 1,
+                "iteration": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "how": "unread"
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "stop",
+                "rule": "ask",
+                "period": true,
+                "source": "answered",
+                "value": "2026-10-09T15:00:00Z",
+                "free": true
+              },
+              {
+                "kind": "period",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "verdict": "undeclared",
+                "argument": "start"
+              },
+              {
+                "kind": "call",
+                "turn": 1,
+                "iteration": 2,
+                "toolCallId": "bridge",
+                "toolName": "checkpoint_bridge",
+                "dispatchedAt": "2026-10-30T21:24:09.999Z"
+              }
+            ],
+            "activeByslot": {
+              "systemPrompt": [],
+              "messages": [],
+              "tools": []
+            },
+            "timeLine": {
+              "iteration": 2,
+              "text": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            },
+            "receipt": {
+              "requestMeasurement": {
+                "boundary": "initial-prepared-request",
+                "format": "json-utf8-v1",
+                "status": "measured",
+                "total": {
+                  "jsonChars": 2309,
+                  "jsonBytes": 2323
+                },
+                "slots": {
+                  "messages": {
+                    "jsonChars": 1389,
+                    "jsonBytes": 1403
+                  },
+                  "tools": {
+                    "jsonChars": 883,
+                    "jsonBytes": 883
+                  }
+                }
+              },
+              "system": {
+                "hash": "c1b8f71cbc9f312a",
+                "chars": 0,
+                "pieces": []
+              },
+              "messages": {
+                "count": 4,
+                "entries": [
+                  {
+                    "role": "user",
+                    "hash": "1da8168be02af5a4"
+                  },
+                  {
+                    "role": "assistant",
+                    "hash": "a1ea0cdb2af08b4e"
+                  },
+                  {
+                    "role": "tool",
+                    "hash": "5d9fa162450f6b5a",
+                    "key": "c1"
+                  }
+                ],
+                "requestOnly": [
+                  {
+                    "role": "user",
+                    "hash": "575e75430c7bad2c",
+                    "reason": "time-window-line"
+                  }
+                ]
+              },
+              "tools": {
+                "names": [
+                  "metric_series",
+                  "cache_paths",
+                  "checkpoint_bridge"
+                ],
+                "schemaHashes": {
+                  "metric_series": "b75b67c41788b1a4",
+                  "cache_paths": "4213a7056046a672",
+                  "checkpoint_bridge": "0bbbc6a6f23305c1"
+                },
+                "forced": null,
+                "withheld": null
+              },
+              "cache": {
+                "transform": "unchanged",
+                "transformHash": null,
+                "markersApplied": [],
+                "strategy": "none"
+              },
+              "params": {},
+              "basis": {
+                "epoch": 2,
+                "runId": "run-1793395449987-2",
+                "model": "mock",
+                "provider": "fixed-partial-window"
+              }
+            },
+            "argumentResolutions": [
+              {
+                "toolCallId": "c1",
+                "iteration": 1,
+                "ask": [
+                  "stop"
+                ]
+              }
+            ],
+            "toolResultsIteration": 2,
+            "argumentAnswersKept": [
+              {
+                "turn": 1,
+                "toolName": "metric_series",
+                "argument": "stop",
+                "value": "2026-10-09T15:00:00Z"
+              }
+            ],
+            "lastToolResult": {
+              "toolName": "metric_series",
+              "result": "metric_series was not run to completion on that call: its check-in consent gate needed a person\u2019s approval for those arguments, and this batch had already paused once \u2014 to ask the person for argument values \u2014 so there was no second pause to ask with. The person's answer for stop was kept for the next metric_series call that leaves it out, so the call may be proposed again without stop."
+            },
+            "toolResults": [],
+            "pausedToolArgs": {}
+          },
+          "pausedStageId": "tool-calls",
+          "pausedExecution": {
+            "runId": "1793395449988-0000000002",
+            "runtimeStageId": "tool-calls#61"
+          },
+          "subflowPath": [],
+          "pauseData": {
+            "toolCallId": "bridge",
+            "toolName": "checkpoint_bridge",
+            "question": "Continue the synthetic sequence?",
+            "awaitingInput": {
+              "id": "bridge",
+              "question": "Continue the synthetic sequence?",
+              "fields": [
+                {
+                  "id": "go",
+                  "type": "boolean",
+                  "required": true
+                }
+              ],
+              "status": "awaiting_input",
+              "requestId": "run-1793395449987-2:bridge",
+              "supplied": {},
+              "origins": {},
+              "missing": [
+                "go"
+              ],
+              "origin": {
+                "originalRequest": "Show metric series and cache paths in the last 2 hours",
+                "toolCallId": "bridge"
+              }
+            }
+          },
+          "subflowStates": {},
+          "executionCount": 62,
+          "visitCounts": {
+            "seed": 1,
+            "sf-results": 2,
+            "sf-results/declare-results": 2,
+            "sf-results/verify-results": 2,
+            "sf-results/record-results": 2,
+            "sf-results/resolve-results": 2,
+            "sf-injection-engine": 2,
+            "sf-injection-engine/gather": 2,
+            "sf-injection-engine/evaluate": 2,
+            "sf-injection-engine/route": 2,
+            "sf-injection-engine/delta": 2,
+            "context": 2,
+            "sf-system-prompt": 2,
+            "sf-system-prompt/compose": 2,
+            "sf-messages": 2,
+            "sf-messages/compose": 2,
+            "sf-tools": 2,
+            "sf-tools/discover": 2,
+            "sf-tools/compose": 2,
+            "sf-cache": 2,
+            "sf-cache/decide-cache-markers": 2,
+            "sf-cache/cache-gate": 2,
+            "sf-cache/apply-markers": 2,
+            "call-llm": 2,
+            "sf-inputs": 2,
+            "sf-inputs/declare-arguments": 2,
+            "sf-inputs/verify-arguments": 2,
+            "sf-inputs/record-arguments": 2,
+            "sf-inputs/resolve-arguments": 2,
+            "sf-route": 2,
+            "tool-calls": 3
+          },
+          "invokerStageId": "sf-route",
+          "pausedAt": 1793395450000
+        },
+        "pauseData": {
+          "toolCallId": "bridge",
+          "toolName": "checkpoint_bridge",
+          "question": "Continue the synthetic sequence?",
+          "awaitingInput": {
+            "id": "bridge",
+            "question": "Continue the synthetic sequence?",
+            "fields": [
+              {
+                "id": "go",
+                "type": "boolean",
+                "required": true
+              }
+            ],
+            "status": "awaiting_input",
+            "requestId": "run-1793395449987-2:bridge",
+            "supplied": {},
+            "origins": {},
+            "missing": [
+              "go"
+            ],
+            "origin": {
+              "originalRequest": "Show metric series and cache paths in the last 2 hours",
+              "toolCallId": "bridge"
+            }
+          }
+        },
+        "awaitingInput": {
+          "id": "bridge",
+          "question": "Continue the synthetic sequence?",
+          "fields": [
+            {
+              "id": "go",
+              "type": "boolean",
+              "required": true
+            }
+          ],
+          "status": "awaiting_input",
+          "requestId": "run-1793395449987-2:bridge",
+          "supplied": {},
+          "origins": {},
+          "missing": [
+            "go"
+          ],
+          "origin": {
+            "originalRequest": "Show metric series and cache paths in the last 2 hours",
+            "toolCallId": "bridge"
+          }
+        }
+      },
+      "seen": [],
+      "requests": [
+        {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Show metric series and cache paths in the last 2 hours"
+            },
+            {
+              "role": "user",
+              "content": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            }
+          ],
+          "tools": [
+            {
+              "name": "metric_series",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "cache_paths",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "checkpoint_bridge",
+              "description": "An inert pause before the target proposal.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ],
+          "model": "mock"
+        },
+        {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Show metric series and cache paths in the last 2 hours"
+            },
+            {
+              "role": "assistant",
+              "content": "",
+              "toolCalls": [
+                {
+                  "id": "c1",
+                  "name": "metric_series",
+                  "args": {
+                    "start": "2026-10-09T13:00:00Z"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "metric_series was not run to completion on that call: its check-in consent gate needed a person\u2019s approval for those arguments, and this batch had already paused once \u2014 to ask the person for argument values \u2014 so there was no second pause to ask with. The person's answer for stop was kept for the next metric_series call that leaves it out, so the call may be proposed again without stop.",
+              "toolCallId": "c1",
+              "toolName": "metric_series"
+            },
+            {
+              "role": "user",
+              "content": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            }
+          ],
+          "tools": [
+            {
+              "name": "metric_series",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "cache_paths",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "checkpoint_bridge",
+              "description": "An inert pause before the target proposal.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ],
+          "model": "mock"
+        }
+      ],
+      "index": 2,
+      "findings": [
+        {
+          "kind": "clock",
+          "turn": 1,
+          "iteration": 1,
+          "now": "2026-10-09T16:00:00Z",
+          "nowSource": "app",
+          "zone": "UTC",
+          "zoneSource": "builder"
+        },
+        {
+          "kind": "time-reading",
+          "turn": 1,
+          "iteration": 1,
+          "reader": {
+            "id": "agentfootprint/english",
+            "version": "1.2.0",
+            "kind": "rule",
+            "locale": "en-US"
+          },
+          "tzdata": "2025b",
+          "mentions": 1,
+          "mention": 0,
+          "quote": "last 2 hours",
+          "parses": [
+            {
+              "relative": {
+                "unit": "hour",
+                "count": 2
+              }
+            }
+          ],
+          "candidates": [
+            {
+              "window": {
+                "kind": "lookback",
+                "duration": "2h"
+              },
+              "range": {
+                "from": "2026-10-09T14:00:00Z",
+                "to": "2026-10-09T16:00:00.001Z"
+              },
+              "zone": "UTC",
+              "grain": "hour",
+              "implied": [],
+              "anchor": "message",
+              "notes": [],
+              "reading": {},
+              "said": [],
+              "reader": {
+                "id": "agentfootprint/english",
+                "kind": "rule"
+              },
+              "parse": 0
+            }
+          ],
+          "choice": {
+            "by": "open",
+            "remaining": [
+              0
+            ],
+            "open": [
+              "confirm"
+            ]
+          }
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "start",
+          "rule": "ask",
+          "period": true,
+          "source": "model",
+          "value": "2026-10-09T13:00:00Z"
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "stop",
+          "rule": "ask",
+          "period": true,
+          "asked": "missing"
+        },
+        {
+          "kind": "call-window",
+          "turn": 1,
+          "iteration": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "how": "unread"
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "stop",
+          "rule": "ask",
+          "period": true,
+          "source": "answered",
+          "value": "2026-10-09T15:00:00Z",
+          "free": true
+        },
+        {
+          "kind": "period",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "verdict": "undeclared",
+          "argument": "start"
+        },
+        {
+          "kind": "call",
+          "turn": 1,
+          "iteration": 2,
+          "toolCallId": "bridge",
+          "toolName": "checkpoint_bridge",
+          "dispatchedAt": "2026-10-30T21:24:09.999Z"
+        }
+      ]
+    }
+  },
+  "dynamic-grouped": {
+    "ordinary": {
+      "outcome": {
+        "paused": true,
+        "checkpoint": {
+          "checkpointVersion": 2,
+          "sharedState": {
+            "userMessage": "Show metric series and cache paths in the last 2 hours",
+            "history": [
+              {
+                "role": "user",
+                "content": "Show metric series and cache paths in the last 2 hours"
+              }
+            ],
+            "runIdentity": {
+              "conversationId": "run-1793395450239-1"
+            },
+            "newMessages": [],
+            "turnNumber": 1,
+            "contextTokensRemaining": 32000,
+            "iteration": 1,
+            "maxIterations": 6,
+            "finalContent": "",
+            "totalInputTokens": 0,
+            "totalOutputTokens": 0,
+            "turnStartMs": 1793395450245,
+            "systemPromptInjections": [],
+            "messagesInjections": [],
+            "toolsInjections": [],
+            "llmLatestContent": "",
+            "llmLatestToolCalls": [
+              {
+                "id": "c1",
+                "name": "metric_series",
+                "args": {
+                  "start": "2026-10-09T13:00:00Z"
+                }
+              }
+            ],
+            "thinkingBlocks": [],
+            "pausedToolCallId": "",
+            "pausedToolName": "",
+            "pausedToolStartMs": 0,
+            "cumTokensInput": 0,
+            "cumTokensOutput": 0,
+            "cumEstimatedUsd": 0,
+            "costBudgetHit": false,
+            "activeInjections": [],
+            "activatedInjectionIds": [],
+            "dynamicToolSchemas": [
+              {
+                "name": "metric_series",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "cache_paths",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "checkpoint_bridge",
+                "description": "An inert pause before the target proposal.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            ],
+            "honestyLayers": {
+              "inputs": true,
+              "results": true
+            },
+            "deliveredMessageKeys": [],
+            "cacheMarkers": [],
+            "cachingDisabled": false,
+            "skillHistory": [],
+            "findingsLedger": [
+              {
+                "kind": "clock",
+                "turn": 1,
+                "iteration": 1,
+                "now": "2026-10-09T16:00:00Z",
+                "nowSource": "app",
+                "zone": "UTC",
+                "zoneSource": "builder"
+              },
+              {
+                "kind": "time-reading",
+                "turn": 1,
+                "iteration": 1,
+                "reader": {
+                  "id": "agentfootprint/english",
+                  "version": "1.2.0",
+                  "kind": "rule",
+                  "locale": "en-US"
+                },
+                "tzdata": "2025b",
+                "mentions": 1,
+                "mention": 0,
+                "quote": "last 2 hours",
+                "parses": [
+                  {
+                    "relative": {
+                      "unit": "hour",
+                      "count": 2
+                    }
+                  }
+                ],
+                "candidates": [
+                  {
+                    "window": {
+                      "kind": "lookback",
+                      "duration": "2h"
+                    },
+                    "range": {
+                      "from": "2026-10-09T14:00:00Z",
+                      "to": "2026-10-09T16:00:00.001Z"
+                    },
+                    "zone": "UTC",
+                    "grain": "hour",
+                    "implied": [],
+                    "anchor": "message",
+                    "notes": [],
+                    "reading": {},
+                    "said": [],
+                    "reader": {
+                      "id": "agentfootprint/english",
+                      "kind": "rule"
+                    },
+                    "parse": 0
+                  }
+                ],
+                "choice": {
+                  "by": "open",
+                  "remaining": [
+                    0
+                  ],
+                  "open": [
+                    "confirm"
+                  ]
+                }
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "start",
+                "rule": "ask",
+                "period": true,
+                "source": "model",
+                "value": "2026-10-09T13:00:00Z"
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "stop",
+                "rule": "ask",
+                "period": true,
+                "asked": "missing"
+              },
+              {
+                "kind": "call-window",
+                "turn": 1,
+                "iteration": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "how": "unread"
+              }
+            ],
+            "receipt": {
+              "requestMeasurement": {
+                "boundary": "initial-prepared-request",
+                "format": "json-utf8-v1",
+                "status": "measured",
+                "total": {
+                  "jsonChars": 1724,
+                  "jsonBytes": 1732
+                },
+                "slots": {
+                  "messages": {
+                    "jsonChars": 804,
+                    "jsonBytes": 812
+                  },
+                  "tools": {
+                    "jsonChars": 883,
+                    "jsonBytes": 883
+                  }
+                }
+              },
+              "system": {
+                "hash": "5826e51f3f93dba0",
+                "chars": 0,
+                "pieces": []
+              },
+              "messages": {
+                "count": 2,
+                "entries": [
+                  {
+                    "role": "user",
+                    "hash": "68b1aa34af60c181"
+                  }
+                ],
+                "requestOnly": [
+                  {
+                    "role": "user",
+                    "hash": "1a747ad6b4691c28",
+                    "reason": "time-window-line"
+                  }
+                ]
+              },
+              "tools": {
+                "names": [
+                  "metric_series",
+                  "cache_paths",
+                  "checkpoint_bridge"
+                ],
+                "schemaHashes": {
+                  "metric_series": "5278802d67883cfe",
+                  "cache_paths": "84fd46c2daeb03b7",
+                  "checkpoint_bridge": "d8b84270ea7778b1"
+                },
+                "forced": null,
+                "withheld": null
+              },
+              "cache": {
+                "transform": "unchanged",
+                "transformHash": null,
+                "markersApplied": [],
+                "strategy": "none"
+              },
+              "params": {},
+              "basis": {
+                "epoch": 1,
+                "runId": "run-1793395450239-1",
+                "model": "mock",
+                "provider": "fixed-partial-window"
+              }
+            },
+            "argumentResolutions": [
+              {
+                "toolCallId": "c1",
+                "iteration": 1,
+                "ask": [
+                  "stop"
+                ]
+              }
+            ],
+            "argumentAsk": {
+              "iteration": 1,
+              "fields": [
+                {
+                  "type": "string",
+                  "question": "Until when?",
+                  "members": [
+                    {
+                      "toolName": "metric_series",
+                      "argument": "stop",
+                      "period": true,
+                      "toolCallIds": [
+                        "c1"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "progress": [
+                {
+                  "rounds": 1
+                }
+              ],
+              "waiting": {
+                "requestId": "run-1793395450239-1:arguments:1:1",
+                "fieldIndexes": [
+                  0
+                ],
+                "awaiting": {
+                  "id": "agentfootprint.arguments",
+                  "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+                  "fields": [
+                    {
+                      "id": "f1",
+                      "type": "string",
+                      "required": true,
+                      "description": "Until when?"
+                    }
+                  ],
+                  "context": {
+                    "agentfootprint": {
+                      "ask": "arguments",
+                      "fields": [
+                        {
+                          "id": "f1",
+                          "tool": "metric_series",
+                          "argument": "stop",
+                          "calls": [
+                            "c1"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "status": "awaiting_input",
+                  "requestId": "run-1793395450239-1:arguments:1:1",
+                  "supplied": {},
+                  "origins": {},
+                  "missing": [
+                    "f1"
+                  ],
+                  "origin": {
+                    "originalRequest": "Show metric series and cache paths in the last 2 hours",
+                    "toolCallId": "c1"
+                  }
+                }
+              }
+            }
+          },
+          "pausedStageId": "tool-calls",
+          "pausedExecution": {
+            "runId": "1793395450241-0000000001",
+            "runtimeStageId": "tool-calls#32"
+          },
+          "subflowPath": [],
+          "pauseData": {
+            "reason": "Before the next step can run, a few values are needed. Each field says what it is for.",
+            "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+            "awaitingInput": {
+              "id": "agentfootprint.arguments",
+              "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+              "fields": [
+                {
+                  "id": "f1",
+                  "type": "string",
+                  "required": true,
+                  "description": "Until when?"
+                }
+              ],
+              "context": {
+                "agentfootprint": {
+                  "ask": "arguments",
+                  "fields": [
+                    {
+                      "id": "f1",
+                      "tool": "metric_series",
+                      "argument": "stop",
+                      "calls": [
+                        "c1"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "status": "awaiting_input",
+              "requestId": "run-1793395450239-1:arguments:1:1",
+              "supplied": {},
+              "origins": {},
+              "missing": [
+                "f1"
+              ],
+              "origin": {
+                "originalRequest": "Show metric series and cache paths in the last 2 hours",
+                "toolCallId": "c1"
+              }
+            }
+          },
+          "subflowStates": {},
+          "executionCount": 33,
+          "visitCounts": {
+            "seed": 1,
+            "sf-results": 1,
+            "sf-results/declare-results": 1,
+            "sf-results/verify-results": 1,
+            "sf-results/record-results": 1,
+            "sf-results/resolve-results": 1,
+            "sf-llm-call": 1,
+            "sf-llm-call/turn-seed": 1,
+            "sf-llm-call/sf-injection-engine": 1,
+            "sf-llm-call/sf-injection-engine/gather": 1,
+            "sf-llm-call/sf-injection-engine/evaluate": 1,
+            "sf-llm-call/sf-injection-engine/route": 1,
+            "sf-llm-call/sf-injection-engine/delta": 1,
+            "sf-llm-call/context": 1,
+            "sf-llm-call/sf-system-prompt": 1,
+            "sf-llm-call/sf-system-prompt/compose": 1,
+            "sf-llm-call/sf-messages": 1,
+            "sf-llm-call/sf-messages/compose": 1,
+            "sf-llm-call/sf-tools": 1,
+            "sf-llm-call/sf-tools/discover": 1,
+            "sf-llm-call/sf-tools/compose": 1,
+            "sf-llm-call/sf-cache": 1,
+            "sf-llm-call/sf-cache/decide-cache-markers": 1,
+            "sf-llm-call/sf-cache/cache-gate": 1,
+            "sf-llm-call/sf-cache/apply-markers": 1,
+            "sf-llm-call/call-llm": 1,
+            "sf-inputs": 1,
+            "sf-inputs/declare-arguments": 1,
+            "sf-inputs/verify-arguments": 1,
+            "sf-inputs/record-arguments": 1,
+            "sf-inputs/resolve-arguments": 1,
+            "sf-route": 1,
+            "tool-calls": 1
+          },
+          "invokerStageId": "sf-route",
+          "pausedBy": "interrupt",
+          "pausedAt": 1793395450279
+        },
+        "pauseData": {
+          "reason": "Before the next step can run, a few values are needed. Each field says what it is for.",
+          "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+          "awaitingInput": {
+            "id": "agentfootprint.arguments",
+            "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+            "fields": [
+              {
+                "id": "f1",
+                "type": "string",
+                "required": true,
+                "description": "Until when?"
+              }
+            ],
+            "context": {
+              "agentfootprint": {
+                "ask": "arguments",
+                "fields": [
+                  {
+                    "id": "f1",
+                    "tool": "metric_series",
+                    "argument": "stop",
+                    "calls": [
+                      "c1"
+                    ]
+                  }
+                ]
+              }
+            },
+            "status": "awaiting_input",
+            "requestId": "run-1793395450239-1:arguments:1:1",
+            "supplied": {},
+            "origins": {},
+            "missing": [
+              "f1"
+            ],
+            "origin": {
+              "originalRequest": "Show metric series and cache paths in the last 2 hours",
+              "toolCallId": "c1"
+            }
+          }
+        },
+        "awaitingInput": {
+          "id": "agentfootprint.arguments",
+          "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+          "fields": [
+            {
+              "id": "f1",
+              "type": "string",
+              "required": true,
+              "description": "Until when?"
+            }
+          ],
+          "context": {
+            "agentfootprint": {
+              "ask": "arguments",
+              "fields": [
+                {
+                  "id": "f1",
+                  "tool": "metric_series",
+                  "argument": "stop",
+                  "calls": [
+                    "c1"
+                  ]
+                }
+              ]
+            }
+          },
+          "status": "awaiting_input",
+          "requestId": "run-1793395450239-1:arguments:1:1",
+          "supplied": {},
+          "origins": {},
+          "missing": [
+            "f1"
+          ],
+          "origin": {
+            "originalRequest": "Show metric series and cache paths in the last 2 hours",
+            "toolCallId": "c1"
+          }
+        }
+      },
+      "seen": [],
+      "requests": [
+        {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Show metric series and cache paths in the last 2 hours"
+            },
+            {
+              "role": "user",
+              "content": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            }
+          ],
+          "tools": [
+            {
+              "name": "metric_series",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "cache_paths",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "checkpoint_bridge",
+              "description": "An inert pause before the target proposal.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ],
+          "model": "mock"
+        }
+      ],
+      "index": 1,
+      "findings": [
+        {
+          "kind": "clock",
+          "turn": 1,
+          "iteration": 1,
+          "now": "2026-10-09T16:00:00Z",
+          "nowSource": "app",
+          "zone": "UTC",
+          "zoneSource": "builder"
+        },
+        {
+          "kind": "time-reading",
+          "turn": 1,
+          "iteration": 1,
+          "reader": {
+            "id": "agentfootprint/english",
+            "version": "1.2.0",
+            "kind": "rule",
+            "locale": "en-US"
+          },
+          "tzdata": "2025b",
+          "mentions": 1,
+          "mention": 0,
+          "quote": "last 2 hours",
+          "parses": [
+            {
+              "relative": {
+                "unit": "hour",
+                "count": 2
+              }
+            }
+          ],
+          "candidates": [
+            {
+              "window": {
+                "kind": "lookback",
+                "duration": "2h"
+              },
+              "range": {
+                "from": "2026-10-09T14:00:00Z",
+                "to": "2026-10-09T16:00:00.001Z"
+              },
+              "zone": "UTC",
+              "grain": "hour",
+              "implied": [],
+              "anchor": "message",
+              "notes": [],
+              "reading": {},
+              "said": [],
+              "reader": {
+                "id": "agentfootprint/english",
+                "kind": "rule"
+              },
+              "parse": 0
+            }
+          ],
+          "choice": {
+            "by": "open",
+            "remaining": [
+              0
+            ],
+            "open": [
+              "confirm"
+            ]
+          }
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "start",
+          "rule": "ask",
+          "period": true,
+          "source": "model",
+          "value": "2026-10-09T13:00:00Z"
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "stop",
+          "rule": "ask",
+          "period": true,
+          "asked": "missing"
+        },
+        {
+          "kind": "call-window",
+          "turn": 1,
+          "iteration": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "how": "unread"
+        }
+      ]
+    },
+    "kept": {
+      "outcome": {
+        "paused": true,
+        "checkpoint": {
+          "checkpointVersion": 2,
+          "sharedState": {
+            "userMessage": "Show metric series and cache paths in the last 2 hours",
+            "history": [
+              {
+                "role": "user",
+                "content": "Show metric series and cache paths in the last 2 hours"
+              },
+              {
+                "role": "assistant",
+                "content": "",
+                "toolCalls": [
+                  {
+                    "id": "c1",
+                    "name": "metric_series",
+                    "args": {
+                      "start": "2026-10-09T13:00:00Z"
+                    }
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "content": "metric_series was not run to completion on that call: its check-in consent gate needed a person\u2019s approval for those arguments, and this batch had already paused once \u2014 to ask the person for argument values \u2014 so there was no second pause to ask with. The person's answer for stop was kept for the next metric_series call that leaves it out, so the call may be proposed again without stop.",
+                "toolCallId": "c1",
+                "toolName": "metric_series"
+              },
+              {
+                "role": "assistant",
+                "content": "",
+                "toolCalls": [
+                  {
+                    "id": "bridge",
+                    "name": "checkpoint_bridge",
+                    "args": {}
+                  }
+                ]
+              }
+            ],
+            "runIdentity": {
+              "conversationId": "run-1793395450527-1"
+            },
+            "newMessages": [],
+            "turnNumber": 1,
+            "contextTokensRemaining": 32000,
+            "iteration": 2,
+            "maxIterations": 6,
+            "finalContent": "",
+            "totalInputTokens": 0,
+            "totalOutputTokens": 0,
+            "turnStartMs": 1793395450532,
+            "systemPromptInjections": [],
+            "messagesInjections": [],
+            "toolsInjections": [],
+            "llmLatestContent": "",
+            "llmLatestToolCalls": [
+              {
+                "id": "bridge",
+                "name": "checkpoint_bridge",
+                "args": {}
+              }
+            ],
+            "thinkingBlocks": [],
+            "pausedToolCallId": "bridge",
+            "pausedToolName": "checkpoint_bridge",
+            "pausedToolStartMs": 1793395450573,
+            "cumTokensInput": 0,
+            "cumTokensOutput": 0,
+            "cumEstimatedUsd": 0,
+            "costBudgetHit": false,
+            "activeInjections": [],
+            "activatedInjectionIds": [],
+            "dynamicToolSchemas": [
+              {
+                "name": "metric_series",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "cache_paths",
+                "description": "Read a synthetic interval.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    },
+                    "stop": {
+                      "type": "string",
+                      "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                    }
+                  }
+                }
+              },
+              {
+                "name": "checkpoint_bridge",
+                "description": "An inert pause before the target proposal.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            ],
+            "honestyLayers": {
+              "inputs": true,
+              "results": true
+            },
+            "deliveredMessageKeys": [],
+            "cacheMarkers": [],
+            "cachingDisabled": false,
+            "skillHistory": [],
+            "findingsLedger": [
+              {
+                "kind": "clock",
+                "turn": 1,
+                "iteration": 1,
+                "now": "2026-10-09T16:00:00Z",
+                "nowSource": "app",
+                "zone": "UTC",
+                "zoneSource": "builder"
+              },
+              {
+                "kind": "time-reading",
+                "turn": 1,
+                "iteration": 1,
+                "reader": {
+                  "id": "agentfootprint/english",
+                  "version": "1.2.0",
+                  "kind": "rule",
+                  "locale": "en-US"
+                },
+                "tzdata": "2025b",
+                "mentions": 1,
+                "mention": 0,
+                "quote": "last 2 hours",
+                "parses": [
+                  {
+                    "relative": {
+                      "unit": "hour",
+                      "count": 2
+                    }
+                  }
+                ],
+                "candidates": [
+                  {
+                    "window": {
+                      "kind": "lookback",
+                      "duration": "2h"
+                    },
+                    "range": {
+                      "from": "2026-10-09T14:00:00Z",
+                      "to": "2026-10-09T16:00:00.001Z"
+                    },
+                    "zone": "UTC",
+                    "grain": "hour",
+                    "implied": [],
+                    "anchor": "message",
+                    "notes": [],
+                    "reading": {},
+                    "said": [],
+                    "reader": {
+                      "id": "agentfootprint/english",
+                      "kind": "rule"
+                    },
+                    "parse": 0
+                  }
+                ],
+                "choice": {
+                  "by": "open",
+                  "remaining": [
+                    0
+                  ],
+                  "open": [
+                    "confirm"
+                  ]
+                }
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "start",
+                "rule": "ask",
+                "period": true,
+                "source": "model",
+                "value": "2026-10-09T13:00:00Z"
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "stop",
+                "rule": "ask",
+                "period": true,
+                "asked": "missing"
+              },
+              {
+                "kind": "call-window",
+                "turn": 1,
+                "iteration": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "how": "unread"
+              },
+              {
+                "kind": "argument",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "argument": "stop",
+                "rule": "ask",
+                "period": true,
+                "source": "answered",
+                "value": "2026-10-09T15:00:00Z",
+                "free": true
+              },
+              {
+                "kind": "period",
+                "turn": 1,
+                "toolCallId": "c1",
+                "toolName": "metric_series",
+                "iteration": 1,
+                "verdict": "undeclared",
+                "argument": "start"
+              },
+              {
+                "kind": "call",
+                "turn": 1,
+                "iteration": 2,
+                "toolCallId": "bridge",
+                "toolName": "checkpoint_bridge",
+                "dispatchedAt": "2026-10-30T21:24:10.573Z"
+              }
+            ],
+            "receipt": {
+              "requestMeasurement": {
+                "boundary": "initial-prepared-request",
+                "format": "json-utf8-v1",
+                "status": "measured",
+                "total": {
+                  "jsonChars": 2309,
+                  "jsonBytes": 2323
+                },
+                "slots": {
+                  "messages": {
+                    "jsonChars": 1389,
+                    "jsonBytes": 1403
+                  },
+                  "tools": {
+                    "jsonChars": 883,
+                    "jsonBytes": 883
+                  }
+                }
+              },
+              "system": {
+                "hash": "d1cca694e6cbfa84",
+                "chars": 0,
+                "pieces": []
+              },
+              "messages": {
+                "count": 4,
+                "entries": [
+                  {
+                    "role": "user",
+                    "hash": "2baca8aa658d8151"
+                  },
+                  {
+                    "role": "assistant",
+                    "hash": "81cdbed78f956381"
+                  },
+                  {
+                    "role": "tool",
+                    "hash": "a8c1eb272832ba72",
+                    "key": "c1"
+                  }
+                ],
+                "requestOnly": [
+                  {
+                    "role": "user",
+                    "hash": "a8163419956bdf19",
+                    "reason": "time-window-line"
+                  }
+                ]
+              },
+              "tools": {
+                "names": [
+                  "metric_series",
+                  "cache_paths",
+                  "checkpoint_bridge"
+                ],
+                "schemaHashes": {
+                  "metric_series": "4b551d03f4b2bb17",
+                  "cache_paths": "412637549f5859fa",
+                  "checkpoint_bridge": "daa1e427f255b3df"
+                },
+                "forced": null,
+                "withheld": null
+              },
+              "cache": {
+                "transform": "unchanged",
+                "transformHash": null,
+                "markersApplied": [],
+                "strategy": "none"
+              },
+              "params": {},
+              "basis": {
+                "epoch": 2,
+                "runId": "run-1793395450564-2",
+                "model": "mock",
+                "provider": "fixed-partial-window"
+              }
+            },
+            "argumentResolutions": [
+              {
+                "toolCallId": "c1",
+                "iteration": 1,
+                "ask": [
+                  "stop"
+                ]
+              }
+            ],
+            "toolResultsIteration": 2,
+            "argumentAnswersKept": [
+              {
+                "turn": 1,
+                "toolName": "metric_series",
+                "argument": "stop",
+                "value": "2026-10-09T15:00:00Z"
+              }
+            ],
+            "lastToolResult": {
+              "toolName": "metric_series",
+              "result": "metric_series was not run to completion on that call: its check-in consent gate needed a person\u2019s approval for those arguments, and this batch had already paused once \u2014 to ask the person for argument values \u2014 so there was no second pause to ask with. The person's answer for stop was kept for the next metric_series call that leaves it out, so the call may be proposed again without stop."
+            },
+            "toolResults": [],
+            "pausedToolArgs": {}
+          },
+          "pausedStageId": "tool-calls",
+          "pausedExecution": {
+            "runId": "1793395450565-0000000002",
+            "runtimeStageId": "tool-calls#65"
+          },
+          "subflowPath": [],
+          "pauseData": {
+            "toolCallId": "bridge",
+            "toolName": "checkpoint_bridge",
+            "question": "Continue the synthetic sequence?",
+            "awaitingInput": {
+              "id": "bridge",
+              "question": "Continue the synthetic sequence?",
+              "fields": [
+                {
+                  "id": "go",
+                  "type": "boolean",
+                  "required": true
+                }
+              ],
+              "status": "awaiting_input",
+              "requestId": "run-1793395450564-2:bridge",
+              "supplied": {},
+              "origins": {},
+              "missing": [
+                "go"
+              ],
+              "origin": {
+                "originalRequest": "Show metric series and cache paths in the last 2 hours",
+                "toolCallId": "bridge"
+              }
+            }
+          },
+          "subflowStates": {},
+          "executionCount": 66,
+          "visitCounts": {
+            "seed": 1,
+            "sf-results": 2,
+            "sf-results/declare-results": 2,
+            "sf-results/verify-results": 2,
+            "sf-results/record-results": 2,
+            "sf-results/resolve-results": 2,
+            "sf-llm-call": 2,
+            "sf-llm-call/turn-seed": 2,
+            "sf-llm-call/sf-injection-engine": 2,
+            "sf-llm-call/sf-injection-engine/gather": 2,
+            "sf-llm-call/sf-injection-engine/evaluate": 2,
+            "sf-llm-call/sf-injection-engine/route": 2,
+            "sf-llm-call/sf-injection-engine/delta": 2,
+            "sf-llm-call/context": 2,
+            "sf-llm-call/sf-system-prompt": 2,
+            "sf-llm-call/sf-system-prompt/compose": 2,
+            "sf-llm-call/sf-messages": 2,
+            "sf-llm-call/sf-messages/compose": 2,
+            "sf-llm-call/sf-tools": 2,
+            "sf-llm-call/sf-tools/discover": 2,
+            "sf-llm-call/sf-tools/compose": 2,
+            "sf-llm-call/sf-cache": 2,
+            "sf-llm-call/sf-cache/decide-cache-markers": 2,
+            "sf-llm-call/sf-cache/cache-gate": 2,
+            "sf-llm-call/sf-cache/apply-markers": 2,
+            "sf-llm-call/call-llm": 2,
+            "sf-inputs": 2,
+            "sf-inputs/declare-arguments": 2,
+            "sf-inputs/verify-arguments": 2,
+            "sf-inputs/record-arguments": 2,
+            "sf-inputs/resolve-arguments": 2,
+            "sf-route": 2,
+            "tool-calls": 3
+          },
+          "invokerStageId": "sf-route",
+          "pausedAt": 1793395450574
+        },
+        "pauseData": {
+          "toolCallId": "bridge",
+          "toolName": "checkpoint_bridge",
+          "question": "Continue the synthetic sequence?",
+          "awaitingInput": {
+            "id": "bridge",
+            "question": "Continue the synthetic sequence?",
+            "fields": [
+              {
+                "id": "go",
+                "type": "boolean",
+                "required": true
+              }
+            ],
+            "status": "awaiting_input",
+            "requestId": "run-1793395450564-2:bridge",
+            "supplied": {},
+            "origins": {},
+            "missing": [
+              "go"
+            ],
+            "origin": {
+              "originalRequest": "Show metric series and cache paths in the last 2 hours",
+              "toolCallId": "bridge"
+            }
+          }
+        },
+        "awaitingInput": {
+          "id": "bridge",
+          "question": "Continue the synthetic sequence?",
+          "fields": [
+            {
+              "id": "go",
+              "type": "boolean",
+              "required": true
+            }
+          ],
+          "status": "awaiting_input",
+          "requestId": "run-1793395450564-2:bridge",
+          "supplied": {},
+          "origins": {},
+          "missing": [
+            "go"
+          ],
+          "origin": {
+            "originalRequest": "Show metric series and cache paths in the last 2 hours",
+            "toolCallId": "bridge"
+          }
+        }
+      },
+      "seen": [],
+      "requests": [
+        {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Show metric series and cache paths in the last 2 hours"
+            },
+            {
+              "role": "user",
+              "content": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            }
+          ],
+          "tools": [
+            {
+              "name": "metric_series",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "cache_paths",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "checkpoint_bridge",
+              "description": "An inert pause before the target proposal.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ],
+          "model": "mock"
+        },
+        {
+          "messages": [
+            {
+              "role": "user",
+              "content": "Show metric series and cache paths in the last 2 hours"
+            },
+            {
+              "role": "assistant",
+              "content": "",
+              "toolCalls": [
+                {
+                  "id": "c1",
+                  "name": "metric_series",
+                  "args": {
+                    "start": "2026-10-09T13:00:00Z"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "metric_series was not run to completion on that call: its check-in consent gate needed a person\u2019s approval for those arguments, and this batch had already paused once \u2014 to ask the person for argument values \u2014 so there was no second pause to ask with. The person's answer for stop was kept for the next metric_series call that leaves it out, so the call may be proposed again without stop.",
+              "toolCallId": "c1",
+              "toolName": "metric_series"
+            },
+            {
+              "role": "user",
+              "content": "[A note from the library that runs the tools \u2014 not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-10-09 16:00 UTC. The window for \u201clast 2 hours\u201d is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when metric_series is called with start, stop left out, or cache_paths is called with start, stop left out (or the call is refused with the reason). So the next step is that call \u2014 not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+            }
+          ],
+          "tools": [
+            {
+              "name": "metric_series",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "cache_paths",
+              "description": "Read a synthetic interval.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  },
+                  "stop": {
+                    "type": "string",
+                    "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+                  }
+                }
+              }
+            },
+            {
+              "name": "checkpoint_bridge",
+              "description": "An inert pause before the target proposal.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ],
+          "model": "mock"
+        }
+      ],
+      "index": 2,
+      "findings": [
+        {
+          "kind": "clock",
+          "turn": 1,
+          "iteration": 1,
+          "now": "2026-10-09T16:00:00Z",
+          "nowSource": "app",
+          "zone": "UTC",
+          "zoneSource": "builder"
+        },
+        {
+          "kind": "time-reading",
+          "turn": 1,
+          "iteration": 1,
+          "reader": {
+            "id": "agentfootprint/english",
+            "version": "1.2.0",
+            "kind": "rule",
+            "locale": "en-US"
+          },
+          "tzdata": "2025b",
+          "mentions": 1,
+          "mention": 0,
+          "quote": "last 2 hours",
+          "parses": [
+            {
+              "relative": {
+                "unit": "hour",
+                "count": 2
+              }
+            }
+          ],
+          "candidates": [
+            {
+              "window": {
+                "kind": "lookback",
+                "duration": "2h"
+              },
+              "range": {
+                "from": "2026-10-09T14:00:00Z",
+                "to": "2026-10-09T16:00:00.001Z"
+              },
+              "zone": "UTC",
+              "grain": "hour",
+              "implied": [],
+              "anchor": "message",
+              "notes": [],
+              "reading": {},
+              "said": [],
+              "reader": {
+                "id": "agentfootprint/english",
+                "kind": "rule"
+              },
+              "parse": 0
+            }
+          ],
+          "choice": {
+            "by": "open",
+            "remaining": [
+              0
+            ],
+            "open": [
+              "confirm"
+            ]
+          }
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "start",
+          "rule": "ask",
+          "period": true,
+          "source": "model",
+          "value": "2026-10-09T13:00:00Z"
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "stop",
+          "rule": "ask",
+          "period": true,
+          "asked": "missing"
+        },
+        {
+          "kind": "call-window",
+          "turn": 1,
+          "iteration": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "how": "unread"
+        },
+        {
+          "kind": "argument",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "argument": "stop",
+          "rule": "ask",
+          "period": true,
+          "source": "answered",
+          "value": "2026-10-09T15:00:00Z",
+          "free": true
+        },
+        {
+          "kind": "period",
+          "turn": 1,
+          "toolCallId": "c1",
+          "toolName": "metric_series",
+          "iteration": 1,
+          "verdict": "undeclared",
+          "argument": "start"
+        },
+        {
+          "kind": "call",
+          "turn": 1,
+          "iteration": 2,
+          "toolCallId": "bridge",
+          "toolName": "checkpoint_bridge",
+          "dispatchedAt": "2026-10-30T21:24:10.573Z"
+        }
+      ]
+    }
+  }
+}

@@ -4847,12 +4847,17 @@ export function buildToolCallsHandler(
       if (
         inputs !== undefined &&
         resolutions !== undefined &&
-        [...resolutions.values()].some((r) => r.ask !== undefined)
+        ([...resolutions.values()].some((r) => r.ask !== undefined) ||
+          deps.time?.reader !== undefined)
       ) {
         // Loaded on first use — the optional-family law: a plain agent's
         // graph never carries the ask (`test/trace-toolpack/browserGraph`).
         const { askBeforeDispatch } = await import('./argumentAsk.js');
         const asked = askBeforeDispatch(scope, resolutions, {
+          excludedCallIds: toolCalls
+            .filter((_, index) => findingsRefusals[index] !== undefined)
+            .map((call) => call.id),
+          ...(deps.argumentSources === true && { argumentSources: true as const }),
           toolOf: (toolName) => resolveTool(toolName).tool,
           runId: () => runFactsOf(scope)?.runId,
           ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
