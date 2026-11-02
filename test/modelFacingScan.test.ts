@@ -503,11 +503,25 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a conformance assertion message, read by whoever runs the suite against a store',
     },
   ],
+  'src/artifacts/gcsArtifacts.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the fixed client-construction diagnostic from GcsArtifactsConfigurationError is thrown to the host while wiring the store, before a store is returned or a model request exists; its SDK configuration instruction never enters tool results or conversation history',
+    },
+  ],
   'src/artifacts/objectStore.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a store error thrown to the host',
+    },
+  ],
+  'src/artifacts/s3Artifacts.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the fixed client-construction diagnostic from S3ArtifactsConfigurationError is thrown to the host while wiring the store, before a store is returned or a model request exists; its SDK configuration instruction never enters tool results or conversation history',
     },
   ],
   'src/artifacts/sqliteArtifacts.ts': [
@@ -1261,12 +1275,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // clause (scripts/recovery.ts) is request-only and registered in
         // modelFacingSurfaces; it matches no persistent rule. files 105 → 106,
         // total 204 → 206, notModelFacing 135 → 137.
-        files: 106,
-        total: 206,
+        // Vendor-neutral artifact construction: two fixed SDK-construction
+        // diagnostics instruct the host at factory wiring, never the model.
+        // Two new files/literals; persistent and unrepaired counts unchanged.
+        // files 106 → 108, total 206 → 208, notModelFacing 137 → 139.
+        files: 108,
+        total: 208,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 137,
+        notModelFacing: 139,
         unrepairedEntries: 15,
       });
       // And the ledger's own total is the number of literals the scan flagged —
