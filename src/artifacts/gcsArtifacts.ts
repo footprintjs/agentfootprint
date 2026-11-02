@@ -213,8 +213,7 @@ export interface GcsArtifactsOptions {
   readonly bucket: string;
   /** Object-name prefix inside the bucket, so a bucket can be shared. */
   readonly prefix?: string;
-  /** Project id for the client this factory builds. Ignored when `storage` is
-   *  passed — that client's configuration is yours. */
+  /** Project id for the client this factory builds. Cannot accompany `storage`. */
   readonly projectId?: string;
   /** Your own pre-built client; configuration and credentials stay yours. */
   readonly storage?: GcsStorageLike;
@@ -226,6 +225,23 @@ export interface GcsArtifactsOptions {
   readonly _storage?: GcsStorageLike;
   /** @internal Test seam — the clock. Defaults to `Date.now`. */
   readonly _now?: () => number;
+}
+
+/** A configuration conflict or an SDK client that could not be constructed. */
+export class GcsArtifactsConfigurationError extends Error {
+  readonly code = 'ERR_GCS_ARTIFACTS_CONFIGURATION' as const;
+
+  constructor(
+    readonly reason: 'conflicting-options' | 'client-construction-failed' = 'conflicting-options',
+  ) {
+    super(
+      reason === 'conflicting-options'
+        ? '[artifacts] gcsArtifacts: storage cannot accompany projectId. ' +
+            'Configure the supplied storage client itself, or omit storage and let this factory build it.'
+        : '[artifacts] gcsArtifacts: could not construct the SDK client. Check the SDK and client configuration; backend error text is withheld.',
+    );
+    this.name = 'GcsArtifactsConfigurationError';
+  }
 }
 
 /** Load the peer dep, or refuse by name with the install line. */
@@ -250,6 +266,20 @@ function loadGcsSdk(): GcsSdkModule {
     );
   }
   return mod;
+}
+
+function buildStorage(options: GcsArtifactsOptions): GcsStorageLike {
+  // loadGcsSdk checks this constructor, preserving the missing-SDK install message.
+  const Storage = options._sdk?.Storage ?? loadGcsSdk().Storage;
+  if (typeof Storage !== 'function')
+    throw new GcsArtifactsConfigurationError('client-construction-failed');
+  try {
+    return new Storage({
+      ...(options.projectId !== undefined && { projectId: options.projectId }),
+    });
+  } catch {
+    throw new GcsArtifactsConfigurationError('client-construction-failed');
+  }
 }
 
 /**
@@ -288,6 +318,9 @@ function toMillis(value: string | undefined): number {
  *   const agent = Agent.create({ provider, artifacts: store });
  */
 export function gcsArtifacts(options: GcsArtifactsOptions): ArtifactStore {
+  if (options.storage !== undefined && options.projectId !== undefined) {
+    throw new GcsArtifactsConfigurationError();
+  }
   const bucketName = assertBucketOption('gcsArtifacts', 'bucket', options.bucket);
   const root = normalizeKeyRoot('gcsArtifacts', options.prefix);
   const { retention } = options;
@@ -296,14 +329,7 @@ export function gcsArtifacts(options: GcsArtifactsOptions): ArtifactStore {
 
   // Resolved at CONSTRUCTION — a missing peer dep refuses where the config
   // was written, not at the first put of the first run.
-  const storage: GcsStorageLike =
-    options._storage ??
-    options.storage ??
-    // Checked by loadGcsSdk.
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    new (options._sdk?.Storage ?? loadGcsSdk().Storage!)({
-      ...(options.projectId !== undefined && { projectId: options.projectId }),
-    });
+  const storage: GcsStorageLike = options._storage ?? options.storage ?? buildStorage(options);
   const bucket = storage.bucket(bucketName);
 
   const nameFor = (scope: ArtifactScope, ref: ArtifactRef): string =>

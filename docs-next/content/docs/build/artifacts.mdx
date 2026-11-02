@@ -533,9 +533,13 @@ An `ArtifactRef` is `art_` + 22 crypto-random chars (~26 total — `ARTIFACT_REF
 
 ## Five adapters
 
+The root entry keeps the `ArtifactStore` port and the three local defaults.
+Backend adapters are imported from `agentfootprint/artifacts`; their SDKs
+are optional and load when the adapter is constructed, never on import.
+
 ```ts
 import { inMemoryArtifacts, fileArtifacts, sqliteArtifacts } from 'agentfootprint';
-import { s3Artifacts, gcsArtifacts } from 'agentfootprint';
+import { s3Artifacts, gcsArtifacts } from 'agentfootprint/artifacts';
 
 inMemoryArtifacts()                             // dev/tests — bounded, drop-counting
 fileArtifacts({ directory: './artifacts' })     // one legible JSON file per artifact
@@ -543,6 +547,29 @@ sqliteArtifacts({ file: './data/artifacts.db' })// one SQLite file — pairs wit
 s3Artifacts({ bucket: 'my-agent-artifacts' })   // a fleet, in an S3 bucket
 gcsArtifacts({ bucket: 'my-agent-artifacts' })  // a fleet, in a Cloud Storage bucket
 ```
+
+### S3-compatible endpoints
+
+`s3Artifacts` speaks the S3-compatible object API used by AWS S3, MinIO and
+Ceph. `endpoint` is passed unchanged to the SDK client this factory builds;
+omitting it preserves the SDK's normal regional endpoint. Configure SDK
+credentials through its normal credential chain. Set `forcePathStyle: true` when your server needs path-style bucket
+addressing (for example, when wildcard DNS is unavailable). Explicit `false`
+is forwarded too; omitting it preserves the SDK default. A supplied `client`
+owns its endpoint, region, credentials and addressing. Combining `client`
+with any of `region`, `endpoint` or `forcePathStyle` throws
+`S3ArtifactsConfigurationError` (`ERR_S3_ARTIFACTS_CONFIGURATION`) at construction.
+Use the client itself for settings beyond these typed options. Even a supplied
+S3 client needs the optional SDK installed because the adapter uses its command classes.
+
+<CodeFile path="examples/artifacts/s3-compatible-config.ts" region="s3-compatible-config" title="Configure an S3-compatible service" />
+
+The runnable example is configuration-only. The repository's SDK-double
+tests prove configuration forwarding and the artifact contract; no MinIO
+or Ceph deployment has been verified here. `gcsArtifacts` uses Google's
+Cloud Storage API, not the S3-compatible API. Combining its `storage` client
+with `projectId` throws `GcsArtifactsConfigurationError`
+(`ERR_GCS_ARTIFACTS_CONFIGURATION`); configure the supplied client itself.
 
 One ladder, one contract: a tool that stored a dataset against the in-memory store stores it in a bucket by swapping one constructor. The five run **the same contract suite** — a cloud column that drifts from the port fails the shipped adapters' own tests.
 

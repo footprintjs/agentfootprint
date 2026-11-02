@@ -166,7 +166,11 @@ export interface S3ArtifactsClientLike {
 
 /** The five command constructors this adapter dispatches. */
 export interface S3ArtifactsSdkModule {
-  readonly S3Client?: new (config: { region?: string }) => S3ArtifactsClientLike;
+  readonly S3Client?: new (config: {
+    region?: string;
+    endpoint?: string;
+    forcePathStyle?: boolean;
+  }) => S3ArtifactsClientLike;
   readonly PutObjectCommand?: new (input: unknown) => unknown;
   readonly GetObjectCommand?: new (input: unknown) => unknown;
   readonly HeadObjectCommand?: new (input: unknown) => unknown;
@@ -181,9 +185,16 @@ export interface S3ArtifactsOptions {
   /** Key prefix inside the bucket, so a bucket can be shared. The scope
    *  layout starts under it. Absent = at the root of the bucket. */
   readonly prefix?: string;
-  /** Region for the client this factory builds. Ignored when `client` is
-   *  passed — that client's configuration is yours. */
+  /** Region for the client this factory builds. Cannot accompany `client`. */
   readonly region?: string;
+  /** S3-compatible service endpoint for the client this factory builds.
+   *  Omit it for the SDK's normal regional endpoint. Cannot accompany
+   *  `client`; configure that client's endpoint and addressing yourself. */
+  readonly endpoint?: string;
+  /** Use path-style bucket addressing. Useful for S3-compatible services
+   *  without wildcard DNS. Omit to keep the SDK default. Cannot accompany
+   *  `client`, including when explicitly false. */
+  readonly forcePathStyle?: boolean;
   /** Your own pre-built client; configuration and credentials stay yours. */
   readonly client?: S3ArtifactsClientLike;
   /** Retention dials. Budgets evict OLDEST-first here: S3 has no cheap
@@ -196,6 +207,23 @@ export interface S3ArtifactsOptions {
   readonly _client?: S3ArtifactsClientLike;
   /** @internal Test seam — the clock. Defaults to `Date.now`. */
   readonly _now?: () => number;
+}
+
+/** A configuration conflict or an SDK client that could not be constructed. */
+export class S3ArtifactsConfigurationError extends Error {
+  readonly code = 'ERR_S3_ARTIFACTS_CONFIGURATION' as const;
+
+  constructor(
+    readonly reason: 'conflicting-options' | 'client-construction-failed' = 'conflicting-options',
+  ) {
+    super(
+      reason === 'conflicting-options'
+        ? '[artifacts] s3Artifacts: client cannot accompany region, endpoint or forcePathStyle. ' +
+            'Configure the supplied client itself, or omit client and let this factory build it.'
+        : '[artifacts] s3Artifacts: could not construct the SDK client. Check the SDK and client configuration; backend error text is withheld.',
+    );
+    this.name = 'S3ArtifactsConfigurationError';
+  }
 }
 
 /** Load the peer dep, or refuse by name with the install line. */
@@ -312,6 +340,14 @@ async function* countedChunks(
  *   const agent = Agent.create({ provider, artifacts: store });
  */
 export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
+  if (
+    options.client !== undefined &&
+    (options.region !== undefined ||
+      options.endpoint !== undefined ||
+      options.forcePathStyle !== undefined)
+  ) {
+    throw new S3ArtifactsConfigurationError();
+  }
   const bucket = assertBucketOption('s3Artifacts', 'bucket', options.bucket);
   const root = normalizeKeyRoot('s3Artifacts', options.prefix);
   const { retention } = options;
@@ -321,7 +357,7 @@ export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
   // Resolved at CONSTRUCTION: a missing peer dep refuses where the config was
   // written, not at the first put of the first run.
   const sdk = options._sdk ?? (options._client ? {} : loadS3Sdk());
-  const client = options._client ?? options.client ?? buildClient(sdk, options.region);
+  const client = options._client ?? options.client ?? buildClient(sdk, options);
   const commands = resolveCommands(
     sdk,
     options._client !== undefined || options.client !== undefined,
@@ -636,14 +672,25 @@ function toMillis(value: Date | string | undefined): number {
   return 0;
 }
 
-function buildClient(sdk: S3ArtifactsSdkModule, region: string | undefined): S3ArtifactsClientLike {
+function buildClient(
+  sdk: S3ArtifactsSdkModule,
+  { region, endpoint, forcePathStyle }: S3ArtifactsOptions,
+): S3ArtifactsClientLike {
   if (typeof sdk.S3Client !== 'function') {
     throw new Error(
       `[artifacts] s3Artifacts: \`@aws-sdk/client-s3\` is installed but exports no S3Client. ` +
         `Update the SDK, or pass \`client\` with a pre-built one.`,
     );
   }
-  return new sdk.S3Client({ ...(region !== undefined && { region }) });
+  try {
+    return new sdk.S3Client({
+      ...(region !== undefined && { region }),
+      ...(endpoint !== undefined && { endpoint }),
+      ...(forcePathStyle !== undefined && { forcePathStyle }),
+    });
+  } catch {
+    throw new S3ArtifactsConfigurationError('client-construction-failed');
+  }
 }
 
 /**

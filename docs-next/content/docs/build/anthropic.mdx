@@ -13,7 +13,7 @@ npm install @anthropic-ai/sdk
 
 The SDK is a peer dependency declared in `peerDependenciesMeta` with `optional: true` — npm doesn't auto-install it. Lazy-required at first call; friendly install hint if missing.
 
-`anthropic()` is imported from the `agentfootprint/providers` subpath, NOT the main `agentfootprint` barrel. Every provider lives there — `mock`, the browser variants and `createProvider` included — so bundlers walking the main entry never touch the optional peer-dep requires. (The one provider helper on the main barrel is `providerFromEnv`.)
+`anthropic()` is imported from the `agentfootprint/providers` subpath, NOT the main `agentfootprint` barrel. Every provider lives there — `mock`, the browser variants and `createProvider` included — so bundlers walking the main entry never touch the optional peer-dep requires. `providerFromEnv` lives on the same subpath.
 
 ## Use
 

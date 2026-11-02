@@ -209,7 +209,7 @@ function declared(raw: string | undefined): string | undefined {
  * from the call itself with `ollama serve` in the message.
  *
  * @example
- *   import { providerFromEnv } from 'agentfootprint';
+ *   import { providerFromEnv } from 'agentfootprint/providers';
  *   const { provider, model, kind } = providerFromEnv({ fallbackToMock: true });
  *   const agent = Agent.create({ provider, model }).build();
  */

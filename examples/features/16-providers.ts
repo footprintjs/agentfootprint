@@ -23,7 +23,8 @@
  * (`AZURE_OPENAI_DEPLOYMENT` or `MODEL_NAME`), not a kind label.
  */
 
-import { Agent, providerFromEnv, type LLMProvider } from '../../src/index.js';
+import { Agent, type LLMProvider } from '../../src/index.js';
+import { providerFromEnv } from '../../src/doors/providers.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {

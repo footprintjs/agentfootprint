@@ -150,7 +150,8 @@ OLLAMA_MODEL=llama3.2    # → ollama('llama3.2')
 ```
 
 ```ts
-import { Agent, providerFromEnv } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { providerFromEnv } from 'agentfootprint/providers';
 
 const { provider, model } = providerFromEnv({ fallbackToMock: true });
 const agent = Agent.create({ provider, model }).build();
