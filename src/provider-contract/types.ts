@@ -171,7 +171,7 @@ export interface LLMMessage {
    *
    * **One definition, two carriers.** The settled call's two brackets on the
    * event stream carry the same fact under the same name, typed off THIS field
-   * (`events/payloads.ts` · `ToolStartPayload.notDispatched`,
+   * (`events/payloads/stream.ts` · `ToolStartPayload.notDispatched`,
    * `ToolEndPayload.notDispatched`), so a reader of the stream alone never has
    * to guess from a `durationMs: 0` bracket whether the call ran.
    *
