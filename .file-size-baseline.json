@@ -60,7 +60,7 @@
     "src/core/agent/stages/route.ts": 1970,
     "src/core/agent/stages/routeTurn.ts": 621,
     "src/core/agent/stages/seed.ts": 1006,
-    "src/core/agent/stages/toolCalls.ts": 7971,
+    "src/core/agent/stages/toolCalls.ts": 7293,
     "src/core/agent/types.ts": 2556,
     "src/core/checkin.ts": 687,
     "src/core/codeRunnerTool.ts": 959,
