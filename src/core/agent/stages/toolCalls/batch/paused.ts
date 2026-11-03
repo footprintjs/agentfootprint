@@ -66,7 +66,7 @@ export type ProposedCall = NonNullable<LLMMessage['toolCalls']>[number];
  * therefore the one owner of "which calls does the next request carry", and
  * the checkpoint gains no key: a checkpoint written before this release
  * settles the same way. The window never removes the turn holding the paused
- * call (`../window/turns.ts` · `refusalFor`, its `paused-tool` arm).
+ * call (`../../../window/turns.ts` · `refusalFor`, its `paused-tool` arm).
  *
  * The LATEST turn proposing the id is the paused one — the pause site commits
  * that turn last, and a provider may reuse an id across turns. No such turn:

@@ -13,7 +13,7 @@ import type { ProducedResult } from '../../../../../integrity/empty-lookup/check
  *
  * A message the batch settlement wrote (9.113.0) is no result: its ground
  * never ran, so it produced nothing to take a value from. Read off the marker
- * (`../findings/offer.ts` · `isResultMessage`), never the sentence.
+ * (`../../../findings/offer.ts` · `isResultMessage`), never the sentence.
  *
  * Each result is read as the TOOL's own bytes (`lib/toolBytes.ts` ·
  * `toolBytesOf`): the note the inputs layer appends after a filled call's

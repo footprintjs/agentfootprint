@@ -1,3 +1,8 @@
+**Mixed** — the extracted tool-call units, grouped by their existing jobs.
+Walker: credential dispatch and batch-state updates in `decorators/` and `batch/`.
+Lens: the refusal and settlement sentences in `helpers/` and `batch/`.
+Fold: paused-batch and producer-corpus projections in `batch/` and `evidence/`.
+
 # Tool-call stage modules
 
 `../toolCalls.ts` remains the stage entry and exports the same handler and helpers.

@@ -40,7 +40,7 @@ export function appendBatchResult(
  * the surfaces recomposed per request (the tool list, the system prompt) own
  * the present tense. Precedents: the 9.86.1 resumed-call refusal in this file
  * ("was not executed on that call, and the resumed dispatch had no second
- * checkpoint…") and `../selfCallNotice.ts` · `selfCallNotice`.
+ * checkpoint…") and `../../../selfCallNotice.ts` · `selfCallNotice`.
  *
  * "The run paused ON call …", never "call … paused the run": on two of the
  * four doors the pause was a gate's, not the call's — a middleware's `ask`, a
