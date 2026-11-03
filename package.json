@@ -311,7 +311,17 @@
       }
     },
     "./package.json": "./package.json",
-    "./canonical-notes.json": "./canonical-notes.json"
+    "./canonical-notes.json": "./canonical-notes.json",
+    "./artifacts": {
+      "import": {
+        "types": "./dist/esm/doors/artifacts.d.ts",
+        "default": "./dist/esm/doors/artifacts.js"
+      },
+      "require": {
+        "types": "./dist/types/doors/artifacts.d.ts",
+        "default": "./dist/doors/artifacts.js"
+      }
+    }
   },
   "typesVersions": {
     "*": {
@@ -368,6 +378,9 @@
       ],
       "ag-ui": [
         "./dist/types/doors/ag-ui.d.ts"
+      ],
+      "artifacts": [
+        "./dist/types/doors/artifacts.d.ts"
       ]
     }
   },

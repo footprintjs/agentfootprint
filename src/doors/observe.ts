@@ -34,3 +34,9 @@ export * from '../status.js';
 export * from '../debug.js';
 export * from '../debug/finders.js';
 export * from '../locales/index.js';
+
+export {
+  AdapterConfigurationError,
+  type AdapterConfigurationAdapter,
+  type AdapterConfigurationReason,
+} from '../lib/adapterConfiguration.js';

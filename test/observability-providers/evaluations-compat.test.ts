@@ -179,7 +179,17 @@ describe('the instrumentation scope name is a knob', () => {
 describe('agentCoreEvaluationSpans is a configuration, not a second adapter', () => {
   it('produces the same strategy identity as the neutral adapter', () => {
     const { tracer } = makeMockTracer();
-    const strat = agentCoreEvaluationSpans({ serviceName: 'svc', tracer });
+    const strat = agentCoreEvaluationSpans({
+      serviceName: 'svc',
+      _otelApi: {
+        trace: {
+          getTracer: (scope: string) => {
+            expect(scope).toBe(AGENTCORE_EVALUATIONS_SCOPE_NAME);
+            return tracer;
+          },
+        },
+      },
+    });
     // Same name and capabilities: nothing about it is a separate implementation.
     expect(strat.name).toBe('otel');
     expect(strat.capabilities.traces).toBe(true);
@@ -187,7 +197,19 @@ describe('agentCoreEvaluationSpans is a configuration, not a second adapter', ()
 
   it('turns content capture on, because a scorer cannot grade what it cannot read', () => {
     const { tracer, spans } = makeMockTracer();
-    runTurn(agentCoreEvaluationSpans({ serviceName: 'svc', tracer }));
+    runTurn(
+      agentCoreEvaluationSpans({
+        serviceName: 'svc',
+        _otelApi: {
+          trace: {
+            getTracer: (scope: string) => {
+              expect(scope).toBe(AGENTCORE_EVALUATIONS_SCOPE_NAME);
+              return tracer;
+            },
+          },
+        },
+      }),
+    );
 
     const root = spans[0]!;
     expect(root.attributes['gen_ai.task.input']).toBe(PROMPT);
@@ -196,11 +218,24 @@ describe('agentCoreEvaluationSpans is a configuration, not a second adapter', ()
 
   it('lets a caller opt content back out, but never the scope name', () => {
     const { tracer, spans } = makeMockTracer();
-    runTurn(agentCoreEvaluationSpans({ serviceName: 'svc', tracer, captureContent: false }));
+    runTurn(
+      agentCoreEvaluationSpans({
+        serviceName: 'svc',
+        _otelApi: {
+          trace: {
+            getTracer: (scope: string) => {
+              expect(scope).toBe(AGENTCORE_EVALUATIONS_SCOPE_NAME);
+              return tracer;
+            },
+          },
+        },
+        captureContent: false,
+      }),
+    );
     expect(spans[0]!.attributes['gen_ai.task.input']).toBeUndefined();
 
     // The scope name is the whole reason this function exists, so an override
-    // of it is refused by construction rather than honoured into silence.
+    // of it is replaced with the fixed name before the tracer is requested.
     let requested: string | undefined;
     const api = {
       trace: {

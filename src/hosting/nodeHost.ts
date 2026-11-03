@@ -389,6 +389,7 @@ function mintSessionId(): string {
  *   await handle.close();
  */
 export function nodeHost(options: NodeHostOptions = {}): NodeHost {
+  const { server, port, hostname, onUnhandled } = options;
   // The shared default instance when nothing about sessions was re-decided, so
   // a host built with no options is the same object graph it always was.
   const wire =
@@ -413,13 +414,13 @@ export function nodeHost(options: NodeHostOptions = {}): NodeHost {
     // there is no port to default, and a port passed WITH one is a caller who
     // believes something untrue about where their agent answers — `httpHost`
     // refuses that pair by name rather than picking a winner.
-    ...(options.port !== undefined && { port: options.port }),
-    ...(options.hostname !== undefined && { hostname: options.hostname }),
-    ...(options.server !== undefined && { server: options.server }),
+    ...(port !== undefined && { port }),
+    ...(hostname !== undefined && { hostname }),
+    ...(server !== undefined && { server: server }),
     // Passed through as given for the same reason: with a caller-owned server
     // this hook is refused BY NAME rather than dropped, so a caller who asked
     // for both learns which one this host cannot honour.
-    ...(options.onUnhandled !== undefined && { onUnhandled: options.onUnhandled }),
+    ...(onUnhandled !== undefined && { onUnhandled }),
     maxBodyBytes: options.maxBodyBytes ?? DEFAULT_NODE_MAX_BODY_BYTES,
     // The door guard's three rules, as given — unset keeps `httpHost`'s safe
     // defaults, which is the whole point of not restating them here.

@@ -102,6 +102,7 @@
  * of connections nobody counted.
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import { identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import {
@@ -127,6 +128,7 @@ import type {
   ScoredEntry,
   SearchOptions,
 } from '../../memory/store/types.js';
+import { num } from './pgVector/number.js';
 
 // ─── The little bit of `pg` this adapter uses ────────────────────────
 
@@ -185,6 +187,7 @@ export interface PgVectorStoreOptions {
    */
   readonly connectionString?: string;
   /** A pre-built `pg.Pool` (or anything with `query`). Recommended. */
+  /** Cannot accompany `connectionString`; configure the supplied pool itself. */
   readonly client?: PgLikeClient;
   /** Schema the tables live in. Default `'public'`. */
   readonly schema?: string;
@@ -306,6 +309,13 @@ const DEFAULT_COLUMNS: Required<PgVectorColumns> = {
  * ```
  */
 export function pgVectorStore(options: PgVectorStoreOptions = {}): PgVectorStore {
+  const {
+    client: suppliedClient,
+    config: { connectionString },
+  } = captureAdapterConstruction('pgVectorStore', options.client, {
+    connectionString: options.connectionString,
+  });
+  const testClient = options._client;
   const schema = ident(options.schema ?? 'public', 'schema');
   const vectorsTable = qualified(schema, ident(options.table ?? 'af_vectors', 'table'));
   const signaturesTable = qualified(
@@ -363,12 +373,12 @@ export function pgVectorStore(options: PgVectorStoreOptions = {}): PgVectorStore
   let client: PgLikeClient | undefined;
   const connect = (): PgLikeClient => {
     if (client) return client;
-    if (options._client) {
-      client = options._client;
+    if (testClient) {
+      client = testClient;
       return client;
     }
-    if (options.client) {
-      client = options.client;
+    if (suppliedClient) {
+      client = suppliedClient;
       return client;
     }
     const pg = options._pg ?? loadPg();
@@ -378,13 +388,13 @@ export function pgVectorStore(options: PgVectorStoreOptions = {}): PgVectorStore
           'pass `client` with a pre-built pool.',
       );
     }
-    if (!options.connectionString) {
+    if (!connectionString) {
       throw new Error(
         'pgVectorStore: pass `client` (recommended — reuse the pool your app already has) ' +
           'or `connectionString` for this store to build one.',
       );
     }
-    client = new pg.Pool({ connectionString: options.connectionString });
+    client = new pg.Pool({ connectionString });
     owned = true;
     return client;
   };
@@ -948,20 +958,6 @@ function bind(params: unknown[], value: unknown): string {
 }
 
 // ─── Row mapping ─────────────────────────────────────────────────────
-
-/**
- * `BIGINT` comes back from `pg` as a STRING by default (it does not fit in a
- * JavaScript number in general), and every timestamp here is one. Coerced in
- * one place, so a `createdAt` never reaches a consumer as `'1754640000000'`.
- */
-function num(value: unknown): number {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
 
 /** `JSONB` arrives already parsed from `pg`; a mock or a `TEXT` column may not. */
 function json(value: unknown): unknown {

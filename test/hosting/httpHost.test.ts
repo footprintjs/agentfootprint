@@ -452,9 +452,25 @@ describe('httpHost — a server the caller owns', () => {
     const base = { name: 'oddHost', wire: oddWire, invokePath: '/say', healthPath: '/alive' };
     const server = createServer();
     openServers.push(server);
-    expect(() => httpHost({ ...base, server, port: 8080 })).toThrow(/both a caller-owned/);
-    expect(() => httpHost({ ...base, server, port: 8080 })).toThrow(/'port'/);
-    expect(() => httpHost({ ...base, server, hostname: '0.0.0.0' })).toThrow(/'hostname'/);
+    expect(() => httpHost({ ...base, server, port: 8080 })).toThrow(
+      expect.objectContaining({
+        name: 'AdapterConfigurationError',
+        code: 'ERR_ADAPTER_CONFIGURATION',
+        adapter: 'httpHost',
+        reason: 'conflicting-options',
+      }),
+    );
+    expect(() => httpHost({ ...base, server, port: 8080 })).toThrow(
+      /server cannot accompany port, hostname or onUnhandled/,
+    );
+    expect(() => httpHost({ ...base, server, hostname: '0.0.0.0' })).toThrow(
+      expect.objectContaining({
+        name: 'AdapterConfigurationError',
+        code: 'ERR_ADAPTER_CONFIGURATION',
+        adapter: 'httpHost',
+        reason: 'conflicting-options',
+      }),
+    );
     // Without a server, both are exactly as ordinary as they were.
     expect(() => httpHost({ ...base, port: 8080, hostname: '0.0.0.0' })).not.toThrow();
   });
@@ -750,12 +766,17 @@ describe('httpHost — onUnhandled, the inverse seam', () => {
     const { server } = await callerServer();
     const base = { name: 'oddHost', wire: oddWire, invokePath: '/say', healthPath: '/alive' };
     expect(() => httpHost({ ...base, server, onUnhandled: () => undefined })).toThrow(
-      /'onUnhandled'/,
+      expect.objectContaining({
+        name: 'AdapterConfigurationError',
+        code: 'ERR_ADAPTER_CONFIGURATION',
+        adapter: 'httpHost',
+        reason: 'conflicting-options',
+      }),
     );
-    // The refusal says why, not just that: there, unmatched paths are already
-    // the caller's, and a second answer would race the first.
+    // The closed diagnostic names the conflicting static settings. Unmatched
+    // paths remain the caller's responsibility on a server they own.
     expect(() => httpHost({ ...base, server, onUnhandled: () => undefined })).toThrow(
-      /already yours/,
+      /server cannot accompany port, hostname or onUnhandled/,
     );
     // Without the server, the same hook is perfectly ordinary.
     expect(() => httpHost({ ...base, port: 0, onUnhandled: () => undefined })).not.toThrow();

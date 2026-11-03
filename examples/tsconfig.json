@@ -11,17 +11,42 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "paths": {
-      "agentfootprint": ["../src/index.ts"],
-      "agentfootprint/providers": ["../src/doors/providers.ts"],
-      "agentfootprint/memory": ["../src/doors/memory.ts"],
-      "agentfootprint/observe": ["../src/doors/observe.ts"],
-      "agentfootprint/context": ["../src/doors/context.ts"],
-      "agentfootprint/resilience": ["../src/doors/resilience.ts"],
-      "agentfootprint/security": ["../src/doors/security.ts"],
-      "agentfootprint/hosting": ["../src/doors/hosting.ts"],
-      "agentfootprint/events": ["../src/events.ts"],
-      "agentfootprint/cache": ["../src/cache/index.ts"]
+      "agentfootprint": [
+        "../src/index.ts"
+      ],
+      "agentfootprint/providers": [
+        "../src/doors/providers.ts"
+      ],
+      "agentfootprint/memory": [
+        "../src/doors/memory.ts"
+      ],
+      "agentfootprint/observe": [
+        "../src/doors/observe.ts"
+      ],
+      "agentfootprint/context": [
+        "../src/doors/context.ts"
+      ],
+      "agentfootprint/resilience": [
+        "../src/doors/resilience.ts"
+      ],
+      "agentfootprint/security": [
+        "../src/doors/security.ts"
+      ],
+      "agentfootprint/hosting": [
+        "../src/doors/hosting.ts"
+      ],
+      "agentfootprint/events": [
+        "../src/events.ts"
+      ],
+      "agentfootprint/cache": [
+        "../src/cache/index.ts"
+      ],
+      "agentfootprint/artifacts": [
+        "../src/doors/artifacts.ts"
+      ]
     }
   },
-  "include": ["**/*.ts"]
+  "include": [
+    "**/*.ts"
+  ]
 }

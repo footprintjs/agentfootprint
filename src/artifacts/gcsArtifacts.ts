@@ -113,6 +113,10 @@
  * off, on purpose, so the evidence would be disposable.
  */
 
+import {
+  AdapterConfigurationError,
+  captureAdapterConstruction,
+} from '../lib/adapterConfiguration.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import { prepareArtifact } from './minting.js';
 import { isArtifactRef } from './naming.js';
@@ -157,6 +161,7 @@ import {
   type ArtifactStreamPutInput,
   type ArtifactStreamRecord,
 } from './types.js';
+import { countedChunks } from './gcsArtifacts/countedChunks.js';
 
 /** Cloud Storage's custom-metadata cap: 8 KiB, keys and values together. */
 const GCS_METADATA_BUDGET = 8 * 1024;
@@ -213,8 +218,7 @@ export interface GcsArtifactsOptions {
   readonly bucket: string;
   /** Object-name prefix inside the bucket, so a bucket can be shared. */
   readonly prefix?: string;
-  /** Project id for the client this factory builds. Ignored when `storage` is
-   *  passed — that client's configuration is yours. */
+  /** Project id for the client this factory builds. Cannot accompany `storage`. */
   readonly projectId?: string;
   /** Your own pre-built client; configuration and credentials stay yours. */
   readonly storage?: GcsStorageLike;
@@ -250,6 +254,20 @@ function loadGcsSdk(): GcsSdkModule {
     );
   }
   return mod;
+}
+
+function buildStorage(options: Pick<GcsArtifactsOptions, 'projectId' | '_sdk'>): GcsStorageLike {
+  // loadGcsSdk checks this constructor, preserving the missing-SDK install message.
+  const Storage = options._sdk?.Storage ?? loadGcsSdk().Storage;
+  if (typeof Storage !== 'function')
+    throw new AdapterConfigurationError('gcsArtifacts', 'client-construction-failed');
+  try {
+    return new Storage({
+      ...(options.projectId !== undefined && { projectId: options.projectId }),
+    });
+  } catch {
+    throw new AdapterConfigurationError('gcsArtifacts', 'client-construction-failed');
+  }
 }
 
 /**
@@ -288,6 +306,11 @@ function toMillis(value: string | undefined): number {
  *   const agent = Agent.create({ provider, artifacts: store });
  */
 export function gcsArtifacts(options: GcsArtifactsOptions): ArtifactStore {
+  const { client: suppliedStorage, config } = captureAdapterConstruction(
+    'gcsArtifacts',
+    options.storage,
+    { projectId: options.projectId },
+  );
   const bucketName = assertBucketOption('gcsArtifacts', 'bucket', options.bucket);
   const root = normalizeKeyRoot('gcsArtifacts', options.prefix);
   const { retention } = options;
@@ -297,13 +320,7 @@ export function gcsArtifacts(options: GcsArtifactsOptions): ArtifactStore {
   // Resolved at CONSTRUCTION — a missing peer dep refuses where the config
   // was written, not at the first put of the first run.
   const storage: GcsStorageLike =
-    options._storage ??
-    options.storage ??
-    // Checked by loadGcsSdk.
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    new (options._sdk?.Storage ?? loadGcsSdk().Storage!)({
-      ...(options.projectId !== undefined && { projectId: options.projectId }),
-    });
+    options._storage ?? suppliedStorage ?? buildStorage({ ...config, _sdk: options._sdk });
   const bucket = storage.bucket(bucketName);
 
   const nameFor = (scope: ArtifactScope, ref: ArtifactRef): string =>
@@ -559,42 +576,4 @@ export function gcsArtifacts(options: GcsArtifactsOptions): ArtifactStore {
       };
     },
   };
-}
-
-/**
- * Yield a web stream's chunks while COUNTING them against the declared
- * length, so a producer that lied about its own payload fails with this
- * library's sentence rather than as a truncated upload.
- */
-async function* countedChunks(
-  body: ReadableStream<Uint8Array>,
-  declared: number,
-): AsyncGenerator<Uint8Array> {
-  const reader = body.getReader();
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value === undefined) continue;
-      total += value.byteLength;
-      if (total > declared) {
-        await reader.cancel();
-        throw new InvalidArtifactError(
-          `gcsArtifacts: the streamed payload is longer than the ${declared} bytes it ` +
-            `declared. The upload was cut off rather than completed under a meta that ` +
-            `describes a different payload. State the exact byte length.`,
-        );
-      }
-      yield value;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  if (total !== declared) {
-    throw new InvalidArtifactError(
-      `gcsArtifacts: the streamed payload ended after ${total} bytes but declared ${declared}. ` +
-        `The upload fails rather than storing a ticket that misdescribes its own payload.`,
-    );
-  }
 }

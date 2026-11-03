@@ -43,6 +43,7 @@
  *          in use.  Emits: N/A (storage adapters don't emit).
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type {
   ListOptions,
@@ -63,6 +64,7 @@ import {
   type MemoryWriteOptionName,
   type MemoryWriteOptions,
 } from '../../memory/store/writeOptions.js';
+import { escapeIdSegment } from './agentcore/escapeIdSegment.js';
 
 /**
  * ListEvents.maxResults: integer 1..100 (AWS API reference, verified 2026-10-19).
@@ -464,6 +466,7 @@ export interface AgentCoreStoreOptions {
   /** AWS region. Required when constructing the SDK client internally. */
   readonly region?: string;
   /** Pre-built AgentCore client (shares one SDK config across the host app). */
+  /** Cannot accompany `region`; configure the supplied client itself. */
   readonly client?: AgentCoreLikeClient;
   /** Page size for session scans and default `list()` calls: integer 1..100. Default 100. */
   readonly pageSize?: number;
@@ -572,38 +575,6 @@ export interface AgentCoreStoreOptions {
 /** AgentCore's own maxima, not a shared guess — see the note above. */
 const ACTOR_ID_MAX = 255;
 const SESSION_ID_MAX = 100;
-
-/** Characters an escaped segment carries through unchanged. */
-const VERBATIM_ID_CHAR = /[A-Za-z0-9-]/;
-
-/**
- * Escape one identity field into AgentCore's alphabet, reversibly.
- *
- * Every code unit outside {@link VERBATIM_ID_CHAR} becomes `introducer` + its
- * four-digit hex — fixed width, so a decoder reading `introducer` always knows
- * exactly how much to consume, which is what makes this a left inverse and
- * therefore injective.
- *
- * The escape character escapes ITSELF for free here, and that is deliberate:
- * `identity/encode.ts` has to order its two `.replace()` passes so `%` goes
- * first (reverse them and `a%2Fb` lands on the value that produced it). A
- * single left-to-right pass over code units has no ordering to get wrong — the
- * introducer is simply not in the verbatim set, so it is escaped like any other
- * character. Do not "optimise" this back into chained replaces.
- *
- * Code UNITS, not code points: a lone surrogate is a legal JS string and would
- * be flattened to U+FFFD by a UTF-8 pass, which is a collision.
- */
-function escapeIdSegment(raw: string, introducer: string): string {
-  let out = '';
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i] as string;
-    out += VERBATIM_ID_CHAR.test(ch)
-      ? ch
-      : introducer + raw.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0');
-  }
-  return out;
-}
 
 /**
  * One half of the actor tuple. Absence has exactly one spelling — `undefined`,
@@ -745,6 +716,10 @@ export class AgentCoreStore implements MemoryStore {
   private readonly feedbackBag = new Map<string, { sum: number; count: number }>();
 
   constructor(options: AgentCoreStoreOptions) {
+    const {
+      client,
+      config: { region },
+    } = captureAdapterConstruction('AgentCoreStore', options.client, { region: options.region });
     if (!options.memoryId) throw new Error('AgentCoreStore requires `memoryId`.');
     this.memoryId = options.memoryId;
     const pageSize = options.pageSize ?? MAX_EVENT_PAGE_SIZE;
@@ -762,8 +737,8 @@ export class AgentCoreStore implements MemoryStore {
     this.requireNamespaceScope = options.requireNamespaceScope === true;
     this.searchAcrossPrincipals = options.searchAcrossPrincipals === true;
 
-    const injected = options._client ?? options.client;
-    this.client = injected ?? createAgentCoreClient(options.region, options.sdk);
+    const injected = options._client ?? client;
+    this.client = injected ?? createAgentCoreClient(region, options.sdk);
     this.writeOptionsRefusal =
       this.client.forwardsWriteOptions === true
         ? undefined

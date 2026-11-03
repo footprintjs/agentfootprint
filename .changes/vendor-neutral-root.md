@@ -1,0 +1,7 @@
+---
+type: breaking
+---
+
+**Keep the root entry independent of backend vendors.** Artifact backend adapters now live at `agentfootprint/artifacts`, alongside the shared artifact API. Provider selection from environment configuration lives at `agentfootprint/providers`. The root retains framework APIs, ports and local artifact defaults without importing vendor implementations. `s3Artifacts` accepts explicit S3-compatible `endpoint` and `forcePathStyle` options when constructing its SDK client. A supplied client cannot be combined with client-construction options; conflicts throw `AdapterConfigurationError` (`ERR_ADAPTER_CONFIGURATION`) at construction.
+
+Migration: Import `s3Artifacts`, `gcsArtifacts`, `S3ArtifactsOptions` and `GcsArtifactsOptions` from `agentfootprint/artifacts`. Import `providerFromEnv`, `ProviderFromEnv`, `ProviderKind` and `CreateProviderOptions` from `agentfootprint/providers`. Update source imports and rebuild consumers. Move any `region`, `endpoint` or `forcePathStyle` supplied alongside `client` into that client's own configuration; the former silently ignored `region` is now refused too. Install each backend's optional SDK only where that adapter is used. A supplied GCS `storage` client can no longer accompany `projectId`; move project configuration into that client. Conflicts throw `AdapterConfigurationError` (`ERR_ADAPTER_CONFIGURATION`). No root aliases remain.

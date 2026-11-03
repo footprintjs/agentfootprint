@@ -151,11 +151,25 @@ a different embedder (`EmbedderMismatchError`) — the failure that otherwise
 presents as *retrieval got worse*.
 
 For conversation memory, `RedisStore` if you already run one, `InMemoryStore` if
-the process is the boundary. For the artifact claim-check store, `s3Artifacts`
-and `gcsArtifacts` (see [AWS](doc:aws) / [Google Cloud](doc:google-cloud)) work
-against an S3-compatible on-prem object store — MinIO and the like — through
-the `client` option: your own endpoint, your own path style, the same five
-verbs. See [Artifacts](doc:artifacts).
+the process is the boundary. For artifacts, import `s3Artifacts` from
+`agentfootprint/artifacts`. It speaks the S3-compatible object API used by
+AWS S3, MinIO and Ceph. Set `endpoint` and `region` for the SDK client the
+factory builds. Set `forcePathStyle: true` for servers without
+wildcard DNS. For SDK settings beyond these typed options, supply a pre-built
+`client` configured by your host. Combining `client` with `endpoint`, `region`
+or `forcePathStyle` throws `AdapterConfigurationError` at construction;
+configure the client itself instead. The optional S3 SDK is still required
+for its command classes. `gcsArtifacts` speaks Google's Cloud Storage
+API and is not an S3-compatible adapter.
+
+<CodeFile path="examples/artifacts/s3-compatible-config.ts" region="s3-compatible-config" title="S3-compatible configuration" />
+
+This example constructs configuration only when run. The contract tests use
+SDK doubles; they do not establish interoperability with your MinIO or Ceph
+installation. Verify put, get, head, delete, listing, scope isolation and
+retention against your actual server before deployment. `fileArtifacts`
+remains a one-machine store; shared network-disk operation is unverified.
+See [Artifacts](doc:artifacts).
 
 ## Embeddings — a model on the machine, or no model at all
 

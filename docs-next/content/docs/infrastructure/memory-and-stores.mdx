@@ -5,6 +5,49 @@ description: The MemoryStore port — eleven required members, one optional meth
 
 > Memory's TYPE × STRATEGY combinations are agnostic about WHERE the bytes live. **The store is the third axis** — the persistence boundary that turns memory from "ephemeral local state" into "production multi-tenant state with GDPR forget + multi-instance access". Pick by access pattern + durability needs.
 
+## Supplied handles and construction settings
+
+A supplied client already owns its construction settings. Combining it with
+options that this factory cannot apply throws `AdapterConfigurationError`
+synchronously, before an SDK loads or a connection/listener is created.
+Only `undefined` means an omitted option; empty strings, `false` and zero
+still count as supplied values where their option types permit them.
+
+| Adapter | Supplied handle | Conflicting factory settings |
+|---|---|---|
+| `RedisStore` | `client` | `url` |
+| `pgVectorStore` | `client` | `connectionString` |
+| `BedrockAgentMemory`, `AgentCoreStore`, `s3VectorsStore`, `bedrockEmbedder`, `agentCoreSessions` memory mode | `client` | `region` |
+| `s3Artifacts` | `client` | `region`, `endpoint`, `forcePathStyle` |
+| `gcsArtifacts` | `storage` | `projectId` |
+| `otelObservability` | `tracer` | `scopeName` |
+| `agentCoreEvaluationSpans` | `tracer` | Its required fixed instrumentation scope |
+| `httpHost`, `nodeHost`, `agentCoreRuntimeHost`, `foundryResponsesHost`, `agentCoreA2AHost` | `server` | `port`, `hostname`, `onUnhandled` |
+
+Configure those settings on the supplied handle, or omit the handle so the
+factory constructs it. Resource and request options remain active: a pool can
+still accompany a pgVector table/schema, and an AgentCore client can still
+accompany its memory resource ID. Internal test overrides and SDK-module
+injection retain their separate semantics.
+
+The error is exported from the affected category doors (`memory`, `providers`,
+`artifacts`, `observe` and `hosting`). `AdapterConfigurationAdapter` is its
+closed adapter identifier type; shared HTTP refusals identify `httpHost`.
+New adapter identifiers may be added in minor releases. Match the adapters
+relevant to your code and keep a fallback; avoid switching exhaustively over
+the entire adapter union.
+`AdapterConfigurationReason` is the closed union `conflicting-options` or
+`client-construction-failed`; the latter masks owned SDK constructor failures
+in S3/GCS artifacts without retaining backend text or a cause. Match the fixed
+`code: 'ERR_ADAPTER_CONFIGURATION'` together with `reason` and `adapter` across
+CJS/ESM boundaries, because each format has its own class identity.
+
+For AgentCore evaluation spans, omit `tracer` so the OTel API can supply the
+required scope. To keep a preconfigured tracer, use `otelObservability` with
+explicit content-capture options instead. On a server you own, set its bind
+address and handle unmatched paths through your own listeners; the HTTP host
+attaches only its declared routes.
+
 ## The port
 
 `MemoryStore` is the I/O boundary. Stages above it never talk to a concrete

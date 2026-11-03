@@ -49,6 +49,7 @@
  * ```
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import {
@@ -130,6 +131,10 @@ export const AGENTCORE_EVALUATIONS_SCOPE_NAME = 'opentelemetry.instrumentation.a
  * keep the conversation text and withhold the tool traffic; the tool scorers
  * then have nothing to grade.
  *
+ * A supplied `tracer` is refused: this preset must request the fixed scope
+ * through the OTel API. For a preconfigured tracer, use `otelObservability`
+ * with explicit content-capture options instead.
+ *
  * Getting the spans to CloudWatch is separate and yours: point an OTLP exporter
  * at the AgentCore log group per AWS's documented header contract, or run
  * inside a runtime that does it for you.
@@ -144,10 +149,19 @@ export const AGENTCORE_EVALUATIONS_SCOPE_NAME = 'opentelemetry.instrumentation.a
 export function agentCoreEvaluationSpans(
   opts: OtelObservabilityOptions,
 ): OtelObservabilityStrategy {
+  const { tracer: suppliedTracer, ...rest } = opts;
+  const { client: tracer } = captureAdapterConstruction(
+    'agentCoreEvaluationSpans',
+    suppliedTracer,
+    {
+      scopeName: AGENTCORE_EVALUATIONS_SCOPE_NAME,
+    },
+  );
   return otelObservability({
     captureContent: true,
     captureToolContent: true,
-    ...opts,
+    ...rest,
+    tracer,
     // Not spreadable-over: a caller who overrode this would silently produce
     // spans the service skips, which is the exact failure this function exists
     // to prevent. The scope name is the whole reason it is a named function.

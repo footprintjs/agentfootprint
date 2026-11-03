@@ -14,3 +14,9 @@
 
 export * from '../hosting/index.js';
 export * from '../hosting-providers.js';
+
+export {
+  AdapterConfigurationError,
+  type AdapterConfigurationAdapter,
+  type AdapterConfigurationReason,
+} from '../lib/adapterConfiguration.js';

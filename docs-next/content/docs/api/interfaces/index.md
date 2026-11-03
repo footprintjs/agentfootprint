@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-384 exported from `agentfootprint`.
+381 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -162,7 +162,6 @@ title: Interfaces
 - [`FlowSubflowRegisteredEvent`](/docs/api/interfaces/flow-events#interface-flowsubflowregisteredevent)
 - [`FoldedConversation`](/docs/api/interfaces/FoldedConversation)
 - [`FoldedSpan`](/docs/api/interfaces/FoldedSpan)
-- [`GcsArtifactsOptions`](/docs/api/interfaces/GcsArtifactsOptions)
 - [`GraphEdge`](/docs/api/interfaces/GraphEdge)
 - [`GraphNode`](/docs/api/interfaces/GraphNode)
 - [`GraphOptions`](/docs/api/interfaces/GraphOptions)
@@ -242,7 +241,6 @@ title: Interfaces
 - [`ProjectedWalk`](/docs/api/interfaces/ProjectedWalk)
 - [`ProposeTransitionEffect`](/docs/api/interfaces/ProposeTransitionEffect)
 - [`ProviderChoice`](/docs/api/interfaces/ProviderChoice)
-- [`ProviderFromEnv`](/docs/api/interfaces/ProviderFromEnv)
 - [`PutArtifactInput`](/docs/api/interfaces/PutArtifactInput)
 - [`ReadEvent`](/docs/api/interfaces/scope-events#interface-readevent)
 - [`ReadingTags`](/docs/api/interfaces/ReadingTags)
@@ -282,7 +280,6 @@ title: Interfaces
 - [`Runner`](/docs/api/interfaces/Runner)
 - [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)
 - [`RunTime`](/docs/api/interfaces/RunTime)
-- [`S3ArtifactsOptions`](/docs/api/interfaces/S3ArtifactsOptions)
 - [`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder)
 - [`ScriptRow`](/docs/api/interfaces/ScriptRow)
 - [`ScriptShownRow`](/docs/api/interfaces/ScriptShownRow)

@@ -47,12 +47,14 @@
  * symbols, one door. Import from the door.
  */
 export type { Embedder } from '../memory/embedding/types.js';
+import { captureAdapterConstruction } from '../lib/adapterConfiguration.js';
 import type { Embedder } from '../memory/embedding/types.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import {
   createGoogleGenAIClientResolver,
   type GoogleGenAIConnectionOptions,
 } from '../adapters/llm/googleGenAI.js';
+import { describeShape } from './describeShape.js';
 
 // ---------------------------------------------------------------------------
 // OpenAI (hosted) — no extra dependency, just a fetch + an API key.
@@ -329,6 +331,7 @@ export interface BedrockEmbedderOptions {
   /** AWS region. Passed to the SDK client when this factory builds one. */
   readonly region?: string;
   /** A pre-built Bedrock runtime client, so one SDK config serves the whole app. */
+  /** Cannot accompany `region`; configure the supplied client itself. */
   readonly client?: BedrockRuntimeLikeClient;
   /** @internal Test injection — skips the SDK require entirely. */
   readonly _client?: BedrockRuntimeLikeClient;
@@ -521,6 +524,11 @@ function inferBedrockFamily(model: string): BedrockEmbeddingFamily | undefined {
  * ```
  */
 export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder {
+  const {
+    client,
+    config: { region },
+  } = captureAdapterConstruction('bedrockEmbedder', options.client, { region: options.region });
+  const testClient = options._client;
   const model = options.model ?? 'amazon.titan-embed-text-v2:0';
   const facts = bedrockFactsFor(model);
   const named = inferBedrockFamily(model);
@@ -600,9 +608,9 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
    */
   const connect = (): Connection => {
     if (connection) return connection;
-    if (options._client) {
+    if (testClient) {
       connection = {
-        client: options._client,
+        client: testClient,
         Command: options._sdk?.InvokeModelCommand ?? IdentityCommand,
       };
       return connection;
@@ -614,7 +622,7 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
           '`InvokeModelCommand` was not found. Update the SDK.',
       );
     }
-    if (!options.client && !sdk.BedrockRuntimeClient) {
+    if (!client && !sdk.BedrockRuntimeClient) {
       throw new Error(
         'bedrockEmbedder: `@aws-sdk/client-bedrock-runtime` is installed but ' +
           '`BedrockRuntimeClient` was not found. Update the SDK.',
@@ -622,10 +630,10 @@ export function bedrockEmbedder(options: BedrockEmbedderOptions = {}): Embedder 
     }
     connection = {
       client:
-        options.client ??
+        client ??
         // Checked directly above.
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        new sdk.BedrockRuntimeClient!({ ...(options.region && { region: options.region }) }),
+        new sdk.BedrockRuntimeClient!({ ...(region && { region: region }) }),
       Command: sdk.InvokeModelCommand,
     };
     return connection;
@@ -809,17 +817,6 @@ function readEmbeddings(
     );
   }
   return vectors;
-}
-
-/** Describe a response by shape, never by content — it may carry customer text. */
-function describeShape(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return `an array of ${value.length}`;
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as object);
-    return keys.length === 0 ? 'an object with no keys' : `an object with keys: ${keys.join(', ')}`;
-  }
-  return typeof value;
 }
 
 // ---------------------------------------------------------------------------

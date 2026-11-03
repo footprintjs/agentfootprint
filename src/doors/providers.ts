@@ -56,3 +56,9 @@ export {
   type AgentCoreResource,
   type BedrockAgentCoreCodeSdkModule,
 } from '../adapters/code/agentcore.js';
+
+export {
+  AdapterConfigurationError,
+  type AdapterConfigurationAdapter,
+  type AdapterConfigurationReason,
+} from '../lib/adapterConfiguration.js';

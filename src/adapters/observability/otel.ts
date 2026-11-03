@@ -231,6 +231,7 @@
  * ```
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import type { FlowDecisionEvent, FlowSelectedEvent } from 'footprintjs';
 import type { Standing } from '../../core/agent/findings/types.js';
 import type {
@@ -250,6 +251,7 @@ import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
+import { cutAt } from './otel/cutAt.js';
 
 /** The batch settlement's marker (9.113.0), as the canonical field defines it. */
 type SettledMarker = NonNullable<ToolStartPayload['notDispatched']>;
@@ -270,6 +272,7 @@ export interface OtelObservabilityOptions {
   /** OTel Tracer to use. Defaults to `trace.getTracer(scopeName)` — where
    *  `trace` is the lazy-imported `@opentelemetry/api` and `scopeName` is the
    *  option below. */
+  /** Cannot accompany `scopeName`; a prebuilt tracer already owns its scope. */
   readonly tracer?: OtelTracerLike;
   /**
    * The INSTRUMENTATION SCOPE name every span is recorded under — what a
@@ -288,7 +291,8 @@ export interface OtelObservabilityOptions {
    * pass one; `agentCoreEvaluationSpans()` in the AgentCore adapter is that
    * one consumer's spelling, kept in that vendor's own file.
    *
-   * Ignored when `tracer` is supplied — a tracer you built already has a name.
+   * Refused when `tracer` is supplied: configure the scope on that tracer,
+   * or omit `tracer` so this factory requests one under the declared name.
    */
   readonly scopeName?: string;
   /**
@@ -603,16 +607,6 @@ const MAX_LIST_ITEMS = 20;
 function bound(value: unknown): string {
   const s = typeof value === 'string' ? value : toWireJson(value) ?? String(value);
   return s.length > MAX_ATTR_CHARS ? `${cutAt(s, MAX_ATTR_CHARS - 1)}…` : s;
-}
-
-/**
- * The first `n` UTF-16 units of `s`, one fewer when the cut would split a
- * surrogate pair — a lone high surrogate is not valid Unicode, and a strict
- * OTLP/JSON decoder rejects it.
- */
-function cutAt(s: string, n: number): string {
-  const code = s.charCodeAt(n - 1);
-  return s.slice(0, code >= 0xd800 && code <= 0xdbff ? n - 1 : n);
 }
 
 /** The longest model- or caller-supplied text a span NAME carries. */
@@ -1002,6 +996,10 @@ const EVALUATORS: ReadonlySet<string> = new Set(['llm', 'fn', 'heuristic']);
 // ─── Strategy factory ────────────────────────────────────────────────
 
 export function otelObservability(opts: OtelObservabilityOptions): OtelObservabilityStrategy {
+  const {
+    client: suppliedTracer,
+    config: { scopeName: suppliedScopeName },
+  } = captureAdapterConstruction('otelObservability', opts.tracer, { scopeName: opts.scopeName });
   if (!opts.serviceName) {
     throw new TypeError(
       `[otelObservability] \`serviceName\` is required. ` +
@@ -1012,7 +1010,7 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
   const sampleRate = opts.sampleRate ?? 1;
   const genAiNames = opts.genAiSpanNames === true;
   const explainability = opts.explainability !== false;
-  const scopeName = opts.scopeName ?? 'agentfootprint';
+  const scopeName = suppliedScopeName ?? 'agentfootprint';
   const captureContent = opts.captureContent === true;
   const captureToolContent = opts.captureToolContent === true;
   const maxContentChars = opts.maxContentChars ?? DEFAULT_MAX_CONTENT_CHARS;
@@ -1022,7 +1020,7 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
   // Lazy-resolve tracer if not injected. Defer the API import until
   // first event so consumers who don't actually fire events (no agent
   // run yet) don't even hit the OTel API surface.
-  let tracer: OtelTracerLike | undefined = opts.tracer;
+  let tracer: OtelTracerLike | undefined = suppliedTracer;
   let otelApi: OtelApiModule | undefined = opts._otelApi;
   function ensureTracer(): OtelTracerLike {
     if (tracer) return tracer;

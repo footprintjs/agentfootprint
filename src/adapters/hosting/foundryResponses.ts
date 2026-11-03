@@ -120,16 +120,16 @@ export interface FoundryResponsesHostOptions extends CrossSiteOptions {
  */
 export function foundryResponsesHost(options: FoundryResponsesHostOptions = {}): HttpHost {
   const { server, onUnhandled, model, hostname } = options;
-  // `port` and `hostname` name a socket a caller-owned server already bound, so
-  // they are passed only when this host is the one binding. Defaulting the port
-  // unconditionally would turn "attach to my server" into a refusal.
-  const socket = server
-    ? { server }
-    : {
-        port: options.port ?? DEFAULT_FOUNDRY_PORT,
-        ...(hostname === undefined ? {} : { hostname }),
-        ...(onUnhandled === undefined ? {} : { onUnhandled }),
-      };
+  // Default only an owned socket; forward explicit fields so httpHost can
+  // refuse configuration it cannot honor on a supplied server.
+  const port = options.port;
+  const socket = {
+    ...(server === undefined
+      ? { port: port ?? DEFAULT_FOUNDRY_PORT }
+      : { server, ...(port === undefined ? {} : { port }) }),
+    ...(hostname === undefined ? {} : { hostname }),
+    ...(onUnhandled === undefined ? {} : { onUnhandled }),
+  };
 
   return httpHost({
     name: 'foundryResponsesHost',

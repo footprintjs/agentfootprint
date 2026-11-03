@@ -82,6 +82,7 @@
  * Everything HTTP lives here and in the wires; `types.ts` knows none of it.
  */
 
+import { captureAdapterConstruction } from '../lib/adapterConfiguration.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
@@ -647,35 +648,18 @@ export function httpHost(options: HttpHostOptions): HttpHost {
       )}.`,
     );
   }
-  const ownServer = options.server;
-  // Refused at construction, not ignored at serve time: a `port` next to a
-  // server this host does not bind is a caller who believes something untrue
-  // about where their agent will answer, and silently dropping it is how they
-  // stay believing it.
-  if (ownServer && (options.port !== undefined || options.hostname !== undefined)) {
-    throw new Error(
-      `[hosting] httpHost('${name}') was given both a caller-owned 'server' and a ` +
-        `'${options.port !== undefined ? 'port' : 'hostname'}'. A server you own already has ` +
-        `an address, and this host binds nothing when you pass one. Drop the port/hostname, ` +
-        `or drop the server and let this host bind its own socket.`,
-    );
-  }
-  // Refused at construction for the same reason and in the same breath: on a
-  // server the caller owns, unmatched paths ALREADY reach their own listeners,
-  // so a hook for them here is a second answer to one question and the winner
-  // would be whichever listener was registered first.
-  const onUnhandled = options.onUnhandled;
-  if (ownServer && onUnhandled !== undefined) {
-    throw new Error(
-      `[hosting] httpHost('${name}') was given both a caller-owned 'server' and an ` +
-        `'onUnhandled'. On a server you own, a path this host does not own is already yours — ` +
-        `it falls through to your own 'request' listeners untouched — so this hook would be a ` +
-        `second answer to the same question. Route unmatched paths on your server, or drop ` +
-        `'server' and let this host own the socket and hand you what it does not answer.`,
-    );
-  }
-  const port = options.port ?? 8080;
-  const hostname = options.hostname ?? '0.0.0.0';
+  const { client: ownServer, config: socketConfig } = captureAdapterConstruction(
+    'httpHost',
+    options.server,
+    {
+      port: options.port,
+      hostname: options.hostname,
+      onUnhandled: options.onUnhandled,
+    },
+  );
+  const { onUnhandled } = socketConfig;
+  const port = socketConfig.port ?? 8080;
+  const hostname = socketConfig.hostname ?? '0.0.0.0';
   const signIn = checkHostSignIn(name, options.signIn, {
     ...(options.allowedOrigins !== undefined && { allowedOrigins: options.allowedOrigins }),
     ...(options.allowedHosts !== undefined && { allowedHosts: options.allowedHosts }),

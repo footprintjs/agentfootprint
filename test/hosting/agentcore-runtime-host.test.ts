@@ -470,7 +470,14 @@ describe('agentCoreRuntimeHost — attached to a server the caller owns', () => 
     const { server } = await containerServer();
     // The contract's own default port is NOT smuggled in either: with a server
     // the adapter binds nothing, so it names nothing.
-    expect(() => agentCoreRuntimeHost({ server, port: 8080 })).toThrow(/both a caller-owned/);
+    expect(() => agentCoreRuntimeHost({ server, port: 8080 })).toThrow(
+      expect.objectContaining({
+        name: 'AdapterConfigurationError',
+        code: 'ERR_ADAPTER_CONFIGURATION',
+        adapter: 'httpHost',
+        reason: 'conflicting-options',
+      }),
+    );
     expect(() => agentCoreRuntimeHost({ server })).not.toThrow();
   });
 
@@ -480,7 +487,12 @@ describe('agentCoreRuntimeHost — attached to a server the caller owns', () => 
     // asked for a pair this adapter cannot honour — there, unmatched paths
     // already reach their own listeners.
     expect(() => agentCoreRuntimeHost({ server, onUnhandled: () => undefined })).toThrow(
-      /'onUnhandled'/,
+      expect.objectContaining({
+        name: 'AdapterConfigurationError',
+        code: 'ERR_ADAPTER_CONFIGURATION',
+        adapter: 'httpHost',
+        reason: 'conflicting-options',
+      }),
     );
   });
 });

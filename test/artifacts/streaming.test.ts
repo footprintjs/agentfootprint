@@ -25,14 +25,13 @@ import {
   canPutArtifactStream,
   canStreamArtifacts,
   fileArtifacts,
-  gcsArtifacts,
   inMemoryArtifacts,
   InvalidArtifactError,
-  s3Artifacts,
   sqliteArtifacts,
   type ArtifactScope,
   type ArtifactStore,
 } from '../../src/index.js';
+import { gcsArtifacts, s3Artifacts } from '../../src/doors/artifacts.js';
 import { fakeGcs, fakeS3 } from './fakes/objectServices.js';
 
 const cleanups: Array<() => void> = [];

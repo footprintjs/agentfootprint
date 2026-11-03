@@ -503,6 +503,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a conformance assertion message, read by whoever runs the suite against a store',
     },
   ],
+  'src/lib/adapterConfiguration.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the shared fixed configuration diagnostic is thrown at factory construction to the host before an adapter or model request exists; its SDK guidance never enters tool results or conversation history',
+    },
+  ],
   'src/artifacts/objectStore.ts': [
     {
       kind: 'not-model-facing',
@@ -1261,12 +1268,19 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // clause (scripts/recovery.ts) is request-only and registered in
         // modelFacingSurfaces; it matches no persistent rule. files 105 → 106,
         // total 204 → 206, notModelFacing 135 → 137.
-        files: 106,
-        total: 206,
+        // Vendor-neutral artifact construction: two fixed SDK-construction
+        // diagnostics instruct the host at factory wiring, never the model.
+        // Two new files/literals; persistent and unrepaired counts unchanged.
+        // files 106 → 108, total 206 → 208, notModelFacing 137 → 139.
+        // Shared construction errors replace those two literals with one
+        // host-only diagnostic: files 108 → 107, total 208 → 207,
+        // notModelFacing 139 → 138. Other delivery counts are unchanged.
+        files: 107,
+        total: 207,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 137,
+        notModelFacing: 138,
         unrepairedEntries: 15,
       });
       // And the ledger's own total is the number of literals the scan flagged —

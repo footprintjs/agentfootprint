@@ -21,6 +21,7 @@
  * Role:   Outer ring. Lazy-requires the AWS SDK; zero cost when unused.
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 
 /** One auto-generated session summary from Bedrock Agents memory. */
@@ -57,6 +58,7 @@ export interface BedrockAgentMemoryOptions {
   /** AWS region (when constructing the SDK client internally). */
   readonly region?: string;
   /** Pre-built client (shares one SDK config across the host app). */
+  /** Cannot accompany `region`; configure the supplied client itself. */
   readonly client?: BedrockAgentMemoryLikeClient;
   /** Default page size for `readSummaries`. Default 20. */
   readonly maxItems?: number;
@@ -79,14 +81,19 @@ export class BedrockAgentMemory {
   private readonly maxItems: number;
 
   constructor(options: BedrockAgentMemoryOptions) {
+    const {
+      client,
+      config: { region },
+    } = captureAdapterConstruction('BedrockAgentMemory', options.client, {
+      region: options.region,
+    });
     if (!options.agentId || !options.agentAliasId) {
       throw new Error('BedrockAgentMemory requires `agentId` and `agentAliasId`.');
     }
     this.agentId = options.agentId;
     this.agentAliasId = options.agentAliasId;
     this.maxItems = options.maxItems ?? 20;
-    this.client =
-      options._client ?? options.client ?? createBedrockAgentClient(options.region, options._sdk);
+    this.client = options._client ?? client ?? createBedrockAgentClient(region, options._sdk);
   }
 
   /** All session summaries Bedrock generated for `memoryId` (paginated). */
