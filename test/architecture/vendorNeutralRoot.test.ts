@@ -42,6 +42,76 @@ function literalSpecifier(argument: ts.Expression): string | undefined {
   return undefined;
 }
 
+/** Parse call scopes once; only potential static SDK edges need TypeScript's type elision. */
+function sdkLoadViolations(file: string, text: string, peers: ReadonlySet<string>): string[] {
+  const violations: string[] = [];
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
+  const isStaticSdkEdge = (
+    node: ts.Node,
+  ): node is (ts.ImportDeclaration | ts.ExportDeclaration) & {
+    moduleSpecifier: ts.StringLiteralLike;
+  } =>
+    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+    node.moduleSpecifier !== undefined &&
+    ts.isStringLiteralLike(node.moduleSpecifier) &&
+    peers.has(packageOf(node.moduleSpecifier.text));
+  let hasStaticSdkCandidate = false;
+  const visit = (node: ts.Node): void => {
+    if (isStaticSdkEdge(node)) hasStaticSdkCandidate = true;
+    // ImportTypeNode (typeof import('sdk'), for example) is not a runtime call.
+    const specifier =
+      ts.isCallExpression(node) && node.arguments[0]
+        ? literalSpecifier(node.arguments[0])
+        : undefined;
+    if (
+      ts.isCallExpression(node) &&
+      specifier !== undefined &&
+      peers.has(packageOf(specifier)) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) &&
+          ['require', 'lazyRequire'].includes(node.expression.text)))
+    ) {
+      let parent: ts.Node | undefined = node.parent;
+      while (parent && !ts.isFunctionLike(parent)) parent = parent.parent;
+      const lazy =
+        node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) && node.expression.text === 'lazyRequire');
+      if (!lazy || !parent) {
+        violations.push(
+          `${file}: SDK loads must use function-scoped lazyRequire(...) or import(...): ${specifier}`,
+        );
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  if (hasStaticSdkCandidate) {
+    // Explicit and inferred type-only imports can disappear from emitted JS.
+    // Compile the whole candidate file so usage, rather than syntax alone, decides.
+    const compiled = ts.createSourceFile(
+      file,
+      ts.transpileModule(text, {
+        fileName: file,
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+      }).outputText,
+      ts.ScriptTarget.ES2022,
+      true,
+    );
+    const visitStaticEdges = (node: ts.Node): void => {
+      if (isStaticSdkEdge(node)) {
+        violations.push(`${file}: static SDK import ${node.moduleSpecifier.text}`);
+      }
+      ts.forEachChild(node, visitStaticEdges);
+    };
+    visitStaticEdges(compiled);
+  }
+  return violations;
+}
+
+const optionalPeers = new Set(
+  Object.keys(pkg.peerDependenciesMeta).filter((name) => pkg.peerDependenciesMeta[name]?.optional),
+);
+
 describe('vendor-neutral root entry', () => {
   it('reaches no adapter implementation, even through another barrel or an alias', async () => {
     const { metafile } = await build({
@@ -86,59 +156,109 @@ describe('vendor-neutral root entry', () => {
   });
 
   it('has no static SDK imports, and SDK loads use function-scoped lazyRequire or import', () => {
-    const violations: string[] = [];
-    const peers = new Set(
-      Object.keys(pkg.peerDependenciesMeta).filter(
-        (name) => pkg.peerDependenciesMeta[name]?.optional,
-      ),
+    const violations = (layering.listSourceFiles(ROOT) as string[]).flatMap((file) =>
+      sdkLoadViolations(file, readFileSync(resolve(ROOT, file), 'utf8'), optionalPeers),
     );
-    for (const file of layering.listSourceFiles(ROOT) as string[]) {
-      const text = readFileSync(resolve(ROOT, file), 'utf8');
-      const compiled = ts.createSourceFile(
-        file,
-        ts.transpileModule(text, {
-          fileName: file,
-          compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-        }).outputText,
-        ts.ScriptTarget.ES2022,
-        true,
-      );
-      const visit = (node: ts.Node): void => {
-        if (
-          (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-          node.moduleSpecifier &&
-          ts.isStringLiteralLike(node.moduleSpecifier) &&
-          peers.has(packageOf(node.moduleSpecifier.text))
-        ) {
-          violations.push(`${file}: static SDK import ${node.moduleSpecifier.text}`);
-        }
-        const specifier =
-          ts.isCallExpression(node) && node.arguments[0]
-            ? literalSpecifier(node.arguments[0])
-            : undefined;
-        if (
-          ts.isCallExpression(node) &&
-          specifier !== undefined &&
-          peers.has(packageOf(specifier)) &&
-          (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-            (ts.isIdentifier(node.expression) &&
-              ['require', 'lazyRequire'].includes(node.expression.text)))
-        ) {
-          let parent: ts.Node | undefined = node.parent;
-          while (parent && !ts.isFunctionLike(parent)) parent = parent.parent;
-          const lazy =
-            node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-            (ts.isIdentifier(node.expression) && node.expression.text === 'lazyRequire');
-          if (!lazy || !parent) {
-            violations.push(
-              `${file}: SDK loads must use function-scoped lazyRequire(...) or import(...): ${specifier}`,
-            );
-          }
-        }
-        ts.forEachChild(node, visit);
-      };
-      visit(compiled);
-    }
     expect(violations).toEqual([]);
   }, 30_000);
+});
+
+describe('SDK load scanner behavior', () => {
+  const staticError = 'fixture.ts: static SDK import @aws-sdk/client-s3';
+  const timingError =
+    'fixture.ts: SDK loads must use function-scoped lazyRequire(...) or import(...): @aws-sdk/client-s3';
+  it.each([
+    {
+      name: 'side-effect import refuses',
+      text: "import '@aws-sdk/client-s3';",
+      errors: [staticError],
+    },
+    {
+      name: 'used value import refuses',
+      text: "import { S3Client } from '@aws-sdk/client-s3'; console.log(S3Client);",
+      errors: [staticError],
+    },
+    {
+      name: 'value re-export refuses',
+      text: "export { S3Client } from '@aws-sdk/client-s3';",
+      errors: [staticError],
+    },
+    {
+      name: 'star re-export refuses',
+      text: "export * from '@aws-sdk/client-s3';",
+      errors: [staticError],
+    },
+    {
+      name: 'explicit type-only import is erased',
+      text: "import type { S3Client } from '@aws-sdk/client-s3'; export type Client = S3Client;",
+      errors: [],
+    },
+    {
+      name: 'unannotated import used only as a type is erased',
+      text: "import { S3Client } from '@aws-sdk/client-s3'; export type Client = S3Client;",
+      errors: [],
+    },
+    {
+      name: 'type-only re-export is erased',
+      text: "export type { S3Client } from '@aws-sdk/client-s3';",
+      errors: [],
+    },
+    {
+      name: 'inline type-only re-export is erased',
+      text: "export { type S3Client } from '@aws-sdk/client-s3';",
+      errors: [],
+    },
+    {
+      name: 'import type query is not a runtime load',
+      text: "export type SDK = typeof import('@aws-sdk/client-s3');",
+      errors: [],
+    },
+    {
+      name: 'top-level lazyRequire refuses',
+      text: "const sdk = lazyRequire('@aws-sdk/client-s3');",
+      errors: [timingError],
+    },
+    {
+      name: 'top-level dynamic import refuses',
+      text: "const sdk = import('@aws-sdk/client-s3');",
+      errors: [timingError],
+    },
+    {
+      name: 'top-level const-specifier lazyRequire refuses',
+      text: "const spec = '@aws-sdk/client-s3'; const sdk = lazyRequire(spec);",
+      errors: [timingError],
+    },
+    {
+      name: 'top-level const-specifier dynamic import refuses',
+      text: "const spec = '@aws-sdk/client-s3'; const sdk = import(spec);",
+      errors: [timingError],
+    },
+    {
+      name: 'function-scoped require refuses',
+      text: "function load() { return require('@aws-sdk/client-s3'); }",
+      errors: [timingError],
+    },
+    {
+      name: 'function-scoped lazyRequire accepts',
+      text: "function load() { return lazyRequire('@aws-sdk/client-s3'); }",
+      errors: [],
+    },
+    {
+      name: 'function-scoped dynamic import accepts',
+      text: "function load() { return import('@aws-sdk/client-s3'); }",
+      errors: [],
+    },
+    {
+      name: 'function-scoped const-specifier lazyRequire accepts',
+      text: "function load() { const spec = '@aws-sdk/client-s3'; return lazyRequire(spec); }",
+      errors: [],
+    },
+    {
+      name: 'function-scoped const-specifier dynamic import accepts',
+      text: "function load() { const spec = '@aws-sdk/client-s3'; return import(spec); }",
+      errors: [],
+    },
+  ])('$name', ({ text, errors }) => {
+    expect(sdkLoadViolations('fixture.ts', text, optionalPeers)).toEqual(errors);
+  });
 });
