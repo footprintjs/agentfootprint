@@ -413,7 +413,7 @@ export interface OtelObservabilityOptions {
    *     session view exactly as the raw id would, and an operator finds a
    *     known session's traces by hashing its id. The library's standing rule
    *     for a key it must be able to JOIN on but not disclose ("keyHash, never
-   *     the key", `events/payloads.ts` · `ToolSessionPayloadBase`).
+   *     the key", `events/payloads/toolSessionPayloads.ts` · `ToolSessionPayloadBase`).
    *   - `'raw'` — the session id as issued. Safe ONLY behind a door that
    *     verifies who may open a conversation (`standingAgent({ identity })`):
    *     at a door with no verifier the session id IS the handle to the

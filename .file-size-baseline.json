@@ -72,7 +72,6 @@
     "src/core/slots/buildToolsSlot.ts": 1322,
     "src/embedders/index.ts": 1486,
     "src/events/dispatcher.ts": 753,
-    "src/events/payloads.ts": 4196,
     "src/events/registry.ts": 1017,
     "src/hosting/answeredPause.ts": 635,
     "src/hosting/conformance/cases.ts": 1014,
