@@ -52,16 +52,15 @@ import {
   artifactStoreConformance,
   fileArtifacts,
   formatArtifactStoreReport,
-  gcsArtifacts,
   inMemoryArtifacts,
   runArtifactStoreCase,
   runArtifactStoreConformance,
-  s3Artifacts,
   sqliteArtifacts,
   type ArtifactScope,
   type ArtifactStore,
   type ArtifactStoreHarness,
 } from '../../src/index.js';
+import { gcsArtifacts, s3Artifacts } from '../../src/doors/artifacts.js';
 import { scopeSegments } from '../../src/artifacts/scopePath.js';
 import { fakeGcs, fakeS3, type FakeGcs, type FakeS3 } from './fakes/objectServices.js';
 

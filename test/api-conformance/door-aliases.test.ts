@@ -73,6 +73,7 @@ const ALIAS_TO_DOOR: Readonly<Record<string, string>> = {
 /** The canonical doors. `./cache` and `./events` stand alone by design. */
 const DOORS = [
   '.',
+  './artifacts',
   './providers',
   './memory',
   './rag',

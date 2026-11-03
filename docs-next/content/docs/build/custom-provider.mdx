@@ -260,7 +260,7 @@ Gotchas:
 - **Custom providers don't go through it** — pass your instance to `Agent.create({ provider })` directly.
 - **No Azure kind.** Call `azureOpenai()` (or `browserAzureOpenai()`) directly.
 - **The `as CreateProviderOptions` cast** is the price of a kind read from a string: TypeScript can't check that the options match a kind it only learns at runtime. With a literal `kind: 'anthropic'` you get full checking and need no cast.
-- **Credentials already in the environment?** `providerFromEnv()` (main barrel) reads them and picks the provider itself — see [Ollama](doc:ollama) and [Microsoft Foundry](doc:microsoft-foundry) for how it decides.
+- **Credentials already in the environment?** `providerFromEnv()` (`agentfootprint/providers`) reads them and picks the provider itself — see [Ollama](doc:ollama) and [Microsoft Foundry](doc:microsoft-foundry) for how it decides.
 
 ## Anti-patterns
 

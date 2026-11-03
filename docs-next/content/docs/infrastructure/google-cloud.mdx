@@ -55,7 +55,7 @@ peer dependency it lazily requires, what it covers — and what it does **not**.
 |---|---|---|---|---|---|---|
 | **Gemini models** (Vertex **and** the Gemini API) | `gemini()` | `agentfootprint/providers` | `@google/genai` | `models.generateContent`, `models.generateContentStream`. **Not** multi-modal input, **not** thought summaries, **not** grounding tools (Search, code execution, URL context) | **Field-validated on the Vertex door** — an independent field trial, 2026-08: a real two-call tool loop and real streaming on `gemini-2.5-flash`; and on **2026-08-14** a live `gemini-3.1-flash-lite` tool loop through 9.29's thought-signature round trip, which is the 3.x path that used to 400 after the tool had already run. **Not every door/model pair works** — read [the matrix](#the-doormodel-matrix) before you pick one | [Gemini](doc:gemini) |
 | **Gemini embeddings** | `geminiEmbedder()` | `agentfootprint/providers` | `@google/genai` | `models.embedContent` — Matryoshka sizes, task types, a refusal when the service says it clipped. **One text per request**, so a batch is N calls | **Field-validated on the Vertex door** — 2026-08: `gemini-embedding-001` at 768 dimensions, indexed through `defineRAG`. The Gemini-API door was blocked by billing, not by code — see [the matrix](#the-doormodel-matrix) | [Embedders](doc:embedders) |
-| **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **Field-validated** — 2026-08: nine live checks against a real bucket, including scope isolation, native streaming, TTL expiry, budget eviction and the sanitized 404 | [Artifacts](doc:artifacts) |
+| **Cloud Storage** (artifact store) | `gcsArtifacts()` | `agentfootprint/artifacts` | `@google-cloud/storage` | `bucket.file().save / .download / .getMetadata / .delete`, `bucket.getFiles`, plus native `createWriteStream` / `createReadStream` streaming | **Field-validated** — 2026-08: nine live checks against a real bucket, including scope isolation, native streaming, TTL expiry, budget eviction and the sanitized 404 | [Artifacts](doc:artifacts) |
 | **Cloud Trace / Cloud Logging** | `otelObservability()` pointed at `telemetry.googleapis.com` — **a recipe, not a new adapter** | `agentfootprint/observe` | `@opentelemetry/api` + the OTel SDK you choose | The whole typed event stream as `gen_ai.*` spans and span events | **Field-validated as the corrected recipe below** — 2026-08: one six-span trace read back from Cloud Trace. The recipe this page shipped before that trial did **not** work; what changed is written out in full | [Observability sinks](doc:observability-sinks) |
 | **Agent Gateway** (egress, MCP passthrough) | `gatewayTransport` + `mcpClient` | `agentfootprint/providers` | `@modelcontextprotocol/sdk` | MCP over Streamable HTTP with per-request auth headers, plus a custom `fetch` seam (9.32.0) | **Field-validated for an ordinary bearer gateway** (2026-08: tool discovery, a real call, five requests → five freshly vended credentials, none stored). 🔴 **Not** for Google's identity-enforced path: Agent Gateway agent identity is **mTLS + DPoP**, and this library implements neither. Since 9.32 you can supply your own signer through `fetch` and keep the rotation — bring-your-own, never support — see below | [Tools & gateways](doc:tools-and-gateways) |
 | **Agent Runtime Sessions** | `agentEngineSessions()` | `agentfootprint/hosting` | `@googleapis/aiplatform` | `sessions.create / .get / .appendEvent / .delete / .list`, `sessions.operations.wait`. Plus `listByUser` and `ownerOf`. State is written by **appending an event** — the service forbids patching it. Reads never touch the event log: one envelope per session, read out of `sessionState` | **Field-validated, with the write verb field-CORRECTED (9.30.0).** The 2026-08-14 trial ran this adapter live: create, hydrate through a fresh instance, owners, paged `listByUser`, `ownerOf`, an unknown envelope format refused before storage, idempotent forget — all PASS. The **second** write failed, because 9.29.0 patched `sessionState` and Google refuses that; 9.30.0 appends an event instead (the repair the same trial verified on the wire). The corrected write has not itself been re-run live | [Hosting & runtime](doc:hosting-and-runtime) |
@@ -326,7 +326,7 @@ and none is on any runtime path. The trial found **no secrets** in either round.
 </Callout>
 
 ```ts
-import { gcsArtifacts } from 'agentfootprint';
+import { gcsArtifacts } from 'agentfootprint/artifacts';
 
 const artifacts = gcsArtifacts({
   bucket: 'my-agent-artifacts',   // must already exist — this library never creates one
@@ -405,7 +405,8 @@ is the same `{ tenant, principal, conversation }` tuple, so a run's artifacts an
 its memories partition the same way with no extra wiring.
 
 ```ts
-import { Agent, gcsArtifacts } from 'agentfootprint';
+import { Agent } from 'agentfootprint';
+import { gcsArtifacts } from 'agentfootprint/artifacts';
 import { standingAgent, nodeHost, agentEngineSessions } from 'agentfootprint/hosting';
 import { memoryBankStore } from 'agentfootprint/memory';
 import { googleIdentity } from 'agentfootprint/security';
@@ -1765,7 +1766,7 @@ after.
 |---|---|---|
 | `gemini()` / `GeminiProvider` | `agentfootprint/providers` | **Field-validated on the Vertex door** — an independent field trial, 2026-08 (`gemini-2.5-flash`: tool loop, streaming, usage). Gemini-API door and current-generation tool calls: see [the matrix](#the-doormodel-matrix) |
 | `geminiEmbedder()` | `agentfootprint/providers` | **Field-validated on the Vertex door** — 2026-08, `gemini-embedding-001` at 768 dimensions through `defineRAG` |
-| `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint` | **Field-validated** — 2026-08, nine live checks against a real bucket. Its optional peer carries [five transitive moderate advisories](#cloud-storage--the-artifact-store-gcsartifacts-9250); the offered `--force` downgrade will not be taken |
+| `gcsArtifacts()` — the artifact store on Cloud Storage | `agentfootprint/artifacts` | **Field-validated** — 2026-08, nine live checks against a real bucket. Its optional peer carries [five transitive moderate advisories](#cloud-storage--the-artifact-store-gcsartifacts-9250); the offered `--force` downgrade will not be taken |
 | `agentEngineSessions()` — conversations in Agent Runtime Sessions | `agentfootprint/hosting` | **field-validated 2026-08-14** (create, hydrate, listing, owners, forget). The write verb is **field-corrected in 9.30.0**: state is appended as an event, because the service refuses a `sessionState` patch |
 | `memoryBankStore()` / `MemoryBankStore` — the `MemoryStore` port over Memory Bank | `agentfootprint/memory` | **field-validated on the data plane 2026-08-14**. Entry fidelity is **field-corrected in 9.30.0**: `source`, caller `metadata` and `decayPolicy` are carried instead of dropped |
 | `googleIdentity()` — Google access tokens from ADC / WIF / impersonation | `agentfootprint/security` | **field-validated 2026-08-14** — a real bearer authorized a Vertex call, both fail-closed refusals held, and the credential does not serialize its token. **Expiry-triggered refresh is still unproven for this door** |

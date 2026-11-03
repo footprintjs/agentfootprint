@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-157 exported from `agentfootprint`.
+154 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -64,7 +64,6 @@ title: Functions
 - [`formatToolContractCheckup`](/docs/api/functions/formatToolContractCheckup)
 - [`fromCredential`](/docs/api/functions/fromCredential)
 - [`fromIdentity`](/docs/api/functions/fromIdentity)
-- [`gcsArtifacts`](/docs/api/functions/gcsArtifacts)
 - [`graph`](/docs/api/functions/graph)
 - [`hashSessionKey`](/docs/api/functions/hashSessionKey)
 - [`hostFilled`](/docs/api/functions/hostFilled)
@@ -114,7 +113,6 @@ title: Functions
 - [`placedResultKind`](/docs/api/functions/placedResultKind)
 - [`probeDispatch`](/docs/api/functions/probeDispatch)
 - [`projectWalk`](/docs/api/functions/projectWalk)
-- [`providerFromEnv`](/docs/api/functions/providerFromEnv)
 - [`readAbsence`](/docs/api/functions/readAbsence)
 - [`readAskComponent`](/docs/api/functions/readAskComponent)
 - [`readCoverageLedger`](/docs/api/functions/readCoverageLedger)
@@ -134,7 +132,6 @@ title: Functions
 - [`runArtifactStoreCase`](/docs/api/functions/runArtifactStoreCase)
 - [`runArtifactStoreConformance`](/docs/api/functions/runArtifactStoreConformance)
 - [`runbookAsTool`](/docs/api/functions/runbookAsTool)
-- [`s3Artifacts`](/docs/api/functions/s3Artifacts)
 - [`sandboxPath`](/docs/api/functions/sandboxPath)
 - [`selectCommentaryKey`](/docs/api/functions/selectCommentaryKey)
 - [`selfConsistency`](/docs/api/functions/selfConsistency)

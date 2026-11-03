@@ -48,8 +48,6 @@ export {
   type SqliteArtifacts,
   type SqliteArtifactsOptions,
 } from './sqliteArtifacts.js';
-export { s3Artifacts, type S3ArtifactsOptions } from './s3Artifacts.js';
-export { gcsArtifacts, type GcsArtifactsOptions } from './gcsArtifacts.js';
 export {
   assertStreamBytes,
   bytesAsStream,
