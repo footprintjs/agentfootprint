@@ -42,6 +42,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run test:contract:foottrace
       - run: npx tsc --noEmit
       # Compile-level regression tests (test/type-regressions/) — ordinary
       # `test/**` isn't covered by the tsc run above (tsconfig.json's
