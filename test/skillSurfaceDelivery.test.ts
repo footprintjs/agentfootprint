@@ -1,3 +1,4 @@
+import { countArrayReads } from './helpers/inputWork.js';
 /**
  * A skill's body has to land SOMEWHERE (8.5.0).
  *
@@ -292,13 +293,12 @@ describe('tool-only delivery — security', () => {
 // ─── 6. PERFORMANCE — the check is linear and build-time only ────
 
 describe('tool-only delivery — performance', () => {
-  it('scans the injection list once, with no per-iteration cost', () => {
+  it('admits each injection once when checking delivery', () => {
     const many = Array.from({ length: 2_000 }, (_, i) => skill(`s${i}`));
-    const start = Date.now();
-    for (let i = 0; i < 20; i++) toolOnlyDeliveryRefusal(many);
-    // 40k skill inspections; a pure filter. Generous bound — this is a smoke test
-    // against someone making the check quadratic, not a benchmark.
-    expect(Date.now() - start).toBeLessThan(2_000);
+    const probe = countArrayReads(many);
+    expect(toolOnlyDeliveryRefusal(probe.input)).toBeUndefined();
+    expect(probe.reads()).toBeGreaterThanOrEqual(many.length);
+    expect(probe.reads()).toBeLessThanOrEqual(1 * many.length);
   });
 });
 

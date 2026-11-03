@@ -14,7 +14,7 @@
  *   security    — hostile inputs (class instances, `__proto__` keys, 1 MB strings, an
  *                 abbreviation, a bare offset, an invalid Date) are refused by name, never thrown
  *                 on as a TypeError from inside, and never reach a row;
- *   performance — 10 000 reads inside a budget;
+ *   performance — one schema enumeration and seven field reads per closed input;
  *   load        — not applicable: pure functions with no shared state (the per-call row's load
  *                 case is in clock-run.test.ts).
  */
@@ -305,12 +305,34 @@ describe('security — hostile inputs are refused by name, never thrown on', () 
 });
 
 describe('performance', () => {
-  it('10 000 run inputs read and drafted inside 500 ms', () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      const read = readRunTime({ now: NOW, zone: LA, window: WINDOW });
-      if ('value' in read) draftClock(read.value, {});
-    }
-    expect(performance.now() - t0).toBeLessThan(500);
-  });
+  it.each([20, 200, 2000])(
+    '%i run inputs use bounded field reads and one schema enumeration each',
+    (n) => {
+      let reads = 0;
+      let enumerations = 0;
+      const input = new Proxy(
+        { now: NOW, zone: LA, window: WINDOW },
+        {
+          get(target, key, receiver) {
+            if (key === 'now' || key === 'zone' || key === 'window') reads++;
+            return Reflect.get(target, key, receiver);
+          },
+          ownKeys(target) {
+            enumerations++;
+            return Reflect.ownKeys(target);
+          },
+        },
+      );
+      let last;
+      for (let i = 0; i < n; i++) {
+        const read = readRunTime(input);
+        if ('value' in read) last = draftClock(read.value, {});
+      }
+      expect(last).toMatchObject({ now: NOW, zone: LA, window: WINDOW });
+      // One schema enumeration and seven direct field reads per admitted input.
+      expect(enumerations).toBe(n);
+      expect(reads).toBeGreaterThanOrEqual(7 * n);
+      expect(reads).toBeLessThanOrEqual(7 * n);
+    },
+  );
 });

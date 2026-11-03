@@ -317,34 +317,40 @@ describe('resilience — performance', () => {
 // ─── ROI — realistic SLO targets meet in production envelope ─────
 
 describe('resilience — ROI (realistic SLO budgets)', () => {
-  it('3-attempt retry recovery completes in under 1.5s', async () => {
-    let calls = 0;
-    const flaky: LLMProvider = {
-      name: 'flaky',
-      complete: async () => {
-        calls++;
-        if (calls < 3) throw new Error('503');
-        return ok('recovered');
-      },
-    };
-    const wrapped = withRetry(flaky, {
-      maxAttempts: 3,
-      initialDelayMs: 100, // 100ms + 200ms backoff = 300ms total backoff budget
-      backoffFactor: 2,
-    });
-
-    const start = Date.now();
-    const result = await wrapped.complete(req);
-    const elapsed = Date.now() - start;
-
-    // The ceiling is the CONFIGURED BACKOFF BUDGET (100ms + 200ms = 300ms)
-    // with room to spare, not a machine-speed guess: the claim is that
-    // recovery waits the backoff it was told to wait and no more. Five times
-    // that budget is far outside anything ordinary load can add to two
-    // timers, and the work between attempts is trivial.
-    const CONFIGURED_BACKOFF_MS = 300;
-    expect(result.content).toBe('recovered');
-    expect(elapsed).toBeLessThan(CONFIGURED_BACKOFF_MS * 5);
+  it('three attempts recover after exactly 100ms and 200ms of requested backoff', async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const waits: number[] = [];
+      const flaky: LLMProvider = {
+        name: 'flaky',
+        complete: async () => {
+          calls += 1;
+          if (calls < 3) throw new Error('503');
+          return ok('recovered');
+        },
+      };
+      const wrapped = withRetry(flaky, {
+        maxAttempts: 3,
+        initialDelayMs: 100,
+        backoffFactor: 2,
+        onRetry: (_error, _attempt, wait) => waits.push(wait),
+      });
+      const pending = wrapped.complete(req);
+      await vi.advanceTimersByTimeAsync(99);
+      expect(calls).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(calls).toBe(2);
+      await vi.advanceTimersByTimeAsync(199);
+      expect(calls).toBe(2);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await pending).content).toBe('recovered');
+      expect(calls).toBe(3);
+      expect(waits).toEqual([100, 200]);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('fallback chain shortcuts on first success — no wasted calls', async () => {

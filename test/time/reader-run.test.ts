@@ -24,7 +24,7 @@
  *                 request bytes equal the reader-less twin's);
  *   byte identity — `.time()` without a reader files no reading row and calls nothing (the T3
  *                 reference `agent-time-clock` and every unarmed reference stay green);
- *   load        — a reading of 16 mentions files 16 rows, in order, inside a budget.
+ *   load        — a reading of 16 mentions files 16 rows in order, with one reader and one provider call.
  * Unit, property, performance: resolve.test.ts.
  */
 
@@ -397,22 +397,22 @@ describe('off means unchanged; nothing is served', () => {
 // ─── load ────────────────────────────────────────────────────────────
 
 describe('load', () => {
-  it('16 mentions → 16 rows, in order, inside a budget', async () => {
+  it('16 mentions → 16 rows, one reader call and one provider request', async () => {
     const words = Array.from(
       { length: 16 },
       (_, i) => `${(i % 12) + 1}:${String(i).padStart(2, '0')}`,
     );
     const message = `times ${words.join(' and ')}`;
-    const { reader } = fixtureReader(() => ({
+    const { reader, calls } = fixtureReader(() => ({
       mentions: words.map((w) => {
         const [h, m] = w.split(':').map(Number) as [number, number];
         return { quote: w, parses: [{ wall: { h, m } }] };
       }),
     }));
-    const { agent } = agentWith([answer('hi')], (b) => b.time({ zone: LA, reader }));
-    const start = performance.now();
+    const { agent, requests } = agentWith([answer('hi')], (b) => b.time({ zone: LA, reader }));
     await agent.run({ message, time: { now: NOW } });
-    expect(performance.now() - start).toBeLessThan(5000);
+    expect(calls).toHaveLength(1);
+    expect(requests).toHaveLength(1);
     const filed = readings(agent);
     expect(filed.map((r) => r.mention)).toEqual(words.map((_, i) => i));
     expect(filed.map((r) => r.quote)).toEqual(words);

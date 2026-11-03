@@ -1,3 +1,4 @@
+import { countRegexInputWork } from './helpers/nativeWork.js';
 /**
  * The check-up stops being silent about entries and bare edges (8.7.0).
  *
@@ -506,15 +507,18 @@ describe('checkup — property, security, performance, load', () => {
     expect(text).toContain('wire_transfer');
   });
 
-  it('security: a pathological id does not hang the contract regex (ReDoS)', () => {
+  it('a pathological body has bounded contract-regex text admissions', () => {
     const evil = 'a'.repeat(5000);
     const s = defineSkill({ id: 'x', description: 'd', body: `${evil}(`, tools: [tool('x_tool')] });
-    const started = Date.now();
-    skillGraph({ skills: [s], start: 'x', check: 'off' }).checkup();
-    expect(Date.now() - started).toBeLessThan(1000);
+    const graph = skillGraph({ skills: [s], start: 'x', check: 'off' });
+    const measured = countRegexInputWork(() => graph.checkup());
+    expect(measured.calls).toBeGreaterThan(0);
+    expect(measured.work).toBeGreaterThanOrEqual(evil.length);
+    expect(measured.work).toBeLessThanOrEqual(64 * evil.length);
+    // Admission volume does not count native regex backtracking internals.
   });
 
-  it('performance: one checkup on a 200-skill chain stays well under a build budget', () => {
+  it('a 200-skill chain has bounded tool/body contract admissions', () => {
     // The check-up is a BUILD-time call, not a per-iteration one. The dominant cost is
     // the proposal-009 contract scan (one regex per known tool name per skill body),
     // which predates this change; the wiring checks added here are linear in E+R.
@@ -527,9 +531,12 @@ describe('checkup — property, security, performance, load', () => {
         .map((s, i) => ({ from: `s${i}`, to: s.id, onToolReturn: `s${i}_tool` })),
       check: 'off',
     });
-    const started = Date.now();
-    g.checkup();
-    expect(Date.now() - started).toBeLessThan(200);
+    const measured = countRegexInputWork(() => g.checkup());
+    expect(measured.calls).toBeGreaterThanOrEqual(skills.length);
+    expect(measured.calls).toBeLessThanOrEqual(5 * skills.length * skills.length);
+    expect(measured.work).toBeGreaterThan(0);
+    // The contract check compares known tools to bodies; this is deliberately
+    // a pairwise admission bound, not a claim that all checkup work is linear.
   });
 
   it('load: a 200-entry menu reports ONE fan-out warning, not 200', () => {

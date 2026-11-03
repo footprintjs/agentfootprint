@@ -755,22 +755,26 @@ function wideTool(n: number): Tool {
 }
 
 describe('PERFORMANCE — building the ask over 32 fields', () => {
-  it('plans, builds and validates a 32-field ask well inside a millisecond budget', () => {
+  it('plans and validates a 32-field ask with bounded schema-field reads', () => {
     const tool = wideTool(32);
     const args = Array.from({ length: 32 }, (_, i) => `a${i}`);
     const calls = [call('c1', tool.schema.name)];
-    const started = performance.now();
-    for (let i = 0; i < 50; i++) {
-      const state = initialAskState(
-        1,
-        planAskFields([{ toolCallId: 'c1', ask: args }], calls, toolOfList(tool)),
-      );
-      validateInputDeclaration(argumentAskDeclaration(state, nextAskRound(state)!).declaration);
-    }
-    const perAsk = (performance.now() - started) / 50;
-    // eslint-disable-next-line no-console
-    console.log(`[perf] 32-field batch ask: ${perAsk.toFixed(3)} ms to plan, build and validate`);
-    expect(perAsk).toBeLessThan(50);
+    const schema = tool.schema.inputSchema as { properties: Record<string, unknown> };
+    let fieldReads = 0;
+    schema.properties = new Proxy(schema.properties, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && args.includes(key)) fieldReads += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const state = initialAskState(
+      1,
+      planAskFields([{ toolCallId: 'c1', ask: args }], calls, toolOfList(tool)),
+    );
+    const declaration = argumentAskDeclaration(state, nextAskRound(state)!).declaration;
+    validateInputDeclaration(declaration);
+    expect(fieldReads).toBeGreaterThanOrEqual(32);
+    expect(fieldReads).toBeLessThanOrEqual(8 * 32);
   });
 });
 

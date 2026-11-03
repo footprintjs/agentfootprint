@@ -9,7 +9,7 @@
  *   property    — over 2026 in all 20 zones: every instant's own wall time reads back to it (unique, or one
  *                 of an overlap's two), and every skipped wall time is a gap refused under `reject`;
  *   security    — `__proto__`, a 10 KB name and 5 000 case variants: refused or bounded, never thrown on;
- *   performance — the year sweep's budget;
+ *   performance — formatter construction admissions and eviction are counted;
  *   load        — 5 000 distinct case variants keep the formatter cache bounded.
  */
 
@@ -283,21 +283,46 @@ describe('hostile input — security and load', () => {
     expect(isZoneName(value)).toBe(false);
   });
 
-  it('5 000 case variants of one name are judged and the formatter cache stays bounded', () => {
+  it('5 000 case variants have bounded formatter admissions and observable eviction', () => {
     const base = 'America/Argentina/Buenos_Aires';
     const letters = [...base].map((c, i) => i).filter((i) => /[a-z]/i.test(base[i] as string));
-    const started = performance.now();
-    for (let n = 0; n < 5_000; n++) {
-      const chars = [...base];
-      letters.forEach((i, bit) => {
-        if ((n >> bit) & 1)
-          chars[i] =
-            (chars[i] as string).toUpperCase() === chars[i]
-              ? (chars[i] as string).toLowerCase()
-              : (chars[i] as string).toUpperCase();
-      });
-      expect(isZoneName(chars.join(''))).toBe(true);
+    const Real = Intl.DateTimeFormat;
+    let built = 0;
+    class Counting extends Real {
+      constructor(...args: ConstructorParameters<typeof Real>) {
+        super(...args);
+        built++;
+      }
     }
-    expect(performance.now() - started).toBeLessThan(20_000);
+    (Intl as { DateTimeFormat: typeof Real }).DateTimeFormat = Counting as typeof Real;
+    let first = '';
+    let last = '';
+    try {
+      for (let n = 0; n < 5_000; n++) {
+        const chars = [...base];
+        letters.forEach((i, bit) => {
+          if ((n >> bit) & 1)
+            chars[i] =
+              (chars[i] as string).toUpperCase() === chars[i]
+                ? (chars[i] as string).toLowerCase()
+                : (chars[i] as string).toUpperCase();
+        });
+        const name = chars.join('');
+        if (n === 0) first = name;
+        last = name;
+        expect(isZoneName(name)).toBe(true);
+      }
+      // At most 256 already-cached spellings may avoid construction. The
+      // newest spelling remains a hit; the oldest has been evicted.
+      expect(built).toBeGreaterThanOrEqual(5_000 - 256);
+      expect(built).toBeLessThanOrEqual(5_000);
+      const before = built;
+      expect(isZoneName(last)).toBe(true);
+      expect(built).toBe(before);
+      expect(isZoneName(first)).toBe(true);
+      expect(built).toBe(before + 1);
+    } finally {
+      (Intl as { DateTimeFormat: typeof Real }).DateTimeFormat = Real;
+    }
   });
 });

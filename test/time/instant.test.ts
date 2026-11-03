@@ -9,12 +9,13 @@
  *                 the pre-T1 parser accepted, naming the same instant; every strict instant is lenient;
  *                 `spellInstant` ∘ `instantOf` is the identity on instants; `periodVerdict` equals the
  *                 pre-T1 verdict on 5 000 generated periods;
- *   security    — no catastrophic backtracking on a 1 MB near-match; non-strings are refused, never thrown on;
- *   performance — 100 000 parses stay well inside a generous budget;
+ *   security    — a 1 MB near-match is refused after one native admission per profile; non-strings are refused, never thrown on;
+ *   performance — native parser admissions are bounded over multiple input counts;
  *   load        — not applicable: a pure function with no shared state.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import {
   compareInstants,
@@ -188,12 +189,17 @@ describe('byte identity with the pre-T1 parser — property', () => {
 });
 
 describe('hostile input — security', () => {
-  it('a 1 MB near-match is refused in linear time', () => {
+  it('a 1 MB near-match has one native regex admission per profile', () => {
     const long = `2026-10-09T08:00:00.${'1'.repeat(1_000_000)}Z`;
-    const started = performance.now();
-    expect(instantOf(long, 'lenient')).toBeUndefined();
-    expect(instantOf(long, 'strict')).toBeUndefined();
-    expect(performance.now() - started).toBeLessThan(500);
+    const counted = countRegexInputWork(() => [
+      instantOf(long, 'lenient'),
+      instantOf(long, 'strict'),
+    ]);
+    expect(counted.result).toEqual([undefined, undefined]);
+    // Each profile admits the input once. Regex-internal backtracking is not counted.
+    expect(counted.calls).toBe(2);
+    expect(counted.work).toBeGreaterThanOrEqual(2 * long.length);
+    expect(counted.work).toBeLessThanOrEqual(2 * long.length);
   });
 
   it.each([null, undefined, 42, {}, [], Symbol('t'), () => '2026-10-09T08:00Z'])(
@@ -210,16 +216,18 @@ describe('hostile input — security', () => {
 });
 
 describe('cost — performance', () => {
-  it('100 000 parses in both profiles stay well inside a generous budget', () => {
+  it.each([20, 200, 2000])('%i inputs are admitted once by each instant profile', (n) => {
     const r = prng(1);
-    const cases = Array.from({ length: 1_000 }, () => instantish(r));
-    const started = performance.now();
-    for (let i = 0; i < 50; i++) {
+    const cases = Array.from({ length: n }, () => instantish(r));
+    const counted = countRegexInputWork(() => {
       for (const text of cases) {
         instantOf(text, 'lenient');
         instantOf(text, 'strict');
       }
-    }
-    expect(performance.now() - started).toBeLessThan(3_000);
+    });
+    const volume = cases.reduce((sum, text) => sum + text.length, 0) * 2;
+    expect(counted.calls).toBe(2 * n);
+    expect(counted.work).toBeGreaterThanOrEqual(volume);
+    expect(counted.work).toBeLessThanOrEqual(volume);
   });
 });

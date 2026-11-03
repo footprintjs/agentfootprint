@@ -736,22 +736,28 @@ describe('streamHandler — the stream', () => {
 
   it('a caller that hangs up mid-run cuts it; one gone before it starts never runs it', async () => {
     let started = 0;
+    let finished = 0;
+    let entered!: () => void;
+    let release!: () => void;
+    const admitted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const slow = {
-      name: 'slow',
-      complete: () => {
+      name: 'held',
+      complete: async () => {
         started += 1;
-        return new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                content: 'late',
-                toolCalls: [],
-                usage: { input: 1, output: 1 },
-                stopReason: 'stop',
-              }),
-            2_000,
-          ),
-        );
+        entered();
+        await gate;
+        finished += 1;
+        return {
+          content: 'late',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+          stopReason: 'stop',
+        };
       },
     };
     const handle = streamHandler({
@@ -767,15 +773,17 @@ describe('streamHandler — the stream', () => {
     const never = await handle(post({ message: 'a' }, { signal: gone.signal }));
     await never.text().catch(() => '');
     expect(started).toBe(0);
-
-    const first = new AbortController();
-    const res = await handle(post({ message: 'b' }, { signal: first.signal }));
-    await new Promise((r) => setTimeout(r, 30));
-    const cutAt = Date.now();
-    first.abort();
-    await res.text().catch(() => '');
-    expect(Date.now() - cutAt).toBeLessThan(1_500);
-    expect(started).toBe(1);
+    const caller = new AbortController();
+    const response = await handle(post({ message: 'b' }, { signal: caller.signal }));
+    try {
+      await admitted;
+      caller.abort();
+      await response.text().catch(() => '');
+      expect(started).toBe(1);
+      expect(finished).toBe(0);
+    } finally {
+      release();
+    }
   });
 
   it('keeps a quiet stream alive with SSE comments', async () => {

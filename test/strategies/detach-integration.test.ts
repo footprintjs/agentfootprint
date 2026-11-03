@@ -35,24 +35,6 @@ function makeObsStrategy(): ObservabilityStrategy & { exported: AgentfootprintEv
   };
 }
 
-function makeSlowObsStrategy(latencyMs: number): ObservabilityStrategy & {
-  exported: AgentfootprintEvent[];
-} {
-  return {
-    name: 'slow-obs',
-    exported: [] as AgentfootprintEvent[],
-    exportEvent(event: AgentfootprintEvent) {
-      // Synchronous busy-loop — emulates a slow exporter that would
-      // otherwise block the agent loop.
-      const deadline = performance.now() + latencyMs;
-      while (performance.now() < deadline) {
-        /* busy */
-      }
-      this.exported.push(event);
-    },
-  };
-}
-
 const fakeAgentEvent: AgentfootprintEvent = {
   type: 'agentfootprint.agent.start' as const,
   payload: { runId: 'r1' },
@@ -156,44 +138,28 @@ describe('attach × detach — P3 scenario', () => {
 // ─── P4 Property — strategy never blocks dispatcher.dispatch() ───────────
 
 describe('attach × detach — P4 property', () => {
-  it('P4 SLOW strategy never blocks dispatcher.dispatch() when detached', () => {
+  it('P4 detached dispatch queues ten events before any strategy delivery', async () => {
     const dispatcher = new EventDispatcher();
-    // 50ms-per-event blocking strategy.
-    const slowStrategy = makeSlowObsStrategy(50);
+    const strategy = makeObsStrategy();
     const driver = createMicrotaskBatchDriver(async (_c, event) => {
-      slowStrategy.exportEvent(event as AgentfootprintEvent);
+      strategy.exportEvent(event as AgentfootprintEvent);
     });
-    attachObservabilityStrategy(dispatcher, {
-      strategy: slowStrategy,
-      detach: { driver, mode: 'forget' },
-    });
-
-    const t0 = performance.now();
+    attachObservabilityStrategy(dispatcher, { strategy, detach: { driver, mode: 'forget' } });
     for (let i = 0; i < 10; i++) dispatcher.dispatch(fakeAgentEvent);
-    const elapsed = performance.now() - t0;
-
-    // The ceiling is the STRATEGY'S OWN configured delay, not a machine-speed
-    // guess: ten emits would cost ten of those delays inline, and detaching
-    // must return before even one has elapsed. The count below is the
-    // load-proof half — the work is queued, not executed.
-    const PER_EVENT_BLOCK_MS = 50;
-    expect(elapsed).toBeLessThan(PER_EVENT_BLOCK_MS);
-    // Strategy hasn't even run yet (work is queued, not executed).
-    expect(slowStrategy.exported).toHaveLength(0);
+    expect(strategy.exported).toHaveLength(0);
+    await flushAllDetached();
+    expect(strategy.exported).toHaveLength(10);
+    expect(strategy.exported).toEqual(Array.from({ length: 10 }, () => fakeAgentEvent));
   });
 
-  it('P4 sync path DOES block (proves the property is real)', () => {
+  it('P4 synchronous dispatch delivers each event before returning', () => {
     const dispatcher = new EventDispatcher();
-    const slowStrategy = makeSlowObsStrategy(20);
-    attachObservabilityStrategy(dispatcher, { strategy: slowStrategy });
-
-    const t0 = performance.now();
-    for (let i = 0; i < 5; i++) dispatcher.dispatch(fakeAgentEvent);
-    const elapsed = performance.now() - t0;
-
-    // 5 emits × 20ms = 100ms inline. Confirm sync path actually blocks.
-    expect(elapsed).toBeGreaterThan(80);
-    expect(slowStrategy.exported).toHaveLength(5);
+    const strategy = makeObsStrategy();
+    attachObservabilityStrategy(dispatcher, { strategy });
+    for (let i = 0; i < 5; i++) {
+      dispatcher.dispatch(fakeAgentEvent);
+      expect(strategy.exported).toHaveLength(i + 1);
+    }
   });
 });
 

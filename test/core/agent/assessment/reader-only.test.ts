@@ -12,9 +12,9 @@
  *                     code for them to see.)
  *   - SECURITY      — a deep-frozen record folds without a write attempt; no
  *                     network, no timer, no clock is touched;
- *   - PERFORMANCE   — a record with 2,000 results and 2,000 coverage rows folds
- *                     in well under a second (linear, one pass per key);
- *   - LOAD          — 500 folds of the same record give the same bytes.
+ *   - COUNTED WORK  — history and coverage input reads grow linearly;
+ *   - LOAD          — 500 large-record byte checks compare the same bytes, in bounded
+ *                     correctness cases rather than one stopwatch-sized case.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -111,10 +111,10 @@ describe('SECURITY — pure: no write, no network, no timer, no clock', () => {
 });
 
 describe('PERFORMANCE / LOAD — linear, and the same bytes every time', () => {
-  const big = () => {
+  const big = (size = 2000) => {
     const history: unknown[] = [{ role: 'user', content: 'q' }];
     const coverageDeclared: unknown[] = [];
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < size; i++) {
       history.push({
         role: 'tool',
         toolCallId: `c${i}`,
@@ -136,21 +136,44 @@ describe('PERFORMANCE / LOAD — linear, and the same bytes every time', () => {
     return { snapshot: { sharedState: { history, coverageDeclared } } };
   };
 
-  it('2,000 results and 1,000 coverage rows fold in well under a second', () => {
-    const record = big();
-    const t0 = performance.now();
-    const a = assessAnswer(record);
-    const ms = performance.now() - t0;
-    expect(a.checked.find((c) => c.check === 'result-shape')).toMatchObject({
-      ran: 2000,
-      of: 2000,
-    });
-    expect(ms).toBeLessThan(1000);
+  it('input visits stay bounded by three history passes and one coverage pass', () => {
+    for (const size of [20, 200, 2000]) {
+      const record = big(size);
+      const counts = { history: 0, coverage: 0 };
+      const counted = <T>(rows: T[], key: keyof typeof counts): T[] => {
+        return new Proxy(rows, {
+          get(target, property, receiver) {
+            if (typeof property === 'string' && /^(0|[1-9][0-9]*)$/.test(property)) {
+              counts[key] += 1;
+            }
+            return Reflect.get(target, property, receiver);
+          },
+        });
+      };
+      record.snapshot.sharedState.history = counted(record.snapshot.sharedState.history, 'history');
+      record.snapshot.sharedState.coverageDeclared = counted(
+        record.snapshot.sharedState.coverageDeclared,
+        'coverage',
+      );
+      const a = assessAnswer(record);
+      expect(a.checked.find((c) => c.check === 'result-shape')).toMatchObject({
+        ran: size,
+        of: size,
+      });
+      // The lower bounds make a blind counter fail, too. This counts reads of
+      // the input arrays; it does not claim to count every internal allocation.
+      expect(counts.history).toBeGreaterThanOrEqual(size);
+      expect(counts.history).toBeLessThanOrEqual(3 * (size + 1));
+      expect(counts.coverage).toBe(size / 2);
+    }
   });
 
-  it('500 folds of one record give one set of bytes', () => {
-    const record = big();
-    const first = JSON.stringify(assessAnswer(record));
-    for (let i = 0; i < 500; i++) expect(JSON.stringify(assessAnswer(record))).toBe(first);
-  });
+  it.each(Array.from({ length: 20 }, (_, batch) => batch))(
+    'large-record byte consistency, batch %i of 20 (25 checks plus one reference fold)',
+    () => {
+      const record = big();
+      const first = JSON.stringify(assessAnswer(record));
+      for (let i = 0; i < 25; i++) expect(JSON.stringify(assessAnswer(record))).toBe(first);
+    },
+  );
 });

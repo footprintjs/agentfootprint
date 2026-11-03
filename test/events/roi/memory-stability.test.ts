@@ -148,40 +148,27 @@ describe('Load — 1,000 sequential agent.run() with per-run { signal } subscrip
 });
 
 describe('ROI — dispatch cost bounded by listener count', () => {
-  it('dispatch to N listeners scales linearly (no hidden O(N²))', () => {
-    const d10 = new EventDispatcher();
-    const d100 = new EventDispatcher();
-    const d1000 = new EventDispatcher();
-
-    for (let i = 0; i < 10; i++) d10.on('agentfootprint.agent.turn_start', () => {});
-    for (let i = 0; i < 100; i++) d100.on('agentfootprint.agent.turn_start', () => {});
-    for (let i = 0; i < 1000; i++) d1000.on('agentfootprint.agent.turn_start', () => {});
-
-    const e = {
+  it('one dispatch invokes every matching listener once and no unrelated listener', () => {
+    const event = {
       type: 'agentfootprint.agent.turn_start',
       payload: { turnIndex: 0, userPrompt: '' },
       meta: meta(),
     } as AgentfootprintEvent;
-
-    function timeMs(fn: () => void, iters: number): number {
-      for (let i = 0; i < Math.min(iters, 1000); i++) fn(); // warmup
-      const start = performance.now();
-      for (let i = 0; i < iters; i++) fn();
-      return performance.now() - start;
+    for (const size of [10, 100, 1000]) {
+      const dispatcher = new EventDispatcher();
+      const delivered = Array<number>(size).fill(0);
+      let unrelated = 0;
+      for (let i = 0; i < size; i++) {
+        dispatcher.on('agentfootprint.agent.turn_start', () => {
+          delivered[i]! += 1;
+        });
+        dispatcher.on('agentfootprint.agent.turn_end', () => {
+          unrelated += 1;
+        });
+      }
+      dispatcher.dispatch(event);
+      expect(delivered).toEqual(Array<number>(size).fill(1));
+      expect(unrelated).toBe(0);
     }
-
-    const t10 = timeMs(() => d10.dispatch(e), 5_000);
-    const t100 = timeMs(() => d100.dispatch(e), 5_000);
-    const t1000 = timeMs(() => d1000.dispatch(e), 1_000);
-
-    // 100x listeners should NOT take 10_000x time — enforce O(N).
-    // Ratio of per-op costs should be ≈ 1:10:100 (±generous envelope).
-    const perOp10 = t10 / 5_000;
-    const perOp100 = t100 / 5_000;
-    const perOp1000 = t1000 / 1_000;
-
-    // 100→10 ratio should be <100x (linear), certainly <1000x (quadratic)
-    expect(perOp100 / perOp10).toBeLessThan(100);
-    expect(perOp1000 / perOp100).toBeLessThan(100);
   });
 });

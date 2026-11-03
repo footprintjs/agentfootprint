@@ -17,7 +17,7 @@
  * because a loaded CI host wakes a timer late.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockProvider } from '../../../src/adapters/llm/MockProvider.js';
 import type { LLMRequest, LLMChunk } from '../../../src/provider-contract/types.js';
 
@@ -45,21 +45,26 @@ describe('MockProvider — M1: thinkingMs (fixed)', () => {
 
 describe('MockProvider — M2: thinkingMs (range)', () => {
   it('complete() waits within [min, max] when given a tuple', async () => {
-    const BAND_MIN = 40;
-    const BAND_MAX = 120;
-    const provider = new MockProvider({ thinkingMs: [BAND_MIN, BAND_MAX], reply: 'r' });
-    const t0 = Date.now();
-    await provider.complete(req());
-    const elapsed = Date.now() - t0;
-    // Both bounds are stated against the CONFIGURED BAND, not against a
-    // machine-speed guess: the claim is that the provider sleeps inside the
-    // band it was handed. The lower bound is exact and load-proof (the wait
-    // never ends early, and load only makes it truer). The upper bound remains
-    // load-sensitive by choice — proving "did not sleep longer than asked" has
-    // no cheaper form — so it carries 3× the band's own maximum, since a late
-    // timer wake-up costs tens of milliseconds, not multiples of the band.
-    expect(elapsed).toBeGreaterThanOrEqual(BAND_MIN);
-    expect(elapsed).toBeLessThan(BAND_MAX * 3);
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    try {
+      const provider = new MockProvider({ thinkingMs: [40, 120], reply: 'r' });
+      let done = false;
+      const pending = provider.complete(req()).then((response) => {
+        done = true;
+        return response;
+      });
+      await vi.advanceTimersByTimeAsync(79);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await pending).content).toBe('r');
+      expect(done).toBe(true);
+      expect(random).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      random.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -191,18 +196,23 @@ describe('MockProvider — M5: signal abort', () => {
 
 describe('MockProvider.realistic()', () => {
   it('returns a provider with thinkingMs set; consumer can override via options', async () => {
-    // Override thinkingMs to a tiny value so the test stays fast — we
-    // only need to prove the factory produces a working provider.
-    const REALISTIC_DEFAULT_FLOOR_MS = 3000; // MockProvider.realistic → thinkingMs [3000, 8000]
-    const provider = MockProvider.realistic({ thinkingMs: 5, reply: 'r' });
-    const t0 = Date.now();
-    const res = await provider.complete(req());
-    expect(res.content).toBe('r');
-    // Not a performance budget: the number is realistic()'s own default
-    // floor, and finishing below it is what proves the override was honoured.
-    // A 5ms sleep would have to be delayed six hundredfold for load to break
-    // this, so it says nothing about the machine.
-    expect(Date.now() - t0).toBeLessThan(REALISTIC_DEFAULT_FLOOR_MS);
+    vi.useFakeTimers();
+    try {
+      const provider = MockProvider.realistic({ thinkingMs: 5, reply: 'r' });
+      let done = false;
+      const pending = provider.complete(req()).then((response) => {
+        done = true;
+        return response;
+      });
+      await vi.advanceTimersByTimeAsync(4);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await pending).content).toBe('r');
+      expect(done).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
