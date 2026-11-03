@@ -30,6 +30,8 @@ const optionalPeers = new Set(
 );
 
 describe('construction inventory coverage', () => {
+  // Whole-tree parsing measured 13.8s under hosted V8 coverage and 4.6s locally.
+  // Match the other architecture scan’s bounded 30s; small fixtures keep defaults.
   it('joins SDK and injected-handle candidates to behavioral cases or exact reason exclusions', () => {
     const inventory = constructionInventory(
       files('src').map((file) => ({
@@ -75,7 +77,7 @@ describe('construction inventory coverage', () => {
         `Unreviewed option change on ${shape.key}; classify construction vs operation before updating the registry`,
       ).toEqual(shape.fields);
     }
-  });
+  }, 30_000);
 
   const discover = (text: string) =>
     constructionCandidates([{ file: 'src/newAdapter.ts', text }], new Set(['vendor-sdk']));
