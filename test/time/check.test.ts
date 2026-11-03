@@ -21,10 +21,11 @@
  *                 row with an abbreviation for a zone;
  *   boundary    — a 1 ms piece is dropped, a 2 ms piece kept; a shift exactly at the step is
  *                 none, one millisecond past it is both lists; `queried.to == asked.to − step`;
- *   performance — 10 000 checks inside a budget.
+ *   performance — bounded native text admissions per closed check fixture.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import {
   clocksDiffer,
@@ -516,17 +517,25 @@ describe('boundary', () => {
 // ─── performance ─────────────────────────────────────────────────────
 
 describe('performance', () => {
-  it('10 000 checks stay well inside a budget', () => {
-    const started = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      periodTimeCheck({
-        window: filled(),
-        drift: { byMs: 30 * 60_000, outcome: 'shifted' },
-        declared: [{ from: HOUR.from, to: '2026-10-09T14:30:00Z' }],
-        facts: { retention: '30d', granularity: '1m' },
-        now: NOW,
-      });
-    }
-    expect(performance.now() - started).toBeLessThan(4_000);
+  it.each([20, 200, 2000])('%i period checks have bounded text admissions', (n) => {
+    const counted = countRegexInputWork(() => {
+      let last;
+      for (let i = 0; i < n; i++) {
+        last = periodTimeCheck({
+          window: filled(),
+          drift: { byMs: 30 * 60_000, outcome: 'shifted' },
+          declared: [{ from: HOUR.from, to: '2026-10-09T14:30:00Z' }],
+          facts: { retention: '30d', granularity: '1m' },
+          now: NOW,
+        });
+      }
+      return last;
+    });
+    expect(counted.result?.shifted).toEqual({ byMs: 30 * 60_000 });
+    // Closed fixture: bounded native admissions per judgement, not V8 backtracking steps.
+    expect(counted.calls).toBeGreaterThanOrEqual(n);
+    expect(counted.calls).toBeLessThanOrEqual(16 * n);
+    expect(counted.work).toBeGreaterThanOrEqual(n);
+    expect(counted.work).toBeLessThanOrEqual(267 * n);
   });
 });

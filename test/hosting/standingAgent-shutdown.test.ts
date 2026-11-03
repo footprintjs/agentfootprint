@@ -237,14 +237,16 @@ describe('standingAgent shutdown — P5 security', () => {
 // ─── P6 Performance ──────────────────────────────────────────────────
 
 describe('standingAgent shutdown — P6 performance', () => {
-  it('P6 close() on an idle host is not slowed by the drain', async () => {
+  it('P6 closing an idle shared host flushes once without stopping it', async () => {
     const agent = buildAgent();
-    agent.enable.observability({ strategy: recordingStrategy(), tier: 'firehose' });
+    const strategy = recordingStrategy();
+    agent.enable.observability({ strategy, tier: 'firehose' });
     const host = inProcessHost();
     const handle = await standingAgent({ agent, sessions: memorySessions(), host });
-    const started = performance.now();
     await handle.close();
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(strategy.flushes).toBe(1);
+    expect(strategy.stops).toBe(0);
+    expect(strategy.exported).toHaveLength(0);
   });
 });
 

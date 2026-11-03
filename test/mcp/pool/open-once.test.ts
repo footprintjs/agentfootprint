@@ -182,14 +182,42 @@ describe('a shared open runs under the pool’s own signal and deadline', () => 
   });
 
   it('the shared open is bounded by initTimeoutMs even when every caller waits forever', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     const endpoint = fakeEndpoint();
-    endpoint.hold((r) => r.rpc === 'initialize');
-    const { pool } = poolOver(endpoint, { initTimeoutMs: 40 });
-    const started = Date.now();
-    await expect(pool.acquire(id('alice', 'c1'))).rejects.toMatchObject({
-      reason: 'init-timeout',
+    let initializeCalls = 0;
+    let entered!: () => void;
+    const admitted = new Promise<void>((resolve) => {
+      entered = resolve;
     });
-    expect(Date.now() - started).toBeLessThan(2_000);
+    const held = endpoint.hold((request) => {
+      if (request.rpc !== 'initialize') return false;
+      initializeCalls += 1;
+      entered();
+      return true;
+    });
+    const { pool } = poolOver(endpoint, { initTimeoutMs: 40 });
+    let done = false;
+    const pending = pool.acquire(id('alice', 'c1'));
+    const refused = expect(pending).rejects.toMatchObject({ reason: 'init-timeout' });
+    void pending.then(
+      () => {
+        done = true;
+      },
+      () => {
+        done = true;
+      },
+    );
+    await admitted;
+    expect(initializeCalls).toBe(1);
+    expect(held.held).toBe(1);
+    await vi.advanceTimersByTimeAsync(39);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await refused;
+    expect(done).toBe(true);
+    expect(initializeCalls).toBe(1);
+    held.release();
+    await flush();
   });
 });
 

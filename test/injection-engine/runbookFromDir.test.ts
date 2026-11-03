@@ -19,7 +19,8 @@
  * contract · property · security · performance.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +28,12 @@ import { join } from 'node:path';
 import { defineTool } from '../../src/index.js';
 import { runbookFromDir, skillsFromDir, skillGraph } from '../../src/injection-engine.js';
 import type { Tool } from '../../src/tools/tools.js';
+
+// Retain real filesystem bytes while observing each ingestion read.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const real = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...real, readFile: vi.fn(real.readFile) };
+});
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
@@ -339,21 +346,30 @@ describe('property / security / performance', () => {
     expect(skills.map((s) => s.id).sort()).toEqual(['billing', 'escalation']);
   });
 
-  it('performance: 100 routed files load in well under a second', async () => {
+  it('100 routed files are each read once and produce 99 steps', async () => {
     const dir = makeDir();
+    const files: string[] = [];
     for (let i = 0; i < 100; i++) {
-      writeSkill(dir, `s${i}`, [
-        '---',
-        `name: s${i}`,
-        `description: step ${i}`,
-        ...(i < 99 ? ['routes:', `  - s${i + 1}`] : []),
-        '---',
-        'body',
-      ]);
+      files.push(
+        writeSkill(dir, `s${i}`, [
+          '---',
+          `name: s${i}`,
+          `description: step ${i}`,
+          ...(i < 99 ? ['routes:', `  - s${i + 1}`] : []),
+          '---',
+          'body',
+        ]),
+      );
     }
-    const started = Date.now();
+    const reads = vi.mocked(readFile);
+    reads.mockClear();
     const { steps } = await runbookFromDir(dir);
     expect(steps).toHaveLength(99);
-    expect(Date.now() - started).toBeLessThan(2000);
+    // A repeated parse/read increases this count even when outputs remain identical.
+    const observed = reads.mock.calls.map(([file]) => String(file));
+    expect(observed.length).toBeGreaterThanOrEqual(files.length);
+    expect(observed.length).toBeLessThanOrEqual(files.length);
+    expect([...observed].sort()).toEqual([...files].sort());
+    reads.mockClear();
   });
 });

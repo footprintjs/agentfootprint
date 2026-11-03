@@ -49,6 +49,7 @@ import {
 import { mock } from '../src/doors/providers.js';
 import { buildToolRegistry } from '../src/core/agent/buildToolRegistry.js';
 import type { InjectionContext } from '../src/injection-engine/types.js';
+import * as skillMatch from '../src/injection-engine/skillMatch.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -945,7 +946,6 @@ describe('front door — property, security, performance, load', () => {
   });
 
   it('load: a 200-rule keyword router builds, checks pairwise, and finds exactly the one seeded overlap', () => {
-    const started = Date.now();
     const n = 200;
     const ruleList = Array.from({ length: n }, (_, i) => ({
       match: { keywords: [`only${i}`, ...(i === 0 || i === n - 1 ? ['shared'] : [])] },
@@ -956,9 +956,17 @@ describe('front door — property, security, performance, load', () => {
       start: { rules: ruleList },
       check: 'off',
     });
+    const compare = vi.spyOn(skillMatch, 'compareMatchers');
     const overlaps = problemsOf(g, 'overlapping-rules');
     expect(overlaps).toHaveLength(1);
     expect(overlaps[0]!.message).toContain('"shared"');
-    expect(Date.now() - started).toBeLessThan(5_000);
+    const pairs = (n * (n - 1)) / 2;
+    try {
+      // Every unordered pair is inspected once; duplicate work must fail.
+      expect(compare.mock.calls.length).toBeGreaterThanOrEqual(pairs);
+      expect(compare.mock.calls.length).toBeLessThanOrEqual(pairs);
+    } finally {
+      compare.mockRestore();
+    }
   });
 });

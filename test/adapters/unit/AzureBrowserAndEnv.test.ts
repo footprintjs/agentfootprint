@@ -192,15 +192,19 @@ describe('providerFromEnv()', () => {
     expect(() => providerFromEnv()).toThrow(/@anthropic-ai\/sdk|anthropic/i);
   });
 
-  it('reads no socket — resolution is env-only and instant', () => {
-    // No daemon is running in this test process. If the function probed, this
-    // would either hang or fail; it must simply hand back the provider and let
-    // the eventual CALL be the thing that refuses.
+  it('resolves the env-only Ollama provider without a fetch attempt', () => {
     process.env.OLLAMA_MODEL = 'qwen3';
     process.env.OLLAMA_HOST = 'http://127.0.0.1:1';
-    const started = Date.now();
-    expect(providerFromEnv().kind).toBe('ollama');
-    expect(Date.now() - started).toBeLessThan(100);
+    const fetch = vi.fn(() => {
+      throw new Error('provider resolution attempted fetch');
+    });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      expect(providerFromEnv().kind).toBe('ollama');
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   // ── Foundry Local — the second local-model arm ────────────────────

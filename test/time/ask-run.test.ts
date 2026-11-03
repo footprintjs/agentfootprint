@@ -26,7 +26,7 @@
  *   byte identity — a `format` field answered well serves the model the same bytes as its twin
  *                 without one (every unarmed reference: test/core/tools/byte-identity.test.ts);
  *   load        — a 32-field time ask answered in one reply, one field refused: one re-ask naming
- *                 that field, inside a budget;
+ *                 that field, with one read per submitted value and no provider work;
  *   unit, property, performance — ask.test.ts.
  */
 
@@ -467,21 +467,31 @@ describe('a good answer serves the same bytes — byte identity', () => {
 // ─── load ────────────────────────────────────────────────────────────────
 
 describe('a 32-field time ask — load', () => {
-  it('one reply, one refused field: one re-ask naming it, inside a budget', async () => {
+  it('one reply checks 32 fields and re-asks only the refused field without provider work', async () => {
     const fields: InputField[] = Array.from({ length: 32 }, (_, i) => ({
       id: `w${i}`,
       type: 'string',
       format: 'time-range',
     }));
-    const { agent, first } = await firstAsk({ fields, time: { zone: LA } });
-    const values = Object.fromEntries(fields.map((f, i) => [f.id, i === 17 ? 'soon' : GOOD]));
-    const start = performance.now();
+    const { agent, first, requests } = await firstAsk({ fields, time: { zone: LA } });
+    const raw = Object.fromEntries(fields.map((f, i) => [f.id, i === 17 ? 'soon' : GOOD]));
+    let reads = 0;
+    const values = new Proxy(raw, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && Object.hasOwn(target, key)) reads++;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const before = requests.length;
     const second = paused(
       await agent.resume(first.checkpoint, { requestId: first.awaitingInput.requestId, values }),
     );
-    expect(performance.now() - start).toBeLessThan(2_000);
     expect(second.awaitingInput.missing).toEqual(['w17']);
     expect(second.awaitingInput.refused?.answer).toEqual({ w17: 'soon' });
     expect(Object.keys(second.awaitingInput.supplied)).toHaveLength(31);
+    expect(before).toBe(1);
+    expect(requests).toHaveLength(before); // a re-ask never consults the provider
+    expect(reads).toBeGreaterThanOrEqual(fields.length);
+    expect(reads).toBeLessThanOrEqual(fields.length);
   });
 });

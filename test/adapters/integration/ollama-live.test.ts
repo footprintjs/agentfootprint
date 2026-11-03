@@ -148,9 +148,8 @@ live(`Ollama live (${MODEL} @ ${HOST}) — the wire really behaves this way`, ()
   );
 
   it(
-    'a wrong address refuses with `ollama serve`, quickly, without hanging',
+    'a wrong address refuses with `ollama serve` and its transport cause',
     async () => {
-      const started = Date.now();
       const err = await ollama(MODEL, { baseUrl: 'http://127.0.0.1:1', timeoutMs: 3_000 })
         .complete({ model: MODEL, messages: [{ role: 'user', content: 'hi' }] })
         .catch((e: unknown) => e);
@@ -158,7 +157,6 @@ live(`Ollama live (${MODEL} @ ${HOST}) — the wire really behaves this way`, ()
       expect(err).toBeInstanceOf(OllamaUnavailableError);
       expect((err as OllamaUnavailableError).reason).toBe('daemon-unreachable');
       expect((err as Error).message).toContain('ollama serve');
-      expect(Date.now() - started).toBeLessThan(10_000);
     },
     TIMEOUT,
   );

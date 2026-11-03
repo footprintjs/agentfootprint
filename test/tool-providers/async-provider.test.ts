@@ -319,10 +319,12 @@ describe('async-provider — discovery_started / discovery_completed', () => {
       toolCount?: number;
     }> = [];
     const llm = mock({ respond: () => ({ content: 'final', toolCalls: [] }) });
+    let clock = 1_000_000;
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
     const provider: ToolProvider = {
       id: 'timed-hub',
       async list() {
-        await new Promise((r) => setTimeout(r, 5));
+        clock += 37;
         return [fakeTool('a'), fakeTool('b'), fakeTool('c')];
       },
     };
@@ -346,21 +348,18 @@ describe('async-provider — discovery_started / discovery_completed', () => {
         toolCount: e.payload.toolCount,
       });
     });
-    await agent.run({ message: 'go' });
+    try {
+      await agent.run({ message: 'go' });
+    } finally {
+      now.mockRestore();
+    }
 
     expect(events).toHaveLength(2);
     expect(events[0]?.type).toBe('started');
     expect(events[0]?.providerId).toBe('timed-hub');
     expect(events[1]?.type).toBe('completed');
     expect(events[1]?.toolCount).toBe(3);
-    // durationMs is the recorded discovery time. The bounds check that a
-    // number was measured at all and that it is not absurd — not that the
-    // machine is fast. The upper bound is deliberately far above anything a
-    // 5ms sleep can produce, including on a loaded runner, and it stays
-    // load-sensitive by choice: there is no cheaper way to say "this field
-    // holds a duration, not a timestamp".
-    expect(events[1]?.durationMs).toBeGreaterThanOrEqual(0);
-    expect(events[1]?.durationMs).toBeLessThan(5_000);
+    expect(events[1]?.durationMs).toBe(37);
   });
 
   it('failed discovery emits started → failed (no completed)', async () => {

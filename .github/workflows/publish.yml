@@ -281,11 +281,20 @@ jobs:
           echo "**Gates:** CI run [$RUN]($URL) passed every gate on tree \`$TREE\`, the tree of \`$SHA\` (the merge of #$NUMBER), so \`build\` does not run them again." >> "$GITHUB_STEP_SUMMARY"
           echo "tested=true" >> "$GITHUB_OUTPUT"
 
+  file-size:
+    needs: plan
+    if: needs.plan.outputs.mode == 'publish'
+    uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
+    with:
+      tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
+      source_sha: ${{ needs.plan.outputs.sha }}
+
   build:
-    needs: [plan, verdict]
+    needs: [plan, verdict, file-size]
     # Runs even when `verdict` failed: its output is then unset, so every gate
-    # below runs. `plan` must have succeeded and named a version to publish.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mode == 'publish' }}
+    # below runs. The independent source-size ratchet must always pass, even
+    # when the other gates reuse an exact previously tested tree.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mode == 'publish' && needs.file-size.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

@@ -8,12 +8,13 @@
  *                 (`byte-identity-rows.test.ts`);
  *   property    — over 20 000 generated strings the look-back set equals the pre-T1 `LOOKBACK` regex;
  *                 `durationMs(spellDuration(x)) === x` and `spellDuration(durationMs(t))` names t's length;
- *   security    — a 1 MB digit run is refused or measured in linear time, never thrown on;
- *   performance — covered by the property sweep's own budget;
+ *   security    — a 1 MB digit run has bounded native regex admissions, never thrown on;
+ *   performance — native regex input admissions are counted; engine-internal work is unobserved;
  *   load        — not applicable: a pure function with no shared state.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import {
   AXIS_UNITS,
@@ -162,13 +163,18 @@ describe('byte identity and round trips — property', () => {
 });
 
 describe('hostile input — security', () => {
-  it('a 1 MB digit run is judged in linear time', () => {
+  it('a 1 MB digit run has three bounded native regex admissions', () => {
     const long = `${'1'.repeat(1_000_000)}m`;
-    const started = performance.now();
-    expect(isDuration(long, LOOKBACK_UNITS)).toBe(true);
-    expect(durationMs(long, LOOKBACK_UNITS)).toBeUndefined();
-    expect(isDuration(`${long}x`, LOOKBACK_UNITS)).toBe(false);
-    expect(performance.now() - started).toBeLessThan(500);
+    // Three native regex admissions, not a measurement of V8 backtracking.
+    const counted = countRegexInputWork(() => [
+      isDuration(long, LOOKBACK_UNITS),
+      durationMs(long, LOOKBACK_UNITS),
+      isDuration(`${long}x`, LOOKBACK_UNITS),
+    ]);
+    expect(counted.result).toEqual([true, undefined, false]);
+    expect(counted.calls).toBe(3);
+    expect(counted.work).toBeGreaterThanOrEqual(3 * long.length);
+    expect(counted.work).toBeLessThanOrEqual(3 * long.length + 1);
   });
 
   it.each([null, undefined, 42, {}, ['2h']])('refuses %j without throwing', (value) => {

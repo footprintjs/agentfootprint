@@ -270,12 +270,21 @@ describe('withRetry · stream() — the policy decides, abort wins', () => {
       onRetry: () => setTimeout(() => controller.abort(reason), 5),
     });
 
-    const started = Date.now();
-    const { error } = await drain(wrapped.stream!({ ...request, signal: controller.signal }));
+    vi.useFakeTimers();
+    try {
+      const pending = drain(wrapped.stream!({ ...request, signal: controller.signal }));
+      await vi.advanceTimersByTimeAsync(4);
+      expect(controller.signal.aborted).toBe(false);
+      expect(s.opened()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      const { error } = await pending;
 
-    expect(error).toBe(reason);
-    expect(s.opened()).toBe(1);
-    expect(Date.now() - started).toBeLessThan(5_000);
+      expect(error).toBe(reason);
+      expect(s.opened()).toBe(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

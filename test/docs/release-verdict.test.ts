@@ -477,16 +477,31 @@ describe('publish.yml · only the verdict can skip a gate, and only a gate', () 
     }
   });
 
-  it('build runs every gate when the verdict failed, and nothing reaches npm untagged', () => {
-    expect(build).toMatch(/^ {4}needs: \[plan, verdict\]$/m);
+  it('build requires the size gate even when verdict fallback reruns other gates, and nothing reaches npm untagged', () => {
+    expect(build).toMatch(/^ {4}needs: \[plan, verdict, file-size\]$/m);
     expect(build).toContain(
-      "if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mode == 'publish' }}",
+      "if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mode == 'publish' && needs.file-size.result == 'success' }}",
     );
     expect(jobBlock(PUBLISH, 'release')).toContain("needs.build.result == 'success'");
     // A skipped `release` publishes only on the legacy trigger, whose tag exists.
     expect(jobBlock(PUBLISH, 'publish')).toContain(
       "(needs.release.result == 'skipped' && github.event_name == 'release')",
     );
+  });
+
+  it('the release size gate independently checks the pinned plan with the same reviewed tool as CI', () => {
+    const size = jobBlock(PUBLISH, 'file-size');
+    const ciSize = jobBlock(CI, 'file-size');
+    expect(size).toMatch(/^ {4}needs: plan$/m);
+    expect(size).toContain("if: needs.plan.outputs.mode == 'publish'");
+    expect(size).toContain('source_sha: ${{ needs.plan.outputs.sha }}');
+    const uses = /^ {4}uses: (.+)$/m.exec(ciSize)?.[1];
+    const pin = uses?.split('@')[1];
+    expect(pin).toMatch(/^[a-f0-9]{40}$/);
+    expect(size).toContain(`uses: ${uses}`);
+    expect(size).toContain(`tool_sha: ${pin}`);
+    expect(size).not.toContain('needs.verdict');
+    expect(size).not.toContain('secrets:');
   });
 
   it('the verdict reads the GitHub API only, with a read-only token', () => {
@@ -538,7 +553,22 @@ describe('ci.yml · what the verdict trusts', () => {
 
   it('every job checks out the run’s own commit, so one recorded tree speaks for all of them', () => {
     for (const id of jobIds(CI)) {
-      for (const step of stepsOf(jobBlock(CI, id))) {
+      const job = jobBlock(CI, id);
+      if (/^ {4}uses:/m.test(job)) {
+        // The shared checker defaults to github.sha; an override here would
+        // let it report a different source tree from tested-tree.
+        expect(id).toBe('file-size');
+        const pin =
+          /^ {4}uses: footprintjs\/ci\/\.github\/workflows\/file-size\.yml@([a-f0-9]{40})$/m.exec(
+            job,
+          )?.[1];
+        expect(pin).toBeDefined();
+        expect(job).toContain(`tool_sha: ${pin}`);
+        expect(job).not.toMatch(/^ {6}source_sha:/m);
+        expect(job).not.toMatch(/^ {4}if:/m);
+        continue;
+      }
+      for (const step of stepsOf(job)) {
         if (stepKey(step, 'uses')?.startsWith('actions/checkout@')) {
           expect(step, `ci.yml · ${id} checks out something else`).not.toMatch(/^\s+ref:/m);
         }

@@ -1,3 +1,4 @@
+import { countArrayReads } from '../helpers/inputWork.js';
 /**
  * Unit tests — the artifact vocabularies and the SG-F checkup rule (9.25.0).
  *
@@ -436,12 +437,13 @@ describe('security: kinds are exact literals, never patterns', () => {
 });
 
 describe('performance: the check scales to a large agent', () => {
-  it('200 skills, one gap — found, and quickly', () => {
+  it('200 skills and one gap use bounded catalog admissions', () => {
     const skills = Array.from({ length: 200 }, (_, i) => skill(`s${i}`, { produces: [`k/${i}`] }));
     skills.push(skill('gap', { consumes: ['k/absent'] }));
-    const started = Date.now();
-    expect(codes(skills)).toEqual([UNSATISFIED]);
-    expect(Date.now() - started).toBeLessThan(1000);
+    const probe = countArrayReads(skills);
+    expect(codes(probe.input)).toEqual([UNSATISFIED]);
+    expect(probe.reads()).toBeGreaterThanOrEqual(skills.length);
+    expect(probe.reads()).toBeLessThanOrEqual(10 * skills.length);
   });
 
   it('200 skills that declare NOTHING short-circuit to []', () => {

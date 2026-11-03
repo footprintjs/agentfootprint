@@ -13,12 +13,11 @@
  *     the same bytes, stays within its caps, and carries none of the record's
  *     denied content (skill bodies, tool arguments, the app's instructions,
  *     raw tool results, a decision's `why`).
- *   • Measured, not claimed: parse + fold + show-me on the field recording.
+ *   • Latency measurements are optional, outside correctness and coverage.
  */
 
 import { readFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
-import { performance } from 'node:perf_hooks';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -26,7 +25,6 @@ import { Agent, inMemoryArtifacts, recordingPutInput } from '../../src/index.js'
 import type { ArtifactStore } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { accountForAnswer } from '../../src/answer-account/index.js';
-import { showLeaves } from '../../src/answer-account/shown.js';
 import { agentCoreRuntimeHost } from '../../src/hosting-providers.js';
 import { memorySessions, nodeHost, standingAgent } from '../../src/hosting/index.js';
 import type { CrossSiteOptions, HostHandle } from '../../src/hosting/index.js';
@@ -382,36 +380,6 @@ describe('answer-account over HTTP — the recording from the field', () => {
     30_000,
   );
 
-  it.skipIf(!haveField)(
-    'measured: the fold’s event-loop cost on the field recording (parse + account + show-me)',
-    () => {
-      const text = readFileSync(FIELD_RECORDING, 'utf8');
-      const runs: { parse: number; fold: number; shown: number }[] = [];
-      for (let i = 0; i < 7; i++) {
-        const t0 = performance.now();
-        const recording = JSON.parse(text) as Recording;
-        const t1 = performance.now();
-        const account = accountForAnswer(recording, HOST_APP_DECLARATIONS, {
-          runId: FLAGSHIP_RUN_ID,
-        });
-        const t2 = performance.now();
-        showLeaves(account, recording, HOST_APP_DECLARATIONS);
-        const t3 = performance.now();
-        runs.push({ parse: t1 - t0, fold: t2 - t1, shown: t3 - t2 });
-      }
-      const median = (xs: number[]) =>
-        [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
-      const report = {
-        characters: text.length,
-        parseMs: median(runs.map((r) => r.parse)),
-        foldMs: median(runs.map((r) => r.fold)),
-        shownMs: median(runs.map((r) => r.shown)),
-      };
-      // Recorded in the af-3 worklog; the bound here is a regression tripwire,
-      // generous enough for a loaded CI box, not the claim.
-      console.info(`[answer-account] field recording cost: ${JSON.stringify(report)}`);
-      expect(report.foldMs + report.shownMs).toBeLessThan(1_000);
-    },
-    60_000,
-  );
+  // Parse/account/show latency lives in bench/performance/run.mjs. The
+  // correctness cases above retain the reduced and opt-in full recordings.
 });

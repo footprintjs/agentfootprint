@@ -1,0 +1,56 @@
+{
+  "measuredAt": "2026-11-03T07:17:03.012Z",
+  "node": "v22.16.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "sources": {
+    "src/hosting/doorGuard.ts": "194bbed12aee187cb96b9cd3a6ab7359bbd643cf8d18f66e0f1d750795de8048",
+    "src/core/agent/assessment/assess.ts": "33bc4fd05627c11f253dfdd4188b14f2901e4cf09a776f9b67491255e3569705"
+  },
+  "limitation": "Local latency under these sample conditions, not a CI limit or all-operation complexity proof.",
+  "measurements": [
+    {
+      "name": "doorGuard allowed request",
+      "repetitions": 100000,
+      "samplesMs": [
+        101.876792,
+        94.55291599999998,
+        94.07291699999996,
+        94.09020800000002,
+        94.48654199999999
+      ],
+      "minMs": 94.07291699999996
+    },
+    {
+      "name": "assessAnswer fold plus JSON serialization: 2000 results and 1000 coverage rows",
+      "repetitions": 500,
+      "samplesMs": [
+        530.9416249999999,
+        518.67975,
+        515.6515419999998,
+        516.1746670000002,
+        518.0386250000001
+      ],
+      "minMs": 515.6515419999998
+    },
+    {
+      "name": "parse/account/show recording",
+      "repetitions": 7,
+      "samplesMs": [
+        4.3918749999998,
+        3.6625840000001517,
+        3.8742090000000644,
+        3.5670829999999114,
+        3.6810420000001614
+      ],
+      "minMs": 3.5670829999999114
+    }
+  ],
+  "recording": {
+    "kind": "reduced repository fixture",
+    "characters": 130341,
+    "sha256": "c37b65c6e426dceb78396837e7c5a88c9ace221de9005414294aa02b076b8956"
+  },
+  "sinkUsed": true,
+  "runner": "bench/performance/run.mjs"
+}

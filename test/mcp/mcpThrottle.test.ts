@@ -313,39 +313,45 @@ describe('mcp throttle — P4 property', () => {
   });
 
   it('P4 maxWaitMs is the rail on Retry-After — a hostile 24h wait is refused', async () => {
-    // The safety property: a server (or a broken proxy) cannot talk the client
-    // into hanging. We stop retrying and let the throttle surface.
+    vi.useFakeTimers();
     const scripted = scriptedFetch([429, 200], { 0: { 'retry-after': '86400' } });
     const seen: ThrottleRetryInfo[] = [];
     const wrapped = retryingFetch(scripted.fetch, {
-      maxWaitMs: 5_000,
+      maxWaitMs: 5000,
       onRetry: (i) => seen.push(i),
     });
-
-    const startedMs = Date.now();
     const res = await wrapped?.('http://example.test/mcp', { body: '{}' });
-
     expect(res?.status).toBe(429);
     expect(scripted.calls()).toBe(1);
     expect(seen).toHaveLength(0);
-    expect(Date.now() - startedMs).toBeLessThan(1000);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('P4 total waiting across attempts stays under maxWaitMs', async () => {
+    vi.useFakeTimers();
     const scripted = scriptedFetch([429, 429, 429, 429], {
       0: { 'retry-after': '1' },
       1: { 'retry-after': '1' },
       2: { 'retry-after': '1' },
     });
-    const wrapped = retryingFetch(scripted.fetch, { maxAttempts: 9, maxWaitMs: 2_500 });
-
-    const startedMs = Date.now();
-    await wrapped?.('http://example.test/mcp', { body: '{}' });
-    const elapsed = Date.now() - startedMs;
-
-    // Two 1s waits fit under 2.5s; a third would breach it, so it stops.
+    const seen: ThrottleRetryInfo[] = [];
+    const wrapped = retryingFetch(scripted.fetch, {
+      maxAttempts: 9,
+      maxWaitMs: 2500,
+      onRetry: (i) => seen.push(i),
+    });
+    const pending = wrapped?.('http://example.test/mcp', { body: '{}' });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(scripted.calls()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(scripted.calls()).toBe(2);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(scripted.calls()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await pending)?.status).toBe(429);
     expect(scripted.calls()).toBe(3);
-    expect(elapsed).toBeLessThan(2_500 + 500);
+    expect(seen.map((entry) => entry.waitMs)).toEqual([1000, 1000]);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
@@ -444,12 +450,12 @@ describe('mcp throttle — P5 security', () => {
 
 describe('mcp throttle — P6 performance', () => {
   it('P6 the success path costs exactly one call and no wait', async () => {
+    vi.useFakeTimers();
     const scripted = scriptedFetch([200]);
     const wrapped = retryingFetch(scripted.fetch, true);
-    const startedMs = Date.now();
-    await wrapped?.('http://example.test/mcp', { body: '{}' });
+    expect((await wrapped?.('http://example.test/mcp', { body: '{}' }))?.status).toBe(200);
     expect(scripted.calls()).toBe(1);
-    expect(Date.now() - startedMs).toBeLessThan(50);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('P6 disabled adds no wrapper at all — identity, not a pass-through closure', () => {

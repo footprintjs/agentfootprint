@@ -1,3 +1,4 @@
+import { countRegexInputWork } from '../../helpers/nativeWork.js';
 /**
  * negative-claim — the prose grammar (design § 5.2, `detect.ts`): a fixed set of phrases, no
  * model, Unicode-, Markdown- and clause-aware, linear in the text.
@@ -194,7 +195,7 @@ describe('spelling — NFC, case folding, apostrophes; spans index the text as g
   });
 });
 
-describe('PERFORMANCE — adversarial input stays linear', () => {
+describe('COUNTED WORK — adversarial text admissions', () => {
   it.each([
     ['repeated claim words', 'there are no '.repeat(20_000)],
     ['one long token', `${'a-'.repeat(60_000)}b`],
@@ -202,9 +203,13 @@ describe('PERFORMANCE — adversarial input stays linear', () => {
     ['backticks', '`'.repeat(120_000)],
     ['fences', '```\n'.repeat(30_000)],
     ['no-space letters', 'x'.repeat(200_000)],
-  ])('%s', (_name, text) => {
-    const started = performance.now();
-    detectNegativeClaims(text);
-    expect(performance.now() - started).toBeLessThan(3_000);
+  ])('%s has bounded native-regex input admissions', (_name, text) => {
+    const measured = countRegexInputWork(() => detectNegativeClaims(text));
+    expect(measured.calls).toBeGreaterThan(0);
+    expect(measured.work).toBeGreaterThanOrEqual(text.length / 2);
+    expect(measured.work).toBeLessThanOrEqual(100 * text.length);
+    // Native regex internals are opaque: this bounds admitted search windows,
+    // not backtracking steps. Real latency is an optional benchmark result.
+    expect(measured.result).toHaveProperty('claims');
   });
 });

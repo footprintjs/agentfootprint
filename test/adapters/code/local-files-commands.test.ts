@@ -11,13 +11,17 @@
  */
 
 import { existsSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn as realSpawn } from 'node:child_process';
 import * as realFs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { localCodeRunner, type FsModuleLike } from '../../../src/adapters/code/local.js';
+import {
+  localCodeRunner,
+  type FsModuleLike,
+  type ChildProcessModuleLike,
+} from '../../../src/adapters/code/local.js';
 import { spawnErroringAfterStart } from './childSeam.js';
 import {
   canReadCodeFiles,
@@ -224,18 +228,66 @@ describe('localCodeRunner.runCommand — opt-in, and only what the process repor
     expect((err as Error).message).not.toContain('sleep 5');
   });
 
-  it('TIMEOUT is a real bound: a child that ignores SIGTERM is killed, never reported as success', async () => {
-    const s = await session({ commands: true });
-    const started = Date.now();
-    const err = await s
-      .runCommand?.('trap "" TERM; echo before; sleep 3; echo after; exit 0', { timeoutMs: 200 })
-      .catch((e: unknown) => e);
-    // Before this, the runtime's own timeout sent SIGTERM, waited for the
-    // child, and — the child having ignored it and exited 0 — answered
-    // `exitCode: 0` with stdout cut at the deadline.
-    expect(err).toBeInstanceOf(CodeSandboxError);
-    expect((err as CodeSandboxError).reason).toBe('timed-out');
-    expect(Date.now() - started).toBeLessThan(2_500);
+  it('TIMEOUT kills a started TERM-ignoring child at the logical deadline', async () => {
+    let entered!: () => void;
+    let closed!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const exited = new Promise<void>((resolve) => {
+      closed = resolve;
+    });
+    let pid: number | undefined;
+    let ended = false;
+    const module: ChildProcessModuleLike = {
+      spawn: (file, args, options) => {
+        const child = realSpawn(file, [...args], { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+        pid = child.pid;
+        child.stdout.once('data', () => entered());
+        child.once('close', () => {
+          ended = true;
+          closed();
+        });
+        return child as unknown as ReturnType<NonNullable<ChildProcessModuleLike['spawn']>>;
+      },
+    };
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const kill = vi.spyOn(process, 'kill');
+    const ownKills = () =>
+      kill.mock.calls.filter(([target]) => pid !== undefined && target === -pid);
+    try {
+      const s = await session({ commands: true, _childProcess: module });
+      const pending = s.runCommand?.('trap "" TERM; echo ready; sleep 60; echo after', {
+        timeoutMs: 200,
+      });
+      const refused = expect(pending).rejects.toMatchObject({ reason: 'timed-out' });
+      await started; // the deadline is not advanced until the real child has run
+      expect(ended).toBe(false);
+      await vi.advanceTimersByTimeAsync(199);
+      expect(ended).toBe(false);
+      expect(ownKills()).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      await refused;
+      expect(pid).toBeTypeOf('number');
+      expect(ownKills()).toContainEqual([-pid!, 'SIGKILL']);
+      await exited; // actual OS exit, not merely 'the final echo has not happened yet'
+      expect(ended).toBe(true);
+      // The deadline and the child's callback may idempotently stop this
+      // same group. Late cleanup from earlier real children is unrelated.
+      expect(ownKills().length).toBeGreaterThanOrEqual(1);
+      expect(ownKills().length).toBeLessThanOrEqual(2);
+      expect(ownKills().every(([, signal]) => signal === 'SIGKILL')).toBe(true);
+    } finally {
+      if (!ended && pid !== undefined) {
+        try {
+          process.kill(-pid, 'SIGKILL');
+        } catch {
+          /* already gone */
+        }
+      }
+      kill.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('output past the buffer ceiling is a stated CUT with no exit status — not a missing shell', async () => {

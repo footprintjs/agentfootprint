@@ -16,10 +16,11 @@
  *   property    — every conversion reads back as the range it came from (seeded ranges, every
  *                 exact form, both edges);
  *   boundary    — a doubled wall hour is not exact; a sub-millisecond instant is not exact;
- *   performance — 10 000 conversions and read-backs inside a budget.
+ *   performance — bounded native text admissions per conversion and read-back.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import {
   convertExact,
@@ -392,14 +393,22 @@ describe('reading a sent value back (§ 3.3)', () => {
     expect(checked).toBeGreaterThan(3000);
   });
 
-  it('performance — 10 000 conversions and read-backs stay well inside a budget', () => {
+  it.each([20, 200, 2000])('%i conversions and read-backs have bounded text admissions', (n) => {
     const form = bounds('iso', 'inclusive');
-    const started = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      const sent = convertExact({ range: ASKED }, [form], CTX)!;
-      readBack(sent.values, form, CTX);
-    }
-    expect(performance.now() - started).toBeLessThan(3000);
+    const counted = countRegexInputWork(() => {
+      let last;
+      for (let i = 0; i < n; i++) {
+        const sent = convertExact({ range: ASKED }, [form], CTX)!;
+        last = readBack(sent.values, form, CTX);
+      }
+      return last;
+    });
+    expect(counted.result !== undefined && sameRange(counted.result, ASKED)).toBe(true);
+    // Closed fixture: bounded native admissions per judgement, not V8 backtracking steps.
+    expect(counted.calls).toBeGreaterThanOrEqual(n);
+    expect(counted.calls).toBeLessThanOrEqual(4 * n);
+    expect(counted.work).toBeGreaterThanOrEqual(n);
+    expect(counted.work).toBeLessThanOrEqual(100 * n);
   });
 });
 

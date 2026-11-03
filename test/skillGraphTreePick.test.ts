@@ -21,7 +21,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { Agent, defineTool } from '../src/index.js';
-import { defineSkill, skillGraph, decideSkill } from '../src/injection-engine.js';
+import {
+  defineSkill,
+  skillGraph,
+  decideSkill,
+  evaluateInjections,
+} from '../src/injection-engine.js';
 import { mock } from '../src/llm-providers.js';
 
 const t = (name: string) =>
@@ -247,14 +252,32 @@ describe('tree pick — a refused pick has no side effects', () => {
 // ─── 6. PERFORMANCE — the empty set costs nothing ────────────────
 
 describe('tree pick — performance', () => {
-  it('reachableSkills is O(1) for a tree of any size', () => {
+  it('reachableSkills returns no jump targets and evaluates no tree predicate', () => {
     const leaves = Array.from({ length: 200 }, (_, i) => leaf(`l${i}`));
+    let predicates = 0;
+    const predicate = () => {
+      predicates++;
+      return true;
+    };
     let node: Parameters<typeof decideSkill>[1] = leaves[0]!;
-    for (let i = 1; i < leaves.length; i++) node = decideSkill(() => true, leaves[i]!, node);
+    for (let i = 1; i < leaves.length; i++) node = decideSkill(predicate, leaves[i]!, node);
     const g = skillGraph().tree(node).build({ check: 'off' });
-    const start = Date.now();
-    for (let i = 0; i < 100_000; i++) g.reachableSkills(`l${i % 200}`);
-    expect(Date.now() - start).toBeLessThan(2_000);
+    predicates = 0;
+    let targets = 0;
+    for (let i = 0; i < 100_000; i++) targets += g.reachableSkills(`l${i % 200}`).length;
+    expect(targets).toBe(0);
+    expect(predicates).toBe(0);
+    // Positive control: these are real compiled triggers, and evaluating the
+    // graph's injections reaches the very same author predicate.
+    const evaluated = evaluateInjections(g.skills, {
+      iteration: 1,
+      userMessage: 'go',
+      history: [],
+      activatedInjectionIds: [],
+    });
+    expect(evaluated.active).toHaveLength(1);
+    expect(predicates).toBeGreaterThan(0);
+    expect(predicates).toBeLessThanOrEqual(leaves.length * leaves.length);
   });
 });
 

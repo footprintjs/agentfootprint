@@ -1349,7 +1349,6 @@ describe('properties — property', () => {
 describe('the refusal costs nothing it does not have to — performance', () => {
   it('answers 415 without waiting for a body the caller never sends, and closes the connection', async () => {
     const { port, calls } = await door();
-    const started = performance.now();
     const seen = await new Promise<string>((resolve, reject) => {
       const socket = connect(port, '127.0.0.1');
       let text = '';
@@ -1369,7 +1368,6 @@ describe('the refusal costs nothing it does not have to — performance', () => 
     });
     expect(Number(/^HTTP\/1\.1 (\d+)/.exec(seen)?.[1])).toBe(415);
     expect(seen).toMatch(/connection: close/i);
-    expect(performance.now() - started).toBeLessThan(2000);
     expect(calls()).toBe(0);
   });
 
@@ -1481,16 +1479,44 @@ describe('the refusal costs nothing it does not have to — performance', () => 
     expect(calls()).toBe(0);
   });
 
-  it('the pure check is cheap: 100k decisions well under a second', () => {
+  it('each allowed decision reads eight headers directly, without enumerating them', () => {
     const guard = doorGuard({ name: 'perf', allowedHosts: ['bot.corp.example'] });
-    const headers = {
+    const values = {
       host: 'bot.corp.example',
       origin: 'https://bot.corp.example',
       'content-type': 'application/json',
+      upgrade: '',
+      'x-forwarded-proto': 'https',
+      'x-forwarded-host': 'bot.corp.example',
+      'sec-fetch-site': 'same-origin',
     };
-    const started = performance.now();
-    for (let i = 0; i < 100_000; i++) guard.check({ method: 'POST', headers });
-    expect(performance.now() - started).toBeLessThan(1000);
+    for (const decisions of [1, 10, 100]) {
+      const reads: string[] = [];
+      const headers = new Proxy(values, {
+        get(target, key, receiver) {
+          reads.push(String(key));
+          return Reflect.get(target, key, receiver);
+        },
+        ownKeys() {
+          throw new Error('lowercase request headers must not need an enumeration');
+        },
+      });
+      for (let i = 0; i < decisions; i++) {
+        expect(guard.check({ method: 'POST', headers })).toBeUndefined();
+      }
+      expect(reads).toEqual(
+        Array.from({ length: decisions }, () => [
+          'host',
+          'upgrade',
+          'origin',
+          'x-forwarded-proto',
+          'host',
+          'x-forwarded-host',
+          'sec-fetch-site',
+          'content-type',
+        ]).flat(),
+      );
+    }
   });
 });
 
