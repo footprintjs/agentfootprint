@@ -1,3 +1,4 @@
+import { countArrayReads } from '../helpers/inputWork.js';
 /**
  * Partition signals — the three ADVISORIES about how a graph cut the world
  * into skills (`tools-share-prefix`, `few-declared-edges`,
@@ -247,16 +248,17 @@ describe('property / security / performance', () => {
     expect(codesOf([hostile, ...filler(4)], { routeCount: 0 })).toEqual(['few-declared-edges']);
   });
 
-  it('performance/load: 500 skills with 6 tools each check in well under a second', () => {
+  it('500 skills with six tools each require bounded catalog admissions', () => {
     const skills = Array.from({ length: 500 }, (_, i) =>
       skill(
         `s${i}`,
         Array.from({ length: 6 }, (_, t) => `sys${i}_call_${t}`),
       ),
     );
-    const started = Date.now();
-    const problems = run(skills, { routeCount: 499 });
+    const probe = countArrayReads(skills);
+    const problems = run(probe.input, { routeCount: 499 });
     expect(problems).toHaveLength(500); // every one is a single-system wrapper
-    expect(Date.now() - started).toBeLessThan(500);
+    expect(probe.reads()).toBeGreaterThanOrEqual(skills.length);
+    expect(probe.reads()).toBeLessThanOrEqual(8 * skills.length);
   });
 });

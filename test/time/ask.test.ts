@@ -19,11 +19,12 @@
  *                 range is taken exactly when both ends are and `from` is before `to`;
  *   security    — a hostile answer (1 MB, control characters, `{{value}}` inside the answer) is
  *                 refused, quoted at most 64 characters, and never re-expanded as a placeholder;
- *   performance — 20 000 judgements inside a budget;
+ *   performance — native text admissions bounded over repeated judgements;
  *   integration — not applicable here (ask-run.test.ts); load — not applicable: pure functions.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import {
   checkTimeAnswer,
@@ -442,18 +443,32 @@ describe('checkTimeAnswer — security', () => {
 });
 
 describe('checkTimeAnswer — performance', () => {
-  it('20 000 judgements inside a budget', () => {
+  it.each([20, 200, 2000])('%i answer judgements use bounded native text admissions', (n) => {
     const values = [
       '2026-10-09T08:00-07:00/2026-10-09T08:41-07:00',
       '2026-03-08T02:30-08:00',
       'America/Los_Angeles',
       '2026-10-09T08:00',
     ];
-    const start = performance.now();
-    for (let i = 0; i < 20_000; i++) {
-      const v = values[i % values.length] as string;
-      checkTimeAnswer(v.includes('/') ? 'time-range' : v.includes('T') ? 'instant' : 'zone', v, LA);
-    }
-    expect(performance.now() - start).toBeLessThan(3_000);
+    const counted = countRegexInputWork(() => {
+      const refusals = [];
+      for (let i = 0; i < n; i++) {
+        const v = values[i % values.length] as string;
+        refusals.push(
+          checkTimeAnswer(
+            v.includes('/') ? 'time-range' : v.includes('T') ? 'instant' : 'zone',
+            v,
+            LA,
+          ),
+        );
+      }
+      return refusals;
+    });
+    expect(counted.result.filter((r) => r !== undefined)).toHaveLength((3 * n) / 4);
+    // Closed fixture: bounded native admissions per judgement, not V8 backtracking steps.
+    expect(counted.calls).toBeGreaterThanOrEqual(n);
+    expect(counted.calls).toBeLessThanOrEqual((15 * n) / 2);
+    expect(counted.work).toBeGreaterThanOrEqual(n);
+    expect(counted.work).toBeLessThanOrEqual((273 * n) / 2);
   });
 });

@@ -23,10 +23,11 @@
  *                 forged `drift` (one test per field law);
  *   boundary    — a range ending within the tool's step of now is the exact row, not the wider;
  *                 a doubled wall hour is not a gap; drift exactly at the step changes nothing;
- *   performance — 10 000 widenings inside a budget.
+ *   performance — bounded native text admissions per widened window.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import { callWindowOf, turnWindowsOf } from '../../src/time/bind.js';
 import {
@@ -560,11 +561,20 @@ describe('property — a widened read covers the window, and window + extra = se
 });
 
 describe('performance', () => {
-  it('10 000 widenings stay well inside a budget', () => {
-    const started = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      convertWidened({ range: i % 2 === 0 ? YESTERDAY : MORNING }, [LOOKBACK, DAY], CTX);
-    }
-    expect(performance.now() - started).toBeLessThan(4_000);
+  it.each([20, 200, 2000])('%i widenings have bounded text admissions', (n) => {
+    const counted = countRegexInputWork(() => {
+      let widened = 0;
+      for (let i = 0; i < n; i++) {
+        if (convertWidened({ range: i % 2 === 0 ? YESTERDAY : MORNING }, [LOOKBACK, DAY], CTX))
+          widened++;
+      }
+      return widened;
+    });
+    expect(counted.result).toBeGreaterThanOrEqual(n / 2);
+    // Closed fixture: bounded native admissions per judgement, not V8 backtracking steps.
+    expect(counted.calls).toBeGreaterThanOrEqual(n);
+    expect(counted.calls).toBeLessThanOrEqual(15 * n);
+    expect(counted.work).toBeGreaterThanOrEqual(n);
+    expect(counted.work).toBeLessThanOrEqual((591 * n) / 2);
   });
 });

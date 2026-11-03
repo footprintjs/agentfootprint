@@ -15,7 +15,7 @@
  *                 naive value is never among the points; the rows are unchanged (frozen input);
  *   security    — hostile values (1 MB strings, NaN, 1e21, objects, `__proto__`) are counted,
  *                 never thrown on; a malformed axis or option is a named caller error;
- *   performance — 100 000 epoch rows and 20 000 zoned wall rows inside a budget;
+ *   performance — one source field read per row, including 100 000 epoch and 20 000 zoned wall rows;
  *   load        — not applicable: a pure function with no shared state.
  */
 
@@ -317,9 +317,16 @@ describe('hostile input — security', () => {
       { t: ['2026-09-14T10:00Z'] },
       { t: Symbol('x') },
     ];
-    const started = performance.now();
-    expect(normaliseInstants(rows, ISO).counts.unreadable).toBe(5);
-    expect(performance.now() - started).toBeLessThan(500);
+    let reads = 0;
+    const observed = rows.map((row) => ({
+      get t() {
+        reads++;
+        return row.t;
+      },
+    }));
+    expect(normaliseInstants(observed, ISO).counts.unreadable).toBe(5);
+    expect(reads).toBeGreaterThanOrEqual(rows.length);
+    expect(reads).toBeLessThanOrEqual(rows.length);
     expect(
       normaliseInstants(
         [{ ts: Number.NaN }, { ts: Infinity }, { ts: 1e21 }, { ts: 1e-7 }, { ts: 2n }],
@@ -348,23 +355,37 @@ describe('hostile input — security', () => {
 });
 
 describe('budget — performance', () => {
-  it('100 000 epoch rows', () => {
-    const rows = Array.from({ length: 100_000 }, (_, i) => ({
-      ts: 1_726_300_800 + ((i * 7919) % 100_000),
+  it.each([20, 200, 100_000])('%i epoch rows are read once each', (n) => {
+    let reads = 0;
+    const rows = Array.from({ length: n }, (_, i) => ({
+      get ts() {
+        reads++;
+        return 1_726_300_800 + ((i * 7919) % n);
+      },
     }));
-    const started = performance.now();
     const view = normaliseInstants(rows, EPOCH_S);
-    expect(performance.now() - started).toBeLessThan(2_000);
-    expect(view.status === 'instants' && view.points.length).toBe(100_000);
+    expect(view.status === 'instants' && view.points.length).toBe(n);
+    // Pins source-row admission. Native sorting and parser internals are not counted.
+    expect(reads).toBeGreaterThanOrEqual(n);
+    expect(reads).toBeLessThanOrEqual(n);
   });
 
-  it('20 000 wall-clock rows in a zone', () => {
-    const rows = Array.from({ length: 20_000 }, (_, i) => ({
-      t: (spellInstant({ ms: 1_790_000_000_000 + i * 60_000, nanos: 0 }, 0) as string).slice(0, -1),
-    }));
-    const started = performance.now();
+  it.each([20, 200, 20_000])('%i zoned wall rows are read once each', (n) => {
+    let reads = 0;
+    const rows = Array.from({ length: n }, (_, i) => {
+      const text = (
+        spellInstant({ ms: 1_790_000_000_000 + i * 60_000, nanos: 0 }, 0) as string
+      ).slice(0, -1);
+      return {
+        get t() {
+          reads++;
+          return text;
+        },
+      };
+    });
     const view = normaliseInstants(rows, LONDON);
-    expect(performance.now() - started).toBeLessThan(3_000);
-    expect(view.status === 'instants' && view.points.length).toBe(20_000);
+    expect(view.status === 'instants' && view.points.length).toBe(n);
+    expect(reads).toBeGreaterThanOrEqual(n);
+    expect(reads).toBeLessThanOrEqual(n);
   });
 });

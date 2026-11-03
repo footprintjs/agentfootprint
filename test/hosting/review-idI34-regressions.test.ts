@@ -6,7 +6,17 @@
  */
 
 import { request as httpRequest } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { scrypt, timingSafeEqual } from 'node:crypto';
+
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return {
+    ...actual,
+    scrypt: vi.fn(actual.scrypt),
+    timingSafeEqual: vi.fn(actual.timingSafeEqual),
+  };
+});
 
 import {
   memorySignIns,
@@ -228,23 +238,22 @@ describe('C — timing and enumeration', () => {
     expect(() => localPasswords(`first:${cheap},priya:${dear}`)).toThrow(/mixes scrypt costs/);
   });
 
-  it('FIXED (S-8, M15): an unknown name costs one derive, like a known one — the decoy is real', async () => {
+  it('FIXED (S-8, M15): known and unknown names each derive and compare one equal-cost key', async () => {
     const list = localPasswords(await testUsers());
-    const time = async (name: string) => {
-      const t = performance.now();
-      await list.check(name, 'wrong');
-      return performance.now() - t;
-    };
-    await time('warm');
-    const known: number[] = [];
-    const unknown: number[] = [];
-    for (let i = 0; i < 5; i += 1) {
-      known.push(await time('alice'));
-      unknown.push(await time(`ghost-${i}`));
+    const costs: unknown[] = [];
+    for (const name of ['alice', 'ghost']) {
+      vi.mocked(scrypt).mockClear();
+      vi.mocked(timingSafeEqual).mockClear();
+      const result = await list.check(name, 'wrong');
+      expect(result).toBeUndefined();
+      expect(scrypt).toHaveBeenCalledTimes(1);
+      expect(timingSafeEqual).toHaveBeenCalledTimes(1);
+      costs.push(vi.mocked(scrypt).mock.calls[0]?.[3]);
     }
-    const median = (xs: number[]) => xs.sort((a, b) => a - b)[2] as number;
-    expect(median(unknown)).toBeGreaterThan(median(known) * 0.5);
-  }, 30_000);
+    expect(costs[0]).toEqual(costs[1]);
+    // Same native operations and configured KDF costs, not a claim about
+    // constant-time internals or the scheduler's observed response latency.
+  });
 });
 
 // ─── D. Attempt limits ───────────────────────────────────────────────

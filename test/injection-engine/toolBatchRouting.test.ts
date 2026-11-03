@@ -1,3 +1,4 @@
+import { countArrayReads } from '../helpers/inputWork.js';
 /**
  * Ordered tool-outcome batch routing + `skill.route_conflict` (9.16.0).
  *
@@ -379,15 +380,15 @@ describe('robustness: throwing route predicates', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('performance: large batches resolve in linear time', () => {
-  it('a 500-result batch over 2 edges resolves in well under 100ms', () => {
+  it('a 500-result batch over two edges has bounded input admissions', () => {
     const g = twoEdgeGraph();
     const batch = Array.from({ length: 500 }, (_, i) =>
       res(i === 499 ? 'alpha' : 'noise', `c${i}`),
     );
-    const start = performance.now();
-    const move = g.explainNextSkill({ ...baseCtx, currentSkillId: 'a', toolResults: batch });
-    const elapsed = performance.now() - start;
+    const probe = countArrayReads(batch);
+    const move = g.explainNextSkill({ ...baseCtx, currentSkillId: 'a', toolResults: probe.input });
     expect(move.to).toBe('b');
-    expect(elapsed).toBeLessThan(100);
+    expect(probe.reads()).toBeGreaterThanOrEqual(batch.length);
+    expect(probe.reads()).toBeLessThanOrEqual(10 * batch.length);
   });
 });

@@ -1,3 +1,4 @@
+import { countArrayReads } from './helpers/inputWork.js';
 /**
  * `read_skill` offers what the gate will actually grant (8.5.0).
  *
@@ -478,12 +479,14 @@ describe('read_skill offer — security', () => {
 // ─── 6. PERFORMANCE — rebuilt per iteration, so it must stay cheap ──
 
 describe('read_skill offer — performance', () => {
-  it('building the offer is linear in the catalog', () => {
+  it('building an offer admits a bounded number of catalog items', () => {
     const many = Array.from({ length: 300 }, (_, i) => skill(`s${i}`));
     const grantable = ['s1', 's2', 's3'];
-    const start = Date.now();
-    for (let i = 0; i < 300; i++) buildReadSkillTool(many, { grantable });
-    expect(Date.now() - start).toBeLessThan(2_000);
+    const probe = countArrayReads(many);
+    for (let i = 0; i < 3; i++)
+      expect(buildReadSkillTool(probe.input, { grantable })).toBeDefined();
+    expect(probe.reads()).toBeGreaterThanOrEqual(many.length);
+    expect(probe.reads()).toBeLessThanOrEqual(30 * many.length);
   });
 });
 

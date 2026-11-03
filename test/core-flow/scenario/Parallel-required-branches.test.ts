@@ -191,22 +191,60 @@ describe('Parallel required — scenario: required failure rejects the run', () 
   });
 
   it('all-required: rejects EARLY — before a slow required sibling finishes', async () => {
-    // The ceiling here is not a performance budget and does not measure the
-    // machine: it is the SLOW BRANCH'S OWN DELAY. Best-effort mode would wait
-    // the full delay for `slow` to settle before the Merge join throws;
-    // fail-fast returns long before. Finishing under two thirds of that delay
-    // is the evidence, and a loaded runner would have to add a full second to
-    // an already-rejected promise to break it.
-    const SLOW_BRANCH_MS = 1500;
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const admitted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let slowCalls = 0;
+    let slowFinished = 0;
+    let failedCalls = 0;
+    const slow = LLMCall.create({
+      provider: {
+        name: 'held',
+        complete: async () => {
+          slowCalls += 1;
+          entered();
+          await gate;
+          slowFinished += 1;
+          return {
+            content: 'S',
+            toolCalls: [],
+            usage: { input: 0, output: 0 },
+            stopReason: 'stop',
+          };
+        },
+      },
+      model: 'mock',
+    }).build();
+    const bad = LLMCall.create({
+      provider: {
+        name: 'bad',
+        complete: async () => {
+          await admitted;
+          failedCalls += 1;
+          throw new Error('instant failure');
+        },
+      },
+      model: 'mock',
+    }).build();
     const par = Parallel.create()
-      .branch('slow', slowOk('S', SLOW_BRANCH_MS), { required: true })
-      .branch('bad', failing('instant failure'), { required: true })
+      .branch('slow', slow, { required: true })
+      .branch('bad', bad, { required: true })
       .mergeWithFn((r) => Object.values(r).join(','))
       .build();
-
-    const t0 = performance.now();
-    await expect(par.run({ message: 'go' })).rejects.toThrow(/instant failure/);
-    expect(performance.now() - t0).toBeLessThan(SLOW_BRANCH_MS * (2 / 3));
+    try {
+      await expect(par.run({ message: 'go' })).rejects.toThrow(/instant failure/);
+      expect(slowCalls).toBe(1);
+      expect(failedCalls).toBe(1);
+      expect(slowFinished).toBe(0);
+    } finally {
+      release();
+    }
+    await gate;
   });
 
   it('all-required abort still emits composition.exit with status=err (enter/exit pairing)', async () => {

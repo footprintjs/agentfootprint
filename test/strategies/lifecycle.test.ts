@@ -385,17 +385,19 @@ describe('strategy lifecycle — P5 security', () => {
 // ─── P6 Performance ──────────────────────────────────────────────────
 
 describe('strategy lifecycle — P6 performance', () => {
-  it('P6 shutdown on a runner with nothing buffered is sub-millisecond', async () => {
+  it('P6 idle shutdown flushes and stops its single strategy once', async () => {
     const agent = Agent.create({
       provider: new MockProvider({ responses: ['ok'] }),
       model: 'mock',
     })
       .system('t')
       .build();
-    agent.enable.observability({ strategy: recordingStrategy(), tier: 'firehose' });
-    const started = performance.now();
+    const strategy = recordingStrategy();
+    agent.enable.observability({ strategy, tier: 'firehose' });
     await agent.shutdown();
-    expect(performance.now() - started).toBeLessThan(50);
+    expect(strategy.flushes).toBe(1);
+    expect(strategy.stops).toBe(1);
+    expect(strategy.exported).toHaveLength(0);
   });
 });
 

@@ -26,11 +26,12 @@
  *                 person) and still refuses a forged one (a form with no range);
  *   byte identity — `timeWindowsLine` with nothing refused serves the bytes it served before;
  *   boundary    — a look-back exactly `maxRange` long is read; one minute longer is refused;
- *   performance — 10 000 answers inside a budget.
+ *   performance — bounded native text admissions per answer.
  * Through real agents: lookback-only-run.test.ts.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import { defineTool } from '../../src/index.js';
 import { callWindowOf, readerWindowsOf, turnWindowsOf } from '../../src/time/bind.js';
@@ -370,16 +371,27 @@ describe('property — a past window on a look-back-only tool is read wider, or 
 });
 
 describe('performance', () => {
-  it('10 000 answers stay well inside a budget', () => {
-    const started = performance.now();
-    for (let i = 0; i < 10_000; i++) {
-      convertForTool(
-        { range: i % 2 === 0 ? YESTERDAY : TODAY },
-        [LOOKBACK],
-        { maxRange: '7d' },
-        CTX,
-      );
-    }
-    expect(performance.now() - started).toBeLessThan(4_000);
+  it.each([20, 200, 2000])('%i lookback answers have bounded text admissions', (n) => {
+    const counted = countRegexInputWork(() => {
+      let converted = 0;
+      let refused = 0;
+      for (let i = 0; i < n; i++) {
+        const result = convertForTool(
+          { range: i % 2 === 0 ? YESTERDAY : TODAY },
+          [LOOKBACK],
+          { maxRange: '7d' },
+          CTX,
+        );
+        if ('conversion' in result) converted++;
+        else refused++;
+      }
+      return { converted, refused };
+    });
+    expect(counted.result).toEqual({ converted: n / 2, refused: n / 2 });
+    // Closed fixture: bounded native admissions per judgement, not V8 backtracking steps.
+    expect(counted.calls).toBeGreaterThanOrEqual(n);
+    expect(counted.calls).toBeLessThanOrEqual(19 * n);
+    expect(counted.work).toBeGreaterThanOrEqual(n);
+    expect(counted.work).toBeLessThanOrEqual((739 * n) / 2);
   });
 });

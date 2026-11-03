@@ -309,15 +309,18 @@ describe('property / security / performance', () => {
     expect(withRows.toMermaid()).toBe(without.toMermaid());
   });
 
-  it('performance/load: 200 rows against 50 rules is a build-time blink', () => {
+  it('200 rows use two predicate passes over 50 rules', () => {
+    let calls = 0;
     const entries = Array.from({ length: 50 }, (_, i) => ({
       id: `s${i}`,
-      when: (ctx: { userMessage?: string }) => (ctx.userMessage ?? '').includes(`token${i}`),
+      when: (ctx: { userMessage?: string }) => {
+        calls += 1;
+        return (ctx.userMessage ?? '').includes(`token${i}`);
+      },
       match: { kind: 'keywords' as const, keywords: [`token${i}`] },
     }));
     const phrases = Array.from({ length: 200 }, (_, i) => `phrase number ${i} claims nothing`);
-    const started = Date.now();
     expect(checkNeverRoutes({ entries, phrases }).problems).toEqual([]);
-    expect(Date.now() - started).toBeLessThan(500);
+    expect(calls).toBe(2 * 200 * 50);
   });
 });

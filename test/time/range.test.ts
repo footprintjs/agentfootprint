@@ -8,11 +8,12 @@
  *   property    — over 5 000 generated ranges: `parseRange` ↔ `spellRange` under both joiners, and EVERY
  *                 boundary round-trips (inclusive span, tool bound under both edges, look-back);
  *   security    — a joiner-only 1 MB string, non-strings and extra keys are refused, never thrown on;
- *   performance — the property sweep's own budget;
+ *   performance — one native split admission per hostile input; native allocation work is unobserved;
  *   load        — not applicable: pure functions with no shared state.
  */
 
 import { describe, expect, it } from 'vitest';
+import { countSplitInputWork } from '../helpers/nativeWork.js';
 
 import { compareInstants, instantOf, spellInstant, type Instant } from '../../src/time/instant.js';
 import { AXIS_UNITS, LOOKBACK_UNITS } from '../../src/time/duration.js';
@@ -255,12 +256,18 @@ describe('round trips — property', () => {
 });
 
 describe('hostile input — security', () => {
-  it('a 1 MB run of joiners is refused in linear time', () => {
+  it('1 MB joiner runs are refused after one split per input', () => {
     const long = '..'.repeat(500_000);
-    const started = performance.now();
-    expect(parseRange(long, '..')).toBeUndefined();
-    expect(splitRange(`2026-10-09T08:00Z${'/'.repeat(1_000_000)}`, '/', 'strict')).toBeUndefined();
-    expect(performance.now() - started).toBeLessThan(500);
+    const slashes = `2026-10-09T08:00Z${'/'.repeat(1_000_000)}`;
+    // Each malformed input is split once; allocation inside native split is opaque.
+    const counted = countSplitInputWork(() => [
+      parseRange(long, '..'),
+      splitRange(slashes, '/', 'strict'),
+    ]);
+    expect(counted.result).toEqual([undefined, undefined]);
+    expect(counted.calls).toBe(2);
+    expect(counted.work).toBeGreaterThanOrEqual(long.length + slashes.length);
+    expect(counted.work).toBeLessThanOrEqual(long.length + slashes.length);
   });
 
   it.each([null, undefined, 42, {}, ['a', 'b']])('parseRange(%j) is undefined', (value) => {

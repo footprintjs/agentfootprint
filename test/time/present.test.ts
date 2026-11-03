@@ -16,13 +16,14 @@
  *                 at minute grain shows the minute before its end;
  *   security    — a zone that is not an IANA name, a non-instant, a reversed range and an
  *                 unknown grain are refused by name; nothing is parsed back from a label;
- *   performance — 20 000 spans inside a budget;
+ *   performance — bounded native text admissions per rendered span;
  *   load        — not applicable: pure functions with no shared state.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
 
 import { composeAnswerWithCoverage } from '../../src/semantics/coverage/answer.js';
 import { periodLine } from '../../src/semantics/coverage/period.js';
@@ -277,11 +278,18 @@ describe('security — refused by name', () => {
 // ─── Performance ─────────────────────────────────────────────────────────
 
 describe('performance', () => {
-  it('20 000 spans in a zone inside 2 s', () => {
-    const t0 = performance.now();
-    for (let i = 0; i < 20_000; i++) {
-      presentSpan('2026-10-09T15:00:00Z', '2026-10-09T15:40:00Z', LA);
-    }
-    expect(performance.now() - t0).toBeLessThan(2000);
+  it.each([20, 200, 2000])('%i rendered spans have bounded text admissions', (n) => {
+    const counted = countRegexInputWork(() => {
+      let last;
+      for (let i = 0; i < n; i++)
+        last = presentSpan('2026-10-09T15:00:00Z', '2026-10-09T15:40:00Z', LA);
+      return last;
+    });
+    expect(counted.result).toBe('2026-10-09 08:00–08:40 America/Los_Angeles (UTC-07:00)');
+    // Closed fixture: bounded native admissions per judgement, not V8 backtracking steps.
+    expect(counted.calls).toBeGreaterThanOrEqual(n);
+    expect(counted.calls).toBeLessThanOrEqual(7 * n);
+    expect(counted.work).toBeGreaterThanOrEqual(n);
+    expect(counted.work).toBeLessThanOrEqual(135 * n);
   });
 });

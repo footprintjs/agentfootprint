@@ -29,13 +29,15 @@
  *                 checks accept every reading, the same text always reads the same;
  *   security    — the leaf law holds for `readers/` (it imports only the port); hostile input
  *                 (long digit/slash runs, unicode) never throws and never quotes text it did not see;
- *   performance — a 100 000-character message reads inside a budget;
+ *   performance — manual text reads and native regex calls are counted, including the 102 000-character input;
  *   integration, byte identity — english-run.test.ts.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { countRegexInputWork } from '../helpers/nativeWork.js';
+import { countTextWork } from '../helpers/workCount.js';
 
 import { englishTimeReader } from '../../src/index.js';
 import { checkReading, MAX_MENTIONS, type TimeParts } from '../../src/time/reader.js';
@@ -724,10 +726,17 @@ describe('security', () => {
 // ─── performance ─────────────────────────────────────────────────────
 
 describe('performance', () => {
-  it('a 100 000-character message reads inside a budget', () => {
-    const text = 'errors on 10/09/26 8 AM to 8:40 AM PST and more words here. '.repeat(1700);
-    const t0 = performance.now();
-    read(text);
-    expect(performance.now() - t0).toBeLessThan(1500);
+  it.each([20, 200, 1700])('%i phrases have bounded manual reads and native regex calls', (n) => {
+    const text = 'errors on 10/09/26 8 AM to 8:40 AM PST and more words here. '.repeat(n);
+    const textRead = countTextWork(() => countRegexInputWork(() => read(text)));
+    const counted = textRead.result;
+    expect(counted.result.mentions).toHaveLength(MAX_MENTIONS);
+    // Count the manual scans and the number of native matches separately.
+    // Anchored regexes receive long suffixes but may reject at their prefix;
+    // neither these admissions nor char reads measure V8 backtracking steps.
+    expect(textRead.work).toBeGreaterThanOrEqual(text.length / 2);
+    expect(textRead.work).toBeLessThanOrEqual(text.length);
+    expect(counted.calls).toBeGreaterThanOrEqual(text.length);
+    expect(counted.calls).toBeLessThanOrEqual(2 * text.length);
   });
 });

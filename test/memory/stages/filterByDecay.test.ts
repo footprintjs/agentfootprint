@@ -183,11 +183,31 @@ describe('filterByDecay — properties', () => {
 // ── Performance ─────────────────────────────────────────────
 
 describe('filterByDecay — performance', () => {
-  it('does no I/O: 10k entries filter without a store, an LLM, or an embedder', async () => {
-    const scope = makeScope(Array.from({ length: 10_000 }, (_, i) => aged(`e${i}`, i * 10)));
-    const started = Date.now();
-    await filterByDecay({ halfLifeMs: SECOND, now: clock })(scope as never);
-    expect(Date.now() - started).toBeLessThan(500);
+  it('10k entries use one clock read and two timestamp reads per entry', async () => {
+    let clockReads = 0;
+    let timestampReads = 0;
+    const scope = makeScope(
+      Array.from({ length: 10_000 }, (_, i) => {
+        const entry = aged(`e${i}`, i * 10);
+        const at = entry.lastAccessedAt;
+        Object.defineProperty(entry, 'lastAccessedAt', {
+          get() {
+            timestampReads += 1;
+            return at;
+          },
+        });
+        return entry;
+      }),
+    );
+    await filterByDecay({
+      halfLifeMs: SECOND,
+      now: () => {
+        clockReads += 1;
+        return NOW;
+      },
+    })(scope as never);
+    expect(clockReads).toBe(1);
+    expect(timestampReads).toBe(2 * 10_000);
     expect(scope.loaded.length).toBeLessThan(10_000);
   });
 });

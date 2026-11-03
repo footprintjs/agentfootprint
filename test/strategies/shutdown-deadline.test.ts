@@ -269,12 +269,16 @@ describe('agent.shutdown() deadline — P3 scenario', () => {
     agent.enable.observability({ strategy: healthy, tier: 'firehose' });
     await agent.run({ message: 'hi' });
 
-    const started = performance.now();
-    await agent.shutdown({ timeoutMs: 100 });
-    const waited = performance.now() - started;
-
-    expect(waited).toBeGreaterThanOrEqual(90);
-    expect(waited).toBeLessThan(2_000);
+    vi.useFakeTimers();
+    let done = false;
+    const shutting = agent.shutdown({ timeoutMs: 100 }).then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(99);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await shutting;
+    expect(done).toBe(true);
     expect(errors).toHaveLength(1);
     expect(errors[0]?.message).toMatch(
       /^\[file\] flush did not finish within 100 ms of shutdown: a delivery it started is still in flight — still delivering, or stuck\./,
