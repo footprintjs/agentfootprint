@@ -108,8 +108,8 @@ const backupRuns = defineTool({
   },
 });
 
-// The turn's clock, on a whole minute (a look-back is spelled in whole minutes).
-const now = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+// A reproducible fixture clock on an ordinary day, on a whole minute for look-back spelling.
+const now = new Date('2026-08-13T15:40:00.000Z');
 const tomorrow = {
   from: new Date(now.getTime() + 86_400_000).toISOString(),
   to: new Date(now.getTime() + 2 * 86_400_000).toISOString(),
@@ -259,6 +259,27 @@ export async function run(input: string): Promise<string> {
       'the preview refuses what the run refused',
     );
   }
+  // On Los Angeles' fall-back day, yesterday itself spans 25 hours: the tool's cap refuses it
+  // before conversion tries to find a covering form. This fixture protects that distinct reason.
+  const fallBack = convertForTool(
+    {
+      range: {
+        from: '2026-11-01T00:00:00-07:00',
+        to: '2026-11-02T00:00:00-08:00',
+      },
+    },
+    sugarForms(recentPeriod),
+    recentPeriod,
+    {
+      now: '2026-11-02T15:40:00.000Z',
+      zone: 'America/Los_Angeles',
+      granularityMs: granularityMsOf(recentPeriod),
+    },
+  );
+  check(
+    'refused' in fallBack && fallBack.refused === 'over-max-range',
+    'the 25-hour fall-back day exceeds the one-day cap',
+  );
   console.log('\nthe one-day tool:', JSON.stringify(latest(shortRows, 's1')));
   return `${String(out)}\n${String(short)}`;
 }
