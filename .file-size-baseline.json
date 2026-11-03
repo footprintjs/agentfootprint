@@ -34,7 +34,7 @@
     "src/context-bisect/localize.ts": 995,
     "src/core-flow/Graph.ts": 865,
     "src/core-flow/Parallel.ts": 1047,
-    "src/core/Agent.ts": 6296,
+    "src/core/Agent.ts": 6159,
     "src/core/agent/AgentBuilder.ts": 4533,
     "src/core/agent/arguments/ask.ts": 1645,
     "src/core/agent/arguments/README.md": 753,

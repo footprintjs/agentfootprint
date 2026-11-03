@@ -103,23 +103,12 @@ import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
-import {
-  assertRedactionPolicy,
-  CarriedPolicyError,
-  carriedVocabularyOf,
-  policyFromCarried,
-  policyOfMarks,
-  unionRedactionPolicies,
-} from '../redaction/policy.js';
+import { assertRedactionPolicy, unionRedactionPolicies } from '../redaction/policy.js';
 import { coverageOfExecutor } from '../redaction/runRedaction.js';
 import { policyOfCoverage } from '../redaction/coverage.js';
 import { ResumeRedactionError } from './conversation.js';
 import { declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
-import {
-  carriedRunPolicy,
-  conversationRedaction,
-  withCurrentVocabulary,
-} from '../redaction/conversation.js';
+import { carriedRunPolicy, conversationRedaction } from '../redaction/conversation.js';
 import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
 import { createReceiptDigests, type ReceiptDigests } from './agent/receipt/receiptDigests.js';
 import { packRecording } from '../recorders/observability/recordingPack.js';
@@ -155,48 +144,6 @@ import type { DispositionLedger } from '../integrity/disposition/ledger.js';
 import type { SkillGraphDeclaredMap } from './agent/skillGraphDeclared.js';
 import type { AppliedRecipe } from '../recipes/types.js';
 
-/**
- * The pseudo-stage a tool-teardown event is stamped with.
- *
- * `session_closed` and `session_close_failed` fire after the run's last stage
- * has committed — there is no runtimeStageId to inherit, and inventing one that
- * looked like a real stage would put a fictitious node in every consumer's step
- * strip. This says plainly where it came from, the way `'<stageId>#paused'`
- * does at the pause boundary. Their two siblings, `session_started` and
- * `session_reused`, happen inside a real stage and carry its real id.
- */
-const TOOL_TEARDOWN_STAGE_ID = 'tool-teardown#0';
-
-/**
- * The pseudo-stage a LATE artifact fact is stamped with — one that lands after
- * the run its binding was made in had ended (a tool's floating upload). Its
- * stage is long gone; like the teardown events it says plainly where it came
- * from, and carries the run it belongs to rather than the one that is live.
- */
-const LATE_ARTIFACT_FACT_STAGE_ID = 'artifact-late#0';
-
-/**
- * The pseudo-stage the run-configuration manifest is stamped with (9.41.0).
- *
- * Same reasoning as the teardown id above, at the other end of the run: the
- * manifest is dispatched before the chart starts, so there is no stage to
- * inherit and inventing a plausible one would put a node in every step strip
- * that no traversal ever visited. This says plainly where it came from.
- */
-const RUN_MANIFEST_STAGE_ID = 'run-configured#0';
-/**
- * Pseudo-stage for `agentfootprint.integrity.disposition` (9.60.0) — the
- * ledger is filed at the run boundary, after the last stage committed, so it
- * states where it came from exactly as the teardown id above does.
- */
-const INTEGRITY_DISPOSITION_STAGE_ID = 'integrity-disposition#0';
-/**
- * Pseudo-stage for `agentfootprint.skill.graph_declared` (9.50.0) — same
- * reasoning as the manifest id directly above: dispatched before the chart
- * starts, so it states where it came from instead of inheriting a stage no
- * traversal visited.
- */
-const GRAPH_DECLARED_STAGE_ID = 'graph-declared#0';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { requireKeepLastToolResults } from './agent/window/options.js';
@@ -369,6 +316,17 @@ export type { ProviderChoice, EscalationPolicy } from './agent/skillBrains.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
 import { thinkingForProviders } from '../thinking/dispatch.js';
 import type { ThinkingHandler } from '../thinking/types.js';
+import {
+  TOOL_TEARDOWN_STAGE_ID,
+  LATE_ARTIFACT_FACT_STAGE_ID,
+  RUN_MANIFEST_STAGE_ID,
+  INTEGRITY_DISPOSITION_STAGE_ID,
+  GRAPH_DECLARED_STAGE_ID,
+} from './agent/run/eventStageIds.js';
+import { requireKeepLedgerFacts, resolveKeepLedgerFacts } from './agent/run/ledgerFacts.js';
+import { MAX_REMEMBERED_RUNS, boundInsertionOrder } from './agent/run/rememberedRuns.js';
+import { withoutTime } from './agent/run/withoutTime.js';
+import { resumeRedactionOf } from './agent/run/resumeRedaction.js';
 export { AgentBuilder };
 
 // Re-export public Agent types so the 28+ existing import sites
@@ -484,39 +442,6 @@ export interface AgentRunOptions extends RunOptions {
 // ./agent/types.ts and re-exported above (v2.11.1).
 
 // AgentState extracted to ./agent/types.ts (v2.11.1).
-
-/**
- * The ledger-fact hold's default ceiling (9.102.0): how many fact turns the
- * window holds beyond `keepRecentTurns` when `.findings()` and a window
- * strategy are both configured and nobody named a number. Resolved in the
- * constructor, ONCE, and threaded to `buildWindowStage` as a plain number —
- * the stage applies no default of its own (absent = unarmed = no hold), so a
- * reader has one place to look. `window/options.ts ·
- * DEFAULT_KEEP_LAST_TOOL_RESULTS` is the pin's twin of this constant.
- */
-const DEFAULT_KEEP_LEDGER_FACTS = 4;
-
-/**
- * Validate the `keepLedgerFacts` dial — `window/options.ts ·
- * requireKeepLastToolResults`'s twin: the same rule, the same moment.
- * Refused at construction, never mid-run.
- */
-function requireKeepLedgerFacts(value: unknown, label: string): void {
-  if (value === false) return;
-  if (!Number.isInteger(value) || (value as number) < 0) {
-    throw new Error(
-      `${label}: keepLedgerFacts must be a whole number >= 0, or false, got ` +
-        `${String(value)}. It is how many fact turns the window holds beyond ` +
-        `keepRecentTurns under .findings(); 0 and false both switch the hold off.`,
-    );
-  }
-}
-
-/** `false` → `0`; a number as named; nothing named → the default. */
-function resolveKeepLedgerFacts(named: number | false | undefined): number {
-  if (named === false) return 0;
-  return named ?? DEFAULT_KEEP_LEDGER_FACTS;
-}
 
 export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   readonly name: string;
@@ -6232,65 +6157,3 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 // Re-export so the 28+ existing import sites continue to work unchanged.
 
 // Validators + helpers extracted to ./agent/validators.ts (v2.11.1).
-
-/** How many run ids one instance remembers. */
-const MAX_REMEMBERED_RUNS = 256;
-
-/** Drop the oldest entries of an insertion-ordered Set or Map past `max`. */
-function boundInsertionOrder(held: Set<string>, max: number): void {
-  while (held.size > max) {
-    const oldest = held.keys().next();
-    if (oldest.done === true) return;
-    held.delete(oldest.value);
-  }
-}
-
-/**
- * The run options without the time layer's `time` — what the engine is handed.
- * The SAME object when it carries no `time` key, so a run that passed none
- * hands the executor exactly the options it always did.
- */
-function withoutTime<T extends { time?: unknown }>(options: T | undefined): T | undefined {
-  if (options === undefined || !('time' in options)) return options;
-  const { time: _time, ...rest } = options;
-  void _time;
-  return rest as T;
-}
-
-/**
- * The policy a paused agent run was covered by, read off its own checkpoint
- * (`AgentState.runRedaction`, committed by seed and by every resumed leg) —
- * FAIL CLOSED: a value this library did not write, or a checkpoint whose run
- * kept names out of its records (`redactionMarks`) but carries no policy,
- * refuses the resume (`ResumeRedactionError`) before anything moves. A leg its
- * policy could not keep covered must never start.
- */
-function resumeRedactionOf(
-  checkpoint: FlowchartCheckpoint,
-  trusted: readonly (RedactionPolicy | undefined)[],
-): RedactionPolicy | undefined {
-  const state = checkpoint.sharedState as { runRedaction?: unknown } | undefined;
-  let carried: RedactionPolicy | undefined;
-  try {
-    // A carried pattern is a reference to one the resuming side holds — never
-    // compiled from the checkpoint (`redaction/policy.ts` · `policyFromCarried`).
-    carried = policyFromCarried(state?.runRedaction, 'Agent.resume', trusted);
-    // A policy built under ANOTHER vocabulary version is joined with the
-    // current list — the leg is never covered by an older list alone.
-    carried = withCurrentVocabulary(carried, carriedVocabularyOf(state?.runRedaction));
-  } catch (refusal) {
-    throw new ResumeRedactionError(
-      refusal instanceof CarriedPolicyError && refusal.refusal === 'unknown-pattern'
-        ? 'unknown-pattern'
-        : 'unreadable',
-    );
-  }
-  // Every leg of a covered run writes its policy into its checkpoint's state
-  // (seed, and `resume` for a resumed leg), so a checkpoint whose run kept
-  // names out but carries none was altered — refused even when the resume
-  // names a policy, which cannot stand in for the one the run was covered by.
-  if (carried === undefined && policyOfMarks(checkpoint.redactionMarks) !== undefined) {
-    throw new ResumeRedactionError('missing');
-  }
-  return carried;
-}
