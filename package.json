@@ -95,7 +95,8 @@
     "coverage:badge": "npm run test:coverage; node scripts/coverage-badge.mjs",
     "docs:truth:report": "node scripts/docs-truth-check.mjs --report-only",
     "test:context-package": "node scripts/check-context-package.mjs",
-    "check:layering": "node scripts/check-layering.mjs"
+    "check:layering": "node scripts/check-layering.mjs",
+    "test:contract:foottrace": "node contract/foottrace.types.mjs && node --test contract/foottrace.test.mjs"
   },
   "files": [
     "dist/**/*",
