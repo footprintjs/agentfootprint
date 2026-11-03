@@ -1914,7 +1914,6 @@ describe('ROUND 2 — the closing re-check’s attacks, pinned closed', () => {
           cap,
           strat: agentCoreEvaluationSpans({
             serviceName: 's',
-            tracer: cap.tracer,
             _otelApi: cap.otelApi,
           }),
         };
@@ -2179,7 +2178,6 @@ describe('agentCoreEvaluationSpans — the one preset that turns tool content on
     const cap = makeCapture();
     const strat = agentCoreEvaluationSpans({
       serviceName: 'svc',
-      tracer: cap.tracer,
       _otelApi: cap.otelApi,
       ...options,
     });

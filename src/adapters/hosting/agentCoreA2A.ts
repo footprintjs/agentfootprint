@@ -178,13 +178,18 @@ export function agentCoreA2AHost(options: AgentCoreA2AHostOptions): HttpHost {
     res.end(JSON.stringify({ error: `no route for ${req.method ?? '?'} ${path}` }));
   };
 
-  const socket = server
-    ? { server }
-    : {
-        port: options.port ?? DEFAULT_AGENTCORE_A2A_PORT,
-        ...(hostname === undefined ? {} : { hostname }),
-        onUnhandled: serveCard,
-      };
+  const port = options.port;
+  const socket = {
+    ...(server === undefined
+      ? { port: port ?? DEFAULT_AGENTCORE_A2A_PORT }
+      : { server, ...(port === undefined ? {} : { port }) }),
+    ...(hostname === undefined ? {} : { hostname }),
+    ...(server === undefined
+      ? { onUnhandled: serveCard }
+      : onUnhandled === undefined
+      ? {}
+      : { onUnhandled }),
+  };
 
   const protocol = a2aWire({
     card,

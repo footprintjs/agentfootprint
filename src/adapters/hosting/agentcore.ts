@@ -71,6 +71,7 @@
  * importing this module costs zero peer-dep load.
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import { artifactWireBody, readArtifactWireOp } from '../../hosting/artifactWire.js';
 import { readSessionWireOp, sessionWireBody } from '../../hosting/sessionWire.js';
 import { platformFrontedDoor, type CrossSiteOptions } from '../../hosting/doorGuard.js';
@@ -530,6 +531,7 @@ function decodeBase64UrlToken(encoded: string): string {
  *   process.on('SIGTERM', () => void handle.close());
  */
 export function agentCoreRuntimeHost(options: AgentCoreRuntimeHostOptions = {}): HttpHost {
+  const { server, port, hostname, onUnhandled } = options;
   return httpHost({
     name: HOST_NAME,
     wire: agentCoreRuntimeWire(options.busy),
@@ -542,21 +544,21 @@ export function agentCoreRuntimeHost(options: AgentCoreRuntimeHostOptions = {}):
     // listened on, and passing one anyway is refused by `httpHost` rather than
     // quietly ignored. An explicitly passed port still travels, so that refusal
     // reaches a caller who asked for both.
-    ...(options.server !== undefined
+    ...(server !== undefined
       ? {
-          server: options.server,
-          ...(options.port !== undefined && { port: options.port }),
-          ...(options.hostname !== undefined && { hostname: options.hostname }),
+          server,
+          ...(port !== undefined && { port }),
+          ...(hostname !== undefined && { hostname }),
         }
-      : { port: options.port ?? RUNTIME_PORT, hostname: options.hostname ?? '0.0.0.0' }),
+      : { port: port ?? RUNTIME_PORT, hostname: hostname ?? '0.0.0.0' }),
     // Travels as given, including next to a `server` — where `httpHost` refuses
     // the pair by name rather than quietly dropping one half of what was asked
     // for.
-    ...(options.onUnhandled !== undefined && { onUnhandled: options.onUnhandled }),
+    ...(onUnhandled !== undefined && { onUnhandled }),
     // The platform fronts this port: browser rules off unless the deployment
     // sets them (see the options' doc) — except on a LOOPBACK bind, which no
     // platform fronts, where every plain-host default applies.
-    ...platformFrontedDoor(options, options.server === undefined ? options.hostname : undefined),
+    ...platformFrontedDoor(options, server === undefined ? hostname : undefined),
   });
 }
 
@@ -654,6 +656,7 @@ export interface AgentCoreMemorySessionsOptions {
    */
   readonly actorId?: string;
   /** Pre-built client, to share one SDK config across the host app. */
+  /** Cannot accompany `region`; configure the supplied client itself. */
   readonly client?: AgentCoreSessionClientLike;
   /** @internal Test injection — skips the SDK require entirely. */
   readonly _client?: AgentCoreSessionClientLike;
@@ -828,13 +831,16 @@ function fileSessions(options: AgentCoreFileSessionsOptions): SessionLifecycle {
 const DEFAULT_ACTOR_ID = 'afp-standing-agent';
 
 function memoryEventSessions(options: AgentCoreMemorySessionsOptions): SessionLifecycle {
+  const {
+    client: suppliedClient,
+    config: { region },
+  } = captureAdapterConstruction('agentCoreSessions', options.client, { region: options.region });
   if (!options.memoryId) {
     throw new Error(`agentCoreSessions({ store: 'memory' }) requires 'memoryId'.`);
   }
   const memoryId = options.memoryId;
   const actorId = options.actorId ?? DEFAULT_ACTOR_ID;
-  const client =
-    options._client ?? options.client ?? createSessionClient(options.region, options._sdk);
+  const client = options._client ?? suppliedClient ?? createSessionClient(region, options._sdk);
 
   return {
     async hydrate(sessionId: string): Promise<CheckpointEnvelope | undefined> {

@@ -134,6 +134,7 @@
  * configuration your app already has.
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import { identityNamespace } from '../../memory/identity/index.js';
 import { lazyRequire } from '../../lib/lazyRequire.js';
 import {
@@ -212,6 +213,7 @@ export interface S3VectorsStoreOptions {
    */
   readonly batchSize?: number;
   /** A pre-built S3 Vectors client, so one SDK config serves the whole app. */
+  /** Cannot accompany `region`; configure the supplied client itself. */
   readonly client?: S3VectorsLikeClient;
   /** @internal Test injection — skips the SDK require entirely. */
   readonly _client?: S3VectorsLikeClient;
@@ -282,6 +284,11 @@ const PAYLOAD_KEY = 'af';
  * ```
  */
 export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
+  const {
+    client,
+    config: { region },
+  } = captureAdapterConstruction('s3VectorsStore', options.client, { region: options.region });
+  const testClient = options._client;
   const { bucket, index } = options;
   if (!bucket || bucket.trim() === '' || !index || index.trim() === '') {
     throw new TypeError(
@@ -330,10 +337,10 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
    */
   const connect = (): Connection => {
     if (connection) return connection;
-    if (options._client) {
+    if (testClient) {
       const sdk = options._sdk;
       connection = {
-        client: options._client,
+        client: testClient,
         GetIndex: sdk?.GetIndexCommand ?? shimCommand('GetIndex'),
         Put: sdk?.PutVectorsCommand ?? shimCommand('PutVectors'),
         Query: sdk?.QueryVectorsCommand ?? shimCommand('QueryVectors'),
@@ -361,19 +368,19 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
           `${missing.length === 1 ? 'was' : 'were'} not found. Update the SDK.`,
       );
     }
-    if (!options.client && typeof sdk.S3VectorsClient !== 'function') {
+    if (!client && typeof sdk.S3VectorsClient !== 'function') {
       throw new Error(
         's3VectorsStore: `@aws-sdk/client-s3vectors` is installed but `S3VectorsClient` was ' +
           'not found. Update the SDK, or pass `client` with a pre-built one.',
       );
     }
-    const owned = !options.client;
+    const owned = !client;
     connection = {
       client:
-        options.client ??
+        client ??
         // Checked directly above.
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        new sdk.S3VectorsClient!({ ...(options.region && { region: options.region }) }),
+        new sdk.S3VectorsClient!({ ...(region && { region: region }) }),
       // All six checked directly above.
       /* eslint-disable @typescript-eslint/no-non-null-assertion */
       GetIndex: sdk.GetIndexCommand!,

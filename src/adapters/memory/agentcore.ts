@@ -43,6 +43,7 @@
  *          in use.  Emits: N/A (storage adapters don't emit).
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type {
   ListOptions,
@@ -464,6 +465,7 @@ export interface AgentCoreStoreOptions {
   /** AWS region. Required when constructing the SDK client internally. */
   readonly region?: string;
   /** Pre-built AgentCore client (shares one SDK config across the host app). */
+  /** Cannot accompany `region`; configure the supplied client itself. */
   readonly client?: AgentCoreLikeClient;
   /** Page size for session scans and default `list()` calls: integer 1..100. Default 100. */
   readonly pageSize?: number;
@@ -745,6 +747,10 @@ export class AgentCoreStore implements MemoryStore {
   private readonly feedbackBag = new Map<string, { sum: number; count: number }>();
 
   constructor(options: AgentCoreStoreOptions) {
+    const {
+      client,
+      config: { region },
+    } = captureAdapterConstruction('AgentCoreStore', options.client, { region: options.region });
     if (!options.memoryId) throw new Error('AgentCoreStore requires `memoryId`.');
     this.memoryId = options.memoryId;
     const pageSize = options.pageSize ?? MAX_EVENT_PAGE_SIZE;
@@ -762,8 +768,8 @@ export class AgentCoreStore implements MemoryStore {
     this.requireNamespaceScope = options.requireNamespaceScope === true;
     this.searchAcrossPrincipals = options.searchAcrossPrincipals === true;
 
-    const injected = options._client ?? options.client;
-    this.client = injected ?? createAgentCoreClient(options.region, options.sdk);
+    const injected = options._client ?? client;
+    this.client = injected ?? createAgentCoreClient(region, options.sdk);
     this.writeOptionsRefusal =
       this.client.forwardsWriteOptions === true
         ? undefined

@@ -47,8 +47,9 @@ describe('S3-compatible artifact endpoint', () => {
       failure = error;
     }
     expect(failure).toMatchObject({
-      name: 'S3ArtifactsConfigurationError',
-      code: 'ERR_S3_ARTIFACTS_CONFIGURATION',
+      name: 'AdapterConfigurationError',
+      adapter: 's3Artifacts',
+      code: 'ERR_ADAPTER_CONFIGURATION',
       reason: 'client-construction-failed',
     });
     expect(failure).not.toHaveProperty('cause');
@@ -110,8 +111,9 @@ describe('S3-compatible artifact endpoint', () => {
       failure = error;
     }
     expect(failure).toMatchObject({
-      name: 'S3ArtifactsConfigurationError',
-      code: 'ERR_S3_ARTIFACTS_CONFIGURATION',
+      name: 'AdapterConfigurationError',
+      adapter: 's3Artifacts',
+      code: 'ERR_ADAPTER_CONFIGURATION',
       reason: 'conflicting-options',
     });
     expect(capture.configs).toEqual([]);

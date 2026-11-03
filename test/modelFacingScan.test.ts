@@ -503,11 +503,11 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a conformance assertion message, read by whoever runs the suite against a store',
     },
   ],
-  'src/artifacts/gcsArtifacts.ts': [
+  'src/lib/adapterConfiguration.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
-      why: 'the fixed client-construction diagnostic from GcsArtifactsConfigurationError is thrown to the host while wiring the store, before a store is returned or a model request exists; its SDK configuration instruction never enters tool results or conversation history',
+      why: 'the shared fixed configuration diagnostic is thrown at factory construction to the host before an adapter or model request exists; its SDK guidance never enters tool results or conversation history',
     },
   ],
   'src/artifacts/objectStore.ts': [
@@ -515,13 +515,6 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 1,
       why: 'a store error thrown to the host',
-    },
-  ],
-  'src/artifacts/s3Artifacts.ts': [
-    {
-      kind: 'not-model-facing',
-      count: 1,
-      why: 'the fixed client-construction diagnostic from S3ArtifactsConfigurationError is thrown to the host while wiring the store, before a store is returned or a model request exists; its SDK configuration instruction never enters tool results or conversation history',
     },
   ],
   'src/artifacts/sqliteArtifacts.ts': [
@@ -1279,12 +1272,15 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // diagnostics instruct the host at factory wiring, never the model.
         // Two new files/literals; persistent and unrepaired counts unchanged.
         // files 106 → 108, total 206 → 208, notModelFacing 137 → 139.
-        files: 108,
-        total: 208,
+        // Shared construction errors replace those two literals with one
+        // host-only diagnostic: files 108 → 107, total 208 → 207,
+        // notModelFacing 139 → 138. Other delivery counts are unchanged.
+        files: 107,
+        total: 207,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 139,
+        notModelFacing: 138,
         unrepairedEntries: 15,
       });
       // And the ledger's own total is the number of literals the scan flagged —

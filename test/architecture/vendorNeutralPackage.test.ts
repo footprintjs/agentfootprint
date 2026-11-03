@@ -113,7 +113,11 @@ describe('packed vendor-neutral package', () => {
 
     const typeProbe = `
       import { Agent, inMemoryArtifacts, type ArtifactStore, type LLMProvider } from 'agentfootprint';
-      import { s3Artifacts, gcsArtifacts, type S3ArtifactsOptions, type GcsArtifactsOptions } from 'agentfootprint/artifacts';
+      import { s3Artifacts, gcsArtifacts, AdapterConfigurationError, type AdapterConfigurationAdapter, type AdapterConfigurationReason, type S3ArtifactsOptions, type GcsArtifactsOptions } from 'agentfootprint/artifacts';
+      import { AdapterConfigurationError as MemoryError } from 'agentfootprint/memory';
+      import { AdapterConfigurationError as ObserveError } from 'agentfootprint/observe';
+      import { AdapterConfigurationError as HostingError } from 'agentfootprint/hosting';
+      import { AdapterConfigurationError as ProviderError } from 'agentfootprint/providers';
       import { providerFromEnv, type ProviderFromEnv } from 'agentfootprint/providers';
       const s3: S3ArtifactsOptions = { bucket: 'a', endpoint: 'https://objects.example.test', forcePathStyle: true };
       const gcs: GcsArtifactsOptions = { bucket: 'a' };
@@ -123,7 +127,20 @@ describe('packed vendor-neutral package', () => {
       )}) };
       const agent = Agent.create({ provider, model: 'local', artifacts: store }).build();
       const env: ProviderFromEnv = providerFromEnv({ fallbackToMock: true });
-      void [s3Artifacts, gcsArtifacts, s3, gcs, env, agent];
+      void [s3Artifacts, gcsArtifacts, s3, gcs, env, agent, MemoryError, ObserveError, HostingError, ProviderError];
+      const reason: AdapterConfigurationReason = 'conflicting-options';
+      const adapter: AdapterConfigurationAdapter = 'RedisStore';
+      const error = new AdapterConfigurationError(adapter, reason);
+      const code: 'ERR_ADAPTER_CONFIGURATION' = error.code;
+      void code;
+      // @ts-expect-error Closed diagnostic reason.
+      new AdapterConfigurationError(adapter, 'backend-error-text');
+      // @ts-expect-error Closed adapter identifier.
+      new AdapterConfigurationError('arbitrary-backend-name');
+      // @ts-expect-error Internal capture helper is not a public export.
+      import { captureAdapterConstruction } from 'agentfootprint/artifacts';
+      // @ts-expect-error Category error does not widen the neutral root.
+      import { AdapterConfigurationError as RootError } from 'agentfootprint';
       // @ts-expect-error Removed root value.
       import { s3Artifacts as removedS3 } from 'agentfootprint';
       // @ts-expect-error Removed root value.
@@ -228,7 +245,7 @@ describe('packed vendor-neutral package', () => {
         const api = ${
           mode === 'require' ? "localRequire('agentfootprint')" : "await import('agentfootprint')"
         };
-        for (const name of ['s3Artifacts', 'gcsArtifacts', 'providerFromEnv']) {
+        for (const name of ['s3Artifacts', 'gcsArtifacts', 'providerFromEnv', 'AdapterConfigurationError']) {
           assert.equal(Object.hasOwn(api, name), false);
         }
         for (const door of ${JSON.stringify(codeDoors)}) {
@@ -241,15 +258,31 @@ describe('packed vendor-neutral package', () => {
             ? "localRequire('agentfootprint/artifacts')"
             : "await import('agentfootprint/artifacts')"
         };
+        const cjsErrors = localRequire('agentfootprint/artifacts');
+        const esmErrors = await import('agentfootprint/artifacts');
+        assert.notEqual(cjsErrors.AdapterConfigurationError, esmErrors.AdapterConfigurationError);
+        let configurationError;
+        try {
+          cjsErrors.s3Artifacts({ bucket: 'a', client: { send: async () => ({}) }, region: 'private-region' });
+        } catch (error) { configurationError = error; }
+        assert.ok(configurationError instanceof cjsErrors.AdapterConfigurationError);
+        assert.equal(configurationError instanceof esmErrors.AdapterConfigurationError, false);
+        assert.equal(configurationError.code, new esmErrors.AdapterConfigurationError('s3Artifacts').code);
+        assert.equal(configurationError.reason, 'conflicting-options');
+        assert.equal(configurationError.adapter, 's3Artifacts');
+        for (const door of ['artifacts', 'memory', 'providers', 'observe', 'hosting']) {
+          assert.equal(localRequire('agentfootprint/' + door).AdapterConfigurationError, cjsErrors.AdapterConfigurationError);
+          assert.equal((await import('agentfootprint/' + door)).AdapterConfigurationError, esmErrors.AdapterConfigurationError);
+        }
         assert.throws(() => artifacts.s3Artifacts({ bucket: 'a' }), /s3Artifacts requires.*client-s3/s);
         assert.throws(() => artifacts.s3Artifacts({ bucket: 'a', client: { send: async () => ({}) } }), /s3Artifacts requires.*client-s3/s);
         for (const options of [{ region: 'r' }, { endpoint: 'https://objects.example.test' }, { forcePathStyle: true }, { forcePathStyle: false }]) {
           assert.throws(() => artifacts.s3Artifacts({ bucket: 'a', client: { send: async () => ({}) }, ...options }),
-            { name: 'S3ArtifactsConfigurationError', code: 'ERR_S3_ARTIFACTS_CONFIGURATION', reason: 'conflicting-options' });
+            { name: 'AdapterConfigurationError', code: 'ERR_ADAPTER_CONFIGURATION', adapter: 's3Artifacts', reason: 'conflicting-options' });
         }
         assert.throws(() => artifacts.gcsArtifacts({ bucket: 'a' }), /gcsArtifacts requires.*google-cloud\\/storage/s);
         assert.throws(() => artifacts.gcsArtifacts({ bucket: 'a', storage: { bucket: () => ({}) }, projectId: 'project' }),
-          { name: 'GcsArtifactsConfigurationError', code: 'ERR_GCS_ARTIFACTS_CONFIGURATION', reason: 'conflicting-options' });
+          { name: 'AdapterConfigurationError', code: 'ERR_ADAPTER_CONFIGURATION', adapter: 'gcsArtifacts', reason: 'conflicting-options' });
         assert.equal(typeof artifacts.gcsArtifacts({ bucket: 'a', storage: { bucket: () => ({}) } }).put, 'function');
         const scope = { tenant: 't', principal: 'p', conversationId: 'c' };
         const stores = [api.inMemoryArtifacts(),

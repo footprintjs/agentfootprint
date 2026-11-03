@@ -558,7 +558,7 @@ addressing (for example, when wildcard DNS is unavailable). Explicit `false`
 is forwarded too; omitting it preserves the SDK default. A supplied `client`
 owns its endpoint, region, credentials and addressing. Combining `client`
 with any of `region`, `endpoint` or `forcePathStyle` throws
-`S3ArtifactsConfigurationError` (`ERR_S3_ARTIFACTS_CONFIGURATION`) at construction.
+`AdapterConfigurationError` (`ERR_ADAPTER_CONFIGURATION`) at construction.
 Use the client itself for settings beyond these typed options. Even a supplied
 S3 client needs the optional SDK installed because the adapter uses its command classes.
 
@@ -568,8 +568,8 @@ The runnable example is configuration-only. The repository's SDK-double
 tests prove configuration forwarding and the artifact contract; no MinIO
 or Ceph deployment has been verified here. `gcsArtifacts` uses Google's
 Cloud Storage API, not the S3-compatible API. Combining its `storage` client
-with `projectId` throws `GcsArtifactsConfigurationError`
-(`ERR_GCS_ARTIFACTS_CONFIGURATION`); configure the supplied client itself.
+with `projectId` throws `AdapterConfigurationError`
+(`ERR_ADAPTER_CONFIGURATION`); configure the supplied client itself.
 
 One ladder, one contract: a tool that stored a dataset against the in-memory store stores it in a bucket by swapping one constructor. The five run **the same contract suite** — a cloud column that drifts from the port fails the shipped adapters' own tests.
 

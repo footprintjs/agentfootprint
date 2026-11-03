@@ -22,8 +22,9 @@ it('does not expose SDK constructor failure text', () => {
     failure = error;
   }
   expect(failure).toMatchObject({
-    name: 'GcsArtifactsConfigurationError',
-    code: 'ERR_GCS_ARTIFACTS_CONFIGURATION',
+    name: 'AdapterConfigurationError',
+    adapter: 'gcsArtifacts',
+    code: 'ERR_ADAPTER_CONFIGURATION',
     reason: 'client-construction-failed',
   });
   expect(failure).not.toHaveProperty('cause');
@@ -38,8 +39,9 @@ it('refuses a projectId beside a supplied GCS storage client', () => {
     failure = error;
   }
   expect(failure).toMatchObject({
-    name: 'GcsArtifactsConfigurationError',
-    code: 'ERR_GCS_ARTIFACTS_CONFIGURATION',
+    name: 'AdapterConfigurationError',
+    adapter: 'gcsArtifacts',
+    code: 'ERR_ADAPTER_CONFIGURATION',
     reason: 'conflicting-options',
   });
 });

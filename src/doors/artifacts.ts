@@ -11,13 +11,11 @@
  * ```
  */
 export * from '../artifacts/public.js';
+export { s3Artifacts, type S3ArtifactsOptions } from '../artifacts/s3Artifacts.js';
+export { gcsArtifacts, type GcsArtifactsOptions } from '../artifacts/gcsArtifacts.js';
+
 export {
-  s3Artifacts,
-  S3ArtifactsConfigurationError,
-  type S3ArtifactsOptions,
-} from '../artifacts/s3Artifacts.js';
-export {
-  gcsArtifacts,
-  GcsArtifactsConfigurationError,
-  type GcsArtifactsOptions,
-} from '../artifacts/gcsArtifacts.js';
+  AdapterConfigurationError,
+  type AdapterConfigurationAdapter,
+  type AdapterConfigurationReason,
+} from '../lib/adapterConfiguration.js';

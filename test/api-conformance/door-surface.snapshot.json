@@ -854,15 +854,14 @@
   "./artifacts": {
     "values": [
       "ARTIFACT_REF_PREFIX",
+      "AdapterConfigurationError",
       "ArtifactIntegrityError",
       "CHART_WALK_ARTIFACT_KIND",
       "DEFAULT_IN_MEMORY_ARTIFACT_RETENTION",
-      "GcsArtifactsConfigurationError",
       "InvalidArtifactError",
       "PRESENT_TOOL_NAME",
       "RECORDING_ARTIFACT_KIND",
       "RECORDING_MEDIA_TYPE",
-      "S3ArtifactsConfigurationError",
       "TIME_AXIS_AGGREGATES",
       "TIME_AXIS_UNITS",
       "UnknownParentRefError",
@@ -898,6 +897,8 @@
       "withDatasetArtifacts"
     ],
     "types": [
+      "AdapterConfigurationAdapter",
+      "AdapterConfigurationReason",
       "ArtifactConformanceKit",
       "ArtifactEventFact",
       "ArtifactEventSink",
@@ -1224,6 +1225,7 @@
       "ALL_WIRE_OPS",
       "ARTIFACT_GET_OP",
       "ARTIFACT_HEAD_OP",
+      "AdapterConfigurationError",
       "AdmissionRefusedError",
       "ArtifactNotCarriedError",
       "ArtifactNotFoundError",
@@ -1373,6 +1375,8 @@
       "A2ASkill",
       "A2AWireOptions",
       "AdSubCodeName",
+      "AdapterConfigurationAdapter",
+      "AdapterConfigurationReason",
       "AdmissionContext",
       "AdmissionPolicy",
       "AdmissionVerdict",
@@ -1570,6 +1574,7 @@
   },
   "./memory": {
     "values": [
+      "AdapterConfigurationError",
       "AgentCoreStore",
       "BedrockAgentMemory",
       "CORPUS_BUNDLE_FORMAT",
@@ -1673,6 +1678,8 @@
       "writeSnapshot"
     ],
     "types": [
+      "AdapterConfigurationAdapter",
+      "AdapterConfigurationReason",
       "AgentCoreEvent",
       "AgentCoreLikeClient",
       "AgentCoreMemoryRecord",
@@ -1813,6 +1820,7 @@
       "AUDIT_BUNDLE_FORMAT",
       "AUDIT_GENESIS_EVENT_TYPE",
       "AUDIT_ZERO_HASH",
+      "AdapterConfigurationError",
       "BoundaryRecorder",
       "CANONICAL_JSON_VERSION",
       "CONTEXT_BISECT_DEFAULTS",
@@ -2052,6 +2060,8 @@
       "AblationVerdict",
       "AblationVerdictKind",
       "ActorArrow",
+      "AdapterConfigurationAdapter",
+      "AdapterConfigurationReason",
       "AgentKeyMoment",
       "AgentRecorderOptions",
       "AgentThinkingTraceHandle",
@@ -2480,6 +2490,7 @@
       "AGENTCORE_RUNTIME_SESSION_HEADER",
       "AGENTCORE_SIGV4_SERVICE",
       "AWS_SYSTEM_BROWSER",
+      "AdapterConfigurationError",
       "AnthropicProvider",
       "BedrockProvider",
       "BrowserAnthropicProvider",
@@ -2564,6 +2575,8 @@
     ],
     "types": [
       "AccessTokenLike",
+      "AdapterConfigurationAdapter",
+      "AdapterConfigurationReason",
       "AgentCoreBrowserClientLike",
       "AgentCoreBrowserOptions",
       "AgentCoreCodeClientLike",

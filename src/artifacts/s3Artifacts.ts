@@ -100,6 +100,10 @@
  * No live call has been made from this repository.
  */
 
+import {
+  AdapterConfigurationError,
+  captureAdapterConstruction,
+} from '../lib/adapterConfiguration.js';
 import { lazyRequire } from '../lib/lazyRequire.js';
 import { prepareArtifact } from './minting.js';
 import { isArtifactRef } from './naming.js';
@@ -207,23 +211,6 @@ export interface S3ArtifactsOptions {
   readonly _client?: S3ArtifactsClientLike;
   /** @internal Test seam — the clock. Defaults to `Date.now`. */
   readonly _now?: () => number;
-}
-
-/** A configuration conflict or an SDK client that could not be constructed. */
-export class S3ArtifactsConfigurationError extends Error {
-  readonly code = 'ERR_S3_ARTIFACTS_CONFIGURATION' as const;
-
-  constructor(
-    readonly reason: 'conflicting-options' | 'client-construction-failed' = 'conflicting-options',
-  ) {
-    super(
-      reason === 'conflicting-options'
-        ? '[artifacts] s3Artifacts: client cannot accompany region, endpoint or forcePathStyle. ' +
-            'Configure the supplied client itself, or omit client and let this factory build it.'
-        : '[artifacts] s3Artifacts: could not construct the SDK client. Check the SDK and client configuration; backend error text is withheld.',
-    );
-    this.name = 'S3ArtifactsConfigurationError';
-  }
 }
 
 /** Load the peer dep, or refuse by name with the install line. */
@@ -340,14 +327,12 @@ async function* countedChunks(
  *   const agent = Agent.create({ provider, artifacts: store });
  */
 export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
-  if (
-    options.client !== undefined &&
-    (options.region !== undefined ||
-      options.endpoint !== undefined ||
-      options.forcePathStyle !== undefined)
-  ) {
-    throw new S3ArtifactsConfigurationError();
-  }
+  const { client: suppliedClient, config } = captureAdapterConstruction(
+    's3Artifacts',
+    options.client,
+    { region: options.region, endpoint: options.endpoint, forcePathStyle: options.forcePathStyle },
+  );
+  const testClient = options._client;
   const bucket = assertBucketOption('s3Artifacts', 'bucket', options.bucket);
   const root = normalizeKeyRoot('s3Artifacts', options.prefix);
   const { retention } = options;
@@ -356,12 +341,9 @@ export function s3Artifacts(options: S3ArtifactsOptions): ArtifactStore {
 
   // Resolved at CONSTRUCTION: a missing peer dep refuses where the config was
   // written, not at the first put of the first run.
-  const sdk = options._sdk ?? (options._client ? {} : loadS3Sdk());
-  const client = options._client ?? options.client ?? buildClient(sdk, options);
-  const commands = resolveCommands(
-    sdk,
-    options._client !== undefined || options.client !== undefined,
-  );
+  const sdk = options._sdk ?? (testClient ? {} : loadS3Sdk());
+  const client = testClient ?? suppliedClient ?? buildClient(sdk, config);
+  const commands = resolveCommands(sdk, testClient !== undefined || suppliedClient !== undefined);
 
   const keyFor = (scope: ArtifactScope, ref: ArtifactRef): string =>
     `${scopeKeyPrefix(scope, root)}${ref}`;
@@ -674,7 +656,11 @@ function toMillis(value: Date | string | undefined): number {
 
 function buildClient(
   sdk: S3ArtifactsSdkModule,
-  { region, endpoint, forcePathStyle }: S3ArtifactsOptions,
+  {
+    region,
+    endpoint,
+    forcePathStyle,
+  }: Pick<S3ArtifactsOptions, 'region' | 'endpoint' | 'forcePathStyle'>,
 ): S3ArtifactsClientLike {
   if (typeof sdk.S3Client !== 'function') {
     throw new Error(
@@ -689,7 +675,7 @@ function buildClient(
       ...(forcePathStyle !== undefined && { forcePathStyle }),
     });
   } catch {
-    throw new S3ArtifactsConfigurationError('client-construction-failed');
+    throw new AdapterConfigurationError('s3Artifacts', 'client-construction-failed');
   }
 }
 

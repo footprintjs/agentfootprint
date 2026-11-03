@@ -18,3 +18,9 @@
 
 export * from '../memory/index.js';
 export * from '../memory-providers.js';
+
+export {
+  AdapterConfigurationError,
+  type AdapterConfigurationAdapter,
+  type AdapterConfigurationReason,
+} from '../lib/adapterConfiguration.js';

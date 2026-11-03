@@ -27,6 +27,7 @@
  *   - Multi-writer correctness ⇒ prefer `putIfVersion` in stage code.
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import { storeRequestLimit } from '../../memory/store/requestLimit.js';
 import type {
   ListOptions,
@@ -89,6 +90,7 @@ export interface RedisStoreOptions {
    * a Redis connection pool. Adapter does NOT call `quit()` on a borrowed
    * client — caller owns the lifecycle.
    */
+  /** Cannot accompany `url`; configure the supplied client itself. */
   readonly client?: RedisLikeClient;
 
   /** Key prefix for namespace isolation across apps sharing one Redis. Default `'agentfootprint'`. */
@@ -133,17 +135,22 @@ export class RedisStore implements MemoryStore {
   private closed = false;
 
   constructor(options: RedisStoreOptions = {}) {
+    const {
+      client,
+      config: { url },
+    } = captureAdapterConstruction('RedisStore', options.client, { url: options.url });
+    const testClient = options._client;
     this.prefix = options.prefix ?? 'agentfootprint';
     this.scanCount = options.scanCount ?? 100;
 
-    if (options._client) {
-      this.client = options._client;
+    if (testClient) {
+      this.client = testClient;
       this.ownsClient = false;
-    } else if (options.client) {
-      this.client = options.client;
+    } else if (client) {
+      this.client = client;
       this.ownsClient = false;
-    } else if (options.url) {
-      this.client = createIoredis(options.url);
+    } else if (url) {
+      this.client = createIoredis(url);
       this.ownsClient = true;
     } else {
       throw new Error('RedisStore requires `url` or `client` (or `_client` for tests).');

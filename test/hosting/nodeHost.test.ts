@@ -138,7 +138,14 @@ describe('nodeHost — a socket the caller owns', () => {
     const server = createServer();
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
     try {
-      expect(() => nodeHost({ server, port: 8080 })).toThrow(/both a caller-owned/);
+      expect(() => nodeHost({ server, port: 8080 })).toThrow(
+        expect.objectContaining({
+          name: 'AdapterConfigurationError',
+          code: 'ERR_ADAPTER_CONFIGURATION',
+          adapter: 'httpHost',
+          reason: 'conflicting-options',
+        }),
+      );
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
@@ -148,7 +155,14 @@ describe('nodeHost — a socket the caller owns', () => {
     const server = createServer();
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
     try {
-      expect(() => nodeHost({ server, onUnhandled: () => undefined })).toThrow(/'onUnhandled'/);
+      expect(() => nodeHost({ server, onUnhandled: () => undefined })).toThrow(
+        expect.objectContaining({
+          name: 'AdapterConfigurationError',
+          code: 'ERR_ADAPTER_CONFIGURATION',
+          adapter: 'httpHost',
+          reason: 'conflicting-options',
+        }),
+      );
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

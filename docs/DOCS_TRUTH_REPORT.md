@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **20 import paths** carrying **2706 distinct named exports**, plus **127 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **20 import paths** carrying **2707 distinct named exports**, plus **127 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**1998 of 2706 exports (74%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**1999 of 2707 exports (74%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **30 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **92 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **16 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **570 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1765 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1766 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 127 typed events are both described on the site and were seen firing in a real run. **27** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **30** are not described in prose on the site at all.
 
@@ -158,7 +158,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (526).** The other 1239 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (525).** The other 1241 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -598,6 +598,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `widestMsOf` | function | `agentfootprint/time` |
 | `withoutCredentials` | function | `agentfootprint/hosting` |
 | `xrayObservability` | function | `agentfootprint/observe` |
+| `AdapterConfigurationError` | class | `agentfootprint/artifacts` `agentfootprint/hosting` `agentfootprint/memory` `agentfootprint/observe` `agentfootprint/providers` |
 | `AdmissionRefusedError` | class | `agentfootprint/hosting` |
 | `ArtifactNotCarriedError` | class | `agentfootprint/hosting` |
 | `ArtifactNotFoundError` | class | `agentfootprint/hosting` |
@@ -622,7 +623,6 @@ The site describes it and it really is exported, but no reference run touches it
 | `FoundryLocalUnavailableError` | class | `agentfootprint/providers` |
 | `FrameTooLargeError` | class | `agentfootprint/hosting` |
 | `GatewayAuthorizationRequiredError` | class | `agentfootprint/providers` |
-| `GcsArtifactsConfigurationError` | class | `agentfootprint/artifacts` |
 | `GeminiProvider` | class | `agentfootprint/providers` |
 | `HostClosedError` | class | `agentfootprint/hosting` |
 | `HostNotAllowedError` | class | `agentfootprint/hosting` |
@@ -662,7 +662,6 @@ The site describes it and it really is exported, but no reference run touches it
 | `RequestArtifactsRevokedError` | class | `agentfootprint/hosting` |
 | `RequestCredentialError` | class | `agentfootprint/security` |
 | `RequestTooLargeError` | class | `agentfootprint/hosting` |
-| `S3ArtifactsConfigurationError` | class | `agentfootprint/artifacts` |
 | `SessionIndexUnavailableError` | class | `agentfootprint/hosting` |
 | `SessionNotFoundError` | class | `agentfootprint/hosting` |
 | `SessionOpNeedsIdentityError` | class | `agentfootprint/hosting` |
@@ -965,15 +964,15 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | Import path | Exports | Described in site prose | Coverage |
 |---|---|---|---|
 | `agentfootprint` | 807 | 677 | 84% |
-| `agentfootprint/providers` | 225 | 197 | 88% |
-| `agentfootprint/memory` | 233 | 124 | 53% |
+| `agentfootprint/providers` | 228 | 200 | 88% |
+| `agentfootprint/memory` | 236 | 127 | 54% |
 | `agentfootprint/rag` | 49 | 49 | 100% |
 | `agentfootprint/cache` | 25 | 20 | 80% |
-| `agentfootprint/observe` | 616 | 278 | 45% |
+| `agentfootprint/observe` | 619 | 281 | 45% |
 | `agentfootprint/events` | 26 | 11 | 42% |
 | `agentfootprint/context` | 161 | 100 | 62% |
 | `agentfootprint/resilience` | 24 | 16 | 67% |
-| `agentfootprint/hosting` | 319 | 319 | 100% |
+| `agentfootprint/hosting` | 322 | 322 | 100% |
 | `agentfootprint/security` | 128 | 108 | 84% |
 | `agentfootprint/reliability` | 1 | 1 | 100% |
 | `agentfootprint/skill-graph` | 116 | 72 | 62% |
@@ -983,7 +982,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | `agentfootprint/ontology` | 38 | 38 | 100% |
 | `agentfootprint/time` | 20 | 20 | 100% |
 | `agentfootprint/ag-ui` | 33 | 33 | 100% |
-| `agentfootprint/artifacts` | 103 | 103 | 100% |
+| `agentfootprint/artifacts` | 104 | 104 | 100% |
 
 ## Honest limits of this report
 

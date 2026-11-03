@@ -231,6 +231,7 @@
  * ```
  */
 
+import { captureAdapterConstruction } from '../../lib/adapterConfiguration.js';
 import type { FlowDecisionEvent, FlowSelectedEvent } from 'footprintjs';
 import type { Standing } from '../../core/agent/findings/types.js';
 import type {
@@ -270,6 +271,7 @@ export interface OtelObservabilityOptions {
   /** OTel Tracer to use. Defaults to `trace.getTracer(scopeName)` — where
    *  `trace` is the lazy-imported `@opentelemetry/api` and `scopeName` is the
    *  option below. */
+  /** Cannot accompany `scopeName`; a prebuilt tracer already owns its scope. */
   readonly tracer?: OtelTracerLike;
   /**
    * The INSTRUMENTATION SCOPE name every span is recorded under — what a
@@ -1002,6 +1004,10 @@ const EVALUATORS: ReadonlySet<string> = new Set(['llm', 'fn', 'heuristic']);
 // ─── Strategy factory ────────────────────────────────────────────────
 
 export function otelObservability(opts: OtelObservabilityOptions): OtelObservabilityStrategy {
+  const {
+    client: suppliedTracer,
+    config: { scopeName: suppliedScopeName },
+  } = captureAdapterConstruction('otelObservability', opts.tracer, { scopeName: opts.scopeName });
   if (!opts.serviceName) {
     throw new TypeError(
       `[otelObservability] \`serviceName\` is required. ` +
@@ -1012,7 +1018,7 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
   const sampleRate = opts.sampleRate ?? 1;
   const genAiNames = opts.genAiSpanNames === true;
   const explainability = opts.explainability !== false;
-  const scopeName = opts.scopeName ?? 'agentfootprint';
+  const scopeName = suppliedScopeName ?? 'agentfootprint';
   const captureContent = opts.captureContent === true;
   const captureToolContent = opts.captureToolContent === true;
   const maxContentChars = opts.maxContentChars ?? DEFAULT_MAX_CONTENT_CHARS;
@@ -1022,7 +1028,7 @@ export function otelObservability(opts: OtelObservabilityOptions): OtelObservabi
   // Lazy-resolve tracer if not injected. Defer the API import until
   // first event so consumers who don't actually fire events (no agent
   // run yet) don't even hit the OTel API surface.
-  let tracer: OtelTracerLike | undefined = opts.tracer;
+  let tracer: OtelTracerLike | undefined = suppliedTracer;
   let otelApi: OtelApiModule | undefined = opts._otelApi;
   function ensureTracer(): OtelTracerLike {
     if (tracer) return tracer;
