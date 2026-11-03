@@ -251,6 +251,7 @@ import { toWireJson } from '../../lib/wireJson.js';
 import type { ObservabilityStrategy } from '../../strategies/types.js';
 
 import { rateLimitedConsoleSink } from './deliveryErrors.js';
+import { cutAt } from './otel/cutAt.js';
 
 /** The batch settlement's marker (9.113.0), as the canonical field defines it. */
 type SettledMarker = NonNullable<ToolStartPayload['notDispatched']>;
@@ -606,16 +607,6 @@ const MAX_LIST_ITEMS = 20;
 function bound(value: unknown): string {
   const s = typeof value === 'string' ? value : toWireJson(value) ?? String(value);
   return s.length > MAX_ATTR_CHARS ? `${cutAt(s, MAX_ATTR_CHARS - 1)}…` : s;
-}
-
-/**
- * The first `n` UTF-16 units of `s`, one fewer when the cut would split a
- * surrogate pair — a lone high surrogate is not valid Unicode, and a strict
- * OTLP/JSON decoder rejects it.
- */
-function cutAt(s: string, n: number): string {
-  const code = s.charCodeAt(n - 1);
-  return s.slice(0, code >= 0xd800 && code <= 0xdbff ? n - 1 : n);
 }
 
 /** The longest model- or caller-supplied text a span NAME carries. */

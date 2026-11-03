@@ -54,6 +54,7 @@ import {
   createGoogleGenAIClientResolver,
   type GoogleGenAIConnectionOptions,
 } from '../adapters/llm/googleGenAI.js';
+import { describeShape } from './describeShape.js';
 
 // ---------------------------------------------------------------------------
 // OpenAI (hosted) — no extra dependency, just a fetch + an API key.
@@ -816,17 +817,6 @@ function readEmbeddings(
     );
   }
   return vectors;
-}
-
-/** Describe a response by shape, never by content — it may carry customer text. */
-function describeShape(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return `an array of ${value.length}`;
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as object);
-    return keys.length === 0 ? 'an object with no keys' : `an object with keys: ${keys.join(', ')}`;
-  }
-  return typeof value;
 }
 
 // ---------------------------------------------------------------------------

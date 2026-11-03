@@ -160,6 +160,7 @@ import type {
   ScoredEntry,
   SearchOptions,
 } from '../../memory/store/types.js';
+import { vectorKey } from './s3Vectors/vectorKey.js';
 
 // ─── The little bit of the SDK this adapter uses ─────────────────────
 
@@ -957,18 +958,6 @@ function refuse(method: string, because: string, why: string, fix: string): neve
 }
 
 // ─── Keys, payloads, rows ────────────────────────────────────────────
-
-/**
- * `'<namespace>#<id>'`.
- *
- * The namespace is in the KEY as well as in the metadata, and the redundancy is
- * deliberate: `search` filters server-side on the metadata, while `list` and
- * `forget` need to select a namespace out of a page of keys, which ListVectors
- * gives no filter for.
- */
-function vectorKey(namespace: string, id: string): string {
-  return `${namespace}#${id}`;
-}
 
 /** The entry id back out of a key. Ids may contain `#` (`'refunds.md#3'`); namespaces may not. */
 function idFromKey(key: string, prefixLength: number): string {
