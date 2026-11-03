@@ -290,7 +290,8 @@ export interface OtelObservabilityOptions {
    * pass one; `agentCoreEvaluationSpans()` in the AgentCore adapter is that
    * one consumer's spelling, kept in that vendor's own file.
    *
-   * Ignored when `tracer` is supplied — a tracer you built already has a name.
+   * Refused when `tracer` is supplied: configure the scope on that tracer,
+   * or omit `tracer` so this factory requests one under the declared name.
    */
   readonly scopeName?: string;
   /**

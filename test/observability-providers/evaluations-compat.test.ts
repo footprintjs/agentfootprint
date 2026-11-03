@@ -235,7 +235,7 @@ describe('agentCoreEvaluationSpans is a configuration, not a second adapter', ()
     expect(spans[0]!.attributes['gen_ai.task.input']).toBeUndefined();
 
     // The scope name is the whole reason this function exists, so an override
-    // of it is refused by construction rather than honoured into silence.
+    // of it is replaced with the fixed name before the tracer is requested.
     let requested: string | undefined;
     const api = {
       trace: {
