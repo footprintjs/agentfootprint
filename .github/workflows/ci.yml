@@ -27,9 +27,9 @@ concurrency:
 # github-actions manager proposes new pins.
 jobs:
   file-size:
-    uses: footprintjs/ci/.github/workflows/file-size.yml@1e97b55ddc2b17aa0fe1373d4a021b394e3f68bf
+    uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
     with:
-      tool_sha: 1e97b55ddc2b17aa0fe1373d4a021b394e3f68bf
+      tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
 
   test:
     runs-on: ubuntu-latest
