@@ -33,6 +33,9 @@ injection retain their separate semantics.
 The error is exported from the affected category doors (`memory`, `providers`,
 `artifacts`, `observe` and `hosting`). `AdapterConfigurationAdapter` is its
 closed adapter identifier type; shared HTTP refusals identify `httpHost`.
+New adapter identifiers may be added in minor releases. Match the adapters
+relevant to your code and keep a fallback; avoid switching exhaustively over
+the entire adapter union.
 `AdapterConfigurationReason` is the closed union `conflicting-options` or
 `client-construction-failed`; the latter masks owned SDK constructor failures
 in S3/GCS artifacts without retaining backend text or a cause. Match the fixed

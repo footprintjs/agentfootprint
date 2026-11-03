@@ -1,9 +1,12 @@
 import ts from 'typescript';
+import {
+  sourceInventory,
+  loaderSpecifier,
+  packageOf,
+  type SourceText,
+} from '../../architecture/sourceInventory.js';
+export type { SourceText } from '../../architecture/sourceInventory.js';
 
-export interface SourceText {
-  readonly file: string;
-  readonly text: string;
-}
 export interface SourceCandidate {
   readonly key: string;
   readonly file: string;
@@ -45,41 +48,30 @@ export function constructionInventory(
   readonly candidates: readonly SourceCandidate[];
   readonly optionShapes: readonly SourceOptionShape[];
 } {
-  const sources = new Map(
-    texts.map(({ file, text }) => [
-      file,
-      ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true),
-    ]),
-  );
+  const sources = new Map(texts.map(({ file, text }) => [file, sourceInventory(file, text)]));
   const declarations = new Map<string, ts.InterfaceDeclaration | ts.TypeAliasDeclaration>();
   const imports = new Map<string, string>();
   for (const [file, source] of sources) {
-    const index = (node: ts.Node): void => {
-      if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) {
-        declarations.set(`${file}#${node.name.text}`, node);
-      }
-      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-        const specifier = node.moduleSpecifier.text;
-        const binding = node.importClause?.namedBindings;
-        if (specifier.startsWith('.') && binding && ts.isNamedImports(binding)) {
-          const parts = file.split('/');
-          parts.pop();
-          for (const part of specifier.split('/')) {
-            if (part === '..') parts.pop();
-            else if (part !== '.') parts.push(part);
-          }
-          const target = parts.join('/').replace(/\.js$/, '.ts');
-          for (const element of binding.elements) {
-            imports.set(
-              `${file}#${element.name.text}`,
-              `${target}#${element.propertyName?.text ?? element.name.text}`,
-            );
-          }
+    for (const node of source.declarations) declarations.set(`${file}#${node.name.text}`, node);
+    for (const node of source.imports) {
+      if (!ts.isStringLiteral(node.moduleSpecifier)) continue;
+      const specifier = node.moduleSpecifier.text;
+      const binding = node.importClause?.namedBindings;
+      if (specifier.startsWith('.') && binding && ts.isNamedImports(binding)) {
+        const parts = file.split('/');
+        parts.pop();
+        for (const part of specifier.split('/')) {
+          if (part === '..') parts.pop();
+          else if (part !== '.') parts.push(part);
         }
+        const target = parts.join('/').replace(/\.js$/, '.ts');
+        for (const element of binding.elements)
+          imports.set(
+            `${file}#${element.name.text}`,
+            `${target}#${element.propertyName?.text ?? element.name.text}`,
+          );
       }
-      ts.forEachChild(node, index);
-    };
-    index(source);
+    }
   }
 
   const resolve = (
@@ -197,101 +189,59 @@ export function constructionInventory(
     }
   };
   for (const [file, source] of sources) {
-    const visit = (node: ts.Node): void => {
+    for (const node of source.declarations) {
+      if (!optionName.test(node.name.text)) continue;
+      const members = resolve(file, ts.factory.createTypeReferenceNode(node.name.text));
+      addMembers(file, node.name.text, members);
+      optionShapes.push({ key: `${file}#${node.name.text}`, fields: [...members.keys()].sort() });
+    }
+    for (const node of source.functions) {
       if (
-        (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) &&
-        optionName.test(node.name.text)
-      ) {
-        const members = resolve(file, ts.factory.createTypeReferenceNode(node.name.text));
-        addMembers(file, node.name.text, members);
-        optionShapes.push({ key: `${file}#${node.name.text}`, fields: [...members.keys()].sort() });
-      }
+        !node.name ||
+        !node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+      )
+        continue;
+      const type = node.parameters[0]?.type;
       if (
-        ts.isFunctionDeclaration(node) &&
-        node.name &&
-        node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
-      ) {
-        const type = node.parameters[0]?.type;
-        // Named Options declarations are inventoried once above, including inheritance/aliases.
-        if (
-          type &&
-          !(
-            ts.isTypeReferenceNode(type) &&
-            ts.isIdentifier(type.typeName) &&
-            optionName.test(type.typeName.text)
-          )
-        ) {
-          addMembers(file, node.name.text, resolve(file, type));
-        }
-      }
+        type &&
+        !(
+          ts.isTypeReferenceNode(type) &&
+          ts.isIdentifier(type.typeName) &&
+          optionName.test(type.typeName.text)
+        )
+      )
+        addMembers(file, node.name.text, resolve(file, type));
+    }
+    for (const node of source.classes) {
       if (
-        ts.isClassDeclaration(node) &&
-        node.name &&
-        node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
-      ) {
-        const constructor = node.members.find(ts.isConstructorDeclaration);
-        const type = constructor?.parameters[0]?.type;
-        if (
-          type &&
-          !(
-            ts.isTypeReferenceNode(type) &&
-            ts.isIdentifier(type.typeName) &&
-            optionName.test(type.typeName.text)
-          )
-        ) {
-          addMembers(file, node.name.text, resolve(file, type));
-        }
-      }
+        !node.name ||
+        !node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+      )
+        continue;
+      const constructor = node.members.find(ts.isConstructorDeclaration);
+      const type = constructor?.parameters[0]?.type;
       if (
-        ts.isCallExpression(node) &&
-        node.arguments[0] &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            ['require', 'lazyRequire'].includes(node.expression.text)))
-      ) {
-        let argument = node.arguments[0];
-        if (ts.isIdentifier(argument)) {
-          const name = argument.text;
-          let parent: ts.Node | undefined = node.parent;
-          while (parent) {
-            if (ts.isBlock(parent) || ts.isSourceFile(parent)) {
-              const declaration = parent.statements
-                .flatMap((statement) =>
-                  ts.isVariableStatement(statement) &&
-                  (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
-                    ? [...statement.declarationList.declarations]
-                    : [],
-                )
-                .find(
-                  (candidate) => ts.isIdentifier(candidate.name) && candidate.name.text === name,
-                );
-              if (declaration?.initializer) {
-                argument = declaration.initializer;
-                break;
-              }
-            }
-            parent = parent.parent;
-          }
-        }
-        if (ts.isStringLiteralLike(argument)) {
-          const peer = argument.text
-            .split('/')
-            .slice(0, argument.text.startsWith('@') ? 2 : 1)
-            .join('/');
-          if (optionalPeers.has(peer)) {
-            let owner: ts.Node | undefined = node.parent;
-            while (owner && !ts.isFunctionLike(owner)) owner = owner.parent;
-            const name =
-              owner && 'name' in owner && owner.name && ts.isIdentifier(owner.name as ts.Node)
-                ? (owner.name as ts.Identifier).text
-                : 'anonymous';
-            add(file, `SDK(${name})`, peer);
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
+        type &&
+        !(
+          ts.isTypeReferenceNode(type) &&
+          ts.isIdentifier(type.typeName) &&
+          optionName.test(type.typeName.text)
+        )
+      )
+        addMembers(file, node.name.text, resolve(file, type));
+    }
+    for (const site of source.loaders) {
+      const specifier = loaderSpecifier(site, true);
+      if (specifier === undefined) continue;
+      const peer = packageOf(specifier);
+      if (!optionalPeers.has(peer)) continue;
+      const owner = site.owner;
+      const name =
+        owner && 'name' in owner && owner.name && ts.isIdentifier(owner.name as ts.Node)
+          ? (owner.name as ts.Identifier).text
+          : 'anonymous';
+      add(file, `SDK(${name})`, peer);
+    }
   }
   return {
     candidates: [...result.values()].sort((left, right) => left.key.localeCompare(right.key)),

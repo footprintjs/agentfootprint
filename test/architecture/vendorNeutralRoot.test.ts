@@ -3,8 +3,23 @@ import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import ts from 'typescript';
-import layering from '../../scripts/layering.config.cjs';
+import {
+  sourceInventory,
+  repositorySources,
+  loaderSpecifier,
+  packageOf,
+  runtimeSdkEdges,
+} from './sourceInventory.js';
+
+import {
+  constructionInventory,
+  uncoveredConstructionCandidates,
+} from '../adapters/construction/sourceCoverage.js';
+import {
+  constructionBehaviorKeys,
+  constructionSourceExclusions,
+  constructionOptionShapes,
+} from '../adapters/construction/sourceCoverageRegistry.js';
 
 const ROOT = resolve(__dirname, '../..');
 const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
@@ -12,99 +27,20 @@ const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
   peerDependenciesMeta: Record<string, { optional?: boolean }>;
 };
 
-function packageOf(specifier: string): string {
-  return specifier
-    .split('/')
-    .slice(0, specifier.startsWith('@') ? 2 : 1)
-    .join('/');
-}
-
-/** Include existing ESM loaders that bind `const spec = 'sdk'; import(spec)`. */
-function literalSpecifier(argument: ts.Expression): string | undefined {
-  if (ts.isStringLiteralLike(argument)) return argument.text;
-  if (!ts.isIdentifier(argument)) return undefined;
-  let scope: ts.Node | undefined = argument.parent;
-  while (scope) {
-    if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
-      for (const statement of scope.statements) {
-        if (!ts.isVariableStatement(statement)) continue;
-        for (const declaration of statement.declarationList.declarations) {
-          if (ts.isIdentifier(declaration.name) && declaration.name.text === argument.text) {
-            return declaration.initializer && ts.isStringLiteralLike(declaration.initializer)
-              ? declaration.initializer.text
-              : undefined;
-          }
-        }
-      }
-    }
-    scope = scope.parent;
-  }
-  return undefined;
-}
-
-/** Parse call scopes once; only potential static SDK edges need TypeScript's type elision. */
+/** Both architecture laws consume the same memoized parse and loader-scope inventory. */
 function sdkLoadViolations(file: string, text: string, peers: ReadonlySet<string>): string[] {
+  const inventory = sourceInventory(file, text);
   const violations: string[] = [];
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true);
-  const isStaticSdkEdge = (
-    node: ts.Node,
-  ): node is (ts.ImportDeclaration | ts.ExportDeclaration) & {
-    moduleSpecifier: ts.StringLiteralLike;
-  } =>
-    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-    node.moduleSpecifier !== undefined &&
-    ts.isStringLiteralLike(node.moduleSpecifier) &&
-    peers.has(packageOf(node.moduleSpecifier.text));
-  let hasStaticSdkCandidate = false;
-  const visit = (node: ts.Node): void => {
-    if (isStaticSdkEdge(node)) hasStaticSdkCandidate = true;
-    // ImportTypeNode (typeof import('sdk'), for example) is not a runtime call.
-    const specifier =
-      ts.isCallExpression(node) && node.arguments[0]
-        ? literalSpecifier(node.arguments[0])
-        : undefined;
-    if (
-      ts.isCallExpression(node) &&
-      specifier !== undefined &&
-      peers.has(packageOf(specifier)) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          ['require', 'lazyRequire'].includes(node.expression.text)))
-    ) {
-      let parent: ts.Node | undefined = node.parent;
-      while (parent && !ts.isFunctionLike(parent)) parent = parent.parent;
-      const lazy =
-        node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) && node.expression.text === 'lazyRequire');
-      if (!lazy || !parent) {
-        violations.push(
-          `${file}: SDK loads must use function-scoped lazyRequire(...) or import(...): ${specifier}`,
-        );
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  if (hasStaticSdkCandidate) {
-    // Explicit and inferred type-only imports can disappear from emitted JS.
-    // Compile the whole candidate file so usage, rather than syntax alone, decides.
-    const compiled = ts.createSourceFile(
-      file,
-      ts.transpileModule(text, {
-        fileName: file,
-        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-      }).outputText,
-      ts.ScriptTarget.ES2022,
-      true,
-    );
-    const visitStaticEdges = (node: ts.Node): void => {
-      if (isStaticSdkEdge(node)) {
-        violations.push(`${file}: static SDK import ${node.moduleSpecifier.text}`);
-      }
-      ts.forEachChild(node, visitStaticEdges);
-    };
-    visitStaticEdges(compiled);
+  for (const site of inventory.loaders) {
+    const specifier = loaderSpecifier(site);
+    if (specifier === undefined || !peers.has(packageOf(specifier))) continue;
+    if (site.kind === 'require' || !site.owner)
+      violations.push(
+        `${file}: SDK loads must use function-scoped lazyRequire(...) or import(...): ${specifier}`,
+      );
   }
+  for (const edge of runtimeSdkEdges(inventory, peers))
+    violations.push(`${file}: static SDK import ${edge.moduleSpecifier.text}`);
   return violations;
 }
 
@@ -156,11 +92,41 @@ describe('vendor-neutral root entry', () => {
   });
 
   it('has no static SDK imports, and SDK loads use function-scoped lazyRequire or import', () => {
-    const violations = (layering.listSourceFiles(ROOT) as string[]).flatMap((file) =>
-      sdkLoadViolations(file, readFileSync(resolve(ROOT, file), 'utf8'), optionalPeers),
-    );
+    const violations = repositorySources(ROOT)
+      .filter(({ file }) => !file.endsWith('.d.ts'))
+      .flatMap(({ file, text }) => sdkLoadViolations(file, text, optionalPeers));
     expect(violations).toEqual([]);
   }, 30_000);
+
+  it('joins SDK and injected-handle candidates to behavioral cases or exact reason exclusions', () => {
+    const inventory = constructionInventory(repositorySources(ROOT), optionalPeers);
+    const { candidates } = inventory;
+    const uncovered = uncoveredConstructionCandidates(
+      candidates,
+      constructionBehaviorKeys,
+      constructionSourceExclusions,
+    );
+    expect(uncovered, `Missing construction coverage:\n${uncovered.join('\n')}`).toEqual([]);
+    const discovered = new Set(candidates.map(({ key }) => key));
+    expect(constructionBehaviorKeys.filter((key) => !discovered.has(key))).toEqual([]);
+    expect(constructionSourceExclusions.filter(({ key }) => !discovered.has(key))).toEqual([]);
+    const optionDeclarations = [
+      ...new Set(
+        constructionBehaviorKeys
+          .filter((key) => !key.includes('#SDK('))
+          .map((key) => key.slice(0, key.lastIndexOf('.'))),
+      ),
+    ].sort();
+    expect(constructionOptionShapes.map(({ key }) => key).sort()).toEqual(optionDeclarations);
+    for (const shape of constructionOptionShapes) {
+      const actual = inventory.optionShapes.find(({ key }) => key === shape.key);
+      expect(actual, `Missing public option shape: ${shape.key}`).toBeDefined();
+      expect(
+        actual?.fields,
+        `Unreviewed option change on ${shape.key}; classify construction vs operation before updating the registry`,
+      ).toEqual(shape.fields);
+    }
+  });
 });
 
 describe('SDK load scanner behavior', () => {
