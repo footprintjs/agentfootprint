@@ -38,7 +38,7 @@ import { cloudwatchObservability } from '../../../src/adapters/observability/clo
 import { xrayObservability } from '../../../src/adapters/observability/xray.js';
 import { bedrockEmbedder } from '../../../src/embedders/index.js';
 import { bedrock } from '../../../src/adapters/llm/BedrockProvider.js';
-import { s3Artifacts } from '../../../src/index.js';
+import { s3Artifacts } from '../../../src/doors/artifacts.js';
 import type { MemoryEntry } from '../../../src/memory/entry/index.js';
 import type { MemoryIdentity } from '../../../src/memory/identity/index.js';
 import type { AgentfootprintEvent } from '../../../src/events/registry.js';

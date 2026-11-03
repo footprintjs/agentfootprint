@@ -34,3 +34,7 @@ One file per door: `skill-graph.ts`, `context.ts`, `observe.ts`, `maps.ts`,
 `recipes.ts`, `memory.ts`, `providers.ts`, `hosting.ts`, `rag.ts`,
 `security.ts`, `resilience.ts`, `classify.ts`, `ontology.ts`, `time.ts`,
 `ag-ui.ts`.
+
+`artifacts.ts` publishes the ArtifactStore port, shared artifact helpers and
+store adapters. The root also exposes the port and local defaults; backend
+adapters remain behind this door and load optional SDKs at construction.

@@ -42,7 +42,7 @@ status honestly is.
 | **X-Ray** | `xrayObservability` | `agentfootprint/observe` | `@aws-sdk/client-xray` | `PutTraceSegments` | Shipped; contract-mapped and injection-tested | [Observability sinks](doc:observability-sinks) |
 | **AgentCore Policy** | No in-process adapter | — | — | — | Enforced at the Gateway; the retired `agentCorePolicy` export is removed | [Governance & policy](doc:governance-and-policy) |
 | **S3 Vectors** | `s3VectorsStore` | `agentfootprint/memory` | `@aws-sdk/client-s3vectors` | `GetIndex`, `PutVectors`, `QueryVectors`, `GetVectors`, `ListVectors`, `DeleteVectors` | Shipped (9.3.0); contract-mapped and injection-tested | [Memory & stores](doc:memory-and-stores) |
-| **S3** (artifact store) | `s3Artifacts` | `agentfootprint` | `@aws-sdk/client-s3` | `PutObject`, `GetObject`, `HeadObject`, `DeleteObject`, `ListObjectsV2` — plus native `putStream` / `getStream` | **9.25.0** — contract-shaped and tested; awaiting field use | [Artifacts](doc:artifacts) |
+| **S3** (artifact store) | `s3Artifacts` | `agentfootprint/artifacts` | `@aws-sdk/client-s3` | `PutObject`, `GetObject`, `HeadObject`, `DeleteObject`, `ListObjectsV2` — plus native `putStream` / `getStream` | **9.25.0** — contract-shaped and tested; awaiting field use | [Artifacts](doc:artifacts) |
 | **Bedrock models** | `bedrock()` — Converse, model-agnostic | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `Converse`, `ConverseStream` | Shipped | [AWS Bedrock](doc:aws-bedrock) |
 | **Bedrock embeddings** | `bedrockEmbedder()` | `agentfootprint/providers` | `@aws-sdk/client-bedrock-runtime` | `InvokeModel` | Shipped | [Embedders](doc:embedders) |
 | **Actor on every event** (`EventMeta.principal` / `.tenant`) | `run({ identity })` — no adapter | `agentfootprint` (main) | none | — | Shipped (9.11.0); **identical on both provider columns** | [Observability sinks](doc:observability-sinks) |
@@ -303,7 +303,7 @@ and the model routes ~26-char tickets. Same five-verb port as every other adapte
 so this is a one-line swap from `fileArtifacts`.
 
 ```ts
-import { s3Artifacts } from 'agentfootprint';
+import { s3Artifacts } from 'agentfootprint/artifacts';
 
 const artifacts = s3Artifacts({
   bucket: 'my-agent-artifacts',   // must already exist — this library never creates one

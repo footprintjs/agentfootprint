@@ -227,6 +227,7 @@ const isDataSubpath = (key: string): boolean => (DATA_SUBPATHS as readonly strin
 /** Everything `package.json` still publishes, the DATA entries aside. */
 const SURVIVING_SUBPATHS = [
   '.',
+  './artifacts',
   './providers',
   './memory',
   './rag',
@@ -503,6 +504,7 @@ describe('surviving subpaths resolve where their convention says', () => {
   // because it is the only home of the reliability GATE's `CircuitOpenError`
   // (see door-aliases.test.ts for that design fact).
   const DOOR_BARRELS = [
+    'artifacts',
     'providers',
     'memory',
     'rag',

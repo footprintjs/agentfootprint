@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-148 exported from `agentfootprint`.
+146 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -45,7 +45,6 @@ title: Type Aliases
 - [`ContextInjectedEvent`](/docs/api/type-aliases/ContextInjectedEvent)
 - [`ContextInjectedListener`](/docs/api/type-aliases/ContextInjectedListener)
 - [`CoverageInput`](/docs/api/type-aliases/CoverageInput)
-- [`CreateProviderOptions`](/docs/api/type-aliases/CreateProviderOptions)
 - [`DatasetArtifactReceipt`](/docs/api/type-aliases/DatasetArtifactReceipt)
 - [`DescribedResultDeclaration`](/docs/api/type-aliases/DescribedResultDeclaration)
 - [`ElicitationProperty`](/docs/api/type-aliases/ElicitationProperty)
@@ -94,7 +93,6 @@ title: Type Aliases
 - [`PermissionCapability`](/docs/api/type-aliases/PermissionCapability)
 - [`Predicate`](/docs/api/type-aliases/Predicate)
 - [`ProposedEffect`](/docs/api/type-aliases/ProposedEffect)
-- [`ProviderKind`](/docs/api/type-aliases/ProviderKind)
 - [`RagDocument`](/docs/api/type-aliases/RagDocument)
 - [`ReadingChoice`](/docs/api/type-aliases/ReadingChoice)
 - [`ReadTrackingMode`](/docs/api/type-aliases/ReadTrackingMode)

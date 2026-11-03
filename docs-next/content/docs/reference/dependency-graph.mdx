@@ -81,7 +81,8 @@ deprecated, for all of 8.x.
 
 | Door | Layer | What it exposes |
 |---|---|---|
-| `agentfootprint` (default) | 8 | The story words — `Agent`, `defineTool`, `.act()`, `.watch()`, `providerFromEnv`, the core types. 90% of consumers use only this |
+| `agentfootprint` (default) | 8 | The story words — `Agent`, `defineTool`, `.act()`, `.watch()`, the core types. 90% of consumers use only this |
+| `agentfootprint/artifacts` | 3 | ArtifactStore, local stores and backend adapters; optional SDKs load at construction |
 | `agentfootprint/providers` | 3 | Everything you plug a backend into — LLM providers, embedders, tool providers + MCP, thinking handlers |
 | `agentfootprint/memory` | 4 | State that outlives a turn — `defineMemory`, `MEMORY_TYPES`, `MEMORY_STRATEGIES`, `InMemoryStore`, plus the `RedisStore` / `AgentCoreStore` adapters |
 | `agentfootprint/observe` | 2 | Everything that watches — `ContextRecorder`, `streamRecorder`, `compositionRecorder`, `agentRecorder`, `boundaryRecorder`, `costRecorder`, `recordRun`, diagnosis (influence, bisect, finders), vendor sinks, SSE delivery, status + its message catalogs |

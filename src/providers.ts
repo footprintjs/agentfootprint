@@ -166,8 +166,10 @@ export {
 
 export {
   createProvider,
+  providerFromEnv,
   type ProviderKind,
   type CreateProviderOptions,
+  type ProviderFromEnv,
 } from './adapters/llm/createProvider.js';
 
 export type {

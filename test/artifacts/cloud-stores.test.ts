@@ -20,14 +20,13 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  gcsArtifacts,
   InvalidArtifactError,
   isArtifactRef,
   mintArtifactRef,
-  s3Artifacts,
   type ArtifactScope,
   type ArtifactStore,
 } from '../../src/index.js';
+import { gcsArtifacts, s3Artifacts } from '../../src/doors/artifacts.js';
 import { fakeGcs, fakeS3 } from './fakes/objectServices.js';
 import { clock, SCOPE } from './storeFixtures.js';
 
