@@ -26,6 +26,11 @@ concurrency:
 # tag could otherwise report a tree as tested that never was. Renovate's
 # github-actions manager proposes new pins.
 jobs:
+  file-size:
+    uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
+    with:
+      tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
