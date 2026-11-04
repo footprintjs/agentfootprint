@@ -92,8 +92,8 @@
  * That gap's sentence used to end with the causes that produce it. That is
  * PROSE DOING DATA'S JOB: a frozen constant cannot know what happened at the
  * site it is printed beside, so it listed the causes somebody could think of —
- * and a path it had never accounted for, the shape refusal in `readReceipt`
- * below, made the count AND the verdict false with nobody editing the string.
+ * and a path it had never accounted for, the shape refusal by `readReceipt`
+ * in `recordReads.ts`, made the count and verdict false without a string edit.
  * The discriminating fact moved to the one place that holds it: `readReceipt`
  * reports whether the receipt key held nothing or held something it refused,
  * and {@link ServedGap.cause} carries that answer out.

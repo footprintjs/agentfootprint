@@ -11,8 +11,8 @@ import type { ServedView } from '../servedView.js';
  * its own right and not a window onto the fold's cache. Elements are the fold's
  * frozen objects; the container is ours.
  *
- * Every other array on a view is built in `viewOf` from scratch and aliases
- * nothing, so it needs the COPY half of this and not the freeze — but it is
+ * Every other array on a view is built by a projection and aliases nothing,
+ * so it needs the COPY half of this and not the freeze — but it is
  * frozen anyway, by {@link frozenView}, because the type says `readonly`
  * throughout and a claim that is true of two containers out of six is a claim
  * a reader cannot use.

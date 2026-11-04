@@ -56,7 +56,7 @@
  *     resolves to a real field on one of the two shapes, so a rename cannot
  *     leave a gap pointing at nothing. That is the same rot as a `file:line`
  *     pointer, which this repo already bans;
- *   • REACHABILITY — every gap kind `viewOf` can push is in the catalogue and
+ *   • REACHABILITY — every gap kind `gapsOf` can push is in the catalogue and
  *     vice versa: no orphan kind, no unreachable entry;
  *   • THE PROSE ITSELF — every `why` and every `UNGAPPED_FIELDS` reason is put
  *     through `test/helpers/gapProseClaims.ts`, the reader-facing sibling of
@@ -156,10 +156,10 @@
  * the defect this file exists to prevent was found in the first place. The
  * narrower blind spots, named rather than left to be discovered:
  *
- *   • the gap-kind half reads `gapOf('…')` calls out of `servedView/gaps.ts`'s
- *     source. A kind pushed some other way is invisible to it — so the walk
- *     also fails on any `gapOf` call whose argument is not a string literal,
- *     which is the only shape that could hide one;
+ *   • the gap-kind half reads `gapOf('…')` calls from every production `.ts`
+ *     leaf in `servedView/`, excluding colocated tests. A kind pushed some
+ *     other way is invisible to it — so the walk also fails on computed kinds
+ *     and calls outside the one declared producer;
  *   • a gap is checked for EXISTENCE, never for firing on the right run. That
  *     is `receipt-conformance.test.ts`'s job, per condition;
  *   • the static half follows type references by NAME within the two files. A
@@ -196,7 +196,7 @@
  * way down, and a crafted recording whose receipt key holds a non-receipt).
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import ts from 'typescript';
@@ -238,6 +238,7 @@ const SRC = resolve(__dirname, '../../src/time-travel');
 const RECEIPT_FILE = resolve(__dirname, '../../src/core/agent/receipt/receipt.ts');
 const TYPE_FILE = resolve(SRC, 'servedView.ts');
 const CATALOGUE_PROSE_FILE = resolve(SRC, 'servedView/gaps.ts');
+const GAP_DIRECTORY = resolve(SRC, 'servedView');
 const GAP_PRODUCER = {
   file: resolve(SRC, 'servedView/gaps.ts'),
   declaration: 'gapsOf',
@@ -1107,21 +1108,35 @@ describe('every gap sentence says which fields, what they mean, and what to do',
 
 // ─── Contract: no orphan kind, no unreachable entry ──────────────────────
 
+function productionLeaves(directory: string): readonly string[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const file = resolve(directory, entry.name);
+      if (entry.isDirectory()) return productionLeaves(file);
+      return entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')
+        ? [file]
+        : [];
+    })
+    .sort();
+}
+
 /**
- * The gap kinds `gapsOf` can actually push, read out of `servedView/gaps.ts`'s own
- * source with the compiler's parser.
+ * The gap kinds `gapsOf` can actually push, read with the compiler's parser.
+ * Every production leaf is checked so a sibling cannot hide an extra call.
  *
  * A source read, because reachability is not a runtime question a test can ask
  * without driving every recording shape that exists. Its blind spot — a kind
  * pushed through a variable — is closed by the second assertion below rather
  * than left in the header as a caveat.
  */
-function pushedKinds(): {
+function pushedKinds(sourceTextOverrides: ReadonlyMap<string, string> = new Map()): {
   readonly literals: readonly string[];
   readonly computed: number;
   readonly outsideProducer: number;
 } {
-  const text = readFileSync(GAP_PRODUCER.file, 'utf8');
+  const sourceText = (file: string): string =>
+    sourceTextOverrides.get(file) ?? readFileSync(file, 'utf8');
+  const text = sourceText(GAP_PRODUCER.file);
   const sf = ts.createSourceFile(GAP_PRODUCER.file, text, ts.ScriptTarget.Latest, true);
   const producers = sf.statements.filter(
     (node): node is ts.FunctionDeclaration =>
@@ -1133,20 +1148,32 @@ function pushedKinds(): {
   const literals = new Set<string>();
   let computed = 0;
   let outsideProducer = 0;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'gapOf'
-    ) {
-      const arg = node.arguments[0];
-      if (arg !== undefined && ts.isStringLiteral(arg)) literals.add(arg.text);
-      else computed += 1;
-      if (node.getStart(sf) < body!.getStart(sf) || node.end > body!.end) outsideProducer += 1;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
+  for (const file of productionLeaves(GAP_DIRECTORY)) {
+    const source =
+      file === GAP_PRODUCER.file
+        ? sf
+        : ts.createSourceFile(file, sourceText(file), ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'gapOf'
+      ) {
+        const arg = node.arguments[0];
+        if (arg !== undefined && ts.isStringLiteral(arg)) literals.add(arg.text);
+        else computed += 1;
+        if (
+          file !== GAP_PRODUCER.file ||
+          node.getStart(source) < body!.getStart(sf) ||
+          node.end > body!.end
+        ) {
+          outsideProducer += 1;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
   return { literals: [...literals].sort(), computed, outsideProducer };
 }
 
@@ -1165,6 +1192,33 @@ describe('the catalogue and the code that raises it are the same set', () => {
     const kinds = pushedKinds();
     expect(kinds.computed).toBe(0);
     expect(kinds.outsideProducer).toBe(0);
+  });
+
+  it.each([
+    ['computed', 'plantedKind', 1],
+    ['literal', "'findings-layout'", 0],
+  ] as const)(
+    'detects a %s gapOf call planted in a production sibling',
+    (_form, argument, computed) => {
+      const sibling = resolve(SRC, 'servedView/assembly.ts');
+      const planted =
+        readFileSync(sibling, 'utf8') +
+        "\nimport { gapOf } from './gaps.js';\n" +
+        "export const plantedKind = 'findings-layout' as const;\n" +
+        `export const plantedGap = gapOf(${argument});\n`;
+      const kinds = pushedKinds(new Map([[sibling, planted]]));
+      expect(kinds.computed).toBe(computed);
+      expect(kinds.outsideProducer).toBe(1);
+      // A known literal cannot make this a catalogue-set failure instead of
+      // exercising the sibling-call guard that the old single-file walk missed.
+      expect(kinds.literals).toEqual(pushedKinds().literals);
+    },
+  );
+
+  it('does not read colocated test files as production gap producers', () => {
+    const testFile = resolve(SRC, 'servedView/assembly.test.ts');
+    const planted = readFileSync(testFile, 'utf8') + '\ngapOf(computedTestKind);\n';
+    expect(pushedKinds(new Map([[testFile, planted]]))).toEqual(pushedKinds());
   });
 
   it('the new kind fires on the chart it was written for', WALK_BUDGET, async () => {

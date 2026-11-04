@@ -42,7 +42,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
     // it is read off `preparedRequest`, past the strategy.
     //
     // RAISED WHERE A STRATEGY COULD HAVE REWRITTEN (9.93.0, entry 8). Until
-    // this release `viewOf` pushed it unconditionally — including on charts
+    // that release the gap was raised unconditionally — including on charts
     // that run no strategy at all — because `cache.transform: 'unchanged'`
     // could not tell "a strategy returned what it was given" from "there was
     // no strategy", and inferring the second from any other committed key is
@@ -205,7 +205,7 @@ export const SERVED_GAPS: Readonly<Record<ServedGapKind, Omit<ServedGap, 'gap'>>
       'number the run itself gave it.',
   }),
   'no-conversation-on-record': Object.freeze({
-    // MECHANISM (not printed). `viewOf` reads the conversation from `history`
+    // MECHANISM (not printed). `conversationAt` reads the turns from `history`
     // (the agent charts) or, failing that, from `messagesInjections` (`LLMCall`
     // and the message-API charts, which have no history at all). Neither
     // committed ⇒ `conversation` is `undefined` and `asSent` is `[]`, which is
@@ -439,7 +439,7 @@ export const UNGAPPED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
 
 /** A gap record, assembled from the catalogue — plus, where the site that
  *  raises it established one, the cause it read. */
-export function gapOf(kind: ServedGapKind, cause?: ServedGapCause): ServedGap {
+function gapOf(kind: ServedGapKind, cause?: ServedGapCause): ServedGap {
   return { gap: kind, ...SERVED_GAPS[kind], ...(cause !== undefined && { cause }) };
 }
 

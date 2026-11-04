@@ -25,8 +25,9 @@ context. Only final basis construction and the narrow gap projection read a
 receipt. Request reconstruction never reads its receipt answer sheet.
 
 The contract walk reads public types from the facade, catalogue prose from
-`gaps.ts`, and every `gapOf` call from the single `gaps.ts` producer
-`gapsOf`. It refuses computed kinds and calls outside that producer.
+`gaps.ts`, and every production TypeScript leaf in this folder for `gapOf`
+calls. Its sole allowed producer is `gaps.ts`'s `gapsOf`; it refuses computed
+kinds and calls outside that producer. Colocated tests are excluded.
 
 Step 4 does not apply to these readers: `servedAt`, `servedViews` and
 `receiptAt` are synchronous pure operations over a saved record, with no

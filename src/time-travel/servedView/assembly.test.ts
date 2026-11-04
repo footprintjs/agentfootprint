@@ -4,6 +4,7 @@ import { Agent, defineTool } from '../../index.js';
 import { servedAt, type ServedView } from '../servedView.js';
 import { epochAt } from '../epochs.js';
 import { RECEIPT_KEY } from '../../lib/conventions.js';
+import type { LLMResponse } from '../../provider-contract/types.js';
 import { stripKey, rewriteKey, stripBases } from '../../../test/helpers/savedRecordDamage.js';
 
 const observed = vi.hoisted(() => ({
@@ -63,10 +64,11 @@ beforeAll(async () => {
   const agent = Agent.create({
     provider: {
       name: 'saved-view-order-mock',
-      complete: async () => ({
+      complete: async (): Promise<LLMResponse> => ({
         content: 'done',
         toolCalls: [],
         usage: { input: 0, output: 0 },
+        stopReason: 'stop',
       }),
     },
     model: 'mock',
