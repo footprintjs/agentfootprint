@@ -148,3 +148,18 @@ test('trusted npm setup precedes dispatch-source checkout in the native build', 
   );
   assert(build.includes('npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts'));
 });
+
+test('publish installs the trusted toolchain before any candidate source', () => {
+  const start = workflow.indexOf('\n  publish:\n'),
+    end = workflow.indexOf('\n  docs:\n', start),
+    publish = workflow.slice(start, end);
+  assert(
+    publish.indexOf('npm install -g npm@11.19.0') < publish.indexOf('actions/checkout@'),
+    'publish must mirror build: trusted tools before source',
+  );
+  assert(
+    publish.includes(
+      'npm install -g npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts',
+    ),
+  );
+});

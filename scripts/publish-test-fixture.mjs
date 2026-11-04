@@ -69,6 +69,18 @@ export function stagedPublish(
     marker = '        run: |\n',
     at = block.lastIndexOf(marker);
   assert(at >= 0);
+  const stepAt = block.lastIndexOf('      - name: Publish to npm\n');
+  assert(stepAt >= 0);
+  const declaredDirectory = /^        working-directory: (.+)$/m.exec(block.slice(stepAt))?.[1];
+  const isolatedDirectory =
+    '${{ runner.temp }}/af-publish-${{ github.run_id }}-${{ github.run_attempt }}';
+  assert(
+    declaredDirectory === undefined || declaredDirectory === isolatedDirectory,
+    'unexpected native publish working-directory',
+  );
+  // GitHub uses the checkout workspace when this step omits working-directory.
+  // Derive this from the specific Publish step, never the earlier npm upgrade.
+  const workingDirectory = declaredDirectory === isolatedDirectory ? publish : root;
   const script = block
     .slice(at + marker.length)
     .split('\n')
@@ -78,7 +90,7 @@ export function stagedPublish(
     '/bin/bash',
     ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script],
     {
-      cwd: publish,
+      cwd: workingDirectory,
       encoding: 'utf8',
       timeout: 10000,
       maxBuffer: 512 * 1024,
@@ -108,6 +120,7 @@ export function stagedPublish(
     bytes,
     publishedSha256: existsSync(digest) ? readFileSync(digest, 'utf8') : null,
     root,
+    workingDirectory,
     incoming,
     publish,
     trusted,

@@ -15,8 +15,12 @@ const base = [
 ];
 for (const version of ['13.2.0', '14.0.0-rc.10'])
   test('native publisher sends the inspected bytes with canonical argv ' + version, (t) => {
-    const { r, args, bytes, publishedSha256, publish } = stagedPublish(t, version);
+    const { r, args, bytes, publishedSha256, publish, workingDirectory } = stagedPublish(
+      t,
+      version,
+    );
     assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(workingDirectory, publish);
     assert.deepEqual(args, version.includes('-rc.') ? [...base, '--tag', 'next'] : base);
     assert.equal(publishedSha256, createHash('sha256').update(bytes).digest('hex'));
     assert.deepEqual(readdirSync(publish), ['package.tgz']);

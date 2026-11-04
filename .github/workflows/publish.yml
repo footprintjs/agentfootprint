@@ -544,13 +544,7 @@ jobs:
       contents: read
       id-token: write # OIDC trusted publishing — granted to THIS job only
     steps:
-      # Trusted source helpers stay separate from incoming artifact data.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.plan.outputs.sha }}
-          persist-credentials: false
-          submodules: false
-          lfs: false
+      # Pin trusted tools before any candidate source can influence them.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
@@ -562,8 +556,23 @@ jobs:
           INCOMING_DIR: ${{ runner.temp }}/af-incoming-${{ github.run_id }}-${{ github.run_attempt }}
           PUBLISH_DIR: ${{ runner.temp }}/af-publish-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          mkdir "$VERIFY_DIR" "$INCOMING_DIR" "$PUBLISH_DIR"
-          cp scripts/publish-archive/archive.cjs scripts/publish-archive/verify.cjs "$VERIFY_DIR/"
+          mkdir -m 0700 "$VERIFY_DIR" "$INCOMING_DIR" "$PUBLISH_DIR"
+
+      # Trusted npm only; no dependency resolution or package lifecycle.
+      - run: npm install -g npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts
+        working-directory: ${{ runner.temp }}/af-publish-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      # Capture only pinned trusted helpers, before the artifact arrives.
+      - name: Capture trusted archive verifier
+        env:
+          VERIFY_DIR: ${{ runner.temp }}/af-verify-${{ github.run_id }}-${{ github.run_attempt }}
+        run: cp scripts/publish-archive/archive.cjs scripts/publish-archive/verify.cjs "$VERIFY_DIR/"
 
       - name: Read the pinned source manifest
         id: source
@@ -596,10 +605,6 @@ jobs:
         with:
           name: package
           path: ${{ runner.temp }}/af-incoming-${{ github.run_id }}-${{ github.run_attempt }}
-
-      # Trusted npm only; no dependency resolution or package lifecycle.
-      - run: npm install -g npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts
-        working-directory: ${{ runner.temp }}/af-publish-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Stage the inspected buffer in an empty npm directory, without extraction.
       # Stable supplies no tag; canonical RC alone selects next.

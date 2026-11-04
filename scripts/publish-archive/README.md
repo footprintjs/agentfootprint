@@ -20,3 +20,8 @@ only fixed fields/refusal names. The publishing shell runs npm in that separate
 directory; artifact siblings cannot become project config. Ordinary stable
 keeps npm's implicit latest; only canonical RC uses next. Shared package
 distribution remains deferred until after AgentFootprint14.
+
+The native verifier uses closed CODE limits of 20,000 members and 128 MiB expanded
+data for both build and publish, preserving headroom above the current package.
+The compressed-input limit remains 16 MiB. Boundary controls admit 20,000/refuse
+20,001 members and refuse expansion above 128 MiB; format rules stay unchanged.
