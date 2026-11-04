@@ -9,7 +9,7 @@
  * Role:    core/ layer. Reached ONLY from `slots/buildToolsSlot.ts ·
  *          composeStage` through `import()` under `.toolChoice()` — the
  *          optional-family law of docs-next's site budget (the
- *          `toolCalls.ts · judgeLanded` precedent): an agent that never
+ *          `toolCalls/evidence/judgeLanded.ts · judgeLanded` precedent): an agent that never
  *          asked never loads this module.
  *
  * WHAT IS ASKED. One `choice` question, id `TOOL_CHOICE_QUESTION`, whose

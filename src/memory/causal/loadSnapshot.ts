@@ -20,11 +20,11 @@
 
 import type { TypedScope } from 'footprintjs';
 import type { LLMMessage } from '../../provider-contract/types.js';
-import type { MemoryEntry } from '../entry/index.js';
 import type { MemoryStore } from '../store/index.js';
 import type { Embedder } from '../embedding/index.js';
 import type { MemoryState } from '../stages/index.js';
-import type { SnapshotEntry } from './types.js';
+import { readSnapshot } from './snapshotSchema.js';
+import { formatSnapshot } from './snapshotProjection.js';
 import { SNAPSHOT_PROJECTIONS, type SnapshotProjection } from '../define.types.js';
 
 export interface LoadSnapshotConfig {
@@ -89,6 +89,8 @@ export function loadSnapshot(config: LoadSnapshotConfig) {
   const minScore = config.minScore ?? 0.7;
 
   return async (scope: TypedScope<MemoryState>): Promise<void> => {
+    const accounting = { returned: 0, accepted: 0, unsupported: 0, invalid: 0 };
+    scope.snapshotRead = accounting;
     const identity = scope.identity;
     const text = queryFrom(scope).trim();
     if (text.length === 0) {
@@ -117,86 +119,18 @@ export function loadSnapshot(config: LoadSnapshotConfig) {
       return;
     }
 
-    const messages: LLMMessage[] = results.map((r) =>
-      formatProjection(r.entry as MemoryEntry<SnapshotEntry>, projection, r.score),
-    );
+    accounting.returned = results.length;
+    const messages: LLMMessage[] = [];
+    for (const result of results) {
+      const admitted = readSnapshot(result.entry.value);
+      if (admitted.kind !== 'accepted') {
+        accounting[admitted.kind] += 1;
+        continue;
+      }
+      accounting.accepted += 1;
+      messages.push(formatSnapshot(admitted.value, projection, result.score));
+    }
+    scope.snapshotRead = { ...accounting };
     scope.formatted = messages;
   };
-}
-
-/**
- * Render one snapshot into a `system` message per the chosen
- * projection. The shape is intentionally compact so multiple
- * snapshots fit comfortably in context.
- */
-function formatProjection(
-  entry: MemoryEntry<SnapshotEntry>,
-  projection: SnapshotProjection,
-  score: number,
-): LLMMessage {
-  const snap = entry.value;
-  const header = `[Past run · query: "${truncate(snap.query, 80)}" · score: ${score.toFixed(2)}]`;
-
-  let body: string;
-  switch (projection) {
-    case SNAPSHOT_PROJECTIONS.DECISIONS: {
-      // Tool evidence is part of the "why": in LLM-decided flows the
-      // operator-level facts (creditScore=580, dti=0.45) arrive as tool
-      // results, so the decisions projection includes them.
-      // SECURITY: this replays STORED TOOL OUTPUT into a future prompt — a
-      // persisted prompt-injection surface if tools ingest untrusted content.
-      // Treat snapshot stores as prompt-trusted; sanitize tool output at the
-      // tool boundary when it carries third-party text.
-      const toolLines =
-        snap.toolCalls.length === 0
-          ? ''
-          : `\nTool evidence:\n${snap.toolCalls
-              .map(
-                (t) =>
-                  `- ${t.name}(${JSON.stringify(t.args)}) → ${t.resultPreview}` +
-                  (t.errored ? ' [ERROR]' : ''),
-              )
-              .join('\n')}`;
-      body =
-        snap.decisions.length === 0 && snap.toolCalls.length === 0
-          ? `(no decision evidence captured)\nFinal answer: ${snap.finalContent}`
-          : `${snap.decisions
-              .map(
-                (d) =>
-                  `- ${d.stageId} → "${d.chosen}"${d.rule ? ` (rule: ${d.rule})` : ''}` +
-                  (d.evidence ? `; evidence: ${JSON.stringify(d.evidence)}` : ''),
-              )
-              .join('\n')}${toolLines}\nFinal answer: ${snap.finalContent}`;
-      break;
-    }
-
-    case SNAPSHOT_PROJECTIONS.NARRATIVE:
-      body = snap.narrative ?? `(no narrative captured)\nFinal answer: ${snap.finalContent}`;
-      break;
-
-    case SNAPSHOT_PROJECTIONS.COMMITS:
-      // commitLog isn't yet captured in SnapshotEntry; project the
-      // decisions list as a stand-in for now.
-      body =
-        snap.decisions.length === 0
-          ? `(no commit log captured)\nFinal answer: ${snap.finalContent}`
-          : snap.decisions.map((d) => `${d.stageId}: chose "${d.chosen}"`).join('\n');
-      break;
-
-    case SNAPSHOT_PROJECTIONS.FULL:
-      body = JSON.stringify(snap, null, 2);
-      break;
-
-    default:
-      body = `Final answer: ${snap.finalContent}`;
-  }
-
-  return {
-    role: 'system',
-    content: `${header}\n${body}`,
-  } as LLMMessage;
-}
-
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }

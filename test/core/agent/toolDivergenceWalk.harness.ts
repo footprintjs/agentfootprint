@@ -663,7 +663,8 @@ export const crossEpochCases = (): readonly WalkCase[] => {
  *     take a served tool off the wire when the cursor hops (the walk tried it
  *     and the case came back vacuous), so it is not staged here;
  *   • fresh-instance resume — the epoch-1 call is paused behind a middleware
- *     ask and resumed in a NEW Agent instance: empty closure, no Compose.
+ *     ask and resumed in a NEW Agent instance: its catalog is reacquired,
+ *     and dispatch stays bound to the saved party.
  */
 const crossEpochCollisionCases = (): readonly WalkCase[] => {
   const cases: WalkCase[] = [];
@@ -1010,7 +1011,7 @@ export const divergencesOf = (c: WalkCase, obs: Observation): readonly Divergenc
           reported: describeReport(report),
           cause:
             answered === 'refused'
-              ? `offered in an earlier epoch and refused in epoch ${epoch}: the party the model last read the name under no longer answers it, and the remaining holder was never offered under that name`
+              ? `offered in an earlier epoch and refused in epoch ${epoch}: the last-served party no longer answers, so dispatch refuses rather than substituting another party`
               : `offered in an earlier epoch and unroutable in epoch ${epoch}: the implementation is resolved from this epoch's provider list, so withdrawing the offer withdrew dispatch with it`,
         });
       } else if (tool === c.name && answered !== 'unroutable' && answered !== 'refused') {

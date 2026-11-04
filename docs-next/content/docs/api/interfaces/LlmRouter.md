@@ -4,9 +4,13 @@ title: LlmRouter
 
 # Interface: LlmRouter
 
-Defined in: [src/patterns/LlmRouter.ts:172](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L172)
+Defined in: [src/patterns/LlmRouter.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L69)
 
-A packaged routing decision-maker. Hold one per swarm.
+A typed routing strategy with bounded observation-only history.
+
+## Extends
+
+- [`RoutingStrategy`](/docs/api/interfaces/RoutingStrategy)
 
 ## Properties
 
@@ -14,46 +18,19 @@ A packaged routing decision-maker. Hold one per swarm.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:174](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L174)
-
-Stable id (also the `conditionalId` on its `route_decided` events).
-
-***
-
-### route
-
-> `readonly` **route**: (`input`) => `string` \| `undefined`
-
-Defined in: [src/patterns/LlmRouter.ts:193](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L193)
-
-The sync seam `swarm({ route })` wants. Returns the agent id decided
-FOR THAT EXACT message, or `undefined` (which halts the swarm) when no
-decision was recorded for it. Never calls an LLM, never guesses.
-Pre-bound — pass it directly as `route`.
-
-#### Parameters
-
-##### input
-
-###### message
-
-`string`
-
-#### Returns
-
-`string` \| `undefined`
+Defined in: [src/patterns/LlmRouter.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L70)
 
 ***
 
 ### step
 
-> `readonly` **step**: [`Runner`](/docs/api/interfaces/Runner)\<\{ `message`: `string`; \}, `string`\>
+> `readonly` **step**: [`Runner`](/docs/api/interfaces/Runner)\<\{ `message`: `string`; \}, [`RoutingDecision`](/docs/api/interfaces/RoutingDecision)\>
 
-Defined in: [src/patterns/LlmRouter.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L186)
+Defined in: [src/patterns/LlmRouter.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L72)
 
-The runner that MAKES a decision: one LLM call, parsed and validated.
-Returns the decision's `message`, so it drops into any chain that
-passes text along. Pre-bound — safe to pass around.
+#### Overrides
+
+[`RoutingStrategy`](/docs/api/interfaces/RoutingStrategy).[`step`](/docs/api/interfaces/RoutingStrategy#step)
 
 ***
 
@@ -61,11 +38,7 @@ passes text along. Pre-bound — safe to pass around.
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/patterns/LlmRouter.ts:180](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L180)
-
-The compiled system prompt — the authored frame with the roster
-encoded inside it. Byte-stable for the same options, so you can diff
-it in a test or paste it in a bug report.
+Defined in: [src/patterns/LlmRouter.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L71)
 
 ## Methods
 
@@ -73,9 +46,9 @@ it in a test or paste it in a bug report.
 
 > **decisionFor**(`message`): [`RoutingDecision`](/docs/api/interfaces/RoutingDecision) \| `undefined`
 
-Defined in: [src/patterns/LlmRouter.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L197)
+Defined in: [src/patterns/LlmRouter.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L76)
 
-The decision recorded for a message, if there is one.
+Most recent observed decision for this text; not a run or invocation identity.
 
 #### Parameters
 
@@ -93,9 +66,9 @@ The decision recorded for a message, if there is one.
 
 > **decisions**(): readonly [`RoutingDecision`](/docs/api/interfaces/RoutingDecision)[]
 
-Defined in: [src/patterns/LlmRouter.ts:195](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L195)
+Defined in: [src/patterns/LlmRouter.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L74)
 
-Every decision this router has made, oldest first (recent window).
+Detached recent decisions, oldest first. Never consulted by dispatch.
 
 #### Returns
 

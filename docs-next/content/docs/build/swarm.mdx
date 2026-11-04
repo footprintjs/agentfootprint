@@ -1,63 +1,50 @@
 ---
 title: Swarm
-description: Hierarchical routing where one agent's tools are other agents. Triage routes to specialists; specialists may hand off back. The pattern is a Loop over Agent calls — no SwarmAgent class needed.
+description: A bounded native chart that routes a message to specialists and carries each returned decision inside its invocation.
 ---
 
-> A user message arrives that could be billing OR technical OR a refund. **You don't want one giant prompt that knows everything** — that's where agents get vague and hallucinate. You want a triage agent that figures out *which specialist* should handle this, then hands off. The specialist focuses on its domain. That's Swarm — and it's just a Loop over `Agent`s with a route function.
+Swarm routes a message to a specialist, carries the specialist's answer into the next iteration, and stops when routing is done or the handoff budget is reached. Each specialist remains an ordinary Runner.
 
-## What Swarm is
-
-Swarm = a hierarchical agent pattern where one orchestrator routes each turn to a specialist agent. The route function is sync, pure, and returns the id of the next agent (or `undefined` to halt). Each handoff is one iteration of a Loop:
-
-```
-Loop {
-  current_agent = route(input)
-  if current_agent is undefined → exit
-  result = current_agent.run(input)
-  input = result + handoff annotation
-}
-```
-
-In agentfootprint there is **no `SwarmAgent` class**. Swarm is a recipe — `swarm({ agents, route, maxHandoffs })` constructs a runnable that wraps a Loop. The 4-composition substrate (Sequence/Parallel/Conditional/Loop) is enough; we don't need a 5th primitive.
-
-## The recipe
+## Pure routing
 
 <CodeFile path="examples/patterns/06-swarm.ts" region="swarm-recipe" title="examples/patterns/06-swarm.ts (region: swarm-recipe)" />
 
-The `route` function is the orchestrator's brain. It inspects the current input (often the previous handoff's result) and decides which agent to dispatch next. Returning `undefined` halts the loop — the most recent specialist's output becomes the final answer.
+`swarm({ agents, route, maxHandoffs })` uses a synchronous, pure `route({ message })` function. It runs once per routing iteration and returns a specialist id or `undefined`. A known id dispatches to that specialist; `undefined` or an unknown id halts with the current message.
 
-`maxHandoffs` caps the loop so a buggy route function can't infinite-loop. Production: 3–5 handoffs covers most triage flows.
+The native chart records the decision, dispatches through its branch decider, and checks the handoff budget after the specialist returns. Keep the route function free of model calls and other effects.
 
-## Why route is sync, not LLM-driven
+## A native routing strategy
 
-`route` is evaluated once per branch predicate AND again in the loop's exit guard, so it cannot `await` — and an LLM call in there would fire several times per hand-off. Keep it as cheap as text inspection.
+For model-driven routing, pass `swarm({ agents, router, maxHandoffs })`. RoutingStrategy supplies a once-built `step` runner whose result is a RoutingDecision. Its `message` becomes the next specialist's input, or the final answer when no known specialist is selected.
 
-The standard pattern is therefore a **deterministic** route based on the previous specialist's output (often via convention markers like `[BILLING]` or `[ESCALATE]` in the message). The intelligence lives in the specialists; the routing is mechanical dispatch.
+The swarm mounts the step and reads that invocation's returned decision. `route` and `router` are mutually exclusive; providing both or neither is rejected during construction.
 
-When you do want the model to choose, don't hand-roll the prompt: [`llmSwarm`](/docs/build/llm-router) is this same swarm with an `llmRouter` wired into the right places — the roster compiles into the router's prompt from each agent's own description, the answer is validated JSON, and `route` stays a sync lookup of a decision already made.
+[`llmRouter` and `llmSwarm`](/docs/build/llm-router) compile the roster into a prompt and validate the model's decision. The model's reason remains trace evidence.
 
-## Multi-tenant identity
+## Handoff budget
 
-A swarm runner's input is `{ message: string }` — and that single `message` is the *only* thing that flows from one specialist to the next (each agent's `string` output becomes the next iteration's `{ message }`). `swarm()` does **not** carry a `MemoryIdentity` through the handoff chain for you.
+`maxHandoffs` defaults to 10 and accepts finite integers from 1 through 500. The roster requires at least two specialists with unique ids; `done` is reserved for the halt branch.
 
-If specialists need per-tenant memory, give each agent its `identity` directly. `Agent.run({ message, identity })` accepts an optional `MemoryIdentity` on its input; bind the tenant scope when you build/run each specialist (e.g. via a closure that injects it), so memory reads/writes stay isolated even though the swarm only relays the message.
+Reaching the budget returns the last specialist's answer. There is no extra routing call after the final permitted dispatch.
 
-## When to use Swarm vs Conditional vs Sequence
+## Identity and concurrency
+
+Specialists and native routers receive the active composition's parent-run binding. Where the enclosing composition carries a caller identity or request context, that context follows its members; a member never reads the identity of the last direct call on its object. Without an admitted caller identity, the composition's run supplies its conversation identity.
+
+Keep tenant and request admission at the host boundary. The parent binding carries the admitted context; it does not authenticate a caller. A message or routing reason is not an identity carrier.
+
+Await an owned run before starting another on that same runner object. Independently executing parent compositions can mount shared child charts with separate invocation state. See [the native run migration](/docs/build/llm-router#connect-a-router-yourself) for the routing API change.
+
+## Choose a composition
 
 | Situation | Use |
 |---|---|
-| One classifier picks ONE specialist for the whole turn | Conditional |
-| Specialists may hand back to triage or to each other | Swarm (this guide) |
-| Fixed pipeline: research → write → edit (no branching) | Sequence |
-| Multi-perspective fan-out → merge | Parallel |
-
-## Anti-patterns
-
-- Don't put expensive logic in the route function. It runs every iteration. Keep it as cheap as text inspection.
-- Don't share state between specialists via globals. Use `MemoryIdentity` + memory layer for cross-agent state.
-- Don't omit `maxHandoffs`. A buggy route returning the same agent every time runs forever.
+| Pick one specialist for the whole turn | Conditional |
+| Return to routing between specialist turns | Swarm |
+| Run a fixed pipeline | Sequence or Workflow |
+| Fan out independent perspectives and merge | Parallel |
 
 ## Next steps
 
-- [Patterns overview](doc:key-concepts#patterns--named-compositions) — Reflexion, ToT, Debate, Map-Reduce all run the same way (recipes over the substrate)
-- [Conditional](doc:key-concepts#3-conditional--branch-on-a-decider) — single-shot routing alternative
+- [Patterns overview](doc:key-concepts#patterns--named-compositions).
+- [LLM routing](/docs/build/llm-router).

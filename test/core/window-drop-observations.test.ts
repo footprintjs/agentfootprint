@@ -253,7 +253,7 @@ describe('droppedToolNames', () => {
 
   it('a SETTLED message is not a result: it names nothing, and a real one beside it still counts (9.113.0)', () => {
     // A paused batch's un-dispatched sibling is answered by the library with a
-    // fixed sentence and carries `notDispatched` (`stages/toolCalls.ts` · "──
+    // fixed sentence and carries `notDispatched` (`stages/toolCalls/batch/settle.ts` · "──
     // The batch settlement (9.113.0)"). No tool produced it, so a span whose
     // only message for `pan_view` is that sentence lost no `pan_view` result.
     const settled: LLMMessage = {

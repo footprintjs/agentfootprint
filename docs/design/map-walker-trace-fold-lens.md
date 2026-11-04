@@ -134,7 +134,7 @@ question 1 below turns on the difference, so the qualifier is part of the claim.
 
 Mixed folders carrying Lens: `src/core/slots/` (`buildSystemPromptSlot.ts`,
 `buildToolsSlot.ts`) · `src/core/agent/stages/` (the same Mixed folder listed
-under Walker: `toolCalls.ts`'s refusals, `stepNudge.ts`, `evidenceRecheck.ts`,
+under Walker: `toolCalls/routing/readSkillRoute.ts`'s refusals, `stepNudge.ts`, `evidenceRecheck.ts`,
 `wrapUp.ts`, and the wire assembly in `callLLM.ts` · `buildCallLLMStage`) ·
 `src/core/agent/window/` (`notice.ts`, `summarize.ts`) ·
 `src/semantics/coverage/` (`answer.ts`) · `src/core/agent/`
@@ -223,7 +223,7 @@ everyone else reads that function.
 > and was the set non-empty before the filter ran". It is a zero-import leaf
 > precisely so that a composer inside the skill-graph fence (`describeOffer`,
 > `skillToolDescriptors.ts` · `describeOffer`) and the dispatch gate outside it
-> (`toolCalls.ts` · "── Skill-graph read_skill GATE") cannot answer it
+> (`toolCalls/routing/readSkillRoute.ts` · `applyReadSkillRoute`) cannot answer it
 > differently. `held` is REQUIRED, not
 > optional, so the compiler asks every caller the question the call sites
 > forgot.
@@ -283,8 +283,7 @@ evidence.
 > only two present-tense phrases are timeless, not temporal; and it names no
 > destination at all, because any id named as somewhere `read_skill` could go
 > is falsified later in the same turn by the budget, the posture arm or the
-> cursor (`src/core/agent/stages/toolCalls.ts` · "No routing map is passed, and
-> that is the fix rather than an omission").
+> cursor (`src/core/agent/stages/toolCalls/routing/readSkillRoute.ts` · `applyReadSkillRoute`).
 
 ## What a reader should be able to answer from the folder tree and this page
 
@@ -311,7 +310,7 @@ there, and the file list.
 a named comment banner in quotes. A line number rots the moment anyone inserts a
 comment above its target, which is exactly what happened twice in this pass. The
 first draft numbered its headers against the files as they stood BEFORE the
-headers were inserted, so `toolCalls.ts` citations came out short by 21–26 and
+headers were inserted, so `toolCalls/routing/readSkillRoute.ts` citations came out short by 21–26 and
 `skillGraph.ts` ones by 3, 6 and 9. The fix pass re-derived the numbers — but
 only in the `.ts` files, and with the same pre-insertion arithmetic in the folder
 READMEs, so nine pointers across four of them stayed wrong by exactly the header

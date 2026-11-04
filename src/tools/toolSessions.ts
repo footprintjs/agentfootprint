@@ -33,7 +33,7 @@
  * ── The seven laws ──────────────────────────────────────────────────────────
  *  1. **At most once, ever** per registration — the `stopped`-flag mechanism
  *     `strategies/lifecycle.ts` uses for strategies, applied one layer down.
- *  2. **Idempotent by `(tool, scope, key)`, first wins.** A second registration
+ *  2. **Idempotent within the owner partition (and call for call scope), then `(tool, scope, key)`, first wins.** A second registration
  *     under the same key does not replace the first — the first is the one
  *     holding the live handle; replacing it would drop that handle on the
  *     floor. The repeat is a TOUCH: it refreshes liveness (that is how the
@@ -51,230 +51,76 @@
  *  7. **Nothing live is ever persisted.** A checkpoint carries what survives
  *     `structuredClone`; a session handle does not. A resumed run re-opens.
  *
- * Zero-cost when unused: no tool registers → the runner never builds a tier →
- * the terminal path is one `undefined` check.
+ * Agent component setup registers joined cleanup before effects. Its first
+ * tool resource admission borrows this tier before tool code runs, even if that
+ * call ultimately registers nothing. Other doors retain their own supported
+ * lifetime. No timer or execution queue is introduced.
  */
 
-import { encodeIdentityField } from '../memory/identity/index.js';
-import { fnv1a } from '../lib/fnv1a.js';
-import { lazyRequire } from '../lib/lazyRequire.js';
-import type { RunContext } from '../bridge/eventMeta.js';
-import type { ToolExecutionContext } from './tools.js';
+import {
+  readToolOwner,
+  readToolCallOwner,
+  sameToolBirth,
+  type ToolCallOwner,
+  type ToolOwnerCarrier,
+} from './toolResourceOwner.js';
+import '../memory/identity/index.js';
+import '../lib/fnv1a.js';
+import '../lib/lazyRequire.js';
 
-/**
- * How long a registered cleanup is allowed to live.
- *
- *  - `'call'`     — until `tool.execute` settles (resolve OR throw). Available
- *                   at every door, including `mcpServe`, where a served call is
- *                   the only unit there is.
- *  - `'run'`      — until the run reaches a terminal that is NOT a pause.
- *                   **A pause is not a terminal**: a check-in on a code
- *                   interpreter is a person deciding, and tearing the sandbox
- *                   down there destroys the exact state the resume needs.
- *  - `'session'`  — until the composition root says the hosting session ended
- *                   (`agent.closeToolSessions({ sessionId })`). Nobody but the
- *                   composition root can know that: a request/reply deployment
- *                   has no end-of-session signal, and inventing one would be a
- *                   library guessing about somebody else's protocol.
- *  - `'shutdown'` — until `agent.shutdown()` (which `standingAgent`'s close
- *                   calls). The backstop under all three.
- */
-export type TeardownScope = 'call' | 'run' | 'session' | 'shutdown';
+import type {
+  TeardownScope,
+  TeardownReason,
+  TeardownOptions,
+  ToolSessionOrigin,
+  RegisterOutcome,
+  ToolSessionReport,
+  ToolSessionTierOptions,
+  ToolSessionBinding,
+  ToolSessionView,
+} from './toolSessions/contracts.js';
+export type {
+  TeardownScope,
+  TeardownReason,
+  TeardownOptions,
+  ToolSessionOrigin,
+  RegisterOutcome,
+  ToolSessionReport,
+  ToolSessionTierOptions,
+  ToolSessionBinding,
+  ToolSessionView,
+} from './toolSessions/contracts.js';
+import {
+  TOOL_TEARDOWN_TIMEOUT_MS,
+  TOOL_SESSION_IDLE_MS,
+  TOOL_SESSION_MAX_LIVE,
+} from './toolSessions/contracts.js';
+export {
+  TOOL_TEARDOWN_TIMEOUT_MS,
+  TOOL_SESSION_IDLE_MS,
+  TOOL_SESSION_MAX_LIVE,
+} from './toolSessions/contracts.js';
+import { hashSessionKey, ownerPartition } from './toolSessions/keys.js';
+export { toolSessionKey, hashSessionKey } from './toolSessions/keys.js';
 
-/** Why a cleanup ran. Reported on `agentfootprint.tools.session_closed`. */
-export type TeardownReason =
-  | 'call-end'
-  | 'run-end'
-  | 'session-end'
-  | 'shutdown'
-  | 'idle'
-  | 'evicted';
-
-/** What a tool says about the cleanup it is registering. */
-export interface TeardownOptions {
-  /** Default `'run'`. Refused by name when the door cannot honour it — see
-   *  {@link ToolExecutionContext.teardownScopes}. */
-  readonly scope?: TeardownScope;
-  /**
-   * Dedup key within `(tool, scope)`. Omitted → the tool gets one registration
-   * per scope, which is right for a tool that holds exactly one thing.
-   *
-   * Derive it with {@link toolSessionKey} rather than by hand: a key that is
-   * narrower than the identity it isolates is the cross-binding bug, and a key
-   * that is wider is a silent latency change.
-   */
-  readonly key?: string;
-  /** The adapter holding the resource — `CodeRunner.id`, say. Reported so a
-   *  row names its backend instead of only its tool. */
-  readonly runnerId?: string;
-  /** One free-form fact about what was opened (the language, the browser
-   *  profile). Reported as-is; never a place for user data. */
-  readonly label?: string;
-}
-
-/** The call a registration came from — what the firing matrix filters on. */
-export interface ToolSessionOrigin {
-  /** Actual registration-time event context, retained only in memory. */
-  readonly runContext?: RunContext;
-  readonly tool: string;
-  readonly toolCallId: string;
-  /** Absent when the door has no run (`mcpServe`). */
-  readonly runId?: string;
-  /** Absent unless the run is bound to a hosting conversation. */
-  readonly sessionId?: string;
-}
-
-/**
- * What `register()` did — a new session, or a call joining one already held.
- *
- * Returned rather than reported, because the two halves of a session's life
- * happen in different places and only one of them has a stage to be stamped
- * with. A start and a reuse happen INSIDE `tool.execute`, where the caller
- * still holds the scope and can emit with the real `runtimeStageId`; a close
- * happens after the run's last stage committed, where nothing does. Reporting
- * both through one channel would have meant stamping a live, mid-stage event
- * with the teardown pseudo-stage — a small lie, and exactly the kind that makes
- * a trace disagree with itself.
- */
-export type RegisterOutcome = 'started' | 'reused';
-
-/**
- * A teardown that happened. The runner turns it into
- * `agentfootprint.tools.session_closed` / `_close_failed`.
- */
-export interface ToolSessionReport {
-  readonly kind: 'closed' | 'close-failed';
-  readonly tool: string;
-  readonly scope: TeardownScope;
-  /** {@link hashSessionKey} of the isolation key — never the key. */
-  readonly keyHash: string;
-  readonly runnerId?: string;
-  readonly label?: string;
-  /** Which firing site ran it. */
-  readonly reason: TeardownReason;
-  /** Wall-clock from registration to close. */
-  readonly durationMs: number;
-  /** `close-failed` only. */
-  readonly error?: string;
-  readonly errorClass?: string;
-}
-
-/**
- * Derive the isolation key a tool should hold a session under.
- *
- * ONE implementation, exported, because the derivation is the security
- * boundary. Returns `undefined` when the facts the scope needs are absent —
- * which is a refusal to guess, not a failure: the caller decides whether to
- * narrow the scope loudly or refuse the call.
- *
- * ```
- * session →  t=<tenant|_>/p=<principal|_>/s=<sessionId>     requires sessionId
- * run     →  t=<tenant|_>/p=<principal|_>/r=<runId>         requires runId
- * call    →  c=<toolCallId>                                 always available
- * ```
- *
- * **`sessionId` alone must never key a live session.** The hosting port says
- * why in its own words: a `sessionId` "is not identity and must never be
- * trusted as identity on its own: anyone who can reach the host can put any
- * string here, including someone else's." A code interpreter keyed on
- * `sessionId` alone hands a live sandbox — files, environment, half-run state —
- * to anyone who guesses one. Tenant and principal are in the key whenever they
- * exist; a deployment that has no principal is thereby STATING it is
- * single-principal rather than quietly assuming it.
- *
- * `'shutdown'` is not a key scope: it is when everything goes, not a thing to
- * hold one session under. Ask for it and you get `undefined`.
- *
- * @example
- *   const key = toolSessionKey(ctx, 'run');
- *   if (!key) throw new Error("run_code: scope 'run' needs a run …");
- */
-export function toolSessionKey(
-  ctx: Pick<ToolExecutionContext, 'toolCallId' | 'runId' | 'sessionId' | 'identity'>,
-  scope: TeardownScope,
-): string | undefined {
-  // Every field goes through the SHARED identity encoder rather than being
-  // joined raw. This key holds a live interpreter sandbox, so two identities
-  // that produce one key share a filesystem — and joining unescaped fields with
-  // `/` and `=` markers meant a value could donate a marker and shift a
-  // boundary: tenant `acme/p=bob` with principal `x` composed the same string
-  // as tenant `acme` with principal `bob/p=x`. The absent-versus-`_` pair was
-  // the same collision `identityNamespace` was fixed for in 9.40.0, one module
-  // over, and this is the encoder that fix produced.
-  //
-  // No reachable attack was found — the markers are prefix-anchored, so a
-  // caller controlling only the trailing field cannot shift a boundary into
-  // somebody else's key. It is closed anyway: "no attack today" is a property
-  // of the current call sites, not of the function.
-  if (scope === 'call') return `c=${encodeIdentityField(ctx.toolCallId)}`;
-  if (scope === 'shutdown') return undefined;
-  const prefix = `t=${encodeIdentityField(ctx.identity?.tenant)}/p=${encodeIdentityField(
-    ctx.identity?.principal,
-  )}`;
-  if (scope === 'session') {
-    return ctx.sessionId ? `${prefix}/s=${encodeIdentityField(ctx.sessionId)}` : undefined;
+export class ToolResourceBorrowedError extends Error {
+  readonly code = 'ERR_TOOL_RESOURCE_BORROWED' as const;
+  constructor() {
+    super('This tool resource owner already has an active local borrow');
+    this.name = 'ToolResourceBorrowedError';
   }
-  return ctx.runId ? `${prefix}/r=${encodeIdentityField(ctx.runId)}` : undefined;
 }
-
-/**
- * A short, stable digest of an isolation key.
- *
- * The key carries tenant, principal and the hosting `sessionId`. Publishing it
- * on the event wire would put a user identifier into every exporter's payload —
- * so the wire carries this instead, which is enough to JOIN two rows and not
- * enough to name whose they are. `meta.sessionId` already carries the session
- * legitimately (9.4.0); the payload does not repeat it.
- *
- * SHA-256, first 12 hex chars, wherever `node:crypto` resolves. In a browser
- * bundle, where it does not, this falls back to the package's non-cryptographic
- * FNV-1a digest — stated here rather than implied, because a fallback nobody
- * documented is how "hashed" comes to mean less than a reader assumed.
- */
-export function hashSessionKey(key: string): string {
-  const crypto = loadCrypto();
-  if (crypto) return crypto.createHash('sha256').update(key).digest('hex').slice(0, 12);
-  return fnv1a(key);
-}
-
-type NodeCryptoModule = typeof import('node:crypto');
-let cryptoModule: NodeCryptoModule | undefined | null;
-
-function loadCrypto(): NodeCryptoModule | undefined {
-  if (cryptoModule !== undefined) return cryptoModule ?? undefined;
-  try {
-    const mod = lazyRequire<NodeCryptoModule>('node:crypto');
-    cryptoModule = typeof mod?.createHash === 'function' ? mod : null;
-  } catch {
-    cryptoModule = null;
+export class ToolResourceClosedError extends Error {
+  readonly code = 'ERR_TOOL_RESOURCE_CLOSED' as const;
+  constructor() {
+    super('This tool resource view is retired');
+    this.name = 'ToolResourceClosedError';
   }
-  return cryptoModule ?? undefined;
-}
-
-/** Defaults, named so a test and a docstring cannot drift from the code. */
-export const TOOL_TEARDOWN_TIMEOUT_MS = 5_000;
-/** A session untouched this long is swept on the tier's next interaction. */
-export const TOOL_SESSION_IDLE_MS = 900_000;
-/** How many live registrations one tier holds before it evicts the coldest. */
-export const TOOL_SESSION_MAX_LIVE = 64;
-
-export interface ToolSessionTierOptions {
-  /** Per-cleanup ceiling. Default {@link TOOL_TEARDOWN_TIMEOUT_MS}. */
-  readonly timeoutMs?: number;
-  /** Idle ceiling for the lazy sweep. Default {@link TOOL_SESSION_IDLE_MS}. */
-  readonly idleMs?: number;
-  /** Live-registration ceiling before LRU eviction. Default
-   *  {@link TOOL_SESSION_MAX_LIVE}. */
-  readonly maxLive?: number;
-  /** Where TEARDOWN reports go. The runner wires this to the typed event
-   *  dispatcher. Starts and reuses are the caller's to announce — see
-   *  {@link RegisterOutcome}. */
-  readonly report?: (report: ToolSessionReport, origin: ToolSessionOrigin) => void;
-  /** Clock seam — tests drive idle and duration without waiting. */
-  readonly now?: () => number;
 }
 
 interface Registration {
+  readonly partition?: string;
+  readonly logicalCall?: string;
   readonly id: number;
   readonly tool: string;
   readonly scope: TeardownScope;
@@ -300,6 +146,7 @@ interface Registration {
  */
 export class ToolSessionTier {
   private readonly registrations = new Map<string, Registration>();
+  private readonly borrows = new Map<string, object>();
   private readonly timeoutMs: number;
   private readonly idleMs: number;
   private readonly maxLive: number;
@@ -313,6 +160,107 @@ export class ToolSessionTier {
     this.maxLive = options.maxLive ?? TOOL_SESSION_MAX_LIVE;
     this.report = options.report ?? ((): void => {});
     this.now = options.now ?? ((): number => Date.now());
+  }
+
+  /** Exclusive local resource-pool borrow, never an execution admission lock. */
+  borrow(owner: ToolOwnerCarrier, facts: ToolSessionBinding): ToolSessionView {
+    const admitted = readToolOwner(owner);
+    const partition = ownerPartition(admitted.birth, facts);
+    if (this.borrows.has(partition)) throw new ToolResourceBorrowedError();
+    const token = {};
+    this.borrows.set(partition, token);
+    let active = true;
+    let closedOrdinal =
+      admitted.pending === undefined ? admitted.nextDispatch - 1 : admitted.pending.ordinal - 1;
+    const current = (): boolean => active && this.borrows.get(partition) === token;
+    const assertActive = (): void => {
+      if (!current()) throw new ToolResourceClosedError();
+    };
+    const callKey = (call: ToolCallOwner): { readonly key: string; readonly ordinal: number } => {
+      const checked = readToolCallOwner(call);
+      if (!sameToolBirth(checked.birth, admitted.birth))
+        throw new TypeError('Tool resource call belongs to another turn');
+      return { key: JSON.stringify([partition, checked.ordinal]), ordinal: checked.ordinal };
+    };
+    return {
+      assertActive,
+      register: (call, origin, cleanup, options = {}) => {
+        if (!current()) {
+          // Never retain a late handle in an unreachable/successor row.
+          this.rejectLate(origin, cleanup, options);
+          throw new ToolResourceClosedError();
+        }
+        const logicalCall = callKey(call);
+        if (logicalCall.ordinal <= closedOrdinal) {
+          this.rejectLate(origin, cleanup, options);
+          throw new ToolResourceClosedError();
+        }
+        return this.registerOwned(origin, cleanup, options, partition, logicalCall.key);
+      },
+      fireCall: async (call) => {
+        assertActive();
+        const logicalCall = callKey(call);
+        if (logicalCall.ordinal <= closedOrdinal) return;
+        // Claim retirement synchronously, before any asynchronous cleanup.
+        closedOrdinal = logicalCall.ordinal;
+        await this.fire(
+          (r) =>
+            r.partition === partition && r.scope === 'call' && r.logicalCall === logicalCall.key,
+          'call-end',
+        );
+      },
+      finish: async (paused) => {
+        if (!current()) return;
+        active = false;
+        try {
+          if (!paused)
+            await this.fire(
+              (r) => r.partition === partition && (r.scope === 'call' || r.scope === 'run'),
+              'run-end',
+            );
+        } finally {
+          if (this.borrows.get(partition) === token) this.borrows.delete(partition);
+        }
+      },
+    };
+  }
+
+  private rejectLate(
+    origin: ToolSessionOrigin,
+    cleanup: () => void | Promise<void>,
+    options: TeardownOptions,
+  ): void {
+    const key = options.key ?? `${options.scope ?? 'run'}:${origin.tool}`;
+    const now = this.now();
+    const registration: Registration = {
+      id: ++this.seq,
+      tool: origin.tool,
+      scope: options.scope ?? 'run',
+      key,
+      keyHash: hashSessionKey(key),
+      origin,
+      cleanup,
+      ...(options.runnerId !== undefined && { runnerId: options.runnerId }),
+      ...(options.label !== undefined && { label: options.label }),
+      startedMs: now,
+      touchedMs: now,
+      calls: 1,
+      fired: true,
+    };
+    this.report(
+      {
+        kind: 'close-failed',
+        tool: origin.tool,
+        scope: registration.scope,
+        keyHash: registration.keyHash,
+        reason: 'run-end',
+        durationMs: 0,
+        error: 'Late teardown registration refused after resource-owner retirement',
+        errorClass: 'ToolResourceClosedError',
+      },
+      origin,
+    );
+    this.detach(this.run(registration, 'run-end'));
   }
 
   /** Live registrations. Diagnostics and tests. */
@@ -362,10 +310,26 @@ export class ToolSessionTier {
     cleanup: () => void | Promise<void>,
     options: TeardownOptions = {},
   ): { readonly outcome: RegisterOutcome; readonly keyHash: string; readonly calls: number } {
+    return this.registerOwned(origin, cleanup, options);
+  }
+
+  private registerOwned(
+    origin: ToolSessionOrigin,
+    cleanup: () => void | Promise<void>,
+    options: TeardownOptions,
+    partition?: string,
+    logicalCall?: string,
+  ): { readonly outcome: RegisterOutcome; readonly keyHash: string; readonly calls: number } {
     this.sweepIdle();
     const scope = options.scope ?? 'run';
     const key = options.key ?? `${scope}:${origin.tool}`;
-    const mapKey = `${origin.tool} ${scope} ${key}`;
+    const mapKey = JSON.stringify([
+      partition ?? null,
+      scope === 'call' ? logicalCall ?? null : null,
+      origin.tool,
+      scope,
+      key,
+    ]);
     const existing = this.registrations.get(mapKey);
     if (existing) {
       // First wins — it is the one holding the live handle. The repeat is what
@@ -377,10 +341,12 @@ export class ToolSessionTier {
     const nowMs = this.now();
     const registration: Registration = {
       id: ++this.seq,
+      ...(partition !== undefined && { partition }),
+      ...(logicalCall !== undefined && { logicalCall }),
       tool: origin.tool,
       scope,
       key,
-      keyHash: hashSessionKey(key),
+      keyHash: hashSessionKey(partition === undefined ? key : mapKey),
       origin,
       cleanup,
       ...(options.runnerId !== undefined && { runnerId: options.runnerId }),
@@ -398,7 +364,7 @@ export class ToolSessionTier {
   /** Fire every `'call'` registration this tool call opened. */
   fireCall(toolCallId: string): Promise<void> {
     return this.fire(
-      (r) => r.scope === 'call' && r.origin.toolCallId === toolCallId,
+      (r) => r.partition === undefined && r.scope === 'call' && r.origin.toolCallId === toolCallId,
       'call-end',
     ).then(() => undefined);
   }
@@ -406,21 +372,10 @@ export class ToolSessionTier {
   /**
    * Fire `'run'`-scoped registrations at a run terminal.
    *
-   * Called from `Agent.run`/`resume` at a terminal that is NOT a pause — and
-   * deliberately not from a `finally`, which also runs on the two pause shapes.
-   *
-   * **`runId` is optional for unhosted callers.** A `'run'` scope means
-   * "release this when the TURN that opened it ends", and a turn is not a
-   * runId: a pause and its resume are one turn across two runs (`resume()`
-   * builds a fresh executor with a fresh id). Filtering on the id would leave
-   * every session a paused turn had opened alive forever — the failure would
-   * look like nothing at all, because the run answered fine.
-   *
-   * Hosted agents use `fireSessionRuns` instead: one runner can retain pauses
-   * for several conversations even though only one run executes at a time.
-   * A session terminal must never close another conversation's resources.
-   *
-   * Pass an id where a caller really does mean one specific run.
+   * Explicit host control for run-scoped rows, optionally restricted to an
+   * opening run ID. Ordinary component terminals never use this broad filter.
+   * A paused component retains its exact call/run rows through a finite owner
+   * reference; its fresh resumed view closes only that owner's rows.
    */
   fireRun(runId?: string): Promise<void> {
     return this.fire(

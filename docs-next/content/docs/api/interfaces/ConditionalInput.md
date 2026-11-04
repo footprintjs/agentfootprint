@@ -4,7 +4,7 @@ title: ConditionalInput
 
 # Interface: ConditionalInput
 
-Defined in: [src/core-flow/Conditional.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L74)
+Defined in: [src/core-flow/Conditional.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L60)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Conditional.ts:74](https://github.com/footprintjs/age
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core-flow/Conditional.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L82)
+Defined in: [src/core-flow/Conditional.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L68)
 
 WHO this run is for — the same tuple as `AgentInput.identity`. Every
 member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
@@ -25,4 +25,4 @@ never a namespace another run shares (`core/memberRun.ts`).
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Conditional.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L75)
+Defined in: [src/core-flow/Conditional.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L61)

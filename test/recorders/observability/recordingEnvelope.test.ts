@@ -144,10 +144,19 @@ describe('recording envelope — unit', () => {
     const engineRunId = (recording.snapshot as { runId?: string }).runId;
 
     expect(envelope.run.runId).toBe(metaRunId);
-    // The two really are different namespaces — if this ever stops being true
-    // the fallback question becomes live again, so it is pinned here.
+    // Clean14 has one native authority for this direct leg.
     expect(engineRunId).toBeDefined();
-    expect(envelope.run.runId).not.toBe(engineRunId);
+    expect(envelope.run.runId).toBe(engineRunId);
+    // An explicitly different snapshot still cannot replace the event fact.
+    const different: Recording = {
+      ...recording,
+      snapshot: { ...recording.snapshot!, runId: 'different-snapshot-only-leg' },
+    };
+    const eventBound = buildRecordingEnvelope(different, {
+      run: { complete: true, droppedEvents: 0 },
+    });
+    expect(eventBound.run.runId).toBe(metaRunId);
+    expect(eventBound.run.runId).not.toBe(different.snapshot!.runId);
   });
 
   it('reports droppedEvents from the live recorder, and 0 means none', async () => {

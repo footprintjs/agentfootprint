@@ -151,7 +151,7 @@ foldLedger(scope.findingsLedger!).standingOf.get('call_1')?.standing; // 'fact'
   JSON object, read by the one coverage recognizer, is the only source of
   the derived row's words — and, only when that object reads as an absence,
   the dispatch door's coverage rows for the call (`AgentState.coverageDeclared`,
-  written by `stages/toolCalls.ts · declareCoverage`), read for their `kind`
+  written by `stages/toolCalls/evidence/coverageOperations.ts · declareCoverage`), read for their `kind`
   alone (`unsettled.ts · withUnsettledRows`).
 - Writes `findingsLedger` through `recordFindings` only, a fresh array per
   write; emits `agentfootprint.findings.declared`,
@@ -497,8 +497,7 @@ predicate, `offer.ts · isResultMessage`, and reads the COMMITTED
 conversation, because the wire has lost the marker.**
 
 Why: when a batch pauses, the resume answers each call after the paused one
-with a fixed sentence and runs none of them (`../stages/toolCalls.ts` · "──
-The batch settlement (9.113.0)"). The model reads that sentence, but a
+with a fixed sentence and runs none of them (`../stages/toolCalls/batch/settle.ts` · `notDispatchedResult`). The model reads that sentence, but a
 standing is a judgment of a tool's RESULT, and that call produced none —
 offering it would invite a judgment of the library's own words, and counting
 it undeclared would report an absence that is not one. A model that names the
@@ -523,7 +522,7 @@ the settled cases in `test/core/window-ledger-fact-pins.test.ts`.
 **What a settled call's OWN `_findings` leaves on the ledger — in part, and
 that is a known gap.** The model may have declared `_findings` on the settled
 call's arguments too. Its `previous` standings ARE filed: the batch loop files
-every call's standings when the batch starts (`../stages/toolCalls.ts` ·
+every call's standings when the batch starts (`../stages/toolCalls/batch/findingsAdmission.ts` ·
 "STANDINGS OF EARLIER RESULTS"), before any call runs. Its basis row and its
 contingent rows are NOT: the loop files those per call as it reaches the call
 ("THE BASIS ROW", "THE CONTINGENT ROWS FOR THIS CALL"), the pause returned
@@ -653,7 +652,7 @@ latencyMs, inputTokens?, outputTokens? }` and `findings.judge_failed`
   executed, was not denied, was not skill-rejected); the resume doors on
   `dispatched.executed`; the `pauseHere` / `askHuman` door judges the
   person's answer because it IS the tool's result by contract
-  (`stages/toolCalls.ts · judgeLanded`). No judgment row, no classifier
+  (`stages/toolCalls/evidence/judgeLanded.ts · judgeLanded`). No judgment row, no classifier
   call, and the model's own standing on such a call carries no `agrees`.
 - **An agent without a judge is byte-identical.** The 17 references pass
   untouched; `agent-findings-judge` is the one reference generated with a
@@ -735,7 +734,7 @@ The laws:
   `stages/route.ts · judgeEvidence`, after the gate's verdict, over
   `EvidenceVerdict.grounded` (the candidates a result carried, exempt left
   out); the row is `declaredOn: 'answer'`. A TOOL CALL's ARGUMENTS —
-  `stages/toolCalls.ts`, at dispatch (the tool-calls stage, not the choice
+  `stages/toolCalls/execution/callStart.ts`, at dispatch (the tool-calls stage, not the choice
   seam), after the call's basis row and before `tool_start`, over the DATA
   values of its peeled arguments (`groundedArgumentValues`, the
   `argumentLeaves.ts` walk the two argument checks share); the row is
@@ -813,7 +812,7 @@ beside, in the same write, at the two moments that file standings (a call's
 
 - **Two facts, two owners, both required.** "Did the tool return an
   absence?" has one owner: the dispatch door
-  (`../stages/toolCalls.ts · declareCoverage`), which reads the value the
+  (`../stages/toolCalls/evidence/coverageOperations.ts · declareCoverage`), which reads the value the
   tool RETURNED through the one recognizer
   (`../../../semantics/coverage/read.ts · readCoverageResult`), delivers the status
   `'absent'`, emits `tools.absent` and files the call's rows on

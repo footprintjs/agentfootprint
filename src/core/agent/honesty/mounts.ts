@@ -67,7 +67,6 @@ import { ArrayMergeMode } from 'footprintjs/advanced';
 import { flowChart } from 'footprintjs';
 import type { FlowChart, FlowChartBuilder, StructureRecorder, TypedScope } from 'footprintjs';
 
-import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { STAGE_IDS, SUBFLOW_IDS, milestoneTagsFor } from '../../../lib/conventions.js';
 import type { SourceCorpus } from '../arguments/checks.js';
 import {
@@ -95,7 +94,7 @@ import {
   type CallWindowRow,
 } from '../../../time/rows.js';
 import type { PeriodFacts, PeriodForm } from '../../../time/convert.js';
-import type { ZoneName } from '../../../time/zone.js';
+
 import {
   copyPeriod,
   type DeclaredPeriod,
@@ -112,69 +111,8 @@ import type {
 } from '../results/subflow.js';
 import { willDispatch } from '../stages/route.js';
 import type { AgentState } from '../types.js';
-
-/** What an armed agent hands the inputs layer's mount — closures, never scope. */
-export interface InputsMountDeps {
-  /** Filter refused references before input planning can consult host-supplied sources. */
-  readonly findings?: true;
-  /**
-   * The evidence gate's revision turns the tools off (an enforcing answer
-   * validation) — present only then. The layer hands Route's dispatch test
-   * the run's `toolsOffAfterRevision`, so it never asks about a call Route
-   * will not run.
-   */
-  readonly toolsOffAfterRevision?: true;
-  /** The implementation that will answer a name — the shared dispatch resolver's. */
-  readonly toolOf: ToolOf;
-  /**
-   * A before-tool middleware chain is configured (`.toolMiddleware()`), so a
-   * rewrite can supersede one of the layer's rows (the call then ran with the
-   * rewrite's value). Read by the final branch's "Assumed" block
-   * (`stages/prepareFinal.ts` · `prepareFinalWithLimitsAndAssumedStage`),
-   * which then reads `middlewareDecisions`; absent, that key can hold no tool
-   * rewrite and is never read. The mount itself does not read it.
-   */
-  readonly rewrites?: true;
-  /**
-   * DECLARED SOURCES ARE ARMED (`.findings({ argumentSources: true })` or
-   * `.inputsLayer({ argumentSources: true })`) — present only then. The mount hands the layer the pieces its checks read
-   * and the closures that read them; `externalGrounds` is the app's own
-   * vouched-for values (`AgentOptions.externalGrounds`), an `app` source with
-   * its label.
-   */
-  readonly sources?: {
-    readonly externalGrounds?: () => readonly ExternalGround[];
-    /**
-     * The findings ledger is armed beside declared sources (`.findings()`) —
-     * present only then: a call that declares a basis files a BASIS row in
-     * ToolCalls, and that row carries the count of dropped `from` entries.
-     * Absent (declared sources without the ledger), no basis row is ever
-     * filed, so the count rides the call's first argument row
-     * (`sourceCorpus.ts` · `declaredSourcesOf`).
-     */
-    readonly basisRows?: true;
-    /**
-     * A tool in reach may carry an arguments view — one the agent registers
-     * carries one (`core/toolShownArgs.ts` · `carriesArgumentView`), or a
-     * ToolProvider is wired (whatever it lists: its list is known only per
-     * iteration) — present only then: no quote the model wrote is shown on a
-     * row or an ask, since a quote may hold the value such a tool hides
-     * (`arguments/resolve.ts` · `quotesMayShow`).
-     */
-    readonly argumentViews?: true;
-  };
-  /**
-   * THE TIME LAYER IS ARMED (`.time()`) — present only then. The mount hands
-   * the layer this turn's `clock` row and `time-reading` rows (`timeInputs`),
-   * and the layer files one `call-window` row per call to a tool whose period
-   * declares forms (`time/bind.ts`), merged into the ledger beside the
-   * argument rows in the same ONE write.
-   */
-  readonly time?: {
-    /** The app's `.time({ zone })` — the zone of a form declaring `wallZone: 'app'`. */
-    readonly appZone?: ZoneName;
-  };
-}
+import type { InputsMountDeps } from './inputsMountContract.js';
+export type { InputsMountDeps } from './inputsMountContract.js';
 
 /**
  * This turn's clock and readings, off the parent's ledger — `undefined` when
@@ -249,27 +187,27 @@ function emitRows(scope: TypedScope<InputsLayerState>, rows: readonly ArgumentRo
  */
 export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
   const sources = deps.sources;
-  const base: InputsLayerDeps = {
-    toolOf: deps.toolOf,
-    willDispatch,
-    emitRows,
-    ...(deps.time !== undefined && { time: deps.time }),
-    ...(deps.toolsOffAfterRevision === true && { toolsOffAfterRevision: true as const }),
-  };
-  // Declared sources: the reader of each call's `from` and the corpora the checks
-  // read live in `sourceCorpus.ts`, loaded on the first armed batch — so neither
-  // is on a plain agent's graph.
-  let armed: Promise<InputsLayerDeps> | undefined;
-  const layerOf = (): InputsLayerDeps | Promise<InputsLayerDeps> => {
+  const layerOf = (scope: object): InputsLayerDeps | Promise<InputsLayerDeps> => {
+    const toolOf = deps.toolOfFor(scope);
+    const base: InputsLayerDeps = {
+      toolOf,
+      willDispatch,
+      emitRows,
+      ...(deps.time !== undefined && { time: deps.time }),
+      ...(deps.toolsOffAfterRevision === true && { toolsOffAfterRevision: true as const }),
+    };
+    // Declared sources: the reader of each call's `from` and the corpora the checks
+    // read live in `sourceCorpus.ts`, loaded on the first armed batch — so neither
+    // is on a plain agent's graph.
     if (sources === undefined) return base;
-    armed ??= loadCorpus().then((corpus) => ({
+    return loadCorpus().then((corpus) => ({
       ...base,
       sources: {
         ...(sources.argumentViews === true && { argumentViews: true as const }),
         declaredOf: (calls: readonly BatchCall[]) =>
           corpus.declaredSourcesOf(
             calls,
-            deps.toolOf,
+            toolOf,
             sources.basisRows === true ? { basisRows: true } : undefined,
           ),
         corpusOf: async (
@@ -278,24 +216,23 @@ export function buildInputsSubflow(deps: InputsMountDeps): FlowChart {
           turn: number,
         ): Promise<SourceCorpus> =>
           corpus.sourceCorpusOf(inputs, calls, turn, {
-            toolOf: deps.toolOf,
+            toolOf,
             ...(sources.externalGrounds !== undefined && {
               externalGrounds: sources.externalGrounds,
             }),
           }),
       },
     }));
-    return armed;
   };
   type Stage = (scope: TypedScope<InputsLayerState>) => Promise<void>;
   const declare: Stage = async (scope) =>
-    (await loadStages()).declareArgumentsStage(scope, await layerOf());
+    (await loadStages()).declareArgumentsStage(scope, await layerOf(scope));
   const verify: Stage = async (scope) =>
-    (await loadStages()).verifyArgumentsStage(scope, await layerOf());
+    (await loadStages()).verifyArgumentsStage(scope, await layerOf(scope));
   const record: Stage = async (scope) =>
-    (await loadStages()).recordArgumentsStage(scope, await layerOf());
+    (await loadStages()).recordArgumentsStage(scope, await layerOf(scope));
   const resolve: Stage = async (scope) =>
-    (await loadStages()).resolveArgumentsStage(scope, await layerOf());
+    (await loadStages()).resolveArgumentsStage(scope, await layerOf(scope));
   return flowChart<InputsLayerState>('DeclareArguments', declare, STAGE_IDS.DECLARE_ARGUMENTS, {
     description:
       'Which calls of a dispatching batch carry argument rules, and which values are missing',
@@ -336,7 +273,9 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
   if (deps === undefined) return builder;
   return builder
     .addSubFlowChartNext(SUBFLOW_IDS.INPUTS, buildInputsSubflow(deps), 'Inputs', {
-      inputMapper: (parent: Record<string, unknown>) => {
+      inputMapper: (parent: Record<string, unknown>, binding) => {
+        if (binding === undefined) throw new TypeError('Inputs require the native parent binding');
+        const toolOf = deps.toolOfFor(binding);
         // Read under Route's own short-circuit: the budget policy only once a
         // budget was hit (the key exists only on an agent that configured one).
         const costBudgetHit = parent.costBudgetHit as boolean | undefined;
@@ -351,7 +290,7 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
         const calls =
           deps.findings === true
             ? proposed.filter((call) => {
-                const schema = deps.toolOf(call.name)?.schema;
+                const schema = toolOf(call.name)?.schema;
                 if (
                   schema !== undefined &&
                   ownsReservedArgument({
@@ -425,7 +364,7 @@ export function mountInputsLayer<B extends FlowChartBuilder>(
 /** What an armed agent hands the results layer's mount — closures, never scope. */
 export interface ResultsMountDeps {
   /** The implementation that answered a name — the shared dispatch resolver's. */
-  readonly toolOf: ToolOf;
+  readonly toolOfFor: (scope: object) => ToolOf;
 }
 
 type ResultsStageModule = typeof import('../results/subflow.js');
@@ -485,18 +424,21 @@ function periodFormsOf(toolOf: ToolOf): (toolName: string) => readonly PeriodFor
  * stages over the pure steps of `results/subflow.ts`.
  */
 export function buildResultsSubflow(deps: ResultsMountDeps): FlowChart {
-  const layer: ResultsLayerDeps = {
-    periodArgumentOf: periodArgumentOf(deps.toolOf),
-    periodFactsOf: periodFactsOf(deps.toolOf),
-    periodFormsOf: periodFormsOf(deps.toolOf),
-    emitRows: emitPeriodRows,
+  const layerOf = (scope: object): ResultsLayerDeps => {
+    const toolOf = deps.toolOfFor(scope);
+    return {
+      periodArgumentOf: periodArgumentOf(toolOf),
+      periodFactsOf: periodFactsOf(toolOf),
+      periodFormsOf: periodFormsOf(toolOf),
+      emitRows: emitPeriodRows,
+    };
   };
   type Stage = (scope: TypedScope<ResultsLayerState>) => Promise<void>;
   const declare: Stage = async (scope) =>
-    (await loadResultsStages()).declareResultsStage(scope, layer);
+    (await loadResultsStages()).declareResultsStage(scope, layerOf(scope));
   const verify: Stage = async (scope) => (await loadResultsStages()).verifyResultsStage(scope);
   const record: Stage = async (scope) =>
-    (await loadResultsStages()).recordResultsStage(scope, layer);
+    (await loadResultsStages()).recordResultsStage(scope, layerOf(scope));
   const resolve: Stage = async () => (await loadResultsStages()).resolveResultsStage();
   return flowChart<ResultsLayerState>('DeclareResults', declare, STAGE_IDS.DECLARE_RESULTS, {
     description:
@@ -709,7 +651,7 @@ export interface AnswerMountDeps {
    * tools — present only where a tool can declare one; the line names a
    * reason's calls in those words (`assessment/stage.ts`).
    */
-  readonly displayNameOf?: (toolName: string) => string | undefined;
+  readonly displayNameOfFor?: (scope: object) => (toolName: string) => string | undefined;
 }
 
 /**
@@ -800,8 +742,16 @@ export function startFinalBranch(
       tags: milestoneTagsFor(STAGE_IDS.PREPARE_FINAL),
     });
   }
-  const assess = async (scope: TypedScope<AgentState>): Promise<void> =>
-    (await loadAnswerStage()).assessAnswerStage(scope, answer);
+  const assess = async (scope: TypedScope<AgentState>): Promise<void> => {
+    const { displayNameOfFor, ...declarations } = answer;
+    const displayNameOf = displayNameOfFor?.(scope);
+    await (
+      await loadAnswerStage()
+    ).assessAnswerStage(scope, {
+      ...declarations,
+      ...(displayNameOf !== undefined && { displayNameOf }),
+    });
+  };
   return flowChart<AgentState>('AssessAnswer', assess, STAGE_IDS.ASSESS_ANSWER, {
     ...recorders,
     description: "The answer's standing, folded from the run's committed record",

@@ -45,7 +45,6 @@ import type { TimePolicy } from '../../../time/resolve.js';
 import { carriedRunPolicy } from '../../../redaction/conversation.js';
 import { policyInForce } from '../../../redaction/runRedaction.js';
 import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../memberRun.js';
-import { makeRunId } from '../../RunnerBase.js';
 import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
 
 /**
@@ -710,38 +709,37 @@ function seedFrom(
     // an earlier step's output (`workflow`, `graph`), and an `identity` there
     // is data, never who the run is for.
     scope.runIdentity = memberIdentityOf(parentRun);
-    if (parentRun.identity === undefined) scope.runIdentitySource = 'composition';
+    scope.runIdentitySource = parentRun.identity === undefined ? 'composition' : 'caller';
   } else if (args.identity !== undefined) {
     scope.runIdentity = args.identity;
+    scope.runIdentitySource = 'caller';
   } else if (mounted) {
     throw new MemberIdentityError();
   } else if (sessionId !== undefined) {
     scope.runIdentity = { conversationId: sessionId };
     scope.runIdentitySource = 'session';
   } else {
-    scope.runIdentity = { conversationId: deps.getCurrentRunId() ?? 'default' };
+    const runId = deps.getCurrentRunId();
+    if (runId === undefined) throw new TypeError('Agent seed requires a native run origin');
+    scope.runIdentity = { conversationId: runId };
+    scope.runIdentitySource = 'run';
   }
   // The run a member serves, for the facts its tools are handed (`ctx.runId`,
   // `ctx.identity`) — written only on a member's run, so the agent's own runs
   // commit exactly the keys they always did. A chart a caller built that
   // handed an explicit identity and no run gets a run of its own.
   if (mounted) {
+    const nativeRunId = deps.getCurrentRunId();
+    if (nativeRunId === undefined) throw new TypeError('Agent member requires a native run origin');
     scope.memberRun = parentRun ?? {
       link: '',
-      runId: makeRunId(),
+      runId: nativeRunId,
       ...(args.identity !== undefined && { identity: args.identity }),
     };
   }
-  // WHICH SESSION this run served, recorded on every session-bound run (rung 1
-  // or 2) — so a resume that names no session reads it from the checkpoint it
-  // is handed, the one carrier that survives a restart (`Agent.resume`). A run
-  // with no session writes nothing: the keys it commits are unchanged.
-  if (sessionId !== undefined) scope.runSessionId = sessionId;
-  // …and on a run a caller NAMED that has no session, `null`: the positive
-  // record that there was none, so a resume can tell this checkpoint from one
-  // written before the key existed (`callerIdentity.ts · pausedSessionOf`). A
-  // run on the per-run default writes nothing.
-  else if (args.identity !== undefined && parentRun === undefined) scope.runSessionId = null;
+  // Transport context is explicit on EVERY new checkpoint. A memory identity
+  // never supplies it; null positively records that this entry was sessionless.
+  scope.runSessionId = sessionId ?? null;
   scope.newMessages = [];
   // WHICH TURN THIS IS (9.6.0). Every release up to 9.5.1 wrote `1` here, on
   // every run — and memory writes key their entries on it (`msg-{turn}-{i}`),

@@ -4,7 +4,7 @@ title: LoopInput
 
 # Interface: LoopInput
 
-Defined in: [src/core-flow/Loop.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L76)
+Defined in: [src/core-flow/Loop.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L62)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Loop.ts:76](https://github.com/footprintjs/agentfootp
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core-flow/Loop.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L84)
+Defined in: [src/core-flow/Loop.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L70)
 
 WHO this run is for — the same tuple as `AgentInput.identity`. Every
 member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
@@ -25,4 +25,4 @@ never a namespace another run shares (`core/memberRun.ts`).
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Loop.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L77)
+Defined in: [src/core-flow/Loop.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Loop.ts#L63)

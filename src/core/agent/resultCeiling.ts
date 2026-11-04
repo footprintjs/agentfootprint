@@ -1,7 +1,7 @@
 /**
  * resultCeiling — the refusing ceiling a tool declares on its OWN result
  * (9.20.0). One owner of the measurement and the refusal sentence; the
- * tool-dispatch loop (`stages/toolCalls.ts`) calls it at every boundary where
+ * tool-dispatch loop (`stages/toolCalls/decorators/limitsOperations.ts`) calls it at every boundary where
  * a handler's return becomes final, so a resumed call is refused exactly as an
  * inline one.
  *

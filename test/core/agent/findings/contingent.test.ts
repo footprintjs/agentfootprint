@@ -14,7 +14,7 @@ import { findingsFrame } from '../../../helpers/findingsData.js';
  *     extractor found in the answer whose every carrier holds a set-aside
  *     standing files ONE row `{ declaredOn: 'answer' }` and ONE event; a
  *     value with a `fact` carrier, or with an undeclared carrier, files none;
- *   • the DISPATCH moment (`stages/toolCalls.ts`): a value in a call's
+ *   • the DISPATCH moment (`stages/toolCalls/execution/callStart.ts`): a value in a call's
  *     arguments whose carrier the SAME call declared ruled-out files a row
  *     `{ declaredOn: { toolCallId } }`, and the next call is served the
  *     `contingent:` line byte-equal to `servedAt`'s rebuild, under the

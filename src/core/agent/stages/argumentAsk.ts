@@ -5,7 +5,7 @@
  * Pattern: stage glue over the pure ask (`arguments/ask.ts`): reads the
  *          layer's resolutions and the ask's working state from scope, files
  *          the answered rows through the one writer, and raises the pause.
- * Role:    core/agent/stages. Called by ToolCalls (`stages/toolCalls.ts`) at
+ * Role:    core/agent/stages. Called by ToolCalls (`stages/toolCalls/batch/execute.ts`) at
  *          the very top of its batch, under the inputs layer's arm, only when
  *          the layer named an argument to ask for on a call of THIS batch.
  * Emits:   `agentfootprint.findings.argument` — one per `answered` /

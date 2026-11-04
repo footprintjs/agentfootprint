@@ -35,7 +35,7 @@ export type {
  * ledger — F1 (the program submitted) and F2 (what its execution record
  * proves), and nothing about any value.
  *
- * Filed by the dispatch loop (`stages/toolCalls.ts`) while
+ * Filed by the dispatch loop (`stages/toolCalls/evidence/scriptsOperations.ts`) while
  * `.namesAndNumbersFromEvidence({ code: 'match' })` or
  * `.scriptTravelsWithTheAnswer()` is on, through ONE writer (`rows.ts` ·
  * `recordScriptRow`): the call's row is KEPT CURRENT — its outcome is written

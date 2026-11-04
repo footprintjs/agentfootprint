@@ -43,7 +43,7 @@ interface NormalizeThinkingState {
  *   4. On success: writes `scope.thinkingBlocks` + emits `stream.thinking_end`
  *   5. On throw: writes empty array + emits `agent.thinking_parse_failed`
  *
- * The result on `scope.thinkingBlocks` is read by toolCalls.ts and
+ * The result on `scope.thinkingBlocks` is read by toolCalls/batch/dispatchContext.ts and
  * prepareFinal.ts when constructing the assistant message for
  * `scope.history` — that's where the Anthropic signature round-trip
  * actually flows from.
@@ -58,7 +58,7 @@ export function buildThinkingSubflow(handler: ThinkingHandler, providerName: str
       const iteration = (scope.$getValue('iteration') as number) ?? 0;
 
       // Early-return: no thinking content for this call (most calls).
-      // Write empty array so toolCalls.ts / prepareFinal.ts have a
+      // Write empty array so toolCalls/batch/dispatchContext.ts / prepareFinal.ts have a
       // consistent read shape, even when no thinking is present.
       if (raw === undefined) {
         scope.$setValue('thinkingBlocks', []);

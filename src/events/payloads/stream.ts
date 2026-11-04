@@ -112,7 +112,7 @@ export interface ToolStartPayload {
    * 9.113.0 — present only on the bracket of a call that was NEVER
    * DISPATCHED: a batch paused on an earlier call, and the resume answered
    * this one with a fixed sentence instead of running it
-   * (`core/agent/stages/toolCalls.ts` · `bracketSettled`, the one stamping
+   * (`core/agent/stages/toolCalls/batch/settlementOperations.ts` · `bracketSettled`, the one stamping
    * site). `pausedCall` names the call in the same batch the run paused on.
    * No gate judged this call and no tool ran; `args` are the ones it would
    * have run with.
@@ -170,7 +170,7 @@ export interface ToolEndPayload {
   readonly status?: ToolResultStatus;
   /**
    * 9.113.0 — present only when this call was NEVER DISPATCHED: the batch
-   * settlement closed its bracket (`core/agent/stages/toolCalls.ts` ·
+   * settlement closed its bracket (`core/agent/stages/toolCalls/batch/settlementOperations.ts` ·
    * `bracketSettled`). `result` is then the library's fixed sentence (the one
    * the model read), `durationMs` is `0`, and `error` is ABSENT.
    *

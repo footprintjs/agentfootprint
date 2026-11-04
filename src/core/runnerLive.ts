@@ -27,10 +27,17 @@
  * record. The registry is weak: a runner that is collected takes its taps along.
  */
 
-import type { RuntimeSnapshot } from 'footprintjs';
+import type { RuntimeSnapshot, FlowchartCheckpoint } from 'footprintjs';
+import type { RunnerPauseOutcome } from './pause.js';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
+
+/** Private occurrence ownership; never serialized into a checkpoint or exposed on Runner. */
+export interface PauseOwnership {
+  release(): void;
+  abandon(): Promise<void>;
+}
 
 /** What the library reads live from a runner. */
 export interface RunnerLive {
@@ -40,6 +47,11 @@ export interface RunnerLive {
   liveState(): Readonly<Record<string, unknown>> | undefined;
   /** The current (or last) run's snapshot, live and unserved. */
   liveSnapshot(): RuntimeSnapshot | undefined;
+  /** Agent-only host ownership transfer, captured synchronously from an actual result. */
+  readonly pause?: {
+    capture(outcome: RunnerPauseOutcome): PauseOwnership | undefined;
+    abandon(checkpoint: FlowchartCheckpoint): Promise<void>;
+  };
 }
 
 const taps = new WeakMap<object, RunnerLive>();

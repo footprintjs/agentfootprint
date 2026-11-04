@@ -1488,21 +1488,12 @@ export interface AgentState {
   // readonly `identity` input arg in scope's typed-args view.
   runIdentity: MemoryIdentity;
   /**
-   * Where `runIdentity` came from, when it came from somewhere other than the
-   * caller (9.10.0).
-   *
-   * `'session'` when the run carried a `sessionId` and no identity at all;
-   * `'composition'` when the agent ran as a composition member whose run named
-   * none, so its namespace is that run's own `{ conversationId: runId }`
-   * (`core/memberRun.ts`). Absent means the identity is either the caller's
-   * own or the per-run default, which is what every release before 9.10.0
-   * committed, so a run that is neither writes exactly the keys it always did.
-   *
-   * It is a fact about the RECORD, not a dial: nothing reads it to decide
-   * anything. It exists so a trace can be asked "did anyone actually name this
-   * namespace?" and answer honestly.
+   * The namespace's source: caller, transport session, composition or run.
+   * Historical absent entries used the caller or per-run default. A session
+   * source is checked against the actual transport session on resume; this
+   * provenance marker does not authenticate the caller.
    */
-  runIdentitySource?: 'session' | 'composition';
+  runIdentitySource?: 'caller' | 'session' | 'composition' | 'run';
   /**
    * The run this agent serves as a composition MEMBER (`core/memberRun.ts`) —
    * the composition's run id and the identity its caller named, if any.
@@ -1513,12 +1504,10 @@ export interface AgentState {
    */
   memberRun?: import('../memberRun.js').ParentRunRecord;
   /**
-   * The session this run served — written by seed on a session-bound run;
-   * `null` on a run a caller named an identity for that has no session (the
-   * positive record of "none"); absent on a run with neither, which commits
-   * the keys it always did. `Agent.resume` reads it when the resuming call
-   * names no session. Like every checkpoint field it names, it does not
-   * prove: a host that lets checkpoints leave its trust boundary signs them.
+   * The actual transport session, string or explicit null on every clean14
+   * entry. Absence is an unsupported ambiguous checkpoint, never sessionless.
+   * The memory identity cannot supply this fact. Stored data is not authority:
+   * hosts authenticate and protect checkpoints at their own trust boundary.
    */
   runSessionId?: string | null;
   /**
@@ -1565,6 +1554,8 @@ export interface AgentState {
     // Gemini it holds the thought signature the NEXT request must echo.
     readonly providerMeta?: Readonly<Record<string, unknown>>;
   }[];
+  /** Finite resource references only; active borrows and live handles stay private. */
+  toolResourceOwner?: import('../../tools/toolResourceOwner.js').ToolOwnerCarrier;
   // Pause checkpoint — set when a tool calls `pauseHere()`, consumed on resume.
   pausedToolCallId: string;
   pausedToolName: string;
@@ -1582,7 +1573,7 @@ export interface AgentState {
    *
    * Optional because a checkpoint written before 8.13.0 does not have it; the
    * resume path recovers those args from the assistant turn in `history` (see
-   * `argsForPausedCall` in `stages/toolCalls.ts`).
+   * `argsForPausedCall` in `stages/toolCalls/batch/paused.ts`).
    */
   pausedToolArgs?: Readonly<Record<string, unknown>>;
   /**
@@ -2514,7 +2505,7 @@ export interface AgentState {
    *  Undefined when the provider has no thinking content for this call. */
   rawThinking?: unknown;
   /** Normalized thinking blocks from the most recent LLM response.
-   *  Written by the NormalizeThinking sub-subflow; read by toolCalls.ts
+   *  Written by the NormalizeThinking sub-subflow; read by toolCalls/batch/dispatchContext.ts
    *  + prepareFinal.ts when constructing the assistant message for
    *  `scope.history` (ensures Anthropic signature round-trip). Empty
    *  array when no thinking present. */

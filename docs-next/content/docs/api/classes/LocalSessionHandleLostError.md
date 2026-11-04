@@ -4,7 +4,7 @@ title: LocalSessionHandleLostError
 
 # Class: LocalSessionHandleLostError
 
-Defined in: [src/tools/toolSessions.ts:570](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L570)
+Defined in: [src/tools/toolSessions.ts:525](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L525)
 
 This process no longer holds the handle a conversation's session was reached
 by, so the call was not sent.
@@ -26,7 +26,7 @@ The message is one fixed sentence; `cause`, when present, is for the app.
 
 > **new LocalSessionHandleLostError**(`options?`): `LocalSessionHandleLostError`
 
-Defined in: [src/tools/toolSessions.ts:577](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L577)
+Defined in: [src/tools/toolSessions.ts:532](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L532)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_LOCAL_SESSION_HANDLE_LOST"`
 
-Defined in: [src/tools/toolSessions.ts:571](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L571)
+Defined in: [src/tools/toolSessions.ts:526](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L526)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [src/tools/toolSessions.ts:571](https://github.com/footprintjs/agent
 
 > `readonly` **evidence**: `"transport-forgot-handle"`
 
-Defined in: [src/tools/toolSessions.ts:573](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L573)
+Defined in: [src/tools/toolSessions.ts:528](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L528)
 
 What proves the loss: the transport no longer holds the handle.
 
@@ -104,7 +104,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **remote**: `"unknown"`
 
-Defined in: [src/tools/toolSessions.ts:575](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L575)
+Defined in: [src/tools/toolSessions.ts:530](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L530)
 
 What is known of the remote session: nothing.
 

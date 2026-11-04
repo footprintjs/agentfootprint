@@ -296,7 +296,7 @@ describe('A1 — an edited checkpoint cannot walk a host that passes its verifie
     const paused = (await agent.run({ message: 'refund me', identity: bob })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     const tampered = structuredClone(paused.checkpoint) as FlowchartCheckpoint & {
       sharedState: Record<string, unknown>;
     };
@@ -318,7 +318,7 @@ describe('A2 — a resume that names a different person is refused: one run, one
     const paused = (await agent.run({ message: 'refund me', identity: alice })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     principals.length = 0;
     seen.length = 0;
     const bob: MemoryIdentity = { principal: 'bob', conversationId: 'cb' };

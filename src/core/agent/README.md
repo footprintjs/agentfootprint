@@ -66,7 +66,7 @@ recomposed for every request — the tool list and the `read_skill` description
    made", "now");
 3. no clause names a destination: no tool to call, no skill to read, no call to
    propose again. Reporting what a finished call held is a past fact, not a
-   destination — `stages/toolCalls.ts` · `unknownToolResult` lists the names
+   destination — `stages/toolCalls/helpers/dispatchRefusals.ts` · `unknownToolResult` lists the names
    that resolved on that call and directs nothing.
 
 A new correction is registered as a row in `test/modelFacingSurfaces.test.ts`
@@ -84,12 +84,12 @@ catches that break the law are named in `test/modelFacingScan.test.ts` ·
 sit in neither list: the `askPolicy: 'refuse'` denial in
 `tools/runChain.ts` · `runToolChain` ("there is no pause here to carry
 that ask" — present tense), and the author's note closing the 9.86.1
-resumed-call refusal in `stages/toolCalls.ts` ("Keep one gate for this tool:
+resumed-call refusal in `stages/toolCalls/resume/ask.ts` ("Keep one gate for this tool:
 …" — a destination). Neither is reworded yet: that changes the bytes of every
 run that meets them.
 
 ```typescript
-// stages/toolCalls.ts · notDispatchedResult — the batch settlement (9.113.0)
+// stages/toolCalls/batch/settle.ts · notDispatchedResult — the batch settlement (9.113.0)
 notDispatchedResult('fetch_invoices', { toolName: 'collect_input', toolCallId: 'c2' });
 // "Tool 'fetch_invoices' was not executed on that call: the run paused on call
 //  'c2' to 'collect_input', earlier in the same batch, and resumed without
@@ -134,7 +134,7 @@ replaces top-level arrays but deep-merges objects; the tuple makes each proof
 atomic, so a previous layout or binding cannot survive inside a later proof.
 
 `../../tools/toolArgsValidation.ts` owns the supported schema rules and correction text.
-`stages/toolCalls.ts` · `argumentRefusal` applies the Agent's mode and emits
+`stages/toolCalls/access/argumentValidation.ts` · `argumentRefusal` applies the Agent's mode and emits
 the existing invalid-arguments event at initial and resumed admission, before
 artifact resolution and credentials. A middleware approval is not schema
 approval. In warn mode the resumed admission can emit another warning.
@@ -149,7 +149,7 @@ then stamps existing permission and credential events through `typedEmit`.
 Normal dispatch, resumed dispatch and nested `ctx.tools` pull failures use
 the same facade. It copies only those two scalar identifiers; it never reads
 scope, judges policy, stores a second ledger or reconstructs a call from event
-order. Permission checks and credential requests stay in `stages/toolCalls.ts`.
+order. Permission checks and credential requests stay in `stages/toolCalls/access/toolPermission.ts`.
 Nested calls use their existing inner id, and an old or caller-emitted event
 with no correlation stays uncorrelated. This does not solve commit placement
 under deferred observation or sanitize provider-authored failure text.

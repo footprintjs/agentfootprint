@@ -4,7 +4,7 @@ Map: `policy.ts` (a policy as data — the shape check, the union),
 `declared.ts` (which runner declared which policy; a composition adopts its
 members') and `conversation.ts` (the names an agent's record carries the
 conversation under — `conversationRedaction()`). Walker: `runRedaction.ts` (the
-per-run wiring every runner's `createExecutor` goes through; `emitServed`, the
+per-component wiring every runner's native setup goes through; `emitServed`, the
 one way a typed event leaves a stage; `setEventSource`, the one way a stage
 writes a value the library derives events from; `servingAhead`, a resume's
 serving before its executor exists). Lens: `served.ts` (THE funnel: what an
@@ -271,44 +271,35 @@ and that the answer account says the question and the answer are kept out.
    recorder row, `agentfootprint.redaction` — the positive sign that a
    placeholder in the record is a value the policy kept out. Without a policy
    nothing is attached and the snapshot is byte-identical.
-9. **A run's redaction is the RUN's, never the instance's.** The policy a run
-   is covered by is handed to its executor (`applyTo`), and a snapshot is
-   served under the policy of the executor it comes from (`policyOfExecutor`)
-   — never whatever run came after. "This run had no policy" is an explicit
-   entry there; an executor no run of this library opened is UNKNOWN, never
-   read as "no policy": its snapshot is not served at all (fail closed). The
-   policy a paused run carries is read
-   off the run that owns the seed's scope (`policyInForce`), never an agent
-   field; a resume's leg policy goes back from `emitPauseResume` to that leg's
-   executor; and a fact is served under its own run's serving, by its run id
-   (`EventDispatcher · servingsByRun` — the 32 most recent runs of ONE
-   dispatcher, so of one runner instance), a pause request under the run whose
-   executor paused (`runRedaction.ts` · `servingOfExecutor`), and one
-   dispatched before any run opened (a consumer's `emit`, a
-   `parseOutputAsync` fallback) under the policy the runner declares
-   (`EventDispatcher · useDefaultServing`). A fact stamped with a run the
-   dispatcher holds no serving for — older than those 32, or never opened on
-   this instance — is REFUSED (served as the placeholder) wherever a policy
-   exists on the instance: never served under another run's policy. Every run
-   stamps its events with its OWN run (a runner captures each run's context
-   for that run's recorders), so overlapping runs of one composition never
-   serve each other's facts. One run at a time per agent instance
-   is the conversation law (`RunInFlightError`, `PendingQuestionError`); a
-   resume that cannot carry its redaction is refused (`ResumeRedactionError`).
+9. **A run's redaction belongs to its admitted native component.** The
+   component's private values carry its explicit coverage and serving; native
+   setup binds its scopes, recorders and policy before execution. Public
+   snapshot readers consult that captured coverage: declared-none serves
+   unchanged, covered serves under the policy, and missing coverage refuses.
+   The old executor-to-policy and executor-to-serving registries are removed.
+   No selected/latest run supplies another component's policy or computation.
 
-   **No registry delivers one run's content to another.** Every registry this
-   folder keeps is keyed by IDENTITY and held weakly — an executor → the
-   policy and serving its run was handed, a scope → its run, a runner's chart
-   stages → that runner (bound at build, per runner) — and none is ever
-   enumerated. Listeners belong to ONE runner's dispatcher, so an event of a
-   run reaches only the listeners of the runner that ran it. A run's serving
-   holds its rule — names, never values (`runRedaction.ts` · `servingOf`) —
-   and `served.ts` holds nothing at module scope but frozen constants. Pinned
-   by `agent-redaction.isolation.test.ts`: two agents in one process, an agent
-   used as a tool by two parents, overlapping runs of one composition, a very
-   late fact, a fact for a run the instance never opened, a pause filed after
-   another run opened, two runners' charts mounted in one executor — and a
-   source scan of every registry.
+   Checkpoints carry the policy of their actual scope, and resumes restore
+   it into their own admitted leg. A fact filed for an older run uses that
+   run's retained serving (`EventDispatcher · servingsByRun`, bounded to
+   32 entries per dispatcher). A pause fact uses the captured invocation's
+   serving. An unknown or evicted run is refused as the placeholder.
+   Consumer-scope emits use the runner's declared policy.
+
+   One instance admits one owned execution at a time
+   (`ERR_RUN_IN_FLIGHT`); independent native parent components can mount the
+   same child with separate values. Events use actual native run and component
+   origins. AF14 removes the second domain run-ID authority. The historical
+   no-policy stream fixture remains unchanged; its test permits only the
+   explicit metadata alias projection for this migration.
+
+   **Scope registrations are weak and identity-keyed.** They bind actual
+   native scopes to their serving and private computation. Build-time stage
+   bindings name their runner; no raw executor registry remains. Listeners
+   belong to one runner's dispatcher. Retired serving retains rule names,
+   never thrown values. The isolation tests cover independent parents,
+   deterministic busy rejection, mounted policies, late/unknown facts and
+   actual native terminal retirement.
    A PATTERN IS NEVER COMPILED FROM A CHECKPOINT (`policy.ts` ·
    `policyFromCarried`): a checkpoint can come back from storage someone else
    controls, and a pattern built to hang a backtracking matcher must never
@@ -319,11 +310,16 @@ and that the answer account says the question and the answer are kept out.
    (`'unknown-pattern'`). Names (keys, fields) carry as they are. Pinned by
    `test/redaction/agent-redaction.run-state.test.ts` and
    `agent-redaction.executor-registry.test.ts`.
-10. The **real-value path** (`EventDispatcher · onRealEvent`) carries each event
-   as its producer made it, to the library's own mechanisms that compute on it:
-   the crash-checkpoint tracker, the window's token meter, causal memory's tool
-   calls, a host's streamed reply and spend ledger, `toSSE({ format: 'text' })`'s
-   token text. Outside a runner's class it is reached only through
+10. **Component computation precedes record serving.** Native component setup
+   installs a private port in the existing scope registration. That component's
+   checkpoint tracker, token meter and causal tool/usage observation read the
+   raw event once there; they never subscribe to an instance-wide dispatcher.
+   Captured native retirement closes private delivery before a stale public
+   emit can be refused. Native decisions and history-write provenance still
+   arrive through the ordinary served scoped recorder; masked provenance stays
+   unknown. The existing **real-value path** (`EventDispatcher · onRealEvent`)
+   remains for hosted replies, spend ledgers and text streams. Outside a runner's
+   class it is reached only through
    `core/runnerLive.ts` (with the run's live state and snapshot, for a host's
    session store and the context ledger), which no barrel exports and no public
    runner method hands out — so no consumer reaches it through the library's

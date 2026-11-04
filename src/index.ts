@@ -183,7 +183,7 @@ export {
 
 // Runner interface + base
 export type { EmittedEvent, EnableNamespace, Runner } from './core/runner.js';
-export { RunnerBase, makeRunId } from './core/RunnerBase.js';
+export { RunnerBase } from './core/RunnerBase.js';
 
 // What `enable.observability()` / `enable.cost()` / `enable.liveStatus()`
 // hand back (8.12.0): the same `Unsubscribe` function, now carrying
@@ -743,9 +743,7 @@ export {
   type CodeSandboxRefusal,
 } from './provider-contract/codeSandbox.js';
 export { SessionExpiredError } from './provider-contract/sessionExpired.js';
-// The conversation refusals (9.2.0) — `instanceof`-able so a caller can tell
-// "you are already running" from "somebody is still waiting on an answer" from
-// "there is nothing to follow up on".
+// Named refusals distinguish active runs, pending questions and invalid resume/conversation state.
 export {
   NoConversationError,
   type NoConversationReason,

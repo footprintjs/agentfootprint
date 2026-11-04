@@ -14,8 +14,8 @@
  */
 
 import type { AgentfootprintEvent } from '../events/registry.js';
-import type { RunnerBase } from '../core/RunnerBase.js';
-import type { EventDispatcher, Unsubscribe } from '../events/dispatcher.js';
+import type { Runner } from '../core/runner.js';
+import type { Unsubscribe } from '../events/dispatcher.js';
 import { runnerLive } from '../core/runnerLive.js';
 import { toWireJson } from '../lib/wireJson.js';
 
@@ -144,7 +144,7 @@ export const agentfootprintSse: SseFraming<AgentfootprintEvent> = {
  * strings until the run completes.
  */
 export async function* toSSE<TIn, TOut>(
-  runner: RunnerBase<TIn, TOut>,
+  runner: Pick<Runner<TIn, TOut>, 'on'>,
   options: ToSSEOptions = {},
 ): AsyncIterable<string> {
   const filter = options.filter;
@@ -152,10 +152,7 @@ export async function* toSSE<TIn, TOut>(
   const heartbeatMs = options.heartbeatMs ?? 0;
   const framing = framingOf(options);
 
-  // Pull the dispatcher off the runner. RunnerBase exposes it as
-  // protected — we cast to access. No public dispatcher() method
-  // exists ; runners forward .on/.off via their public API.
-  const dispatcher = (runner as unknown as { dispatcher: EventDispatcher }).dispatcher;
+  // The public event port is sufficient; native private state stays encapsulated.
 
   // Bounded queue: events drained as the consumer iterates.
   const queue: AgentfootprintEvent[] = [];
@@ -222,7 +219,7 @@ export async function* toSSE<TIn, TOut>(
       wakeup();
     }
   };
-  const offRecord: Unsubscribe = dispatcher.on('*', listener);
+  const offRecord: Unsubscribe = runner.on('*', listener);
   const unsub = (): void => {
     offRecord();
     offReplies?.();
@@ -276,7 +273,7 @@ export async function* toSSE<TIn, TOut>(
  */
 export class SSEFormatter<TIn = unknown, TOut = unknown> {
   constructor(
-    private readonly runner: RunnerBase<TIn, TOut>,
+    private readonly runner: Pick<Runner<TIn, TOut>, 'on'>,
     private readonly options: ToSSEOptions = {},
   ) {}
 

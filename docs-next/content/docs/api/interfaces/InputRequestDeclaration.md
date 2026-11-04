@@ -22,7 +22,7 @@ is refused, and `null` is the field omitted — and filed by the dispatch
 door at the raise, before the
 checkpoint is returned: the same `tools.absent` event and
 `coverageDeclared` row a RETURNED absence files
-(`core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`). Data for the
+(`core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`). Data for the
 record, not for the ask: it never rides the awaiting-input shape or the
 paused call's served result, and nothing on resume reads it, so the
 pending question says the miss only if `question` says it in words.

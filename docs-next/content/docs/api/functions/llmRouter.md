@@ -6,13 +6,9 @@ title: llmRouter
 
 > **llmRouter**(`opts`): [`LlmRouter`](/docs/api/interfaces/LlmRouter)
 
-Defined in: [src/patterns/LlmRouter.ts:539](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L539)
+Defined in: [src/patterns/LlmRouter.ts:378](https://github.com/footprintjs/agentfootprint/blob/main/src/patterns/LlmRouter.ts#L378)
 
-Build an LLM-driven router for a fixed agent roster.
-
-The roster compiles into the router's system prompt from each agent's
-own `description`, so prompt and roster cannot drift. The decision is
-parsed and validated; `reason` stays in the trace.
+Build a typed routing strategy. Pass it as `swarm({ router, agents })`.
 
 ## Parameters
 
@@ -23,21 +19,3 @@ parsed and validated; `reason` stays in the trace.
 ## Returns
 
 [`LlmRouter`](/docs/api/interfaces/LlmRouter)
-
-## Example
-
-```ts
-const router = llmRouter({
-  provider,
-  model: 'claude-sonnet-4-5',
-  agents: [
-    { id: 'billing', description: 'Invoices, refunds, payment methods.' },
-    { id: 'tech', description: 'Login problems, errors, outages.' },
-  ],
-  instruction: 'Anything money-shaped goes to billing.',
-});
-
-await router.step.run({ message: 'my invoice is wrong' });
-router.route({ message: 'my invoice is wrong' }); // → 'billing'
-router.decisions().at(-1)?.reason;                // → why, for the trace
-```

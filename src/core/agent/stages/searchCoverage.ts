@@ -3,7 +3,7 @@
  * call's result identity before it runs, compose its coverage after.
  *
  * Pattern: a deps-closure factory (the `toolResolver.ts` shape) so every
- *          execute boundary in `toolCalls.ts` — the batch loop and the resume
+ *          execute boundary in `toolCalls/evidence/coverageOperations.ts` — the batch loop and the resume
  *          doors — asks the same two functions.
  * Role:    core/agent. The rules live in `semantics/coverage/search/` (pure);
  *          this file reads the run's facts they need (the party, the

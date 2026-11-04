@@ -8,7 +8,7 @@
     "refused": 26,
     "clean": 1,
     "divergent": 41,
-    "divergences": 43
+    "divergences": 42
   },
   "cases": {
     "collision/static-then-provider": {
@@ -530,10 +530,10 @@
       "tool": "withdrawn_tool",
       "epoch": 2,
       "contract": "not offered this epoch",
-      "answered": "unroutable",
+      "answered": "refused",
       "reported": "none",
-      "cause": "offered in an earlier epoch and unroutable in epoch 2: the implementation is resolved from this epoch's provider list, so withdrawing the offer withdrew dispatch with it",
-      "tolerated": "Seed 1, and true by construction rather than by defect. A provider tool's implementation is resolved from providerToolCache.current, which the Tools slot OVERWRITES with this iteration's provider.list(ctx) — so withdrawing the offer withdraws dispatch with it. Same-epoch offer still implies same-epoch dispatch; only the cross-epoch half fails, and making it hold would mean retaining every tool a provider ever served, an un-revocable registry that defeats the point of a dynamic provider. What is owed is a sentence the model can read when it names one, not a wider cache — a behaviour change with its own decision."
+      "cause": "offered in an earlier epoch and refused in epoch 2: the last-served party no longer answers, so dispatch refuses rather than substituting another party",
+      "tolerated": "The provider's current catalog withdrew this earlier offer. The retained last-served party is known but has no current implementation, so dispatch returns a named refusal instead of treating the name as unknown. Nothing restores the withdrawn tool or substitutes another party; retaining every implementation would defeat provider withdrawal. The offer-withdrawn divergence remains recorded."
     },
     "cross-epoch/flat-graph-scoped-out::billing_tool@e1::answered-off-wire": {
       "case": "cross-epoch/flat-graph-scoped-out",
@@ -557,19 +557,7 @@
       "answered": "never dispatched",
       "reported": "tools.claim_swallowed lostBy=skill(desk-idle) wonBy=provider(static)",
       "cause": "'skill-inactive' registered 'shared_tool' and neither its schema nor its implementation was ever reachable; reported as a dead claim by tools.claim_swallowed, once per epoch it lost",
-      "tolerated": "The inactive scoped skill's claim is dead on epoch 1 (the provider holds the name; reported by tools.claim_swallowed on the first instance) and, on the fresh instance's resume, the dispatcher refuses rather than answers with it — the checkpoint carries the served party (pausedToolParty) so an empty closure cannot fall back to the build-time map. Tolerated for the same reason as every reserved loser: named, and not refusable at build."
-    },
-    "cross-epoch/fresh-instance-resume-provider-vs-inactive-skill::shared_tool@e1::offered-not-dispatchable": {
-      "case": "cross-epoch/fresh-instance-resume-provider-vs-inactive-skill",
-      "configuration": "a provider's 'shared_tool' paused behind a middleware ask and resumed in a FRESH Agent instance, a never-activated scoped skill holding the same name",
-      "kind": "offered-not-dispatchable",
-      "tool": "shared_tool",
-      "epoch": 1,
-      "contract": "provider",
-      "answered": "refused",
-      "reported": "none",
-      "cause": "epoch 1 offered 'shared_tool' under 'provider's contract and the resumed dispatch refused it: that party's implementation was not available to answer, and no other party may",
-      "tolerated": "A resume in a FRESH Agent instance re-dispatches without running Compose, so the provider's list is not resolved on that instance and the provider's implementation — the one whose contract the model read on epoch 1 — is not available. Until the 9.92.0 review this fell back to registryByName and the never-activated skill answered, silently (the blocking finding). Now the checkpoint carries the served party (pausedToolParty), the dispatcher sees it cannot answer, and refuses with a recorded tool result (toolCalls.ts · notServedResult); the same sentence a provider-only tool gets on that path. Tolerated because refusing is the honest answer available to a resume that has not asked the provider; resolving provider.list(ctx) on the resume path is its own packet."
+      "tolerated": "The inactive scoped skill's claim is dead on epoch 1: the provider holds the name, reported by tools.claim_swallowed on the first instance. A fresh native resume reacquires the same declared provider party and dispatches its paused call without falling back to the inactive skill. The saved party is a dispatch consistency label, not implementation authentication. This swallowed loser remains named on the record and is not refusable at build."
     },
     "cross-epoch/parked-map::get_zone_info@e4::answered-off-wire": {
       "case": "cross-epoch/parked-map",
@@ -590,10 +578,10 @@
       "tool": "scoped_tool",
       "epoch": 4,
       "contract": "not offered this epoch",
-      "answered": "unroutable",
+      "answered": "refused",
       "reported": "none",
-      "cause": "offered in an earlier epoch and unroutable in epoch 4: the implementation is resolved from this epoch's provider list, so withdrawing the offer withdrew dispatch with it",
-      "tolerated": "Seed 1, and true by construction rather than by defect. A provider tool's implementation is resolved from providerToolCache.current, which the Tools slot OVERWRITES with this iteration's provider.list(ctx) — so withdrawing the offer withdraws dispatch with it. Same-epoch offer still implies same-epoch dispatch; only the cross-epoch half fails, and making it hold would mean retaining every tool a provider ever served, an un-revocable registry that defeats the point of a dynamic provider. What is owed is a sentence the model can read when it names one, not a wider cache — a behaviour change with its own decision."
+      "cause": "offered in an earlier epoch and refused in epoch 4: the last-served party no longer answers, so dispatch refuses rather than substituting another party",
+      "tolerated": "The provider's current catalog withdrew this earlier offer. The retained last-served party is known but has no current implementation, so dispatch returns a named refusal instead of treating the name as unknown. Nothing restores the withdrawn tool or substitutes another party; retaining every implementation would defeat provider withdrawal. The offer-withdrawn divergence remains recorded."
     },
     "cross-epoch/step-hold-out::export_receipt@e2::answered-off-wire": {
       "case": "cross-epoch/step-hold-out",
@@ -640,7 +628,7 @@
       "contract": "not offered this epoch",
       "answered": "refused",
       "reported": "none",
-      "cause": "offered in an earlier epoch and refused in epoch 2: the party the model last read the name under no longer answers it, and the remaining holder was never offered under that name",
+      "cause": "offered in an earlier epoch and refused in epoch 2: the last-served party no longer answers, so dispatch refuses rather than substituting another party",
       "tolerated": "Closed in 9.92.0 by REFUSING rather than by dispatching. The model read the provider's contract on epoch 1; on epoch 2 the provider withdrew the name and its only remaining holder is a scoped skill that never activated — a party the model was never shown under that name. Until the 9.92.0 review the off-wire fallback read registryByName and the inactive skill answered, silently (the blocking finding). Now the dispatcher remembers who last served the name (ServedToolParties.lastServed), sees that party cannot answer, and refuses with a recorded tool result (toolCalls.ts · notServedResult) instead of handing the model's belief to a stranger's function. Tolerated as a divergence row because the name WAS offered earlier and is unroutable now — the same shape as dynamic-provider-withdraws, with a truthful sentence."
     },
     "framework/present-vs-mcp::present::claim-swallowed(mcp)": {

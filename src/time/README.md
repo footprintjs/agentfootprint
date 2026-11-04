@@ -63,11 +63,11 @@ reaches it as what the call asked about and what the source holds, both in the p
 prints both); the results layer (`results/subflow.ts` · `checkPeriods`, handed each call's
 `call-window` and `call` rows by `honesty/mounts.ts` · `timeOfBatch`) asks `check.ts` ·
 `periodTimeCheck` and files the answer on the call's `period` row, which the answer's standing folds
-(`period-differs-from-asked`, `period-beyond-retention`); `stages/toolCalls.ts` files a
+(`period-differs-from-asked`, `period-beyond-retention`); `stages/toolCalls/evidence/sourceClock.ts` files a
 `source-clock` row when a dataset it mints declares an axis zone;
 `Agent.run` / `Agent.resume` read the run's `time` through `clock.ts` (refusing a run with no zone
 before the turn starts); `stages/seed.ts` · `stampClock` files the turn's `clock` row;
-`stages/toolCalls.ts` files each `call` row and, first thing in a resumed leg (either pause
+`stages/timeLayer.ts` files each `call` row and, first thing in a resumed leg (either pause
 shape: the `resume` door, or `execute` re-run after the argument ask's `interrupt()`),
 `clock-on-resume`;
 `stages/seed.ts` · `readTimeWords` reads the person's message through the armed reader, right
@@ -263,7 +263,7 @@ person's window into the conclusion an answer states (`search_logs was not run f
 … So the answer tells the person that search_logs could not read that time, …`) and stops naming
 that call as the next step — the T6b bench's future case asked the same refused call five times.
 **The drift law: only the library's own fill is redrawn.** At dispatch
-(`stages/toolCalls.ts` · `timeAtDispatch`) a look-back sent more than the tool's step (one
+(`stages/timeLayer.ts` · `timeAtDispatch`) a look-back sent more than the tool's step (one
 minute) after the turn's `now` — after a pause, or an app `now` far from the wall clock — is
 re-sent as the asked range in the tool's first absolute form when the library wrote it; the
 model's look-back, or one with no absolute form, runs as sent. The `call` row records
@@ -635,7 +635,7 @@ The core ask owner distinguishes ordinary endpoint completion from confirmation
 of a person's time words. `core/agent/arguments/partialWindow.ts` classifies an
 original partially specified bounds form using the existing declaration and
 read-back owners. A readable complete alternative is not partial; ambiguous
-partial forms refuse. `stages/toolCalls.ts` enters the shared ask owner even
+partial forms refuse. `stages/toolCalls/batch/execute.ts` enters the shared ask owner even
 when a default or kept answer leaves no ordinary question outstanding.
 
 `stages/argumentAsk.ts` carries the original call and declaration in detached

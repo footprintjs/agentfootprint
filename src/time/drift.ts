@@ -12,7 +12,7 @@
  *          own (never written over, § 7.3), or a tool with no absolute form —
  *          as shifted.
  * Role:    L0 leaf (the time layer). Imports `convert.ts` and `range.ts`
- *          types only. Asked by ToolCalls (`stages/toolCalls.ts` ·
+ *          types only. Asked by ToolCalls (`stages/timeLayer.ts` ·
  *          `timeAtDispatch`) at both execute sites, just before the tool
  *          runs; the answer rides the `call` row (`rows.ts` · `CallDrift`).
  * Emits:   N/A.

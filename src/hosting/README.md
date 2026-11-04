@@ -441,7 +441,7 @@ promote one the library derived (the session rung, the per-run default).
 ```ts
 // No host: the checkpoint carries who the paused run was for.
 const paused = await agent.run({ message: 'refund me', identity: xavier }, { sessionId: 's-x' });
-agent.abandonPause();
+await agent.abandonPause();
 await agent.run({ message: 'hi', identity: yara });                 // somebody else, same instance
 await agent.resume(paused.checkpoint, 'yes', { sessionId: 's-x' }); // for xavier, in xavier's session
 agent.checkpoint()?.identity;                                        // → xavier

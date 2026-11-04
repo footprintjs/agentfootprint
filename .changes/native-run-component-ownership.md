@@ -1,0 +1,25 @@
+---
+type: breaking
+---
+
+**Run ownership follows the native execution and component boundary.** An overlapping operation on one logical runner is refused through the shared native lifecycle. Independently mounted components keep their private execution state separate, and typed-answer postprocessing stays under the same admission.
+
+Migration: await each in-flight operation before starting another on that instance. Answer a paused question through resume(); await abandonPause() only when explicitly discarding it. Caller identity is recorded explicitly as caller, session, composition or run; identifier spelling, receipts and the last caller are no longer used to guess it. A pause carrying an identity without a supported origin marker must be recreated with the new writer. Hosts must continue protecting checkpoints at their trust boundary: recorded origin is not authentication.
+
+The exported RunInFlightError is the native class. Match its code ERR_RUN_IN_FLIGHT across module formats; runnerId replaces agentId and activeRunId is absent when overlap is refused before native origin exists.
+
+Migration: the separate makeRunId export is removed. Read the native run ID from execution events or an admitted lifecycle origin; do not create an ID in a second layer. The private runSignalOf/underRunSignal timer path is removed; the native lifecycle owns cancellation and deadline cleanup.
+
+Migration: causal snapshots require schemaVersion:2. Readers skip/count legacy or invalid rows. Observation covers one actual component execution leg, with explicit observed/partial/unavailable status, bounded retention and omissions; it is not the whole answer's cost. Native resume starts new observation handles and does not reset restored conversation or repair budgets. Custom memory evidenceSource callbacks now receive the native opaque parent binding; copied source coordinates or no-argument selected-run lookups are not valid substitutes.
+
+Migration: resource checkpoints carry a bounded toolResourceOwner reference with its original component birth and monotonic dispatch counter, including between calls. Recreate older pauses that lack this reference. SAME/FRESH resume restores references, not live handles; a missing local handle does not establish remote closure. Call and turn resources close through joined native component finalization; explicit abandonPause joins that paused owner's cleanup. Retained registrars refuse after call/component retirement and request bounded best-effort reclamation.
+
+Migration: toolSessionKey and tier dedup include the actual component owner and identity/session partition; provider call IDs are correlation only. Session/shutdown registrations remain until the host's explicit close, but separate new turns no longer reuse one registration or SDK cache key. Account for the resulting resource/startup cost. A completed recording is filed after joined component cleanup and still excludes its own mint event.
+
+Migration: event metadata now uses the native run ID. The former separately minted domain run ID is removed; component/stage origins still distinguish siblings within one native run. SAME resumes can retain a log run identity distinct from the new leg. Consumers must not equate every source log ID with every leg ID. The historical no-policy fixture is preserved and the single fresh-resume scenario's exact metadata delta is pinned.
+
+Migration: every new pause records its actual transport session as a string or explicit null. Missing or inconsistent transport/origin/resource carriers are refused; recreate old pauses rather than adding guessed fields. Refused answers retain the outstanding question and its paused resources. Hosted persistence transfers a captured question guard, while cancellation closes the exact stored owner. Fresh resume reacquires the current provider catalog for both native pausable and interrupt-replay entries; a withdrawn party never falls back to another holder. Dispatch matches the saved party's declared channel and optional ID to the current provider or registered claim; a different declared owner is refused. These IDs are cooperative labels, not authentication of same-ID or anonymous implementations.
+
+Migration: full record fixtures now name the14 native-component contract. Explicit metadata writes and their traces, and observed parallel-slot completion order, can differ from historical records. Model-facing content is separately compared. Preserve recorded order and raw source coordinates; do not sort logs or interpret a repeated observed schedule as a universal ordering guarantee.
+
+Migration: replace router.route and separately sequenced router.step calls with swarm({ agents, router }). RoutingStrategy carries one native step returning its invocation decision. The router observation window is bounded and never dispatch authority. A pure route callback remains an exclusive strategy for synchronous routing.

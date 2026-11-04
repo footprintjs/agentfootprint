@@ -4,7 +4,7 @@ title: ConditionalBuilder
 
 # Class: ConditionalBuilder
 
-Defined in: [src/core-flow/Conditional.ts:423](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L423)
+Defined in: [src/core-flow/Conditional.ts:359](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L359)
 
 Fluent builder. Branches evaluate in registration order; first matching
 predicate wins. `.otherwise()` is the mandatory fallback.
@@ -15,7 +15,7 @@ predicate wins. `.otherwise()` is the mandatory fallback.
 
 > **new ConditionalBuilder**(`opts`): `ConditionalBuilder`
 
-Defined in: [src/core-flow/Conditional.ts:430](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L430)
+Defined in: [src/core-flow/Conditional.ts:366](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L366)
 
 #### Parameters
 
@@ -33,7 +33,7 @@ Defined in: [src/core-flow/Conditional.ts:430](https://github.com/footprintjs/ag
 
 > **build**(): [`Conditional`](/docs/api/classes/Conditional)
 
-Defined in: [src/core-flow/Conditional.ts:507](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L507)
+Defined in: [src/core-flow/Conditional.ts:443](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L443)
 
 #### Returns
 
@@ -45,7 +45,7 @@ Defined in: [src/core-flow/Conditional.ts:507](https://github.com/footprintjs/ag
 
 > **otherwise**(`id`, `runner`, `nameOrOpts?`): `this`
 
-Defined in: [src/core-flow/Conditional.ts:480](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L480)
+Defined in: [src/core-flow/Conditional.ts:416](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L416)
 
 Register the fallback branch. Exactly ONE must be registered before build().
 Third arg accepts a legacy `name` string OR a `ConditionalBranchOptions`
@@ -75,7 +75,7 @@ bag (same shape as `.when()`).
 
 > **when**(`id`, `predicate`, `runner`, `nameOrOpts?`): `this`
 
-Defined in: [src/core-flow/Conditional.ts:444](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L444)
+Defined in: [src/core-flow/Conditional.ts:380](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Conditional.ts#L380)
 
 Register a predicate-gated branch. `predicate` is a pure sync function
 of the Conditional's input; if it returns true, the corresponding

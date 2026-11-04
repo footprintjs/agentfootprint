@@ -101,7 +101,7 @@ export interface CompactionMeterHandle {
   clear(): void;
   /**
    * Take one `stream.llm_end` reading. Fed from the agent's REAL-value event
-   * path (`EventDispatcher · onRealEvent`), never from a served event: the
+   * component computation port, never from a served event: the
    * count is a measurement the window decides on, and a redaction policy whose
    * pattern happens to match `input` must not quietly switch compaction off.
    */

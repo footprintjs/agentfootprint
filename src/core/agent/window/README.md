@@ -136,7 +136,7 @@ result, so the window names no tool for it** (`toolNames.ts` ·
 
 Why: when a batch of calls pauses, the resume answers each call after the
 paused one with the library's fixed sentence and never runs it
-(`../stages/toolCalls.ts` · "── The batch settlement (9.113.0)"). The message
+(`../stages/toolCalls/batch/settle.ts` · `notDispatchedResult`). The message
 has a `role: 'tool'` and a `toolName`. Named as that tool's latest result, it
 moved the last-tool-result pin off the tool's real, earlier result and onto
 the sentence, so the evidence the pin exists to keep could leave (the

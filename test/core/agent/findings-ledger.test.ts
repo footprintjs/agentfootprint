@@ -59,7 +59,7 @@ import {
 } from '../../../src/core/agent/findings/reserved.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
 import { buildRouteDeciderStage, routeDeciderStage } from '../../../src/core/agent/stages/route.js';
-import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js';
+import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls/index.js';
 import { staticTools } from '../../../src/tool-providers/index.js';
 import { defineSkill } from '../../../src/injection-engine.js';
 import { TOOL_RESULTS } from './fixtures/sanEvidence.js';
@@ -1375,7 +1375,7 @@ describe('.findings() — an ask-human pause mid-batch keeps ONE basis row per c
     // Exactly ONE row per call that reached the loop head: c1 (ran before the
     // pause) and c2 (asked). The sibling AFTER the asked call, c3, is never
     // dispatched on resume. Since 9.113.0 the resume door SETTLES it — a fixed
-    // result, a bracket and a count (`toolCalls.ts` · `notDispatchedResult`) —
+    // result, a bracket and a count (`toolCalls/batch/settle.ts` · `notDispatchedResult`) —
     // and it still files no row: its declaration lives only in the emission.
     // Never inferred from history, never filed by the resume door.
     expect(basisRows(ledgerOf(agent)!).map((r) => r.toolCallId)).toEqual(['c1', 'c2']);

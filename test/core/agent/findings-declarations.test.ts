@@ -24,8 +24,8 @@
  *          with `hasFindingsLedger: true` — value-conditionally, so an
  *          unarmed agent hands the stage exactly today's deps. The stage
  *          does nothing with them yet (the wiring stage does), so the ONE
- *          observable seam is the deps object itself: `buildChart()` runs at
- *          `build()`, and the block below wraps the real `buildWindowStage`
+ *          observable seam is the deps object itself: native component entry initializes
+ *          each handler, and the block below wraps the real `buildWindowStage`
  *          in a pass-through spy to read what it was handed.
  */
 
@@ -264,11 +264,12 @@ const windowed = (keepLedgerFacts?: number | false): Built =>
 
 const stageFactory = () => vi.mocked(buildWindowStage);
 
-/** Build ONE agent and return the deps object its window stage was handed —
- *  exactly one factory call per build, or the test is reading someone else's. */
-const depsOf = (build: () => Agent): WindowStageDeps => {
+/** Read one actual native component's window dependencies, after execution. */
+const depsOf = async (build: () => Agent): Promise<WindowStageDeps> => {
   const before = stageFactory().mock.calls.length;
-  build();
+  const agent = build();
+  expect(stageFactory().mock.calls.length).toBe(before);
+  await agent.run({ message: 'hi' });
   const calls = stageFactory().mock.calls;
   expect(calls.length).toBe(before + 1);
   return calls[before]![0];
@@ -332,20 +333,18 @@ describe('findings declarations — AgentOptions.keepLedgerFacts (step 4: the op
 });
 
 describe('findings declarations — the thread into the window stage (step 4)', () => {
-  it("unarmed: the stage gets exactly today's deps, whatever the option says", () => {
-    const plain = depsOf(() => windowed().build());
-    const dialled = depsOf(() => windowed(3).build());
+  it('unarmed: the component gets the same deps, whatever the option says', async () => {
+    const plain = await depsOf(() => windowed().build());
+    const dialled = await depsOf(() => windowed(3).build());
     expect(plain).not.toHaveProperty('hasFindingsLedger');
     expect(plain).not.toHaveProperty('keepLedgerFacts');
-    // The option without `.findings()` is accepted and threads NOTHING — the
-    // same key set, byte for byte the deps an unarmed agent always built.
     expect(keysOfDeps(dialled)).toEqual(keysOfDeps(plain));
     expect(dialled).not.toHaveProperty('keepLedgerFacts');
   });
 
-  it('armed with a window: hasFindingsLedger: true and the default ceiling 4, and nothing else moves', () => {
-    const off = depsOf(() => windowed().build());
-    const on = depsOf(() => windowed().findings().build());
+  it('armed with a window: the component gets the default ceiling4 and only the two declared keys', async () => {
+    const off = await depsOf(() => windowed().build());
+    const on = await depsOf(() => windowed().findings().build());
     expect(on.hasFindingsLedger).toBe(true);
     expect(on.keepLedgerFacts).toBe(4);
     expect(keysOfDeps(on)).toEqual(
@@ -353,35 +352,39 @@ describe('findings declarations — the thread into the window stage (step 4)', 
     );
   });
 
-  it('ONE resolved value: the option, the door, and the door winning when both are given', () => {
-    expect(depsOf(() => windowed(3).findings().build()).keepLedgerFacts).toBe(3);
-    expect(depsOf(() => windowed().findings({ keepLedgerFacts: 2 }).build()).keepLedgerFacts).toBe(
-      2,
-    );
-    expect(depsOf(() => windowed(3).findings({ keepLedgerFacts: 2 }).build()).keepLedgerFacts).toBe(
-      2,
-    );
-    // The door wins with `false` too — `??` skips nothing but undefined.
+  it('ONE resolved value: the option, the door, and the door winning when both are given', async () => {
+    expect((await depsOf(() => windowed(3).findings().build())).keepLedgerFacts).toBe(3);
     expect(
-      depsOf(() => windowed(3).findings({ keepLedgerFacts: false }).build()).keepLedgerFacts,
+      (await depsOf(() => windowed().findings({ keepLedgerFacts: 2 }).build())).keepLedgerFacts,
+    ).toBe(2);
+    expect(
+      (await depsOf(() => windowed(3).findings({ keepLedgerFacts: 2 }).build())).keepLedgerFacts,
+    ).toBe(2);
+    expect(
+      (await depsOf(() => windowed(3).findings({ keepLedgerFacts: false }).build()))
+        .keepLedgerFacts,
     ).toBe(0);
   });
 
-  it('false and 0 both reach the stage as 0 — a number, never `false`, so the stage applies no default', () => {
-    expect(depsOf(() => windowed(false).findings().build()).keepLedgerFacts).toBe(0);
-    expect(depsOf(() => windowed(0).findings().build()).keepLedgerFacts).toBe(0);
-    expect(depsOf(() => windowed().findings({ keepLedgerFacts: 0 }).build()).keepLedgerFacts).toBe(
-      0,
-    );
-    // The arm still rides beside a switched-off hold: the gate and the
-    // ceiling travel together or not at all.
-    expect(depsOf(() => windowed(false).findings().build()).hasFindingsLedger).toBe(true);
+  it('false and0 reach the component as0 while its ledger arm stays present', async () => {
+    expect((await depsOf(() => windowed(false).findings().build())).keepLedgerFacts).toBe(0);
+    expect((await depsOf(() => windowed(0).findings().build())).keepLedgerFacts).toBe(0);
+    expect(
+      (await depsOf(() => windowed().findings({ keepLedgerFacts: 0 }).build())).keepLedgerFacts,
+    ).toBe(0);
+    expect((await depsOf(() => windowed(false).findings().build())).hasFindingsLedger).toBe(true);
   });
 
-  it('armed with NO window strategy: there is no window stage, so nothing is threaded', () => {
+  it('armed without a window: no window handler is constructed, even during the run', async () => {
     const before = stageFactory().mock.calls.length;
-    Agent.create({ provider: answerOnly(), model: 'm', keepLedgerFacts: 3 }).findings().build();
-    Agent.create({ provider: answerOnly(), model: 'm' }).findings({ keepLedgerFacts: 3 }).build();
+    await Agent.create({ provider: answerOnly(), model: 'm', keepLedgerFacts: 3 })
+      .findings()
+      .build()
+      .run({ message: 'hi' });
+    await Agent.create({ provider: answerOnly(), model: 'm' })
+      .findings({ keepLedgerFacts: 3 })
+      .build()
+      .run({ message: 'hi' });
     expect(stageFactory().mock.calls.length).toBe(before);
   });
 

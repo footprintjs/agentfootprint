@@ -140,7 +140,7 @@ entries 1–3 and the `claim-swallowed` family).
 **The law.** For every tool name on a call, exactly one party owns the OFFER
 and the same party owns the ANSWER — or the record names the disagreement.
 `buildToolsSlot.ts` · `mergeWire` is the one pass that produces the wire AND
-the record of who won each name (`ServedToolParties`); `toolCalls.ts` ·
+the record of who won each name (`ServedToolParties`); `toolCalls/execution/catalogOperations.ts` ·
 `lookupTool` reads that record first. Three consequences, one example each:
 
 1. **Dispatch follows the offer.** A name on the wire resolves to the party
@@ -151,7 +151,7 @@ the record of who won each name (`ServedToolParties`); `toolCalls.ts` ·
    the name's only holder when it was never served this run; every such
    dispatch is on the record as `agentfootprint.tools.answered_off_wire`. A
    name whose last-served party can no longer answer (a provider withdrew it)
-   is refused as a recorded tool result (`toolCalls.ts` · `notServedResult`),
+   is refused as a recorded tool result (`toolCalls/helpers/dispatchRefusals.ts` · `notServedResult`),
    never handed to a party the model was not shown under that name.
 
    ```ts
@@ -200,7 +200,7 @@ the record of who won each name (`ServedToolParties`); `toolCalls.ts` ·
 
 `skip_step` is a claimant like any other: the framework's schema merges LAST,
 so it rides only when nobody else put the name forward; when a provider does,
-the provider answers and the step bookkeeping (`toolCalls.ts` ·
+the provider answers and the step bookkeeping (`toolCalls/execution/catalogOperations.ts` ·
 `frameworkSkipStepAnswered`) does not advance the procedure. A run with no
 name collision commits byte-identical logs and served views
 (`test/core/tools/byte-identity.test.ts`, fifteen references generated on 9.91.0,

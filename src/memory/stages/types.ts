@@ -101,7 +101,7 @@ export interface MemoryState {
    * Write-side input (CAUSAL pipelines): evidence harvested during the run by
    * `causalEvidenceRecorder` — decisions, tool calls, iterations, duration,
    * token usage. Populated by the wire layer via the mount's `evidenceSource`;
-   * undefined for non-causal pipelines (writeSnapshot falls back to zeros).
+   * undefined for non-causal pipelines (observation is unavailable, never measured zero).
    */
   runEvidence?: import('../causal/evidenceRecorder.js').RunEvidence;
 

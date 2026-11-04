@@ -1738,9 +1738,9 @@ export async function standingAgent<TH extends HostHandle>(
                 sessionId,
                 toEnvelope({ ...conversation, history, checkpointedAt: Date.now() }),
               );
-            runner.abandonPause();
-            if (sessionId !== undefined)
-              await runner.closeToolSessions({ scope: 'run', sessionId });
+            const control = runnerLive(runner)?.pause;
+            if (control === undefined) throw new TypeError('Agent pause ownership is unavailable');
+            await control.abandon(paused.checkpoint);
             // A turn that ends, so the host is offered its binding like any
             // other — but no run happened, so there is no run id to stamp.
             await offerTurnArtifacts(runner, reply, offer, () => undefined);
@@ -1834,29 +1834,30 @@ export async function standingAgent<TH extends HostHandle>(
     priorPause?: PausedRun,
   ): Promise<void> {
     const runner = lane.agent;
-    // Mid-run writes settle FIRST. Ordering, not tidiness: an 'async' write
-    // still in flight would otherwise land after the terminal envelope and
-    // overwrite it — a stored pause quietly demoted back to a conversation,
-    // and the question a person was asked gone with it. It also rethrows a
-    // store that refused this run's progress, so a broken store fails the
-    // request rather than being reported as a clean answer.
-    await lane.writer?.settle();
-
+    // Capture THIS returned pause before persistence, artifacts or reply await.
+    // A partial stored answer ran no new occurrence and therefore captures none.
+    const ownership = isPaused(output) ? runnerLive(runner)?.pause?.capture(output) : undefined;
     if (isPaused(output)) {
-      const pending = describePause(output, sessionId);
-      const conversation =
-        sessionId === undefined
-          ? undefined
-          : output.awaitingInput !== undefined &&
-            output.awaitingInput.requestId === priorPause?.pending.awaitingInput?.requestId
-          ? priorPause.conversation
-          : runner.checkpoint();
+      let stored = false;
       try {
+        // Progress must settle before the terminal envelope. A failed writer,
+        // failed persistence or unsupported reply still disposes only this
+        // captured occurrence when ownership did not reach the store.
+        await lane.writer?.settle();
+        const pending = describePause(output, sessionId);
+        const conversation =
+          sessionId === undefined
+            ? undefined
+            : output.awaitingInput !== undefined &&
+              output.awaitingInput.requestId === priorPause?.pending.awaitingInput?.requestId
+            ? priorPause.conversation
+            : runner.checkpoint();
         if (sessionId !== undefined && conversation) {
           await store.persist(
             sessionId,
             toPausedEnvelope({ checkpoint: output.checkpoint, conversation, pending }),
           );
+          stored = true;
           if (reply.awaiting) {
             // The run id for `origin` comes from the conversation just
             // snapshotted. When that is the PRIOR pause's — re-used because
@@ -1876,31 +1877,16 @@ export async function standingAgent<TH extends HostHandle>(
         reply.fail(new PauseNotCarriedError(pending.tool, sessionId, conversation !== undefined));
         return;
       } finally {
-        // ── OWNERSHIP MOVES HERE ────────────────────────────────────────
-        // A pause belongs to a SESSION. In the shared shape one Agent carries
-        // every session, and the Agent's own pending-question guard (9.2.0) is
-        // right for a script driving one instance and wrong here: the instance
-        // would go on holding session A's question, and session B's next
-        // message — a different conversation, a different person — would be
-        // refused on behalf of an answer B was never asked for.
-        //
-        // Once the pause is in the STORE, the store owns it: a later request
-        // for that session carrying `decision` continues it from exactly
-        // where it stopped, and nothing about that consults the instance. So
-        // the instance is released, here, at the moment ownership transfers.
-        // On the failure path above it is released for the opposite reason —
-        // the question could not be carried at all, and blocking every other
-        // session on one nobody can ever answer is strictly worse.
-        //
-        // The pooled shape releases it too, and for a reason of its own: this
-        // session's instance can be EVICTED while the question is outstanding,
-        // and a pause held only in an instance nobody can reach again is a
-        // question nobody could ever answer. The store is the one place it can
-        // survive that, so the store is the only place it is kept.
-        runner.abandonPause();
+        // Successful persistence transfers the captured question guard only.
+        // Without a store, dispose that actual occurrence's resources. Neither
+        // operation follows the shared instance's later selected run.
+        if (stored) ownership?.release();
+        else await ownership?.abandon();
       }
     }
 
+    // A progress write may not overtake the final completed conversation.
+    await lane.writer?.settle();
     let conversation: AgentRunCheckpoint | undefined;
     if (sessionId !== undefined) {
       conversation = runner.checkpoint();

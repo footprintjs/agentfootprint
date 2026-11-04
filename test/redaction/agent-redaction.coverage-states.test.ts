@@ -16,7 +16,6 @@
  * state on an instance with NO policy: a lookup that misses fails closed
  * there too.
  */
-import { FlowChartExecutor } from 'footprintjs';
 import type { RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
@@ -29,7 +28,8 @@ import {
   unpackRecording,
 } from '../../src/doors/observe.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
-import { coverageOfExecutor } from '../../src/redaction/runRedaction.js';
+import { servedUnderPolicy } from '../../src/redaction/marker.js';
+import { UnknownRun } from './nativeRun.fixture.js';
 import { carriedConversationPolicy, locationsOf } from './fixture.js';
 
 const SECRET = 'SSN-STATE-9000';
@@ -79,26 +79,13 @@ async function served(agent: Built) {
   };
 }
 
-/** The runner's last executor swapped for one no run of this library opened — a lookup that misses. */
-async function unknownExecutor(agent: Built): Promise<FlowChartExecutor> {
-  const foreign = new FlowChartExecutor(agent.getSpec());
-  await foreign.run({ input: { message: `Check ${SECRET}` } }).catch(() => undefined);
-  (agent as unknown as { lastExecutor: FlowChartExecutor }).lastExecutor = foreign;
-  expect(coverageOfExecutor(foreign)).toEqual({ state: 'unknown' });
-  return foreign;
-}
-
 const holds = (value: unknown) => locationsOf(value, SECRET).length > 0;
 
 describe('COVERED — the run was opened with a policy: every door serves under it', () => {
   it('snapshot, narrative, events, recordings and the account hold no selected value', async () => {
     const agent = agentUnder(carriedConversationPolicy());
     const doors = await served(agent);
-    expect(
-      coverageOfExecutor((agent as unknown as { lastExecutor: object }).lastExecutor),
-    ).toMatchObject({
-      state: 'covered',
-    });
+    expect(servedUnderPolicy(doors.snapshot)).toBe(true);
     expect(doors.snapshot).toBeDefined();
     expect(doors.narrative.length).toBeGreaterThan(0);
     expect(doors.events.length).toBeGreaterThan(0);
@@ -107,13 +94,13 @@ describe('COVERED — the run was opened with a policy: every door serves under 
 });
 
 describe('DECLARED-NONE — positively no policy: every door serves unchanged', () => {
-  it('snapshot and narrative are the executor’s own', async () => {
+  it('snapshot and narrative preserve the admitted unredacted run', async () => {
     const agent = agentUnder();
     const doors = await served(agent);
-    const executor = (agent as unknown as { lastExecutor: FlowChartExecutor }).lastExecutor;
-    expect(coverageOfExecutor(executor)).toEqual({ state: 'declared-none' });
-    expect(JSON.stringify(doors.snapshot)).toBe(JSON.stringify(executor.getSnapshot()));
-    expect(doors.narrative).toEqual(executor.getNarrativeEntries());
+    expect(doors.snapshot).toBeDefined();
+    expect(servedUnderPolicy(doors.snapshot)).toBe(false);
+    expect(doors.snapshotAlias).toEqual(doors.snapshot);
+    expect(holds(doors.narrative)).toBe(true);
     expect(holds(doors.snapshot)).toBe(true);
   });
 
@@ -134,9 +121,10 @@ describe('UNKNOWN — a lookup that misses fails closed, whatever the instance d
   ] as const) {
     describe(label, () => {
       it('snapshot and narrative: refused for an executor no run opened', async () => {
-        const agent = agentUnder(redact);
-        await agent.run({ message: 'first' });
-        await unknownExecutor(agent);
+        const agent = new UnknownRun(SECRET, redact);
+        await agent.run('first');
+        expect(holds(agent.rawSnapshot())).toBe(true);
+        expect(holds(agent.rawNarrative())).toBe(true);
         expect(agent.getLastSnapshot()).toBeUndefined();
         expect(agent.getSnapshot()).toBeUndefined();
         expect(agent.getLastNarrativeEntries()).toEqual([]);
@@ -154,16 +142,17 @@ describe('UNKNOWN — a lookup that misses fails closed, whatever the instance d
       });
 
       it('recordings and the account: nothing of an executor no run opened', async () => {
-        const agent = agentUnder(redact);
+        const agent = new UnknownRun(SECRET, redact);
         const recorder = recordRun(agent);
-        await agent.run({ message: 'first' });
-        await unknownExecutor(agent);
+        await agent.run('first');
+        expect(holds(agent.rawSnapshot())).toBe(true);
+        expect(holds(agent.rawNarrative())).toBe(true);
         recorder.stop();
         const recording = recorder.toRecording();
         expect((recording as { snapshot?: unknown }).snapshot).toBeUndefined();
         const unpacked = unpackRecording(JSON.parse(JSON.stringify(packRecording(recording))));
         for (const value of [recording, unpacked, accountForAnswer(recording)]) {
-          expect(locationsOf(value, `Check ${SECRET}`)).toEqual([]);
+          expect(locationsOf(value, SECRET)).toEqual([]);
         }
       });
     });

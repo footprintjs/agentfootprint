@@ -114,12 +114,14 @@ describe('request credentials — composition members, nested', () => {
       .build();
   }
 
-  it('two requests through one composition at once: every member call sees its own run’s', async () => {
+  it('two native parents share one composition: every member call sees its own request', async () => {
     const seen: Seen[] = [];
-    const flow = nested(seen);
+    const shared = nested(seen);
+    const flow = Sequence.create({ id: 'parent-a' }).step('shared', shared).build();
+    const other = Sequence.create({ id: 'parent-b' }).step('shared', shared).build();
     await Promise.all([
       flow.run({ message: 'go', identity: ALICE }, { request: requestFor(ALICE_TOKEN) }),
-      flow.run({ message: 'go', identity: BOB }, { request: requestFor(BOB_TOKEN) }),
+      other.run({ message: 'go', identity: BOB }, { request: requestFor(BOB_TOKEN) }),
     ]);
     // Three members × two runs, every one served.
     expect(seen.filter((s) => s.auth !== undefined)).toHaveLength(6);

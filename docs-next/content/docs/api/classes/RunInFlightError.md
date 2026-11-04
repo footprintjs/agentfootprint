@@ -4,25 +4,9 @@ title: RunInFlightError
 
 # Class: RunInFlightError
 
-Defined in: [src/core/conversation.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L58)
+Defined in: node\_modules/footprintjs/dist/types/lib/errors/RunInFlightError.d.ts:2
 
-Thrown when `run()` / `resume()` is called on a runner that is already
-running.
-
-One instance answers one turn at a time. To run two turns at once, build two
-agents — a chart is built once per instance and instances are cheap — or put
-the turns behind `standingAgent({ onConcurrentInvoke: 'enqueue' })`, which
-queues them.
-
-## Example
-
-```ts
-// Refused: both would write the same instance's last-run state.
-await Promise.all([agent.run({ message: 'a' }), agent.run({ message: 'b' })]);
-
-// Fine: two instances, two sets of state.
-await Promise.all([agentA.run({ message: 'a' }), agentB.run({ message: 'b' })]);
-```
+A logical runner or native executor already owns an unfinished execution.
 
 ## Extends
 
@@ -32,21 +16,17 @@ await Promise.all([agentA.run({ message: 'a' }), agentB.run({ message: 'b' })]);
 
 ### Constructor
 
-> **new RunInFlightError**(`door`, `agentId`, `activeRunId`): `RunInFlightError`
+> **new RunInFlightError**(`runnerId`, `activeRunId?`): `RunInFlightError`
 
-Defined in: [src/core/conversation.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L65)
+Defined in: node\_modules/footprintjs/dist/types/lib/errors/RunInFlightError.d.ts:6
 
 #### Parameters
 
-##### door
+##### runnerId
 
 `string`
 
-##### agentId
-
-`string`
-
-##### activeRunId
+##### activeRunId?
 
 `string`
 
@@ -60,23 +40,11 @@ Defined in: [src/core/conversation.ts:65](https://github.com/footprintjs/agentfo
 
 ## Properties
 
-### activeRunId
+### activeRunId?
 
-> `readonly` **activeRunId**: `string`
+> `readonly` `optional` **activeRunId?**: `string`
 
-Defined in: [src/core/conversation.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L63)
-
-The run already in flight, so a log line can be joined to its trace.
-
-***
-
-### agentId
-
-> `readonly` **agentId**: `string`
-
-Defined in: [src/core/conversation.ts:61](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L61)
-
-The runner that is busy, by its configured id.
+Defined in: node\_modules/footprintjs/dist/types/lib/errors/RunInFlightError.d.ts:5
 
 ***
 
@@ -96,7 +64,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_RUN_IN_FLIGHT"`
 
-Defined in: [src/core/conversation.ts:59](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L59)
+Defined in: node\_modules/footprintjs/dist/types/lib/errors/RunInFlightError.d.ts:4
 
 ***
 
@@ -121,6 +89,14 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 #### Inherited from
 
 `Error.name`
+
+***
+
+### runnerId
+
+> `readonly` **runnerId**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/errors/RunInFlightError.d.ts:3
 
 ***
 

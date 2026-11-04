@@ -54,7 +54,7 @@ declaring it has no submissions on the record, and a block shown for it is prose
 ## The row — one per call, filed at the execute boundary
 
 While `code: 'match'` or `.scriptTravelsWithTheAnswer()` is on, the dispatch
-loop (`stages/toolCalls.ts` · `fileScript`) files one `script` row per call of a
+loop (`stages/toolCalls/evidence/scriptsOperations.ts` · `fileScript`) files one `script` row per call of a
 declaring tool, through ONE writer (`rows.ts` · `recordScriptRow`):
 
 - `text` is the program SUBMITTED to the tool — the arguments handed to

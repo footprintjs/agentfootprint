@@ -5,7 +5,7 @@ paths:
   - src/core/Agent.ts
   - src/core/RunnerBase.ts
   - src/core/runner.ts
-  - src/core/agent/stages/toolCalls.ts
+  - src/core/agent/stages/toolCalls/**/*.ts
   - src/core/agent/stages/seed.ts
   - src/core/agent/stages/prepareFinal.ts
   - src/core/agent/stages/reliabilityExecution.ts
@@ -28,9 +28,9 @@ paths:
 The per-stage transaction commit and `FlowchartCheckpoint` machinery live UPSTREAM in footprintjs. `src/memory/causal/writeSnapshot.ts`/`loadSnapshot.ts` are cross-session memory persistence, NOT backtracking. **Two disjoint checkpoint types with similar names:** `FlowchartCheckpoint` (M1, footprintjs, full scope) vs `AgentRunCheckpoint` (M2, history-only) — `agent.resume()` vs `agent.resumeOnError()`; never cross-wire them.
 
 ## M1 — Pause/Resume (human-in-the-loop, intentional)
-Files: `core/pause.ts` (`PauseRequest` :47-56, `pauseHere` :71-73, `askHuman` :100) · `stages/toolCalls.ts:352-366` (catch → commit partial → RETURN payload = footprintjs pause; resume handler :485-524) · `RunnerBase.ts:294-312` `detectPause` · `Agent.ts:754-767` `resume()` (fresh executor → executor.resume).
+Files: `core/pause.ts` (`PauseRequest` :47-56, `pauseHere` :71-73, `askHuman` :100) · `stages/toolCalls/execution/initialInvocation.ts` (catch → commit partial → RETURN payload = footprintjs pause; resume handler toolCalls/resume/handler.ts) · `RunnerBase.ts:294-312` `detectPause` · `Agent.ts:754-767` `resume()` (fresh executor → executor.resume).
 
-Trace: tool calls `askHuman({question})` → PauseRequest thrown from tool.execute → caught at toolCalls.ts:352 → `scope.history`, `pausedToolCallId/Name/StartMs` committed (:354-357) → returns a defined object → footprintjs pause + FlowchartCheckpoint → detectPause → `{paused, checkpoint, pauseData}`. Later `agent.resume(checkpoint, answer)` → fresh executor seeds from checkpoint → resume handler appends answer as the paused tool's result, iteration++, clears pausedTool* (:521-523) → loop continues.
+Trace: tool calls `askHuman({question})` → PauseRequest thrown from tool.execute → caught at toolCalls/execution/initialInvocation.ts → `scope.history`, `pausedToolCallId/Name/StartMs` committed by initialInvocation.writePause → returns a defined object → footprintjs pause + FlowchartCheckpoint → detectPause → `{paused, checkpoint, pauseData}`. Later `agent.resume(checkpoint, answer)` → fresh executor seeds from checkpoint → resume handler appends answer as the paused tool's result, iteration++, clears pausedTool* in the four toolCalls/resume/ owners → loop continues.
 
 | Step | SAVED | RESTORED | DISCARDED |
 |---|---|---|---|
@@ -54,7 +54,7 @@ resume(scope, humanInput):
 ```
 
 ## M2 — Error-checkpoint replay (`resumeOnError`, history-only memento)
-Files: `core/runCheckpoint.ts` (`AgentRunCheckpoint` :69-97, `RunCheckpointError` :123-145, tracker :156-166, `buildCheckpoint` :174-194, `validateCheckpoint` :204-230) · `Agent.ts` (tracker install :616-622, catch-and-wrap :638-661, `resumeOnError` :711-720, `installCheckpointTracker` :729-752, `pendingResumeHistory` side channel, a `PendingResumeHistory` = `{ history, appendsUserTurn }` written by `Agent.ts · applyContinuation`) · `stages/seed.ts · consumePendingResumeHistory` (read-AND-clear) → `stages/seed.ts · historyForTurn` (9.112.2: the ONE writer of the turn's user entry, called after the `'input'` middleware chain). Source events: toolCalls.ts:471-481 (execute path) + toolCalls.ts:512-518 (resume path) emit `iteration_end` with PLAIN detached history; prepareFinal.ts:43 emits `iteration_end` WITHOUT a history field — it only advances lastCompletedIteration (the tracker keeps the last toolCalls-provided history, guard Agent.ts:739-747).
+Files: `core/runCheckpoint.ts` (`AgentRunCheckpoint` :69-97, `RunCheckpointError` :123-145, tracker :156-166, `buildCheckpoint` :174-194, `validateCheckpoint` :204-230) · `Agent.ts` (tracker install :616-622, catch-and-wrap :638-661, `resumeOnError` :711-720, `installCheckpointTracker` :729-752, admitted component continuation, a `PendingResumeHistory` = `{ history, appendsUserTurn }` written by `Agent.ts · applyContinuation`) · `stages/seed.ts · consumePendingResumeHistory` (read-AND-clear) → `stages/seed.ts · historyForTurn` (9.112.2: the ONE writer of the turn's user entry, called after the `'input'` middleware chain). Source events: toolCalls/batch/completion.ts (execute path) + toolCalls/batch/completion.ts (resume path) emit `iteration_end` with PLAIN detached history; prepareFinal.ts:43 emits `iteration_end` WITHOUT a history field — it only advances lastCompletedIteration (the tracker keeps the last toolCalls-provided history, guard Agent.ts:739-747).
 
 Trace (provider 500s at iteration 3): iterations 1-2 emit iteration_end → tracker snapshots history + lastCompletedIteration → iter 3 throws → catch: not PauseSignal/PolicyHalt/ReliabilityFailFast AND tracker.history nonempty → `throw RunCheckpointError(cause, buildCheckpoint(...))`. Consumer persists `err.checkpoint`; `agent.resumeOnError(cp)` → validate → `pendingResumeHistory = { history: cp.history, appendsUserTurn: false }` → re-`run(cp.originalInput.message)` → seed runs the `'input'` chain, consumes the side channel and sets `scope.history = historyForTurn(pending, verdict)` = the stored history as-is (no user entry appended: the failing turn's message is already its last one) → model re-decides from restored history. The conversation door `run({ message, continueFrom: cp })` rides the same channel with `appendsUserTurn: true`, so seed appends `{ user: verdict }` — the chain's output, never the raw message.
 
@@ -65,7 +65,7 @@ Trace (provider 500s at iteration 3): iterations 1-2 emit iteration_end → trac
 | resumeOnError | — | ONLY conversation history + original message | iteration counter (re-seeds 1), token/cost accumulators, runId, recorder state, failed iteration's tool side effects |
 
 Invariant: iteration boundaries encode progress. The checkpoint owner also retains explicit prepared thinking-retirement patches before transport, even when a later request fails inside a grouped child stage. `checkpointReplayHistory` applies only those approved thinking edits to both checkpoint histories through the shared identity rule; it never adopts failed-stage tool results, output or iteration state. Explicitly NOT exact-state restore (Agent.ts:678-695).
-Breaks when: a non-idempotent tool (payment, send-email) ran inside the FAILED iteration — resume re-issues it and it executes AGAIN (no toolCallId dedup, runCheckpoint.ts:37-49). Also interleaving resumeOnError with a concurrent run() — pendingResumeHistory is one instance field, consumed by whichever seed runs first.
+Breaks when: a non-idempotent tool (payment, send-email) ran inside the FAILED iteration — resume re-issues it and it executes AGAIN (no toolCallId dedup, runCheckpoint.ts:37-49). Concurrent owned entry points now reject under native admission; the continuation is held by its actual component and consumed only by that component's seed.
 
 ```
 run(input):
@@ -157,6 +157,6 @@ stage-level (honest ceiling); enabling `'reads-prefix'` tightens them with no
 consumer change (fp #P1).
 
 ## Cross-mechanism seams
-- Scope is the only durable carrier across pause (M1), fail-fast $break (M3 → ReliabilityFailFastError via scope.reliabilityFail*), and policy halt (toolCalls.ts:447-466 strict order: synthetic tool_result → halt emit → history commit → $break) — so M2's checkpoint always sees consistent state.
-- Event payloads feeding M2's tracker must be PLAIN DETACHED arrays (toolCalls.ts:475-480) — a live TypedScope proxy in iteration_end.history breaks checkpoint serialization under deferred delivery.
+- Scope is the only durable carrier across pause (M1), fail-fast $break (M3 → ReliabilityFailFastError via scope.reliabilityFail*), and policy halt (toolCalls/batch/completion.ts strict order: synthetic tool_result → halt emit → history commit → $break) — so M2's checkpoint always sees consistent state.
+- Event payloads feeding M2's tracker must be PLAIN DETACHED arrays (toolCalls/batch/completion.ts) — a live TypedScope proxy in iteration_end.history breaks checkpoint serialization under deferred delivery.
 - Retry telemetry flows via the emit channel (reliability.retried/recovered/fail_fast), never via scope commits.

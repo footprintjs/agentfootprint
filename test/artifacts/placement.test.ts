@@ -239,7 +239,7 @@ describe('the coupling — routing predicates read the string placement rewrites
     // Not a bug: routing must judge what the MODEL was told, so the ticket is
     // the honest thing for a predicate to see. It IS a footgun, which is why
     // it is pinned here and commented at both ends (placeResults in
-    // stages/toolCalls.ts ↔ InjectionContext.lastToolResult). Change either
+    // stages/toolCalls/execution/artifactsOperations.ts ↔ InjectionContext.lastToolResult). Change either
     // without the other and this fails.
     const seenBy = (placement?: { maxInlineChars: number }) => {
       const seen: string[] = [];

@@ -326,7 +326,7 @@ describe('NIT 2 (J2) — a JavaScript caller’s malformed identity is refused a
 // ─── NIT 3 (J3): an OLD checkpoint is never filed as sessionless ─────────────
 
 describe('NIT 3 (J3) — an old checkpoint (no runSessionId) with a named identity + session, resumed bare', () => {
-  it('recovers the session from the identity’s conversationId; the next sessionless caller reads nothing', async () => {
+  it('refuses a missing transport fact without exposing it to a sessionless caller', async () => {
     const agent = explainingAgent();
     const since = toolEndTexts(agent);
     const alice: MemoryIdentity = { principal: 'alice', conversationId: 'sA' };
@@ -337,12 +337,14 @@ describe('NIT 3 (J3) — an old checkpoint (no runSessionId) with a named identi
     const old = structuredClone(paused.checkpoint);
     expect(old.sharedState.runSessionId).toBe('sA');
     delete old.sharedState.runSessionId; // as written by 9.116.x
-    agent.abandonPause();
-    await agent.resume(old, 'yes');
+    await agent.abandonPause();
+    await expect(agent.resume(old, 'yes')).rejects.toThrow(/Invalid checkpoint.*runSessionId/);
     since();
     await agent.run({ message: 'WHY c-alice' });
     expect(since()).not.toContain('SECRET-alice');
-    // …and alice's own session explains it.
+    // A distinct current checkpoint carries the actual transport fact.
+    await agent.resume(paused.checkpoint, 'yes', { identity: alice, sessionId: 'sA' });
+    since();
     await agent.run({ message: 'WHY c-none c-alice', identity: alice }, { sessionId: 'sA' });
     expect(since()).toContain('SECRET-alice');
   });

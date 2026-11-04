@@ -118,7 +118,6 @@
 
 import { assertUnreservedSubflowSegment } from '../lib/conventions.js';
 import {
-  FlowChartExecutor,
   flowChart,
   isFlowEvent,
   type CombinedRecorder,
@@ -128,28 +127,15 @@ import {
   type TypedScope,
 } from 'footprintjs';
 import type { RunOptions } from '../core/runner.js';
-import type { RedactionPolicy } from 'footprintjs';
-import type { RunContext } from '../bridge/eventMeta.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
 import { adoptMemberRedaction } from '../redaction/declared.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId, underRunSignal } from '../core/RunnerBase.js';
-import { agentRecorder } from '../recorders/core/AgentRecorder.js';
-import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
-import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
-import { streamRecorder } from '../recorders/core/StreamRecorder.js';
+import { RunnerBase, type RunnerCoreValues } from '../core/RunnerBase.js';
+import type { RunnerInvocation } from '../core/runnerExecution.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { childError, childOutcome } from './childOutcome.js';
-import {
-  adoptParentRun,
-  parentRunIn,
-  readsParentRun,
-  closeParentRun,
-  openParentRun,
-  reopenParentRun,
-  withParentRun,
-} from '../core/memberRun.js';
+import { parentRunIn, readsParentRun, withParentRun } from '../core/memberRun.js';
 import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
@@ -237,6 +223,24 @@ interface NodeErrorRecord {
  */
 function nodeFailureMessage(graphId: string, nodeId: string, reason: string): string {
   return `graph '${graphId}': node '${nodeId}' failed: ${reason}`;
+}
+
+/** Retain the first mapper failure before the native mount swallows it. */
+function rememberNodeFailure(
+  errors: Map<string, NodeErrorRecord>,
+  nodeId: string,
+  error: unknown,
+): void {
+  if (errors.has(nodeId)) return;
+  errors.set(nodeId, {
+    message: error instanceof Error ? error.message : String(error),
+    raw: error,
+  });
+}
+
+/** Private values belong to the actual native runtime, including mounted graphs. */
+interface GraphRunValues extends RunnerCoreValues {
+  readonly nodeErrors: Map<string, NodeErrorRecord>;
 }
 
 // ─── Build-time validation + levelization ────────────────────────────
@@ -418,32 +422,13 @@ function toNodeArgs(value: unknown, nodeId: string, source: string): Record<stri
 /**
  * A fixed DAG of runners. Build one with {@link graph}.
  */
-export class Graph extends RunnerBase<GraphInput, GraphOutput> {
+export class Graph extends RunnerBase<GraphInput, GraphOutput, GraphRunValues> {
   readonly name: string;
   readonly id: string;
   private readonly nodes: readonly GraphNode<any, any>[];
   private readonly levels: readonly (readonly GraphNode<any, any>[])[];
   private readonly parentsOf: ReadonlyMap<string, readonly string[]>;
   private readonly opts: GraphOptions;
-
-  private currentRunContext: RunContext = {
-    runStartMs: 0,
-    runId: 'pending',
-    compositionPath: [],
-  };
-
-  /**
-   * Per-node first-error records for the current run. footprintjs's
-   * `SubflowExecutor` swallows a subflow error into the parent's debug
-   * bag and skips the `outputMapper`, so the message never reaches parent
-   * scope on its own. An internal recorder captures it here; the level
-   * join reads it to name what actually went wrong. Mirrors Parallel's
-   * `branchErrors`, epoch-guarded for the same reason.
-   */
-  private readonly nodeErrors = new Map<string, NodeErrorRecord>();
-
-  /** Monotonic run token — see Parallel's `runEpoch`. */
-  private runEpoch = 0;
 
   constructor(opts: GraphOptions) {
     super();
@@ -473,7 +458,11 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     // It hands the run it serves to its members (`core/memberRun.ts`).
     readsParentRun(this);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
-    this.initChart(() => this.buildChart());
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [`Graph:${this.id}`],
+      initialize: () => ({ nodeErrors: new Map<string, NodeErrorRecord>() }),
+    });
   }
 
   /** How the graph was levelized — level 0 first. Stable post-construction. */
@@ -482,36 +471,29 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
   }
 
   async run(input: GraphInput, options?: RunOptions): Promise<GraphOutput | RunnerPauseOutcome> {
-    // The incoming request, refused here — before anything moves — when
-    // requestContext() did not build it.
-    const request = requestOf(options, 'graph.run');
-    const executor = this.createExecutor();
-    this.lastExecutor = executor;
-    // The run every node serves — the caller's identity when the input names
-    // one (`input.identity`), else this run's own conversation (`core/memberRun.ts`).
-    const parentRun = openParentRun(
-      this.currentRunContext.runId,
-      (input as { readonly identity?: MemoryIdentity } | undefined)?.identity,
-      'graph.run',
-      request,
-    );
-    try {
+    return this.runExecution().withRun(async (invocation) => {
+      const request = requestOf(options, 'graph.run');
+      this.prepareCompositionRun(
+        invocation,
+        (input as { readonly identity?: MemoryIdentity } | undefined)?.identity,
+        request,
+        'graph.run',
+      );
+      const prepared = this.compositionRunSetup(invocation, undefined, [
+        this.makeNodeErrorRecorder(invocation.value.nodeErrors),
+      ]);
       let result: unknown;
       try {
-        result = await underRunSignal(options, (engine) =>
-          executor.run({
-            input: { ...input, parentRun: parentRun.link },
-            ...(engine ?? {}),
-          }),
+        result = await invocation.execute(
+          { kind: 'run', options: { ...options, input: { ...input } } },
+          prepared.setup,
+          prepared.binding,
         );
-      } catch (err) {
-        this.rethrowWithNodeAttribution(err);
+      } catch (error) {
+        this.rethrowWithNodeAttribution(error, invocation.value.nodeErrors);
       }
-      return this.finalizeResult(executor, result);
-    } finally {
-      // Released when the run returns — finished, failed or paused (a resume re-opens it).
-      closeParentRun(parentRun);
-    }
+      return this.finalizeResult(invocation, result);
+    });
   }
 
   async resume(
@@ -519,27 +501,25 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<GraphOutput | RunnerPauseOutcome> {
-    // The incoming request, and the paused run its members serve (re-opened
-    // from the checkpoint's own record) — both refused before anything moves.
-    const request = requestOf(options, 'graph.resume');
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'graph.resume', request);
-    try {
-      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    return this.runExecution().withRun(async (invocation) => {
+      const request = requestOf(options, 'graph.resume');
+      this.prepareCompositionResume(invocation, checkpoint, request, 'graph.resume');
       const resumeLeg = this.emitPauseResume(checkpoint, input);
-      const executor = this.createExecutor(resumeLeg);
-      this.lastExecutor = executor;
+      const prepared = this.compositionRunSetup(invocation, resumeLeg, [
+        this.makeNodeErrorRecorder(invocation.value.nodeErrors),
+      ]);
       let result: unknown;
       try {
-        result = await underRunSignal(options, (engine) =>
-          executor.resume(checkpoint, input, engine),
+        result = await invocation.execute(
+          { kind: 'resume', mode: 'fresh', checkpoint, input, options },
+          prepared.setup,
+          prepared.binding,
         );
-      } catch (err) {
-        this.rethrowWithNodeAttribution(err);
+      } catch (error) {
+        this.rethrowWithNodeAttribution(error, invocation.value.nodeErrors);
       }
-      return this.finalizeResult(executor, result);
-    } finally {
-      closeParentRun(parentRun);
-    }
+      return this.finalizeResult(invocation, result);
+    });
   }
 
   /**
@@ -553,45 +533,17 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
    * — including the join's own already-attributed error — is rethrown
    * untouched.
    */
-  private rethrowWithNodeAttribution(err: unknown): never {
+  private rethrowWithNodeAttribution(
+    err: unknown,
+    nodeErrors: ReadonlyMap<string, NodeErrorRecord>,
+  ): never {
     const message = err instanceof Error ? err.message : String(err);
-    for (const [nodeId, record] of this.nodeErrors) {
+    for (const [nodeId, record] of nodeErrors) {
       if (record.raw === err || record.message === message) {
         throw new Error(nodeFailureMessage(this.id, nodeId, record.message), { cause: err });
       }
     }
     throw err;
-  }
-
-  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
-    this.currentRunContext = {
-      runStartMs: Date.now(),
-      runId: makeRunId(),
-      compositionPath: [`Graph:${this.id}`],
-    };
-    this.runEpoch += 1;
-    this.nodeErrors.clear();
-
-    // THIS run's context, captured: a run that overlaps it on this instance
-    // never restamps its events, so each is served under its own run's policy.
-    const runContext = this.currentRunContext;
-    const getRunCtx = (): RunContext => runContext;
-    // The run's redaction (`src/redaction/`): every policy a node declared.
-    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
-    const spec = this.getSpec();
-    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
-    redaction.applyTo(executor);
-    const dispatcher = this.getDispatcher();
-
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
-    );
-    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(this.makeNodeErrorRecorder(this.runEpoch));
-    for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
-    return executor;
   }
 
   /**
@@ -600,34 +552,33 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
    * the same correlation Parallel uses, and the only one that survives a
    * node mounting subflows of its own.
    */
-  private makeNodeErrorRecorder(epoch: number): CombinedRecorder {
+  private makeNodeErrorRecorder(nodeErrors: Map<string, NodeErrorRecord>): CombinedRecorder {
     const nodeIds = new Set(this.nodes.map((n) => n.id));
     return {
       id: 'graph-node-errors',
       onError: (event) => {
-        if (epoch !== this.runEpoch) return; // straggler from a dead run
         if (!isFlowEvent(event)) return;
         const stageId = event.traversalContext?.stageId ?? '';
         const slash = stageId.indexOf('/');
         const nodeId = slash >= 0 ? stageId.slice(0, slash) : undefined;
         if (nodeId === undefined || !nodeIds.has(nodeId)) return;
-        if (this.nodeErrors.has(nodeId)) return;
+        if (nodeErrors.has(nodeId)) return;
         const structured = event.structuredError;
         const message =
           structured?.message ??
           (event.message.startsWith('Error: ')
             ? event.message.slice('Error: '.length)
             : event.message);
-        this.nodeErrors.set(nodeId, { message, raw: structured?.raw });
+        nodeErrors.set(nodeId, { message, raw: structured?.raw });
       },
     };
   }
 
   private finalizeResult(
-    executor: FlowChartExecutor,
+    invocation: RunnerInvocation<GraphRunValues>,
     result: unknown,
   ): GraphOutput | RunnerPauseOutcome {
-    const paused = this.detectPause(executor, result);
+    const paused = this.detectPause(invocation, result);
     if (paused) return paused;
     if (result instanceof Error) throw result;
     return (result ?? {}) as GraphOutput;
@@ -638,13 +589,12 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
     const compositionName = this.name;
     const nodeCount = this.nodes.length;
     const levels = this.levels;
-    const nodeErrors = this.nodeErrors;
 
     const seed = (scope: TypedScope<GraphState>) => {
       // The graph's own input is what every ROOT node receives; the run it
       // serves is kept apart and handed to EVERY node (`core/memberRun.ts`).
       const { parentRun: _run, ...graphInput } = scope.$getArgs<GraphInput>();
-      adoptParentRun(scope, { parentRun: _run }, 'graph');
+      this.enterComposition(scope, { parentRun: _run }, 'graph');
       scope.graphInput = graphInput;
       scope.results = {};
       typedEmit(scope, 'agentfootprint.composition.enter', {
@@ -688,7 +638,8 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
           // and turned into a plain "this subflow did not run" — the reason
           // never reaches parent scope. Record it first, so the level join
           // can name what actually happened instead of 'unknown error'.
-          inputMapper: (parent) => {
+          inputMapper: (parent, binding?: unknown) => {
+            const nodeErrors = this.runExecution().forScope(binding).value.nodeErrors;
             try {
               return withParentRun(
                 this.inputForNode(node, parent as Record<string, unknown>),
@@ -696,12 +647,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
                 node.runner,
               );
             } catch (err) {
-              if (!nodeErrors.has(node.id)) {
-                nodeErrors.set(node.id, {
-                  message: err instanceof Error ? err.message : String(err),
-                  raw: err,
-                });
-              }
+              rememberNodeFailure(nodeErrors, node.id, err);
               throw err;
             }
           },
@@ -715,15 +661,16 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
           // the child's own error — recorded first, as the inputMapper does,
           // because footprintjs swallows a mapper throw — so the node is
           // absent and the level join names it.
-          outputMapper: (sfOutput) => {
-            const outcome = childOutcome(node.runner, sfOutput);
-            if ('verdict' in outcome) {
-              const err = childError(outcome.verdict);
-              if (!nodeErrors.has(node.id))
-                nodeErrors.set(node.id, { message: err.message, raw: err });
+          outputMapper: (sfOutput, _parent, binding?: unknown) => {
+            const nodeErrors = this.runExecution().forScope(binding).value.nodeErrors;
+            try {
+              const outcome = childOutcome(node.runner, sfOutput);
+              if ('verdict' in outcome) throw childError(outcome.verdict);
+              return { results: { [node.id]: outcome.answer } };
+            } catch (err) {
+              rememberNodeFailure(nodeErrors, node.id, err);
               throw err;
             }
-            return { results: { [node.id]: outcome.answer } };
           },
         });
       }
@@ -739,6 +686,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
           // shared state but do NOT enumerate through TypedScope's nested
           // property proxy. Verified against footprintjs — the property
           // read returns `{}` while `$getValue` returns the real record.
+          const nodeErrors = this.runExecution().forScope(scope).value.nodeErrors;
           const results = (scope.$getValue('results') as Record<string, unknown>) ?? {};
           const missing = level.map((n) => n.id).filter((id) => !(id in results));
           if (missing.length > 0) {
@@ -747,7 +695,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
               id: compositionId,
               name: compositionName,
               status: 'err',
-              durationMs: Date.now() - this.currentRunContext.runStartMs,
+              durationMs: Date.now() - this.runExecution().forScope(scope).context.runStartMs,
             });
             const reasonFor = (id: string): string =>
               nodeErrors.get(id)?.message ?? 'unknown error';
@@ -777,7 +725,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput> {
           id: compositionId,
           name: compositionName,
           status: 'ok',
-          durationMs: Date.now() - this.currentRunContext.runStartMs,
+          durationMs: Date.now() - this.runExecution().forScope(scope).context.runStartMs,
         });
         // `$getValue` for the same reason as the level join.
         return scope.$getValue('results') ?? {};

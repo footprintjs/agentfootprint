@@ -154,7 +154,7 @@ export interface ToolsClaimSwallowedPayload {
  * the one the model last read this name under (or the name's only claimant
  * when it was never served); a name whose last-served contract belonged to a
  * party that can no longer answer is refused as a recorded tool result
- * instead (`toolCalls.ts` · `notServedResult`), never handed to somebody else.
+ * instead (`toolCalls/helpers/dispatchRefusals.ts` · `notServedResult`), never handed to somebody else.
  *
  * Carries names only — never args, never results.
  */

@@ -4,7 +4,7 @@ Walker (the cursor, its guards and its moves): `seed.ts`, `pickEntry.ts`,
 `reliabilityExecution.ts`, `prepareFinal.ts`, `breakFinal.ts`.
 Lens (a sentence a model reads, composed here because it has to be composed at
 the moment the gate fires): `callLLM.ts`'s wire assembly (`buildCallLLMStage`,
-`callLLM.ts` · `buildCallLLMStage`), `toolCalls.ts`'s refusals and result overwrites,
+`callLLM.ts` · `buildCallLLMStage`), `toolCalls/index.ts`'s refusals and result overwrites,
 `stepNudge.ts`, `evidenceRecheck.ts`, `wrapUp.ts`.
 This folder holds the library's densest set of model-facing composers, which is
 exactly why it may not claim one role: `Walker` on line 1 would let five Lens
@@ -25,7 +25,7 @@ One file per stage of the Agent chart, mounted by `buildAgentChart` /
 | deliver.ts | messages-slot delivery (role-checked, sequence-checked) |
 | callLLM.ts | provider invocation + streaming + reliability retry loop. 9.19.0: ONE `brainFor(nextSkillCursor ?? currentSkillId, skillEscalated)` consult at the top — the cursor picks the brain; precedence escalation > skill brain > `.configure()` > build default; `llm_start.brain` stamps the winning rung (absent = the agent's own config answered) |
 | route.ts | the decider: tool-calls / output-retry / step-nudge / evidence-recheck / final. Three judges over a would-be-final answer, in this order: schema (a broken shape is replaced wholesale) → steps (`steps_unfinished` accepted/cut-short) → evidence (9.35.0 — every name and number must appear in a tool result). A DENIED answer is judged by none of them. Under the answer layer's arm (honesty layer 4) the step judge and the evidence gate also file their verdict's committed witness row — `steps-unfinished` on an accepted or cut-short stop, `grounded` on a clean pass (`../assessment/witness.ts`) — and every row this decider files carries the turn stamp |
-| toolCalls.ts | tool dispatch (pausable): permission gate → middleware → validation → credentials → execute; the read_skill gate; the step boundary (9.18.0) — advance/skip at EVERY result-finalization site, the batch loop AND all four resume paths. 9.19.0: the escalation counter (both `skill.rejected` sites feed `skillRefusalsThisTurn`; at `afterRefusals` the flip is committed + `skill.escalated` fires once) and the typed tool-effects judge (`applyToolEffects` — envelope unwrapped at every execute boundary; propose-transition reachability-checked, first-accepted-wins with `route_conflict { source: 'tool-proposal' }`; require-instruction leases granted from the declared catalog — but lease DEATH is owned by the injection engine's Evaluate tenure sweep (`nextInstructionLeases`), which is what keeps a dead lease dead across cyclic re-entry; `status` rides `tool_end` + the batch; a status-only near-miss missing its `effects: []` marker stays data and gets a dev-mode warning naming the fix). This release: `declareCoverage` at those SAME two execute boundaries — `absent()` / `coverage()` recognized on the UNWRAPPED content and BEFORE the ceiling (a declared boundary is not the channel that overflows), files `tools.absent` / `tools.coverage_declared`, appends to `coverageDeclared`, and returns the delivered status: `'absent'` when an absence is in play, and only when the envelope declared none |
+| toolCalls/routing/readSkillRoute.ts | tool dispatch (pausable): permission gate → middleware → validation → credentials → execute; the read_skill gate; the step boundary (9.18.0) — advance/skip at EVERY result-finalization site, the batch loop AND all four resume paths. 9.19.0: the escalation counter (both `skill.rejected` sites feed `skillRefusalsThisTurn`; at `afterRefusals` the flip is committed + `skill.escalated` fires once) and the typed tool-effects judge (`applyToolEffects` — envelope unwrapped at every execute boundary; propose-transition reachability-checked, first-accepted-wins with `route_conflict { source: 'tool-proposal' }`; require-instruction leases granted from the declared catalog — but lease DEATH is owned by the injection engine's Evaluate tenure sweep (`nextInstructionLeases`), which is what keeps a dead lease dead across cyclic re-entry; `status` rides `tool_end` + the batch; a status-only near-miss missing its `effects: []` marker stays data and gets a dev-mode warning naming the fix). This release: `declareCoverage` at those SAME two execute boundaries — `absent()` / `coverage()` recognized on the UNWRAPPED content and BEFORE the ceiling (a declared boundary is not the channel that overflows), files `tools.absent` / `tools.coverage_declared`, appends to `coverageDeclared`, and returns the delivered status: `'absent'` when an absence is in play, and only when the envelope declared none |
 | outputRetry.ts | `.outputSchema()` re-ask branch |
 | outputAdmission.ts | pre-capture guard for an output-governed final branch. Consumes Route's refusal flag without walking the policy again; breaks before the selected composer, final events and memory writes. `prepareFinalFor` binds the declaration, and `captureTurnPayload` releases the captured answer once on acceptance. Raw audit state is not erased. |
 | stepNudge.ts | the unfinished-steps teaching re-ask (9.18.0): appends the premature answer + the nudge, once per turn, loops like SchemaRetry |
@@ -59,21 +59,21 @@ traversal — a pause mid-batch commits the partial batch, resume paths append):
   a parallel batch routes on all its calls, not only the last.
 
 Any NEW dispatch path must write both (and apply `capResults` — see the note
-on the five `tool_end`-emitting paths in toolCalls.ts).
+on the five `tool_end`-emitting paths in toolCalls/observation/observationsOperations.ts).
 
 The batch settlement (9.113.0) is NOT a dispatch path and writes neither key.
 When a call pauses mid-batch, every resume path settles the calls after it
-(`toolCalls.ts` · "── The batch settlement (9.113.0)"): a fixed result in
+(`toolCalls/batch/settle.ts` · `notDispatchedResult`): a fixed result in
 `history` that carries `LLMMessage.notDispatched` (stripped before the wire), a
 `tool_start` / `tool_end` bracket carrying the same marker
-(`toolCalls.ts` · `bracketSettled`, the only bracket that ever does), a place
+(`toolCalls/batch/settlementOperations.ts` · `bracketSettled`, the only bracket that ever does), a place
 in `iteration_end`'s count — and nothing else. Those calls never returned, so
 they may not route, trigger or renew a map as if they had; they never
 dispatched, so a reader asking "did it run?" or "is this a tool's result?"
 reads the marker, never the role, the sentence or the bracket's
 `durationMs: 0` — its `tool_end` carries no `error`, since the call did not
 fail (`security/extractSequence.ts`, `../../checkin.ts` · `buildTrail`,
-`toolCalls.ts` · `producerCorpusOf`, the empty-lookup producer corpus,
+`toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf`, the empty-lookup producer corpus,
 `../window/toolNames.ts` · `toolNameOfMessage`, `callLLM.ts`'s closure check,
 `../findings/offer.ts` · `isResultMessage`, `../window/ledgerFactPins.ts` ·
 `turnStandingOf`, `trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`,
@@ -116,7 +116,7 @@ never a name out of the dispatch map. So the gate keeps two sets — the raw one
 it judges with, the filtered one it speaks with.
 
 ```typescript
-// toolCalls.ts — the read_skill gate
+// toolCalls/routing/readSkillRoute.ts — the read_skill gate
 const hidden = new Set(scope.hiddenSkillIds ?? []);
 const visible = (ids: readonly string[]) => ids.filter((id) => !hidden.has(id));
 
@@ -236,7 +236,7 @@ cancelled run up to the loop's cap), never counted against a breaker — and a c
 that returned anyway is not judged or retried. No `reliability.*` event, no
 record. The loop reads the signal from `$getEnv()`, so EVERY runner's `run` /
 `resume` hands a signal passed as `{ signal }` to the stages too
-(`core/RunnerBase.ts` · `runSignalOf`) — a composition included: an
+(`core/runEntry.ts` · `nativeEntryFor`) — a composition included: an
 agent inside one used to retry a cancelled call up to its cap. Recorded: a
 stage that calls `$getEnv()` on such a run is marked
 `untrackedSources: ['env']`, and tools see the signal as `ctx.signal`. Pinned
@@ -302,7 +302,7 @@ set `parkedNow` computes from `parkedMemberIds` (the maps kernel's own owner of
 the fact — the engine imports it, never the reverse):
 
 ```typescript
-// toolCalls.ts — the skill_read permission gate
+// toolCalls/helpers/mountedCursor.ts — the skill_read permission gate
 const stay = atMountedCursor({
   ...(typeof scope.currentSkillId === 'string' && { cursor: scope.currentSkillId }),
   target: requestedSkillId,
@@ -383,7 +383,7 @@ with its file and line instead of shipping.
 // test/modelFacingSurfaces.test.ts — one row per producer, composing the REAL code
 {
   id: 'skill-graph — the read_skill REFUSAL composer',
-  module: 'src/core/agent/stages/toolCalls.ts',
+  module: 'src/core/agent/stages/toolCalls/helpers/readSkillRefusal.ts',
   surface: TOOL_RESULT,
   lifetimeBecause:
     'the gate returns it as the result of the `read_skill` call it declined, so it is ' +

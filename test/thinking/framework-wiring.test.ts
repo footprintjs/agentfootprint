@@ -8,7 +8,7 @@
  *   - .thinkingHandler() builder method (override + opt-out + auto)
  *   - callLLM populates scope.rawThinking from response.rawThinking
  *   - NormalizeThinking subflow runs handler with failure isolation
- *   - toolCalls.ts + prepareFinal.ts attach thinkingBlocks to assistant message
+ *   - toolCalls/batch/dispatchContext.ts + prepareFinal.ts attach thinkingBlocks to assistant message
  *   - redactThinkingBlocks pure helper scrubs content
  *
  * 7-pattern coverage:

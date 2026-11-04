@@ -4,7 +4,7 @@ import type { EntryDecl, RouteDecl } from './graphRoutes.js';
 // consumers read this and never re-derive it: the read_skill offer builder (Agent.ts · readSkillOfferFor), the
 // injection-engine config's `reachableSkills` and the read_skill gate's `allowedSkillIds` (both Agent.ts) — which
 // toolCalls reads back as deps.allowedSkillIds at the propose-transition judge and at the gate itself
-// (toolCalls.ts · "── Skill-graph read_skill GATE").
+// (toolCalls/routing/readSkillRoute.ts · `applyReadSkillRoute`).
 // detached: yes — dedupe builds a fresh array per call; the declarations never leave.
 /**
  * The reachable-set resolver (the read_skill gate's allowed set). Pure +
@@ -67,8 +67,8 @@ export type SkillTargetClass = 'self' | 'hop' | 'open' | 'unreachable';
 
 // FOLD · the one owner of which class a read_skill target falls in from one cursor: 'self' | 'hop' | 'open' | 'unreachable'
 // consumers read this and never re-derive it: skillToolDescriptors.ts · grantableRows and skillToolDescriptors.ts ·
-// classOf · toolCalls.ts · atMountedCursor, the propose-transition judge (toolCalls.ts · "── A PROPOSAL TO THE
-// CURSOR'S OWN SKILL IS A STAY") and the read_skill gate (toolCalls.ts · "── Skill-graph read_skill GATE") ·
+// classOf · toolCalls/helpers/mountedCursor.ts · atMountedCursor, the propose-transition judge (toolCalls/routing/effectsOperations.ts · "── A PROPOSAL TO THE
+// CURSOR'S OWN SKILL IS A STAY") and the read_skill gate (toolCalls/routing/readSkillRoute.ts · `applyReadSkillRoute`) ·
 // re-exported for consumers at doors/skill-graph.ts.
 // detached: yes — a string literal over readonly inputs the caller already owns.
 /**

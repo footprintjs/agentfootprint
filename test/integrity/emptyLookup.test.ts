@@ -51,7 +51,10 @@ import { beginIntegrityRun } from '../../src/integrity/disposition/lifecycle.js'
 import { Agent, absent, defineTool, isInputPause, requestInput } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
-import { notDispatchedResult, producerCorpusOf } from '../../src/core/agent/stages/toolCalls.js';
+import {
+  notDispatchedResult,
+  producerCorpusOf,
+} from '../../src/core/agent/stages/toolCalls/index.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
 import type { ContextError } from '../../src/integrity/finding/types.js';
 
@@ -484,7 +487,7 @@ describe('functional: the field case, through the real loop', () => {
 });
 
 describe('unit: the producer corpus holds results from a declared ground, never a settlement (9.113.0)', () => {
-  // The corpus the join reads (`toolCalls.ts` · `producerCorpusOf`): every
+  // The corpus the join reads (`toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf`): every
   // RESULT from a tool the judged one names in `argumentsFrom`. A message the
   // batch settlement wrote is a `role: 'tool'` message too, but it carries
   // `LLMMessage.notDispatched` — its ground never ran and produced nothing.
@@ -530,10 +533,10 @@ describe('functional: a ground the paused batch never dispatched served nothing 
   it("a settled producer contributes no text — the lookup's row is `unreachable`, and a value only its sentence carries files nothing", async () => {
     // The model batches [collect_input → asks a person, fabric_inventory]. The
     // resume SETTLES fabric_inventory without running it: its result is the
-    // library's sentence (`toolCalls.ts` · `notDispatchedResult`), filed under
+    // library's sentence (`toolCalls/batch/settle.ts` · `notDispatchedResult`), filed under
     // the producer's name, carrying tool names and call ids. The producer
     // never ran, so nothing in that sentence is a value this run produced
-    // (`toolCalls.ts` · `producerCorpusOf` reads results by
+    // (`toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf` reads results by
     // `findings/offer.ts` · `isResultMessage`). Read as a result, the check
     // would file an advisory naming 'fabric_inventory' as the source of a
     // value it never served, and count the encounter as checked.

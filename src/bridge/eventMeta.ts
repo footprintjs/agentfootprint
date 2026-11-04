@@ -28,6 +28,8 @@ import type { EventMeta, EventSourcePosition } from '../events/types.js';
  * We accept both shapes and normalize inside `buildEventMeta`.
  */
 export interface StageOrigin {
+  /** Actual native traversal identity, when this fact came from a stage. */
+  readonly runId?: string;
   readonly runtimeStageId?: string;
   readonly subflowPath?: string | readonly string[];
   /** Source emission time, when this origin is an emit rather than a flow hook. */
@@ -96,7 +98,7 @@ export function buildEventMeta(
     runtimeStageId,
     subflowPath,
     compositionPath: run.compositionPath,
-    runId: run.runId,
+    runId: origin?.runId ?? run.runId,
     ...(run.traceId !== undefined && { traceId: run.traceId }),
     ...(run.correlationId !== undefined && { correlationId: run.correlationId }),
     ...(run.turnIndex !== undefined && { turnIndex: run.turnIndex }),

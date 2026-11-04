@@ -5,7 +5,7 @@
  * Pattern: a closed discriminated union, decided where the library positively
  *          knows the answer and switched on wherever a record is served.
  * Role:    the one vocabulary every serving door resolves to
- *          (`runRedaction.ts` · `coverageOfExecutor`, `declared.ts` ·
+ *          (`RunRedaction.coverage`, `declared.ts` ·
  *          `declarationOf`, `EventDispatcher` · `served`):
  *
  *   - `covered`        — the run was opened with a policy: serve under it.

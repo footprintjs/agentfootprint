@@ -81,9 +81,13 @@ function slowOk(reply: string, delayMs: number) {
   return LLMCall.create({ provider, model: 'mock' }).system('').build();
 }
 
-/** Reach the instance's private branch-error map (test-only). */
-function branchErrorsOf(par: Parallel): Map<string, BranchErrorRecord> {
-  return (par as unknown as { branchErrors: Map<string, BranchErrorRecord> }).branchErrors;
+/** A child-owned outcome reader that fails INSIDE the production output mapper. */
+function mapperFailure(): ReturnType<typeof ok> & { outcomeOf(): never } {
+  return Object.assign(ok('unused'), {
+    outcomeOf(): never {
+      throw new Error('mapper boom');
+    },
+  });
 }
 
 // ── 1. Unit — wrapBranchOutputMapper + failFast stamping ────────────
@@ -92,9 +96,13 @@ describe('Parallel required — unit', () => {
   it('wrapBranchOutputMapper records a mapper throw against the branch id and rethrows', () => {
     const errs = new Map<string, BranchErrorRecord>();
     const boom = new Error('mapper boom');
-    const wrapped = wrapBranchOutputMapper('legal', errs, () => {
-      throw boom;
-    });
+    const wrapped = wrapBranchOutputMapper(
+      'legal',
+      () => errs,
+      () => {
+        throw boom;
+      },
+    );
 
     expect(() => wrapped('whatever')).toThrow('mapper boom');
     expect(errs.get('legal')?.message).toBe('mapper boom');
@@ -106,9 +114,13 @@ describe('Parallel required — unit', () => {
     const errs = new Map<string, BranchErrorRecord>([
       ['legal', { message: 'earlier error', raw: undefined }],
     ]);
-    const wrapped = wrapBranchOutputMapper('legal', errs, () => {
-      throw new Error('later error');
-    });
+    const wrapped = wrapBranchOutputMapper(
+      'legal',
+      () => errs,
+      () => {
+        throw new Error('later error');
+      },
+    );
 
     expect(() => wrapped('x')).toThrow('later error');
     expect(errs.get('legal')?.message).toBe('earlier error');
@@ -116,9 +128,13 @@ describe('Parallel required — unit', () => {
 
   it('wrapBranchOutputMapper passes success through untouched and records nothing', () => {
     const errs = new Map<string, BranchErrorRecord>();
-    const wrapped = wrapBranchOutputMapper('legal', errs, (sfOutput) => ({
-      branchResults: { legal: sfOutput },
-    }));
+    const wrapped = wrapBranchOutputMapper(
+      'legal',
+      () => errs,
+      (sfOutput) => ({
+        branchResults: { legal: sfOutput },
+      }),
+    );
 
     expect(wrapped('fine')).toEqual({ branchResults: { legal: 'fine' } });
     expect(errs.size).toBe(0);
@@ -126,9 +142,13 @@ describe('Parallel required — unit', () => {
 
   it('wrapBranchOutputMapper coerces a non-Error throw to a string message', () => {
     const errs = new Map<string, BranchErrorRecord>();
-    const wrapped = wrapBranchOutputMapper('rogue', errs, () => {
-      throw 'string-thrown';
-    });
+    const wrapped = wrapBranchOutputMapper(
+      'rogue',
+      () => errs,
+      () => {
+        throw 'string-thrown';
+      },
+    );
 
     expect(() => wrapped('x')).toThrow();
     expect(errs.get('rogue')?.message).toBe('string-thrown');
@@ -461,33 +481,14 @@ describe('Parallel required — integration: defaults unchanged', () => {
 // ── 5. Scenario — (c) outputMapper throw attribution ────────────────
 
 describe('Parallel required — outputMapper error attribution', () => {
-  /**
-   * End-to-end through the REAL footprintjs swallow path: replace one
-   * mounted outputMapper with a production-wrapped throwing mapper
-   * (bound to the instance's own branch-error map), run, and assert the
-   * Merge join prints the attributed message — NOT 'unknown error'.
-   *
-   * The inner mapper Parallel installs is total over its input, so the
-   * throw is injected at the same seam `wrapBranchOutputMapper` guards.
-   */
-  function poisonMapper(par: Parallel, branchId: string, error: () => never): void {
-    const node = par.getSpec().root.children!.find((c) => c.id === branchId)!;
-    node.subflowMountOptions!.outputMapper = wrapBranchOutputMapper(
-      branchId,
-      branchErrorsOf(par),
-      error,
-    );
-  }
-
+  // The public child-owned outcome reader throws inside the unchanged
+  // production wrapper. No private-instance map or compiled-chart mutation.
   it('strict merge: a mapper throw rejects with the branch-attributed message, not unknown error', async () => {
     const par = Parallel.create({ id: 'p-mapper' })
       .branch('a', ok('A'))
-      .branch('b', ok('B'))
+      .branch('b', mapperFailure())
       .mergeWithFn((r) => Object.values(r).join(','))
       .build();
-    poisonMapper(par, 'b', () => {
-      throw new Error('mapper boom');
-    });
 
     const err = await par.run({ message: 'go' }).then(
       () => undefined,
@@ -501,28 +502,22 @@ describe('Parallel required — outputMapper error attribution', () => {
   it('tolerant merge: a mapper throw lands in BranchOutcome.error with the real message', async () => {
     const par = Parallel.create()
       .branch('a', ok('A'))
-      .branch('b', ok('B'))
+      .branch('b', mapperFailure())
       .mergeOutcomesWithFn((outcomes) => {
         const b = outcomes['b']!;
         return b.ok ? 'unexpected-ok' : `b-error=${b.error}`;
       })
       .build();
-    poisonMapper(par, 'b', () => {
-      throw new Error('mapper boom');
-    });
 
     expect(await par.run({ message: 'go' })).toBe('b-error=mapper boom');
   });
 
   it('mixed + tolerant: a REQUIRED branch mapper throw rejects with the attributed message', async () => {
     const par = Parallel.create({ id: 'p-req-mapper' })
-      .branch('vital', ok('V'), { required: true })
+      .branch('vital', mapperFailure(), { required: true })
       .branch('extra', ok('E'))
       .mergeOutcomesWithFn(() => 'merged')
       .build();
-    poisonMapper(par, 'vital', () => {
-      throw new Error('mapper boom');
-    });
 
     await expect(par.run({ message: 'go' })).rejects.toThrow(/vital: mapper boom/);
   });

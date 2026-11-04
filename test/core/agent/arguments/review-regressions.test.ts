@@ -47,7 +47,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../../../../src/provider-contract/types.js';
-import { producerCorpusOf } from '../../../../src/core/agent/stages/toolCalls.js';
+import { producerCorpusOf } from '../../../../src/core/agent/stages/toolCalls/index.js';
 import { _resetUnmountedRulesWarnings } from '../../../../src/core/agent/arguments/dispatch.js';
 import type { ArgumentRow } from '../../../../src/core/agent/arguments/rows.js';
 import { unreadableRulesRefusal } from '../../../../src/core/agent/arguments/serve.js';

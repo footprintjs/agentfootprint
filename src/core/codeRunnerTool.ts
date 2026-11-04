@@ -162,7 +162,7 @@ export const CODE_RUNS: unique symbol = Symbol.for('agentfootprint.tools.codeRun
 /**
  * Where a code run's facts ALSO go when the AGENT dispatched the call: a slot
  * the dispatch loop puts on that one call's execution context
- * (`core/agent/stages/toolCalls.ts`, both execute boundaries) and reads back
+ * (`core/agent/stages/toolCalls/evidence/scriptsOperations.ts`, both execute boundaries) and reads back
  * when `execute` returns. The published map above is filled exactly as
  * before; the slot is the dispatch's own copy, the one the script record
  * attests from and `agentfootprint.tools.code_run` carries.

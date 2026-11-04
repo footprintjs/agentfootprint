@@ -206,13 +206,23 @@ describe('async-provider — async reject', () => {
 // ─── 5. SIGNAL PROPAGATION ───────────────────────────────────────
 
 describe('async-provider — signal propagation', () => {
-  it('env.signal flows into ctx.signal so providers can honor abort', async () => {
+  it('caller cancellation reaches current discovery and prevents later model work', async () => {
     const sawSignals: AbortSignal[] = [];
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const llm = mock({ respond: () => ({ content: 'ok', toolCalls: [] }) });
+    const complete = vi.spyOn(llm, 'complete');
     const provider: ToolProvider = {
       id: 'signal-aware',
-      list(ctx) {
+      async list(ctx) {
         if (ctx.signal) sawSignals.push(ctx.signal);
+        entered();
+        await gate;
         return [fakeTool('a')];
       },
     };
@@ -221,9 +231,20 @@ describe('async-provider — signal propagation', () => {
       .toolProvider(provider)
       .build();
     const controller = new AbortController();
-    await agent.run({ message: 'go' }, { env: { signal: controller.signal } });
+    const outcome = agent.run({ message: 'go' }, { env: { signal: controller.signal } }).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    await started;
     expect(sawSignals).toHaveLength(1);
-    expect(sawSignals[0]).toBe(controller.signal);
+    expect(sawSignals[0]?.aborted).toBe(false);
+    const reason = new Error('local discovery cancelled');
+    controller.abort(reason);
+    expect(sawSignals[0]?.aborted).toBe(true);
+    expect(sawSignals[0]?.reason).toBe(reason);
+    release();
+    expect(await outcome).toHaveProperty('error');
+    expect(complete).not.toHaveBeenCalled();
   });
 
   it('ctx.signal is undefined when the agent runs without an env.signal', async () => {

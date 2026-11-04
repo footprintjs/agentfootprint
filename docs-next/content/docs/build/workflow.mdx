@@ -57,43 +57,7 @@ Those failures are pinned as a compile-level regression test (`test/type-regress
 
 Any `Runner` is a step, and a typed step is a small class over `RunnerBase` — one stage, and the stage's **return value** is what the next step receives:
 
-```ts
-import { flowChart, FlowChartExecutor, type FlowChart, type TypedScope } from 'footprintjs';
-import { RunnerBase } from 'agentfootprint';
-
-class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
-  readonly id: string;
-  readonly name: string;
-  private readonly fn: (input: TIn) => TOut;
-
-  constructor(id: string, fn: (input: TIn) => TOut) {
-    super();
-    this.id = id;
-    this.name = id;
-    this.fn = fn;
-    this.initChart(() => this.buildChart());
-  }
-
-  private buildChart(): FlowChart {
-    const fn = this.fn;
-    return flowChart<TOut, TypedScope<Record<string, unknown>>>(
-      this.name,
-      (scope) => fn(scope.$getArgs<TIn>()),
-      `${this.id}-run`,
-    ).build();
-  }
-
-  async run(input: TIn): Promise<TOut> {
-    const executor = new FlowChartExecutor(this.getSpec());
-    this.lastExecutor = executor;
-    return (await executor.run({ input: { ...input } })) as TOut;
-  }
-
-  async resume(): Promise<TOut> {
-    throw new Error(`${this.id}: nothing to pause on`);
-  }
-}
-```
+<CodeFile path="examples/core-flow/05-workflow.ts" region="typed-step" title="A typed step over the native lifecycle" />
 
 The full version is in the example above, used twice.
 

@@ -22,9 +22,9 @@
  * byte-silent).
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { danglingReferencesOf } from '../../src/integrity/dangling-reference/check.js';
 import { Agent, slidingWindow, defineTool } from '../../src/index.js';
 import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
@@ -257,10 +257,14 @@ describe('functional: the evicted ground files ONE finding through the real loop
  *
  * The one moving part, the turn's clock (`turnStartMs`), is masked.
  */
-const NARRATIVE_REFERENCE = resolve(__dirname, 'reference/dangling-trap-narrative.json');
+
+const NATIVE_NARRATIVE_REFERENCE = resolve(
+  __dirname,
+  'reference/v14-native-dangling-trap-narrative.json',
+);
 
 describe('regression: the check adds no step to the narrative', () => {
-  it('the trap run narrates exactly what 9.112.2 narrated, step for step', async () => {
+  it('the trap retains the exact native14 narrative, including every tracked read', async () => {
     const { agent, events } = trapAgent(true);
     await agent.run({ message: TASK });
     // The trap is armed: compositions after the drop ran the check.
@@ -268,18 +272,9 @@ describe('regression: the check adds no step to the narrative', () => {
     const narrative = agent
       .getLastNarrativeEntries()
       .map((entry) => entry.text.replace(/turnStartMs = \d+/g, 'turnStartMs = <clock>'));
-    if (process.env.AF_DANGLING_NARRATIVE_REFERENCE === 'update') {
-      mkdirSync(dirname(NARRATIVE_REFERENCE), { recursive: true });
-      writeFileSync(NARRATIVE_REFERENCE, `${JSON.stringify(narrative, null, 1)}\n`);
-      return;
-    }
-    expect(
-      existsSync(NARRATIVE_REFERENCE),
-      'no narrative reference — generate it on the pre-change tree',
-    ).toBe(true);
-    const reference = JSON.parse(readFileSync(NARRATIVE_REFERENCE, 'utf8')) as string[];
-    // The reads first, so a failure names the step that moved.
-    const reads = (lines: readonly string[]) => lines.filter((l) => / Read \w+/.test(l));
+    const reference = JSON.parse(readFileSync(NATIVE_NARRATIVE_REFERENCE, 'utf8')) as string[];
+    // Keep the same full read/order/value guard on the explicit14 record.
+    const reads = (lines: readonly string[]) => lines.filter((line) => / Read \w+/.test(line));
     expect(reads(narrative)).toEqual(reads(reference));
     expect(narrative).toEqual(reference);
   });
@@ -412,8 +407,8 @@ describe('regression: a re-fetched ground stays silent when the window speaks wi
 
 /**
  * When a batch of calls pauses, the resume answers each call after the paused
- * one with a fixed sentence and never runs it (`core/agent/stages/toolCalls.ts`
- * · "── The batch settlement (9.113.0)"). That message is `role: 'tool'` with a
+ * one with a fixed sentence and never runs it (`core/agent/stages/toolCalls/batch/settle.ts`
+ * · `notDispatchedResult`). That message is `role: 'tool'` with a
  * `toolName`, so a reader that goes by the role would count it as the ground's
  * fresh result and file nothing. The marker `LLMMessage.notDispatched` says it
  * is no result. The request's wire never carries the marker

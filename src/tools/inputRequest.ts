@@ -61,7 +61,7 @@ export interface InputRequestDeclaration {
    * door at the raise, before the
    * checkpoint is returned: the same `tools.absent` event and
    * `coverageDeclared` row a RETURNED absence files
-   * (`core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`). Data for the
+   * (`core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`). Data for the
    * record, not for the ask: it never rides the awaiting-input shape or the
    * paused call's served result, and nothing on resume reads it, so the
    * pending question says the miss only if `question` says it in words.
@@ -455,11 +455,11 @@ function landedAnswer(
  * when it reads nothing, so a raise cannot carry a miss the dispatch door
  * would then drop without a word. Held as handed over: it is read once, at
  * the raise, and the rows filed from it are copies
- * (`core/agent/stages/toolCalls.ts` · `declareCoverage` copies item by item).
+ * (`core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareCoverage` copies item by item).
  * An envelope it reads whose lists that copy cannot read (a hand-built
  * `checked: [null]`) is not refused here: the door meets it at the raise
  * and errors the call, as it would the same value returned
- * (`core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`).
+ * (`core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`).
  */
 function recognizedAbsence(raw: unknown): ToolAbsence {
   const absence = readAbsence(raw);

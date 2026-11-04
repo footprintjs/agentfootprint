@@ -38,46 +38,11 @@
  */
 
 /**
- * Thrown when `run()` / `resume()` is called on a runner that is already
- * running.
- *
- * One instance answers one turn at a time. To run two turns at once, build two
- * agents — a chart is built once per instance and instances are cheap — or put
- * the turns behind `standingAgent({ onConcurrentInvoke: 'enqueue' })`, which
- * queues them.
- *
- * @example
- * ```ts
- * // Refused: both would write the same instance's last-run state.
- * await Promise.all([agent.run({ message: 'a' }), agent.run({ message: 'b' })]);
- *
- * // Fine: two instances, two sets of state.
- * await Promise.all([agentA.run({ message: 'a' }), agentB.run({ message: 'b' })]);
- * ```
+ * One shared native refusal class across logical runners and raw executors.
+ * Migration: runnerId replaces agentId; activeRunId is absent during setup
+ * before native origin exists. Match code ERR_RUN_IN_FLIGHT across formats.
  */
-export class RunInFlightError extends Error {
-  readonly code = 'ERR_RUN_IN_FLIGHT' as const;
-  /** The runner that is busy, by its configured id. */
-  readonly agentId: string;
-  /** The run already in flight, so a log line can be joined to its trace. */
-  readonly activeRunId: string;
-
-  constructor(door: string, agentId: string, activeRunId: string) {
-    super(
-      `${door}: this agent is already running (run '${activeRunId}'). One instance answers one ` +
-        `turn at a time — its last executor, run context, answer and pause all live on the ` +
-        `instance, so two overlapping runs would each finish having overwritten the other's. ` +
-        `Both would return a plausible answer and checkpoint() would then hand back whichever ` +
-        `finished last, which is why this is refused rather than left to look like it worked. ` +
-        `Await the run in flight, build a second Agent for the second turn (charts are ` +
-        `built per instance and instances are cheap), or serve the agent through ` +
-        `standingAgent({ onConcurrentInvoke: 'enqueue' }) to queue turns behind each other.`,
-    );
-    this.name = 'RunInFlightError';
-    this.agentId = agentId;
-    this.activeRunId = activeRunId;
-  }
-}
+export { RunInFlightError } from 'footprintjs';
 
 /**
  * Thrown when a new message is sent to an agent whose last run PAUSED to ask a
@@ -109,7 +74,7 @@ export class PendingQuestionError extends Error {
         `${asked} raised the question and nothing has answered it.${quoted} Answer it with ` +
         `agent.resume(outcome.checkpoint, decision) — that continues the paused run from where ` +
         `it stopped, with no earlier tool re-executed. If the question really is being dropped, ` +
-        `call agent.abandonPause() first and then run() again: a pending question that a later ` +
+        `await agent.abandonPause() first and then run() again: a pending question that a later ` +
         `message silently discards is a consent gate anyone can walk around.`,
     );
     this.name = 'PendingQuestionError';

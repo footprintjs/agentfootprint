@@ -45,7 +45,11 @@ class ObjectStep extends RunnerBase<object, unknown> {
   readonly name = 'object-step';
   constructor(private readonly fn: () => unknown) {
     super();
-    this.initChart(() => this.buildChart());
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [this.name],
+      initialize: () => ({}),
+    });
   }
   private buildChart(): FlowChart {
     const fn = this.fn;

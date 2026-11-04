@@ -134,7 +134,7 @@ Defined in: [src/provider-contract/types.ts:184](https://github.com/footprintjs/
 9.113.0 — this `role: 'tool'` message answers a call that was NEVER
 DISPATCHED. The library wrote it; no gate judged the call and no tool ran.
 
-Stamped by the batch settlement (`core/agent/stages/toolCalls.ts` ·
+Stamped by the batch settlement (`core/agent/stages/toolCalls/batch/settlementOperations.ts` ·
 `settleBatch`, which takes each copy from `notDispatchedMarker`). The
 model proposed several calls in one turn, one of them paused the run, and
 the resume answered each call after it with a fixed sentence
@@ -144,7 +144,7 @@ MODEL reads. This field is the same fact as data, for the readers that ask
 `security/extractSequence.ts` · `extractSequence`, which builds the
 `sequence` a permission policy judges (pairing each marker with the ONE
 proposal it answers, by position — a provider may reuse an id); the
-empty-lookup check's producer corpus (`toolCalls.ts` ·
+empty-lookup check's producer corpus (`toolCalls/evidence/producerCorpus.ts` ·
 `producerCorpusOf`); the check-in evidence trail
 (`core/checkin.ts` · `CheckInTrail` — its `toolCalls` are the calls
 already completed); the window's result naming
@@ -303,7 +303,7 @@ so the note never breaks the one emptiness reader's parse and hides an
 empty or absent result; the unsupported-argument seam's grounded corpus
 (`core/agent/stages/callLLM.ts`, cut on the committed twin — the wire copy
 has lost this field) and the empty-lookup seam's producer corpus
-(`core/agent/stages/toolCalls.ts` · `producerCorpusOf`), so the note never
+(`core/agent/stages/toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf`), so the note never
 vouches for an argument. The model still reads the whole `content`: it
 needs the value to reason about what ran.
 

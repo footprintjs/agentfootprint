@@ -369,7 +369,7 @@ function gatherStage(scope: TypedScope<InjectionEngineState>): void {
 // FOLD · the one owner of scope.hiddenSkillIds — which skill ids this caller's role may not see, this iteration
 // consumers read this and never re-derive it: the Evaluate stage below (cursor + activation, via
 // `types.ts` · isHiddenSkill), and, through the mount's outputMapper, the tools slot's read_skill offer,
-// toolCalls.ts · dispatchRoster, the read_skill gate, the propose-transition refusal, callLLM's ontology piece.
+// toolCalls/execution/catalogOperations.ts · dispatchRoster, the read_skill gate, the propose-transition refusal, callLLM's ontology piece.
 // detached: yes — a plain string[].
 /**
  * Resolve the role-hidden skill ids for this pass. Resolved HERE, at the top

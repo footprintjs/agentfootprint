@@ -96,24 +96,32 @@ function nestedComposition(store: InMemoryStore, seen: Seen, toolSaw: unknown[])
   return Sequence.create({ id: 'outer' }).step('top', top).step('fan', fanOut).build();
 }
 
+// Independent native parents mount the SAME retained children. One parent's
+// public run door remains serialized; mounted component banks stay separate.
+const parentsOf = (shared: Sequence | Parallel) =>
+  [
+    Sequence.create({ id: 'parent-a' }).step('shared', shared).build(),
+    Sequence.create({ id: 'parent-b' }).step('shared', shared).build(),
+  ] as const;
+
 describe('composition members — two users at the same time, nested', () => {
   it('each user’s members read and write only that user’s memory', async () => {
     const store = new InMemoryStore();
     const seen: Seen = [];
     const toolSaw: unknown[] = [];
-    const flow = nestedComposition(store, seen, toolSaw);
+    const [flow, other] = parentsOf(nestedComposition(store, seen, toolSaw));
 
     // Round 1, interleaved: each user tells their own secret.
     await Promise.all([
       flow.run({ message: 'ALICE-SECRET is 1234', identity: ALICE }),
-      flow.run({ message: 'BOB-SECRET is 9876', identity: BOB }),
+      other.run({ message: 'BOB-SECRET is 9876', identity: BOB }),
     ]);
     // Round 2, interleaved: each asks for it back.
     seen.length = 0;
     toolSaw.length = 0;
     await Promise.all([
       flow.run({ message: 'alice asks: what did I tell you?', identity: ALICE }),
-      flow.run({ message: 'bob asks: what did I tell you?', identity: BOB }),
+      other.run({ message: 'bob asks: what did I tell you?', identity: BOB }),
     ]);
 
     const requestsOf = (who: string) => seen.filter((r) => r.includes(`${who} asks`));
@@ -139,10 +147,10 @@ describe('composition members — two users at the same time, nested', () => {
   it('two anonymous runs never share: each run is its own conversation', async () => {
     const store = new InMemoryStore();
     const seen: Seen = [];
-    const flow = nestedComposition(store, seen, []);
+    const [flow, other] = parentsOf(nestedComposition(store, seen, []));
     await Promise.all([
       flow.run({ message: 'ANON-ONE secret' }),
-      flow.run({ message: 'ANON-TWO secret' }),
+      other.run({ message: 'ANON-TWO secret' }),
     ]);
     seen.length = 0;
     await flow.run({ message: 'third asks: anything?' });
@@ -197,19 +205,20 @@ describe('composition members — every composition, deeper nesting, refusals by
   it('Parallel on its own: two users at once, each branch in its own user’s memory', async () => {
     const store = new InMemoryStore();
     const seen: Seen = [];
-    const flow = Parallel.create({ id: 'p' })
+    const shared = Parallel.create({ id: 'p' })
       .branch('a', member('a', store, seen, []))
       .branch('b', member('b', store, seen, []))
       .mergeWithFn((r) => Object.values(r).join(' | '))
       .build();
+    const [flow, other] = parentsOf(shared);
     await Promise.all([
       flow.run({ message: 'ALICE-P-SECRET', identity: ALICE }),
-      flow.run({ message: 'BOB-P-SECRET', identity: BOB }),
+      other.run({ message: 'BOB-P-SECRET', identity: BOB }),
     ]);
     seen.length = 0;
     await Promise.all([
       flow.run({ message: 'alice asks again', identity: ALICE }),
-      flow.run({ message: 'bob asks again', identity: BOB }),
+      other.run({ message: 'bob asks again', identity: BOB }),
     ]);
     const alice = seen.filter((r) => r.includes('alice asks')).join('\n');
     const bob = seen.filter((r) => r.includes('bob asks')).join('\n');

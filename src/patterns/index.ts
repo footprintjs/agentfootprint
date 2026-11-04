@@ -28,5 +28,6 @@ export {
   type LlmRouterOptions,
   type RouterAgent,
   type RoutingDecision,
+  type RoutingStrategy,
 } from './LlmRouter.js';
 export { llmSwarm, type LlmSwarmAgent, type LlmSwarmOptions } from './LlmSwarm.js';

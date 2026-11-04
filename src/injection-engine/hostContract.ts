@@ -134,7 +134,7 @@ export type SkillCachePolicy =
  * across four call sites in three files can be READ in one place, and so a
  * host on another framework can typecheck its own wiring against it.
  *
- * `buildInjectionEngineSubflow.ts` + `core/agent/stages/toolCalls.ts` are the
+ * `buildInjectionEngineSubflow.ts` + `core/agent/stages/toolCalls/index.ts` are the
  * reference implementation of every clause below.
  *
  * @example checking a foreign host against the contract
@@ -170,7 +170,7 @@ export interface SkillGraphHost {
    * this itself: it never sees the tool call. A host that skips the gate
    * turns every declared edge into a suggestion.
    *
-   * Reference: `toolCalls.ts` — `deps.allowedSkillIds(currentSkillId)`.
+   * Reference: `toolCalls/routing/readSkillRoute.ts` — `deps.allowedSkillIds(currentSkillId)`.
    */
   acceptSkillPick(skillId: string, currentSkillId: string | undefined): boolean;
 
@@ -182,7 +182,7 @@ export interface SkillGraphHost {
    * never move the cursor), and clear it at the top of every iteration so it
    * names a pick made just now rather than a stale one.
    *
-   * Reference: `toolCalls.ts` — cleared once per iteration, then set only on
+   * Reference: `toolCalls/routing/readSkillRoute.ts` — cleared once per iteration, then set only on
    * the accepted-hop path.
    */
   publishAcceptedPick(skillId: string | undefined): void;

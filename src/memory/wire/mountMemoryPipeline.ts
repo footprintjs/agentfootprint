@@ -33,7 +33,7 @@
  *   - Future non-Agent concepts (Swarm, Parallel) can use the same helper
  *     — memory isn't tied to Agent conceptually.
  */
-import type { FlowChartBuilder } from 'footprintjs';
+import type { FlowChartBuilder, NativeMappingBinding } from 'footprintjs';
 import type { MemoryPipeline } from '../pipeline/types.js';
 
 /**
@@ -110,13 +110,15 @@ export interface MountMemoryPipelineConfig<ParentState> {
 
   /**
    * Evidence source for CAUSAL pipelines (the evidence bridge, backlog #5).
-   * Called by the write mount's inputMapper at write time; its result lands on
-   * `MemoryState.runEvidence` so `writeSnapshot` persists real decisions /
-   * tool calls / iterations / duration / token usage instead of zeros. The
-   * Agent threads `causalEvidenceRecorder().collect` here automatically when a
-   * CAUSAL memory is mounted. Omit for non-causal pipelines.
+   * Called with the native mapper's opaque parent binding at write time.
+   * Its result lands on MemoryState.runEvidence as a bounded component-leg
+   * observation. Missing or failed observation is unavailable, never measured
+   * zero. Agent resolves that binding's private aggregate automatically for
+   * CAUSAL memories. Omit for non-causal pipelines.
    */
-  readonly evidenceSource?: () => import('../causal/evidenceRecorder.js').RunEvidence;
+  readonly evidenceSource?: (
+    binding: NativeMappingBinding,
+  ) => import('../causal/evidenceRecorder.js').RunEvidence;
 }
 
 // NOTE on stage ordering:
@@ -189,6 +191,13 @@ export function mountMemoryRead<ParentState>(
   });
 }
 
+/** A configured collector cannot manufacture a parent from plain state. */
+function writerBinding(binding: NativeMappingBinding | undefined): NativeMappingBinding {
+  if (binding === undefined)
+    throw new TypeError('Causal observation requires the native memory writer binding');
+  return binding;
+}
+
 /**
  * Mount only the WRITE subflow. No-op when the pipeline has no `write`
  * (e.g., ephemeral pipelines) — returns the builder unchanged.
@@ -208,7 +217,7 @@ export function mountMemoryWrite<ParentState>(
   const identityOverride = config.identityOverride;
 
   return builder.addSubFlowChartNext(writeSubflowId, config.pipeline.write, 'Save Memory', {
-    inputMapper: (parentState: Record<string, unknown>) => ({
+    inputMapper: (parentState: Record<string, unknown>, binding?: NativeMappingBinding) => ({
       identity: identityOverride ?? parentState[identityKey],
       turnNumber: parentState[turnNumberKey],
       contextTokensRemaining: parentState[contextTokensKey] ?? 0,
@@ -217,7 +226,7 @@ export function mountMemoryWrite<ParentState>(
       // Closure-delivered (no PARENT-scope write) — note it DOES land in the
       // write subflow's own tracked scope/commit log, like newMessages; the
       // values are already observable as events, so no new exposure class.
-      ...(config.evidenceSource && { runEvidence: config.evidenceSource() }),
+      ...(config.evidenceSource && { runEvidence: config.evidenceSource(writerBinding(binding)) }),
     }),
     // No outputMapper — write has no parent-visible output.
   });

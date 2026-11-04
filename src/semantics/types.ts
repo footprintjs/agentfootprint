@@ -3,7 +3,7 @@
  * (9.53.0, the `toolOutcome.ts` precedent).
  *
  * WHY IT LIVES HERE. Two sides read these words and neither may own the
- * other: the agent loop's dispatch boundary (core/agent/stages/toolCalls.ts)
+ * other: the agent loop's dispatch boundary (core/agent/stages/toolCalls/evidence/semanticsOperations.ts)
  * recognizes the envelope at run time, and the `check:semantics` build gate
  * (semantics/check.ts) judges the same shapes with no agent anywhere in
  * sight. Declaring the vocabulary in a leaf both sides import keeps the

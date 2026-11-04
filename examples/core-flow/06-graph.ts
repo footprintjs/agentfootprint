@@ -21,7 +21,7 @@
  * Run:  npx tsx examples/core-flow/06-graph.ts
  */
 
-import { FlowChartExecutor, flowChart, type FlowChart, type TypedScope } from 'footprintjs';
+import { flowChart, type FlowChart, type TypedScope } from 'footprintjs';
 import { graph, LLMCall, RunnerBase } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
@@ -61,7 +61,11 @@ class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
     this.id = id;
     this.name = id;
     this.fn = fn;
-    this.initChart(() => this.buildChart());
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [this.name],
+      initialize: () => ({}),
+    });
   }
 
   private buildChart(): FlowChart {
@@ -74,9 +78,14 @@ class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
   }
 
   async run(input: TIn): Promise<TOut> {
-    const executor = new FlowChartExecutor(this.getSpec());
-    this.lastExecutor = executor;
-    return (await executor.run({ input: { ...input } })) as TOut;
+    return this.runExecution().withRun(async (invocation) => {
+      const prepared = this.compositionRunSetup(invocation);
+      return (await invocation.execute(
+        { kind: 'run', options: { input: { ...input } } },
+        prepared.setup,
+        prepared.binding,
+      )) as TOut;
+    });
   }
 
   async resume(): Promise<TOut> {
@@ -91,8 +100,7 @@ export async function run(
   provider?: import('../../src/index.js').LLMProvider,
 ): Promise<unknown> {
   const classify = LLMCall.create({
-    provider:
-      provider ?? exampleProvider('core-flow', { reply: 'refund request for order A-42' }),
+    provider: provider ?? exampleProvider('core-flow', { reply: 'refund request for order A-42' }),
     model: 'mock',
   })
     .system('Restate the request in one line, keeping any order id.')
@@ -194,5 +202,7 @@ export async function run(
 }
 
 if (isCliEntry(import.meta.url)) {
-  run(meta.defaultInput ?? '').then(printResult).catch(console.error);
+  run(meta.defaultInput ?? '')
+    .then(printResult)
+    .catch(console.error);
 }

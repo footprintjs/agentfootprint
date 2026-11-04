@@ -57,7 +57,7 @@ import {
   _resetPeriodWarnings,
   PERIOD_VERDICT_CLAUSES,
 } from '../../../../src/semantics/coverage/period.js';
-import { _resetPeriodUnjudgedWarnings } from '../../../../src/core/agent/stages/toolCalls.js';
+import { _resetPeriodUnjudgedWarnings } from '../../../../src/core/agent/stages/toolCalls/index.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

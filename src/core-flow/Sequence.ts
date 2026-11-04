@@ -10,37 +10,18 @@
  * Emits:   agentfootprint.composition.enter / exit (via compositionRecorder).
  */
 
-import {
-  FlowChartExecutor,
-  flowChart,
-  type FlowChart,
-  type FlowchartCheckpoint,
-  type TypedScope,
-} from 'footprintjs';
+import { flowChart, type FlowChart, type FlowchartCheckpoint, type TypedScope } from 'footprintjs';
 import type { RunOptions } from '../core/runner.js';
-import type { RedactionPolicy } from 'footprintjs';
 import type { StructureRecorder } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId, underRunSignal } from '../core/RunnerBase.js';
+import { RunnerBase, type RunnerCoreValues } from '../core/RunnerBase.js';
+import type { RunnerInvocation } from '../core/runnerExecution.js';
 import { normalizeRunInput } from '../core/runInput.js';
-import type { RunContext } from '../bridge/eventMeta.js';
-import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
-import { streamRecorder } from '../recorders/core/StreamRecorder.js';
-import { agentRecorder } from '../recorders/core/AgentRecorder.js';
-import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { composedInput, readsMessageFromIfAny } from '../core/messageFrom.js';
-import {
-  adoptParentRun,
-  parentRunIn,
-  readsParentRun,
-  closeParentRun,
-  openParentRun,
-  reopenParentRun,
-  withParentRun,
-} from '../core/memberRun.js';
+import { parentRunIn, readsParentRun, withParentRun } from '../core/memberRun.js';
 import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import { adoptMemberRedaction } from '../redaction/declared.js';
@@ -123,12 +104,6 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
   private readonly steps: readonly StepEntry[];
   private readonly opts: SequenceOptions;
 
-  private currentRunContext: RunContext = {
-    runStartMs: 0,
-    runId: 'pending',
-    compositionPath: [],
-  };
-
   constructor(opts: SequenceOptions, steps: readonly StepEntry[]) {
     super();
     this.opts = opts;
@@ -153,7 +128,11 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     // It hands the run it serves to its members (`core/memberRun.ts`).
     readsParentRun(this);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
-    this.initChart(() => this.buildChart());
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [`Sequence:${this.id}`],
+      initialize: () => ({}),
+    });
   }
 
   static create(opts: SequenceOptions = {}): SequenceBuilder {
@@ -192,31 +171,18 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     input: SequenceInput | string,
     options?: RunOptions,
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
-    // The incoming request, refused here — before anything moves — when
-    // requestContext() did not build it.
-    const request = requestOf(options, 'Sequence.run');
-    const runInput = normalizeRunInput<SequenceInput>(input, 'Sequence.run');
-    const executor = this.createExecutor();
-    this.lastExecutor = executor;
-    // The run every member serves — built once, here, from THIS run's id.
-    const parentRun = openParentRun(
-      this.currentRunContext.runId,
-      runInput.identity,
-      'Sequence.run',
-      request,
-    );
-    try {
-      const result = await underRunSignal(options, (engine) =>
-        executor.run({
-          input: { message: runInput.message, parentRun: parentRun.link },
-          ...(engine ?? {}),
-        }),
+    return this.runExecution().withRun(async (invocation) => {
+      const request = requestOf(options, 'Sequence.run');
+      const runInput = normalizeRunInput<SequenceInput>(input, 'Sequence.run');
+      this.prepareCompositionRun(invocation, runInput.identity, request, 'Sequence.run');
+      const prepared = this.compositionRunSetup(invocation);
+      const result = await invocation.execute(
+        { kind: 'run', options: { ...options, input: { message: runInput.message } } },
+        prepared.setup,
+        prepared.binding,
       );
-      return this.finalizeResult(executor, result);
-    } finally {
-      // Released when the run returns — finished, failed or paused (a resume re-opens it).
-      closeParentRun(parentRun);
-    }
+      return this.finalizeResult(invocation, result);
+    });
   }
 
   async resume(
@@ -224,61 +190,25 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
-    // The incoming request, and the paused run its members serve (re-opened
-    // from the checkpoint's own record) — both refused before anything moves.
-    const request = requestOf(options, 'Sequence.resume');
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'Sequence.resume', request);
-    try {
-      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    return this.runExecution().withRun(async (invocation) => {
+      const request = requestOf(options, 'Sequence.resume');
+      this.prepareCompositionResume(invocation, checkpoint, request, 'Sequence.resume');
       const resumeLeg = this.emitPauseResume(checkpoint, input);
-      const executor = this.createExecutor(resumeLeg);
-      this.lastExecutor = executor;
-      const result = await underRunSignal(options, (engine) =>
-        executor.resume(checkpoint, input, engine),
+      const prepared = this.compositionRunSetup(invocation, resumeLeg);
+      const result = await invocation.execute(
+        { kind: 'resume', mode: 'fresh', checkpoint, input, options },
+        prepared.setup,
+        prepared.binding,
       );
-      return this.finalizeResult(executor, result);
-    } finally {
-      closeParentRun(parentRun);
-    }
-  }
-
-  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
-    this.currentRunContext = {
-      runStartMs: Date.now(),
-      runId: makeRunId(),
-      compositionPath: [`Sequence:${this.id}`],
-    };
-
-    // THIS run's context, captured: a run that overlaps it on this instance
-    // never restamps its events, so each is served under its own run's policy.
-    const runContext = this.currentRunContext;
-    const getRunCtx = (): RunContext => runContext;
-    // The run's redaction (`src/redaction/`): every policy a step declared —
-    // the steps run inside THIS executor, so this run's one rule covers them.
-    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
-
-    // Reuse the cached chart built at constructor time.
-    const spec = this.getSpec();
-    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
-    redaction.applyTo(executor);
-
-    const dispatcher = this.getDispatcher();
-
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
-    );
-    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
-    for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
-    return executor;
+      return this.finalizeResult(invocation, result);
+    });
   }
 
   private finalizeResult(
-    executor: FlowChartExecutor,
+    invocation: RunnerInvocation<RunnerCoreValues>,
     result: unknown,
   ): SequenceOutput | RunnerPauseOutcome {
-    const paused = this.detectPause(executor, result);
+    const paused = this.detectPause(invocation, result);
     if (paused) return paused;
     if (result instanceof Error) throw result;
     if (typeof result === 'string') return result;
@@ -293,7 +223,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     const seed = (scope: TypedScope<SequenceState>) => {
       const args = scope.$getArgs<SequenceInput>();
       scope.current = args.message;
-      adoptParentRun(scope, args, 'Sequence');
+      this.enterComposition(scope, args, 'Sequence');
       typedEmit(scope, 'agentfootprint.composition.enter', {
         kind: 'Sequence',
         id: compositionId,
@@ -361,7 +291,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
           id: compositionId,
           name: compositionName,
           status: 'ok',
-          durationMs: Date.now() - this.currentRunContext.runStartMs,
+          durationMs: Date.now() - this.runExecution().forScope(scope).context.runStartMs,
         });
         return current;
       },

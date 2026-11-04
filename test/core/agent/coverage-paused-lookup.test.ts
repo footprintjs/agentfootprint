@@ -3,7 +3,7 @@
  *
  * A tool that finds nothing and then raises `requestInput` to ask the person
  * used to leave NO record of the miss it was asking about: the dispatch
- * door's coverage reader (`stages/toolCalls.ts` · `declareCoverage`) runs on a
+ * door's coverage reader (`stages/toolCalls/evidence/coverageOperations.ts` · `declareCoverage`) runs on a
  * RETURNED result, and the batch loop's pause branch returned the checkpoint
  * before any call site of it. So no `tools.absent`, no `coverageDeclared` row,
  * nothing for a coverage band — and the app could not file it either, because
@@ -54,7 +54,7 @@ import {
 import { mock } from '../../../src/llm-providers.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
 import { stampInputRequest, validateInputDeclaration } from '../../../src/tools/inputRequest.js';
-import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js';
+import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls/index.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── fixtures ────────────────────────────────────────────────────────
@@ -772,6 +772,13 @@ describe('integration: a pause inside a three-call batch (the 9.113.0 settlement
 const REFERENCE = resolve(__dirname, 'reference/paused-lookup-no-absence.json');
 
 /** Every run-varying number dropped: timings and fire times. */
+/** Expected-side clean14 metadata only; historical behavior/payload/order stay exact. */
+const nativeOwnershipKeys = (legacy: readonly string[]): string[] => {
+  const added = ['runIdentitySource', 'runSessionId', 'toolResourceOwner'];
+  for (const key of added) expect(legacy).not.toContain(key);
+  return [...legacy, ...added].sort();
+};
+
 const untimed = (value: unknown): unknown =>
   JSON.parse(
     JSON.stringify(value, (key, v: unknown) =>
@@ -819,7 +826,12 @@ describe('regression: a raise WITHOUT `absence` records what 9.113.0 recorded', 
         return;
       }
       expect(existsSync(REFERENCE), 'no reference — capture it on the pre-change tree').toBe(true);
-      expect(record).toEqual(JSON.parse(readFileSync(REFERENCE, 'utf8')));
+      const legacy = JSON.parse(readFileSync(REFERENCE, 'utf8'));
+      expect(record).toEqual({
+        ...legacy,
+        keysAtPause: nativeOwnershipKeys(legacy.keysAtPause),
+        keysAfterResume: nativeOwnershipKeys(legacy.keysAfterResume),
+      });
     },
   );
 });
@@ -956,7 +968,17 @@ describe('regression: a malformed HAND raise fails as 9.113.0 failed, with or wi
     expect(existsSync(MALFORMED_REFERENCE), 'no reference — capture it on the 9.113.0 tree').toBe(
       true,
     );
-    expect(snapshot).toEqual(JSON.parse(readFileSync(MALFORMED_REFERENCE, 'utf8')));
+    const legacy = JSON.parse(readFileSync(MALFORMED_REFERENCE, 'utf8')) as Record<
+      string,
+      { keys: string[] }
+    >;
+    const expected = Object.fromEntries(
+      Object.entries(legacy).map(([label, record]) => [
+        label,
+        { ...record, keys: nativeOwnershipKeys(record.keys) },
+      ]),
+    );
+    expect(snapshot).toEqual(expected);
     // What the reference holds is the in-flight batch, not an empty frame —
     // for every raise after a sibling, whether or not it carried `absence`.
     for (const label of [

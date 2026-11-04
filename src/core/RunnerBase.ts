@@ -12,12 +12,12 @@ import type {
   CombinedRecorder,
   FlowChart,
   FlowChartExecutor,
+  FlowChartExecutorOptions,
+  RunSetup,
   FlowchartCheckpoint,
   RedactionPolicy,
 } from 'footprintjs';
 import type { RunOptions } from './runner.js';
-import { armDeadline, linkedController } from '../lib/abort.js';
-import type { RunContext } from '../bridge/eventMeta.js';
 import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
 import { bindChartStages } from '../redaction/chartBinding.js';
 import { declarationOf, declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
@@ -25,21 +25,38 @@ import { policyOfCoverage, type RedactionCoverage } from '../redaction/coverage.
 import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
 import {
   adoptScopeOutsideRun,
-  coverageOfExecutor,
   createRunRedaction,
   outsideRunFor,
   servingAhead,
-  servingOfExecutor,
   type OutsideRun,
   type RunRedaction,
 } from '../redaction/runRedaction.js';
 import type { EventServing } from '../redaction/served.js';
-import { servableSnapshot } from './servableSnapshot.js';
 import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
 import { readAskComponent } from '../tools/askComponent.js';
-import { pauseDemandsDecision } from './pause.js';
+import { isPaused, pauseDemandsDecision } from './pause.js';
+import {
+  RunnerExecution,
+  type RunnerInvocation,
+  type RunnerComponentInstaller,
+} from './runnerExecution.js';
+import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
+import { streamRecorder } from '../recorders/core/StreamRecorder.js';
+import { agentRecorder } from '../recorders/core/AgentRecorder.js';
+import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
+import {
+  adoptParentRun,
+  closeParentRun,
+  copyIdentity,
+  openParentRun,
+  reopenParentRun,
+  type ParentRunRecord,
+} from './memberRun.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
+import type { RequestContext } from '../identity/requestContext.js';
+import { assertIdentityShape } from './agent/callerIdentity.js';
 import { noteDecisionTakenUp, pausedRequestIdOf } from './consentRequest.js';
 import { readAwaitingInput } from '../tools/inputRequest.js';
 import type { MiddlewareAsk, RunnerPauseOutcome } from './pause.js';
@@ -99,142 +116,31 @@ function pauseSegments(checkpoint: FlowchartCheckpoint): readonly string[] {
   return typeof last === 'string' ? parseSubflowPath(last) : [];
 }
 
-let _runIdSeq = 0;
-
-/**
- * Make a unique run id. Exported for tests; internal use normally.
- */
-export function makeRunId(): string {
-  return `run-${Date.now()}-${++_runIdSeq}`;
+export interface RunnerCoreValues {
+  /** Private policy/serving for this execution; never tracked chart state. */
+  redaction?: RunRedaction;
+  parentIdentity?: MemoryIdentity;
+  parentRequest?: RequestContext;
+  parentRun?: ParentRunRecord;
 }
 
-/**
- * Is `value` shaped like an id {@link makeRunId} mints? The recogniser lives
- * beside the minter so the format has one owner.
- *
- * Asked by `core/agent/callerIdentity.ts · callerIdentityOf`, which must tell
- * the per-run DEFAULT identity (`{ conversationId: '<runId>' }`, seed's third
- * rung) apart from an identity a caller named — the one fact a resumed run
- * cannot otherwise recover, because a flowchart checkpoint does not carry the
- * paused run's id.
- */
-export function isMintedRunId(value: unknown): boolean {
-  return typeof value === 'string' && /^run-\d+-\d+$/.test(value);
-}
-
-/**
- * One cancellation signal per run, for every runner. A caller may hand it to
- * the engine (`signal`, which stops the traversal) or to the stages
- * (`env.signal`, which tools, the reliability loop and every provider call
- * read). Handed only to the engine, it is handed to the stages too — so a
- * stage never takes the run's own abort for a failure (the reliability loop
- * filed it as a fail-fast, and an agent inside a composition retried the
- * cancelled call up to its cap). Handed to both, the run follows BOTH: either
- * one cancels. Every runner's `run` / `resume` builds its engine options here
- * (through {@link underRunSignal} where it can). The SAME object when there is
- * nothing to add.
- *
- * The run's DEADLINE joins the same signal (`timeoutMs`). The engine arms its
- * own timer for the traversal only, and only when no signal was given — so a
- * deadline used to stop the chart while the provider call in flight kept
- * running (and billing), and a deadline beside a caller's signal did nothing
- * at all. Folded in here, it cancels that call like any abort
- * (`lib/abort.ts`), and the run still fails with the engine's own words.
- *
- * `release()` ends what this armed — the deadline's timer and the links on
- * the caller's signals — and is called once the run settles (finished, failed
- * or paused), as the engine released its own timer: a deadline never fires on
- * a run that already finished, and no listener outlives the run on a
- * long-lived signal. A resume arms a fresh one.
- *
- * It is also where the incoming `request` STOPS: the engine is handed the
- * options without it, so a sealed request never reaches footprintjs's run
- * options (the runner reads it before this call, `memberRun.ts`).
- */
-export function runSignalOf<T extends RunOptions>(options: T | undefined): RunSignal<T> {
-  const engine = withoutRequest(options);
-  const timeoutMs = engine?.timeoutMs;
-  const hasDeadline =
-    typeof timeoutMs === 'number' && timeoutMs !== 0 && Number.isFinite(timeoutMs);
-  const signal = engine?.signal;
-  const envSignal = engine?.env?.signal;
-  if (engine === undefined || (!hasDeadline && (signal === undefined || signal === envSignal))) {
-    return { options: engine, release: NOTHING_ARMED };
-  }
-  if (!hasDeadline && envSignal === undefined) {
-    // One signal, handed to the stages as well: nothing to combine, nothing armed.
-    return { options: { ...engine, env: { ...engine.env, signal } }, release: NOTHING_ARMED };
-  }
-  // Two signals, or a deadline: ONE run signal follows them all, for exactly
-  // the run's lifetime (`linkedController`), and the deadline aborts it.
-  const { controller, unlink } = linkedController(signal, envSignal);
-  const disarm = hasDeadline
-    ? armDeadline(
-        controller,
-        timeoutMs,
-        () => new Error(`Execution timed out after ${timeoutMs}ms`),
-      )
-    : NOTHING_ARMED;
-  // The deadline now rides the signal; the engine is not handed a second timer.
-  const { timeoutMs: _timeoutMs, ...rest } = engine;
-  void _timeoutMs;
-  return {
-    options: {
-      ...rest,
-      signal: controller.signal,
-      env: { ...engine.env, signal: controller.signal },
-    } as T,
-    release: () => {
-      disarm();
-      unlink();
-    },
-  };
-}
-
-/** One run's engine options, and the release of what was armed for them. */
-export interface RunSignal<T> {
-  readonly options: T | undefined;
-  /** Disarm the run's deadline and unlink its signals — the run settled. Idempotent. */
-  readonly release: () => void;
-}
-
-const NOTHING_ARMED = (): void => undefined;
-
-/**
- * `start` with this run's engine options ({@link runSignalOf}), released once
- * it settles — finished, failed or paused.
- */
-export async function underRunSignal<T extends RunOptions, R>(
-  options: T | undefined,
-  start: (engine: T | undefined) => Promise<R>,
-): Promise<R> {
-  const run = runSignalOf(options);
-  try {
-    return await start(run.options);
-  } finally {
-    run.release();
-  }
-}
-
-/** `options` without `request` — the SAME object when it carries none. */
-function withoutRequest<T extends RunOptions>(options: T | undefined): T | undefined {
-  if (options === undefined || !('request' in options)) return options;
-  const { request: _request, ...rest } = options;
-  void _request;
-  return rest as T;
-}
-
-export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runner<TIn, TOut> {
+export abstract class RunnerBase<
+  TIn = unknown,
+  TOut = unknown,
+  TValues extends RunnerCoreValues = RunnerCoreValues,
+> implements Runner<TIn, TOut>
+{
   protected readonly dispatcher = new EventDispatcher();
   protected readonly attachedRecorders: CombinedRecorder[] = [];
 
-  /**
-   * The most recently used FlowChartExecutor — set by subclasses in
-   * `run()` so consumers can read the canonical structural snapshot
-   * via `getLastSnapshot()`. Single source of structural truth: this
-   * is footprintjs's snapshot, NOT a domain re-derivation.
-   */
-  protected lastExecutor: FlowChartExecutor | undefined;
+  /** Domain values and metadata over the native chart's one run lifecycle. */
+  private execution: RunnerExecution<TValues> | undefined;
+
+  protected runExecution(): RunnerExecution<TValues> {
+    if (this.execution === undefined)
+      throw new TypeError('The runner chart has not been initialized');
+    return this.execution;
+  }
 
   /**
    * Cached footprintjs FlowChart, built ONCE at construction time via
@@ -292,13 +198,15 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * getter — what it computes on is the live run (`liveSnapshot`).
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
-    if (this.lastExecutor === undefined) return undefined;
-    const coverage = coverageOfExecutor(this.lastExecutor);
+    const selected = this.execution?.selected();
+    if (selected === undefined) return undefined;
+    const coverage = selected.value.redaction?.coverage;
+    if (coverage === undefined) return undefined;
     switch (coverage.state) {
       case 'covered':
-        return servableSnapshot(this.lastExecutor, coverage.policy);
+        return selected.view.snapshot({ redact: true });
       case 'declared-none':
-        return servableSnapshot(this.lastExecutor, undefined);
+        return selected.view.snapshot();
       case 'unknown':
         // An executor no run of this runner opened: nothing says what its
         // record may show, so none of it is served — fail closed, never raw.
@@ -314,7 +222,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * {@link RunnerBase.getLastSnapshot}.
    */
   protected liveSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
-    return this.lastExecutor?.getSnapshot();
+    return this.execution?.view()?.snapshot();
   }
 
   /**
@@ -335,7 +243,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     let declaredServing: { declaration: RedactionCoverage; serving: EventServing } | undefined;
     // A fact of a run this dispatcher holds no serving for is refused, never
     // served under another run's policy; the run-id format is ours to judge.
-    this.dispatcher.useRunIdRecogniser(isMintedRunId);
+    this.dispatcher.useRunIdRecogniser((runId) => runId !== CONSUMER_SCOPE_RUN_ID);
     this.dispatcher.useInstanceServing(() => {
       const declaration = declarationOf(this);
       if (declaration.state === 'unknown') return REFUSE;
@@ -346,32 +254,101 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
     });
     registerRunnerLive(this, {
       onRealEvent: (listener) => this.dispatcher.onRealEvent(listener),
-      liveState: () => this.lastExecutor?.getRuntime().globalStore.getState(),
+      liveState: () => this.execution?.view()?.liveState(),
       liveSnapshot: () => this.liveSnapshot(),
     });
   }
 
-  /**
-   * Open the redaction for one run — called by every runner's
-   * `createExecutor`, for every run, before `new FlowChartExecutor`.
-   *
-   * The policy in force is this runner's declaration joined with `handedDown`
-   * (a policy the caller added for this run — `AgentRunOptions.redact`). The
-   * returned object supplies the executor's scope factory (so every stage's
-   * events are served at their source, `src/redaction/runRedaction.ts`) and
-   * hands the policy to footprintjs (`applyTo`). The dispatcher serves the
-   * run's direct facts by the same rule from here on.
-   */
-  protected openRunRedaction(
-    handedDown: RedactionPolicy | undefined,
-    getRunContext: () => RunContext,
+  /** Build domain serving inside the admitted invocation; bind its ID at native origin. */
+  protected prepareRunRedaction(
+    invocation: RunnerInvocation<TValues>,
+    handedDown?: RedactionPolicy,
   ): RunRedaction {
     const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown);
-    const run = createRunRedaction({ policy, dispatcher: this.dispatcher, getRunContext });
-    // Under the run's own id too: a fact it dispatches after the next run
-    // opened is still served under this run's policy.
-    this.dispatcher.useServing(run.serving, getRunContext().runId);
-    return run;
+    const redaction = createRunRedaction({
+      policy,
+      dispatcher: this.dispatcher,
+      getRunContext: () => invocation.context(),
+    });
+    invocation.value.redaction = redaction;
+    return redaction;
+  }
+
+  protected bindRunServing(invocation: RunnerInvocation<TValues>): void {
+    const redaction = invocation.value.redaction;
+    if (redaction === undefined) throw new TypeError('The run has no domain serving declaration');
+    this.dispatcher.useServing(redaction.serving, invocation.context().runId);
+  }
+
+  protected compositionRunSetup(
+    invocation: RunnerInvocation<TValues>,
+    resumeLeg?: RedactionPolicy,
+    extra: readonly CombinedRecorder[] = [],
+  ): {
+    readonly setup: RunSetup;
+    readonly binding: { readonly bindScope: RunRedaction['bindScope'] };
+  } {
+    const redaction = this.prepareRunRedaction(invocation, resumeLeg);
+    const getRunContext = () => invocation.context();
+    const dispatcher = this.dispatcher;
+    const recorders: readonly CombinedRecorder[] = [
+      ...redaction.recorders,
+      new ContextRecorder({ dispatcher, getRunContext, realWrites: redaction }),
+      streamRecorder({ dispatcher, getRunContext }),
+      agentRecorder({ dispatcher, getRunContext }),
+      compositionRecorder({ dispatcher, getRunContext }),
+      ...extra,
+      ...this.attachedRecorders,
+    ];
+    return {
+      setup: {
+        redaction: redaction.policy,
+        attachments: recorders.map((recorder) => ({ recorder })),
+        onOrigin: () => this.bindRunServing(invocation),
+      },
+      binding: { bindScope: redaction.bindScope },
+    };
+  }
+
+  protected prepareCompositionRun(
+    invocation: RunnerInvocation<TValues>,
+    identity: MemoryIdentity | undefined,
+    request: RequestContext | undefined,
+    door: string,
+  ): void {
+    assertIdentityShape(identity, door);
+    invocation.value.parentIdentity = identity === undefined ? undefined : copyIdentity(identity);
+    invocation.value.parentRequest = request;
+    invocation.run.onFinalize(() => closeParentRun(invocation.value.parentRun));
+  }
+
+  protected prepareCompositionResume(
+    invocation: RunnerInvocation<TValues>,
+    checkpoint: FlowchartCheckpoint,
+    request: RequestContext | undefined,
+    door: string,
+  ): void {
+    invocation.value.parentRun = reopenParentRun(checkpoint.sharedState, door, request);
+    invocation.run.onFinalize(() => closeParentRun(invocation.value.parentRun));
+  }
+
+  /** Existing composition seed: open its link with the actual native identity. */
+  protected enterComposition(scope: object, args: unknown, door: string): void {
+    const bound = this.runExecution().forScope(scope);
+    if (!bound.own) {
+      adoptParentRun(scope, args, door);
+      return;
+    }
+    const record =
+      bound.value.parentRun ??
+      openParentRun(
+        bound.context.runId,
+        bound.value.parentIdentity,
+        door,
+        bound.value.parentRequest,
+      );
+    bound.value.parentRun = record;
+    adoptParentRun(scope, { parentRun: record.link }, door);
   }
 
   /**
@@ -410,7 +387,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * timeline, not a sum of every nested one.
    */
   getCommitCount(): number {
-    return this.lastExecutor?.getCommitCount() ?? 0;
+    return this.execution?.view()?.getCommitCount() ?? 0;
   }
 
   // ─── Subclass hooks ────────────────────────────────────────────
@@ -544,13 +521,29 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * guards never see false-positives because each child runner's
    * stage functions are created once and reused.
    */
-  protected initChart(builder: () => FlowChart): void {
+  protected initChart(
+    builder: () => FlowChart,
+    execution: {
+      readonly runnerId: string;
+      readonly compositionPath: readonly string[];
+      readonly initialize: () => TValues;
+      readonly options?: FlowChartExecutorOptions;
+      readonly componentSetup?: RunnerComponentInstaller<TValues>;
+    },
+  ): void {
     if (this.chart !== undefined) {
       throw new Error(
         `${this.constructor.name}: initChart() called twice — the chart is built once at construction and is immutable.`,
       );
     }
     this.chart = builder();
+    this.execution = new RunnerExecution(
+      this.chart,
+      execution,
+      execution.initialize,
+      execution.options,
+      execution.componentSetup,
+    );
     // A stage that runs outside this runner's runs (its chart mounted into an
     // executor the app built) serves its events under what this runner
     // declares — its policy, or positively none — bound to THIS runner at
@@ -594,12 +587,12 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
    * misinterpreted as "unexpected result shape".
    */
   protected detectPause(
-    executor: FlowChartExecutor,
+    invocation: RunnerInvocation<TValues>,
     result: unknown,
   ): RunnerPauseOutcome | undefined {
-    if (!executor.isPaused()) return undefined;
-    const checkpoint = executor.getCheckpoint();
-    if (checkpoint === undefined) return undefined;
+    if (!invocation.view.isPaused() || !isPaused(result)) return undefined;
+    const checkpoint = result.checkpoint;
+    if (checkpoint === undefined) throw new TypeError('The native paused result has no checkpoint');
 
     const pauseData =
       checkpoint.pauseData !== undefined
@@ -608,7 +601,7 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         ? (result as { pauseData?: unknown }).pauseData
         : undefined;
 
-    this.emitPauseRequest(checkpoint, pauseData, servingOfExecutor(executor));
+    this.emitPauseRequest(checkpoint, pauseData, invocation.value.redaction?.serving);
 
     // A check-in pause carries its typed request under `pauseData.checkIn` and a
     // middleware ask carries its question under `pauseData.ask` (the dispatch
@@ -1088,9 +1081,10 @@ export abstract class RunnerBase<TIn = unknown, TOut = unknown> implements Runne
         getSnapshot: () => this.getLastSnapshot(),
         getCommitCount: () => this.getCommitCount(),
         redactedByPolicy: () => {
-          if (this.lastExecutor === undefined) return false;
+          const selected = this.execution?.selected();
+          if (selected === undefined) return false;
           // Unknown reads as covered: a label never claims less than the record may hold.
-          return coverageOfExecutor(this.lastExecutor).state !== 'declared-none';
+          return selected.value.redaction?.coverage.state !== 'declared-none';
         },
       }),
     // v2.8 grouped strategy enablers — see

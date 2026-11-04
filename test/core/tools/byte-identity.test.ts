@@ -1,6 +1,13 @@
 /**
- * BYTE-IDENTITY — a run with NO tool-name collision records exactly what it
- * recorded before 9.92.0.
+ * BYTE-IDENTITY — complete record and served-view fixture contracts.
+ *
+ * Migration14: native component ownership has a named expected record baseline
+ * for28scenarios; three retain direct historical equality. Old JSON is preserved.
+ * The explicit delta includes seed identity/transport/owner writes and matching
+ * traces, plus observed completion-order permutations in existing parallel
+ * slots. No actual record is sorted or filtered and the normalizer is unchanged.
+ * The following notes describe earlier fixture migrations, not current proof
+ * of whole-record equality with pre14 releases.
  *
  * THINKING REPLAY: the `provider-defaults` reader gap's boundary sentence now
  * says that later preparation notes do not prove what was sent or accepted.
@@ -1532,12 +1539,44 @@ function projection(snapshot: Snapshot): unknown {
 }
 
 const REFERENCE_DIR = new URL('./reference/', import.meta.url);
-const referencePath = (name: string): URL => new URL(`${name}.json`, REFERENCE_DIR);
+const NATIVE_RECORD_CASES = new Set([
+  'agent-answer-layer',
+  'agent-arguments-ask-resumed',
+  'agent-arguments-ask',
+  'agent-arguments-assume-limits',
+  'agent-arguments-assume',
+  'agent-arguments-sources-only',
+  'agent-arguments-sources',
+  'agent-dynamic-graph-hop',
+  'agent-dynamic-static-tool',
+  'agent-findings-contingent',
+  'agent-findings-judge',
+  'agent-findings-window',
+  'agent-findings',
+  'agent-from-active-skill',
+  'agent-grouped-graph-hop',
+  'agent-grouped-static-tool',
+  'agent-ontology',
+  'agent-parked-map',
+  'agent-provider-three-sources',
+  'agent-results-period',
+  'agent-scoped-provider',
+  'agent-script-artifact',
+  'agent-shared-tool-reference',
+  'agent-stepped-skill',
+  'agent-time-clock',
+  'agent-tool-choice',
+  'agent-tool-forced',
+  'agent-wrap-up',
+]);
+const NATIVE_REFERENCE_DIR = new URL('./reference/v14-native-components/', import.meta.url);
+const referencePath = (name: string): URL =>
+  new URL(`${name}.json`, NATIVE_RECORD_CASES.has(name) ? NATIVE_REFERENCE_DIR : REFERENCE_DIR);
 const UPDATE = process.env.AF_TOOLS_REFERENCE === 'update';
 
 // ─── the law ─────────────────────────────────────────────────────────
 
-describe('byte-identity — a collision-free run records what it recorded before 9.92.0', () => {
+describe('byte-identity — exact whole-record contract for native component ownership', () => {
   for (const [name, drive] of Object.entries(SCENARIOS)) {
     it(name, async () => {
       const observed = projection(await drive());

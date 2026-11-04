@@ -306,7 +306,7 @@ export function memberIdentityOf(parentRun: ParentRun): MemoryIdentity {
   return parentRun.identity ?? { conversationId: parentRun.runId };
 }
 
-function copyIdentity(identity: MemoryIdentity): MemoryIdentity {
+export function copyIdentity(identity: MemoryIdentity): MemoryIdentity {
   return {
     ...(identity.conversationId !== undefined && { conversationId: identity.conversationId }),
     ...(identity.tenant !== undefined && { tenant: identity.tenant }),

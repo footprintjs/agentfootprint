@@ -6,7 +6,7 @@ title: hashSessionKey
 
 > **hashSessionKey**(`key`): `string`
 
-Defined in: [src/tools/toolSessions.ts:234](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L234)
+Defined in: [src/tools/toolSessions/keys.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions/keys.ts#L92)
 
 A short, stable digest of an isolation key.
 

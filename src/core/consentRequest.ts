@@ -5,7 +5,7 @@
  * Role:   the ONE owner of that law. A consent gate (a tool's `checkIn`, a
  *         middleware's `ask`) pauses the run; `mintConsentRequest` mints the request
  *         at the pause, and `heldDecision` + `spendDecision` hold a resume's
- *         decision to it. The dispatch loop (`agent/stages/toolCalls.ts`) is
+ *         decision to it. The dispatch loop (`agent/stages/toolCalls/index.ts`) is
  *         the only writer and the only place a decision is used; `Agent.resume`
  *         asks the same pure question earlier, so a mismatch is refused before
  *         anything moves.
@@ -805,7 +805,7 @@ export async function spendDecision(
  * What an aborted run ended with — the signal's own reason, as the engine
  * reports it — or `undefined` while the run goes on. Asked before the spend,
  * after it, and by the dispatch loop once more at the last moment before an
- * approved call runs (`toolCalls.ts` · `resolveCredentialAndExecute`): the
+ * approved call runs (`toolCalls/execution/resumedInvocation.ts` · `resolveCredentialAndExecute`): the
  * engine stops waiting on an aborted run's stage, but the stage goes on, and
  * nothing may run for a caller who was already told the run ended.
  */

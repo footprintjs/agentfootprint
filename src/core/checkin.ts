@@ -15,7 +15,7 @@
  * footprintjs's dev-mode flag); the rest are type-only imports of the message
  * shape + the influence-core attribution unit — so it stays cheap to import
  * and trivial to unit-test. The pause plumbing lives in
- * `core/agent/stages/toolCalls.ts`; the events in `events/`; the store in
+ * `core/agent/stages/toolCalls/access/checkInAdmission.ts`; the events in `events/`; the store in
  * `recorders/core/CheckInRecorder.ts`.
  *
  * NOT a policy engine (the `PermissionChecker` in `provider-contract/types.ts` is

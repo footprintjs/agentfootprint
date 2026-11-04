@@ -172,9 +172,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     } catch (err) {
       if (!(err instanceof RunInFlightError)) throw err;
       console.log('  two runs at once → RunInFlightError');
-      console.log(
-        '    (both used to succeed; the instance state afterwards belonged to whichever',
-      );
+      console.log('    (both used to succeed; the instance state afterwards belonged to whichever');
       console.log('     finished last, so checkpoint() could hand back the other run.)');
     }
     await inFlight;
@@ -209,7 +207,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       if (!(err instanceof PendingQuestionError)) throw err;
       console.log(`  message during a pending question → PendingQuestionError (${err.toolName})`);
       console.log('    answer it with resume(checkpoint, decision), or say you are dropping it:');
-      const dropped = agent.abandonPause();
+      const dropped = await agent.abandonPause();
       console.log(`    abandonPause() → dropped ${JSON.stringify(dropped?.question)}`);
     }
   }

@@ -454,7 +454,7 @@ export class EventDispatcher {
   /**
    * Dispatch a fact the runner files about ONE run after its executor returned
    * (its pause request) — served under THAT run's serving
-   * (`runRedaction.ts` · `servingOfExecutor`), never the run in force now: on
+   * (`RunnerInvocation.value.redaction.serving`), never the run in force now: on
    * an instance whose runs overlap, the last run opened is another run. A fact
    * whose run has no serving (`undefined` — an executor no run of this library
    * opened) is refused: served as the placeholder. The real-value path

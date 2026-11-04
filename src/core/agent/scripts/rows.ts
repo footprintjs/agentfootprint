@@ -6,7 +6,7 @@
  *          twin for this kind): `scriptRowFor` builds, `recordScriptRow` is
  *          the only thing that writes a `script` row, `scriptRowsOfTurn` is
  *          the one reader the match and the attachment share.
- * Role:    core/ layer leaf. Called by the dispatch loop (`stages/toolCalls.ts`)
+ * Role:    core/ layer leaf. Called by the dispatch loop (`stages/toolCalls/evidence/scriptsOperations.ts`)
  *          at each place a call of a declared code-running tool pauses or
  *          settles; read by the Route decider's judge and the final branch.
  * Emits:   N/A — the row is state; the runner's facts already rode

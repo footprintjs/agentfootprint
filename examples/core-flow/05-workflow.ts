@@ -18,7 +18,7 @@
  * Run:  npx tsx examples/core-flow/05-workflow.ts
  */
 
-import { FlowChartExecutor, flowChart, type FlowChart, type TypedScope } from 'footprintjs';
+import { flowChart, type FlowChart, type TypedScope } from 'footprintjs';
 import { workflow, LLMCall, RunnerBase } from '../../src/index.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 import { exampleProvider } from '../helpers/provider.js';
@@ -47,6 +47,7 @@ interface Ticket {
  * This is all it takes to put non-LLM work in a chain — one stage, and
  * the stage's return value is what the next step receives.
  */
+// #region typed-step
 class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
   readonly id: string;
   readonly name: string;
@@ -57,7 +58,11 @@ class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
     this.id = id;
     this.name = id;
     this.fn = fn;
-    this.initChart(() => this.buildChart());
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [this.name],
+      initialize: () => ({}),
+    });
   }
 
   private buildChart(): FlowChart {
@@ -72,15 +77,21 @@ class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
   }
 
   async run(input: TIn): Promise<TOut> {
-    const executor = new FlowChartExecutor(this.getSpec());
-    this.lastExecutor = executor;
-    return (await executor.run({ input: { ...input } })) as TOut;
+    return this.runExecution().withRun(async (invocation) => {
+      const prepared = this.compositionRunSetup(invocation);
+      return (await invocation.execute(
+        { kind: 'run', options: { input: { ...input } } },
+        prepared.setup,
+        prepared.binding,
+      )) as TOut;
+    });
   }
 
   async resume(): Promise<TOut> {
     throw new Error(`${this.id}: this step has nothing to pause on`);
   }
 }
+// #endregion typed-step
 
 export async function run(
   input: string,
@@ -140,5 +151,7 @@ export async function run(
 }
 
 if (isCliEntry(import.meta.url)) {
-  run(meta.defaultInput ?? '').then(printResult).catch(console.error);
+  run(meta.defaultInput ?? '')
+    .then(printResult)
+    .catch(console.error);
 }

@@ -145,7 +145,7 @@ waiting. 'issue_refund' (call c2) raised the question…
 A paused run is unfinished work with a person on the other end. Answer it with `resume(checkpoint, decision)`. If the question really is being dropped, say so — `abandonPause()` returns what it dropped, so the abandonment can be logged rather than performed blind:
 
 ```ts
-const dropped = agent.abandonPause();   // { toolName, toolCallId, question }
+const dropped = await agent.abandonPause();   // { toolName, toolCallId, question }
 await agent.run({ message: 'never mind, different question' });
 ```
 

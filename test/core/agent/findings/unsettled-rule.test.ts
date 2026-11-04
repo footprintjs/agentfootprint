@@ -81,7 +81,7 @@ const served = (value: unknown): string => JSON.stringify(value);
 
 /**
  * The rows the dispatch door files for one RETURNED value — the shape
- * `stages/toolCalls.ts · declareCoverage` writes on `coverageDeclared`
+ * `stages/toolCalls/evidence/coverageOperations.ts · declareCoverage` writes on `coverageDeclared`
  * (the one recognizer's reading, each item copied `{ what, why? }`). A
  * string return is never read there, so it files nothing.
  */

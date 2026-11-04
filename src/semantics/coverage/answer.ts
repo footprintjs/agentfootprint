@@ -395,7 +395,7 @@ function copyItem(item: CoverageItem): CoverageItem {
 // LENS · injected-turn · persistent-history
 // reads: scope.coverageDeclared ← read once by ../../core/agent/stages/prepareFinal.ts · captureTurnPayload — the ONE reader that COMPOSES from it,
 //        folded and capped (a typed answer never reaches it: its data twin is `coverageOfAnswer`, above). Not the only read
-//        of the key: ../../core/agent/stages/toolCalls.ts · declareCoverage reads it to append to it,
+//        of the key: ../../core/agent/stages/toolCalls/evidence/coverageOperations.ts · declareCoverage reads it to append to it,
 //        and ../../core/agent/findings/unsettled.ts · withUnsettledRows (9.113.0) reads one call's rows for their `kind` — the witness
 //        that the tool returned an absence — and composes nothing from them (its row's words come from the served result).
 // law: may omit, never deny; every clause anchored to the call it was composed on.

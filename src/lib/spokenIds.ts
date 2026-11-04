@@ -45,8 +45,8 @@ export interface SpokenIds {
 
 // FOLD · the one owner of whether a filtered set is empty because the filter emptied it (held) or because the run held nothing
 // consumers read this and never re-derive it, each NAMED so the pointer survives an edit above it:
-//   skillToolDescriptors.ts · describeOffer · the propose-transition refusal (toolCalls.ts · "── THE REFUSAL SPEAKS WITH THE FILTERED SETS")
-//   toolCalls.ts · dispatchRoster · the read_skill gate's two sets (toolCalls.ts · "── Skill-graph read_skill GATE") · the turn-route offer
+//   skillToolDescriptors.ts · describeOffer · the propose-transition refusal (toolCalls/routing/effectsOperations.ts · "── THE REFUSAL SPEAKS WITH THE FILTERED SETS")
+//   toolCalls/execution/catalogOperations.ts · dispatchRoster · the read_skill gate's two sets (toolCalls/routing/readSkillRoute.ts · `applyReadSkillRoute`) · the turn-route offer
 // detached: yes — { named, held } is freshly built; held is required, not optional, on purpose.
 /**
  * Apply the role filter to one set and keep both halves (9.86.0).

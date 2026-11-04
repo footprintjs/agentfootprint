@@ -1,100 +1,14 @@
-/**
- * Causal memory — types.
- *
- * A `SnapshotEntry` is the value stored in a Causal `MemoryStore`. It
- * captures one agent run's "what happened and why" so future turns can
- * answer follow-up questions ("why did you reject this?") with EXACT
- * past facts instead of LLM reconstruction.
- *
- * Differentiator: footprintjs's `decide()`/`select()` already capture
- * decision evidence as first-class events during traversal — we just
- * persist them. Other libraries can't do this without rebuilding their
- * core to surface decision evidence.
- *
- * Stored as `MemoryEntry<SnapshotEntry>` so the existing store layer
- * (`MemoryStore`, `InMemoryStore`, future Redis/Dynamo/Postgres
- * adapters) handles persistence + identity isolation + TTL + vector
- * search out of the box.
- */
-
+/** Version2 causal snapshots: answer facts plus explicit component-leg evidence. */
 import type { LLMMessage } from '../../provider-contract/types.js';
+import type { Observation, SnapshotCoverage } from './observation.js';
 
-/**
- * One stored agent run — the unit of causal memory.
- *
- * Decisions, tool calls, iterations, and token usage are harvested DURING the run
- * by `causalEvidenceRecorder` (the evidence bridge) and persisted here — the Agent
- * attaches it automatically whenever a CAUSAL memory is mounted. Still deferred: the
- * FULL `commitLog` + narrative entries with depth/path, which land only when an
- * out-of-band recorder integrates `executor.getSnapshot()` directly. Consequence: a
- * persisted snapshot answers "why?" from the recorded DOMAIN evidence (decisions /
- * tool calls), but cannot yet rehydrate the trace-toolpack tools for cross-restart
- * step-by-step navigation — use `.selfExplain()` for in-conversation deep traces.
- */
-export interface SnapshotEntry {
-  /**
-   * The user's message at the time of the run. THIS IS WHAT GETS
-   * EMBEDDED for retrieval — new queries are matched by cosine
-   * similarity against past queries.
-   */
+export type SnapshotEntry = {
+  readonly schemaVersion: 2;
   readonly query: string;
-
-  /**
-   * The agent's final answer for the run. Pairs with `query` to form
-   * the (prompt, completion) pair RL/SFT exports project on.
-   */
   readonly finalContent: string;
-
-  /**
-   * Iteration count — how many ReAct loop turns the agent used to
-   * produce `finalContent`. Useful for ranking "decisive" runs vs
-   * "thrashy" ones.
-   */
-  readonly iterations: number;
-
-  /**
-   * Decision records collected via `decide()`/`select()` (and skill-graph routing)
-   * during the run — harvested live by `causalEvidenceRecorder` (the evidence
-   * bridge) and persisted here. Empty only when the run used no decision primitives.
-   * THE killer field (by design): each entry carries the rule that matched + the
-   * evidence values that satisfied it.
-   */
-  readonly decisions: ReadonlyArray<DecisionRecord>;
-
-  /**
-   * Tool calls made during the run. Each entry: tool name, args,
-   * result (truncated). Surfaces the agent's tool-use trajectory for
-   * RL training of tool-use policies.
-   */
-  readonly toolCalls: ReadonlyArray<ToolCallRecord>;
-
-  /**
-   * Optional rendered narrative — when an out-of-band recorder
-   * captures `executor.getNarrative()` at write time, the full
-   * human-readable trace lands here.
-   */
   readonly narrative?: string;
-
-  /**
-   * Wall-clock duration of the run in milliseconds.
-   */
-  readonly durationMs: number;
-
-  /**
-   * Cumulative token usage at end of run. Used to skip expensive
-   * snapshots from training-data exports under cost caps.
-   */
-  readonly tokenUsage: {
-    readonly input: number;
-    readonly output: number;
-  };
-
-  /**
-   * Optional eval score attached by an `evalRecorder`. When present,
-   * exports can filter to high-quality runs for SFT or rank for DPO.
-   */
   readonly evalScore?: number;
-}
+} & Observation<SnapshotCoverage>;
 
 export interface DecisionRecord {
   /** Stage id where the decision happened (`'classify-risk'`). */

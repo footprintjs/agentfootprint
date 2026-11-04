@@ -1,7 +1,7 @@
 import type { SpokenIds } from '../../../../../lib/spokenIds.js';
 
 // LENS · tool-result · persistent-history
-// reads: the dispatchable roster ← `toolCalls.ts` · dispatchRoster: registry ∪ provider cache, filtered through scope.hiddenSkillIds
+// reads: the dispatchable roster ← `toolCalls/execution/catalogOperations.ts` · dispatchRoster: registry ∪ provider cache, filtered through scope.hiddenSkillIds
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /**
  * What a call to a name nothing can dispatch gets back (9.86.0).

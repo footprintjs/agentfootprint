@@ -4,7 +4,7 @@ title: ParallelBranchOptions
 
 # Interface: ParallelBranchOptions
 
-Defined in: [src/core-flow/Parallel.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L155)
+Defined in: [src/core-flow/Parallel.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L143)
 
 Options bag accepted by `ParallelBuilder.branch()` for per-method
 overrides. Backwards-compatible with the legacy
@@ -17,7 +17,7 @@ string it's still treated as `name`.
 
 > `readonly` `optional` **groupTranslator?**: [`GroupTranslator`](/docs/api/interfaces/GroupTranslator)\<`unknown`\>
 
-Defined in: [src/core-flow/Parallel.ts:159](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L159)
+Defined in: [src/core-flow/Parallel.ts:147](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L147)
 
 Per-method translator override. See `BranchEntry.groupTranslator`.
 
@@ -27,7 +27,7 @@ Per-method translator override. See `BranchEntry.groupTranslator`.
 
 > `readonly` `optional` **name?**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:157](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L157)
+Defined in: [src/core-flow/Parallel.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L145)
 
 Human-friendly name for this branch. Default: the branch id.
 
@@ -37,7 +37,7 @@ Human-friendly name for this branch. Default: the branch id.
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: [src/core-flow/Parallel.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L197)
+Defined in: [src/core-flow/Parallel.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L185)
 
 Mark this branch as REQUIRED: its failure rejects the whole Parallel
 run — even under a tolerant `.mergeOutcomesWithFn()` merge — with an

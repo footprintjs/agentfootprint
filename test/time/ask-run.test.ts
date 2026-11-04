@@ -458,7 +458,32 @@ describe('a good answer serves the same bytes — byte identity', () => {
         requestId: first.awaitingInput.requestId,
         values: { window: GOOD },
       });
-      return JSON.stringify(requests.map((r) => r.messages)).replace(/run-\d+-\d+/g, 'run-…');
+      let projected = 0;
+      const messages = requests.map((request) =>
+        request.messages.map((message) => {
+          if (message.role !== 'tool' || typeof message.content !== 'string') return message;
+          let result: Record<string, unknown>;
+          try {
+            result = JSON.parse(message.content);
+          } catch {
+            return message;
+          }
+          if (
+            result.status !== 'input_received' ||
+            result.requestId !== first.awaitingInput.requestId
+          )
+            return message;
+          projected++;
+          return {
+            ...message,
+            content: JSON.stringify({ ...result, requestId: '<captured-request>' }),
+          };
+        }),
+      );
+      // One actual response stamp is volatile; no identifier spelling or other
+      // message/payload/ordering is normalized.
+      expect(projected).toBe(1);
+      return JSON.stringify(messages);
     };
     expect(await bytes([WINDOW_FIELD])).toBe(await bytes([plainField]));
   });

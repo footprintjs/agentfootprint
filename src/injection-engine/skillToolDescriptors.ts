@@ -303,7 +303,7 @@ function describeOffer(
   // claim about NECESSITY that no posture, budget or hold-out could falsify.
   // The PARK falsifies it. A parked map member keeps the cursor and loses its
   // body and its tools, and `read_skill` is then the only door back — the
-  // re-engagement arm at `toolCalls.ts` exists precisely because 9.59.0 found
+  // re-engagement arm at `toolCalls/routing/readSkillRoute.ts` exists precisely because 9.59.0 found
   // that telling a parked model to answer with the current skill made parking
   // permanent for the rest of the turn. This description cannot see the park
   // (see the note below on hold-outs), so it cannot know when it would be

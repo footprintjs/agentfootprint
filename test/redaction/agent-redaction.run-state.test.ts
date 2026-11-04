@@ -3,8 +3,8 @@
  *
  * Every per-run fact of the redaction lives with the run it describes:
  *   - the policy a run is covered by is handed to ITS executor
- *     (`runRedaction.ts` · `applyTo`), and a snapshot is served under the
- *     policy of the executor it comes from (`policyOfExecutor`) — never the
+ *     (`RunRedaction.recorders`), and a snapshot is served under the
+ *     policy of the executor it comes from (`RunRedaction.coverage`) — never the
  *     instance's latest;
  *   - the policy a paused run was covered by rides its OWN state into its
  *     checkpoint (`AgentState.runRedaction`, written by seed off the run that
@@ -35,7 +35,6 @@ import { recordRun } from '../../src/doors/observe.js';
 import { mock } from '../../src/doors/providers.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { VOCABULARY_VERSION } from '../../src/redaction/conversation.js';
-import { coverageOfExecutor } from '../../src/redaction/runRedaction.js';
 import { servedUnderPolicy } from '../../src/redaction/marker.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { carriedConversationPolicy, locationsOf } from './fixture.js';
@@ -48,16 +47,35 @@ const P: RedactionPolicy = carriedConversationPolicy();
 const Q: RedactionPolicy = { keys: ['finalContent'] };
 
 /** An agent whose first call asks a person about `ssn`, then answers. */
-function asker(provider?: LLMProvider) {
+type PolicySink = (keys: readonly string[] | undefined) => void;
+
+function asker(provider?: LLMProvider, observePolicy?: PolicySink) {
   const ask = defineTool<{ ssn: string }, string>({
     name: 'confirm',
     description: 'ask a person to confirm',
     inputSchema: { type: 'object', properties: { ssn: { type: 'string' } }, required: ['ssn'] },
     execute: ({ ssn }) => askHuman({ question: `Is ${ssn} right?` }),
   });
-  return Agent.create({ provider: provider ?? pausesThenAnswers('SSN-A-1111'), model: 'm' })
-    .tool(ask)
-    .build();
+  const builder = Agent.create({
+    provider: provider ?? pausesThenAnswers('SSN-A-1111'),
+    model: 'm',
+  }).tool(ask);
+  if (observePolicy) {
+    builder.tool(
+      defineTool<Record<string, never>, string>({
+        name: 'inspect_resume_policy',
+        description: 'Observe the resumed fixture policy.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        execute: (_args, context) => {
+          observePolicy(
+            context.redact === undefined ? undefined : [...(context.redact.keys ?? [])],
+          );
+          return askHuman({ question: 'Policy probe reached' });
+        },
+      }),
+    );
+  }
+  return builder.build();
 }
 
 /** A provider that calls `confirm` with `ssn` once, then answers. */
@@ -474,7 +492,7 @@ describe('a carried pattern is a reference the resuming side must hold — never
 
 describe('a carried policy records the vocabulary version it was built under — fail closed across versions', () => {
   const pausedUnder = async (redact: RedactionPolicy) => {
-    const outcome = await asker().run({ message: 'check' }, { redact });
+    const outcome = await asker(undefined, () => undefined).run({ message: 'check' }, { redact });
     if (!isPaused(outcome)) throw new Error('must pause');
     return outcome.checkpoint;
   };
@@ -497,15 +515,23 @@ describe('a carried policy records the vocabulary version it was built under —
   };
   /** The rationale of the resumed leg's route decisions — library text, content by default. */
   const resumedRationales = async (checkpoint: Awaited<ReturnType<typeof pausedUnder>>) => {
-    const agent = asker();
+    const seen: (readonly string[] | undefined)[] = [];
+    const agent = asker(
+      mock({
+        chunkDelayMs: 0,
+        replies: [{ toolCalls: [{ id: 'policy-probe', name: 'inspect_resume_policy', args: {} }] }],
+      }),
+      (keys) => seen.push(keys),
+    );
     const events: AgentfootprintEvent[] = [];
     agent.on('*', (e) => events.push(e));
-    await agent.resume(checkpoint, { answer: 'yes' });
-    const executor = (agent as unknown as { lastExecutor: object }).lastExecutor;
+    expect(isPaused(await agent.resume(checkpoint, { answer: 'yes' }))).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBeDefined();
     const rationales = events
       .filter((e) => e.type === 'agentfootprint.agent.route_decided')
       .map((e) => (e.payload as { rationale?: unknown }).rationale);
-    return { rationales, coverage: coverageOfExecutor(executor) };
+    return { rationales, policyKeys: seen[0]!, marked: servedUnderPolicy(agent.getLastSnapshot()) };
   };
 
   it('a run under the vocabulary carries the CURRENT version; one under a narrower policy carries none', async () => {
@@ -520,21 +546,21 @@ describe('a carried policy records the vocabulary version it was built under —
 
   it('a leg whose record names an OLDER version is covered by the current vocabulary — default-deny stays on', async () => {
     const forged = narrowed(await pausedUnder(P), 'v1-00000000');
-    const { rationales, coverage } = await resumedRationales(forged);
+    const { rationales, policyKeys, marked } = await resumedRationales(forged);
     expect(rationales.length).toBeGreaterThan(0);
     for (const rationale of rationales) expect(rationale).toBe('[REDACTED]');
     // The name the older list lacked covers the leg again.
-    expect(coverage.state).toBe('covered');
-    if (coverage.state === 'covered') expect(coverage.policy.keys).toContain('userPrompt');
+    expect(marked).toBe(true);
+    expect(policyKeys).toContain('userPrompt');
   });
 
   it('control: the same older list stamped with the CURRENT version resumes as carried — the version is what decides', async () => {
     const forged = narrowed(await pausedUnder(P), VOCABULARY_VERSION);
-    const { rationales, coverage } = await resumedRationales(forged);
+    const { rationales, policyKeys, marked } = await resumedRationales(forged);
     // The list resumes as it was carried: without the dropped name. Its events
     // are still served by the value-kind rule — under ANY policy.
-    expect(coverage.state).toBe('covered');
-    if (coverage.state === 'covered') expect(coverage.policy.keys).not.toContain('userPrompt');
+    expect(marked).toBe(true);
+    expect(policyKeys).not.toContain('userPrompt');
     for (const rationale of rationales) expect(rationale).toBe('[REDACTED]');
   });
 

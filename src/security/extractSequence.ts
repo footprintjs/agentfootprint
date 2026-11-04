@@ -157,7 +157,7 @@ function resultsById(history: readonly LLMMessage[]): Map<string, string> {
 /**
  * The proposals the batch settlement answered (9.113.0), keyed by
  * {@link proposalKey}. Pairing is POSITIONAL — the rule the settlement itself
- * writes by (`core/agent/stages/toolCalls.ts` · `pausedBatchOf`: only an
+ * writes by (`core/agent/stages/toolCalls/batch/paused.ts` · `pausedBatchOf`: only an
  * answer AFTER the proposing turn counts): a `role: 'tool'` message answers
  * the first still-unanswered call of its id on the LATEST assistant turn
  * before it that proposed that id. A later answer for an id already answered

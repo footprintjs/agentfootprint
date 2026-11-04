@@ -410,16 +410,25 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the repeated-call notes appended to a tool result ('has now been called N times this turn') — `now` points at the moment of reading, and the count was true only of the call that produced it",
     },
   ],
-  'src/core/agent/stages/toolCalls.ts': [
+  'src/core/agent/stages/toolCalls/access/toolPermission.ts': [
     {
       kind: 'unrepaired',
-      count: 2,
-      why: "both permission-denied tool results ('could not be authorized. This will not change during this run') — a per-call refusal anchored to the run rather than to the call it refused",
+      count: 1,
+      why: "permission-denied tool result ('could not be authorized. This will not change during this run') — the existing per-call refusal classification follows its owner",
     },
+  ],
+  'src/core/agent/stages/toolCalls/access/capabilityQuestion.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: "permission-denied capability result ('could not be authorized. This will not change during this run') — the existing per-call refusal classification follows its owner",
+    },
+  ],
+  'src/core/agent/stages/toolCalls/execution/artifactsOperations.ts': [
     {
       kind: 'not-model-facing',
       count: 2,
-      why: 'an event payload `detail` and the InvalidAskComponentError thrown to the consumer that raised the ask',
+      why: 'an event payload detail and the InvalidAskComponentError thrown to the consumer that raised the ask — the existing classification follows its owner',
     },
   ],
   'src/hosting/answeredPause.ts': [
@@ -1315,16 +1324,15 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // clause (scripts/recovery.ts) is request-only and registered in
         // modelFacingSurfaces; it matches no persistent rule. files 105 → 106,
         // total 204 → 206, notModelFacing 135 → 137.
-        // Trace Stage A: the same4 ephemeral/13 unrepaired literals move from
-        // one file to8 owners. No literal/category total changes; the same
-        // unrepaired arms now occupy6 owner entries instead of1.
-        files: 113,
+        // Trace and ToolCalls splits retain all206 literals and their categories.
+        // The independent owner moves produce115 classified files and21 unrepaired entries.
+        files: 115,
         total: 206,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
         notModelFacing: 137,
-        unrepairedEntries: 20,
+        unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —
       // the two halves of the same census, which is what makes the bucket a work

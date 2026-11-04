@@ -40,7 +40,8 @@
  */
 
 import {
-  FlowChartExecutor,
+  type CombinedRecorder,
+  type RunSetup,
   flowChart,
   type FlowChart,
   type FlowchartCheckpoint,
@@ -55,7 +56,8 @@ import type { GroupMetadata, GroupTranslator } from './translator.js';
 import type { RunnerPauseOutcome } from './pause.js';
 import { SUBFLOW_IDS, STAGE_IDS, milestoneTagsFor, RECEIPT_KEY } from '../lib/conventions.js';
 import { callUnder } from '../lib/abort.js';
-import type { RunContext } from '../bridge/eventMeta.js';
+import type { RunnerInvocation } from './runnerExecution.js';
+import type { RunRedaction } from '../redaction/runRedaction.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { errorBridge } from '../recorders/core/ErrorBridge.js';
@@ -75,7 +77,7 @@ import {
   resolveCostBudget,
   type ResolvedCostBudget,
 } from './cost.js';
-import { RunnerBase, makeRunId, underRunSignal } from './RunnerBase.js';
+import { RunnerBase, type RunnerCoreValues } from './RunnerBase.js';
 import { normalizeRunInput } from './runInput.js';
 import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
@@ -243,13 +245,6 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
    *  the chart has zero thinking overhead (build-time conditional mount). */
   private readonly thinkingHandler?: ThinkingHandler;
 
-  // Run-scoped; refreshed each run().
-  private currentRunContext: RunContext = {
-    runStartMs: 0,
-    runId: 'pending',
-    compositionPath: [],
-  };
-
   constructor(opts: LLMCallOptions, systemPromptValue: string) {
     super();
     this.provider = opts.provider;
@@ -284,7 +279,11 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // exactly N times (N = node count) per LLMCall, and reference-equality memos
     // on `getSpec()` work. Subsequent `getSpec()` calls return the
     // cached chart; each `run()` reuses it in a fresh executor.
-    this.initChart(() => this.buildChart() as FlowChart);
+    this.initChart(() => this.buildChart() as FlowChart, {
+      runnerId: this.id,
+      compositionPath: [`LLMCall:${this.id}`],
+      initialize: () => ({}),
+    });
   }
 
   static create(opts: LLMCallOptions): LLMCallBuilder {
@@ -323,22 +322,20 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     input: LLMCallInput | string,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
-    // Refused like every runner's; it serves no tool here, so it goes nowhere.
-    requestOf(options, 'LLMCall.run');
-    // Normalize or refuse first. Before 8.18.0 a bare string reached here as
-    // `input.message === undefined`, the messages slot composed ZERO messages
-    // from it, and the model was called with an empty conversation — an
-    // answer to nothing, returned as though the call had worked.
-    const runInput = normalizeRunInput<LLMCallInput>(input, 'LLMCall.run');
-    const executor = this.createExecutor();
-    this.lastExecutor = executor;
-    const result = await underRunSignal(options, (engine) =>
-      executor.run({
-        input: { message: runInput.message },
-        ...(engine ?? {}),
-      }),
-    );
-    return this.finalizeResult(executor, result);
+    return this.runExecution().withRun(async (invocation) => {
+      requestOf(options, 'LLMCall.run');
+      const runInput = normalizeRunInput<LLMCallInput>(input, 'LLMCall.run');
+      const prepared = this.createRunSetup(invocation);
+      const result = await invocation.execute(
+        {
+          kind: 'run',
+          options: { ...options, input: { message: runInput.message } },
+        },
+        prepared.setup,
+        { bindScope: prepared.bindScope },
+      );
+      return this.finalizeResult(invocation, result);
+    });
   }
 
   async resume(
@@ -346,77 +343,58 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
-    // Refused like every runner's; it serves no tool here, so it goes nowhere.
-    requestOf(options, 'LLMCall.resume');
-    // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
-    const resumeLeg = this.emitPauseResume(checkpoint, input);
-    const executor = this.createExecutor(resumeLeg);
-    this.lastExecutor = executor;
-    const result = await underRunSignal(options, (engine) =>
-      executor.resume(checkpoint, input, engine),
-    );
-    return this.finalizeResult(executor, result);
+    return this.runExecution().withRun(async (invocation) => {
+      requestOf(options, 'LLMCall.resume');
+      const resumeLeg = this.emitPauseResume(checkpoint, input);
+      const prepared = this.createRunSetup(invocation, resumeLeg);
+      const result = await invocation.execute(
+        { kind: 'resume', mode: 'fresh', checkpoint, input, options },
+        prepared.setup,
+        { bindScope: prepared.bindScope },
+      );
+      return this.finalizeResult(invocation, result);
+    });
   }
 
-  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
-    this.currentRunContext = {
-      runStartMs: Date.now(),
-      runId: makeRunId(),
-      compositionPath: [`LLMCall:${this.id}`],
-    };
-
-    // THIS run's context, captured: a run that overlaps it on this instance
-    // never restamps its events, so each is served under its own run's policy.
-    const runContext = this.currentRunContext;
-    const getRunCtx = (): RunContext => runContext;
-    // The run's redaction (`src/redaction/`). An LLMCall declares no policy of
-    // its own — mounted in a composition, the composition's run decides — but
-    // the redaction is opened for every run so its stages' events still reach
-    // the real-value path (a `toSSE({ format: 'text' })` reply stream).
-    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
-
-    // Reuse the cached chart built at constructor time. `getSpec()` and
-    // every `run()` share the same `FlowChart` object reference.
-    const spec = this.getSpec();
-    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
-    redaction.applyTo(executor);
-
+  private createRunSetup(
+    invocation: RunnerInvocation<RunnerCoreValues>,
+    resumeLeg?: RedactionPolicy,
+  ): {
+    readonly setup: RunSetup;
+    readonly bindScope: RunRedaction['bindScope'];
+  } {
+    const getRunCtx = () => invocation.context();
+    const redaction = this.prepareRunRedaction(invocation, resumeLeg);
     const dispatcher = this.getDispatcher();
-
-    executor.attachCombinedRecorder(
+    const recorders: CombinedRecorder[] = [
+      ...redaction.recorders,
       new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
+      streamRecorder({ dispatcher, getRunContext: getRunCtx }),
+      errorBridge({ dispatcher, getRunContext: getRunCtx }),
+    ];
+    if (this.pricingTable) recorders.push(costRecorder({ dispatcher, getRunContext: getRunCtx }));
+    recorders.push(
+      evalRecorder({ dispatcher, getRunContext: getRunCtx }),
+      memoryRecorder({ dispatcher, getRunContext: getRunCtx }),
+      skillRecorder({ dispatcher, getRunContext: getRunCtx }),
+      resilienceRecorder({ dispatcher, getRunContext: getRunCtx }),
+      ...this.attachedRecorders,
     );
-    // NOTE: no contextEvaluatedRecorder here — LLMCall composes its slots
-    // directly and does NOT mount the Injection Engine, so context.evaluated
-    // never fires in an LLMCall (that event is Agent-only).
-    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
-    // Terminal-failure bridge: footprintjs onRunFailed → typed error.fatal,
-    // so a thrown run clears in-flight live state + flips monitor status.
-    executor.attachCombinedRecorder(errorBridge({ dispatcher, getRunContext: getRunCtx }));
-    if (this.pricingTable) {
-      // Only attach cost bridge when pricing is configured — zero overhead
-      // on runs that don't opt into cost accounting.
-      executor.attachCombinedRecorder(costRecorder({ dispatcher, getRunContext: getRunCtx }));
-    }
-    // Always-on bridges for consumer-emitted domain events (eval / memory /
-    // skill). EmitBridge early-exits when no listener is attached, so
-    // these are zero-alloc on runs that don't emit.
-    executor.attachCombinedRecorder(evalRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(memoryRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(skillRecorder({ dispatcher, getRunContext: getRunCtx }));
-    // Provider-decorator telemetry (withFallback / withRetry reports from
-    // the call-llm stage's `resilienceHooks`). LLMCall has its own in-run
-    // provider.complete(), so it needs its own bridge.
-    executor.attachCombinedRecorder(resilienceRecorder({ dispatcher, getRunContext: getRunCtx }));
-    for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
-    return executor;
+    return {
+      setup: {
+        redaction: redaction.policy,
+        attachments: recorders.map((recorder) => ({ recorder })),
+        onOrigin: () => this.bindRunServing(invocation),
+      },
+      bindScope: redaction.bindScope,
+    };
   }
 
   private finalizeResult(
-    executor: FlowChartExecutor,
+    invocation: RunnerInvocation<RunnerCoreValues>,
     result: unknown,
   ): LLMCallOutput | RunnerPauseOutcome {
-    const paused = this.detectPause(executor, result);
+    const paused = this.detectPause(invocation, result);
     if (paused) return paused;
     if (result instanceof Error) throw result;
     // Client stage is the chart's last-executed stage (it $break()s
@@ -425,7 +403,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     // `scope.answer` on the outer-chart state. Read it from the
     // snapshot here to bridge to LLMCall.run()'s string return.
     if (typeof result === 'string') return result;
-    const snap = executor.getSnapshot();
+    const snap = invocation.view.snapshot();
     const sharedState = (snap as { sharedState?: { answer?: unknown } } | undefined)?.sharedState;
     const answer = sharedState?.answer;
     if (typeof answer === 'string') return answer;
@@ -444,12 +422,6 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     const costBudget = this.costBudget;
     const thinkingHandler = this.thinkingHandler;
     const recordReceipt = this.recordReceiptValue;
-    // THE SALT (9.91.0). `createExecutor` mints a fresh run id on every run and
-    // every resume, and the chart is built once — so the receipt reads it
-    // through `this` AT CALL TIME rather than closing over a value that would
-    // be one run stale on the second run of the same LLMCall.
-    const getRunId = (): string => this.currentRunContext.runId;
-
     // ─── Outer Client stage ─────────────────────────────────────────
     // First visit: receives args, sets userMessage on outer scope.
     // Second visit (post-loop): scope.answer has been populated by the
@@ -572,7 +544,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
       // is ever dropped before a call, and the absent key says exactly that.
       if (recordReceipt) {
         scope[RECEIPT_KEY] = buildReceipt({
-          runId: getRunId(),
+          runId: this.runExecution().forScope(scope).context.runId,
           epoch: iteration,
           model,
           provider: provider.name,

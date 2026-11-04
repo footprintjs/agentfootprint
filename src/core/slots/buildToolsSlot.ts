@@ -35,10 +35,10 @@ import {
 } from '../../injection-engine/skillSteps.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 import type { Tool } from '../../tools/tools.js';
+import { sameToolParty, type ToolParty } from '../../tools/toolParty.js';
 import type { ToolClaim } from '../agent/buildToolRegistry.js';
-import type { ToolNameChannel } from '../../events/payloads.js';
-import type { ToolProvider, ToolDispatchContext } from '../../tools/toolProvider.js';
-import { emitListUses } from '../../tools/mcpClientUse.js';
+import type { ToolProvider } from '../../tools/toolProvider.js';
+import { discoverTools } from './discoverTools.js';
 import { composeSlot, fnv1a, formatOverflowWarning, slotOverflow, truncate } from './helpers.js';
 import {
   ownsReservedArgument,
@@ -59,23 +59,25 @@ import type { TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js'
  * resolves the provider's tools each iteration and stashes the
  * Tool[] here; the toolCalls handler reads on dispatch — so async
  * providers pay the discovery cost once, not twice. Scoped to the
- * chart build so concurrent `agent.run()` calls each get their own
- * cache.
+ * native component bank so direct entries and independent mounts never
+ * share executable tools, even when they reuse one built chart.
  */
 export interface ProviderToolCache {
   current: readonly Tool[];
+  /** Successful acquisition in THIS component, including a genuinely empty list. */
+  resolved?: true;
 }
 
-/**
- * A party that put a tool name forward for the wire (9.92.0) — the vocabulary
- * `tools.shadowed` and `tools.claim_swallowed` speak. `id` is the provider id or
- * the skill id when the party has one; a static `.tool()` and a framework
- * auto-attach carry none.
- */
-export interface ToolParty {
-  readonly channel: ToolNameChannel;
-  readonly id?: string;
+/** The private state shared by the slot and dispatch for this component only. */
+export interface ToolsSlotRuntime {
+  readonly providerToolCache?: ProviderToolCache;
+  readonly servedTools?: ServedToolParties;
+  readonly integrityLedger?: {
+    current: import('../../integrity/disposition/ledger.js').DispositionLedger | undefined;
+  };
 }
+
+export type { ToolParty } from '../../tools/toolParty.js';
 
 /**
  * WHO PUT EACH NAME ON THIS EPOCH'S WIRE (9.92.0) — written by Compose from
@@ -116,8 +118,6 @@ interface WireCandidate {
 }
 
 const FRAMEWORK_PARTY: ToolParty = { channel: 'framework' };
-
-const sameParty = (a: ToolParty, b: ToolParty): boolean => a.channel === b.channel && a.id === b.id;
 
 /**
  * The same CONTRACT arriving twice — an always-visible skill's tool rides the
@@ -187,7 +187,7 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
     if (first !== undefined) {
       const sameImplementation =
         (candidate.tool !== undefined && candidate.tool === first.tool) ||
-        (sameParty(party, first.party) && sameContract(schema, first.schema));
+        (sameToolParty(party, first.party) && sameContract(schema, first.schema));
       if (sameImplementation) continue;
       const lost = losers.get(schema.name);
       if (lost === undefined) losers.set(schema.name, [party]);
@@ -255,14 +255,8 @@ export interface ToolsSlotConfig {
    * compose-seam integrity backstop below. Present only when `.maps()` is
    * mounted; absent → the backstop never runs, byte-identical.
    */
-  /**
-   * The per-run disposition ledger, by REFERENCE (9.60.0) — the
-   * ProviderToolCache pattern: build-closure plumbing, never scope state.
-   * The compose backstop notes one disposition per pass here.
-   */
-  readonly integrityLedger?: {
-    current: import('../../integrity/disposition/ledger.js').DispositionLedger | undefined;
-  };
+  /** Private component ports captured from the actual stage scope. */
+  readonly runtime?: (scope: object) => ToolsSlotRuntime;
   readonly mountedMaps?: ReadonlyArray<{
     readonly id: string;
     readonly toolNames: readonly string[];
@@ -287,13 +281,6 @@ export interface ToolsSlotConfig {
     scope: object,
   ) => { tenant?: string; principal?: string; conversationId: string } | undefined;
   /**
-   * Mutable cache the slot writes to after resolving `toolProvider.list(ctx)`.
-   * The same cache reference is passed to `buildToolCallsHandler` so
-   * dispatch reads from this iteration's resolved Tool[] instead of
-   * calling `list()` a second time. Required when `toolProvider` is set.
-   */
-  readonly providerToolCache?: ProviderToolCache;
-  /**
    * Every build-time claimant per tool name (9.92.0) — `buildToolRegistry`'s
    * `toolClaimants`. Read for two things: the party a STATIC-list schema
    * belongs to (a `.tool()`, a framework auto-attach, an always-visible
@@ -303,13 +290,6 @@ export interface ToolsSlotConfig {
    * Absent — the message-API charts — and every static schema is `registry`.
    */
   readonly toolClaimants?: ReadonlyMap<string, readonly ToolClaim[]>;
-  /**
-   * The record of who put each name on the wire (9.92.0), written here every
-   * iteration and read by dispatch. Same closure-shared shape and lifetime as
-   * `providerToolCache`. Absent → the record is not kept, and dispatch reads
-   * its build-time map first as it did before 9.92.0.
-   */
-  readonly servedTools?: ServedToolParties;
   /**
    * Rebuild `read_skill`'s SCHEMA for this iteration's cursor (8.5.0).
    *
@@ -487,10 +467,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   const staticTools = config.tools;
   const readSkillFor = config.readSkillFor;
   const toolProvider = config.toolProvider;
-  const providerToolCache = config.providerToolCache;
   const stepPlanFor = config.stepPlanFor;
   const toolClaimants = config.toolClaimants;
-  const servedTools = config.servedTools;
   const toolChoice = config.toolChoice;
   /** A STATIC-list schema's party and implementation: its first build-time claimant. */
   const registryCandidate = (schema: LLMToolSchema): WireCandidate => {
@@ -506,15 +484,6 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // The skip_step schema template — description is rebuilt per iteration
   // (it names the current step), everything else is static.
   const skipStepSchemaTemplate = stepPlanFor ? buildSkipStepTool().schema : undefined;
-  // Read by Discover from the mount's input, read by Compose (sync).
-  //
-  // Chart-scoped, and the chart is built ONCE at Agent construction — so this
-  // outlives a run. It is never stale at READ time because Discover always runs
-  // before Compose in the same slot and overwrites it every iteration; and it
-  // cannot cross callers because one Agent runs one turn at a time (and
-  // `standingAgent({ agentFactory })` gives each session its own instance, and
-  // therefore its own chart and its own closure).
-  let hiddenSkillIds: readonly string[] = [];
   // Dedup latch for the human-facing warning, scoped to THIS built chart:
   // a 20-iteration ReAct loop must not print 20 identical warnings. The
   // typed `context.budget_pressure` event still fires every iteration and
@@ -541,98 +510,23 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
   // Sync providers still pay zero microtask overhead — the dynamic
   // `instanceof Promise` check skips await for non-Promise returns.
   const discoverStage = async (scope: TypedScope<ToolsSubflowState>): Promise<void> => {
-    // Per-role skill visibility (9.11.0). The Injection Engine resolved this
-    // iteration's ids BEFORE it decided anything and published them on scope
-    // (owner: `buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`); this
-    // slot reads that one answer through its mount, so the menu it composes
-    // and the activation the engine refused were judged by the same policy
-    // call. Absent on agents without per-role visibility.
-    hiddenSkillIds =
-      scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ?? EMPTY_OFFER;
-    if (!toolProvider) return; // No-op fast path: keeps trace shape consistent.
-
-    const args = scope.$getArgs<{ iteration?: number }>();
-    const iteration = args.iteration ?? 1;
-    const env = scope.$getEnv();
-    const activatedIds =
-      (scope.$getValue('activatedInjectionIds') as readonly string[] | undefined) ?? [];
-    const identity = scope.$getValue('runIdentity') as
-      | { tenant?: string; principal?: string; conversationId: string }
-      | undefined;
-    // `activeSkillIds` is the REAL active set (8.7.0) — every skill the injection
-    // engine resolved for this iteration, whatever activated it. `activeSkillId`
-    // stays what it always was: the tail of `activatedInjectionIds`, which only
-    // `read_skill` writes. The two answer different questions and both are needed.
-    const activeSkillIds = (
-      (scope.$getValue('activeInjections') as readonly ActiveInjection[] | undefined) ?? []
-    )
-      .filter((inj) => inj.flavor === 'skill')
-      .map((inj) => inj.id);
-    // The caller's own identity, never a derived one (`ToolDispatchContext.callerIdentity`).
-    const callerIdentity = config.callerIdentity?.(scope as object);
-    const ctx: ToolDispatchContext = {
-      iteration,
-      ...(activatedIds.length > 0 && { activeSkillId: activatedIds[activatedIds.length - 1] }),
-      ...(activeSkillIds.length > 0 && { activeSkillIds }),
-      ...(identity && { identity }),
-      ...(callerIdentity !== undefined && { callerIdentity }),
-      ...(env.signal && { signal: env.signal }),
-    };
-
-    typedEmit(scope, 'agentfootprint.tools.discovery_started', {
-      providerId: toolProvider.id,
-      iteration,
+    if (!toolProvider) return;
+    await discoverTools(scope, {
+      provider: toolProvider,
+      cache: config.runtime?.(scope).providerToolCache,
+      callerIdentity: config.callerIdentity?.(scope),
     });
-
-    const startMs = Date.now();
-    let visibleTools: readonly Tool[];
-    try {
-      // Dynamic check — sync providers skip the await microtask.
-      const result = toolProvider.list(ctx);
-      visibleTools = result instanceof Promise ? await result : result;
-    } catch (err) {
-      // An MCP client pool's use of a client is recorded whether or not its
-      // listing succeeded (`tools/mcpClientUse.ts`).
-      emitListUses(scope, ctx);
-      // Discovery failure is loud by design. Emit the typed event
-      // with the providerId so consumers can route alerts; then
-      // re-throw so a configured `reliability` rule decides whether
-      // to retry / fall back / fail-fast. Silently dropping tools
-      // mid-conversation creates non-deterministic agent behavior
-      // harder to debug than a crash.
-      const errMessage = err instanceof Error ? err.message : String(err);
-      const errName = err instanceof Error ? err.name : 'Error';
-      typedEmit(scope, 'agentfootprint.tools.discovery_failed', {
-        providerId: toolProvider.id,
-        error: errMessage,
-        errorName: errName,
-        iteration,
-        durationMs: Date.now() - startMs,
-      });
-      throw err;
-    }
-
-    emitListUses(scope, ctx);
-    typedEmit(scope, 'agentfootprint.tools.discovery_completed', {
-      providerId: toolProvider.id,
-      iteration,
-      durationMs: Date.now() - startMs,
-      toolCount: visibleTools.length,
-    });
-
-    // Cache the resolved Tool[] in the closure-shared ProviderToolCache.
-    // The Compose stage reads providerSchemas from here; the toolCalls
-    // handler reads the executable Tool objects on dispatch. Both share
-    // ONE list() call per iteration. The cache lives outside scope
-    // because Tool objects carry `execute` functions that can't be
-    // `structuredClone`d into the transactional memory layer.
-    if (providerToolCache) providerToolCache.current = visibleTools;
   };
 
   // Stage 2 — Compose: merges static + provider + per-skill schemas
   // into the tool slot. Pure compute, sync, fast. Reads provider tools
   // from `providerToolCache.current` populated by the Discover stage.
   const composeStage = (scope: TypedScope<ToolsSubflowState>): void | Promise<void> => {
+    const runtime = config.runtime?.(scope);
+    const providerToolCache = runtime?.providerToolCache;
+    const servedTools = runtime?.servedTools;
+    const hiddenSkillIds =
+      scope.$getArgs<{ hiddenSkillIds?: readonly string[] }>().hiddenSkillIds ?? EMPTY_OFFER;
     const args = scope.$getArgs<{
       iteration?: number;
       currentSkillId?: string;
@@ -1042,7 +936,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
       if (servedTools !== undefined) {
         // Dispatch follows the OFFER: a name narrowed off this epoch's wire
         // was not served, so it is not on `current` and takes the off-wire
-        // path (`toolCalls.ts · resolveTool`) — answered by the party the
+        // path (`toolResolver.ts · buildToolResolver`) — answered by the party the
         // model last read it under, and recorded as `tools.answered_off_wire`.
         const wireWinners =
           narrowedTo === undefined
@@ -1100,7 +994,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
         // The disposition (9.60.0): a pass with no parked map had nothing this
         // check could violate — stated as not-applicable, never as silence.
-        config.integrityLedger?.current?.note(
+        runtime?.integrityLedger?.current?.note(
           'invariant-violation',
           'compose',
           !comparedAnyMap ? 'not-applicable' : firedThisPass ? 'checked-fail' : 'checked-pass',
@@ -1110,7 +1004,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         // Maps mounted, nothing parked this pass: the registered check had no
         // applicable work — stated, so the liveness theorem never mistakes a
         // run that simply never parked for a dead checker.
-        config.integrityLedger?.current?.note('invariant-violation', 'compose', 'not-applicable');
+        runtime?.integrityLedger?.current?.note('invariant-violation', 'compose', 'not-applicable');
       }
       reportShadowedTools(scope, {
         iteration,
@@ -1185,7 +1079,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
     // served, and the narrowed list — when there is one — is what the mount
     // maps to `dynamicToolSchemas`. The whole tail (`toolChoice/compose.ts`)
     // is loaded through `import()`: the optional-family law of docs-next's
-    // site budget (`toolCalls.ts · judgeLanded`). The rows arrive as the
+    // site budget (`toolCalls/evidence/judgeLanded.ts · judgeLanded`). The rows arrive as the
     // frozen mount arg `priorToolChoices`; the writer is handed them
     // explicitly and the mount's outputMapper carries the fresh list back.
     return import('../agent/toolChoice/compose.js').then(({ composeToolChoice }) =>
@@ -1274,7 +1168,7 @@ function reportShadowedTools(
     // Reserved: every build-time claimant of the name that is neither the
     // winner nor one of this epoch's candidates for it.
     const putForward = candidates.filter((c) => c.schema.name === toolName);
-    const winning = putForward.find((c) => sameParty(c.party, winner));
+    const winning = putForward.find((c) => sameToolParty(c.party, winner));
     const reserved = (claimants?.get(toolName) ?? [])
       .filter(
         (c) =>
@@ -1282,8 +1176,8 @@ function reportShadowedTools(
           // the winner's `Tool` reference lost nothing.
           c.tool !== winning?.tool &&
           !putForward.some((p) => p.tool === c.tool) &&
-          !sameParty(partyOfClaim(c), winner) &&
-          !putForward.some((p) => sameParty(p.party, partyOfClaim(c))),
+          !sameToolParty(partyOfClaim(c), winner) &&
+          !putForward.some((p) => sameToolParty(p.party, partyOfClaim(c))),
       )
       .map(partyOfClaim);
     if (competing.length === 0 && reserved.length === 0) continue;

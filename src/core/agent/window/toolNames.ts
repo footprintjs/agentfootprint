@@ -15,7 +15,7 @@
  *
  * ## Why the name is not simply `msg.toolName`
  *
- * It usually is: every path in `stages/toolCalls.ts` that appends a result
+ * It usually is: every path in `stages/toolCalls/execution/deliveredResult.ts` that appends a result
  * stamps `toolName` beside `toolCallId`. But `LLMMessage.toolName` is
  * OPTIONAL on the adapter type, so a window seeded from outside this run — a
  * restored conversation written by an older release, a hand-built fixture, a
@@ -32,8 +32,8 @@
  * ## A settled message is not a result at all (9.113.0)
  *
  * When a batch of calls pauses, the resume answers each call after the paused
- * one with a fixed sentence and never runs it (`../stages/toolCalls.ts` ·
- * "── The batch settlement (9.113.0)"). That message has `role: 'tool'` and a
+ * one with a fixed sentence and never runs it (`../stages/toolCalls/batch/settle.ts` ·
+ * `notDispatchedResult`). That message has `role: 'tool'` and a
  * `toolName`, and no tool produced it: `LLMMessage.notDispatched` says so, and
  * this file reads that marker rather than the role. So it names nothing, and
  * every reader of the name asks the right question for free: the

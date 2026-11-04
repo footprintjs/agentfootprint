@@ -187,7 +187,7 @@ At runtime, `artifacts/` imports **only** `lib/` (lazyRequire, sqliteUnavailable
 drift). `datasetResult.ts` also has erased type-only imports of `Tool` and
 `ToolExecutionContext` from `core/`; these add no runtime dependency.
 There are no runtime imports of `core/`, `events/`, or any recorder: the
-tool-dispatch layer (`core/agent/stages/toolCalls.ts`) binds the capability,
+tool-dispatch layer (`core/agent/stages/toolCalls/execution/contextOperations.ts`) binds the capability,
 composes the scope from the run's `runIdentity`, and adapts the fact sink
 onto the typed `agentfootprint.artifacts.*` events. Core wires artifacts;
 never the reverse.
@@ -238,7 +238,7 @@ never the reverse.
   result string everywhere downstream — history, `lastToolResult`,
   `toolResults` — which is where skill-graph `when` edges and `rule` triggers
   look. Deliberate (routing judges what the model was told), stated at both
-  ends: `placeResults` in core/agent/stages/toolCalls.ts and
+  ends: `placeResults` in core/agent/stages/toolCalls/execution/artifactsOperations.ts and
   `InjectionContext.lastToolResult`.
 - **`present` misses set `error: true`** on the call: the model holds no
   presentation, `tool_end` says so, and a procedure step whose tool
