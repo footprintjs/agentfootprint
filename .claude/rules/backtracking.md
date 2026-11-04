@@ -137,7 +137,7 @@ walkToRoot: frame = symptom; loop: narrow(frame) → beam-k writers → ablate e
 
 ## M7 — Variable-first triage surface (consumes fp's slice layer)
 
-Files: `src/trace-toolpack/traceToolpack.ts` `buildBacktrack` — the 6th
+Files: `src/trace-toolpack/traceToolpack/backtrackView.ts` `buildBacktrack` — the 6th
 toolpack tool, `backtrack(variable, element?, before?)`: slice mode =
 `sliceForKey` + `formatSlice` (fp 9.10.0); element mode = `elementProvenance`
 (the history mega-key answer: `history[N]` names its birth iteration —
