@@ -127,8 +127,7 @@
     "src/tools/hostFilled.ts": 622,
     "src/tools/inputRequest.ts": 662,
     "src/tools/tools.ts": 1342,
-    "src/tools/toolSessions.ts": 632,
-    "src/trace-toolpack/traceToolpack.ts": 3171
+    "src/tools/toolSessions.ts": 632
   },
   "exclude": []
 }

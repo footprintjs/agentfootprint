@@ -250,16 +250,70 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the self-explain skill body, its trigger line and the host-opted hypothesis frame — system text composed for the debugging request that serves the trace tools, never a persistent result assertion',
     },
   ],
-  'src/trace-toolpack/traceToolpack.ts': [
+  'src/trace-toolpack/traceToolpack/navigationHints.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: "the unknown-id RESULT correction's standing imperative ('Call run_overview …'), correctly flagged and unchanged by the file split",
+    },
+  ],
+  'src/trace-toolpack/traceToolpack/findingEvidence.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: 'the disposition RESULT line reports what happened anchored to `this run` with no call named; correctly flagged and unchanged by the file split',
+    },
+  ],
+  'src/trace-toolpack/traceToolpack/contextErrors.ts': [
     {
       kind: 'ephemeral',
-      count: 4,
-      why: 'four tool DESCRIPTIONS (find_context_errors, find_in_trace, inspect_tool_call, read_narrative) — they ride the tools array of the request being answered',
+      count: 1,
+      why: "find_context_errors' tool DESCRIPTION rides the tools array of the request being answered",
     },
     {
       kind: 'unrepaired',
-      count: 13,
-      why: "thirteen RESULT arms: standing imperatives telling the model to make another call ('Call run_overview …', 'Use trace_node …'), and per-run reports anchored to `this run` with no call named. Correctly flagged; repairing them means re-testing the trace suite around them, which this packet did not do",
+      count: 7,
+      why: 'seven find_context_errors RESULT arms: standing imperatives and per-run reports anchored to `this run` with no call named; correctly flagged and unchanged by the file split',
+    },
+  ],
+  'src/trace-toolpack/traceToolpack/findInTrace.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: "find_in_trace's tool DESCRIPTION rides the tools array of the request being answered",
+    },
+  ],
+  'src/trace-toolpack/traceToolpack/backtrackView.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: "the element-mode RESULT refusal's standing imperative ('Call backtrack without element'); correctly flagged and unchanged by the file split",
+    },
+  ],
+  'src/trace-toolpack/traceToolpack/toolCallJournal.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: "inspect_tool_call's tool DESCRIPTION rides the tools array of the request being answered",
+    },
+    {
+      kind: 'unrepaired',
+      count: 2,
+      why: 'two unknown-tool-call RESULT corrections carry standing navigation imperatives; correctly flagged and unchanged by the file split',
+    },
+  ],
+  'src/trace-toolpack/traceToolpack/innerRecords.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: 'the no-inner-record RESULT reports a fact anchored to `this run` with no call named; correctly flagged and unchanged by the file split',
+    },
+  ],
+  'src/trace-toolpack/traceToolpack/narrativeView.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: "read_narrative's tool DESCRIPTION rides the tools array of the request being answered",
     },
   ],
   'src/memory/beats/formatAsNarrative.ts': [
@@ -1261,13 +1315,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // clause (scripts/recovery.ts) is request-only and registered in
         // modelFacingSurfaces; it matches no persistent rule. files 105 → 106,
         // total 204 → 206, notModelFacing 135 → 137.
-        files: 106,
+        // Trace Stage A: the same4 ephemeral/13 unrepaired literals move from
+        // one file to8 owners. No literal/category total changes; the same
+        // unrepaired arms now occupy6 owner entries instead of1.
+        files: 113,
         total: 206,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
         notModelFacing: 137,
-        unrepairedEntries: 15,
+        unrepairedEntries: 20,
       });
       // And the ledger's own total is the number of literals the scan flagged —
       // the two halves of the same census, which is what makes the bucket a work

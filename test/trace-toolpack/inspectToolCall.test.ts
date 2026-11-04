@@ -405,7 +405,7 @@ describe('inspect_tool_call — a call the paused batch never dispatched (9.113.
   });
 
   it("evicted, and the bracket's field scrubbed: the marker is read from the history the call's own step committed", async () => {
-    // The history fallback's last arm (`traceToolpack.ts` · `settledInHistory`):
+    // The history fallback's last arm (`traceToolpack/toolCallJournal.ts` · `settledInHistory`):
     // the final history has lost the message and the tail's brackets carry no
     // field, so the only marker left is in the `history` the resume step
     // itself committed. The tail still names the call, which is how the join
@@ -437,7 +437,7 @@ describe('inspect_tool_call — a call the paused batch never dispatched (9.113.
     // The join reads the LATEST result for an id; the marker follows the same
     // rule on the stream and in history, so the call that ran is not reported
     // as the one that was settled. The outcome and the duration are read off
-    // the LAST `tool_end` for the id (`traceToolpack.ts` ·
+    // the LAST `tool_end` for the id (`traceToolpack/toolCallJournal.ts` ·
     // `buildInspectToolCall`), and the step off the first bracket of a call
     // that ran (`bracketsFor`) — never the settlement's, which comes first on
     // the tail.

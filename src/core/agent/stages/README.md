@@ -76,7 +76,7 @@ fail (`security/extractSequence.ts`, `../../checkin.ts` · `buildTrail`,
 `toolCalls.ts` · `producerCorpusOf`, the empty-lookup producer corpus,
 `../window/toolNames.ts` · `toolNameOfMessage`, `callLLM.ts`'s closure check,
 `../findings/offer.ts` · `isResultMessage`, `../window/ledgerFactPins.ts` ·
-`turnStandingOf`, `trace-toolpack/traceToolpack.ts` · `notDispatchedOf`,
+`turnStandingOf`, `trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`,
 and every reader of the stream). A reader that only sees the WIRE has lost
 the marker (`../composeRequest.ts` · `stripFrameworkFields`), so it reads the
 same messages from the committed history, as the closure check, the findings

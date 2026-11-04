@@ -6,6 +6,7 @@ import ts from 'typescript';
 
 export function importedFoottrace(root = new URL('../src/', import.meta.url)) {
   const imports = [];
+  const sideEffects = [];
   function walk(directory) {
     for (const entry of fs
       .readdirSync(directory, { withFileTypes: true })
@@ -27,6 +28,10 @@ export function importedFoottrace(root = new URL('../src/', import.meta.url)) {
             /^foottrace(?:\/|$)/.test(node.moduleSpecifier.text)
           ) {
             const module = node.moduleSpecifier.text;
+            if (ts.isImportDeclaration(node) && !node.importClause) {
+              sideEffects.push({ module, filename });
+              return;
+            }
             const clause = ts.isImportDeclaration(node) ? node.importClause : node;
             const bindings = ts.isImportDeclaration(node)
               ? clause?.namedBindings
@@ -84,5 +89,12 @@ export function importedFoottrace(root = new URL('../src/', import.meta.url)) {
     throw new Error(
       'No source Foottrace imports found; remove or revise this contract explicitly.',
     );
+  // A bare load imports no symbols. Its module must still have named runtime
+  // bindings, so the existing type and import/require behavior contracts cover it.
+  for (const { module, filename } of sideEffects)
+    if (!imports.some((item) => item.module === module && !item.typeOnly))
+      throw new Error(
+        `Add contract coverage for side-effect-only Foottrace module ${module}: ${filename}`,
+      );
   return imports;
 }

@@ -20,7 +20,7 @@ A provider may reuse a tool-call id across turns (the library's own fallback
 ids are minted per provider instance). `inspect_tool_call` answers for the
 LATEST call under the id: its result is the latest `role: 'tool'` message, its
 outcome and duration come off the LAST `tool_end` for the id
-(`traceToolpack.ts` · `buildInspectToolCall`), and it reads "not dispatched"
+(`traceToolpack/toolCallJournal.ts` · `buildInspectToolCall`), and it reads "not dispatched"
 when the latest bracket or message carries the batch settlement's marker
 (9.113.0, `notDispatchedOf`). The step line still names the step of the first
 call under the id that ran (`bracketsFor`).
@@ -42,7 +42,7 @@ in the store the runner writes, `core/innerRunRecords.ts`) and
 views are this pack's own tools over the inner record, so inner answers carry
 the same reason codes, folded from the inner record's own `initialState`.
 Inner ids are said to be inner on every answer; an outer tool handed one
-corrects toward the mount (`traceToolpack.ts` · `innerIdMessage`), so step-id
+corrects toward the mount (`traceToolpack/navigationHints.ts` · `innerIdMessage`), so step-id
 schemas carry no `enum` when subflows kept their own logs. A nested mount opens
 one level at a time (`subflowRecords.ts` · `mountChain`). The outer views name
 the door in ONE line and print nothing from inside — and only when following it
@@ -64,7 +64,7 @@ INSIDE SUBFLOW sf-tools#33 — "Tools": its own log, 3 commit(s), the mount's se
 ```
 
 ## Files
-- `traceToolpack.ts` — the twelve trace tools.
+- `traceToolpack.ts` — the canonical entry for the twelve trace tools; `traceToolpack/` owns their existing factories, views, evidence readers and bounds.
 - `innerDescent.ts` — the one descent below the run, shared by both inner doors.
 - `subflowRecords.ts` — where a mount's own log is, and why it is not.
 - `bounded.ts` — the one bound every served value passes through.

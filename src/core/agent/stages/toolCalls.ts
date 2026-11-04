@@ -3497,7 +3497,7 @@ export function buildToolCallsHandler(
   // dangling-reference check), the findings offer, identity source, piece,
   // collapse and dropped-standings record skip it (`../findings/offer.ts`), so
   // does a turn's standing (`../window/ledgerFactPins.ts` · `turnStandingOf`),
-  // and the trace toolpack reports it as not dispatched (`traceToolpack.ts` ·
+  // and the trace toolpack reports it as not dispatched (`traceToolpack/toolCallJournal.ts` ·
   // `notDispatchedOf`). Its two brackets carry the same marker
   // (`bracketSettled`), so the readers of the EVENT stream answer the same
   // way. The wire never carries the marker (`composeRequest.ts` ·

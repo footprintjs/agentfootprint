@@ -151,7 +151,7 @@ already completed); the window's result naming
 (`core/agent/window/toolNames.ts` · `toolNameOfMessage` — the
 last-tool-result pin, the drop notice, the dangling-reference check); and
 the trace toolpack's `inspect_tool_call`
-(`trace-toolpack/traceToolpack.ts` · `notDispatchedOf`); and, under
+(`trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`); and, under
 `.findings()`, the offer, the identity source, the piece's `undeclared:`
 line, the collapse, the window's `droppedStandings` and a turn's standing
 (`core/agent/findings/offer.ts`, `findings/serve.ts` · `collapseJudged`,

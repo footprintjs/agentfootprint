@@ -159,7 +159,7 @@ own finding prose — `src/integrity/empty-lookup/`,
 `fileDirection`, emitted for every ContextError by
 `src/core/agent/integrityFindings.ts` · `fileIntegrityFindings` and served
 verbatim to a debugging model by
-`src/trace-toolpack/traceToolpack.ts` · `buildFindContextErrors`; only the
+`src/trace-toolpack/traceToolpack/contextErrors.ts` · `buildFindContextErrors`; only the
 first three carry a `test/modelFacingScan.test.ts` LEDGER row, because that scan
 keys on a time anchor the other four do not use) ·
 `src/core/runbook/verdicts.ts` · `src/rag/retriever/defineRAG.ts` ·

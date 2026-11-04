@@ -564,7 +564,7 @@ const unknownToolResults = (): readonly string[] => [
 /**
  * A real run whose batch paused on its middle call (`requestInput`) and whose
  * third call the resume SETTLED — the record `inspect_tool_call`'s
- * never-dispatched arm reads (`traceToolpack.ts` · `notDispatchedOf`).
+ * never-dispatched arm reads (`traceToolpack/toolCallJournal.ts` · `notDispatchedOf`).
  */
 const settledBatchArtifacts = async (): Promise<TraceToolpackArtifacts> => {
   const agent = Agent.create({
@@ -1614,33 +1614,45 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'trace toolpack — the tool-call inspection results',
-    module: 'src/trace-toolpack/traceToolpack.ts',
+    module: 'src/trace-toolpack/traceToolpack/toolCallJournal.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
-      "these are the return values of the pack's `execute`, dispatched by a debugging agent " +
+      "these are the return values of the pack's execute, dispatched by a debugging agent " +
       'like any other tool — every later call of that session re-reads them',
     drivenBy: [
       'test/trace-toolpack/inspectToolCall.test.ts',
       'test/trace-toolpack/innerRunRecords.test.ts',
     ],
-    // The arms this row composes, one marker each. NOT every arm of the
-    // pack: the unknown-id arms of `inspect_tool_call` / `trace_node` carry
-    // standing imperatives ("Call run_overview …") that this release did not
-    // repair, and they are on the record as such in
-    // `test/modelFacingScan.test.ts` rather than hidden by a row that quietly
-    // does not compose them.
+    // The same composite fixture's first two outputs belong to the call journal.
+    // Unknown-id arms carry standing imperatives recorded in modelFacingScan,
+    // and remain outside this row exactly as before.
     reaches: [
       /TOOL CALL c1 — lookup_order/,
       /failed schema validation on call 'c1'/,
+      /not dispatched — the run paused on call 'c2' to 'second'.*without executing call 'c3'/,
+    ],
+    compose: async () => (await traceToolpackResults()).slice(0, 2),
+  },
+  {
+    id: 'trace toolpack — the inner-record inspection results',
+    module: 'src/trace-toolpack/traceToolpack/innerRecords.ts',
+    surface: TOOL_RESULT,
+    lifetimeBecause:
+      "these are the return values of the pack's execute, dispatched by a debugging agent " +
+      'like any other tool — every later call of that session re-reads them',
+    drivenBy: [
+      'test/trace-toolpack/inspectToolCall.test.ts',
+      'test/trace-toolpack/innerRunRecords.test.ts',
+    ],
+    // The same fixture's final three outputs belong to the inner-record reader.
+    // Together these two rows retain all five real calls and all seven markers.
+    reaches: [
       /no retained inner run/,
       /Inner runs you CAN open/,
       /the outer run does not record a call with that id/,
       /No inner run was held when inspect_tool_run/,
-      // The never-dispatched arm (9.113.0): anchored to the paused call and to
-      // the settled one, by id.
-      /not dispatched — the run paused on call 'c2' to 'second'.*without executing call 'c3'/,
     ],
-    compose: traceToolpackResults,
+    compose: async () => (await traceToolpackResults()).slice(2),
   },
   {
     id: 'agent — the out-of-budget WRAP-UP frame',
