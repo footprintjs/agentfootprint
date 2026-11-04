@@ -4,6 +4,7 @@ Run the consumer's narrow upstream gate with:
 
 ```sh
 npm ci
+npm ls foottrace
 npm run test:contract:foottrace
 ```
 
@@ -31,5 +32,17 @@ admission and `/cause` graph/explanation reads. Saved-record loading belongs to
 this consumer's `footprintjs/trace` imports; it does not import Foottrace's
 `readStoredRecord`, so that unrelated door is deliberately outside this suite.
 
-CI runs this command on Node 22 and 24, in the `test-package` job. It does not build
-or test the upstream repository, change a dependency version, or publish a package.
+`foottrace.install.mjs` also resolves Foottrace from this consumer and from
+Footprint's installed entry, then compares their real paths. Both must use one
+physical record-library image; matching version strings or file bytes alone do
+not establish that. Symlink aliases to the same physical image are accepted.
+The adjacent controls use inert same-version/same-byte package fixtures and
+demonstrate the actual nested resolution before checking its refusal. This is a
+new assertion, not a claim that the previous contract suite detected duplicates.
+
+CI records `npm ls foottrace` immediately after the locked install, then runs
+this command on Node 22 and 24 in the `test-package` job. The real-path check
+measures the currently installed dependency image; a separately preserved local
+development image is not evidence of a fresh locked install. This gate does not
+build or test the upstream repository, change a dependency version, or publish a
+package.
