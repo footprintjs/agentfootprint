@@ -6,6 +6,7 @@ import os from 'node:os';
 import { archiveBytes } from './archive-fixture.mjs';
 import verifier from './verify.cjs';
 import archive from './archive.cjs';
+import { compressedArchiveAtSize } from './compressed-fixture.mjs';
 const source = { name: 'agentfootprint', version: '13.2.0' };
 function file(t, bytes) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'archive-profile-'));
@@ -64,3 +65,22 @@ for (const bit of [1, 2, 4, 8, 16, 32, 64, 128])
       (e) => archive.archiveRefusalCode(e) === 'invalid-archive',
     );
   });
+
+for (const size of [32 * 1024 * 1024 - 1, 32 * 1024 * 1024])
+  test('native archive admits exact compressed byte length ' + size, (t) => {
+    const bytes = compressedArchiveAtSize(source, size);
+    const input = file(t, bytes);
+    let actual;
+    assert.doesNotThrow(() => {
+      actual = verifier.inspectFile(input, source, source.version);
+    });
+    assert.equal(actual.bytes.length, size);
+    assert.equal(actual.report.files.length, 3);
+  });
+test('native archive refuses one byte above the 32MiB compressed limit', (t) => {
+  const input = file(t, compressedArchiveAtSize(source, 32 * 1024 * 1024 + 1));
+  assert.throws(
+    () => verifier.inspectFile(input, source, source.version),
+    (e) => verifier.refusalCode(e) === 'archive-input',
+  );
+});

@@ -3,7 +3,11 @@ const fs = require('node:fs'),
   path = require('node:path');
 const { inspectArchive, archiveRefusalCode } = require('./archive.cjs');
 const failures = new WeakMap();
-const archiveLimits = Object.freeze({ maxFiles: 20000, maxExpandedBytes: 128 * 1024 * 1024 });
+const archiveLimits = Object.freeze({
+  maxArchiveBytes: 32 * 1024 * 1024,
+  maxFiles: 20000,
+  maxExpandedBytes: 128 * 1024 * 1024,
+});
 function fail(code) {
   const error = new Error('publish-archive-refused');
   failures.set(error, code);
@@ -28,7 +32,12 @@ function versionTag(version) {
 function inspectFile(file, sourceManifest, version) {
   versionTag(version);
   const stat = fs.lstatSync(file);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 || stat.size > 16 * 1024 * 1024)
+  if (
+    !stat.isFile() ||
+    stat.isSymbolicLink() ||
+    stat.size < 1 ||
+    stat.size > archiveLimits.maxArchiveBytes
+  )
     fail('archive-input');
   const bytes = fs.readFileSync(file);
   const report = inspectArchive(bytes, {
