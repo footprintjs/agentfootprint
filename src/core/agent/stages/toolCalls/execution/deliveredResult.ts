@@ -218,6 +218,7 @@ export function landCallResult(
           frame.callArguments.callArgs,
           frame.args,
           frame.noteOptionsFor(frame.tool),
+          scope,
         )
       : '';
   if (layerNote !== '') frame.delivery.resultStr += layerNote;

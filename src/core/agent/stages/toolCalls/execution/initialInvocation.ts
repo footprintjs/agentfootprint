@@ -481,7 +481,13 @@ export async function invokeInitialTool(
           // else returned above, or set `raisedMissError`): the
           // answers the call carried are kept for its next proposal.
           frame.askedLayer.secondPauseRefusal(frame.tc.name, 'tool-pause') +
-          frame.askedLayer.keptNote(scope, frame.tc.name, frame.resolution)
+          frame.askedLayer.keptNote(
+            scope,
+            frame.tc.name,
+            frame.resolution,
+            frame.tool,
+            frame.callArguments.callArgs,
+          )
         : err instanceof Error
         ? err.message
         : String(err));

@@ -18,6 +18,11 @@ import { unboundCallRefusal } from './bindings.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { shownArgsOf } from '../../../../toolShownArgs.js';
+import {
+  markPrivateCheckIn,
+  requirePrivateQuestionSupport,
+} from '../../../arguments/privateAnswers.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -67,6 +72,7 @@ export async function admitCheckInCall(
       history: historyForEvidence,
     },
   );
+  if (trips && frame.askedLayer === undefined) requirePrivateQuestionSupport(scope, [frame.tool]);
   // The request the person would be asked (`core/consentRequest.ts`):
   // an id their decision must quote, bound to a detached copy of this
   // exact call — minted only for a call that is about to pause.
@@ -89,7 +95,7 @@ export async function admitCheckInCall(
   // The paused state keeps `bound.args`, the copy the request is bound
   // to, so nothing that sees the question can change the call the
   // answer runs.
-  const shown = bound === undefined ? undefined : frame.viewOf(frame.callArguments.callArgs);
+  const shown = bound === undefined ? undefined : frame.viewOf(shownArgsOf(frame.tool, bound.args));
   if (!trips) {
     // Predicate said no — fall through to the normal credential+execute
     // path below (this `if` block is the ONLY thing the gate adds).
@@ -104,13 +110,20 @@ export async function admitCheckInCall(
     // proposal, where the check-in pauses as it always does.
     frame.outcome.result =
       frame.askedLayer.secondPauseRefusal(frame.tc.name, 'check-in') +
-      frame.askedLayer.keptNote(scope, frame.tc.name, frame.resolution);
+      frame.askedLayer.keptNote(
+        scope,
+        frame.tc.name,
+        frame.resolution,
+        frame.tool,
+        frame.callArguments.callArgs,
+      );
   } else if (bound === undefined || shown === undefined) {
     // A call no approval could be bound to is refused, never asked.
     frame.consentGate.checkInRefused = true;
     frame.outcome.error = true;
     frame.outcome.result = unboundCallRefusal(frame.tc.name, 'checkIn');
   } else {
+    markPrivateCheckIn(scope, frame.tool, bound.args);
     // The tool's declared decision component (9.24.0), judged BEFORE
     // the evidence pack is assembled — a gate that cannot be honored
     // as declared refuses before any work, and a dangling propsRef is

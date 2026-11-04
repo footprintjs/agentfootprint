@@ -94,7 +94,6 @@ import {
   type TimeReadingRow,
 } from '../../../time/rows.js';
 import { fixedOffsetZone, isZoneName, offsetAt, type ZoneName } from '../../../time/zone.js';
-import { shownArgsOf } from '../../toolShownArgs.js';
 import { validatePropertyValue } from '../../../tools/toolArgsValidation.js';
 import {
   convertSpelling,
@@ -106,10 +105,11 @@ import {
   type RuledArgument,
 } from '../../../tools/declare.js';
 import { ARGUMENT_ASK_KIND, ASK_CONTEXT_KEY, isArgumentAskContext } from './askMarker.js';
-import type { ArgumentFill, BatchCall, ToolOf } from './resolve.js';
+import type { ArgumentFill, ArgumentResolution, BatchCall, ToolOf } from './resolve.js';
 import type { PartialOrigin, PartialWindowState } from './partialWindow.js';
-import { isMissing } from '../../../tools/declare.js';
-import { HIDDEN_VALUE, answeredRowOf, askedRowOf, shownQuote, type ArgumentRow } from './rows.js';
+import { askedRowOf, shownQuote, type ArgumentRow } from './rows.js';
+import { answeredRows, memberCalls, memberValue, windowAnsweredRows } from './answerRows.js';
+export { memberValue } from './answerRows.js';
 
 // The reserved key and its kind have ONE owner (`askMarker.ts`), which a
 // reader on every agent's graph can load without loading this module.
@@ -871,16 +871,6 @@ function propertyOf(
     : undefined;
 }
 
-/** The answer in a member's own spelling — itself, unless the field is a shared period. */
-export function memberValue(
-  field: AskField,
-  member: AskMember,
-  answer: InputValue,
-): InputValue | undefined {
-  if (field.spelling === undefined || member.spelling === undefined) return answer;
-  return convertSpelling(answer, field.spelling, member.spelling);
-}
-
 /**
  * Whether `answer` fits EVERY member's property schema (in the member's own
  * spelling) — the re-check the typed ask cannot do: an integer asked as a
@@ -1119,12 +1109,14 @@ export function bindAnswer(
   toolOf: ToolOf,
   stamp: { readonly turn: number; readonly iteration: number },
   time?: AskTime,
+  baseResolutions?: ReadonlyMap<string, ArgumentResolution>,
 ): BoundAnswer {
   const waiting = state.waiting;
   if (waiting === undefined) return { state, rows: [] };
   const byId = new Map(calls.map((c) => [c.id, c]));
   const progress = [...state.progress];
-  const rows: (ArgumentRow | TimeAnswerRow | CallWindowRow)[] = [];
+  const rowParts: (() => BoundAnswer['rows'])[] = [];
+  const filledById = new Map<string, BatchCall['args']>();
   const pairs = pairsBroken(state, values, byId, toolOf, time);
   const fields = [...state.fields];
   waiting.fieldIndexes.forEach((index, k) => {
@@ -1145,27 +1137,38 @@ export function bindAnswer(
           fills: bound.fills,
           ...('refused' in bound && { refused: bound.refused }),
         };
-        rows.push(...windowAnsweredRows(field, bound.fills, byId, toolOf, stamp));
+        rowParts.push(() =>
+          windowAnsweredRows(field, bound.fills, byId, toolOf, stamp, filledById),
+        );
         // The person's window for the mention — the only door a window of words becomes theirs.
-        rows.push(timeAnswerRow({ mention: field.window.mention, ...bound.answered }, stamp));
+        const answerRow = timeAnswerRow(
+          { mention: field.window.mention, ...bound.answered },
+          stamp,
+        );
+        rowParts.push(() => [answerRow]);
         // Each filled call's window, as it will run: the person's answer, exactly or WIDER (the
         // covering look-back's `sent` and `extra`) — the call's latest `call-window` row, so the
         // clock at dispatch, `ctx.time` and the result checks read the window the call carries.
         for (const [toolCallId, { toolName, decision }] of Object.entries(bound.filled)) {
-          rows.push(callWindowRow({ toolCallId, toolName }, decision, stamp));
+          const windowRow = callWindowRow({ toolCallId, toolName }, decision, stamp);
+          rowParts.push(() => [windowRow]);
         }
         return;
       }
       if ('outside' in bound) {
         progress[index] = { rounds: was.rounds, exhausted: true, expected: bound.outside };
-        rows.push(...memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')));
+        rowParts.push(() =>
+          memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')),
+        );
         return;
       }
       progress[index] =
         was.rounds >= MAX_ASK_ROUNDS
           ? { rounds: was.rounds, exhausted: true, expected: bound.expected }
           : { rounds: was.rounds, invalid: true, expected: bound.expected };
-      rows.push(...memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')));
+      rowParts.push(() =>
+        memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')),
+      );
       return;
     }
     const alone =
@@ -1175,7 +1178,7 @@ export function bindAnswer(
     const check = alone.fits && pair !== undefined ? { fits: false, expected: pair } : alone;
     if (answer !== undefined && check.fits) {
       progress[index] = { rounds: was.rounds, answer };
-      rows.push(...answeredRows(field, answer, byId, toolOf, stamp));
+      rowParts.push(() => answeredRows(field, byId, toolOf, stamp, filledById));
       return;
     }
     const expected =
@@ -1184,11 +1187,28 @@ export function bindAnswer(
       was.rounds >= MAX_ASK_ROUNDS
         ? { rounds: was.rounds, exhausted: true, ...expected }
         : { rounds: was.rounds, invalid: true, ...expected };
-    rows.push(...memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')));
+    rowParts.push(() => memberCalls(field).map((who) => askedRowOf(who, stamp, 'invalid-answer')));
   });
   const { waiting: _settled, ...rest } = state;
   void _settled;
-  return { state: { ...rest, fields, progress }, rows };
+  const settled = { ...rest, fields, progress };
+  const fills = settledCalls(settled);
+  for (const call of calls) {
+    filledById.set(
+      call.id,
+      Object.assign(
+        {},
+        call.args,
+        Object.fromEntries(
+          [
+            ...(baseResolutions?.get(call.id)?.fills ?? []),
+            ...(fills.get(call.id)?.fills ?? []),
+          ].map((fill) => [fill.argument, fill.value]),
+        ),
+      ),
+    );
+  }
+  return { state: settled, rows: rowParts.flatMap((part) => part()) };
 }
 
 // ─── The window answer (the lazy word-driven ask, time design § 5.2) ────────
@@ -1477,98 +1497,6 @@ function windowFills(
     }
   }
   return { fills, filled };
-}
-
-/** The `answered` rows of a bound window: one per (call, argument) the window filled, in the tool's own view. */
-function windowAnsweredRows(
-  field: AskField,
-  fills: Readonly<Record<string, WindowFill>>,
-  byId: ReadonlyMap<string, BatchCall>,
-  toolOf: ToolOf,
-  stamp: { readonly turn: number; readonly iteration: number },
-): ArgumentRow[] {
-  const nameOf = new Map(field.members.flatMap((m) => m.toolCallIds.map((id) => [id, m.toolName])));
-  return Object.entries(fills).flatMap(([toolCallId, { values }]) => {
-    const call = byId.get(toolCallId);
-    const toolName = nameOf.get(toolCallId);
-    if (call === undefined || toolName === undefined) return [];
-    const tool = toolOf(toolName);
-    const shown = tool === undefined ? undefined : shownArgsOf(tool, { ...call.args, ...values });
-    return Object.keys(values).map((argument) =>
-      answeredRowOf(
-        {
-          toolCallId,
-          toolName,
-          argument,
-          rule: 'ask',
-          period: true as const,
-          shownValue: shown === undefined ? HIDDEN_VALUE : shown[argument],
-        },
-        stamp,
-      ),
-    );
-  });
-}
-
-/** Every (call, argument) a field binds to, as a row identity. */
-function memberCalls(field: AskField) {
-  return field.members.flatMap((m) =>
-    m.toolCallIds.map((toolCallId) => ({
-      toolCallId,
-      toolName: m.toolName,
-      argument: m.argument,
-      rule: 'ask' as const,
-      ...(m.period === true && { period: true as const }),
-    })),
-  );
-}
-
-function answeredRows(
-  field: AskField,
-  answer: InputValue,
-  byId: ReadonlyMap<string, BatchCall>,
-  toolOf: ToolOf,
-  stamp: { readonly turn: number; readonly iteration: number },
-): ArgumentRow[] {
-  const free = field.type === 'string' && field.choices === undefined;
-  return field.members.flatMap((m) => {
-    const value = memberValue(field, m, answer) as InputValue;
-    const tool = toolOf(m.toolName);
-    return m.toolCallIds.flatMap((toolCallId) => {
-      const call = byId.get(toolCallId);
-      if (call === undefined) return [];
-      // The tool's own view decides what a row may show. A name nothing answers at this moment
-      // (its call is refused at dispatch) has no view to ask, so its value is shown as hidden —
-      // an omission, never a raw value a view might have hidden.
-      const shownValue =
-        tool === undefined
-          ? HIDDEN_VALUE
-          : shownArgsOf(tool, { ...call.args, [m.argument]: value })[m.argument];
-      // A value the call CARRIED and the answer replaced (declared sources: an untraced value is
-      // asked about) — the model's own, in the same view. Absent when the call left it out.
-      const carried = !isMissing(call.args, m.argument);
-      const shownProposed = !carried
-        ? undefined
-        : tool === undefined
-        ? HIDDEN_VALUE
-        : shownArgsOf(tool, call.args)[m.argument];
-      return [
-        answeredRowOf(
-          {
-            toolCallId,
-            toolName: m.toolName,
-            argument: m.argument,
-            rule: 'ask',
-            ...(m.period === true && { period: true as const }),
-            shownValue,
-            ...(shownProposed !== undefined && { shownProposed }),
-            ...(free && { free: true as const }),
-          },
-          stamp,
-        ),
-      ];
-    });
-  });
 }
 
 // ─── The settled ask ────────────────────────────────────────────────────

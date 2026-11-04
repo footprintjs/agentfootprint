@@ -5,6 +5,10 @@ import {
   policyFromCarried,
   policyOfMarks,
 } from '../../../redaction/policy.js';
+import {
+  nonPrivateMarksOf,
+  privateFieldsOfCheckpoint,
+} from '../../../redaction/privateCheckpoint.js';
 import { ResumeRedactionError } from '../../conversation.js';
 import { withCurrentVocabulary } from '../../../redaction/conversation.js';
 
@@ -36,11 +40,18 @@ export function resumeRedactionOf(
         : 'unreadable',
     );
   }
+  // A private-only native rule can acquire conservative marks through copying;
+  // its resume preserves those separately from caller coverage. A legacy
+  // caller-covered leg still requires its saved caller policy.
   // Every leg of a covered run writes its policy into its checkpoint's state
   // (seed, and `resume` for a resumed leg), so a checkpoint whose run kept
   // names out but carries none was altered — refused even when the resume
   // names a policy, which cannot stand in for the one the run was covered by.
-  if (carried === undefined && policyOfMarks(checkpoint.redactionMarks) !== undefined) {
+  if (
+    carried === undefined &&
+    privateFieldsOfCheckpoint(checkpoint) === undefined &&
+    policyOfMarks(nonPrivateMarksOf(checkpoint)) !== undefined
+  ) {
     throw new ResumeRedactionError('missing');
   }
   return carried;

@@ -30,10 +30,10 @@ import type { MiddlewareDecision } from '../middleware/types.js';
 import type { AgentState } from '../types.js';
 import { isMissing, rulesOf } from '../../../tools/declare.js';
 import { keptThisTurn, withKept, withoutUsed } from './kept.js';
+import { markPrivateKept, privateFilledArguments } from './privateAnswers.js';
 import type { ArgumentFill, ArgumentResolution } from './resolve.js';
 import {
   filledNote,
-  hidesArgument,
   keptAnswersNote,
   secondPauseRefusal,
   unmountedRulesRefusal,
@@ -102,6 +102,7 @@ export function dropUsedKept(
   const before = scope.$getValue('argumentAnswersKept') as unknown;
   const left = withoutUsed(before, turn, used);
   if ((left?.length ?? 0) === keptThisTurn(before, turn).length) return;
+  markPrivateKept(scope, before, left, turn);
   scope.argumentAnswersKept = left;
 }
 
@@ -118,6 +119,8 @@ export function keepAnswers(
   scope: TypedScope<AgentState>,
   toolName: string,
   resolution: ArgumentResolution | undefined,
+  tool?: Tool,
+  args?: ToolArgs,
 ): readonly string[] {
   const answered = (resolution?.fills ?? []).filter(
     (f): f is ArgumentFill & { readonly source: 'answered'; readonly value: InputValue } =>
@@ -125,12 +128,17 @@ export function keepAnswers(
       f.source === 'answered' && (typeof f.value !== 'object' || f.value === null),
   );
   if (answered.length === 0) return [];
-  scope.argumentAnswersKept = withKept(
-    scope.$getValue('argumentAnswersKept') as unknown,
-    scope.turnNumber as number,
+  const before = scope.$getValue('argumentAnswersKept') as unknown;
+  const turn = scope.turnNumber as number;
+  const next = withKept(before, turn, toolName, answered);
+  const filled = withFills(args ?? {}, resolution);
+  markPrivateKept(scope, before, next, turn, {
     toolName,
-    answered,
-  );
+    tool,
+    args: filled,
+    privateArguments: privateFilledArguments(scope, tool, filled, resolution),
+  });
+  scope.argumentAnswersKept = next;
   return answered.map((f) => f.argument);
 }
 
@@ -143,8 +151,10 @@ export function keptNote(
   scope: TypedScope<AgentState>,
   toolName: string,
   resolution: ArgumentResolution | undefined,
+  tool?: Tool,
+  args?: ToolArgs,
 ): string {
-  return keptAnswersNote(toolName, keepAnswers(scope, toolName, resolution));
+  return keptAnswersNote(toolName, keepAnswers(scope, toolName, resolution, tool, args));
 }
 
 /**
@@ -194,9 +204,15 @@ export function noteFor(
   ranWith: ToolArgs,
   proposed?: ToolArgs,
   options?: ServeOptions,
+  scope?: Pick<AgentState, 'argumentResolutions'>,
 ): string {
   const ran = fillsThatRan(resolution, ranWith);
   if (ran.length === 0) return '';
+  const hidden = privateFilledArguments(scope, tool, ranWith, resolution);
+  const carriedHidden =
+    proposed === undefined
+      ? undefined
+      : privateFilledArguments(undefined, tool, proposed, undefined);
   return filledNote(
     toolName,
     ran.map((f) => {
@@ -206,7 +222,7 @@ export function noteFor(
         return {
           argument: f.argument,
           value: f.value,
-          hidden: hidesArgument(tool, f.argument, f.value as InputValue),
+          hidden: hidden.has(f.argument),
           source: 'window' as const,
           from: 'answered' as const,
           ...(f.wider !== undefined && { wider: f.wider }),
@@ -216,7 +232,7 @@ export function noteFor(
         return {
           argument: f.argument,
           value: f.value,
-          hidden: hidesArgument(tool, f.argument, f.value as InputValue),
+          hidden: hidden.has(f.argument),
           source: 'window' as const,
           from: f.from,
           ...(f.wider !== undefined && { wider: f.wider }),
@@ -226,7 +242,9 @@ export function noteFor(
       return {
         argument: f.argument,
         value: f.value,
-        hidden: hidesArgument(tool, f.argument, f.value as InputValue),
+        hidden:
+          hidden.has(f.argument) ||
+          (f.source === 'answered' && carriedHidden?.has(f.argument) === true),
         ...(f.source === 'answered' && { source: 'answered' as const }),
         ...(carried !== undefined && { carried }),
       };

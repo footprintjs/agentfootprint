@@ -124,7 +124,14 @@ export async function admitMiddlewareCall(
     // answers this call carried are kept for its next proposal.
     frame.outcome.result =
       chain.refusedAsk === true && frame.askedLayer !== undefined
-        ? chain.reason + frame.askedLayer.keptNote(scope, frame.tc.name, frame.resolution)
+        ? chain.reason +
+          frame.askedLayer.keptNote(
+            scope,
+            frame.tc.name,
+            frame.resolution,
+            frame.tool,
+            frame.callArguments.callArgs,
+          )
         : chain.reason;
   } else if (chain.kind === 'ask' && bound === undefined) {
     // A call no approval could be bound to is refused, never asked.

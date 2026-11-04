@@ -12,9 +12,21 @@ import type {
 import type { RunOptions } from './runner.js';
 import { EventDispatcher, REFUSE } from '../events/dispatcher.js';
 import { bindChartStages } from '../redaction/chartBinding.js';
-import { declarationOf, declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
+import {
+  declarationOf,
+  declareRedaction,
+  redactionDeclaredBy,
+  privateFieldsDeclaredBy,
+} from '../redaction/declared.js';
 import { policyOfCoverage, type RedactionCoverage } from '../redaction/coverage.js';
-import { policyOfMarks, unionRedactionPolicies } from '../redaction/policy.js';
+import {
+  checkpointWithPrivateFields,
+  privateResumeOf,
+  resumePoliciesOf,
+} from '../redaction/privateCheckpoint.js';
+import type { RunnerCoreValues } from './runnerCoreValues.js';
+export type { RunnerCoreValues } from './runnerCoreValues.js';
+import { unionRedactionPolicies } from '../redaction/policy.js';
 import {
   adoptScopeOutsideRun,
   createRunRedaction,
@@ -45,7 +57,6 @@ import {
   copyIdentity,
   openParentRun,
   reopenParentRun,
-  type ParentRunRecord,
 } from './memberRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { RequestContext } from '../identity/requestContext.js';
@@ -67,7 +78,7 @@ import type {
   AgentfootprintEventType,
 } from '../events/registry.js';
 import type { EventMeta } from '../events/types.js';
-import { CONSUMER_SCOPE_RUN_ID, parseSubflowPath } from '../bridge/eventMeta.js';
+import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
 import {
   attachObservabilityStrategy,
   attachCostStrategy,
@@ -88,34 +99,7 @@ import {
 } from '../recorders/observability/localObservability.js';
 import type { EnableNamespace, Runner } from './runner.js';
 import type { TeardownReason, ToolSessionTier } from '../tools/toolSessions.js';
-import type { FixedPauseReason } from '../events/payloads.js';
-
-/** The reason a pause request names when its pause carries none — typed, so a
- *  redacted record keeps it as the library's own words (`FixedPauseReason`). */
-const DEFAULT_PAUSE_REASON: FixedPauseReason = 'stage requested pause';
-
-/**
- * Where a pause happened, as the SEGMENT list every other event carries
- * (`buildEventMeta`) — so a reader finds the owner of `pause.request` and
- * `pause.resume` the way it finds every event's. The checkpoint's own list is
- * footprintjs's resume cursor, one cumulative mount id per level
- * (`['step-p', 'step-p/x']`); its last entry names the whole path.
- */
-function pauseSegments(checkpoint: FlowchartCheckpoint): readonly string[] {
-  // Read defensively: `resume()` builds `pause.resume` BEFORE the engine
-  // validates the checkpoint, and a hostile one must still fail there, by name.
-  const cursor: unknown = checkpoint.subflowPath;
-  const last: unknown = Array.isArray(cursor) ? cursor[cursor.length - 1] : undefined;
-  return typeof last === 'string' ? parseSubflowPath(last) : [];
-}
-
-export interface RunnerCoreValues {
-  /** Private policy/serving for this execution; never tracked chart state. */
-  redaction?: RunRedaction;
-  parentIdentity?: MemoryIdentity;
-  parentRequest?: RequestContext;
-  parentRun?: ParentRunRecord;
-}
+import { DEFAULT_PAUSE_REASON, pauseSegments } from './pauseRecord.js';
 
 export abstract class RunnerBase<
   TIn = unknown,
@@ -169,8 +153,8 @@ export abstract class RunnerBase<
    * of what a run may show: `sharedState` and every subflow's state from the
    * redacted mirror, the commit log as scrubbed at write time, and no
    * `initialState` (the raw pre-run base never passed the policy, so a fold of
-   * it reports `basis: 'log-only'`). Without a policy it is the snapshot
-   * exactly as footprintjs builds it. The library's own logic never reads this
+   * it reports `basis: 'log-only'`). Private argument selectors use the same
+   * native view; without either arm the snapshot is unchanged. The library's own logic never reads this
    * getter — what it computes on is the live run (`liveSnapshot`).
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
@@ -182,7 +166,9 @@ export abstract class RunnerBase<
       case 'covered':
         return selected.view.snapshot({ redact: true });
       case 'declared-none':
-        return selected.view.snapshot();
+        return selected.value.redaction?.recordPolicy === undefined
+          ? selected.view.snapshot()
+          : selected.view.snapshot({ redact: true });
       case 'unknown':
         // An executor no run of this runner opened: nothing says what its
         // record may show, so none of it is served — fail closed, never raw.
@@ -243,6 +229,8 @@ export abstract class RunnerBase<
     const policy = unionRedactionPolicies(redactionDeclaredBy(this), handedDown);
     const redaction = createRunRedaction({
       policy,
+      privateFields: invocation.value.privateFields ?? privateFieldsDeclaredBy(this),
+      recordMarks: invocation.value.recordMarks,
       dispatcher: this.dispatcher,
       getRunContext: () => invocation.context(),
     });
@@ -278,7 +266,7 @@ export abstract class RunnerBase<
     ];
     return {
       setup: {
-        redaction: redaction.policy,
+        redaction: redaction.recordPolicy,
         attachments: recorders.map((recorder) => ({ recorder })),
         onOrigin: () => this.bindRunServing(invocation),
       },
@@ -304,6 +292,7 @@ export abstract class RunnerBase<
     request: RequestContext | undefined,
     door: string,
   ): void {
+    Object.assign(invocation.value, privateResumeOf(checkpoint));
     invocation.value.parentRun = reopenParentRun(checkpoint.sharedState, door, request);
     invocation.run.onFinalize(() => closeParentRun(invocation.value.parentRun));
   }
@@ -568,8 +557,13 @@ export abstract class RunnerBase<
     result: unknown,
   ): RunnerPauseOutcome | undefined {
     if (!invocation.view.isPaused() || !isPaused(result)) return undefined;
-    const checkpoint = result.checkpoint;
-    if (checkpoint === undefined) throw new TypeError('The native paused result has no checkpoint');
+    const rawCheckpoint = result.checkpoint;
+    if (rawCheckpoint === undefined)
+      throw new TypeError('The native paused result has no checkpoint');
+    const checkpoint = checkpointWithPrivateFields(
+      rawCheckpoint,
+      invocation.value.redaction?.privateFields(),
+    );
 
     const pauseData =
       checkpoint.pauseData !== undefined
@@ -681,10 +675,9 @@ export abstract class RunnerBase<
     // caller hands it, joined with the names the paused leg kept out (the
     // checkpoint's marks) — returned for the runner to hand THIS leg's
     // native executor setup, so nothing per-run is kept on the instance.
-    const resumeLeg = unionRedactionPolicies(handedDown, policyOfMarks(checkpoint.redactionMarks));
-    this.dispatcher.useServing(
-      servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg)),
-    );
+    const policies = resumePoliciesOf(checkpoint, handedDown, redactionDeclaredBy(this));
+    const resumeLeg = policies.caller;
+    this.dispatcher.useServing(servingAhead(policies.serving));
     const meta = this.minimalMeta();
     const pausedDurationMs = Date.now() - checkpoint.pausedAt;
     // Which registered component the paused ask nominated to collect this

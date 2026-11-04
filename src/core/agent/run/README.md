@@ -13,3 +13,5 @@ These small modules support the Agent facade in `../../Agent.ts`. Native compone
 - `resumeRedaction.ts` reads a carried policy and refuses an uncovered resume.
 
 Runtime policy and error identities remain owned by the existing redaction and conversation modules. State and registration remain with their original owners.
+
+- `injectionDelivery.ts` owns the complete pre-run injected-message validation unit extracted from Agent (size ratchet); behavior is unchanged.

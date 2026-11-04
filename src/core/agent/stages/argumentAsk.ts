@@ -68,6 +68,7 @@ import {
   type ToolOf,
 } from '../arguments/resolve.js';
 import { withFills } from '../arguments/dispatch.js';
+import { markPrivateAsk, requirePrivateQuestionSupport } from '../arguments/privateAnswers.js';
 import {
   hasOneMaterializedWindow,
   partialOriginOf,
@@ -389,6 +390,10 @@ export function askBeforeDispatch(
     return { resolutions: entries, answered: false };
   if (deps.refuseMalformedBatch?.() === true)
     return { resolutions: entries, answered: false, refused: true };
+  requirePrivateQuestionSupport(
+    scope,
+    calls.map((call) => deps.toolOf(call.name)),
+  );
   // The admitted resource owner keeps its native birth across SAME and FRESH restore.
   const owner = readToolOwner(scope.$getValue('toolResourceOwner')).birth;
   const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;
@@ -442,7 +447,9 @@ export function askBeforeDispatch(
       deps.toolOf,
       { turn, iteration },
       time,
+      entries,
     );
+    markPrivateAsk(scope, bound.state, calls, deps.toolOf, settledCalls(bound.state), entries);
     deps.admitAnswer?.();
     recordFindings(scope, bound.rows, { turn });
     state = bound.state;
@@ -475,7 +482,9 @@ export function askBeforeDispatch(
   }
   if (round !== undefined) {
     const waiting = stampRound(scope, state, round, deps);
-    scope.argumentAsk = snapshotPartialState(withWaiting(state, waiting));
+    const next = snapshotPartialState(withWaiting(state, waiting));
+    markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
+    scope.argumentAsk = next;
     deps.saveParties?.();
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');

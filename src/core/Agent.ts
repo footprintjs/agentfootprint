@@ -128,7 +128,12 @@ import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
 import { assertRedactionPolicy, unionRedactionPolicies } from '../redaction/policy.js';
 import { policyOfCoverage } from '../redaction/coverage.js';
 import { ResumeRedactionError } from './conversation.js';
-import { declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
+import { privateResumeOf } from '../redaction/privateCheckpoint.js';
+import {
+  declareRedaction,
+  redactionDeclaredBy,
+  declarePrivateFields,
+} from '../redaction/declared.js';
 import { carriedRunPolicy, conversationRedaction } from '../redaction/conversation.js';
 import { packRecording } from '../recorders/observability/recordingPack.js';
 import { pendingDurableWrite } from './durabilityBarrier.js';
@@ -164,9 +169,9 @@ import type { AppliedRecipe } from '../recipes/types.js';
 import { EmitBridge } from '../recorders/core/EmitBridge.js';
 import { buildWindowStage } from './agent/stages/window.js';
 import { requireKeepLastToolResults } from './agent/window/options.js';
-import { assertDeliverableRole, buildDeliverStage } from './agent/stages/deliver.js';
+import { buildDeliverStage } from './agent/stages/deliver.js';
 import { providerTargets } from './agent/providerTargets.js';
-import { messagesContentRefusal } from '../injection-engine/messagesSlotRefusal.js';
+import { assertInjectionDelivery } from './agent/run/injectionDelivery.js';
 import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
@@ -2564,6 +2569,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
     // without reaching it, refused or aborted, used nothing.
     resumeStateOf(checkpoint);
+    Object.assign(invocation.value, privateResumeOf(checkpoint));
     // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
     // Refused HERE, before the engine is handed the checkpoint, so nothing
     // executes and the checkpoint is unchanged — the caller can answer the same
@@ -3477,34 +3483,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   }
 
   private assertDeliverableRoles(): void {
-    const providers = providerTargets(
-      this.provider,
-      this.model,
-      this.reliabilityConfig?.providers,
-    ).map((target) => target.provider);
-    for (const inj of this.injections) {
-      for (const msg of inj.inject?.messages ?? []) {
-        assertDeliverableRole(providers, msg.role, `Agent injection '${inj.id}'`);
-        // Content, judged at the same funnel as role (8.18.0). The named
-        // factories refuse empty content; a hand-built Injection reached the
-        // delivery stage unchecked and put a contentless turn on the wire.
-        const content = msg.content as unknown;
-        if (typeof content !== 'string' || content.trim() === '') {
-          throw new Error(
-            messagesContentRefusal({
-              site: `Agent injection '${inj.id}'`,
-              role: msg.role,
-              received:
-                typeof content !== 'string'
-                  ? content === undefined
-                    ? 'missing'
-                    : `a ${content === null ? 'null' : typeof content}`
-                  : 'empty',
-            }),
-          );
-        }
-      }
-    }
+    assertInjectionDelivery(
+      this.injections,
+      providerTargets(this.provider, this.model, this.reliabilityConfig?.providers).map(
+        (target) => target.provider,
+      ),
+    );
   }
 
   /**
@@ -3839,7 +3823,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     }
     return {
       setup: {
-        redaction: redaction.policy,
+        redaction: redaction.recordPolicy,
         narrative: {},
         attachments,
         onOrigin: () => {
@@ -4821,6 +4805,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         ...(this.argumentSourcesArmed === true && { argumentSources: true as const }),
       },
     );
+    if ([...registryByName.values()].some(carriesArgumentView)) declarePrivateFields(this);
     // The declared ontology's tool edges (9.106.0): every name a node's `via`
     // names must be a tool this registry can dispatch — the static registry,
     // the framework's doors and every skill's tools, `registryByName` being

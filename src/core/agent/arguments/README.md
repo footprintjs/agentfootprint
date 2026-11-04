@@ -1,7 +1,13 @@
 **Mixed** — the inputs layer (honesty layer 2): what a tool author declares about each argument, where the model says each value came from, and what the library checks, does, files and says.
 Map: `sources.ts` (the model's `_findings.from` and its one reader), `rows.ts` (the `argument` row and its door check), `kept.ts` (an answer a call could not use, kept for its next proposal), `askMarker.ts` (the library's own ask, recognised without loading it). The declaration and its one assert live below the agent and the injection engine, in `../../../tools/declare.ts`, because every reader of a `Tool` needs them.
-Walker: `resolve.ts` (the one table), `checks.ts` (the declared-sources checks, V1–V6), `subflow.ts` (the four stages of `sf-inputs`), `dispatch.ts` (ToolCalls' half: the fills, the note, the rewrites' `changedKeys`, the fail-closed refusal, the kept answers), `ask.ts` (the one ask per batch: its fields, its declaration, the answer's binding, the re-ask).
+Walker: `resolve.ts` (the one table), `checks.ts` (the declared-sources checks, V1–V6), `subflow.ts` (the four stages of `sf-inputs`), `dispatch.ts` (ToolCalls' half: the fills, the note, the rewrites' `changedKeys`, the fail-closed refusal, the kept answers), `ask.ts` (the one ask per batch: its fields, its declaration, the answer's binding, the re-ask). `answerRows.ts` composes answer rows only after the batch's accepted fills settle, preserving row order and judging privacy with the complete call context; `privateAnswers.ts` carries admitted private working-field provenance across answers and kept/resolved lists.
 Lens: `serve.ts` (the served schema sentence, the notes on a result, the refusals, the "Assumed" block).
+
+Migration: schema default sentences and hypothetical converted-window values have no actual
+call context. When a tool carries an argument-view mapper, these sentences hide the value:
+a one-field probe cannot establish what a mapper depending on sibling arguments would show.
+Tools without a mapper keep their existing prose. Actual answered rows and result notes use
+the complete filled call context, so arguments that the real view permits remain visible.
 
 **The law.** No argument runs unaccounted for.
 
@@ -653,18 +659,18 @@ the PERFORMANCE block), and the resume adds no model call.
   while a re-ask (or a second round of 32 fields) is out; `AgentState.argumentAnswersKept` a
   kept answer until it is used; `argumentResolutions` a kept answer's fill for its batch; and a
   call that then pauses on its own carries its completed arguments in the pause carriers
-  (`pausedCheckInArgs`, …). A full recording of such a run carries that state, as it carries
-  those carriers; a single-round ask whose calls run holds no answer in committed state. A tool
-  that must keep a value out of recordings too needs a redaction policy on the run: the
-  agent's `redact` (`src/redaction/`) — `conversationRedaction()` names these keys
-  (`argumentAsk`, `argumentAnswersKept`, `argumentResolutions`, the pause carriers) among the
-  conversation.
+  (`pausedCheckInArgs`, …). `privateAnswers.ts` registers actual hidden fills before raw
+  writes; native private-field metadata masks record-facing projections while checkpoints
+  and execution stay raw. Kept privacy follows `(toolName, argument, turn)` across list
+  changes, not value matching; unreadable provenance masks the fixed carrier conservatively.
+  A late mapper without native private-field support refuses before a question is created.
+  Caller redaction remains independent; `conversationRedaction()` can cover the whole run.
 - **A kept answer that reaches a check-in rides the check-in's own evidence pack.** The
   check-in shows the person the arguments the call will run with (`core/checkin.ts` ·
-  `CheckInRequest`, on its `checkin.request` event and its pause), and it does not read the
-  tool's argument view — for a kept answer as for any other value. So when an argument the
-  tool's view hides is answered, kept, and then reaches that tool's check-in, the evidence pack
-  carries the raw value. Reading the view there is a change to the check-in, not to this layer.
+  `CheckInRequest`, on its `checkin.request` event and its pause) in the tool's shown argument
+  view. Its evidence assembler receives that same masked view. Approval still names the
+  operation and public context; the consent binding, raw checkpoint and actual execution
+  retain the original arguments.
 - **A raised miss behind a refused second pause.** A tool whose own `requestInput` carries an
   `absence` in the batch that asked settles as the refusal; that miss is not filed.
 - **Numeric bounds** (`minimum`, `maximum`) are not judged on the person's answer: the one
@@ -751,3 +757,5 @@ model had set aside), the **composed-run exposure** (`failed: 'composed-message'
 characters: on 2026-09-28, beside the ledger, the ruled tool's schema +744 characters, the system
 prompt +0, an unruled tool +0 — the first cut was +617 and +447; without the ledger, the ruled
 tool +863 over a plain agent's, where the ledger alone costs every tool about +2,400).
+
+`resolutionRows.ts` contains the complete resolved-row composers extracted from `resolve.ts`, with explicit pure reader ports and full filled-call context for private views. `resolve.ts` remains the oversized declare/verify/resolve facade; `ask.ts` retains planning/validation/binding after complete answer-row composer extraction. Neither file is claimed structurally complete.

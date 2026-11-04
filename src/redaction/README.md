@@ -1,7 +1,7 @@
 **Mixed** — one run's redaction: which policy covers it, and what each record of
 it is served as.
 Map: `policy.ts` (a policy as data — the shape check, the union),
-`declared.ts` (which runner declared which policy; a composition adopts its
+`declared.ts` (which runner declared which caller policy and private capability; a composition adopts its
 members') and `conversation.ts` (the names an agent's record carries the
 conversation under — `conversationRedaction()`). Walker: `runRedaction.ts` (the
 per-component wiring every runner's native setup goes through; `emitServed`, the
@@ -552,3 +552,44 @@ bytes, for any recording — an agent's or a chart's.)
   log holds the placeholder where the chart marked a write
   (`$setValue(key, value, true)`). Give the tool a `redact` to have its kept
   record and recording served.
+
+## Private argument records
+
+Tools with an argument-view mapper arm the existing native mirror before execution.
+`privateFields.ts` admits a bounded, closed names-only carrier for argument ask
+progress, kept answers, resolved fills and paused check-in arguments. `privateRun.ts`
+registers these names on the actual native rule before raw writes. It retains selector
+metadata only; there is no second redaction engine. `privateCheckpoint.ts` carries
+those names at the raw checkpoint root for direct and mounted resumes. Its reader
+refuses unknown versions, extra fields and selectors outside the fixed grammar.
+
+Caller policy coverage remains independent. A library-private field does not claim
+that a caller supplied a policy, relax an author's mark, or make an unknown mark
+safe to display. Known private fields preserve public event strings; caller policy
+and unknown marks keep the existing default-deny event law. Whole-carrier fallback
+is conservative. A late provider mapper requires an already armed native rule;
+otherwise discovery refuses with `ERR_PRIVATE_ARGUMENT_RECORD` before offering tools.
+An externally mounted raw chart has no private storage port and refuses hidden asks.
+
+Raw pause checkpoints and actual tool execution retain their values. Check-in
+arguments and evidence use the tool's shown view, including its chosen mask; the
+approval remains bound to the actual private call. Protect checkpoints at the host
+boundary: their consistency checks are not authentication.
+
+A private-only snapshot carries the native redaction marker and omits `initialState`.
+Its served views therefore report `no-fold-base`; they cannot claim an exact full
+reconstruction. Public answer-account facts remain readable and `assessAnswer` does
+not invent missing caller coverage. A runner without a private mapper or caller
+policy keeps the existing stream bytes, no new mirror, marker or checkpoint field.
+
+Module size: Agent's whole injected-message validation moved to
+`core/agent/run/injectionDelivery.ts` (step 2 extraction); RunnerBase's complete pause
+record utilities and run-values interface moved to `core/pauseRecord.ts` and
+`core/runnerCoreValues.ts` (step 1). Both facades remain oversized and continue their
+existing size ratchets; broader decomposition is a separate structure lane.
+
+Native copying may conservatively promote field marks to whole working keys. On
+a private-checkpoint resume these unknown marks join the native record policy as
+record-only selectors; they do not claim caller coverage or become admitted
+private fields. They retain default-deny event serving. Legacy checkpoints without
+the private carrier retain the existing missing-caller-policy refusal.

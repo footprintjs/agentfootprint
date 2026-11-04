@@ -143,7 +143,13 @@ export async function admitToolCredential(
       // in a batch that asked nothing (its sentence stays the
       // credential's own — the service is the subject).
       if (frame.onAuthorizationRequired === 'pause') {
-        frame.askedLayer?.keepAnswers(scope, frame.tc.name, frame.resolution);
+        frame.askedLayer?.keepAnswers(
+          scope,
+          frame.tc.name,
+          frame.resolution,
+          frame.tool,
+          frame.callArguments.callArgs,
+        );
       }
       deps.reportConsentOutstanding?.({
         service: frame.need.credential,
