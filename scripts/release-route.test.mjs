@@ -179,17 +179,19 @@ test('release route: RC never reaches proposal or docs jobs and never invokes th
     'RC package version must change only after the untouched-source gates',
   );
 });
-test('release route: publish derives an explicit next/latest tag from staged package data', () => {
+test('release route: publisher disables scripts and uses an explicit tag only for RC', () => {
   const publish = job('publish');
-  assert(/--tag\s+["']?\$NPM_TAG/.test(publish), 'npm publication has no explicit tag');
-  assert(publish.includes('NPM_TAG=next'), 'RC artifact has no next classification');
   assert(
-    publish.includes('NPM_TAG=latest'),
-    'stable artifact has no explicit latest classification',
+    publish.includes('--ignore-scripts'),
+    'folder publication must disable package lifecycle scripts',
+  );
+  assert(
+    !publish.includes('NPM_TAG=latest'),
+    'stable must retain implicit npm latest safety checks',
   );
   assert(
     /jq[^\n]*version[^\n]*package.json/.test(publish),
-    'publish must classify the staged package version',
+    'publish classifies the actual staged package',
   );
 });
 
@@ -208,7 +210,14 @@ test('release route: candidate preserves raise-only explicit bump selection', ()
   assert.throws(() => changes.candidateVersion('13.2.0', [breaking()], [], 'patch'), /floor/);
 });
 
-function stagedPublish(t, version, planned = version) {
+function stagedPublish(
+  t,
+  version,
+  planned = version,
+  manifest = {},
+  manifestBytes = null,
+  sourceManifest = null,
+) {
   const parent = os.tmpdir();
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'staged-')),
@@ -218,7 +227,7 @@ function stagedPublish(t, version, planned = version) {
   mkdirSync(bin);
   writeFileSync(
     path.join(root, 'package.json'),
-    JSON.stringify({ name: 'synthetic-package', version }),
+    manifestBytes ?? JSON.stringify({ name: 'agentfootprint', version, ...manifest }),
   );
   const npm = path.join(bin, 'npm');
   writeFileSync(npm, '#!/bin/sh\nprintf "%s\\n" "$@" > "$NPM_ARGS"\n');
@@ -240,7 +249,17 @@ function stagedPublish(t, version, planned = version) {
       encoding: 'utf8',
       timeout: 10000,
       maxBuffer: 512 * 1024,
-      env: { PATH: bin + ':/usr/bin:/bin', NPM_ARGS: output, PLANNED_VERSION: planned },
+      env: {
+        PATH: bin + ':/usr/bin:/bin',
+        NPM_ARGS: output,
+        PLANNED_VERSION: planned,
+        SOURCE_MANIFEST: JSON.stringify(
+          sourceManifest ?? {
+            name: 'agentfootprint',
+            version: typeof version === 'string' && version.includes('-rc.') ? '13.2.0' : version,
+          },
+        ),
+      },
     },
   );
   assert.equal(r.error, undefined);
@@ -254,12 +273,20 @@ function stagedPublish(t, version, planned = version) {
 test('release route: actual publisher shell binds canonical RC package data to npm next', (t) => {
   const { r, args } = stagedPublish(t, '14.0.0-rc.10');
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(args, ['publish', '--provenance', '--access', 'public', '--tag', 'next']);
+  assert.deepEqual(args, [
+    'publish',
+    '--provenance',
+    '--access',
+    'public',
+    '--ignore-scripts',
+    '--tag',
+    'next',
+  ]);
 });
-test('release route: actual publisher shell binds stable package data to explicit npm latest', (t) => {
+test('release route: actual publisher shell preserves stable implicit latest and disables lifecycle scripts', (t) => {
   const { r, args } = stagedPublish(t, '13.2.0');
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(args, ['publish', '--provenance', '--access', 'public', '--tag', 'latest']);
+  assert.deepEqual(args, ['publish', '--provenance', '--access', 'public', '--ignore-scripts']);
 });
 for (const version of ['014.0.0', '14.0.0-rc.01', '14.0.0-beta.1', '14.0.0+build.1', 4]) {
   test('release route: publisher refuses unsupported package version ' + String(version), (t) => {
@@ -338,4 +365,191 @@ for (const [staged, planned] of [
 test('release route: OIDC publisher directly needs the plan version', () => {
   assert(/needs: \[plan, build, release\]/.test(job('publish')));
   assert(job('publish').includes('PLANNED_VERSION: ${{ needs.plan.outputs.version }}'));
+});
+
+for (const config of [
+  null,
+  false,
+  '',
+  {},
+  { registry: 'http://127.0.0.1:9/evil/' },
+  { 'https-proxy': 'http://127.0.0.1:9/' },
+  { tag: 'latest' },
+])
+  test(
+    'release route: publisher refuses every own publishConfig ' + JSON.stringify(config),
+    (t) => {
+      const { r, args } = stagedPublish(t, '14.0.0-rc.10', '14.0.0-rc.10', {
+        publishConfig: config,
+      });
+      assert.notEqual(r.status, 0);
+      assert.deepEqual(args, []);
+    },
+  );
+test('release route: staged package identity is checked before npm receives publishing authority', (t) => {
+  const { r, args } = stagedPublish(t, '14.0.0-rc.10', '14.0.0-rc.10', { name: 'other-package' });
+  assert.notEqual(r.status, 0);
+  assert.deepEqual(args, []);
+});
+test('release route: hostile lifecycle declarations cannot remove ignore-scripts from either native route', (t) => {
+  for (const version of ['13.2.0', '14.0.0-rc.10']) {
+    const scripts = { prepublishOnly: 'exit 91', publish: 'exit 92', postpublish: 'exit 93' };
+    const { r, args } = stagedPublish(t, version, version, { scripts }, null, {
+      name: 'agentfootprint',
+      version: version.includes('-rc.') ? '13.2.0' : version,
+      scripts,
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert(args.includes('--ignore-scripts'));
+  }
+});
+
+for (const [version, config] of [
+  ['13.2.0', undefined],
+  ['14.0.0-rc.10', undefined],
+  ['14.0.0-rc.10', { registry: 'http://127.0.0.1:9/evil/' }],
+])
+  test(
+    'release route: actual native tar staging reaches the guarded publisher ' +
+      version +
+      (config ? ' config' : ' clean'),
+    (t) => {
+      const root = mkdtempSync(path.join(os.tmpdir(), 'release-tar-stage-'));
+      t.after(() => rmSync(root, { recursive: true, force: true }));
+      const input = path.join(root, 'input'),
+        stage = path.join(root, 'stage'),
+        bin = path.join(root, 'bin');
+      for (const dir of [path.join(input, 'package/dist'), stage, bin])
+        mkdirSync(dir, { recursive: true });
+      const manifest = {
+        name: 'agentfootprint',
+        version,
+        scripts: { prepublishOnly: 'exit 91' },
+        ...(config ? { publishConfig: config } : {}),
+      };
+      writeFileSync(path.join(input, 'package/package.json'), JSON.stringify(manifest) + '\n');
+      writeFileSync(path.join(input, 'package/dist/index.js'), 'exports.fixture=true;\n');
+      const archive = path.join(root, 'fixture.tgz');
+      const tar = spawnSync('/usr/bin/tar', ['-czf', archive, '-C', input, 'package'], {
+        encoding: 'utf8',
+        timeout: 10000,
+      });
+      assert.equal(tar.error, undefined);
+      assert.equal(tar.signal, null);
+      assert.equal(tar.status, 0, tar.stderr);
+      const pack = path.join(bin, 'npm');
+      writeFileSync(
+        pack,
+        '#!/bin/sh\n[ "$1" = pack ] || exit 90\n/bin/cp "$FIXTURE_ARCHIVE" "$PACKED_FILE"\n',
+      );
+      chmodSync(pack, 0o700);
+      const build = job('build'),
+        start = build.indexOf('      - name: Stage published package');
+      assert(start >= 0);
+      const block = build.slice(
+        start,
+        build.indexOf('      - uses: actions/upload-artifact@', start),
+      );
+      const match = /        run: \|\n([\s\S]*)/.exec(block);
+      assert(match, 'actual native package staging shell missing');
+      const script = match[1]
+        .split('\n')
+        .map((l) => (l.startsWith('          ') ? l.slice(10) : l))
+        .join('\n');
+      const staged = spawnSync(
+        '/bin/bash',
+        ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script],
+        {
+          cwd: stage,
+          encoding: 'utf8',
+          timeout: 10000,
+          env: {
+            PATH: bin + ':/usr/bin:/bin',
+            FIXTURE_ARCHIVE: archive,
+            PACKED_FILE: path.join(stage, 'packed.tgz'),
+          },
+        },
+      );
+      assert.equal(staged.error, undefined);
+      assert.equal(staged.signal, null);
+      assert.equal(staged.status, 0, staged.stderr);
+      const bytes = readFileSync(path.join(stage, 'pkg/package.json'));
+      const { r, args } = stagedPublish(t, version, version, {}, bytes, {
+        name: 'agentfootprint',
+        version: version.includes('-rc.') ? '13.2.0' : version,
+        scripts: { prepublishOnly: 'exit 91' },
+      });
+      assert.equal(r.status, config ? 1 : 0, r.stderr);
+      if (config) assert.deepEqual(args, []);
+      else {
+        assert(args.includes('--ignore-scripts'));
+        assert.equal(args.includes('--tag'), version.includes('-rc.'));
+      }
+    },
+  );
+
+for (const version of ['13.2.0', '14.0.0-rc.10'])
+  for (const [key, value] of [
+    ['tag', 'latest'],
+    ['scripts', { postinstall: 'exit 94' }],
+    ['dependencies', { unreviewed: '9.0.0' }],
+    ['bin', { tool: 'dist/other.js' }],
+    ['dist', { tarball: 'unreviewed' }],
+  ])
+    test('publisher requires pinned-source equality for ' + version + ' ' + key, (t) => {
+      const { r, args } = stagedPublish(t, version, version, { [key]: value });
+      assert.equal(r.status, 1);
+      assert.match(r.stdout, new RegExp('manifest-source:' + key));
+      assert.deepEqual(args, []);
+    });
+test('publisher compares missing source keys separately from null and keeps object key order irrelevant', (t) => {
+  const source = {
+    name: 'agentfootprint',
+    version: '13.2.0',
+    scripts: { build: 'source' },
+    dependencies: { b: '2', a: '1' },
+  };
+  const ok = stagedPublish(
+    t,
+    '14.0.0-rc.10',
+    '14.0.0-rc.10',
+    { dependencies: { a: '1', b: '2' }, scripts: { build: 'source' } },
+    null,
+    source,
+  );
+  assert.equal(ok.r.status, 0, ok.r.stderr);
+  for (const changed of [
+    { scripts: { build: 'source' } },
+    { scripts: { build: 'source' }, dependencies: null },
+  ]) {
+    const bad = stagedPublish(t, '14.0.0-rc.10', '14.0.0-rc.10', changed, null, source);
+    assert.equal(bad.r.status, 1);
+    assert.match(bad.r.stdout, /manifest-source:dependencies/);
+    assert.deepEqual(bad.args, []);
+  }
+});
+test('publisher names the first differing key without echoing unknown raw names or values', (t) => {
+  const marker = 'private-value\nmarker',
+    key = 'unknown-key-' + marker;
+  const bad = stagedPublish(t, '14.0.0-rc.10', '14.0.0-rc.10', { [key]: marker });
+  assert.equal(bad.r.status, 1);
+  assert.match(bad.r.stdout, /manifest-source:key-[a-f0-9]{12}/);
+  assert(!bad.r.stdout.includes(marker));
+  assert(!bad.r.stderr.includes(marker));
+  assert.deepEqual(bad.args, []);
+});
+test('publisher source is fetched before artifact extraction at the native pinned SHA', () => {
+  const publish = job('publish'),
+    source = publish.indexOf('- name: Read the pinned source manifest');
+  assert(source >= 0, 'missing trusted source read');
+  assert(source < publish.indexOf('actions/download-artifact@'));
+  assert(publish.includes('SOURCE_SHA: ${{ needs.plan.outputs.sha }}'));
+  assert(publish.includes('SOURCE_MANIFEST: ${{ steps.source.outputs.manifest }}'));
+  assert(publish.includes('repos/$REPO/contents/package.json?ref=$SOURCE_SHA'));
+  assert.equal(
+    (publish.match(/GH_TOKEN:/g) || []).length,
+    1,
+    'read credential is scoped to the source read step only',
+  );
+  assert(!/npm (ci|run)/.test(publish), 'no dependency execution in the OIDC job');
 });

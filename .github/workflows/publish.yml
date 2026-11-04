@@ -44,9 +44,9 @@ name: Release
 #            or fit its budget delays the website only, and Deploy Docs can be
 #            run again with no new version.
 #
-# A red gate publishes nothing, and nothing a person has to undo: the version
-# on main simply stays untagged until a fixing PR merges (whose run publishes)
-# or someone re-runs the failed job.
+# A red gate publishes nothing. Preserve partial tags, releases and run evidence.
+# An unknown npm outcome requires GET-only verification before further action;
+# rerunning publish does not prove that a previous submission did not arrive.
 #
 # SETUP (once): a GitHub App with Contents + Pull requests read/write, installed
 # on this repository; its Client ID in the Actions VARIABLE
@@ -437,7 +437,7 @@ jobs:
         with:
           name: package
           path: pkg/
-          # Long enough to re-run `publish` after a registry outage.
+          # Retain the exact staged bytes for verification after a registry outage.
           retention-days: 30
 
   release:
@@ -525,6 +525,35 @@ jobs:
       contents: read
       id-token: write # OIDC trusted publishing — granted to THIS job only
     steps:
+      # Read source as data before the artifact arrives. No dependency code,
+      # checkout helper or App key runs with the read token or OIDC authority.
+      - name: Read the pinned source manifest
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          if ! [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || ! [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::source-manifest:identity"
+            exit 1
+          fi
+          if ! RESPONSE="$(gh api --hostname github.com --method GET "repos/$REPO/contents/package.json?ref=$SOURCE_SHA" 2>/dev/null)"; then
+            echo "::error::source-manifest:read"
+            exit 1
+          fi
+          if ! SOURCE="$(jq -ce '
+            select(type == "object" and .type == "file" and .encoding == "base64"
+              and (.size | type == "number" and . > 0 and . <= 1048576)
+              and (.content | type == "string"))
+            | .content | @base64d | fromjson
+            | select(type == "object" and .name == "agentfootprint" and (.version | type == "string"))
+          ' <<< "$RESPONSE" 2>/dev/null)"; then
+            echo "::error::source-manifest:shape"
+            exit 1
+          fi
+          printf 'manifest=%s\n' "$SOURCE" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: package
@@ -543,13 +572,36 @@ jobs:
       # Publishes the pre-built artifact with its declared registry dependency.
       # No dependency resolution runs with publishing authority.
       # Trusted publishing: no NODE_AUTH_TOKEN — npm authenticates via the GitHub OIDC token.
-      # If this step fails, the tag already exists: fix the cause and use
-      # "Re-run failed jobs" — the staged tarball is kept for 30 days, and the
-      # release job skips what it already did.
+      # The unpacked manifest is data only: match the pinned source except version; keep npm's
+      # implicit-latest safeguards for stable; RC alone supplies --tag next.
+      # An uncertain submission stops for GET-only verification, never a blind
+      # publish retry. Preserve the staged artifact and native run evidence.
       - name: Publish to npm
         env:
           PLANNED_VERSION: ${{ needs.plan.outputs.version }}
+          SOURCE_MANIFEST: ${{ steps.source.outputs.manifest }}
         run: |
+          if ! KEY="$(jq -r --argjson source "$SOURCE_MANIFEST" '
+            . as $packed
+            | if type != "object" or ($source | type) != "object" then "root"
+              else [((keys + ($source | keys)) | unique | .[])
+                | select(. != "version") | . as $key
+                | select(($packed | has($key) | not) or ($source | has($key) | not)
+                  or $packed[$key] != $source[$key])][0] // ""
+              end
+          ' package.json 2>/dev/null)"; then
+            echo "::error::manifest-source:invalid"
+            exit 1
+          fi
+          if [ -n "$KEY" ]; then
+            # Diagnostic names only, never an admission whitelist.
+            case "$KEY" in
+              name|type|description|license|author|repository|bugs|homepage|engines|sideEffects|main|module|types|files|exports|scripts|dependencies|devDependencies|peerDependencies|peerDependenciesMeta|optionalDependencies|bin|dist|tag|publishConfig|keywords|packageManager|workspaces|root) ;;
+              *) KEY="key-$(printf '%s' "$KEY" | shasum -a 256 | cut -c1-12)" ;;
+            esac
+            echo "::error::manifest-source:$KEY"
+            exit 1
+          fi
           VERSION="$(jq -er '.version | strings' package.json)"
           if [ "$VERSION" != "$PLANNED_VERSION" ]; then
             echo "::error::The staged package version does not match the plan."
@@ -557,14 +609,14 @@ jobs:
           fi
           stable='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
           if [[ "$VERSION" =~ ^$stable$ ]]; then
-            NPM_TAG=latest
+            publish_tag=()
           elif [[ "$VERSION" =~ ^$stable-rc\.(0|[1-9][0-9]*)$ ]]; then
-            NPM_TAG=next
+            publish_tag=(--tag next)
           else
             echo "::error::Unsupported staged package version."
             exit 1
           fi
-          npm publish --provenance --access public --tag "$NPM_TAG"
+          npm publish --provenance --access public --ignore-scripts "${publish_tag[@]}"
 
   # The site documents what npm serves, so it deploys only once npm has the
   # version (see docs.yml). On the legacy path, release.sh starts it itself.
