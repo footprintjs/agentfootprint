@@ -8,8 +8,8 @@ permissions:
   contents: read
 jobs:
   structure-report:
-    uses: footprintjs/ci/.github/workflows/structure-report.yml@cef818ab3c43db9542955ccd8bf7673fbe8474fa
+    uses: footprintjs/ci/.github/workflows/structure-report.yml@7f2bfc504184be3b9946d17933323d1bf1dd6932
     with:
-      tool_sha: cef818ab3c43db9542955ccd8bf7673fbe8474fa
+      tool_sha: 7f2bfc504184be3b9946d17933323d1bf1dd6932
       source_sha: ${{ github.sha }}
       base_sha: ${{ github.event.pull_request.base.sha || github.event.before }}
