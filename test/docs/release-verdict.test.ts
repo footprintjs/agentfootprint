@@ -36,6 +36,7 @@ import {
   commandsOf,
   jobBlock,
   jobIds,
+  needsOf,
   readWorkflow,
   runScript,
   stepKey,
@@ -450,11 +451,18 @@ describe('publish.yml · only the verdict can skip a gate, and only a gate', () 
   });
 
   it('CI runs every command a skipped gate would have run, in a job the verdict requires', () => {
-    // `test (22)` and `test (24)` are the two legs of ci.yml's `test` job.
+    // `test (22)` and `test (24)` are the two legs of ci.yml's `test` job. A gate
+    // runs its own commands and those of the jobs it `needs:`: `test` and
+    // `coverage` pass only when the jobs behind them did (ci-test-shards.test.ts).
+    const behind = (id: string): string[] => [id, ...needsOf(jobBlock(CI, id)).flatMap(behind)];
     const ciCommands = new Set(
-      GATES.flatMap((gate) => stepsOf(jobBlock(CI, gate.replace(/ \(\d+\)$/, ''))))
+      GATES.flatMap((gate) => behind(gate.replace(/ \(\d+\)$/, '')))
+        .flatMap((id) => stepsOf(jobBlock(CI, id)))
         .filter((step) => stepKey(step, 'run') !== undefined)
-        .flatMap((step) => commandsOf(runScript(step))),
+        .flatMap((step) => commandsOf(runScript(step)))
+        // A shard runs the same command on its share of the test files, and
+        // ci-test-shards.test.ts pins that all the shards run.
+        .map((command) => command.replace(/ -- --shard=.*$/, '')),
     );
     for (const step of skippable) {
       for (const command of commandsOf(runScript(step))) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs every .ts example under examples/ end-to-end via tsx, in parallel.
 # Used by `npm run test:examples` (after the typecheck) — locally, in CI's
-# test job and in the Release workflow.
+# test-examples job and in the Release workflow.
 #
 # Forces the paths-free runtime tsconfig so footprintjs/* subpaths
 # resolve through node + package.json exports instead of the root

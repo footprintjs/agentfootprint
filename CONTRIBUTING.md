@@ -142,6 +142,10 @@ release PR skips `docs` and `changes`; GitHub reports a job skipped by its `if:`
 so neither holds it up. Leave the bypass list empty. Tags are not affected, so the Release
 workflow can still tag and publish.
 
+CI splits the test run across machines. `test (22)`, `test (24)` and `coverage` stay the required
+names: each passes only when the `test-*` or `coverage-shard` jobs it needs all succeeded, so
+those jobs need no entry of their own.
+
 ## Commit Messages
 
 Follow conventional commits:

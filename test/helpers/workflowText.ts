@@ -56,6 +56,12 @@ export function jobBlock(yml: string, id: string): string {
   return blockFrom(lines, start, 2).join('\n');
 }
 
+/** The job ids a job's `needs:` names (`needs: a` or `needs: [a, b]`); empty when it has none. */
+export function needsOf(job: string): string[] {
+  const value = /^ {4}needs: (.+)$/m.exec(job)?.[1];
+  return value === undefined ? [] : value.replace(/[[\]\s]/g, '').split(',');
+}
+
 /**
  * A job's steps, each from its `      - ` line up to the next line indented six
  * spaces or less (the next step, or a comment above it).

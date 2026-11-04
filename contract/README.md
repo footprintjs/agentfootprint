@@ -31,5 +31,5 @@ admission and `/cause` graph/explanation reads. Saved-record loading belongs to
 this consumer's `footprintjs/trace` imports; it does not import Foottrace's
 `readStoredRecord`, so that unrelated door is deliberately outside this suite.
 
-CI runs this command in the existing Node 22 and 24 test jobs. It does not build
+CI runs this command on Node 22 and 24, in the `test-package` job. It does not build
 or test the upstream repository, change a dependency version, or publish a package.
