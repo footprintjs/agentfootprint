@@ -1,0 +1,231 @@
+name: Vitest 5 measurement
+
+# Measurement only. This file belongs to the measurement branch and must not
+# reach main. ci.yml is untouched: it reports what the upgraded suite does on the
+# normal jobs, and this file answers the two questions ci.yml cannot.
+#
+# 1. Is Vitest 5 faster? Two hosted runners can differ by half on the same
+#    commit, so each job runs Vitest 4 and Vitest 5 on the SAME runner.
+# 2. Does the on-disk module cache help CI? Vitest 5.1 turns it on by default and
+#    keeps it in node_modules, which npm ci deletes. So every normal CI job starts
+#    cold. The restored job shows what persisting it with actions/cache would buy.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vitest-5-measure-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The foottrace upgrade PR's head and the main commit it was cut from.
+  FOOTTRACE_V4_SHA: 4ab2e6b74134042dd90f55d0d27eb1a6a7f0267b
+  FOOTTRACE_V5_SHA: 82a661194b9fe2e3e5450adde45fd1c7be06bd75
+
+jobs:
+  # One runner: Vitest 4, then Vitest 5 with the cache off, cold and warm.
+  # The two samples use different orders so drift on a runner shows up.
+  af-paired:
+    name: af paired (sample ${{ matrix.sample }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sample: 1
+            order: v4 off cold warm
+          - sample: 2
+            order: off cold warm v4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build the Vitest 5 checkout
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Install and build the Vitest 4 checkout
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth=1 origin "$BASE_SHA"
+          git worktree add "$RUNNER_TEMP/af-v4" "$BASE_SHA"
+          cd "$RUNNER_TEMP/af-v4"
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp "$GITHUB_WORKSPACE/.github/measure/phase-reporter.mjs" node_modules/.measure/
+      - name: Measure
+        env:
+          ORDER: ${{ matrix.order }}
+        run: |
+          for pass in $ORDER; do
+            case "$pass" in
+              v4) bash .github/measure/run.sh v4 "$RUNNER_TEMP/af-v4" ;;
+              off) bash .github/measure/run.sh v5-cache-off "$GITHUB_WORKSPACE" --fsModuleCache=false ;;
+              cold)
+                rm -rf node_modules/.vitest-cache
+                bash .github/measure/run.sh v5-cache-cold "$GITHUB_WORKSPACE"
+                ;;
+              warm) bash .github/measure/run.sh v5-cache-warm "$GITHUB_WORKSPACE" ;;
+            esac
+          done
+      - name: Keep the module cache for a fresh runner
+        if: matrix.sample == 1
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vitest-cache
+          key: vitest-module-cache-${{ github.run_id }}-${{ github.run_attempt }}
+
+  # A fresh runner, as a real CI job would be: npm ci, then restore the cache.
+  af-restored:
+    name: af restored cache (sample ${{ matrix.sample }})
+    needs: af-paired
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sample: 1
+            order: restored off
+          - sample: 2
+            order: off restored
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Restore the module cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vitest-cache
+          key: vitest-module-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+      - name: Measure
+        env:
+          ORDER: ${{ matrix.order }}
+        run: |
+          for pass in $ORDER; do
+            case "$pass" in
+              restored) bash .github/measure/run.sh v5-cache-restored "$GITHUB_WORKSPACE" ;;
+              off) bash .github/measure/run.sh v5-cache-off "$GITHUB_WORKSPACE" --fsModuleCache=false ;;
+            esac
+          done
+
+  # Coverage on one runner, Vitest 4 against Vitest 5 as CI would run it.
+  af-coverage:
+    name: af coverage paired (sample ${{ matrix.sample }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sample: 1
+            order: v4 v5
+          - sample: 2
+            order: v5 v4
+    env:
+      AF_COVERAGE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build the Vitest 5 checkout
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Install and build the Vitest 4 checkout
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth=1 origin "$BASE_SHA"
+          git worktree add "$RUNNER_TEMP/af-v4" "$BASE_SHA"
+          cd "$RUNNER_TEMP/af-v4"
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp "$GITHUB_WORKSPACE/.github/measure/phase-reporter.mjs" node_modules/.measure/
+      - name: Measure
+        env:
+          ORDER: ${{ matrix.order }}
+        run: |
+          args="--coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reportsDirectory=coverage"
+          for pass in $ORDER; do
+            case "$pass" in
+              v4) bash .github/measure/run.sh v4-coverage "$RUNNER_TEMP/af-v4" $args ;;
+              v5) bash .github/measure/run.sh v5-coverage "$GITHUB_WORKSPACE" $args ;;
+            esac
+          done
+
+  # foottrace's suite is under a minute, so one runner can repeat it many times.
+  # This also gives foottrace absolute phase totals without touching its PR.
+  foottrace-paired:
+    name: foottrace paired
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22.16.0
+      - run: npm install -g npm@11.19.0
+      - name: Install and build both foottrace checkouts
+        run: |
+          for pair in "v4 $FOOTTRACE_V4_SHA" "v5 $FOOTTRACE_V5_SHA"; do
+            set -- $pair
+            dir="$RUNNER_TEMP/ft-$1"
+            git clone --filter=blob:none https://github.com/footprintjs/foottrace "$dir"
+            git -C "$dir" checkout --quiet "$2"
+            (
+              cd "$dir"
+              npm ci
+              npm run build
+              mkdir -p node_modules/.measure
+              cp "$GITHUB_WORKSPACE/.github/measure/phase-reporter.mjs" node_modules/.measure/
+            )
+          done
+      - name: Measure
+        run: |
+          run="bash .github/measure/run.sh"
+          v4="$RUNNER_TEMP/ft-v4"
+          v5="$RUNNER_TEMP/ft-v5"
+          for round in 1 2 3 4; do
+            echo "MEASURE round $round"
+            $run v4 "$v4"
+            $run v5-cache-off "$v5" --fsModuleCache=false
+            rm -rf "$v5/node_modules/.vitest-cache"
+            $run v5-cache-cold "$v5"
+            $run v5-cache-warm "$v5"
+            $run v4-coverage "$v4" --coverage
+            $run v5-coverage-cache-off "$v5" --coverage --fsModuleCache=false
+            $run v5-coverage-cache-warm "$v5" --coverage
+          done
