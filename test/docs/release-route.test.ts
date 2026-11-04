@@ -10,6 +10,7 @@ it('runs the release route and candidate package contract', () => {
       '--test-concurrency=1',
       'scripts/release-route.test.mjs',
       'scripts/publish-source.test.mjs',
+      'scripts/publish-manifest.test.mjs',
       'scripts/release-route-git.test.mjs',
       'scripts/release-route-guards.test.mjs',
     ],

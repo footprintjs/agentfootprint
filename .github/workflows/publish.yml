@@ -581,23 +581,27 @@ jobs:
           PLANNED_VERSION: ${{ needs.plan.outputs.version }}
           SOURCE_MANIFEST: ${{ steps.source.outputs.manifest }}
         run: |
-          if ! KEY="$(jq -r --argjson source "$SOURCE_MANIFEST" '
+          if ! COMPARISON="$(jq -c --argjson source "$SOURCE_MANIFEST" '
             . as $packed
-            | if type != "object" or ($source | type) != "object" then "root"
+            | if type != "object" or ($source | type) != "object" then {equal:false,key:"root"}
               else [((keys + ($source | keys)) | unique | .[])
                 | select(. != "version") | . as $key
                 | select(($packed | has($key) | not) or ($source | has($key) | not)
-                  or $packed[$key] != $source[$key])][0] // ""
+                  or $packed[$key] != $source[$key])] as $keys
+                | {equal:($keys | length == 0),key:$keys[0]}
               end
           ' package.json 2>/dev/null)"; then
             echo "::error::manifest-source:invalid"
             exit 1
           fi
-          if [ -n "$KEY" ]; then
-            # Diagnostic names only, never an admission whitelist.
-            case "$KEY" in
-              name|type|description|license|author|repository|bugs|homepage|engines|sideEffects|main|module|types|files|exports|scripts|dependencies|devDependencies|peerDependencies|peerDependenciesMeta|optionalDependencies|bin|dist|tag|publishConfig|keywords|packageManager|workspaces|root) ;;
-              *) KEY="key-$(printf '%s' "$KEY" | shasum -a 256 | cut -c1-12)" ;;
+          # Equality is a CODE-produced boolean, never the truthiness of a key.
+          if [ "$(jq -r '.equal' <<< "$COMPARISON")" != true ]; then
+            # Unknown keys stay JSON encoded across shell substitution, including
+            # empty strings, NUL and newlines. Only fixed diagnostic names decode.
+            KEY_JSON="$(jq -c '.key' <<< "$COMPARISON")"
+            case "$KEY_JSON" in
+              '"name"'|'"type"'|'"description"'|'"license"'|'"author"'|'"repository"'|'"bugs"'|'"homepage"'|'"engines"'|'"sideEffects"'|'"main"'|'"module"'|'"types"'|'"files"'|'"exports"'|'"scripts"'|'"dependencies"'|'"devDependencies"'|'"peerDependencies"'|'"peerDependenciesMeta"'|'"optionalDependencies"'|'"bin"'|'"dist"'|'"tag"'|'"publishConfig"'|'"keywords"'|'"packageManager"'|'"workspaces"'|'"root"') KEY="$(jq -r '.key' <<< "$COMPARISON")" ;;
+              *) KEY="key-$(printf '%s' "$KEY_JSON" | shasum -a 256 | cut -c1-12)" ;;
             esac
             echo "::error::manifest-source:$KEY"
             exit 1

@@ -1,3 +1,4 @@
+import { stagedPublish } from './publish-test-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -210,66 +211,6 @@ test('release route: candidate preserves raise-only explicit bump selection', ()
   assert.throws(() => changes.candidateVersion('13.2.0', [breaking()], [], 'patch'), /floor/);
 });
 
-function stagedPublish(
-  t,
-  version,
-  planned = version,
-  manifest = {},
-  manifestBytes = null,
-  sourceManifest = null,
-) {
-  const parent = os.tmpdir();
-  mkdirSync(parent, { recursive: true });
-  const root = mkdtempSync(path.join(parent, 'staged-')),
-    bin = path.join(root, 'bin'),
-    output = path.join(root, 'args');
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(bin);
-  writeFileSync(
-    path.join(root, 'package.json'),
-    manifestBytes ?? JSON.stringify({ name: 'agentfootprint', version, ...manifest }),
-  );
-  const npm = path.join(bin, 'npm');
-  writeFileSync(npm, '#!/bin/sh\nprintf "%s\\n" "$@" > "$NPM_ARGS"\n');
-  chmodSync(npm, 0o700);
-  const block = job('publish'),
-    marker = '        run: |\n',
-    at = block.lastIndexOf(marker);
-  assert(at >= 0, 'actual publisher shell missing');
-  const script = block
-    .slice(at + marker.length)
-    .split('\n')
-    .map((l) => (l.startsWith('          ') ? l.slice(10) : l))
-    .join('\n');
-  const r = spawnSync(
-    '/bin/bash',
-    ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      timeout: 10000,
-      maxBuffer: 512 * 1024,
-      env: {
-        PATH: bin + ':/usr/bin:/bin',
-        NPM_ARGS: output,
-        PLANNED_VERSION: planned,
-        SOURCE_MANIFEST: JSON.stringify(
-          sourceManifest ?? {
-            name: 'agentfootprint',
-            version: typeof version === 'string' && version.includes('-rc.') ? '13.2.0' : version,
-          },
-        ),
-      },
-    },
-  );
-  assert.equal(r.error, undefined);
-  assert.equal(r.signal, null);
-  assert(
-    !/command not found|SyntaxError/.test(r.stderr),
-    'publisher fixture setup failed: ' + r.stderr,
-  );
-  return { r, args: existsSync(output) ? readFileSync(output, 'utf8').trim().split('\n') : [] };
-}
 test('release route: actual publisher shell binds canonical RC package data to npm next', (t) => {
   const { r, args } = stagedPublish(t, '14.0.0-rc.10');
   assert.equal(r.status, 0, r.stderr);

@@ -137,4 +137,5 @@ test('actual publisher source reader refuses an unpinned source before GET', (t)
 test('source-reader fixture remains registered in the hosted native release wrapper', () => {
   const wrapper = readFileSync(path.join(ROOT, 'test/docs/release-route.test.ts'), 'utf8');
   assert(wrapper.includes("'scripts/publish-source.test.mjs'"));
+  assert(wrapper.includes("'scripts/publish-manifest.test.mjs'"));
 });
