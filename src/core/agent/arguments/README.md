@@ -3,11 +3,7 @@ Map: `sources.ts` (the model's `_findings.from` and its one reader), `rows.ts` (
 Walker: `resolve.ts` (the one table), `checks.ts` (the declared-sources checks, V1–V6), `subflow.ts` (the four stages of `sf-inputs`), `dispatch.ts` (ToolCalls' half: the fills, the note, the rewrites' `changedKeys`, the fail-closed refusal, the kept answers), `ask.ts` (the one ask per batch: its fields, its declaration, the answer's binding, the re-ask). `answerRows.ts` composes answer rows only after the batch's accepted fills settle, preserving row order and judging privacy with the complete call context; `privateAnswers.ts` carries admitted private working-field provenance across answers and kept/resolved lists.
 Lens: `serve.ts` (the served schema sentence, the notes on a result, the refusals, the "Assumed" block).
 
-Migration: schema default sentences and hypothetical converted-window values have no actual
-call context. When a tool carries an argument-view mapper, these sentences hide the value:
-a one-field probe cannot establish what a mapper depending on sibling arguments would show.
-Tools without a mapper keep their existing prose. Actual answered rows and result notes use
-the complete filled call context, so arguments that the real view permits remain visible.
+Private argument records and migration: [private-records.md](private-records.md).
 
 **The law.** No argument runs unaccounted for.
 
@@ -723,39 +719,6 @@ the PERFORMANCE block), and the resume adds no model call.
   value that text spells checks out as `app`. Whether the library's default sentence counts as
   the app's text is the owner's call; the corpus is unchanged until then.
 
-## What it lets you measure
+## Measurements
 
-From the record alone, per model and per prompt or skill version: the **assumed-value rate**
-(calls that ran on a default nobody chose — `default` rows over ruled-argument rows), the
-**echoed-default rate** (the model sent the default itself — `default` rows that carry
-`proposed`), the **model-chosen rate** (`model` rows), the **ask rate** (batches that asked —
-`asked: 'missing'` rows, grouped by call and iteration), the **answered rate** (`answered`
-over `asked` rows), the **kept-answer uses** (an `answered` row with no `asked` row for its
-call and iteration: a call proposed again after the one-question law refused it, filled from
-the kept answer — nobody was asked in that batch) and the **free-text share** (`free`), the **invalid-answer rate** and the
-calls refused after three (`asked: 'invalid-answer'`), the share of answers whose standing
-names an assumption (`argument-assumed`) or ended waiting on the library (`argument-asked`),
-and — from the performance tests — what the layer costs per iteration in commit-log bytes and
-what a 32-field ask costs to build. The **needless-ask rate** (the library asked for a value
-the person had already given) is read from the same `asked` rows beside a case label: the
-record says what was asked, the bench says whether the person had said it. These rows are
-what a bench over the layer scores and what a lens draws — no second record is kept for
-either. The limit: it measures whose value a call ran on, not whether that value was right.
-
-Under declared sources, from the same rows: the **declared-source rate** (rows whose
-`claimed` is not `none`), the **verified rate** — how often the model's quotes, ids and
-earlier answers checked out, a COPYING measure, not an honesty measure (traced sources over
-declared ones), the **failed-claim mix** (the `failed` values — `quote-not-found`,
-`not-in-result`, `composed-message`, …), the **reading rate** (`said` + `reading`: values
-read into the person's words), the **hint rate** (`coincides`; split it at
-`integrity/argumentLeaves.ts` · `MIN_CHECKED_LENGTH`, four characters — a short value
-coincides by chance), the **contingent uses** (`setAside`: values taken from a result the
-model had set aside), the **composed-run exposure** (`failed: 'composed-message'`), the
-**unverified-ask rate** (`asked: 'unverified'`) and — from the request receipts — the
-**tokens per call** the `from` property costs
-(`test/core/agent/arguments/sources-layer.test.ts` and `sources-served.test.ts` print the served
-characters: on 2026-09-28, beside the ledger, the ruled tool's schema +744 characters, the system
-prompt +0, an unruled tool +0 — the first cut was +617 and +447; without the ledger, the ruled
-tool +863 over a plain agent's, where the ledger alone costs every tool about +2,400).
-
-`resolutionRows.ts` contains the complete resolved-row composers extracted from `resolve.ts`, with explicit pure reader ports and full filled-call context for private views. `resolve.ts` remains the oversized declare/verify/resolve facade; `ask.ts` retains planning/validation/binding after complete answer-row composer extraction. Neither file is claimed structurally complete.
+See [measurements.md](measurements.md) for rates and the limits of what the record can establish.

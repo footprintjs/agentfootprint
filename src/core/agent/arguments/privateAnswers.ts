@@ -81,7 +81,7 @@ function keptFacts(prior: PrivateRecordFields | undefined, before: unknown) {
   return { hidden, unknown: false };
 }
 
-function hiddenKeys(tool: Tool | undefined, args: ToolArgs): ReadonlySet<string> {
+function hiddenKeys(tool: ReturnType<ToolOf>, args: ToolArgs): ReadonlySet<string> {
   return new Set(tool === undefined ? [] : changedArgKeys(args, shownArgsOf(tool, args)));
 }
 

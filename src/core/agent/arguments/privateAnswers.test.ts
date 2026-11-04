@@ -279,3 +279,11 @@ function secretPaths(value: unknown, path = '$', seen = new Set<object>()): stri
     return [...(privateKey ? [child] : []), ...secretPaths(item, child, seen)];
   });
 }
+
+it('private row classification accepts the tool descriptor without execution capability', () => {
+  const { execute: ignoredExecute, ...descriptor } = maskedTool();
+  expect(typeof ignoredExecute).toBe('function');
+  expect(privateResolutionSelections(undefined, rows, [call], () => descriptor, 2)).toEqual([
+    { root: 'argumentResolutions', path: '0.fills.0.value' },
+  ]);
+});
