@@ -22,6 +22,9 @@ dist/
 *.log
 npm-debug.log*
 
+# Vitest 5 writes reports and attachments here by default
+/.vitest
+
 # Docs build output
 api-docs/
 # `npm run docs:api` writes a local-only preview to api-docs/ (above). The
