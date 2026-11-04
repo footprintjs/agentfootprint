@@ -42,6 +42,7 @@
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
 import { withArgumentParties } from './argumentParties.js';
 import type { ToolParty } from '../../../tools/toolParty.js';
+import { readToolOwner } from '../../../tools/toolResourceOwner.js';
 
 import { stampInputRequest, type AwaitingInput } from '../../../tools/inputRequest.js';
 import {
@@ -376,8 +377,8 @@ export function askBeforeDispatch(
       : [],
   );
   const stored = stateFor(scope, iteration);
-  // A resume mints a new execution run id; the native checkpoint keeps the seeded turn identity.
-  const owner = JSON.stringify([scope.turnStartMs, scope.$getValue('runIdentity')]);
+  // The admitted resource owner keeps its native birth across SAME and FRESH restore.
+  const owner = readToolOwner(scope.$getValue('toolResourceOwner')).birth;
   const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;
   const identity = { owner, turn, iteration, mention, origins };
   if (

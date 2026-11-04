@@ -8,6 +8,7 @@ import { formArguments, readBack, sameRange, type PeriodForm } from '../../../ti
 import { isMissing, isRefused, periodFormsOf, rulesOf } from '../../../tools/declare.js';
 import type { ArgumentAskState, AskField, AskProgress, AskTime, AskWaiting } from './ask.js';
 import type { BatchCall, ToolOf } from './resolve.js';
+import type { ToolTurnBirth } from '../../../tools/toolResourceOwner.js';
 
 export interface PartialOrigin {
   readonly call: BatchCall;
@@ -19,7 +20,7 @@ export interface PartialOrigin {
 export interface PartialWindowState {
   readonly version: 1;
   readonly phase: 'complete-arguments' | 'confirm-meaning';
-  readonly owner: string;
+  readonly owner: ToolTurnBirth;
   readonly turn: number;
   readonly iteration: number;
   readonly mention: number;
@@ -148,7 +149,7 @@ export function validPartialState(
   return (
     state.version === 1 &&
     (state.phase === 'complete-arguments' || state.phase === 'confirm-meaning') &&
-    state.owner === expected.owner &&
+    sameData(state.owner, expected.owner) &&
     state.turn === expected.turn &&
     state.iteration === expected.iteration &&
     state.mention === expected.mention &&

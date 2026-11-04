@@ -828,6 +828,11 @@ describe('askBeforeDispatch â€” a state another batch left is never this batchâ€
     );
     const store: Record<string, unknown> = {
       argumentAsk: stale,
+      toolResourceOwner: {
+        version: 1,
+        birth: { runId: 'native-run', componentOrdinal: 0 },
+        nextDispatch: 0,
+      },
       llmLatestToolCalls: [{ id: 'c9', name: 'search_logs', args: { host: 'db-1' } }],
     };
     const scope = {

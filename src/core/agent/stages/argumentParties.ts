@@ -4,6 +4,11 @@ import type { ArgumentAskState } from '../arguments/ask.js';
 import type { ServedToolParties } from '../../slots/buildToolsSlot.js';
 import { readToolParty, sameToolParty, type ToolParty } from '../../../tools/toolParty.js';
 import { isArgumentAskPause } from '../arguments/askMarker.js';
+import {
+  readToolOwner,
+  sameToolBirth,
+  type ToolTurnBirth,
+} from '../../../tools/toolResourceOwner.js';
 
 interface CallIdentity {
   readonly id: string;
@@ -13,7 +18,7 @@ interface CallIdentity {
 interface ArgumentPartyState extends ArgumentAskState {
   readonly toolParties: {
     readonly version: 1;
-    readonly owner: string;
+    readonly owner: ToolTurnBirth;
     readonly turn: number;
     readonly iteration: number;
     readonly calls: readonly (CallIdentity & { readonly party: ToolParty | null })[];
@@ -33,10 +38,18 @@ function own(value: unknown, key: PropertyKey): unknown {
   return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
-function ownerOf(scope: TypedScope<AgentState>): string {
-  const owner = JSON.stringify([scope.turnStartMs, scope.$getValue('runIdentity')]);
-  if (owner.length > 16384) invalid();
-  return owner;
+function ownerOf(scope: TypedScope<AgentState>): ToolTurnBirth {
+  return readToolOwner(scope.$getValue('toolResourceOwner')).birth;
+}
+
+function sameOwner(value: unknown, expected: ToolTurnBirth): boolean {
+  const runId = own(value, 'runId');
+  const componentOrdinal = own(value, 'componentOrdinal');
+  return (
+    typeof runId === 'string' &&
+    typeof componentOrdinal === 'number' &&
+    sameToolBirth({ runId, componentOrdinal }, expected)
+  );
 }
 
 function callsOf(scope: TypedScope<AgentState>): readonly CallIdentity[] {
@@ -114,7 +127,7 @@ export function restoreArgumentParties(
   if (
     served === undefined ||
     own(binding, 'version') !== 1 ||
-    own(binding, 'owner') !== ownerOf(scope) ||
+    !sameOwner(own(binding, 'owner'), ownerOf(scope)) ||
     own(binding, 'turn') !== scope.turnNumber ||
     own(binding, 'iteration') !== scope.iteration ||
     own(state, 'iteration') !== scope.iteration ||

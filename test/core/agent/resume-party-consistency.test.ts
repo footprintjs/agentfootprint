@@ -297,6 +297,7 @@ function argumentPartyAgent(options: {
   listed?: () => void;
   inputsLayer?: false;
   requiresWindow?: false;
+  redactPrincipal?: true;
 }) {
   const tool = (execute: (args: Record<string, unknown>) => string) =>
     defineTool({
@@ -330,6 +331,7 @@ function argumentPartyAgent(options: {
     },
     model: 'mock',
     reactMode: options.reactMode,
+    ...(options.redactPrincipal && { redact: { keys: ['runIdentity', 'memberRun'] } }),
   });
   if (options.inputsLayer !== false) builder = builder.inputsLayer();
   if (options.registryExecute) builder = builder.tool(tool(options.registryExecute));
@@ -411,7 +413,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
 interface MutableArgumentState {
   toolParties: {
     version: number;
-    owner: string;
+    owner: { runId: string; componentOrdinal: number };
     turn: number;
     iteration: number;
     calls: { id: string; name: string; party: { channel: string; id?: string } }[];
@@ -431,6 +433,50 @@ function editArgumentState(value: unknown, edit: (state: MutableArgumentState) =
 }
 
 describe('argument party checkpoint admission', () => {
+  it.each(['owned', 'mounted', 'fresh'] as const)(
+    '%s keeps private principal text out of the served argument-pause record',
+    async (kind) => {
+      const principal = 'principal-canary-do-not-retain';
+      const agent = argumentPartyAgent({
+        reactMode: 'dynamic',
+        providerPresent: true,
+        providerId: 'original',
+        providerExecute: () => 'rows',
+        redactPrincipal: true,
+      });
+      const runner = kind === 'mounted' ? Sequence.create().step('member', agent).build() : agent;
+      const pause = await runner.run({
+        message: 'read',
+        identity: { conversationId: 'test-conversation', principal },
+      });
+      expect(isInputPause(pause)).toBe(true);
+      expect(JSON.stringify(pause)).toContain(principal); // Raw checkpoint is deliberately operational.
+      expect(runner.getSnapshot()).toBeDefined();
+      const matches: string[] = [];
+      const find = (value: unknown, path: string): void => {
+        if (typeof value === 'string' && value.includes(principal)) matches.push(path);
+        else if (value !== null && typeof value === 'object')
+          for (const [key, child] of Object.entries(value)) find(child, `${path}/${key}`);
+      };
+      find(runner.getSnapshot(), 'snapshot');
+      if (kind === 'fresh') {
+        if (!isInputPause(pause)) throw new Error('expected argument pause');
+        const fresh = argumentPartyAgent({
+          reactMode: 'dynamic',
+          providerPresent: true,
+          providerId: 'original',
+          providerExecute: () => 'rows',
+          redactPrincipal: true,
+        });
+        await fresh.resume(structuredClone(pause.checkpoint), {
+          requestId: pause.awaitingInput.requestId,
+          values: { [pause.awaitingInput.fields[0]!.id]: '24h' },
+        });
+        find(fresh.getSnapshot(), 'resumed');
+      }
+      expect(matches, matches.join('\n')).toEqual([]);
+    },
+  );
   it.each(['owned', 'mounted'] as const)(
     '%s refuses a stripped carrier even if the new configuration skips asking',
     async (kind) => {
@@ -487,7 +533,7 @@ describe('argument party checkpoint admission', () => {
     ],
     ['future version', (state: MutableArgumentState) => (state.toolParties.version = 2)],
     ['foreign turn', (state: MutableArgumentState) => (state.toolParties.turn += 1)],
-    ['foreign owner', (state: MutableArgumentState) => (state.toolParties.owner = 'other')],
+    ['foreign owner', (state: MutableArgumentState) => (state.toolParties.owner.runId = 'other')],
     ['foreign iteration', (state: MutableArgumentState) => (state.toolParties.iteration += 1)],
     ['missing sibling', (state: MutableArgumentState) => state.toolParties.calls.pop()],
     [
@@ -540,6 +586,11 @@ describe('finite argument party data', () => {
     const values: Record<string, unknown> = {
       llmLatestToolCalls: calls,
       runIdentity: { conversationId: 'retained' },
+      toolResourceOwner: {
+        version: 1,
+        birth: { runId: 'native-run', componentOrdinal: 0 },
+        nextDispatch: 0,
+      },
     };
     const scope = {
       $getValue: (key: string) => values[key],
