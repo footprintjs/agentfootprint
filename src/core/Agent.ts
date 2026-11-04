@@ -3,6 +3,7 @@ import { componentResources } from './agent/componentResources.js';
 import { resumeStateOf, resumeSessionOf } from './agent/resumeCheckpoint.js';
 import {
   capturePauseOwnership,
+  preservePendingQuestion,
   abandonStoredPause,
   isUnansweredPause,
   withUnansweredPause,
@@ -2529,7 +2530,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     return this.runExecution().withRun((invocation) =>
-      this.resumeOwned(invocation, checkpoint, input, options),
+      preservePendingQuestion(
+        invocation.previous?.value,
+        () => invocation.run.origin !== undefined,
+        () => this.resumeOwned(invocation, checkpoint, input, options),
+      ),
     );
   }
 
@@ -2677,14 +2682,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // the same door and before any state moves, because a resume that has begun
     // is a resume that has already used the value.
     assertDecisionIsNotStale(checkpoint.pauseData, input);
-    // The same one-turn-at-a-time guard `run()` carries: a resume writes the
-    // same per-instance state a run does. Answering the question is what this
-    // door is FOR, so it never checks `pendingQuestion` — it clears it.
-    // Settled the moment the answer is handed over, not when the resumed run
-    // finishes: a resume that then FAILS must not leave the agent refusing
-    // every later message on behalf of a question that has been answered.
-    // Kept to put back when the run refuses the answer itself (a replay of a
-    // request already answered): that resume answered nothing.
+    // A native-admitted answer settles the old question even if its leg fails.
+    // The outer pause-ownership boundary restores pre-origin refusals; named
+    // unanswered refusals after origin are restored below.
     const questionBefore = invocation.previous?.value.pendingQuestion;
     if (invocation.previous !== undefined) invocation.previous.value.pendingQuestion = undefined;
     // WHO this resumed run is for — set BEFORE the executor exists, because the

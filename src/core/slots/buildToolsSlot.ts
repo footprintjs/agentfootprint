@@ -94,7 +94,7 @@ export type { ToolParty } from '../../tools/toolParty.js';
  * which is the capability law's held-out clause unchanged.
  */
 export interface ServedToolParties {
-  current: ReadonlyMap<string, ToolParty>;
+  current: ReadonlyMap<string, ToolParty | null>;
   /**
    * The party each name was LAST served under, across the epochs of one run
    * (cleared on iteration 1). The off-wire fallback reads it: a name that

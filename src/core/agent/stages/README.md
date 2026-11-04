@@ -13,6 +13,12 @@ state the Lens laws in full; the role word is new, the laws are not.
 
 # `src/core/agent/stages/` — the ReAct loop's stage functions
 
+`argumentParties.ts` owns the private argument-pause batch binding. It captures declared
+parties, admits the selected native checkpoint leaf, and reinstalls one validated map
+for the existing resolver before tool discovery or dispatch. `argumentAsk.ts` retains
+that binding until batch completion; it never stores executable tools. Regression
+coverage extends the existing `test/core/agent/resume-party-consistency.test.ts` suite.
+
 One file per stage of the Agent chart, mounted by `buildAgentChart` /
 `buildDynamicAgentChart` (never imported by consumers):
 

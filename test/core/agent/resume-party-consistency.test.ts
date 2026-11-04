@@ -1,10 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Agent, checkInApproved, defineTool, isCheckInPause } from '../../../src/index.js';
+import {
+  Agent,
+  Sequence,
+  checkInApproved,
+  defineTool,
+  isCheckInPause,
+  isInputPause,
+} from '../../../src/index.js';
 import { buildToolResolver } from '../../../src/core/agent/stages/toolResolver.js';
 import type { ToolClaim } from '../../../src/core/agent/buildToolRegistry.js';
 import type { ToolParty } from '../../../src/core/slots/buildToolsSlot.js';
 import type { Tool } from '../../../src/tools/tools.js';
 import type { LLMRequest } from '../../../src/provider-contract/types.js';
+import {
+  restoreArgumentParties,
+  withArgumentParties,
+} from '../../../src/core/agent/stages/argumentParties.js';
+import { readToolParty } from '../../../src/tools/toolParty.js';
 
 const NAME = 'read_rows';
 const REFUSAL = 'The saved party cannot answer this call.';
@@ -267,3 +279,332 @@ it.each(['dynamic', 'dynamic-grouped'] as const)(
     );
   },
 );
+
+type ArgumentPartyCase =
+  | 'same named party'
+  | 'same anonymous party'
+  | 'changed provider id'
+  | 'sole registry replacement'
+  | 'withdrawn provider with registry'
+  | 'named provider becomes anonymous';
+
+function argumentPartyAgent(options: {
+  reactMode: 'dynamic' | 'dynamic-grouped';
+  providerId?: string;
+  providerPresent: boolean;
+  providerExecute: (args: Record<string, unknown>) => string;
+  registryExecute?: (args: Record<string, unknown>) => string;
+  listed?: () => void;
+  inputsLayer?: false;
+  requiresWindow?: false;
+}) {
+  const tool = (execute: (args: Record<string, unknown>) => string) =>
+    defineTool({
+      name: NAME,
+      description: 'Read synthetic local rows for a named service and window',
+      inputSchema: {
+        type: 'object',
+        required: options.requiresWindow === false ? ['service'] : ['service', 'window'],
+        properties: {
+          service: { type: 'string' },
+          window: { type: 'string', enum: ['1h', '24h'] },
+        },
+      },
+      askOrAssume: { window: { ask: 'Which window?', choices: ['1h', '24h'] } },
+      execute,
+    });
+  let builder = Agent.create({
+    provider: {
+      name: 'scripted-argument-party',
+      complete: async (request: LLMRequest) =>
+        request.messages.some((message) => message.role === 'tool')
+          ? { content: 'done', toolCalls: [], usage: { input: 1, output: 1 } }
+          : {
+              content: '',
+              toolCalls: [
+                { id: 'argument-one', name: NAME, args: { service: 'one' } },
+                { id: 'argument-two', name: NAME, args: { service: 'two' } },
+              ],
+              usage: { input: 1, output: 1 },
+            },
+    },
+    model: 'mock',
+    reactMode: options.reactMode,
+  });
+  if (options.inputsLayer !== false) builder = builder.inputsLayer();
+  if (options.registryExecute) builder = builder.tool(tool(options.registryExecute));
+  return builder
+    .toolProvider({
+      ...(options.providerId !== undefined && { id: options.providerId }),
+      list: () => {
+        options.listed?.();
+        return options.providerPresent ? [tool(options.providerExecute)] : [];
+      },
+    })
+    .build();
+}
+
+describe.each(['dynamic', 'dynamic-grouped'] as const)(
+  'argument interrupt party through %s',
+  (reactMode) => {
+    it.each([
+      'same named party',
+      'same anonymous party',
+      'changed provider id',
+      'sole registry replacement',
+      'withdrawn provider with registry',
+      'named provider becomes anonymous',
+    ] as const)('%s keeps the offered owner of both calls', async (kind: ArgumentPartyCase) => {
+      const anonymous = kind === 'same anonymous party';
+      const originalCall = vi.fn(() => 'original');
+      const original = argumentPartyAgent({
+        reactMode,
+        providerId: anonymous ? undefined : 'original',
+        providerPresent: true,
+        providerExecute: originalCall,
+      });
+      const pause = await original.run({ message: 'read both services' });
+      if (!isInputPause(pause)) throw new Error('fixture did not reach the argument interrupt');
+      expect(originalCall).not.toHaveBeenCalled();
+      expect(pause.awaitingInput.fields).toHaveLength(1);
+      const replacement = vi.fn((_args: Record<string, unknown>) => 'current rows');
+      const registry = vi.fn((_args: Record<string, unknown>) => 'registry rows');
+      const registryOnly =
+        kind === 'sole registry replacement' || kind === 'withdrawn provider with registry';
+      const fresh = argumentPartyAgent({
+        reactMode,
+        providerId:
+          kind === 'changed provider id'
+            ? 'replacement'
+            : anonymous || kind === 'named provider becomes anonymous'
+            ? undefined
+            : 'original',
+        providerPresent: !registryOnly,
+        providerExecute: replacement,
+        ...(registryOnly && { registryExecute: registry }),
+      });
+      await expect(
+        fresh.resume(structuredClone(pause.checkpoint), {
+          requestId: pause.awaitingInput.requestId,
+          values: { [pause.awaitingInput.fields[0]!.id]: '24h' },
+        }),
+      ).resolves.toBe('done');
+      const same = kind === 'same named party' || anonymous;
+      if (same) {
+        expect(replacement.mock.calls.map(([args]) => args)).toEqual([
+          { service: 'one', window: '24h' },
+          { service: 'two', window: '24h' },
+        ]);
+      } else {
+        expect.soft(replacement).not.toHaveBeenCalled();
+        expect.soft(registry).not.toHaveBeenCalled();
+        expect
+          .soft(JSON.stringify(fresh.checkpoint()?.history))
+          .toContain('offered under that name was not available to answer it.');
+      }
+      expect(originalCall).not.toHaveBeenCalled();
+      expect(registry).not.toHaveBeenCalled();
+    });
+  },
+);
+
+interface MutableArgumentState {
+  toolParties: {
+    version: number;
+    owner: string;
+    turn: number;
+    iteration: number;
+    calls: { id: string; name: string; party: { channel: string; id?: string } }[];
+  };
+}
+
+function editArgumentState(value: unknown, edit: (state: MutableArgumentState) => void): number {
+  if (typeof value !== 'object' || value === null) return 0;
+  let count = 0;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'argumentAsk' && typeof child === 'object' && child !== null) {
+      edit(child as MutableArgumentState);
+      count++;
+    } else count += editArgumentState(child, edit);
+  }
+  return count;
+}
+
+describe('argument party checkpoint admission', () => {
+  it.each(['owned', 'mounted'] as const)(
+    '%s refuses a stripped carrier even if the new configuration skips asking',
+    async (kind) => {
+      const execute = vi.fn(() => 'rows');
+      const options = {
+        reactMode: 'dynamic' as const,
+        providerId: 'original',
+        providerPresent: true,
+        providerExecute: execute,
+      };
+      const originalAgent = argumentPartyAgent(options);
+      const original =
+        kind === 'mounted' ? Sequence.create().step('agent', originalAgent).build() : originalAgent;
+      const pause = await original.run({ message: 'read' });
+      if (!isInputPause(pause)) throw new Error('fixture did not reach argument interrupt');
+      const checkpoint = structuredClone(pause.checkpoint);
+      expect(
+        editArgumentState(checkpoint, (state) => {
+          Reflect.deleteProperty(state, 'toolParties');
+        }),
+      ).toBeGreaterThan(0);
+      // Also strip the complete ask state, leaving the native pause metadata intact.
+      const strip = (value: unknown): void => {
+        if (typeof value !== 'object' || value === null) return;
+        for (const [key, child] of Object.entries(value)) {
+          if (key === 'argumentAsk') Reflect.deleteProperty(value, key);
+          else strip(child);
+        }
+      };
+      strip(checkpoint);
+      const listed = vi.fn();
+      const freshAgent = argumentPartyAgent({
+        ...options,
+        listed,
+        inputsLayer: false,
+        requiresWindow: false,
+      });
+      const fresh =
+        kind === 'mounted' ? Sequence.create().step('agent', freshAgent).build() : freshAgent;
+      await expect(
+        fresh.resume(checkpoint, {
+          requestId: pause.awaitingInput.requestId,
+          values: { [pause.awaitingInput.fields[0]!.id]: '24h' },
+        }),
+      ).rejects.toThrow('argumentAsk:');
+      expect(listed).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    [
+      'missing binding',
+      (state: MutableArgumentState) => Reflect.deleteProperty(state, 'toolParties'),
+    ],
+    ['future version', (state: MutableArgumentState) => (state.toolParties.version = 2)],
+    ['foreign turn', (state: MutableArgumentState) => (state.toolParties.turn += 1)],
+    ['foreign owner', (state: MutableArgumentState) => (state.toolParties.owner = 'other')],
+    ['foreign iteration', (state: MutableArgumentState) => (state.toolParties.iteration += 1)],
+    ['missing sibling', (state: MutableArgumentState) => state.toolParties.calls.pop()],
+    [
+      'extra sibling',
+      (state: MutableArgumentState) => state.toolParties.calls.push(state.toolParties.calls[0]),
+    ],
+    ['reordered siblings', (state: MutableArgumentState) => state.toolParties.calls.reverse()],
+    ['foreign call id', (state: MutableArgumentState) => (state.toolParties.calls[0].id = 'other')],
+    [
+      'foreign tool name',
+      (state: MutableArgumentState) => (state.toolParties.calls[0].name = 'other'),
+    ],
+    [
+      'unknown party',
+      (state: MutableArgumentState) => (state.toolParties.calls[0].party.channel = 'unknown'),
+    ],
+    [
+      'inconsistent same-name parties',
+      (state: MutableArgumentState) => (state.toolParties.calls[0].party.id = 'other'),
+    ],
+  ] as const)('refuses %s before catalog discovery', async (_label, damage) => {
+    const execute = vi.fn(() => 'rows');
+    const options = {
+      reactMode: 'dynamic' as const,
+      providerId: 'original',
+      providerPresent: true,
+      providerExecute: execute,
+    };
+    const first = argumentPartyAgent(options);
+    const pause = await first.run({ message: 'read' });
+    if (!isInputPause(pause)) throw new Error('fixture did not reach argument interrupt');
+    const checkpoint = structuredClone(pause.checkpoint);
+    expect(editArgumentState(checkpoint, damage)).toBeGreaterThan(0);
+    const listed = vi.fn();
+    const fresh = argumentPartyAgent({ ...options, listed });
+    await expect(
+      fresh.resume(checkpoint, {
+        requestId: pause.awaitingInput.requestId,
+        values: { [pause.awaitingInput.fields[0]!.id]: '24h' },
+      }),
+    ).rejects.toThrow('argumentAsk:');
+    expect(listed).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('finite argument party data', () => {
+  function fixture(count = 2) {
+    const calls = Array.from({ length: count }, (_, i) => ({ id: `call-${i}`, name: NAME }));
+    const values: Record<string, unknown> = {
+      llmLatestToolCalls: calls,
+      runIdentity: { conversationId: 'retained' },
+    };
+    const scope = {
+      $getValue: (key: string) => values[key],
+      iteration: 1,
+      turnNumber: 1,
+      turnStartMs: 1,
+    };
+    const capture = () =>
+      withArgumentParties(scope as never, { iteration: 1, fields: [], progress: [] }, () => ({
+        channel: 'provider',
+        id: 'original',
+      }));
+    return { scope, values, calls, capture };
+  }
+
+  it('admits the finite call limit and refuses the next before allocating a saved batch', () => {
+    expect(fixture(1024).capture().toolParties.calls).toHaveLength(1024);
+    expect(() => fixture(1025).capture()).toThrow('argumentAsk:');
+  });
+
+  it('refuses duplicate proposal ids', () => {
+    const f = fixture();
+    f.calls[1]!.id = f.calls[0]!.id;
+    expect(f.capture).toThrow('argumentAsk:');
+  });
+
+  it('does not partly install a damaged sibling', () => {
+    const f = fixture();
+    const saved = structuredClone(f.capture());
+    Reflect.deleteProperty(saved.toolParties.calls[1]!, 'party');
+    f.values.argumentAsk = saved;
+    const current = new Map<string, ToolParty>([['untouched', { channel: 'registry' }]]);
+    const served = { current, lastServed: new Map<string, ToolParty>() };
+    expect(() => restoreArgumentParties(f.scope as never, served)).toThrow('argumentAsk:');
+    expect(served.current).toBe(current);
+  });
+
+  it('keeps an explicitly unowned name closed instead of choosing a current holder', () => {
+    const f = fixture();
+    f.values.argumentAsk = withArgumentParties(
+      f.scope as never,
+      { iteration: 1, fields: [], progress: [] },
+      () => undefined,
+    );
+    const served = {
+      current: new Map<string, ToolParty | null>(),
+      lastServed: new Map<string, ToolParty>(),
+    };
+    restoreArgumentParties(f.scope as never, served);
+    const resolve = buildToolResolver({
+      servedTools: served,
+      registryByName: new Map([[NAME, rowTool('replacement')]]),
+      notServed: () => REFUSAL,
+    });
+    expect(resolve(NAME)).toEqual({ refusal: REFUSAL });
+  });
+
+  it('reads bounded own data without invoking accessors or adopting inherited labels', () => {
+    const getter = vi.fn(() => 'provider');
+    expect(readToolParty(Object.defineProperty({}, 'channel', { get: getter }))).toBeUndefined();
+    expect(getter).not.toHaveBeenCalled();
+    expect(
+      readToolParty(Object.assign(Object.create({ id: 'inherited' }), { channel: 'provider' })),
+    ).toBeUndefined();
+    expect(readToolParty({ channel: 'provider', id: 'x'.repeat(1024) })).toBeDefined();
+    expect(readToolParty({ channel: 'provider', id: 'x'.repeat(1025) })).toBeUndefined();
+  });
+});

@@ -475,6 +475,7 @@ export function buildResumeAsk(
       toolCallCount: 1 + askSettlement.settled.length,
       history: askHistory,
     });
+    if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     await links.endCall(scope);
     scope.pausedToolCallId = '';

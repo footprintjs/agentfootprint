@@ -80,3 +80,22 @@ export async function withUnansweredPause<T>(
     throw error;
   }
 }
+
+/**
+ * A refused native plan or setup has accepted no answer. Capture the exact
+ * prior occurrence, and restore its guard on every exit without a new origin.
+ * An admitted leg owns its answer even when later work fails; the named
+ * unanswered-answer policy below still covers refusals inside that leg.
+ */
+export async function preservePendingQuestion<T>(
+  previous: AgentRunValues | undefined,
+  hasNativeOrigin: () => boolean,
+  resume: () => T | Promise<T>,
+): Promise<T> {
+  const question = previous?.pendingQuestion;
+  try {
+    return await resume();
+  } finally {
+    if (previous !== undefined && !hasNativeOrigin()) previous.pendingQuestion = question;
+  }
+}

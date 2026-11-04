@@ -35,6 +35,7 @@ import type { EventServing } from '../redaction/served.js';
 import { registerRunnerLive } from './runnerLive.js';
 import { redactConsentUrlForEvent } from '../identity/consent.js';
 import { argumentAskReplyForEvent, isArgumentAskPause } from './agent/arguments/askMarker.js';
+import { requireArgumentPartyCheckpoint } from './agent/stages/argumentParties.js';
 import { readAskComponent } from '../tools/askComponent.js';
 import { isPaused, pauseDemandsDecision } from './pause.js';
 import {
@@ -684,8 +685,7 @@ export abstract class RunnerBase<
     input: unknown,
     handedDown?: RedactionPolicy,
   ): RedactionPolicy | undefined {
-    // Taken up by this library: a door watching the paused request sees every
-    // use of its decision from here (`consentRequest.ts` · `watchDecisionUse`).
+    requireArgumentPartyCheckpoint(checkpoint);
     noteDecisionTakenUp(pausedRequestIdOf(checkpoint));
     // The resumed leg's own policy beside this runner's declaration: what the
     // caller hands it, joined with the names the paused leg kept out (the

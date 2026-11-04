@@ -40,6 +40,8 @@
  */
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
+import { withArgumentParties } from './argumentParties.js';
+import type { ToolParty } from '../../../tools/toolParty.js';
 
 import { stampInputRequest, type AwaitingInput } from '../../../tools/inputRequest.js';
 import {
@@ -180,6 +182,7 @@ export interface ArgumentAskDeps {
   readonly argumentSources?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
+  readonly partyOf: (name: string) => ToolParty | undefined;
   /** The run id a stamped request id carries; absent → the turn's start time. */
   readonly runId?: () => string | undefined;
   /** The host's own context for the ask (`AgentOptions.argumentAskContext`). */
@@ -460,10 +463,13 @@ export function askBeforeDispatch(
   }
   if (round !== undefined) {
     const waiting = stampRound(scope, state, round, deps);
-    scope.argumentAsk = snapshotPartialState(withWaiting(state, waiting));
+    scope.argumentAsk = snapshotPartialState(
+      withArgumentParties(scope, withWaiting(state, waiting), deps.partyOf),
+    );
     interrupt(scope, pauseDataOf(waiting));
+    throw new TypeError('argumentAsk: replay is missing its original batch state');
   }
-  if (stored !== undefined) scope.argumentAsk = undefined;
+  if (stored !== undefined) scope.argumentAsk = snapshotPartialState(state);
   const settled = withSettled(entries, state, calls);
   if (partial && time !== undefined) {
     const currentLedger = scope.findingsLedger as FindingsLedger | undefined;

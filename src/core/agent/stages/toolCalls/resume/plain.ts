@@ -189,6 +189,7 @@ export function buildResumePlain(
       // Plain local array — see the matching note on the execute path.
       history: newHistory,
     });
+    if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     // Clear pause checkpoint fields.
     await links.endCall(scope);

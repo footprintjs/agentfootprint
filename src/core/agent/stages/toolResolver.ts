@@ -111,13 +111,14 @@ function registryPartyOf(deps: ToolResolverDeps, name: string): ToolParty | unde
 export function buildToolResolver(deps: ToolResolverDeps): ToolResolver {
   return (toolName, pinned) => {
     const wireParty = pinned ?? deps.servedTools?.current.get(toolName);
+    if (wireParty === null) return { refusal: deps.notServed(toolName) };
     const lastParty =
       wireParty === undefined ? deps.servedTools?.lastServed.get(toolName) : undefined;
     const party = wireParty ?? lastParty;
     if (party !== undefined) {
       const tool = toolForParty(deps, toolName, party);
       return tool === undefined
-        ? { refusal: deps.notServed(toolName) }
+        ? { party, refusal: deps.notServed(toolName) }
         : { tool, party, ...(lastParty !== undefined && { offWire: true as const }) };
     }
     const registryHolder = deps.registryByName.get(toolName);

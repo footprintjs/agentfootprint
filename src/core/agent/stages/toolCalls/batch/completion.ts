@@ -25,6 +25,7 @@ export function completeToolBatch(
   frame: CompleteToolBatchFrame,
 ): void {
   scope.history = frame.newHistory;
+  if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
 
   // The batch-end aggregate for conflicting transition proposals
   // (9.19.0) — fires only when ≥2 accepted proposals named different

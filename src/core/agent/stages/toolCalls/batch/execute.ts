@@ -7,6 +7,7 @@ import { completeToolBatch } from './completion.js';
 import type { ToolCallOperations } from '../compose.js';
 import type { DispatchBatchFrame } from '../contracts/dispatchBatch.js';
 import type { DispatchCallRunner } from '../contracts/dispatchCall.js';
+import { restoreArgumentParties } from '../../argumentParties.js';
 
 /** The existing native batch handler: original waits, one serial call loop, and defined pause propagation. */
 export function buildToolBatchExecution(
@@ -15,6 +16,7 @@ export function buildToolBatchExecution(
   dispatchCall: DispatchCallRunner,
 ): PausableHandler<TypedScope<AgentState>>['execute'] {
   const execute: PausableHandler<TypedScope<AgentState>>['execute'] = async (scope) => {
+    restoreArgumentParties(scope, deps.servedTools);
     // Replay and pausable resume both admit the saved native owner and current executable catalog.
     deps.resources?.restore(scope, operations.resourceFactsOf(scope));
     const catalog = deps.prepareProviderTools?.(scope);
@@ -66,6 +68,7 @@ export function buildToolBatchExecution(
           .map((call) => call.id),
         ...(deps.argumentSources === true && { argumentSources: true as const }),
         toolOf: (toolName) => operations.resolveTool(toolName).tool,
+        partyOf: (toolName) => operations.resolveTool(toolName).party,
         runId: () => operations.runFactsOf(scope)?.runId,
         ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
         ...(deps.time !== undefined && {

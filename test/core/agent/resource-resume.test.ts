@@ -322,3 +322,106 @@ it('a missing answer preserves the pending question and its retained resources',
   await agent.resume(pause.checkpoint, 'yes');
   expect(closed).toEqual(['run']);
 });
+
+async function guardedResumeFixture(options: { failAnsweredLeg?: boolean } = {}) {
+  const closed: string[] = [];
+  let modelCalls = 0;
+  const agent = Agent.create({
+    provider: {
+      name: 'scripted-admission',
+      complete: async () => {
+        modelCalls += 1;
+        if (modelCalls === 1) {
+          return {
+            content: '',
+            toolCalls: [{ id: 'held-admission', name: 'hold_admission', args: {} }],
+            usage: { input: 1, output: 1 },
+          };
+        }
+        if (options.failAnsweredLeg && modelCalls === 2) {
+          throw new Error('answered leg failed');
+        }
+        return { content: 'done', toolCalls: [], usage: { input: 1, output: 1 } };
+      },
+    },
+    model: 'mock',
+  })
+    .tool(
+      defineTool({
+        name: 'hold_admission',
+        description: 'Hold one local synthetic resource',
+        inputSchema: { type: 'object' },
+        execute: (_args, ctx) => {
+          ctx.onTeardown!(
+            () => {
+              closed.push('run');
+            },
+            { scope: 'run', key: 'admission-owner' },
+          );
+          return pauseHere({ question: 'continue admission?' });
+        },
+      }),
+    )
+    .build();
+  const pause = await agent.run({ message: 'hold admission' });
+  if (!isPaused(pause)) throw new Error('admission fixture did not pause');
+  return { agent, pause, closed, modelCalls: () => modelCalls };
+}
+
+it.each(['run', 'followUp'] as const)(
+  'resume admission keeps the question after native plan refusal before %s',
+  async (door) => {
+    const { agent, pause, closed, modelCalls } = await guardedResumeFixture();
+    const bad = {
+      ...structuredClone(pause.checkpoint),
+      pausedStageId: '__absent_admission_stage__',
+    };
+    await expect(agent.resume(bad, 'yes')).rejects.toThrow(
+      /Cannot resume: stage '__absent_admission_stage__' not found/,
+    );
+    expect.soft(modelCalls()).toBe(1);
+    expect.soft(closed).toEqual([]);
+    const next = await (door === 'run'
+      ? agent.run({ message: 'not an answer' })
+      : agent.followUp('not an answer')
+    ).catch((error: unknown) => error);
+    expect.soft(next).toMatchObject({ code: 'ERR_PENDING_QUESTION' });
+    expect.soft(modelCalls()).toBe(1);
+    await expect(agent.resume(pause.checkpoint, 'yes')).resolves.toBe('done');
+    expect.soft(closed).toEqual(['run']);
+    expect.soft(modelCalls()).toBe(2);
+  },
+);
+
+it.each(['run', 'followUp'] as const)(
+  'resume admission keeps the question after setup refusal before %s',
+  async (door) => {
+    const { agent, pause, closed, modelCalls } = await guardedResumeFixture();
+    const options = {
+      get correlationId(): string {
+        throw new Error('fixture resume setup failure');
+      },
+    };
+    await expect(agent.resume(pause.checkpoint, 'yes', options)).rejects.toThrow(
+      'fixture resume setup failure',
+    );
+    expect.soft(modelCalls()).toBe(1);
+    expect.soft(closed).toEqual([]);
+    const next = await (door === 'run'
+      ? agent.run({ message: 'not an answer' })
+      : agent.followUp('not an answer')
+    ).catch((error: unknown) => error);
+    expect.soft(next).toMatchObject({ code: 'ERR_PENDING_QUESTION' });
+    expect.soft(modelCalls()).toBe(1);
+    await expect(agent.resume(pause.checkpoint, 'yes')).resolves.toBe('done');
+    expect.soft(closed).toEqual(['run']);
+    expect.soft(modelCalls()).toBe(2);
+  },
+);
+
+it('resume admission does not resurrect a question after the answered leg fails', async () => {
+  const { agent, pause, closed } = await guardedResumeFixture({ failAnsweredLeg: true });
+  await expect(agent.resume(pause.checkpoint, 'yes')).rejects.toThrow('answered leg failed');
+  expect(closed).toEqual(['run']);
+  await expect(agent.run({ message: 'new work' })).resolves.toBe('done');
+});

@@ -202,6 +202,7 @@ export function buildResumeCredential(
       toolCallCount: 1 + consentSettlement.settled.length,
       history: consentHistory,
     });
+    if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     // Clear ALL pause checkpoint fields (shared + credential).
     await links.endCall(scope);
