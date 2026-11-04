@@ -33,6 +33,7 @@ recorders/observability/
 ├── StatusRecorder.ts   live-status helper (attachStatus) behind enable.liveStatus
 ├── LoggingRecorder.ts    structured-logging helper (attachLogging) behind enable.observability
 ├── BoundaryRecorder.ts   unified domain event log (run / subflow / llm / tool / context)
+├── boundaryRecorder/     existing event contracts, projections and capture helpers
 ├── FlowchartRecorder.ts  StepGraph projection for Lens UI
 └── LiveStateRecorder.ts  O(1) "is X happening NOW" reads (LLM stream / tool / agent turn)
 ```
