@@ -112,22 +112,19 @@ Start it by hand with **Actions → Release → Run workflow** or
 ### Release candidates
 
 Use **Actions → Release → Run workflow** on main with **rc** enabled. The current
-stable version must already be tagged and fragments must be waiting. The workflow
-computes the normal next version and chooses the next unused -rc.N tag. It runs all
-release gates on untouched main, changes the version only in package staging, and
-publishes a GitHub prerelease and npm next. No release proposal or commit is created;
-main's package, lock, notes, capability rows and fragments stay unchanged. Docs
-deployment and the follow-up dispatch are skipped.
+stable version must already be tagged and fragments must be waiting. All release
+gates run on unchanged main. Only the staging package version changes before pack;
+the workflow publishes a GitHub prerelease and npm next. No RC commit, proposal,
+docs deployment or follow-up dispatch is made.
 
-The ordinary final release PR stays open. Merge it only after exact-head review
-and every downstream PR is green against the RC. If source changed after the RC,
-cut a new candidate first. The final route computes the stable version and consumes
-the fragments as usual. A candidate is never merged back into main.
+The ordinary final release PR waits for exact-head review and every downstream PR
+to be green against the RC. If source changed after the RC, cut a new candidate
+first. The final route computes the stable version and consumes fragments as usual.
 
-A failed or uncertain submission requires read-only verification before deciding
-what can continue. Do not blindly rerun a writer or publisher. A concurrent proposal
-branch move is rejected without force; a normal successor preserves the previous
-proposal as its second parent.
+Normal Git pushes preserve prior proposals and reject a concurrent branch move.
+Repeated runs converge on one own-repository PR. After fixing a failed release or
+publish job, use **Re-run failed jobs**; tags/releases already present are skipped,
+and npm refuses a duplicate version.
 
 ### One-time setup: the release App
 
@@ -147,7 +144,7 @@ never report. The release PR is opened by a small GitHub App instead:
    - Variables tab → **New repository variable** `RELEASE_APP_CLIENT_ID` = the Client ID.
    - Secrets tab → **New repository secret** `RELEASE_APP_PRIVATE_KEY` = the whole `.pem`
      file's contents. Then delete the downloaded file.
-     The workflow never enables automatic merging or force-pushes a release proposal.
+The workflow never enables automatic merging or force-pushes a release proposal.
 
 ### Protecting `main`
 
@@ -167,7 +164,6 @@ those jobs need no entry of their own.
 ## Commit Messages
 
 Follow conventional commits:
-
 - `feat:` new feature
 - `fix:` bug fix
 - `docs:` documentation
@@ -178,7 +174,6 @@ Follow conventional commits:
 ## Reporting Issues
 
 Use the issue templates on GitHub. Include:
-
 - Version (`npm ls agentfootprint`)
 - Provider (Anthropic/OpenAI/Bedrock/Ollama)
 - Minimal reproduction code

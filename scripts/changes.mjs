@@ -40,15 +40,7 @@ export const TYPES = {
   security: ['Security', 'patch'],
   internal: [null, 'patch'],
 };
-const SECTION_ORDER = [
-  'breaking',
-  'added',
-  'changed',
-  'deprecated',
-  'removed',
-  'fixed',
-  'security',
-];
+const SECTION_ORDER = ['breaking', 'added', 'changed', 'deprecated', 'removed', 'fixed', 'security'];
 export const BUMPS = ['patch', 'minor', 'major'];
 
 /** Parse one fragment. Returns `{ file, type, bump, body }` or throws a teaching error. */
@@ -69,25 +61,18 @@ export function parseFragment(file, text) {
   }
   const type = meta.type;
   if (!type || !(type in TYPES))
-    throw new Error(
-      `${file}: type must be one of ${Object.keys(TYPES).join(' | ')} (got "${type ?? ''}")`,
-    );
+    throw new Error(`${file}: type must be one of ${Object.keys(TYPES).join(' | ')} (got "${type ?? ''}")`);
   const implied = TYPES[type][1];
   let bump = implied;
   if (meta.bump !== undefined) {
     if (!BUMPS.includes(meta.bump))
       throw new Error(`${file}: bump must be patch | minor | major (got "${meta.bump}")`);
     if (BUMPS.indexOf(meta.bump) < BUMPS.indexOf(implied))
-      throw new Error(
-        `${file}: bump "${meta.bump}" is lower than type "${type}" implies (${implied})`,
-      );
+      throw new Error(`${file}: bump "${meta.bump}" is lower than type "${type}" implies (${implied})`);
     bump = meta.bump;
   }
   const body = m[2].trim();
-  if (!body)
-    throw new Error(
-      `${file}: the body is empty — say what changed, for the reader of the CHANGELOG`,
-    );
+  if (!body) throw new Error(`${file}: the body is empty — say what changed, for the reader of the CHANGELOG`);
   if (type === 'breaking' && !/migrat/i.test(body))
     throw new Error(
       `${file}: a breaking change must tell the reader how to migrate — add a "Migration:" paragraph`,
@@ -120,7 +105,7 @@ export function incVersion(version, bump) {
   return `${maj}.${min}.${pat + 1}`;
 }
 
-/** Compute an RC from untouched main and observed native tag names. No writes. */
+/** Compute an RC from untouched main and observed tag names. No writes. */
 export function candidateVersion(current, fragments, tags, requested = 'auto') {
   if (
     !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(current) ||
@@ -168,16 +153,12 @@ export function renderEntryBody(fragments) {
     if (inType.length === 0) continue;
     parts.push(`### ${TYPES[type][0]}\n\n${inType.map((f) => asBullets(f.body)).join('\n\n')}`);
   }
-  if (parts.length === 0)
-    parts.push('_Internal changes only — nothing a user of the library can see._');
+  if (parts.length === 0) parts.push('_Internal changes only — nothing a user of the library can see._');
   return parts.join('\n\n');
 }
 
 function changedFilesSince(base) {
-  const out = execFileSync('git', ['diff', '--name-status', `${base}...HEAD`], {
-    cwd: ROOT,
-    encoding: 'utf8',
-  });
+  const out = execFileSync('git', ['diff', '--name-status', `${base}...HEAD`], { cwd: ROOT, encoding: 'utf8' });
   return out
     .split('\n')
     .filter(Boolean)
@@ -192,14 +173,14 @@ function main(argv) {
   if (cmd === 'candidate') {
     const at = rest.indexOf('--tags-file');
     if (at < 0 || !rest[at + 1])
-      throw new Error('candidate requires --tags-file from a successful native tag query');
+      throw new Error('candidate requires --tags-file from a successful tag query');
     const text = readFileSync(rest[at + 1], 'utf8');
     const tags = text
       .split('\n')
       .filter(Boolean)
       .map((line) => {
         const row = /^([0-9a-f]{40})\trefs\/tags\/([^\s]+)$/.exec(line);
-        if (!row) throw new Error('native tag query returned an invalid row');
+        if (!row) throw new Error('tag query returned an invalid row');
         return row[2];
       });
     const bumpAt = rest.indexOf('--bump');
@@ -216,11 +197,7 @@ function main(argv) {
       return 0;
     }
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-    console.log(
-      `## [${incVersion(pkg.version, bump)}] - (release date)  ← ${bump} bump from ${
-        pkg.version
-      }\n`,
-    );
+    console.log(`## [${incVersion(pkg.version, bump)}] - (release date)  ← ${bump} bump from ${pkg.version}\n`);
     console.log(renderEntryBody(fragments));
     return 0;
   }
@@ -232,8 +209,7 @@ function main(argv) {
       const changed = changedFilesSince(base);
       const touchesSrc = changed.some((c) => c.path.startsWith('src/'));
       const addsFragment = changed.some(
-        (c) =>
-          c.status === 'A' && c.path.startsWith('.changes/') && c.path !== '.changes/README.md',
+        (c) => c.status === 'A' && c.path.startsWith('.changes/') && c.path !== '.changes/README.md',
       );
       if (touchesSrc && !addsFragment) {
         console.error(
@@ -257,16 +233,10 @@ function main(argv) {
         return 1;
       }
     }
-    console.log(
-      `${fragments.length} change fragment(s) valid; next release: ${
-        requiredBump(fragments) ?? 'none pending'
-      }.`,
-    );
+    console.log(`${fragments.length} change fragment(s) valid; next release: ${requiredBump(fragments) ?? 'none pending'}.`);
     return 0;
   }
-  console.error(
-    'usage: node scripts/changes.mjs check [--base <ref>] | preview | candidate --tags-file <file> [--bump <kind>]',
-  );
+  console.error('usage: node scripts/changes.mjs check [--base <ref>] | preview | candidate --tags-file <file> [--bump <kind>]');
   return 2;
 }
 

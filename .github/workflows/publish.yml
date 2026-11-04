@@ -46,7 +46,7 @@ name: Release
 #
 # A red gate publishes nothing, and nothing a person has to undo: the version
 # on main simply stays untagged until a fixing PR merges (whose run publishes)
-# or a verified continuation is eligible after read-only diagnosis.
+# or someone re-runs the failed job.
 #
 # SETUP (once): a GitHub App with Contents + Pull requests read/write, installed
 # on this repository; its Client ID in the Actions VARIABLE
@@ -141,9 +141,12 @@ jobs:
           SHA="$(git rev-parse HEAD)"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           if [ "$EVENT_NAME" = release ]; then
+            # The legacy path publishes what the tag points at, so that commit
+            # must already be on main: compare says main is `ahead` of it, or
+            # `identical`. Anything else (`behind`, `diverged`) publishes nothing.
             STATUS="$(gh api "repos/$REPO/compare/$SHA...main" --jq .status)"
             if [ "$STATUS" != ahead ] && [ "$STATUS" != identical ]; then
-              echo "::error::Tag $TAG is not contained in main. Nothing was published."
+              echo "::error::Tag $TAG points at $SHA, which main does not contain (compare: $STATUS). Nothing was published."
               exit 1
             fi
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -172,13 +175,16 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           if [ "$TAGGED" = false ]; then
             echo "mode=publish" >> "$GITHUB_OUTPUT"
+            echo "main names v$VERSION, which has no tag — publishing it." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           count=$(find .changes -maxdepth 1 -name '*.md' ! -name README.md | wc -l)
           if [ "$count" -gt 0 ] || [ "$BUMP" != auto ]; then
             echo "mode=propose" >> "$GITHUB_OUTPUT"
+            echo "$count .changes/ fragment(s) waiting — opening or updating the release PR." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "Nothing to release: v$VERSION is tagged and no .changes/ fragments are waiting." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # Did CI already pass every gate on THE TREE about to be published? The
@@ -414,7 +420,9 @@ jobs:
         if: needs.plan.outputs.mode == 'rc'
         env:
           VERSION: ${{ needs.plan.outputs.version }}
-        run: npm version "$VERSION" --no-git-tag-version --ignore-scripts
+        run: |
+          jq --arg version "$VERSION" '.version = $version' package.json > "$RUNNER_TEMP/package.json"
+          cp "$RUNNER_TEMP/package.json" package.json
 
       - name: Stage published package
         run: |
@@ -445,7 +453,7 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.sha }}
 
-      # Read existing tag/release state before any continuation.
+      # Idempotent, so "Re-run failed jobs" finishes a half-done release.
       - name: Tag
         env:
           VERSION: ${{ needs.plan.outputs.version }}
@@ -516,8 +524,9 @@ jobs:
       # Publishes the pre-built artifact with its declared registry dependency.
       # No dependency resolution runs with publishing authority.
       # Trusted publishing: no NODE_AUTH_TOKEN — npm authenticates via the GitHub OIDC token.
-      # A failed or uncertain submission stops here. GET-verify the registry
-      # and native run before any continuation; never blindly retry a publish.
+      # If this step fails, the tag already exists: fix the cause and use
+      # "Re-run failed jobs" — the staged tarball is kept for 30 days, and the
+      # release job skips what it already did.
       - name: Publish to npm
         run: |
           VERSION="$(jq -er '.version | strings' package.json)"
@@ -671,17 +680,12 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ needs.propose.outputs.version }}
           BASE: ${{ needs.plan.outputs.sha }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          # Re-running an uncertain writer is GET verification only, never
-          # another commit/ref/PR creation attempt.
-          [ "$RUN_ATTEMPT" = 1 ] || { echo "::error::Writer retry requires GET verification."; exit 1; }
           git fetch "$RUNNER_TEMP/release-pr/release.bundle" "release/next:release/next"
-          # Validate the producer's one-commit-on-BASE bundle BEFORE making a
-          # successor: BASE..successor can also contain the previous proposal.
+          # Check the producer bundle before adding the prior proposal parent.
           PROPOSAL="$(git rev-parse release/next)"
           if [ "$(git rev-parse 'release/next^')" != "$BASE" ] || [ "$(git rev-list --count "$BASE..release/next")" != 1 ]; then
-            echo "::error::The release bundle is not one commit on the pinned base."
+            echo "::error::The release bundle is not one commit on $BASE. Nothing was pushed."
             exit 1
           fi
           TREE="$(git rev-parse 'release/next^{tree}')"
@@ -689,31 +693,25 @@ jobs:
           MAIN="$(awk '$2 == "refs/heads/main" { print $1 }' "$RUNNER_TEMP/proposal-refs")"
           PRIOR="$(awk '$2 == "refs/heads/release/next" { print $1 }' "$RUNNER_TEMP/proposal-refs")"
           hex40='^[0-9a-f]{40}$'
-          [[ "$MAIN" =~ $hex40 ]] && [ "$MAIN" = "$BASE" ] || { echo "::error::Main moved or is unknown."; exit 1; }
+          [[ "$MAIN" =~ $hex40 ]] || exit 1
+          if [ "$MAIN" != "$BASE" ]; then
+            echo "::notice::Main moved; its queued run will prepare the next proposal."
+            exit 0
+          fi
+          PUSH=true
           if [ -n "$PRIOR" ]; then
             [[ "$PRIOR" =~ $hex40 ]] || exit 1
-            git fetch --no-tags origin "$PRIOR"
-            # A proposal on this same base may be a partial/uncertain prior
-            # submission. Do not create a second commit or infer a missing PR.
+            git fetch --no-tags --depth=2 origin "$PRIOR"
             PRIOR_PARENT="$(git rev-parse "$PRIOR^")"
-            if [ "$PRIOR_PARENT" = "$BASE" ]; then
-              gh pr list --head release/next --base main --state all --json number,state,headRefOid
-              echo "::error::This base already has a proposal; GET-verify the prior outcome."
-              exit 1
-            fi
-            if [ "$PRIOR" != "$BASE" ]; then
+            if [ "$PRIOR_PARENT" = "$BASE" ] && [ "$(git rev-parse "$PRIOR^{tree}")" = "$TREE" ]; then
+              PUSH=false
+            elif [ "$PRIOR" != "$BASE" ]; then
               NEXT="$(git -c user.name='github-actions[bot]' -c user.email='41898283+github-actions[bot]@users.noreply.github.com' commit-tree "$TREE" -p "$BASE" -p "$PRIOR" -m "chore: release v$VERSION")"
               git update-ref refs/heads/release/next "$NEXT" "$PROPOSAL"
             fi
           fi
-          # Recheck both inputs immediately before the nonforce effect. An
-          # independent later advance of release/next is rejected by Git.
-          git ls-remote --heads origin refs/heads/main refs/heads/release/next > "$RUNNER_TEMP/proposal-refs-now"
-          cmp "$RUNNER_TEMP/proposal-refs" "$RUNNER_TEMP/proposal-refs-now" || { echo "::error::Proposal inputs moved."; exit 1; }
-          if ! git push origin release/next:refs/heads/release/next; then
-            git ls-remote --heads origin refs/heads/main refs/heads/release/next
-            echo "::error::Push outcome requires GET verification; no submission retry."
-            exit 1
+          if [ "$PUSH" = true ]; then
+            git push origin release/next:refs/heads/release/next
           fi
           {
             cat "$RUNNER_TEMP/release-pr/notes.md"
@@ -721,26 +719,15 @@ jobs:
             echo "---"
             echo "Written by the Release workflow from the change fragments on main. Merge only after an exact-head verdict and all required checks."
           } > "$RUNNER_TEMP/body.md"
-          PRS="$(gh pr list --head release/next --base main --state open --json number)"
-          COUNT="$(jq 'length' <<< "$PRS")"
-          # No PR metadata or creation is submitted after the reviewed ref
-          # moved again. Recheck immediately before its one effect.
-          EXPECTED="$(git rev-parse release/next)"
-          git ls-remote --heads origin refs/heads/main refs/heads/release/next > "$RUNNER_TEMP/pr-inputs"
-          [ "$(awk '$2 == "refs/heads/main" {print $1}' "$RUNNER_TEMP/pr-inputs")" = "$BASE" ] &&
-            [ "$(awk '$2 == "refs/heads/release/next" {print $1}' "$RUNNER_TEMP/pr-inputs")" = "$EXPECTED" ] || exit 1
+          PRS="$(gh pr list --head release/next --base main --state open --json number,isCrossRepository)"
+          OWN_PRS="$(jq '[.[] | select(.isCrossRepository == false)]' <<< "$PRS")"
+          COUNT="$(jq 'length' <<< "$OWN_PRS")"
           if [ "$COUNT" = 1 ]; then
-            PR="$(jq -r '.[0].number' <<< "$PRS")"
-            if ! gh pr edit "$PR" --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"; then
-              gh pr view "$PR" --json number,title,body,headRefOid
-              exit 1
-            fi
+            PR="$(jq -r '.[0].number' <<< "$OWN_PRS")"
+            gh pr edit "$PR" --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
           elif [ "$COUNT" = 0 ]; then
-            if ! gh pr create --base main --head release/next --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"; then
-              gh pr list --head release/next --base main --state all --json number,state,headRefOid
-              exit 1
-            fi
+            gh pr create --base main --head release/next --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
           else
-            echo "::error::Expected at most one release PR."
+            echo "::error::Expected at most one own-repository release PR."
             exit 1
           fi

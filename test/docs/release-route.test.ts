@@ -2,7 +2,7 @@ import { it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-it('runs the native R0-small release-route and RC package contract', () => {
+it('runs the native release route and candidate package contract', () => {
   execFileSync(
     process.execPath,
     [
