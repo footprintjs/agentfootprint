@@ -56,7 +56,7 @@
  *     resolves to a real field on one of the two shapes, so a rename cannot
  *     leave a gap pointing at nothing. That is the same rot as a `file:line`
  *     pointer, which this repo already bans;
- *   • REACHABILITY — every gap kind `viewOf` can push is in the catalogue and
+ *   • REACHABILITY — every gap kind `gapsOf` can push is in the catalogue and
  *     vice versa: no orphan kind, no unreachable entry;
  *   • THE PROSE ITSELF — every `why` and every `UNGAPPED_FIELDS` reason is put
  *     through `test/helpers/gapProseClaims.ts`, the reader-facing sibling of
@@ -156,10 +156,10 @@
  * the defect this file exists to prevent was found in the first place. The
  * narrower blind spots, named rather than left to be discovered:
  *
- *   • the gap-kind half reads `gapOf('…')` calls out of `servedView.ts`'s
- *     source. A kind pushed some other way is invisible to it — so the walk
- *     also fails on any `gapOf` call whose argument is not a string literal,
- *     which is the only shape that could hide one;
+ *   • the gap-kind half reads `gapOf('…')` calls from every production `.ts`
+ *     leaf in `servedView/`, excluding colocated tests. A kind pushed some
+ *     other way is invisible to it — so the walk also fails on computed kinds
+ *     and calls outside the one declared producer;
  *   • a gap is checked for EXISTENCE, never for firing on the right run. That
  *     is `receipt-conformance.test.ts`'s job, per condition;
  *   • the static half follows type references by NAME within the two files. A
@@ -196,7 +196,7 @@
  * way down, and a crafted recording whose receipt key holds a non-receipt).
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import ts from 'typescript';
@@ -223,6 +223,7 @@ import {
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { isPaused, pauseHere } from '../../src/core/pause.js';
 import { replayReceiptFixture } from '../helpers/replayReceiptFixture.js';
+import { stripKey, rewriteKey, stripBases } from '../helpers/savedRecordDamage.js';
 // The receipt-LESS shape a shipped chart still produces (9.91.0) — the public
 // barrel carries this chart's deps type and not the builder itself.
 import { buildMessageApiChart } from '../../src/core/agent/buildMessageApiChart.js';
@@ -235,7 +236,13 @@ import {
 
 const SRC = resolve(__dirname, '../../src/time-travel');
 const RECEIPT_FILE = resolve(__dirname, '../../src/core/agent/receipt/receipt.ts');
-const SERVED_FILE = resolve(SRC, 'servedView.ts');
+const TYPE_FILE = resolve(SRC, 'servedView.ts');
+const CATALOGUE_PROSE_FILE = resolve(SRC, 'servedView/gaps.ts');
+const GAP_DIRECTORY = resolve(SRC, 'servedView');
+const GAP_PRODUCER = {
+  file: resolve(SRC, 'servedView/gaps.ts'),
+  declaration: 'gapsOf',
+} as const;
 
 // ─── (1) the STATIC enumeration — the declarations, expanded ─────────────
 
@@ -259,7 +266,7 @@ interface StaticField {
 /** Every `interface` declared in the two files, by name. */
 function localInterfaces(): ReadonlyMap<string, ts.InterfaceDeclaration> {
   const out = new Map<string, ts.InterfaceDeclaration>();
-  for (const file of [RECEIPT_FILE, SERVED_FILE]) {
+  for (const file of [RECEIPT_FILE, TYPE_FILE]) {
     const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
     sf.forEachChild((node) => {
       if (ts.isInterfaceDeclaration(node)) out.set(node.name.text, node);
@@ -807,7 +814,7 @@ describe('every field of a Receipt and a ServedView is accounted for', () => {
       // supplying one it would fail and the comment would be rewritten. That
       // day is this release: the windowed run below supplies it, and the
       // comment now says so instead.
-      const commentProse = readFileSync(SERVED_FILE, 'utf8')
+      const commentProse = readFileSync(CATALOGUE_PROSE_FILE, 'utf8')
         .replace(/^\s*(?:\/\/|\*)\s?/gm, '')
         .replace(/\s+/g, ' ');
       expect(commentProse).not.toContain('no chart in this library ever supplies it');
@@ -1101,34 +1108,73 @@ describe('every gap sentence says which fields, what they mean, and what to do',
 
 // ─── Contract: no orphan kind, no unreachable entry ──────────────────────
 
+function productionLeaves(directory: string): readonly string[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const file = resolve(directory, entry.name);
+      if (entry.isDirectory()) return productionLeaves(file);
+      return entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')
+        ? [file]
+        : [];
+    })
+    .sort();
+}
+
 /**
- * The gap kinds `viewOf` can actually push, read out of `servedView.ts`'s own
- * source with the compiler's parser.
+ * The gap kinds `gapsOf` can actually push, read with the compiler's parser.
+ * Every production leaf is checked so a sibling cannot hide an extra call.
  *
  * A source read, because reachability is not a runtime question a test can ask
  * without driving every recording shape that exists. Its blind spot — a kind
  * pushed through a variable — is closed by the second assertion below rather
  * than left in the header as a caveat.
  */
-function pushedKinds(): { readonly literals: readonly string[]; readonly computed: number } {
-  const text = readFileSync(SERVED_FILE, 'utf8');
-  const sf = ts.createSourceFile(SERVED_FILE, text, ts.ScriptTarget.Latest, true);
+function pushedKinds(sourceTextOverrides: ReadonlyMap<string, string> = new Map()): {
+  readonly literals: readonly string[];
+  readonly computed: number;
+  readonly outsideProducer: number;
+} {
+  const sourceText = (file: string): string =>
+    sourceTextOverrides.get(file) ?? readFileSync(file, 'utf8');
+  const text = sourceText(GAP_PRODUCER.file);
+  const sf = ts.createSourceFile(GAP_PRODUCER.file, text, ts.ScriptTarget.Latest, true);
+  const producers = sf.statements.filter(
+    (node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === GAP_PRODUCER.declaration,
+  );
+  expect(producers, 'exactly one declared gap producer').toHaveLength(1);
+  const body = producers[0]?.body;
+  expect(body, 'the gap producer has a body').toBeDefined();
   const literals = new Set<string>();
   let computed = 0;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'gapOf'
-    ) {
-      const arg = node.arguments[0];
-      if (arg !== undefined && ts.isStringLiteral(arg)) literals.add(arg.text);
-      else computed += 1;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
-  return { literals: [...literals].sort(), computed };
+  let outsideProducer = 0;
+  for (const file of productionLeaves(GAP_DIRECTORY)) {
+    const source =
+      file === GAP_PRODUCER.file
+        ? sf
+        : ts.createSourceFile(file, sourceText(file), ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'gapOf'
+      ) {
+        const arg = node.arguments[0];
+        if (arg !== undefined && ts.isStringLiteral(arg)) literals.add(arg.text);
+        else computed += 1;
+        if (
+          file !== GAP_PRODUCER.file ||
+          node.getStart(source) < body!.getStart(sf) ||
+          node.end > body!.end
+        ) {
+          outsideProducer += 1;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return { literals: [...literals].sort(), computed, outsideProducer };
 }
 
 describe('the catalogue and the code that raises it are the same set', () => {
@@ -1140,10 +1186,39 @@ describe('the catalogue and the code that raises it are the same set', () => {
     expect(literals).toEqual(catalogued);
   });
 
-  it('no gapOf call hides a kind behind a variable', () => {
+  it('no gapOf call hides a kind behind a variable or sits outside the producer', () => {
     // The technique above can only see string literals. This is what stops
     // that from being a hole somebody widens by accident.
-    expect(pushedKinds().computed).toBe(0);
+    const kinds = pushedKinds();
+    expect(kinds.computed).toBe(0);
+    expect(kinds.outsideProducer).toBe(0);
+  });
+
+  it.each([
+    ['computed', 'plantedKind', 1],
+    ['literal', "'findings-layout'", 0],
+  ] as const)(
+    'detects a %s gapOf call planted in a production sibling',
+    (_form, argument, computed) => {
+      const sibling = resolve(SRC, 'servedView/assembly.ts');
+      const planted =
+        readFileSync(sibling, 'utf8') +
+        "\nimport { gapOf } from './gaps.js';\n" +
+        "export const plantedKind = 'findings-layout' as const;\n" +
+        `export const plantedGap = gapOf(${argument});\n`;
+      const kinds = pushedKinds(new Map([[sibling, planted]]));
+      expect(kinds.computed).toBe(computed);
+      expect(kinds.outsideProducer).toBe(1);
+      // A known literal cannot make this a catalogue-set failure instead of
+      // exercising the sibling-call guard that the old single-file walk missed.
+      expect(kinds.literals).toEqual(pushedKinds().literals);
+    },
+  );
+
+  it('does not read colocated test files as production gap producers', () => {
+    const testFile = resolve(SRC, 'servedView/assembly.test.ts');
+    const planted = readFileSync(testFile, 'utf8') + '\ngapOf(computedTestKind);\n';
+    expect(pushedKinds(new Map([[testFile, planted]]))).toEqual(pushedKinds());
   });
 
   it('the new kind fires on the chart it was written for', WALK_BUDGET, async () => {
@@ -1354,67 +1429,6 @@ describe('a ServedView is a value', () => {
 // `provider-defaults` (a receipt exists) and `forced-tool-schema` (a
 // 'tool-forced' output). `receipt-conformance.test.ts` drives each of those on
 // a real run instead, which is the honest place for them.
-
-/** A detached copy with one state key gone from every log and every base. */
-function stripKey<T>(recording: T, key: string): T {
-  type Bundle = { trace: { path: string }[]; overwrite: Record<string, unknown> };
-  type Log = { commitLog?: Bundle[]; history?: Bundle[]; initialState?: Record<string, unknown> };
-  const copy = JSON.parse(JSON.stringify(recording)) as T & {
-    subflowResults?: Record<string, { treeContext?: Log }>;
-  };
-  const scrub = (log: Log | undefined): void => {
-    if (!log) return;
-    for (const bundle of [...(log.commitLog ?? []), ...(log.history ?? [])]) {
-      bundle.trace = bundle.trace.filter((t) => t.path !== key);
-      delete bundle.overwrite[key];
-    }
-    if (log.initialState) delete log.initialState[key];
-  };
-  scrub(copy as Log);
-  for (const entry of Object.values(copy.subflowResults ?? {})) scrub(entry?.treeContext);
-  return copy;
-}
-
-/**
- * A detached copy with one state key REWRITTEN wherever the log wrote it.
- *
- * The other half of `stripKey`, and the crafted damage the second cause needs:
- * no run produces a recording whose receipt key holds a non-receipt, because
- * the mint either runs or does not. A truncated file, a hand-edited log or a
- * consumer that wrote its own value under the key does — and that is the case
- * the read refuses, so it is the case a test has to construct.
- */
-function rewriteKey<T>(recording: T, key: string, value: unknown): T {
-  type Bundle = { trace: { path: string }[]; overwrite: Record<string, unknown> };
-  type Log = { commitLog?: Bundle[]; history?: Bundle[]; initialState?: Record<string, unknown> };
-  const copy = JSON.parse(JSON.stringify(recording)) as T & {
-    subflowResults?: Record<string, { treeContext?: Log }>;
-  };
-  const rewrite = (log: Log | undefined): void => {
-    if (!log) return;
-    for (const bundle of [...(log.commitLog ?? []), ...(log.history ?? [])]) {
-      if (bundle.trace.some((t) => t.path === key)) bundle.overwrite[key] = value;
-    }
-    if (log.initialState && key in log.initialState) log.initialState[key] = value;
-  };
-  rewrite(copy as Log);
-  for (const entry of Object.values(copy.subflowResults ?? {})) rewrite(entry?.treeContext);
-  return copy;
-}
-
-/** A detached copy with every fold base gone — `getSnapshot({ redact: true })`
- *  hands back this shape, and so does any recording that travelled without it. */
-function stripBases<T>(recording: T): T {
-  type Log = { initialState?: unknown };
-  const copy = JSON.parse(JSON.stringify(recording)) as T & {
-    subflowResults?: Record<string, { treeContext?: Log }>;
-  };
-  delete (copy as Log).initialState;
-  for (const entry of Object.values(copy.subflowResults ?? {})) {
-    if (entry?.treeContext) delete entry.treeContext.initialState;
-  }
-  return copy;
-}
 
 /** The values at one dotted path, arrays flattened, `undefined` dropped. */
 function valuesAt(root: unknown, path: string): readonly unknown[] {

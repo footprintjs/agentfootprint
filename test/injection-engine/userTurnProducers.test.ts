@@ -245,7 +245,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       opening: FINDINGS_DATA_FRAME_PREFIX,
     },
   ],
-  'src/time-travel/servedView.ts': [
+  'src/time-travel/servedView/requestOnly.ts': [
     {
       cls: 'never-in-history',
       why:

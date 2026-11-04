@@ -7,7 +7,7 @@
  * about — but what a mint knew about has grown (`cache.strategy` arrived in
  * 9.93.0), and a receipt a consumer already holds was written by the release
  * that wrote it, not by this one. The narrowing that admits a stored value
- * (`servedView.ts` · `readReceipt`) checks the basis and nothing past it, so
+ * (`servedView/recordReads.ts` · `readReceipt`) checks the basis and nothing past it, so
  * every container past the basis is what that vintage wrote, and a reader that
  * dereferences one without looking is a reader that throws on an older
  * recording.
