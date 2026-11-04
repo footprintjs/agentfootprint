@@ -11,5 +11,5 @@ Every batch refuses tool-call IDs the private binding cannot represent before
 any question or tool dispatch: non-primitive values and accessor IDs are never
 coerced into correlation keys. Refusal is framework feedback for the whole batch.
 Other finite checkpoint call bounds apply only when the batch needs an argument
-or time ask. Ordinary non-asking batches with primitive IDs retain their existing
+or time ask. Ordinary non-asking batches with supported primitive IDs retain their existing
 per-call semantics, including numeric, empty, duplicate and long IDs.
