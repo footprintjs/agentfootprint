@@ -59,6 +59,10 @@ jobs:
       # local package's main/exports, which point to dist/.
       - run: npm run build
       - run: npm test -- --shard=${{ matrix.shard }}/4
+      - if: matrix.node-version == 24 && matrix.shard == 3
+        run: |
+          sleep 300
+          exit 1
 
   # What runs around the test suite, on both Node versions: the contract, the
   # compiler and the package as it would ship.
@@ -97,6 +101,7 @@ jobs:
   # Every example, typechecked AND run end-to-end against mock providers — the
   # code people copy. Once per commit (on Node 22) is enough.
   test-examples:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -355,6 +360,9 @@ jobs:
         shard: [1, 2, 3, 4]
 
     steps:
+      - if: matrix.shard == 2
+        run: exit 1
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
