@@ -78,6 +78,8 @@ Mixed folders carrying Trace: `src/events/` (the 78-name closed contract in
 `src/recorders/observability/`
 (`BoundaryRecorder.ts` is the ordered stream; `RouteRecorder.ts`,
 `ToolLineageRecorder.ts`, `ToolChoiceRecorder.ts`, `RunStepRecorder.ts`) ·
+`src/recorders/observability/boundaryRecorder/` (`domainEvents.ts`, `flowEvents.ts`,
+`options.ts`, `eventBuilders.ts`, `agentInternal.ts`) ·
 `src/core/agent/middleware/ledger.ts` · `src/core/agent/window/types.ts`
 (`WindowRecord` / `CompactionRecord`) · `src/memory/causal/`
 (`writeSnapshot.ts`, `evidenceRecorder.ts`) · `src/hosting/ingressRecord.ts`
@@ -114,7 +116,9 @@ the one spelling the evidence gate and the inputs layer share) · `src/lib/` (`s
 much of the stream was retained, how much was dropped, where the window starts) ·
 `src/recorders/` and `src/recorders/observability/` (`FlowchartRecorder.ts`'s `buildStepGraph`,
 `trace.ts`, and `recordRun.ts` — which is the one KNOWN BREACH of Fold law 3,
-stated at its header and again below).
+stated at its header and again below) ·
+`src/recorders/observability/boundaryRecorder/` (`leanContent.ts`, `rangeLabels.ts`,
+`rollups.ts`).
 
 ### Lens — what this reader is served
 

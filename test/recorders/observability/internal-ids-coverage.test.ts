@@ -6,7 +6,7 @@
  *   - A slot subflow (system-prompt / messages / tools — filtered by
  *     `slotKind` in BoundaryRecorder, attributed to the next LLM call)
  *   - Agent-internal plumbing (`AGENT_INTERNAL_LOCAL_IDS` in
- *     BoundaryRecorder.ts — filtered out of the user-facing StepGraph)
+ *     boundaryRecorder/agentInternal.ts — filtered out of the user-facing StepGraph)
  *   - Explicitly user-facing (a known primitive — Agent, LLMCall, etc.)
  *
  * If someone adds a new entry to `SUBFLOW_IDS` and forgets to register
@@ -26,7 +26,7 @@
 import { describe, expect, it } from 'vitest';
 import { SUBFLOW_IDS, STAGE_IDS } from '../../../src/lib/conventions.js';
 
-// ── Categorization (mirror BoundaryRecorder.ts) ──────────────────────
+// ── Categorization (mirror boundaryRecorder/agentInternal.ts) ──────────
 
 /** Slot subflows — handled by `slotKind` tagging, NOT by the internal set. */
 const SLOT_SUBFLOW_IDS: ReadonlySet<string> = new Set<string>([
@@ -36,7 +36,7 @@ const SLOT_SUBFLOW_IDS: ReadonlySet<string> = new Set<string>([
 ]);
 
 /** Subflow ids that are pure plumbing — must match
- *  `AGENT_INTERNAL_LOCAL_IDS` in BoundaryRecorder.ts. */
+ *  `AGENT_INTERNAL_LOCAL_IDS` in boundaryRecorder/agentInternal.ts. */
 const EXPECTED_INTERNAL_SUBFLOW_IDS: ReadonlySet<string> = new Set<string>([
   SUBFLOW_IDS.INJECTION_ENGINE,
   SUBFLOW_IDS.LLM_CALL, // LLMCall's inner invocation wrapper — container, not a step
@@ -70,7 +70,7 @@ describe('SUBFLOW_IDS coverage — every subflow categorized', () => {
     }
     expect(
       uncategorized,
-      `Uncategorized SUBFLOW_IDS — add to BoundaryRecorder's AGENT_INTERNAL_LOCAL_IDS ` +
+      `Uncategorized SUBFLOW_IDS — add to boundaryRecorder/agentInternal.ts's AGENT_INTERNAL_LOCAL_IDS ` +
         `(if it's plumbing) OR to the SLOT_SUBFLOW_IDS list above (if it's a context slot). ` +
         `Otherwise these subflows leak as fake user-visible steps in Lens:\n  ` +
         uncategorized.join('\n  '),
