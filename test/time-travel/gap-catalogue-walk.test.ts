@@ -156,7 +156,7 @@
  * the defect this file exists to prevent was found in the first place. The
  * narrower blind spots, named rather than left to be discovered:
  *
- *   • the gap-kind half reads `gapOf('…')` calls out of `servedView.ts`'s
+ *   • the gap-kind half reads `gapOf('…')` calls out of `servedView/assembly.ts`'s
  *     source. A kind pushed some other way is invisible to it — so the walk
  *     also fails on any `gapOf` call whose argument is not a string literal,
  *     which is the only shape that could hide one;
@@ -235,7 +235,12 @@ import {
 
 const SRC = resolve(__dirname, '../../src/time-travel');
 const RECEIPT_FILE = resolve(__dirname, '../../src/core/agent/receipt/receipt.ts');
-const SERVED_FILE = resolve(SRC, 'servedView.ts');
+const TYPE_FILE = resolve(SRC, 'servedView.ts');
+const CATALOGUE_PROSE_FILE = resolve(SRC, 'servedView/gaps.ts');
+const GAP_PRODUCER = {
+  file: resolve(SRC, 'servedView/assembly.ts'),
+  declaration: 'viewOf',
+} as const;
 
 // ─── (1) the STATIC enumeration — the declarations, expanded ─────────────
 
@@ -259,7 +264,7 @@ interface StaticField {
 /** Every `interface` declared in the two files, by name. */
 function localInterfaces(): ReadonlyMap<string, ts.InterfaceDeclaration> {
   const out = new Map<string, ts.InterfaceDeclaration>();
-  for (const file of [RECEIPT_FILE, SERVED_FILE]) {
+  for (const file of [RECEIPT_FILE, TYPE_FILE]) {
     const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
     sf.forEachChild((node) => {
       if (ts.isInterfaceDeclaration(node)) out.set(node.name.text, node);
@@ -807,7 +812,7 @@ describe('every field of a Receipt and a ServedView is accounted for', () => {
       // supplying one it would fail and the comment would be rewritten. That
       // day is this release: the windowed run below supplies it, and the
       // comment now says so instead.
-      const commentProse = readFileSync(SERVED_FILE, 'utf8')
+      const commentProse = readFileSync(CATALOGUE_PROSE_FILE, 'utf8')
         .replace(/^\s*(?:\/\/|\*)\s?/gm, '')
         .replace(/\s+/g, ' ');
       expect(commentProse).not.toContain('no chart in this library ever supplies it');
@@ -1102,7 +1107,7 @@ describe('every gap sentence says which fields, what they mean, and what to do',
 // ─── Contract: no orphan kind, no unreachable entry ──────────────────────
 
 /**
- * The gap kinds `viewOf` can actually push, read out of `servedView.ts`'s own
+ * The gap kinds `viewOf` can actually push, read out of `servedView/assembly.ts`'s own
  * source with the compiler's parser.
  *
  * A source read, because reachability is not a runtime question a test can ask
@@ -1110,11 +1115,23 @@ describe('every gap sentence says which fields, what they mean, and what to do',
  * pushed through a variable — is closed by the second assertion below rather
  * than left in the header as a caveat.
  */
-function pushedKinds(): { readonly literals: readonly string[]; readonly computed: number } {
-  const text = readFileSync(SERVED_FILE, 'utf8');
-  const sf = ts.createSourceFile(SERVED_FILE, text, ts.ScriptTarget.Latest, true);
+function pushedKinds(): {
+  readonly literals: readonly string[];
+  readonly computed: number;
+  readonly outsideProducer: number;
+} {
+  const text = readFileSync(GAP_PRODUCER.file, 'utf8');
+  const sf = ts.createSourceFile(GAP_PRODUCER.file, text, ts.ScriptTarget.Latest, true);
+  const producers = sf.statements.filter(
+    (node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === GAP_PRODUCER.declaration,
+  );
+  expect(producers, 'exactly one declared gap producer').toHaveLength(1);
+  const body = producers[0]?.body;
+  expect(body, 'the gap producer has a body').toBeDefined();
   const literals = new Set<string>();
   let computed = 0;
+  let outsideProducer = 0;
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
@@ -1124,11 +1141,12 @@ function pushedKinds(): { readonly literals: readonly string[]; readonly compute
       const arg = node.arguments[0];
       if (arg !== undefined && ts.isStringLiteral(arg)) literals.add(arg.text);
       else computed += 1;
+      if (node.getStart(sf) < body!.getStart(sf) || node.end > body!.end) outsideProducer += 1;
     }
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return { literals: [...literals].sort(), computed };
+  return { literals: [...literals].sort(), computed, outsideProducer };
 }
 
 describe('the catalogue and the code that raises it are the same set', () => {
@@ -1140,10 +1158,12 @@ describe('the catalogue and the code that raises it are the same set', () => {
     expect(literals).toEqual(catalogued);
   });
 
-  it('no gapOf call hides a kind behind a variable', () => {
+  it('no gapOf call hides a kind behind a variable or sits outside the producer', () => {
     // The technique above can only see string literals. This is what stops
     // that from being a hole somebody widens by accident.
-    expect(pushedKinds().computed).toBe(0);
+    const kinds = pushedKinds();
+    expect(kinds.computed).toBe(0);
+    expect(kinds.outsideProducer).toBe(0);
   });
 
   it('the new kind fires on the chart it was written for', WALK_BUDGET, async () => {

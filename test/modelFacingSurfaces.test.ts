@@ -1742,7 +1742,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       '`callLLM · buildCallLLMStage` composes it per request by `findingsLedgerPiece` from the ' +
       'committed `findingsLedger` key and joins it into `systemPieces` ONLY (after the recovery ' +
       'piece) — never pushed into `systemPromptInjections`, never written into `history`; the ' +
-      'model reads a fresh composition on each call, `servedView.ts · viewOf` recomposes the ' +
+      'model reads a fresh composition on each call, `servedView/assembly.ts · viewOf` recomposes the ' +
       'same one from the record, and the receipt hashes it per request',
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
@@ -1778,7 +1778,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       "a constant (`FINDINGS_ANSWER_ASK`) that `findingsLedgerPiece` appends as the piece's last " +
       "section ONLY under `findings({ answerAsk: 'quote-facts' })` — the same request-only " +
       'system piece as the row above, composed per request, joined into `systemPieces` only, ' +
-      'never an injection and never a `history` turn; `servedView.ts · viewOf` re-appends it ' +
+      'never an injection and never a `history` turn; `servedView/assembly.ts · viewOf` re-appends it ' +
       'from the run constant `findingsAnswerAsk`',
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
@@ -1834,7 +1834,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'off the record):` — the one section the header\'s "what the model itself declared" does not ' +
       "cover, named as the library's join so the header stays true — " +
       'composed per request, joined into `systemPieces` only, never an injection and never a ' +
-      '`history` turn; `servedView.ts · viewOf` recomposes it from the record',
+      '`history` turn; `servedView/assembly.ts · viewOf` recomposes it from the record',
     drivenBy: [
       'test/core/agent/findings/contingent.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1861,7 +1861,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       "heading `unsettled by absence (read off the record):` — the library's reading of the " +
       'result a ruled-out standing rests on, named as such so the header stays true — composed ' +
       'per request, joined into `systemPieces` only, never an injection and never a `history` ' +
-      'turn; `servedView.ts · viewOf` recomposes it from the record',
+      'turn; `servedView/assembly.ts · viewOf` recomposes it from the record',
     drivenBy: [
       'test/core/agent/findings/unsettled.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -2615,7 +2615,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       '`callLLM · buildCallLLMStage` composes it per request by `ontologyPiece` from the run ' +
       'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece, ' +
       'before the findings piece) — never pushed into `systemPromptInjections`, never written ' +
-      'into `history`; `servedView.ts · viewOf` recomposes the same one from the record and the ' +
+      'into `history`; `servedView/assembly.ts · viewOf` recomposes the same one from the record and the ' +
       'receipt hashes it per request',
     drivenBy: [
       'test/core/agent/ontology.test.ts',
