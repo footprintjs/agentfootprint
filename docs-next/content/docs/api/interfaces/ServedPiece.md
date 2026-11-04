@@ -4,7 +4,7 @@ title: ServedPiece
 
 # Interface: ServedPiece
 
-Defined in: [src/time-travel/servedView.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L230)
+Defined in: [src/time-travel/servedView.ts:166](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L166)
 
 One piece of the composed system string, in wire order.
 
@@ -14,7 +14,7 @@ One piece of the composed system string, in wire order.
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/time-travel/servedView.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L232)
+Defined in: [src/time-travel/servedView.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L168)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/time-travel/servedView.ts:232](https://github.com/footprintjs/a
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: [src/time-travel/servedView.ts:233](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L233)
+Defined in: [src/time-travel/servedView.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L169)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/time-travel/servedView.ts:233](https://github.com/footprintjs/a
 
 > `readonly` **text**: `string`
 
-Defined in: [src/time-travel/servedView.ts:231](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L231)
+Defined in: [src/time-travel/servedView.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/servedView.ts#L167)

@@ -117,6 +117,14 @@ gates run on unchanged main. Only the staging package version changes before pac
 the workflow publishes a GitHub prerelease and npm next. No RC commit, proposal,
 docs deployment or follow-up dispatch is made.
 
+Both stable and RC routes use npm 11.19.0 and pack once with lifecycle scripts
+disabled. Build and publish inspect the canonical archive and compare every
+manifest field except version with the pinned source. Publish uses exactly those
+tarball bytes, without extracting them, in a separate empty directory; downloaded
+siblings cannot become npm project configuration or change the manifest. Stable
+supplies no tag override; only an RC supplies `--tag next`. Unsupported archive
+formats or a missing/non-string version fail with a named refusal before npm.
+
 The ordinary final release PR waits for exact-head review and every downstream PR
 to be green against the RC. If source changed after the RC, cut a new candidate
 first. **Squash-merge** the final release PR; rebasing a two-parent proposal would replay
@@ -166,6 +174,7 @@ those jobs need no entry of their own.
 ## Commit Messages
 
 Follow conventional commits:
+
 - `feat:` new feature
 - `fix:` bug fix
 - `docs:` documentation
@@ -176,6 +185,7 @@ Follow conventional commits:
 ## Reporting Issues
 
 Use the issue templates on GitHub. Include:
+
 - Version (`npm ls agentfootprint`)
 - Provider (Anthropic/OpenAI/Bedrock/Ollama)
 - Minimal reproduction code

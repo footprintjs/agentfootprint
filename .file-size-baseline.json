@@ -115,7 +115,6 @@
     "src/semantics/envelope.ts": 1042,
     "src/strategies/attach.ts": 699,
     "src/time-travel/README.md": 919,
-    "src/time-travel/servedView.ts": 1482,
     "src/time/axis.ts": 645,
     "src/time/convert.ts": 876,
     "src/time/readers/english.ts": 863,

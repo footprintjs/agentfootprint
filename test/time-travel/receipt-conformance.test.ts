@@ -2547,7 +2547,7 @@ describe('an armed findings ledger, served: the receipt hashes the piece and the
   // `callLLM` joins the ledger piece (`findings/serve.ts ·
   // findingsLedgerPiece`) after the recovery piece, and serves judged tool
   // results as tickets (`collapseJudged`) BEFORE the receipt mint. The
-  // rebuild (`servedView.ts · viewOf`) recomposes both from the committed key
+  // rebuild (`servedView/findings.ts · findingsAt`) recomposes both from the committed key
   // and the run constant `findingsServe`, with the same functions in the same
   // order — so the law holds with NOTHING new declared as a gap, and every
   // `messages.entries[i].hash` is the hash of what went out, ticket included.
