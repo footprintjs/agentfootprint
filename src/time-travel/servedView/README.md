@@ -1,3 +1,5 @@
+**Fold** — reconstruct one saved request and name what the record cannot prove.
+
 # servedView/ — saved request reconstruction
 
 This library is sealed by `../servedView.ts`. That facade retains the public

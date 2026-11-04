@@ -750,7 +750,7 @@ pins it as the one door. What is true:
 - **Under one** (`conversationRedaction()` names the system prompt's pieces
   among the conversation), the commit log holds footprintjs's placeholder where
   a selected value was, and this folder's readers take a placeholder for
-  ABSENT, never for text the model was sent (`servedView.ts` · `readAtCall`,
+  ABSENT, never for text the model was sent (`servedView/recordReads.ts` · `readAtCall`,
   `readRunConstant`).
 - The **receipt carries no bytes** — hashes, counts and names only — and those
   hashes are **not** redacted either. The run salt is what limits them: the
