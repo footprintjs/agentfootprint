@@ -17,7 +17,7 @@
  */
 
 import type { Embedder } from '../memory/embedding/types.js';
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import { softmax } from './softmax.js';
 import type {
   IntentCandidate,

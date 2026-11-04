@@ -464,14 +464,14 @@ function rankOf(relPath, compiled = COMPILED) {
   return best === null ? null : best.rank;
 }
 
-/** Every `.ts` file (no `.d.ts`) under `<root>/<dir>`, repo-relative and sorted. */
+/** Production `.ts` files (no `.d.ts` or colocated tests), repo-relative and sorted. */
 function listSourceFiles(root, dir = 'src') {
   const out = [];
   const walk = (at) => {
     for (const name of fs.readdirSync(at).sort()) {
       const full = path.join(at, name);
       if (fs.statSync(full).isDirectory()) walk(full);
-      else if (name.endsWith('.ts') && !name.endsWith('.d.ts'))
+      else if (name.endsWith('.ts') && !name.endsWith('.d.ts') && !name.endsWith('.test.ts'))
         out.push(path.relative(root, full).split(path.sep).join('/'));
     }
   };

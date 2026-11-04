@@ -14,5 +14,5 @@ longer.
 ## Files
 - `embedMessages.ts`, `loadRelevant.ts` — the write- and read-side stages.
 - `types.ts` — the `Embedder` seam; `mockEmbedder.ts` — deterministic tests.
-- `cosine.ts` — the similarity metric `store.search()` uses.
+- `index.ts` re-exports the shared similarity metric from `../../lib/cosine.ts`; stores depend on that neutral arithmetic leaf.
 - `inputCeiling.ts`, `emitEmbedding.ts`, `index.ts`.

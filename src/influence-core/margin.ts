@@ -21,7 +21,7 @@
  * "the model chose because". Margin is EVIDENCE of decisiveness, not
  * proof; tier 3 (choice-entropy sampling) validates the proxy.
  */
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import type { CandidateScore, Embedder, MarginCandidate, MarginResult } from './types.js';
 import { DEFAULT_MARGIN_THRESHOLD } from './types.js';
 

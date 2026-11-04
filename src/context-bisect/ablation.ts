@@ -25,7 +25,7 @@
  * score elsewhere is a correlational proxy.
  */
 
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import type { Embedder } from '../influence-core/index.js';
 import type {
   AblationRerun,

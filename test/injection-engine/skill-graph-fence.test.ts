@@ -136,7 +136,7 @@ const PURE_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
       'about how many actions a turn has left. No imports, no runtime, nothing agent-shaped.',
   ],
   [
-    'src/memory/embedding/cosine.ts',
+    'src/lib/cosine.ts',
     '`cosineSimilarity` — twelve lines of arithmetic over two number arrays. Nothing in ' +
       'it knows what an agent is.',
   ],

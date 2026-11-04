@@ -25,8 +25,10 @@
  *   - file-level value cycles;
  *   - the folder cycles that type-only edges add (`folderCyclesWithTypes`).
  *
- * An import counts as runtime exactly when `ts.transpileModule` keeps it — the same elision
- * `tsc` applies. A dynamic `import()` is a lazy edge: counted for layering, NOT for cycles
+ * An ESM import counts as runtime exactly when `ts.transpileModule` keeps it — the same elision
+ * `tsc` applies. Literal `require()` and non-type `import = require()` conservatively count as
+ * value edges by syntax; import-equals is not classified by the ESNext transpile's elision.
+ * A dynamic `import()` is a lazy edge: counted for layering, NOT for cycles
  * (it cannot close a load-time cycle). `import type`, an elided import and an
  * `import('x').T` type reference are type-only edges.
  *
@@ -70,8 +72,22 @@ export function readEdges(root, files, unresolved = []) {
   const known = new Set(files);
   const resolveSpec = (from, spec, line) => {
     const to = defaultConfig.resolveRelative(from, spec, (candidate) => known.has(candidate));
-    if (to !== null || !spec.startsWith('.')) return to;
+    if (!spec.startsWith('.')) return to;
     const literal = join(root, dirname(from), spec);
+    const excludedTest = defaultConfig.resolveRelative(
+      from,
+      spec,
+      (candidate) =>
+        candidate.endsWith('.test.ts') &&
+        existsSync(join(root, candidate)) &&
+        statSync(join(root, candidate)).isFile(),
+    );
+    // An existing excluded test is a forbidden production target, never a non-source escape.
+    if (to?.endsWith('.test.ts') || excludedTest !== null || literal.endsWith('.test.ts')) {
+      unresolved.push({ from, spec, line });
+      return null;
+    }
+    if (to !== null) return to;
     if (!(existsSync(literal) && statSync(literal).isFile())) unresolved.push({ from, spec, line });
     return null;
   };
@@ -131,6 +147,29 @@ export function readEdges(root, files, unresolved = []) {
       ) {
         const to = resolveSpec(file, node.arguments[0].text, lineOf(node));
         if (to) edges.push({ from: file, to, kind: 'dynamic', line: lineOf(node) });
+      } else if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'require' &&
+        node.arguments[0] &&
+        ts.isStringLiteralLike(node.arguments[0])
+      ) {
+        const to = resolveSpec(file, node.arguments[0].text, lineOf(node));
+        if (to) edges.push({ from: file, to, kind: 'value', line: lineOf(node) });
+      } else if (
+        ts.isImportEqualsDeclaration(node) &&
+        ts.isExternalModuleReference(node.moduleReference) &&
+        node.moduleReference.expression &&
+        ts.isStringLiteralLike(node.moduleReference.expression)
+      ) {
+        const to = resolveSpec(file, node.moduleReference.expression.text, lineOf(node));
+        if (to)
+          edges.push({
+            from: file,
+            to,
+            kind: node.isTypeOnly ? 'type' : 'value',
+            line: lineOf(node),
+          });
       } else if (
         ts.isImportTypeNode(node) &&
         ts.isLiteralTypeNode(node.argument) &&

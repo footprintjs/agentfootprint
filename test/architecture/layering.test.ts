@@ -144,6 +144,54 @@ describe('layering config — which file an import names', () => {
 // ── boundary: fixture trees ──────────────────────────────────────────────────
 
 describe('check-layering — what fails', () => {
+  it('refuses an excluded test even when a direct reader receives an unfiltered list', () => {
+    const root = makeTree({
+      'src/low/a.ts': "export { value } from './a.test.js';",
+      'src/low/a.test.ts': 'export const value = 1;',
+    });
+    const unresolved: Array<{ from: string; spec: string; line: number }> = [];
+    expect(readEdges(root, ['src/low/a.ts', 'src/low/a.test.ts'], unresolved)).toEqual([]);
+    expect(unresolved).toEqual([{ from: 'src/low/a.ts', spec: './a.test.js', line: 1 }]);
+  });
+
+  it('keeps colocated tests outside the production graph', () => {
+    const root = makeTree({
+      'src/low/a.ts': 'export const value = 1;',
+      'src/low/a.test.ts': "import { it } from 'vitest'; it('adjacent', () => undefined);",
+    });
+    expect(listSourceFiles(root)).toEqual(['src/low/a.ts']);
+    expect(
+      analyse({
+        root,
+        config: {
+          layers: FIXTURE_LAYERS,
+          upwardAllowances: [],
+          typeOnlyAllowances: [],
+          closedFolders: [],
+          barrelFiles: [],
+        },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it.each([
+    "import { value } from './a.test.js'; export { value };",
+    "export { value } from './a.test.js';",
+    "export type Alias = import('./a.test.js').Value;",
+    "export const load = () => import('./a.test.js');",
+    "import './a.test.ts'; export const value = 1;",
+    "import './a.test'; export const value = 1;",
+    "const test = require('./a.test.js'); export const value = test.value;",
+    "import test = require('./a.test.js'); export const value = test.value;",
+  ])('refuses a production import of an excluded test: %s', (source) => {
+    const result = run({
+      'src/low/a.ts': source,
+      'src/low/a.test.ts': 'export const value = 1; export interface Value { value: number; }',
+    });
+    expect(result.ok).toBe(false);
+    expect(result.unresolved).toMatchObject([{ from: 'src/low/a.ts', line: 1 }]);
+  });
+
   it('a downward value import is clean', () => {
     const r = run({
       'src/low/a.ts': 'export const a = 1;',
@@ -151,6 +199,28 @@ describe('check-layering — what fails', () => {
     });
     expect(r.ok).toBe(true);
     expect(r.upward).toEqual([]);
+  });
+
+  it('a downward literal require is a value edge', () => {
+    const root = makeTree({
+      'src/low/a.ts': 'export const a = 1;',
+      'src/high/b.ts': "const a = require('../low/a.js'); export const b = a.a;",
+    });
+    expect(readEdges(root, listSourceFiles(root))).toEqual([
+      { from: 'src/high/b.ts', to: 'src/low/a.ts', kind: 'value', line: 1 },
+    ]);
+    expect(
+      analyse({
+        root,
+        config: {
+          layers: FIXTURE_LAYERS,
+          upwardAllowances: [],
+          typeOnlyAllowances: [],
+          closedFolders: [],
+          barrelFiles: [],
+        },
+      }).ok,
+    ).toBe(true);
   });
 
   it('an upward value import fails, naming the line', () => {
