@@ -376,6 +376,9 @@ jobs:
           name: coverage-blob-${{ matrix.shard }}
           path: vitest-blobs/
           if-no-files-found: error
+          # A re-run's blob replaces the last attempt's. Left with two of one name,
+          # the download picks the higher artifact id, which is not the newer one.
+          overwrite: true
           retention-days: 1
 
   # The required check `coverage`, by that exact name. It judges the merge of all

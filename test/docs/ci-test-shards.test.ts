@@ -152,6 +152,8 @@ describe('ci.yml · the coverage gate judges the merge of every shard', () => {
     expect(shard).toContain('name: coverage-blob-${{ matrix.shard }}');
     expect(shard).toContain('path: vitest-blobs/');
     expect(shard).toContain('if-no-files-found: error');
+    // A re-run must merge its own blob, not whichever attempt's has the higher id.
+    expect(shard).toContain('overwrite: true');
   });
 
   it('downloads the blobs, names every one, merges them, then uploads', () => {
