@@ -594,6 +594,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "typed-output, option-validation, forced-tool and native-output (`strategy: 'native'` run-start) errors thrown to the caller, the build-time refusal of `.toolChoice()` under reactMode 'classic' (findings is still refused, but its corrected sentence no longer matches this grammar), plus one console warning about a cached menu",
     },
   ],
+  'src/core/conversation.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: "ResumeIdentityConflictError's followUp guidance ('Use a separate instance…') is thrown to the caller by refuseFollowUpIdentity before the continuation starts; the refusal is not appended to history or sent on a model wire",
+    },
+  ],
   'src/core/agent/toolChoice/pick.ts': [
     {
       kind: 'not-model-facing',
@@ -1326,12 +1333,14 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // total 204 → 206, notModelFacing 135 → 137.
         // Trace and ToolCalls splits retain all206 literals and their categories.
         // The independent owner moves produce115 classified files and21 unrepaired entries.
-        files: 115,
-        total: 206,
+        // Follow-up identity admission adds one host-only teaching refusal:
+        // conversation.ts, files115→116, total206→207, notModelFacing137→138.
+        files: 116,
+        total: 207,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 137,
+        notModelFacing: 138,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

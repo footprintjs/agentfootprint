@@ -1,42 +1,46 @@
 import { expect, it } from 'vitest';
-import { ToolSessionTier, toolSessionKey } from './toolSessions.js';
+import { ToolSessionTier, toolSessionKey, hashSessionKey } from './toolSessions.js';
 import { newToolOwner, nextToolDispatch } from './toolResourceOwner.js';
 
 const origin = { tool: 'resource', toolCallId: 'same-provider-id', runId: 'opening-leg' };
 const owner = (ordinal: number) => nextToolDispatch(newToolOwner({ runId: 'native-leg', ordinal }));
 
-it('partitions custom/default keys and call cleanup even when provider IDs match', async () => {
-  const closed: string[] = [],
-    tier = new ToolSessionTier();
-  const a = owner(0),
-    b = owner(1);
-  const va = tier.borrow(a, {}),
-    vb = tier.borrow(b, {});
-  const first = va.register(
-    a.pending!,
-    origin,
-    () => {
-      closed.push('a');
-    },
-    { scope: 'call', key: 'custom' },
-  );
-  const second = vb.register(
-    b.pending!,
-    origin,
-    () => {
-      closed.push('b');
-    },
-    { scope: 'call', key: 'custom' },
-  );
-  expect(first.outcome).toBe('started');
-  expect(second.outcome).toBe('started');
-  expect(first.keyHash).not.toBe(second.keyHash);
-  await vb.fireCall(b.pending!);
-  expect(closed).toEqual(['b']);
-  await va.finish(false);
-  expect(closed).toEqual(['b', 'a']);
-  await vb.finish(false);
-});
+it.each(['custom', undefined] as const)(
+  'partitions %s keys and call cleanup even when provider IDs match',
+  async (key) => {
+    const closed: string[] = [],
+      tier = new ToolSessionTier();
+    const a = owner(0),
+      b = owner(1);
+    const va = tier.borrow(a, {}),
+      vb = tier.borrow(b, {});
+    const first = va.register(
+      a.pending!,
+      origin,
+      () => {
+        closed.push('a');
+      },
+      { scope: 'call', ...(key !== undefined && { key }) },
+    );
+    const second = vb.register(
+      b.pending!,
+      origin,
+      () => {
+        closed.push('b');
+      },
+      { scope: 'call', ...(key !== undefined && { key }) },
+    );
+    expect(first.outcome).toBe('started');
+    expect(second.outcome).toBe('started');
+    expect(first.keyHash).toBe(hashSessionKey(key ?? 'call:resource'));
+    expect(second.keyHash).toBe(first.keyHash);
+    await vb.fireCall(b.pending!);
+    expect(closed).toEqual(['b']);
+    await va.finish(false);
+    expect(closed).toEqual(['b', 'a']);
+    await vb.finish(false);
+  },
+);
 
 it('paused views release their exclusive borrow; stale views cannot close or register into successors', async () => {
   const reports: unknown[] = [],
@@ -190,7 +194,7 @@ it('a closed call refuses a retained registrar while its turn still admits later
 });
 
 it.each(['session', 'shutdown'] as const)(
-  '%s custom keys preserve tenant/principal/session isolation across turns',
+  '%s custom keys honor their declared conversation or tier lifetime across turns',
   async (scope) => {
     const tier = new ToolSessionTier(),
       closed: number[] = [],
@@ -214,15 +218,16 @@ it.each(['session', 'shutdown'] as const)(
         },
         { scope, key: 'custom' },
       );
-      expect(result.outcome).toBe(i === 4 ? 'reused' : 'started');
+      const fresh = i === 0 || (scope === 'session' && i < 4);
+      expect(result.outcome).toBe(fresh ? 'started' : 'reused');
       hashes.push(result.keyHash);
       await view.finish(false);
     }
-    expect(new Set(hashes.slice(0, 4)).size).toBe(4);
-    expect(hashes[4]).toBe(hashes[0]);
-    expect(tier.liveCount()).toBe(4);
+    expect(hashes).toEqual(facts.map(() => hashSessionKey('custom')));
+    expect(tier.liveCount()).toBe(scope === 'session' ? 4 : 1);
     expect(closed).toEqual([]);
     await tier.fireShutdown();
-    expect([...closed].sort()).toEqual([0, 1, 2, 3]);
+    expect([...closed].sort()).toEqual(scope === 'session' ? [0, 1, 2, 3] : [0]);
+    expect(tier.liveCount()).toBe(0);
   },
 );
