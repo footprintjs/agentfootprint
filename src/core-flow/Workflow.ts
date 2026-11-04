@@ -195,6 +195,7 @@ export class Workflow<TIn extends object = object, TOut = unknown> extends Runne
     input?: unknown,
     options?: RunOptions,
   ): Promise<TOut | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'Workflow.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'Workflow.resume');

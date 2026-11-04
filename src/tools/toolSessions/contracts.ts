@@ -57,6 +57,8 @@ export interface TeardownOptions {
 export interface ToolSessionOrigin {
   /** Actual registration-time event context, retained only in memory. */
   readonly runContext?: RunContext;
+  /** Private captured parent-run observer channel; never checkpoint data. */
+  readonly emit?: (type: string, payload: unknown) => void;
   readonly tool: string;
   readonly toolCallId: string;
   /** Absent when the door has no run (`mcpServe`). */

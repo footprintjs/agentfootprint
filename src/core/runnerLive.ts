@@ -29,6 +29,9 @@
 
 import type { RuntimeSnapshot, FlowchartCheckpoint } from 'footprintjs';
 import type { RunnerPauseOutcome } from './pause.js';
+import type { AgentInput } from './agent/types.js';
+import type { AgentRunOptions } from './Agent.js';
+import type { AgentRunCheckpoint } from './runCheckpoint.js';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
@@ -39,6 +42,13 @@ export interface PauseOwnership {
   abandon(): Promise<void>;
 }
 
+/** Captured inside one invocation, before its lease ends or a host awaits. */
+export interface HostedTurn {
+  readonly output: unknown;
+  readonly conversation: AgentRunCheckpoint | undefined;
+  readonly ownership: PauseOwnership | undefined;
+}
+
 /** What the library reads live from a runner. */
 export interface RunnerLive {
   /** Subscribe to every event as its producer made it — never served. */
@@ -47,6 +57,15 @@ export interface RunnerLive {
   liveState(): Readonly<Record<string, unknown>> | undefined;
   /** The current (or last) run's snapshot, live and unserved. */
   liveSnapshot(): RuntimeSnapshot | undefined;
+  /** Agent-only execution port; never follows a later selected run. */
+  readonly turn?: {
+    run(input: AgentInput | string, options?: AgentRunOptions): Promise<HostedTurn>;
+    resume(
+      checkpoint: FlowchartCheckpoint,
+      input?: unknown,
+      options?: AgentRunOptions,
+    ): Promise<HostedTurn>;
+  };
   /** Agent-only host ownership transfer, captured synchronously from an actual result. */
   readonly pause?: {
     capture(outcome: RunnerPauseOutcome): PauseOwnership | undefined;

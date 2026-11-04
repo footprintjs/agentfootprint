@@ -724,6 +724,24 @@
               "rounds": 1
             }
           ],
+          "toolParties": {
+            "calls": [
+              {
+                "id": "c1",
+                "name": "search_logs",
+                "party": {
+                  "channel": "registry"
+                }
+              }
+            ],
+            "iteration": 1,
+            "owner": {
+              "componentOrdinal": 0,
+              "runId": "<volatile>"
+            },
+            "turn": 1,
+            "version": 1
+          },
           "waiting": {
             "awaiting": {
               "context": {
@@ -772,6 +790,30 @@
             ],
             "requestId": "<volatile>"
           }
+        },
+        "servedToolParties": {
+          "current": [
+            {
+              "name": "search_logs",
+              "party": {
+                "channel": "registry"
+              }
+            }
+          ],
+          "last": [
+            {
+              "name": "search_logs",
+              "party": {
+                "channel": "registry"
+              }
+            }
+          ],
+          "owner": {
+            "componentOrdinal": 0,
+            "runId": "<volatile>"
+          },
+          "turn": 1,
+          "version": 1
         }
       },
       "redactedPaths": [],
@@ -785,6 +827,10 @@
       "trace": [
         {
           "path": "argumentAsk",
+          "verb": "set"
+        },
+        {
+          "path": "servedToolParties",
           "verb": "set"
         }
       ],

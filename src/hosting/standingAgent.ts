@@ -52,20 +52,10 @@
  * engine continues from its own checkpoint, and no earlier tool call re-runs.
  *
  * ── Why one run at a time, and where that bound actually is ─────────────────
- * An Agent instance holds per-run state on itself. Two runs overlapping on ONE
- * instance do not crash — which is precisely the danger. They both finish, and
- * the state the composer reads afterwards belongs to whichever started last, so
- * one session's envelope can end up holding another session's conversation.
- * Nothing in the recording would say so. **Runs on one instance are therefore
- * serialized, and that is a correctness requirement rather than a tuning
- * choice.**
- *
- * What CHANGED in 9.10.0 is not that rule but its scope. `{ agent }` hands this
- * composer one instance to share, so the serialization is global — the shape
- * every earlier release had, unchanged to the byte. `{ agentFactory }` hands it
- * a way to MAKE instances, so each session gets its own and the same rule binds
- * per session: sessions run in parallel, each session's turns queue behind that
- * session's own instance.
+ * Native admission refuses overlapping use of one Agent instance. This host
+ * serializes a lane's turns through persistence and delivery too. `{ agent }`
+ * shares one global lane; `{ agentFactory }` creates a lane for each session.
+ * Independent sessions can then run concurrently on separate instances.
  *
  *   standingAgent({ agent })          → one instance,  global queue
  *   standingAgent({ agentFactory })   → one per session, a queue each
@@ -182,7 +172,7 @@ import {
   TURN_ARTIFACTS_TIMEOUT_MS,
 } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
-import { runnerLive } from '../core/runnerLive.js';
+import { runnerLive, type HostedTurn } from '../core/runnerLive.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
@@ -1732,15 +1722,15 @@ export async function standingAgent<TH extends HostHandle>(
             history.push({ role: 'assistant', content: output });
             const { skillCursor: _cursor, ...conversation } = paused.conversation;
             void _cursor;
+            const control = runnerLive(runner)?.pause;
+            if (control === undefined) throw new TypeError('Agent pause ownership is unavailable');
+            await control.abandon(paused.checkpoint);
             await lane.writer?.settle();
             if (sessionId !== undefined)
               await store.persist(
                 sessionId,
                 toEnvelope({ ...conversation, history, checkpointedAt: Date.now() }),
               );
-            const control = runnerLive(runner)?.pause;
-            if (control === undefined) throw new TypeError('Agent pause ownership is unavailable');
-            await control.abandon(paused.checkpoint);
             // A turn that ends, so the host is offered its binding like any
             // other — but no run happened, so there is no run id to stamp.
             await offerTurnArtifacts(runner, reply, offer, () => undefined);
@@ -1753,9 +1743,11 @@ export async function standingAgent<TH extends HostHandle>(
         // failure below may have used the decision (`answeredPause.ts`).
         const watch = watchAnswer(paused);
         try {
+          const turn = runnerLive(runner)?.turn;
+          if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
           await deliver(
             lane,
-            await runner.resume(paused.checkpoint, request.decision, resumeOptions),
+            await turn.resume(paused.checkpoint, request.decision, resumeOptions),
             store,
             reply,
             sessionId,
@@ -1803,10 +1795,13 @@ export async function standingAgent<TH extends HostHandle>(
       }
 
       const turnOptions = await withSealedRequest();
-      const output = prior
-        ? await runner.run({ message: request.input, continueFrom: prior }, turnOptions)
-        : await runner.run({ message: request.input }, turnOptions);
-      await deliver(lane, output, store, reply, sessionId, offer);
+      const turn = runnerLive(runner)?.turn;
+      if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
+      const completed = await turn.run(
+        { message: request.input, ...(prior !== undefined && { continueFrom: prior }) },
+        turnOptions,
+      );
+      await deliver(lane, completed, store, reply, sessionId, offer);
     } catch (err) {
       // A run that threw still has to drain. A write left in flight would race
       // the NEXT turn's terminal write and could land after it. The drain's own
@@ -1826,7 +1821,7 @@ export async function standingAgent<TH extends HostHandle>(
   /** Store what the run left behind, then end the reply with the right terminal. */
   async function deliver(
     lane: Lane,
-    output: unknown,
+    completed: HostedTurn,
     store: SessionLifecycle,
     reply: HostReply,
     sessionId: string | undefined,
@@ -1834,9 +1829,7 @@ export async function standingAgent<TH extends HostHandle>(
     priorPause?: PausedRun,
   ): Promise<void> {
     const runner = lane.agent;
-    // Capture THIS returned pause before persistence, artifacts or reply await.
-    // A partial stored answer ran no new occurrence and therefore captures none.
-    const ownership = isPaused(output) ? runnerLive(runner)?.pause?.capture(output) : undefined;
+    const { output, ownership } = completed;
     if (isPaused(output)) {
       let stored = false;
       try {
@@ -1851,7 +1844,7 @@ export async function standingAgent<TH extends HostHandle>(
             : output.awaitingInput !== undefined &&
               output.awaitingInput.requestId === priorPause?.pending.awaitingInput?.requestId
             ? priorPause.conversation
-            : runner.checkpoint();
+            : completed.conversation;
         if (sessionId !== undefined && conversation) {
           await store.persist(
             sessionId,
@@ -1889,7 +1882,7 @@ export async function standingAgent<TH extends HostHandle>(
     await lane.writer?.settle();
     let conversation: AgentRunCheckpoint | undefined;
     if (sessionId !== undefined) {
-      conversation = runner.checkpoint();
+      conversation = completed.conversation;
       // Persist BEFORE answering: the caller learns the answer only once the
       // conversation that produced it is durable, so a queued next turn can
       // never read state older than the answer already given.

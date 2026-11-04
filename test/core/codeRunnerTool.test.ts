@@ -167,7 +167,7 @@ describe('one session, many calls', () => {
     expect(toolSessionsOf(tool)?.size).toBe(0);
   });
 
-  it('session resources survive until host close while new turns use distinct owners', async () => {
+  it("a 'session'-scoped session SURVIVES the turn that opened it", async () => {
     const { runner, starts, stops } = fakeRunner();
     const tool = codeRunnerTool({ runner, scope: 'session' });
     const agent = Agent.create({
@@ -188,12 +188,12 @@ describe('one session, many calls', () => {
     await agent.run({ message: 'turn one' }, { sessionId: 'sess-1' });
     await agent.run({ message: 'turn two' }, { sessionId: 'sess-1' });
 
-    // Lifetime remains host-controlled; the new turn deliberately gets its own resource key.
-    expect(starts).toHaveLength(2);
+    // One interpreter across turns preserves the conversation's files and variables.
+    expect(starts).toHaveLength(1);
     expect(stops).toHaveLength(0);
 
     await agent.closeToolSessions({ sessionId: 'sess-1' });
-    expect(stops).toHaveLength(2);
+    expect(stops).toHaveLength(1);
   });
 
   it('PERFORMANCE — two parallel calls in one iteration open ONE session', async () => {

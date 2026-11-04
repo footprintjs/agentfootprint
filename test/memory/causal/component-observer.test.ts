@@ -11,7 +11,14 @@ import {
 import type { SnapshotEntry } from '../../../src/memory/causal/types.js';
 import type { LLMProvider } from '../../../src/provider-contract/types.js';
 
-it('concurrent mounts of one agent keep complete causal evidence in their own conversations', async () => {
+it.each([
+  { label: 'plain', env: undefined },
+  { label: 'traceId', env: { traceId: 'fixture-trace' } },
+  {
+    label: 'traceparent',
+    env: { traceparent: '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01' },
+  },
+])('concurrent mounts keep complete causal evidence with $label', async ({ env }) => {
   const store = new InMemoryStore();
   let entered!: () => void;
   let release!: () => void;
@@ -70,12 +77,12 @@ it('concurrent mounts of one agent keep complete causal evidence in their own co
     .build();
   const alpha = Sequence.create({ id: 'alpha-parent' }).step('shared', shared).build();
   const beta = Sequence.create({ id: 'beta-parent' }).step('shared', shared).build();
-  const first = alpha.run({ message: 'alpha', identity: { conversationId: 'alpha' } });
+  const first = alpha.run({ message: 'alpha', identity: { conversationId: 'alpha' } }, { env });
   const observed = first.catch((error: unknown) => ({ error }));
   try {
     await reached;
     await expect(
-      beta.run({ message: 'beta', identity: { conversationId: 'beta' } }),
+      beta.run({ message: 'beta', identity: { conversationId: 'beta' } }, { env }),
     ).resolves.toContain('PRIVATE-beta');
   } finally {
     release();

@@ -10,6 +10,7 @@ type DispatchContext = ReturnType<
 >;
 
 interface CompleteToolBatchFrame {
+  readonly askAnswered?: boolean;
   readonly newHistory: DispatchContext['newHistory'];
   readonly emitTransitionConflict: ReturnType<
     typeof buildToolEffectsOperations
@@ -25,7 +26,7 @@ export function completeToolBatch(
   frame: CompleteToolBatchFrame,
 ): void {
   scope.history = frame.newHistory;
-  if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
+  if (frame.askAnswered !== true && 'argumentAsk' in scope) scope.argumentAsk = undefined;
 
   // The batch-end aggregate for conflicting transition proposals
   // (9.19.0) — fires only when ≥2 accepted proposals named different

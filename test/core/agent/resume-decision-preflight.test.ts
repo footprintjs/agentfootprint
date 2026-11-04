@@ -35,7 +35,7 @@ describe('resume resource preflight and an unused consent decision', () => {
           return {};
         });
         const deps = {
-          resources: { restore },
+          resources: { restore, expectAnswer: vi.fn() },
           prepareProviderTools,
           awaitDurable,
         } as unknown as ToolCallsHandlerDeps;

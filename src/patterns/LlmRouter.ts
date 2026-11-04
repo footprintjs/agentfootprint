@@ -278,6 +278,7 @@ class RouterStep extends RunnerBase<{ message: string }, RoutingDecision> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<RoutingDecision | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'LlmRouter.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'LlmRouter.resume');

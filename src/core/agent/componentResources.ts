@@ -1,3 +1,5 @@
+import type { AgentfootprintEventMap } from '../../events/registry.js';
+import { AnswerConsumption } from '../answerConsumption.js';
 import type { ComponentRun } from 'footprintjs';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import type { RunContext } from '../../bridge/eventMeta.js';
@@ -20,7 +22,9 @@ export interface ResourceFacts {
   readonly identity?: MemoryIdentity;
   readonly sessionId?: string;
 }
+type RestoreStatus = AgentfootprintEventMap['agentfootprint.tools.resource_restore']['payload'];
 export interface ComponentResources {
+  bindReporter(report: (status: RestoreStatus) => void): void;
   /** Positive new-turn entry; resume may skip it and must restore the saved reference. */
   seed(scope: ResourceScope): void;
   restore(scope: ResourceScope, facts: ResourceFacts): void;
@@ -32,8 +36,9 @@ export interface ComponentResources {
     readonly owner: ToolCallOwner;
   };
   endCall(scope: ResourceScope): Promise<void>;
-  /** A named answer refusal consumed nothing; keep the prior paused owner. */
-  retainPause(): void;
+  /** Answer admission is separate from native execution admission. */
+  expectAnswer(): void;
+  readonly answer: AnswerConsumption;
   /** Explicit host abandonment of this exact retained paused owner. */
   abandon(): Promise<void>;
 }
@@ -47,8 +52,17 @@ export function componentResources(
   let carrier: ToolOwnerCarrier | undefined;
   let view: ToolSessionView | undefined;
   let closed = false;
-  let retainedPause = false;
+  let awaitingAnswer = false;
+  const answer = new AnswerConsumption();
   let binding: ResourceFacts | undefined;
+  let reporter: ((status: RestoreStatus) => void) | undefined;
+  const report = (status: RestoreStatus): void => {
+    try {
+      reporter?.(status);
+    } catch {
+      /* observation cannot own cleanup */
+    }
+  };
   const restore = (scope: ResourceScope, facts: ResourceFacts): void => {
     if (closed) throw new TypeError('Tool resource component is retired');
     if (view !== undefined) {
@@ -63,7 +77,10 @@ export function componentResources(
       ...facts,
       ...(facts.identity !== undefined && { identity: Object.freeze({ ...facts.identity }) }),
     });
-    const borrowed = tier().borrow(admitted, snapshot);
+    const pool = tier();
+    const local = pool.localStatus(admitted, snapshot);
+    const borrowed = pool.borrow(admitted, snapshot);
+    if (awaitingAnswer) report({ local, remote: 'unknown' });
     binding = snapshot;
     carrier = admitted;
     view = borrowed;
@@ -71,21 +88,25 @@ export function componentResources(
   };
   component.onFinalize(async (end) => {
     closed = true;
-    await view?.finish(end.kind === 'paused' || retainedPause);
+    if (awaitingAnswer && view === undefined) report({ local: 'unconfirmed', remote: 'unknown' });
+    await view?.finish(end.kind === 'paused' || (awaitingAnswer && !answer.consumed));
   });
   return {
+    bindReporter(next) {
+      reporter ??= next;
+    },
     seed(scope) {
       if (closed) throw new TypeError('Tool resource component is retired');
-      const saved = scope.$getValue(KEY);
-      const admitted = saved === undefined ? newToolOwner(component.entry) : readToolOwner(saved);
+      const admitted = newToolOwner(component.entry);
       carrier = admitted;
       scope.$setValue(KEY, admitted);
     },
     restore,
-    retainPause() {
+    expectAnswer() {
       if (closed) throw new TypeError('Tool resource component is retired');
-      retainedPause = true;
+      awaitingAnswer = true;
     },
+    answer,
     async abandon() {
       if (carrier === undefined || binding === undefined) return;
       await tier().borrow(carrier, binding).finish(false);

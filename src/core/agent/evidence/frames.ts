@@ -27,6 +27,7 @@ import {
   EVIDENCE_CHECK_FRAME_PREFIX,
   SCHEMA_CHECK_FRAME_PREFIX,
   FINDINGS_DATA_FRAME_PREFIX,
+  TOOL_BATCH_FRAME_PREFIX,
 } from '../../../lib/saidByPerson.js';
 
 // Both markers live in the authorship registry (9.84.0) — the one list of
@@ -59,6 +60,7 @@ export function isLibraryAuthoredTurn(content: string): boolean {
   return (
     content.startsWith(EVIDENCE_CHECK_FRAME_PREFIX) ||
     content.startsWith(SCHEMA_CHECK_FRAME_PREFIX) ||
-    content.startsWith(FINDINGS_DATA_FRAME_PREFIX)
+    content.startsWith(FINDINGS_DATA_FRAME_PREFIX) ||
+    content.startsWith(TOOL_BATCH_FRAME_PREFIX)
   );
 }

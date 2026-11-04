@@ -208,13 +208,13 @@ describe.each(['pinned', 'current-wire', 'last-served'] as const)(
   },
 );
 
-it('keeps a fully withdrawn last-served party distinct from an unknown name', () => {
+it('renders a fully withdrawn name without another holder as unknown', () => {
   const result = resolveFixture({
     via: 'last-served',
     saved: { channel: 'provider', id: 'withdrawn' },
   });
   expect(result.tool).toBeUndefined();
-  expect(result.refusal).toBe(REFUSAL);
+  expect(result.refusal).toBeUndefined();
 });
 
 function providerAgent(options: {
@@ -592,12 +592,19 @@ describe('finite argument party data', () => {
         nextDispatch: 0,
       },
     };
-    const scope = {
-      $getValue: (key: string) => values[key],
-      iteration: 1,
-      turnNumber: 1,
-      turnStartMs: 1,
-    };
+    const scope = new Proxy(
+      {
+        $getValue: (key: string) => values[key],
+        iteration: 1,
+        turnNumber: 1,
+        turnStartMs: 1,
+      },
+      {
+        // TypedScope's native has trap checks defined state without recording a read.
+        has: (target, key) =>
+          key in target || (typeof key === 'string' && values[key] !== undefined),
+      },
+    );
     const capture = () =>
       withArgumentParties(scope as never, { iteration: 1, fields: [], progress: [] }, () => ({
         channel: 'provider',
@@ -645,7 +652,7 @@ describe('finite argument party data', () => {
       registryByName: new Map([[NAME, rowTool('replacement')]]),
       notServed: () => REFUSAL,
     });
-    expect(resolve(NAME)).toEqual({ refusal: REFUSAL });
+    expect(resolve(NAME)).toEqual({});
   });
 
   it('reads bounded own data without invoking accessors or adopting inherited labels', () => {

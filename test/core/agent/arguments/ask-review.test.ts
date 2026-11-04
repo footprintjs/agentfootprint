@@ -565,6 +565,71 @@ describe('SECURITY — a hidden argument’s answer reaches no surface a viewer 
     }
   });
 
+  it.each(['direct', 'mounted'] as const)(
+    'hidden answer remains absent after a later policy halt: %s',
+    async (shape) => {
+      const ran: Record<string, unknown>[] = [];
+      const m = scripted([
+        batch(
+          { id: 'secret', name: 'lookup_account', args: { region: 'eu' } },
+          { id: 'blocked', name: 'block', args: {} },
+        ),
+      ]);
+      const agent = Agent.create({
+        provider: m.provider as never,
+        model: 'm',
+        permissionChecker: {
+          name: 'halt-later',
+          check: ({ target }) =>
+            target === 'block' ? { result: 'halt', reason: 'test:later' } : { result: 'allow' },
+        },
+      })
+        .tool(lookupAccount(ran))
+        .tool(
+          defineTool({
+            name: 'block',
+            description: 'Must not run',
+            inputSchema: { type: 'object' },
+            execute: () => {
+              throw new Error('unexpected tool entry');
+            },
+          }),
+        )
+        .build();
+      const runner = shape === 'direct' ? agent : Sequence.create().step('ops', agent).build();
+      const raw: unknown[] = [];
+      runner.attach({
+        id: 'privacy-halt',
+        onRead: (event: unknown) => {
+          raw.push(event);
+        },
+        onWrite: (event: unknown) => {
+          raw.push(event);
+        },
+      });
+      const seen = events(runner as never);
+      const recorder = recordRun(runner);
+      try {
+        const asked = await runner.run({ message: 'look up' });
+        if (!isInputPause(asked)) throw new Error('Expected argument ask');
+        await expect(
+          runner.resume(stored(asked), replyTo(asked, { f1: SECRET })),
+        ).rejects.toMatchObject({ code: 'ERR_POLICY_HALT' });
+        expect(ran).toEqual([{ region: 'eu', account: SECRET }]);
+        for (const surface of [
+          raw,
+          seen,
+          recorder.toRecording(),
+          runner.getSnapshot(),
+          shape === 'direct' ? agent.getLastNarrativeEntries() : [],
+        ])
+          expect(JSON.stringify(surface)).not.toContain(SECRET);
+      } finally {
+        recorder.stop();
+      }
+    },
+  );
+
   it('the hosted resume: no event carries it', async () => {
     const ran: Record<string, unknown>[] = [];
     const agent = Agent.create({ provider: script().provider as never, model: 'm' })

@@ -1,3 +1,4 @@
+import { localResourceStatus } from './toolSessions/localStatus.js';
 /**
  * toolSessions — the end-signal a tool can be handed, and the tier that fires it.
  *
@@ -100,7 +101,7 @@ export {
   TOOL_SESSION_IDLE_MS,
   TOOL_SESSION_MAX_LIVE,
 } from './toolSessions/contracts.js';
-import { hashSessionKey, ownerPartition } from './toolSessions/keys.js';
+import { hashSessionKey, ownerPartition, sessionPartition } from './toolSessions/keys.js';
 export { toolSessionKey, hashSessionKey } from './toolSessions/keys.js';
 
 export class ToolResourceBorrowedError extends Error {
@@ -133,17 +134,10 @@ interface Registration {
   readonly startedMs: number;
   touchedMs: number;
   calls: number;
-  /** One-way. Law 1. */
   fired: boolean;
 }
 
-/**
- * The teardown tier for one runner.
- *
- * Holds nothing until a tool registers, and the runner builds one only when
- * that happens — so an agent whose tools hold no sessions pays a single
- * `undefined` check at each terminal and nothing else.
- */
+/** The existing local registration tier; borrows do not confer remote authority. */
 export class ToolSessionTier {
   private readonly registrations = new Map<string, Registration>();
   private readonly borrows = new Map<string, object>();
@@ -162,10 +156,22 @@ export class ToolSessionTier {
     this.now = options.now ?? ((): number => Date.now());
   }
 
+  localStatus(
+    owner: ToolOwnerCarrier,
+    facts: ToolSessionBinding,
+  ): 'retained' | 'none-known-locally' {
+    return localResourceStatus(
+      this.registrations.values(),
+      ownerPartition(readToolOwner(owner).birth, facts),
+      sessionPartition(facts),
+    );
+  }
+
   /** Exclusive local resource-pool borrow, never an execution admission lock. */
   borrow(owner: ToolOwnerCarrier, facts: ToolSessionBinding): ToolSessionView {
     const admitted = readToolOwner(owner);
     const partition = ownerPartition(admitted.birth, facts);
+    const conversation = sessionPartition(facts);
     if (this.borrows.has(partition)) throw new ToolResourceBorrowedError();
     const token = {};
     this.borrows.set(partition, token);
@@ -195,7 +201,14 @@ export class ToolSessionTier {
           this.rejectLate(origin, cleanup, options);
           throw new ToolResourceClosedError();
         }
-        return this.registerOwned(origin, cleanup, options, partition, logicalCall.key);
+        const persistent = options.scope === 'session' || options.scope === 'shutdown';
+        return this.registerOwned(
+          origin,
+          cleanup,
+          options,
+          persistent ? conversation : partition,
+          logicalCall.key,
+        );
       },
       fireCall: async (call) => {
         assertActive();

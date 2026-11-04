@@ -551,6 +551,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
 import {
@@ -1573,6 +1574,9 @@ const NATIVE_REFERENCE_DIR = new URL('./reference/v14-native-components/', impor
 const referencePath = (name: string): URL =>
   new URL(`${name}.json`, NATIVE_RECORD_CASES.has(name) ? NATIVE_REFERENCE_DIR : REFERENCE_DIR);
 const UPDATE = process.env.AF_TOOLS_REFERENCE === 'update';
+const UPDATE_CASES = new Set(
+  (process.env.AF_TOOLS_REFERENCE_CASES ?? '').split(',').filter(Boolean),
+);
 
 // ─── the law ─────────────────────────────────────────────────────────
 
@@ -1582,8 +1586,17 @@ describe('byte-identity — exact whole-record contract for native component own
       const observed = projection(await drive());
       const text = `${JSON.stringify(observed, null, 2)}\n`;
       if (UPDATE) {
+        if (!UPDATE_CASES.has(name))
+          throw new Error(
+            `Reference update requires an explicit AF_TOOLS_REFERENCE_CASES entry: ${name}`,
+          );
+        const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+        const before = existsSync(referencePath(name))
+          ? digest(readFileSync(referencePath(name), 'utf8'))
+          : 'absent';
         mkdirSync(REFERENCE_DIR, { recursive: true });
         writeFileSync(referencePath(name), text);
+        console.info(`[reference update] ${name}: ${before} -> ${digest(text)}`);
       }
       expect(existsSync(referencePath(name)), `no reference for ${name}`).toBe(true);
       const reference = JSON.parse(readFileSync(referencePath(name), 'utf8')) as unknown;

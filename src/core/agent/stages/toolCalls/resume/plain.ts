@@ -37,7 +37,10 @@ interface ResumePlainLinks {
 
 /** Compose only the existing plain resume door and its original landing order. */
 export function buildResumePlain(
-  deps: Pick<ToolCallsHandlerDeps, 'negativeClaimsArmed' | 'stepPlanFor' | 'findingsJudge'>,
+  deps: Pick<
+    ToolCallsHandlerDeps,
+    'resources' | 'negativeClaimsArmed' | 'stepPlanFor' | 'findingsJudge'
+  >,
   links: ResumePlainLinks,
 ) {
   const resumePlain = async (
@@ -71,6 +74,7 @@ export function buildResumePlain(
     if (input === undefined) {
       throw new PauseAnswerRequiredError({ toolName, toolCallId });
     }
+    deps.resources?.answer.record();
     const iteration = scope.iteration as number;
     const env = scope.$getEnv();
     const tool = links.lookupTool(toolName);
@@ -189,7 +193,7 @@ export function buildResumePlain(
       // Plain local array — see the matching note on the execute path.
       history: newHistory,
     });
-    if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
+    if ('argumentAsk' in scope) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     // Clear pause checkpoint fields.
     await links.endCall(scope);

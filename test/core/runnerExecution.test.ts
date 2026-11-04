@@ -1,7 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { flowChart, type FlowChart } from 'footprintjs';
 
-import { RunnerExecution } from '../../src/core/runnerExecution.js';
+import { RunnerExecution, type RunnerInvocation } from '../../src/core/runnerExecution.js';
+
+it.each(['completed', 'failed'] as const)(
+  'releases the previous selection when an invocation body has %s',
+  async (outcome) => {
+    let ordinal = 0;
+    const chart = flowChart('answer', () => 'ok', 'answer').build();
+    const execution = new RunnerExecution(
+      chart,
+      { runnerId: 'retention', compositionPath: ['Retention'] },
+      () => ({ ordinal: ++ordinal }),
+    );
+    await execution.withRun((invocation) => invocation.execute({ kind: 'run' }));
+    const previous = execution.selected();
+    let retained: RunnerInvocation<{ ordinal: number }> | undefined;
+    const failure = new Error('body failed');
+    const pending = execution.withRun(async (invocation) => {
+      retained = invocation;
+      expect(invocation.previous).toEqual(previous);
+      await invocation.execute({ kind: 'run' });
+      if (outcome === 'failed') throw failure;
+      return 'ok';
+    });
+    if (outcome === 'failed') await expect(pending).rejects.toBe(failure);
+    else await expect(pending).resolves.toBe('ok');
+    // Recorder callbacks may keep this invocation, but must not keep prior executors through it.
+    expect(retained?.previous).toBeUndefined();
+    expect(retained?.context().runId).toBe(execution.selected()?.context.runId);
+    await expect(
+      execution.withRun((invocation) => invocation.execute({ kind: 'run' })),
+    ).resolves.toBe('ok');
+  },
+);
 
 function barrier() {
   let release!: () => void;

@@ -5,7 +5,7 @@ import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { runOfLink } from '../../../../memberRun.js';
 import type { ToolExecutionContext } from '../../../../../tools/tools.js';
-import { policyInForce } from '../../../../../redaction/runRedaction.js';
+import { captureLateEmitter, policyInForce } from '../../../../../redaction/runRedaction.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 
@@ -77,6 +77,7 @@ export function buildToolResourcesOperations(
           {
             tool: toolName,
             toolCallId,
+            emit: captureLateEmitter(scope, 'tool-teardown#0'),
             ...(facts?.runContext !== undefined && { runContext: facts.runContext }),
             ...(facts?.runId !== undefined && { runId: facts.runId }),
             ...(facts?.sessionId !== undefined && { sessionId: facts.sessionId }),

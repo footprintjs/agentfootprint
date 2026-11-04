@@ -1,6 +1,6 @@
 {
   "version": 14,
-  "scope": "Exact complete observed commit order plus served view; existing normalizer unchanged",
+  "scope": "Exact complete captures; unchanged served projection; named identity/transport/resource/served-party and argument-party writes/traces; only the two context slots may interleave",
   "changed": [
     {
       "case": "agent-answer-layer",
@@ -10,12 +10,12 @@
     {
       "case": "agent-arguments-ask-resumed",
       "historicalSha256": "8e0d0a01b97e7a2ab291b77aabcd32ea43de17e8d73152d611c4a1fbe92e8cc7",
-      "expectedSha256": "97969317555f237ce7f6508fa7b4dda0b20d7777373a024fd7f0c4f7a011d7d7"
+      "expectedSha256": "a0ec7c6186cdc08e4843c5c703731fcc7b4b22b7f8c496e527fc1e4613629d83"
     },
     {
       "case": "agent-arguments-ask",
       "historicalSha256": "58c2283a5050c1acb763553ab5fc944bbc3428f458b8f43b8ff6da5812f3fb04",
-      "expectedSha256": "b1b457831fba1725f721a6bba1c6ae9e19c82be3224685d7128830f69bf3fd5a"
+      "expectedSha256": "0a16a3820afdd7ad74d4c256bf63bae808941e5789a7ca0cbb2737748dd79538"
     },
     {
       "case": "agent-arguments-assume-limits",

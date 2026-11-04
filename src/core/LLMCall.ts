@@ -1,8 +1,6 @@
 /**
  * LLMCall — the leaf primitive for a single LLM invocation (no tools).
  *
- * Pattern: Builder (GoF) → produces a Runner backed by a footprintjs FlowChart.
- *
  * Chart shape — outer client wrapper around an inner llm-subflow:
  *
  *     Client → sf-llm-call → loopTo(client)
@@ -343,6 +341,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LLMCallOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       requestOf(options, 'LLMCall.resume');
       const resumeLeg = this.emitPauseResume(checkpoint, input);

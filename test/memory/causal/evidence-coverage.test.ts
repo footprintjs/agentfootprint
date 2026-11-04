@@ -180,3 +180,20 @@ describe('causal component-leg accounting', () => {
     ]);
   });
 });
+
+it.each([null, 3, 'bad', false, ['bad']])(
+  'preserves a call with malformed non-object arguments %j beside a valid sibling',
+  (args) => {
+    const rec = make();
+    emit(rec, 'stream.tool_start', { toolCallId: 'malformed', toolName: 'bad', args });
+    emit(rec, 'stream.tool_end', { toolCallId: 'malformed', result: 'refused' });
+    pair(rec, 'valid');
+    const evidence = rec.collect();
+    expect(evidence.toolCalls).toHaveLength(2);
+    expect(evidence.toolCalls[0]?.args).toEqual({
+      __invalidArguments: args === null ? 'null' : Array.isArray(args) ? 'array' : typeof args,
+    });
+    expect(evidence.toolCalls[1]?.args).toEqual({ id: 'valid' });
+    expect(evidence.availability).toBe('observed');
+  },
+);

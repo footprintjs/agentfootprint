@@ -1,11 +1,5 @@
 import type { FlowchartCheckpoint } from 'footprintjs';
-import {
-  ResumeDecisionError,
-  DecisionRequiredError,
-  PauseAnswerRequiredError,
-  type RunnerPauseOutcome,
-} from '../pause.js';
-import type { ComponentResources } from './componentResources.js';
+import { type RunnerPauseOutcome } from '../pause.js';
 import type { PauseOwnership } from '../runnerLive.js';
 import type { AgentRunValues } from './runValues.js';
 import type { ToolSessionTier } from '../../tools/toolSessions.js';
@@ -13,6 +7,18 @@ import { readToolOwner } from '../../tools/toolResourceOwner.js';
 import { callerIdentityOf, restoredIdentityOf } from './callerIdentity.js';
 import { resumeSessionOf, resumeStateOf } from './resumeCheckpoint.js';
 import { ResumeIdentityConflictError } from '../conversation.js';
+
+/** Only descriptive question fields; no executable authority is inferred. */
+export function pendingQuestionOf(data: unknown): NonNullable<AgentRunValues['pendingQuestion']> {
+  const question = data as
+    | { toolName?: unknown; toolCallId?: unknown; question?: unknown }
+    | undefined;
+  return {
+    ...(typeof question?.toolName === 'string' && { toolName: question.toolName }),
+    ...(typeof question?.toolCallId === 'string' && { toolCallId: question.toolCallId }),
+    ...(typeof question?.question === 'string' && { question: question.question }),
+  };
+}
 
 /** An actual returned occurrence, captured before a host crosses an await. */
 export function capturePauseOwnership(
@@ -59,28 +65,6 @@ export async function abandonStoredPause(
   await tier().borrow(owner, { identity, sessionId }).finish(false);
 }
 
-/** Named refusals that hand no answer to a paused tool. */
-export function isUnansweredPause(error: unknown): boolean {
-  return (
-    error instanceof ResumeDecisionError ||
-    error instanceof DecisionRequiredError ||
-    error instanceof PauseAnswerRequiredError
-  );
-}
-
-/** Native finalization still joins; only the retained owner's terminal differs. */
-export async function withUnansweredPause<T>(
-  resources: ComponentResources | undefined,
-  body: () => T | Promise<T>,
-): Promise<T> {
-  try {
-    return await body();
-  } catch (error) {
-    if (isUnansweredPause(error)) resources?.retainPause();
-    throw error;
-  }
-}
-
 /**
  * A refused native plan or setup has accepted no answer. Capture the exact
  * prior occurrence, and restore its guard on every exit without a new origin.
@@ -89,13 +73,13 @@ export async function withUnansweredPause<T>(
  */
 export async function preservePendingQuestion<T>(
   previous: AgentRunValues | undefined,
-  hasNativeOrigin: () => boolean,
+  answerAdmitted: () => boolean,
   resume: () => T | Promise<T>,
 ): Promise<T> {
   const question = previous?.pendingQuestion;
   try {
     return await resume();
   } finally {
-    if (previous !== undefined && !hasNativeOrigin()) previous.pendingQuestion = question;
+    if (previous !== undefined && !answerAdmitted()) previous.pendingQuestion = question;
   }
 }

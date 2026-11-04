@@ -46,13 +46,18 @@ function preview(value: unknown, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
-function bounded(
-  value: Readonly<Record<string, unknown>> | undefined,
-  max: number,
-): Readonly<Record<string, unknown>> | undefined {
+function bounded(value: unknown, max: number): Readonly<Record<string, unknown>> | undefined {
   if (value === undefined) return undefined;
-  const text = toWireJson(value);
-  return text.length <= max ? withWireErrors(value) : { __truncated: text.slice(0, max) + '…' };
+  const projected = withWireErrors(value);
+  const record =
+    projected !== null && typeof projected === 'object' && !Array.isArray(projected)
+      ? (projected as Readonly<Record<string, unknown>>)
+      : {
+          __invalidArguments:
+            value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
+        };
+  const text = toWireJson(record);
+  return text.length <= max ? record : { __truncated: text.slice(0, max) + '…' };
 }
 
 export function causalEvidenceRecorder(
@@ -145,8 +150,7 @@ export function causalEvidenceRecorder(
             }
             pending.set(id, {
               name: preview(payload.toolName ?? 'unknown', maxField),
-              args:
-                bounded((payload.args ?? {}) as Readonly<Record<string, unknown>>, maxField) ?? {},
+              args: bounded(payload.args, maxField) ?? {},
             });
             break;
           }

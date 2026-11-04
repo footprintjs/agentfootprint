@@ -194,6 +194,7 @@ export class Conditional extends RunnerBase<ConditionalInput, ConditionalOutput>
     input?: unknown,
     options?: RunOptions,
   ): Promise<ConditionalOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'Conditional.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'Conditional.resume');

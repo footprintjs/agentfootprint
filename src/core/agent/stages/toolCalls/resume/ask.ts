@@ -63,6 +63,7 @@ interface ResumeAskLinks {
 export function buildResumeAsk(
   deps: Pick<
     ToolCallsHandlerDeps,
+    | 'resources'
     | 'inputsLayer'
     | 'toolMiddleware'
     | 'artifactStore'
@@ -94,7 +95,7 @@ export function buildResumeAsk(
     const decision: CheckInDecision = consentDecision;
     // Used from here — so spent here, before any row or the tool: a second
     // resume presenting it is refused ('already-answered').
-    await spendDecision(links.decisionLedger, decision, 'ask', runSignal);
+    await spendDecision(links.decisionLedger, decision, 'ask', runSignal, deps.resources?.answer);
 
     let result: unknown;
     /** What the model reads. Differs from `result` only when a rule at the
@@ -475,7 +476,7 @@ export function buildResumeAsk(
       toolCallCount: 1 + askSettlement.settled.length,
       history: askHistory,
     });
-    if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
+    if ('argumentAsk' in scope) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     await links.endCall(scope);
     scope.pausedToolCallId = '';

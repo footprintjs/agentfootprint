@@ -6,9 +6,6 @@
  *          sees on this iteration — one InjectionRecord per exposed tool.
  * Emits:   None directly; ContextRecorder sees the writes.
  *
- * Minimal scope for Phase 3e: static tool registry, all exposed every
- * iteration. Full permission gating / skill activation / context-aware
- * tool filtering arrives in Phase 5.
  */
 
 import { flowChart, isDevMode } from 'footprintjs';
@@ -94,6 +91,7 @@ export type { ToolParty } from '../../tools/toolParty.js';
  * which is the capability law's held-out clause unchanged.
  */
 export interface ServedToolParties {
+  pinned?: ReadonlyMap<string, ToolParty | null>;
   current: ReadonlyMap<string, ToolParty | null>;
   /**
    * The party each name was LAST served under, across the epochs of one run

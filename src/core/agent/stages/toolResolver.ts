@@ -110,16 +110,22 @@ function registryPartyOf(deps: ToolResolverDeps, name: string): ToolParty | unde
  */
 export function buildToolResolver(deps: ToolResolverDeps): ToolResolver {
   return (toolName, pinned) => {
-    const wireParty = pinned ?? deps.servedTools?.current.get(toolName);
-    if (wireParty === null) return { refusal: deps.notServed(toolName) };
-    const lastParty =
-      wireParty === undefined ? deps.servedTools?.lastServed.get(toolName) : undefined;
-    const party = wireParty ?? lastParty;
+    const currentParty = deps.servedTools?.current.get(toolName);
+    const pinnedParty = pinned ?? deps.servedTools?.pinned?.get(toolName);
+    const party =
+      pinnedParty === undefined
+        ? currentParty ?? deps.servedTools?.lastServed.get(toolName)
+        : pinnedParty;
+    // A saved absence is not an offered contract and cannot select a new holder.
+    if (party === null) return {};
     if (party !== undefined) {
       const tool = toolForParty(deps, toolName, party);
-      return tool === undefined
-        ? { party, refusal: deps.notServed(toolName) }
-        : { tool, party, ...(lastParty !== undefined && { offWire: true as const }) };
+      if (tool === undefined) {
+        const otherHolder =
+          deps.registryByName.has(toolName) || providerToolOf(deps, toolName) !== undefined;
+        return otherHolder ? { party, refusal: deps.notServed(toolName) } : {};
+      }
+      return { tool, party, ...(currentParty === undefined && { offWire: true as const }) };
     }
     const registryHolder = deps.registryByName.get(toolName);
     const providerHolder = providerToolOf(deps, toolName);
@@ -128,10 +134,10 @@ export function buildToolResolver(deps: ToolResolverDeps): ToolResolver {
     if (registryHolder !== undefined && providerHolder !== undefined) {
       return { refusal: deps.notServed(toolName) };
     }
-    const currentParty =
+    const fallbackParty =
       registryHolder === undefined ? providerPartyOf(deps) : registryPartyOf(deps, toolName);
-    return currentParty === undefined
+    return fallbackParty === undefined
       ? { refusal: deps.notServed(toolName) }
-      : { tool, party: currentParty, offWire: true };
+      : { tool, party: fallbackParty, offWire: true };
   };
 }

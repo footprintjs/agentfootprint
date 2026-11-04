@@ -180,6 +180,8 @@ function windowPlanOf(
 export interface ArgumentAskDeps {
   /** Already refused calls do not acquire new obligations. */
   readonly excludedCallIds?: readonly string[];
+  readonly admitAnswer?: () => void;
+  readonly saveParties?: () => void;
   readonly argumentSources?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
@@ -244,6 +246,7 @@ function batchOf(scope: TypedScope<AgentState>): BatchCall[] {
  * for on a call of this batch, so the key is read only where it can exist.
  */
 function stateFor(scope: TypedScope<AgentState>, iteration: number): ArgumentAskState | undefined {
+  if (!('argumentAsk' in scope)) return undefined;
   const state = scope.$getValue('argumentAsk') as ArgumentAskState | undefined;
   return state !== undefined && state.iteration === iteration
     ? (structuredClone(state) as ArgumentAskState)
@@ -377,6 +380,8 @@ export function askBeforeDispatch(
       : [],
   );
   const stored = stateFor(scope, iteration);
+  if (asks.length === 0 && origins.length === 0 && stored === undefined)
+    return { resolutions: entries, answered: false };
   // The admitted resource owner keeps its native birth across SAME and FRESH restore.
   const owner = readToolOwner(scope.$getValue('toolResourceOwner')).birth;
   const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;
@@ -393,8 +398,6 @@ export function askBeforeDispatch(
   ) {
     throw new TypeError('argumentAsk: meaning role without partial-window owner');
   }
-  if (asks.length === 0 && origins.length === 0 && stored === undefined)
-    return { resolutions: entries, answered: false };
   const partial = origins.length > 0;
   const fillAsks = asks.filter((ask) => ask.window === true);
   const ordinaryAsks = partial ? asks.filter((ask) => ask.window !== true) : asks;
@@ -433,6 +436,7 @@ export function askBeforeDispatch(
       { turn, iteration },
       time,
     );
+    deps.admitAnswer?.();
     recordFindings(scope, bound.rows, { turn });
     state = bound.state;
     answered = true;
@@ -467,10 +471,11 @@ export function askBeforeDispatch(
     scope.argumentAsk = snapshotPartialState(
       withArgumentParties(scope, withWaiting(state, waiting), deps.partyOf),
     );
+    deps.saveParties?.();
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');
   }
-  if (stored !== undefined) scope.argumentAsk = snapshotPartialState(state);
+  if (stored !== undefined) scope.argumentAsk = undefined;
   const settled = withSettled(entries, state, calls);
   if (partial && time !== undefined) {
     const currentLedger = scope.findingsLedger as FindingsLedger | undefined;

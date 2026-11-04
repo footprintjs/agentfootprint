@@ -105,6 +105,8 @@ export interface ScopeRun {
   readonly serving: EventServing;
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
   real(type: string, payload: unknown, stageId: string): void;
+  /** Capture metadata/serving only, so retained cleanup cannot keep a run bank alive. */
+  captureLate?(stageId: string): (type: string, payload: unknown) => void;
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
   /** Whether the run's rule keeps `name` out of its records. */
   keepsOut(name: string): boolean;
@@ -182,6 +184,18 @@ export function createRunRedaction(args: {
         payload,
         meta: buildEventMeta(origin, getRunContext()),
       } as unknown as AgentfootprintEvent);
+    },
+    captureLate(stageId) {
+      const context = Object.freeze({ ...getRunContext() });
+      return (type, payload) =>
+        dispatcher.dispatchForRun(
+          {
+            type,
+            payload,
+            meta: buildEventMeta({ runtimeStageId: stageId }, context),
+          } as unknown as AgentfootprintEvent,
+          serving,
+        );
     },
     keepsOut(name) {
       return policy !== undefined && decided.rule.isKeyRedacted(name);
@@ -358,6 +372,14 @@ export function adoptScopeOutsideRun(scope: unknown, outside: OutsideRun): void 
   const previous = scopeRuns.get(scope);
   if (previous?.serving !== undefined) return;
   scopeRuns.set(scope, { ...previous, serving: { run: outside.scopeRun, stageId: '' } });
+}
+
+/** The actual parent run's late fact channel; no retired native scope emit is used. */
+export function captureLateEmitter(
+  scope: object,
+  stageId: string,
+): ((type: string, payload: unknown) => void) | undefined {
+  return scopeRuns.get(scope)?.serving?.run.captureLate?.(stageId);
 }
 
 /** A scope that can emit — structurally footprintjs's `TypedScope` `$emit`. */

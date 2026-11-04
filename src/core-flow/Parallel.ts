@@ -1,8 +1,7 @@
 /**
  * Parallel — fan-out composition: N branches run concurrently, then merge.
  *
- * Pattern: Builder (GoF) + Adapter over footprintjs's `addSubFlowChart`
- *          (fork children).
+ * Builder over native fork children.
  * Role:    core-flow/ layer. All branches receive the same input
  *          `{ message }`. Each returns a string. A merge step combines
  *          them: either a pure function OR an LLM.
@@ -341,6 +340,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput, Parallel
     input?: unknown,
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'Parallel.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'Parallel.resume');

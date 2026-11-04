@@ -165,6 +165,7 @@ class SwarmRunner extends RunnerBase<{ message: string }, string> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<string | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'Swarm.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'Swarm.resume');

@@ -3,9 +3,6 @@
  * AgentOutput) consumed by `Agent.create({...}).run({...})` callers AND
  * the INTERNAL `AgentState` shape used by stage functions.
  *
- * These were originally inline in `core/Agent.ts`; extracted here as
- * part of the v2.11.1 decomposition. `core/Agent.ts` re-exports them
- * for back-compat (the 28+ existing import sites continue to work).
  */
 
 import type {
@@ -1556,6 +1553,7 @@ export interface AgentState {
   }[];
   /** Finite resource references only; active borrows and live handles stay private. */
   toolResourceOwner?: import('../../tools/toolResourceOwner.js').ToolOwnerCarrier;
+  servedToolParties?: import('./stages/servedParties.js').ServedPartiesCarrier;
   // Pause checkpoint — set when a tool calls `pauseHere()`, consumed on resume.
   pausedToolCallId: string;
   pausedToolName: string;

@@ -171,6 +171,7 @@ export interface ToolProvider {
   list(ctx: ToolDispatchContext): readonly Tool[] | Promise<readonly Tool[]>;
 
   /**
+   * Cooperative owner label, not authentication of an implementation.
    * Optional: stable id for observability / debugging. Defaults to
    * `'static'` for `staticTools`, `'gated'` for `gatedTools`. Custom
    * implementations should set their own id — surfaces on

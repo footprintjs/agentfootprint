@@ -1,14 +1,8 @@
 /**
  * graph() — a FIXED DAG of runners, levelized at build time.
  *
- * WHY this exists: `Sequence` and `workflow()` run steps in a line, and
- * `Parallel` fans out ONCE and merges. Real pipelines are neither: an
- * intake step feeds two independent lookups, and a writer waits for both.
- * Expressing that with the existing compositions means nesting a Parallel
- * inside a Sequence and threading values through by hand — and on this
- * codebase that hand-off silently loses structured data (see "The trap"
- * below). `graph()` states the shape once, as nodes and edges, and lets
- * the engine work out what can run at the same time.
+ * Nodes and edges declare dependencies; the engine schedules independent
+ * nodes together and passes their structured outputs to declared consumers.
  *
  * What it gives you:
  *   - **Concurrency you did not have to schedule.** Kahn levelization at
@@ -501,6 +495,7 @@ export class Graph extends RunnerBase<GraphInput, GraphOutput, GraphRunValues> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<GraphOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'graph.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'graph.resume');

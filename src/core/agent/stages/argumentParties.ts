@@ -1,3 +1,5 @@
+import { MAX_TOOL_CALLS, MAX_TOOL_LABEL } from './toolCallShape.js';
+import { readServedParties } from './servedParties.js';
 import type { FlowchartCheckpoint, TypedScope } from 'footprintjs';
 import type { AgentState } from '../types.js';
 import type { ArgumentAskState } from '../arguments/ask.js';
@@ -25,9 +27,6 @@ interface ArgumentPartyState extends ArgumentAskState {
   };
 }
 
-const MAX_CALLS = 1024;
-const MAX_LABEL = 1024;
-
 function invalid(): never {
   throw new TypeError('argumentAsk: missing or invalid original tool parties; recreate the pause');
 }
@@ -52,9 +51,8 @@ function sameOwner(value: unknown, expected: ToolTurnBirth): boolean {
   );
 }
 
-function callsOf(scope: TypedScope<AgentState>): readonly CallIdentity[] {
-  const calls = scope.$getValue('llmLatestToolCalls');
-  if (!Array.isArray(calls) || calls.length > MAX_CALLS) invalid();
+function callsOfValue(calls: unknown): readonly CallIdentity[] {
+  if (!Array.isArray(calls) || calls.length > MAX_TOOL_CALLS) invalid();
   const ids = new Set<string>();
   return Array.from({ length: calls.length }, (_, index) => {
     const call = own(calls, index);
@@ -63,11 +61,11 @@ function callsOf(scope: TypedScope<AgentState>): readonly CallIdentity[] {
     if (
       typeof id !== 'string' ||
       id.length === 0 ||
-      id.length > MAX_LABEL ||
+      id.length > MAX_TOOL_LABEL ||
       ids.has(id) ||
       typeof name !== 'string' ||
       name.length === 0 ||
-      name.length > MAX_LABEL
+      name.length > MAX_TOOL_LABEL
     )
       invalid();
     ids.add(id);
@@ -75,9 +73,8 @@ function callsOf(scope: TypedScope<AgentState>): readonly CallIdentity[] {
   });
 }
 
-/** Admit the selected native leaf, including mounted pauses whose new config omits the ask. */
+/** Admit the selected native leaf before origin, including omitted ask configuration. */
 export function requireArgumentPartyCheckpoint(checkpoint: FlowchartCheckpoint): void {
-  if (!isArgumentAskPause(checkpoint.pauseData)) return;
   const path = checkpoint.subflowPath;
   if (!Array.isArray(path)) invalid();
   const last = path[path.length - 1];
@@ -87,8 +84,22 @@ export function requireArgumentPartyCheckpoint(checkpoint: FlowchartCheckpoint):
       : typeof last === 'string'
       ? own(checkpoint.subflowStates, last)
       : invalid();
+  const askPause = isArgumentAskPause(checkpoint.pauseData);
+  const pausedCall = own(leaf, 'pausedToolCallId');
+  if (askPause || (typeof pausedCall === 'string' && pausedCall.length > 0)) {
+    readToolOwner(own(leaf, 'toolResourceOwner'));
+    readServedParties(leaf as Record<string, unknown>);
+  }
+  if (!askPause) return;
   const ask = own(leaf, 'argumentAsk');
-  if (own(ask, 'toolParties') === undefined || own(ask, 'waiting') === undefined) invalid();
+  if (own(ask, 'waiting') === undefined) invalid();
+  readParties(
+    ask,
+    callsOfValue(own(leaf, 'llmLatestToolCalls')),
+    readToolOwner(own(leaf, 'toolResourceOwner')).birth,
+    own(leaf, 'turnNumber'),
+    own(leaf, 'iteration'),
+  );
 }
 
 /** Capture declarations, never executable tools, for every sibling in the paused batch. */
@@ -97,7 +108,7 @@ export function withArgumentParties(
   state: ArgumentAskState,
   partyOf: (name: string) => ToolParty | undefined,
 ): ArgumentPartyState {
-  const calls = callsOf(scope).map((call) => {
+  const calls = callsOfValue(scope.$getValue('llmLatestToolCalls')).map((call) => {
     const offered = partyOf(call.name);
     const party = offered === undefined ? null : readToolParty(offered) ?? invalid();
     return { ...call, party };
@@ -119,18 +130,35 @@ export function restoreArgumentParties(
   scope: TypedScope<AgentState>,
   served: ServedToolParties | undefined,
 ): void {
+  if (!('argumentAsk' in scope)) return;
   const state = scope.$getValue('argumentAsk');
   if (state === undefined) return;
+  if (served === undefined) invalid();
+  served.pinned = readParties(
+    state,
+    callsOfValue(scope.$getValue('llmLatestToolCalls')),
+    ownerOf(scope),
+    scope.turnNumber,
+    scope.iteration,
+  );
+}
+
+/** Pure bounded domain admission, shared by preflight and the live scope. */
+function readParties(
+  state: unknown,
+  calls: readonly CallIdentity[],
+  owner: ToolTurnBirth,
+  turn: unknown,
+  iteration: unknown,
+): Map<string, ToolParty | null> {
   const binding = own(state, 'toolParties');
-  const calls = callsOf(scope);
   const rows = own(binding, 'calls');
   if (
-    served === undefined ||
     own(binding, 'version') !== 1 ||
-    !sameOwner(own(binding, 'owner'), ownerOf(scope)) ||
-    own(binding, 'turn') !== scope.turnNumber ||
-    own(binding, 'iteration') !== scope.iteration ||
-    own(state, 'iteration') !== scope.iteration ||
+    !sameOwner(own(binding, 'owner'), owner) ||
+    own(binding, 'turn') !== turn ||
+    own(binding, 'iteration') !== iteration ||
+    own(state, 'iteration') !== iteration ||
     !Array.isArray(rows) ||
     rows.length !== calls.length
   )
@@ -149,5 +177,5 @@ export function restoreArgumentParties(
       invalid();
     parties.set(call.name, party);
   }
-  served.current = parties;
+  return parties;
 }

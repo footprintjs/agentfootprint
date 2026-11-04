@@ -1,17 +1,11 @@
+import type { AnswerConsumption } from './answerConsumption.js';
 /**
  * consentRequest — the request a consent gate puts to a person: how it is
  * named, what it is bound to, and how a decision is held to it, once.
  *
- * Role:   the ONE owner of that law. A consent gate (a tool's `checkIn`, a
- *         middleware's `ask`) pauses the run; `mintConsentRequest` mints the request
- *         at the pause, and `heldDecision` + `spendDecision` hold a resume's
- *         decision to it. The dispatch loop (`agent/stages/toolCalls/index.ts`) is
- *         the only writer and the only place a decision is used; `Agent.resume`
- *         asks the same pure question earlier, so a mismatch is refused before
- *         anything moves.
- * Reads:  the call about to pause; at a resume, the paused run's own state
- *         (`gatedCallOf`) and the decision.
- * Writes: nothing — the dispatch loop writes what `mintConsentRequest` returns.
+ * Binds a pause to its exact call; heldDecision checks it and spendDecision
+ * records ledger use. The dispatch stage owns checkpoint writes. Agent.resume
+ * applies the same pure admission before execution.
  *
  * ── WHY THE ID IS A COMMITMENT, NOT ONLY A NAME ─────────────────────────────
  * `id = sha256(domain ‖ nonce ‖ canonicalJson(call))`, where the call is
@@ -779,6 +773,7 @@ export async function spendDecision(
   decision: CheckInDecision,
   gate: ConsentGateKind,
   signal?: AbortSignal,
+  consumption?: AnswerConsumption,
 ): Promise<void> {
   refuseIfAborted(signal);
   const attempts = attemptsOn(decision.requestId, ledger, decision.approved === false);
@@ -798,6 +793,9 @@ export async function spendDecision(
       gate,
     );
   }
+  // Confirmed consumption precedes cancellation, and may be observed after
+  // retirement. This fact never reopens a retired component or authorizes IO.
+  consumption?.record();
   refuseIfAborted(signal);
 }
 

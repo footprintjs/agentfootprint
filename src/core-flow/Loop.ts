@@ -215,6 +215,7 @@ export class Loop extends RunnerBase<LoopInput, LoopOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<LoopOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'Loop.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'Loop.resume');

@@ -55,7 +55,10 @@ export function toolSessionKey(
   // caller controlling only the trailing field cannot shift a boundary into
   // somebody else's key. It is closed anyway: "no attack today" is a property
   // of the current call sites, not of the function.
-  const owner = ctx.resourceOwner === undefined ? undefined : readToolCallOwner(ctx.resourceOwner);
+  const owner =
+    scope === 'session' || scope === 'shutdown' || ctx.resourceOwner === undefined
+      ? undefined
+      : readToolCallOwner(ctx.resourceOwner);
   const turn = owner === undefined ? undefined : ownerPartition(owner.birth, ctx);
   if (scope === 'call')
     return owner === undefined
@@ -66,11 +69,7 @@ export function toolSessionKey(
     ctx.identity?.principal,
   )}`;
   if (scope === 'session') {
-    return ctx.sessionId
-      ? `${prefix}/s=${encodeIdentityField(ctx.sessionId)}${
-          turn === undefined ? '' : '/owner=' + encodeIdentityField(turn)
-        }`
-      : undefined;
+    return ctx.sessionId ? `${prefix}/s=${encodeIdentityField(ctx.sessionId)}` : undefined;
   }
   return ctx.runId ? `${prefix}/r=${encodeIdentityField(turn ?? ctx.runId)}` : undefined;
 }
@@ -114,11 +113,18 @@ export function ownerPartition(
   birth: ToolOwnerCarrier['birth'],
   facts: ToolSessionBinding,
 ): string {
-  return JSON.stringify([
+  return JSON.stringify([...identityParts(facts), birth.runId, birth.componentOrdinal]);
+}
+
+/** Conversation/host lifetimes do not restart at a native turn boundary. */
+export function sessionPartition(facts: ToolSessionBinding): string {
+  return JSON.stringify(identityParts(facts));
+}
+
+function identityParts(facts: ToolSessionBinding): readonly string[] {
+  return [
     encodeIdentityField(facts.identity?.tenant),
     encodeIdentityField(facts.identity?.principal),
     encodeIdentityField(facts.sessionId),
-    birth.runId,
-    birth.componentOrdinal,
-  ]);
+  ];
 }

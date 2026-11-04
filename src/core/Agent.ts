@@ -1,16 +1,16 @@
+import { hostedTurns } from './agent/hostTurn.js';
 import type { TypedScope, NativeMappingBinding } from 'footprintjs';
 import { componentResources } from './agent/componentResources.js';
 import { resumeStateOf, resumeSessionOf } from './agent/resumeCheckpoint.js';
 import {
   capturePauseOwnership,
+  pendingQuestionOf,
   preservePendingQuestion,
   abandonStoredPause,
-  isUnansweredPause,
-  withUnansweredPause,
 } from './agent/pauseOwnership.js';
 import { registerRunnerLive, runnerLive } from './runnerLive.js';
 import { agentComponentObservers, componentEvidence } from './agent/componentObservers.js';
-import { bindScopeComputation } from '../redaction/runRedaction.js';
+import { bindScopeComputation, captureLateEmitter } from '../redaction/runRedaction.js';
 import { createAgentRunValues, type AgentRunValues } from './agent/runValues.js';
 import {
   bindRunnerStage,
@@ -78,8 +78,6 @@ import {
 } from './pause.js';
 import {
   checkDecisionAgainst,
-  noteDecisionTakenUp,
-  pausedRequestIdOf,
   processDecisionLedger,
   registerConsentLedger,
   registerConsentRules,
@@ -363,8 +361,7 @@ export type {
  * `correlationId`/`traceId` are NOT footprintjs concepts — footprintjs's
  * `RunOptions.env` is an intentionally closed infra bag (signal/timeoutMs/
  * traceId only; see footprintjs's `ExecutionEnv`). These two ride separately
- * into `Agent.currentRunContext` and from there into every emitted event's
- * `EventMeta` via `buildEventMeta` (`RunContext` already declares both —
+ * into the native invocation metadata, then each event's `EventMeta` via `buildEventMeta` (`RunContext` already declares both —
  * `../bridge/eventMeta.ts`), so a caller can join agentfootprint's event
  * stream against an external system (a upstream request id, an OTEL trace,
  * a cross-tier why() join key) without threading it through tool args.
@@ -797,7 +794,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * awaiting-input shape itself (`repeat.count`), not here.
    */
 
-  // `lastExecutor` is now inherited as a protected field from RunnerBase
   // (single canonical source for footprintjs snapshot access across all
   // runners). Agent's `getLastSnapshot()` delegates to the inherited
   // implementation but is kept here for the JSDoc + clearer return type.
@@ -1497,6 +1493,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
           recorder: observers.recorder,
           bindScope: (scope) => {
             const run = this.runExecution().forScope(scope);
+            value.resources?.bindReporter((status) =>
+              captureLateEmitter(scope as object, TOOL_TEARDOWN_STAGE_ID)?.(
+                'agentfootprint.tools.resource_restore',
+                status,
+              ),
+            );
+            if (scope !== null && typeof scope === 'object' && 'servedToolParties' in scope)
+              value.resources?.expectAnswer();
             bindScopeComputation(scope, {
               owner: component,
               retired: () => run.retired,
@@ -1510,6 +1514,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     if (live === undefined) throw new TypeError('Agent live taps were not initialized');
     registerRunnerLive(this, {
       ...live,
+      turn: hostedTurns(this.runExecution(), {
+        run: (run, input, options) => this.runOwned(run, input, options),
+        resume: (run, checkpoint, input, options) =>
+          this.resumeOwned(run, checkpoint, input, options),
+        prepareResume: (checkpoint) => this.noteResumeTakenUp(checkpoint),
+        checkpoint: (run) => this.checkpointFor(run),
+      }),
       pause: {
         capture: (outcome) => capturePauseOwnership(this.runExecution().selected()?.value, outcome),
         abandon: (checkpoint) =>
@@ -1762,6 +1773,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * read or write of a selected key reads `[REDACTED]`, and an `[emit]` line
    * shows the event's served payload (`src/redaction/runRedaction.ts`).
    */
+  /** Empty during preparation before native origin; capture prior entries before the next call. */
   getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
     const selected = this.runExecution().selected();
     const coverage = selected?.value.redaction?.coverage;
@@ -2058,7 +2070,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // never on the server's zone.
     const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
     // The engine's options; the run's signal (and its deadline) is armed just
-    // before the run starts and released in its `finally` (`runSignalOf`).
+    // before native execution, whose lifecycle releases it.
     const engineOptions = withoutTime(options);
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
@@ -2363,6 +2375,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     return this.runExecution().withRun(async (invocation) => {
       const previous = invocation.previous;
       const dropped = previous?.value.pendingQuestion;
+      if (dropped === undefined) return undefined;
       await previous?.value.resources?.abandon();
       if (previous !== undefined) previous.value.pendingQuestion = undefined;
       return dropped;
@@ -2502,7 +2515,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    *
    * WHO the resumed run is for is the paused run's caller, read off the
    * checkpoint (`agent/callerIdentity.ts`) — never whatever this instance ran
-   * last; which SESSION, the call's `sessionId`, else the paused run's. A
+   * last; the session is the paused run's. A supplied `sessionId` must match. A
    * checkpoint names who it is for; it is not proof: a host that lets
    * checkpoints leave its trust boundary signs them or keeps them
    * server-side, and passes the identity it verified as `options.identity`.
@@ -2529,10 +2542,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     input?: unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun((invocation) =>
       preservePendingQuestion(
         invocation.previous?.value,
-        () => invocation.run.origin !== undefined,
+        () => invocation.value.resources?.answer.consumed === true,
         () => this.resumeOwned(invocation, checkpoint, input, options),
       ),
     );
@@ -2548,7 +2562,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // decision passes through the one spend a door watching this pause sees
     // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
     // without reaching it, refused or aborted, used nothing.
-    noteDecisionTakenUp(pausedRequestIdOf(checkpoint));
     resumeStateOf(checkpoint);
     // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
     // Refused HERE, before the engine is handed the checkpoint, so nothing
@@ -2685,8 +2698,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // A native-admitted answer settles the old question even if its leg fails.
     // The outer pause-ownership boundary restores pre-origin refusals; named
     // unanswered refusals after origin are restored below.
-    const questionBefore = invocation.previous?.value.pendingQuestion;
-    if (invocation.previous !== undefined) invocation.previous.value.pendingQuestion = undefined;
+    const questionBefore =
+      invocation.previous?.value.pendingQuestion ?? pendingQuestionOf(checkpoint.pauseData);
     // WHO this resumed run is for — set BEFORE the executor exists, because the
     // run context's principal (every event's `EventMeta.principal`), a tool's
     // `ctx.identity` and `checkpoint()` all read it: the identity the PAUSED
@@ -2695,11 +2708,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // this instance ran last, which on a shared or pooled agent is another
     // person's, or nobody's (`callerIdentity.ts`).
     invocation.value.identity = options?.identity ?? pausedFor;
-    // …and WHICH session: the call's, else the one the paused run recorded in
-    // its own state (`runSessionId`, or the session rung's) — one source, no
-    // instance memory — so a host that resumes without repeating the session
-    // does not file the resumed turn (its tool teardown, its events, its
-    // self-explain evidence) as sessionless.
+    // Resume retains the paused transport session; an override was checked equal above.
     const sessionResumeOptions: AgentRunOptions | undefined =
       sessionId !== undefined && options?.sessionId === undefined
         ? { ...options, sessionId }
@@ -2766,8 +2775,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
               runRedaction: carriedRunPolicy(leg.policy),
             },
           };
-    // A resume arms its own run signal and deadline (`runSignalOf`), released in
-    // the `finally` below.
+    // The native resumed leg owns its signal and deadline.
     try {
       const result = await invocation.execute(
         { kind: 'resume', mode: 'fresh', checkpoint: legCheckpoint, input, options: resumeOptions },
@@ -2783,21 +2791,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       this.assertIntegrityAlive(invocation);
       recording?.complete(finalized);
       return finalized;
-    } catch (cause) {
-      // An answer the run refused ran nothing and answered nothing: the
-      // question this agent was waiting on (if any) is still outstanding, and
-      // no tool session ended — a replayed decision must not tear down the
-      // sandbox a live pause is holding.
-      if (isUnansweredPause(cause)) {
-        // Native execution may have selected this refused leg. Carry the
-        // still-open question in that leg too, never only in an older view.
+    } finally {
+      if (invocation.value.resources?.answer.consumed === true) {
+        if (invocation.previous !== undefined)
+          invocation.previous.value.pendingQuestion = undefined;
+      } else {
         invocation.value.pendingQuestion = questionBefore;
         if (invocation.previous !== undefined)
           invocation.previous.value.pendingQuestion = questionBefore;
-        throw cause;
       }
-      throw cause;
-    } finally {
       // A resume's passed `time` ends with the resume (the fresh-run path's terms).
       invocation.value.resumePassedTime = undefined;
       // Same terms as the fresh-run path: rows on every exit, before the
@@ -2861,6 +2863,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * // it does not rewrite entries manually appended to that history.
    * ```
    */
+  /** During preparation before native origin this is undefined; capture before the next call. */
   checkpoint(): AgentRunCheckpoint | undefined {
     return this.checkpointFor(this.runExecution().selected());
   }
@@ -3154,14 +3157,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       return;
     }
     values.pauseOutcome = outcome;
-    const data = outcome.pauseData as
-      | { toolName?: unknown; toolCallId?: unknown; question?: unknown }
-      | undefined;
-    values.pendingQuestion = {
-      ...(typeof data?.toolName === 'string' && { toolName: data.toolName }),
-      ...(typeof data?.toolCallId === 'string' && { toolCallId: data.toolCallId }),
-      ...(typeof data?.question === 'string' && { question: data.question }),
-    };
+    values.pendingQuestion = pendingQuestionOf(outcome.pauseData);
   }
 
   /**
@@ -3299,9 +3295,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       report.kind === 'closed'
         ? 'agentfootprint.tools.session_closed'
         : 'agentfootprint.tools.session_close_failed';
+    const { kind: _kind, ...payload } = report;
+    if (origin.emit !== undefined) {
+      origin.emit(type, payload);
+      return;
+    }
     const dispatcher = this.getDispatcher();
     if (!dispatcher.hasListenersFor(type)) return;
-    const { kind: _kind, ...payload } = report;
     dispatcher.dispatch({
       type,
       payload,
@@ -5820,13 +5820,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     const toolCallsHandler: ReturnType<typeof buildToolCallsHandler> = {
       execute: bindRunnerStage(
         (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
-        (run) => (scope) =>
-          withUnansweredPause(run.value.resources, () => handlerFor(run).execute(scope)),
+        (run) => (scope) => handlerFor(run).execute(scope),
       ),
       resume: bindRunnerStage(
         (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
-        (run) => (scope, input) =>
-          withUnansweredPause(run.value.resources, () => handlerFor(run).resume(scope, input)),
+        (run) => (scope, input) => handlerFor(run).resume(scope, input),
       ),
     };
     const thinkingSubflow = this.thinkingHandler

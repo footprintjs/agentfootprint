@@ -1,12 +1,4 @@
-/**
- * RunnerBase — shared implementation of the Runner interface.
- *
- * Pattern: Template Method (GoF). Subclasses override `buildChart()` and
- *          optionally `onBeforeRun()` / `onAfterRun()`; the base handles
- *          dispatcher, recorder attachment, custom emit, and subscription.
- * Role:    Base class for LLMCall, Agent, Sequence, Parallel, Conditional, Loop.
- * Emits:   Nothing directly — its attached recorders do.
- */
+/** Shared native execution adapter, serving, recorders and subscriptions for runners. */
 
 import type {
   CombinedRecorder,
@@ -143,26 +135,9 @@ export abstract class RunnerBase<
     return this.execution;
   }
 
-  /**
-   * Cached footprintjs FlowChart, built ONCE at construction time via
-   * `initChart()`. Subsequent `getSpec()` calls return this same
-   * object — reference-stable across all consumers (Lens spec memos,
-   * footprintjs's OpenAPI/MCP caches, recorder-side correlation).
-   *
-   * Set via `initChart(builder)`, called from the subclass constructor
-   * AFTER all instance fields are populated. Read via `getSpec()`.
-   *
-   * Why eager construction: the `StructureRecorder` contract is
-   * "fires once per node at build time" — lazy construction would
-   * fire each recorder every `getSpec()` / `run()` call (2N invocations
-   * per run instead of N), break reference equality, and trigger
-   * `_mergeStageMap` false-positive collisions on second build.
-   * See `RunnerBase.initChart` for details.
-   *
-   * Visibility note: `private` (not `protected`) so subclasses cannot
-   * bypass the `initChart()` double-init guard by writing the field
-   * directly. All legitimate access goes through `getSpec()` and
-   * `initChart()`.
+  /** Built once by initChart(builder, execution), after subclass fields are ready.
+   * Stable getSpec identity keeps structure recorders and stage maps single-built.
+   * Only initChart can set it; subclasses cannot bypass the double-init guard.
    */
   private chart: FlowChart | undefined;
 
@@ -180,9 +155,9 @@ export abstract class RunnerBase<
    * most recent run's snapshot, including across multi-turn reuse of the same
    * runner instance.
    *
-   * **Live during a run.** The executor is assigned at run start, so a caller
-   * reading this from inside a run — an event listener, a tool, a recorder —
-   * gets the IN-FLIGHT snapshot, partially filled, not the last completed one.
+   * During preparation before native origin this returns `undefined`; capture
+   * any previous snapshot before starting the next call. After origin it is
+   * the current run's partially filled snapshot.
    * {@link RunnerBase.getSnapshot} is the same value under the name that says
    * so. Anything that must describe a FINISHED run has to capture at the
    * terminal flush instead of polling this.
@@ -387,6 +362,7 @@ export abstract class RunnerBase<
    * kept out of the run-level log by footprintjs, so this is the parent
    * timeline, not a sum of every nested one.
    */
+  /** Zero during preparation before native origin; never the preceding run's count. */
   getCommitCount(): number {
     return this.execution?.view()?.getCommitCount() ?? 0;
   }
@@ -680,17 +656,31 @@ export abstract class RunnerBase<
    * fresh instance, a later process or another pool lane would dispatch it
    * unserved (`runRedaction.ts` · `servingAhead`).
    */
+  protected noteResumeTakenUp(checkpoint: FlowchartCheckpoint): void {
+    // A refused lease has handed no answer to a tool. Register the door before
+    // admission so a host's conservative consent watcher can establish that.
+    noteDecisionTakenUp(pausedRequestIdOf(checkpoint));
+    try {
+      requireArgumentPartyCheckpoint(checkpoint);
+    } catch (error) {
+      this.dispatcher.dispatch({
+        type: 'agentfootprint.tools.resource_restore',
+        payload: { local: 'unconfirmed', remote: 'unknown' },
+        meta: this.minimalMeta(),
+      });
+      throw error;
+    }
+  }
+
   protected emitPauseResume(
     checkpoint: FlowchartCheckpoint,
     input: unknown,
     handedDown?: RedactionPolicy,
   ): RedactionPolicy | undefined {
-    requireArgumentPartyCheckpoint(checkpoint);
-    noteDecisionTakenUp(pausedRequestIdOf(checkpoint));
     // The resumed leg's own policy beside this runner's declaration: what the
     // caller hands it, joined with the names the paused leg kept out (the
     // checkpoint's marks) — returned for the runner to hand THIS leg's
-    // executor (`openRunRedaction`), so nothing per-run is kept on the instance.
+    // native executor setup, so nothing per-run is kept on the instance.
     const resumeLeg = unionRedactionPolicies(handedDown, policyOfMarks(checkpoint.redactionMarks));
     this.dispatcher.useServing(
       servingAhead(unionRedactionPolicies(redactionDeclaredBy(this), resumeLeg)),

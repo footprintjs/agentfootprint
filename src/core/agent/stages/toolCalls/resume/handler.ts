@@ -1,3 +1,4 @@
+import { restoreServedParties } from '../../servedParties.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { PausableHandler, TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -14,6 +15,8 @@ export function buildToolResume(
   operations: ToolCallOperations,
 ): PausableHandler<TypedScope<AgentState>>['resume'] {
   const resume: PausableHandler<TypedScope<AgentState>>['resume'] = async (scope, input) => {
+    deps.resources?.expectAnswer();
+    restoreServedParties(scope, deps.servedTools);
     restoreArgumentParties(scope, deps.servedTools);
     // A consent gate's answer is a DECISION for ONE request: held to the
     // request this run paused on and to the exact call it was bound to —

@@ -1,3 +1,5 @@
+import { refuseToolBatch } from './refusal.js';
+import { restoreServedParties, saveServedParties } from '../../servedParties.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { PausableHandler, TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -16,6 +18,8 @@ export function buildToolBatchExecution(
   dispatchCall: DispatchCallRunner,
 ): PausableHandler<TypedScope<AgentState>>['execute'] {
   const execute: PausableHandler<TypedScope<AgentState>>['execute'] = async (scope) => {
+    if ('argumentAsk' in scope) deps.resources?.expectAnswer();
+    restoreServedParties(scope, deps.servedTools);
     restoreArgumentParties(scope, deps.servedTools);
     // Replay and pausable resume both admit the saved native owner and current executable catalog.
     deps.resources?.restore(scope, operations.resourceFactsOf(scope));
@@ -36,7 +40,12 @@ export function buildToolBatchExecution(
     if (deps.time !== undefined) {
       (await import('../../timeLayer.js')).recordClockOnResume(scope, deps.time);
     }
-    const { toolCalls, iteration, findingsRefusals } = operations.admitFindingsBatch(scope);
+    const { toolCalls, iteration, findingsRefusals, malformed } =
+      operations.admitFindingsBatch(scope);
+    if (malformed !== undefined) {
+      refuseToolBatch(scope, malformed);
+      return;
+    }
     // THE INPUTS LAYER'S HALF OF DISPATCH (honesty layer 2) — loaded through
     // `import()` only under the arm, so an unarmed batch awaits nothing new.
     const inputs: InputsDispatch | undefined =
@@ -69,6 +78,8 @@ export function buildToolBatchExecution(
         ...(deps.argumentSources === true && { argumentSources: true as const }),
         toolOf: (toolName) => operations.resolveTool(toolName).tool,
         partyOf: (toolName) => operations.resolveTool(toolName).party,
+        admitAnswer: () => deps.resources?.answer.record(),
+        saveParties: () => saveServedParties(scope, deps.servedTools),
         runId: () => operations.runFactsOf(scope)?.runId,
         ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
         ...(deps.time !== undefined && {
@@ -113,16 +124,21 @@ export function buildToolBatchExecution(
     };
     for (const [callIndex, tc] of toolCalls.entries()) {
       const result = await dispatchCall(scope, tc, callIndex, batch);
-      if (result.kind === 'paused') return result.pause;
+      if (result.kind === 'paused') {
+        saveServedParties(scope, deps.servedTools);
+        return result.pause;
+      }
       if (result.kind === 'halted') return undefined;
     }
     completeToolBatch(scope, {
+      askAnswered: oneQuestionAsked,
       newHistory,
       emitTransitionConflict: operations.emitTransitionConflict,
       iteration,
       transitionState,
       toolCalls,
     });
+    if (deps.servedTools !== undefined) deps.servedTools.pinned = undefined;
     return undefined; // explicit: no pause, flow continues to loopTo
   };
   return execute;

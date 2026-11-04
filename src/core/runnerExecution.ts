@@ -186,8 +186,8 @@ export class RunnerExecution<T> {
   }
 
   withRun<R>(body: (invocation: RunnerInvocation<T>) => R | Promise<R>): Promise<R> {
-    const previous = this.selected();
-    return this.lifecycle.withRun((run) => {
+    const prior: { previous: RunnerSelection<T> | undefined } = { previous: this.selected() };
+    return this.lifecycle.withRun(async (run) => {
       const view = this.lifecycle.view();
       if (view === undefined) throw new TypeError('The admitted native execution has no view');
       // Initialization, including any callback it invokes, is under native admission.
@@ -198,7 +198,9 @@ export class RunnerExecution<T> {
         value: values.value,
         run,
         view,
-        previous,
+        get previous() {
+          return prior.previous;
+        },
         context: () => {
           if (run.origin === undefined)
             throw new TypeError('The native run has no admitted origin yet');
@@ -222,7 +224,11 @@ export class RunnerExecution<T> {
           });
         },
       };
-      return body(invocation);
+      try {
+        return await body(invocation);
+      } finally {
+        prior.previous = undefined;
+      }
     });
   }
 

@@ -49,7 +49,7 @@ interface ResumeCheckInLinks {
 export function buildResumeCheckIn(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'negativeClaimsArmed' | 'stepPlanFor' | 'findings' | 'findingsJudge'
+    'resources' | 'negativeClaimsArmed' | 'stepPlanFor' | 'findings' | 'findingsJudge'
   >,
   links: ResumeCheckInLinks,
 ) {
@@ -70,7 +70,13 @@ export function buildResumeCheckIn(
     const decision: CheckInDecision = consentDecision;
     // Used from here — so spent here, before the record or the tool: a
     // second resume presenting it is refused ('already-answered').
-    await spendDecision(links.decisionLedger, decision, 'checkIn', runSignal);
+    await spendDecision(
+      links.decisionLedger,
+      decision,
+      'checkIn',
+      runSignal,
+      deps.resources?.answer,
+    );
 
     // The registered component that COLLECTED this decision (9.24.0),
     // written at pause time only when the ask carried one. The decision
@@ -251,7 +257,7 @@ export function buildResumeCheckIn(
       toolCallCount: 1 + decisionSettlement.settled.length,
       history: decisionHistory,
     });
-    if (scope.$getValue('argumentAsk') !== undefined) scope.argumentAsk = undefined;
+    if ('argumentAsk' in scope) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     // Clear ALL pause checkpoint fields (shared + check-in).
     await links.endCall(scope);

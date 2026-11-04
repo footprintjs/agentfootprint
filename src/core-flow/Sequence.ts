@@ -190,6 +190,7 @@ export class Sequence extends RunnerBase<SequenceInput, SequenceOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<SequenceOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
     return this.runExecution().withRun(async (invocation) => {
       const request = requestOf(options, 'Sequence.resume');
       this.prepareCompositionResume(invocation, checkpoint, request, 'Sequence.resume');

@@ -71,6 +71,10 @@
       ],
       "trace": [
         {
+          "path": "servedToolParties",
+          "verb": "set"
+        },
+        {
           "path": "findingsLedger",
           "verb": "append"
         },

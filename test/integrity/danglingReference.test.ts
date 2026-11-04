@@ -273,7 +273,8 @@ describe('regression: the check adds no step to the narrative', () => {
       .getLastNarrativeEntries()
       .map((entry) => entry.text.replace(/turnStartMs = \d+/g, 'turnStartMs = <clock>'));
     const reference = JSON.parse(readFileSync(NATIVE_NARRATIVE_REFERENCE, 'utf8')) as string[];
-    // Keep the same full read/order/value guard on the explicit14 record.
+    // Explicit14 correction: remove only the initial undefined owner read and renumber steps.
+    // All remaining reads, writes, payloads and observed order stay exact.
     const reads = (lines: readonly string[]) => lines.filter((line) => / Read \w+/.test(line));
     expect(reads(narrative)).toEqual(reads(reference));
     expect(narrative).toEqual(reference);

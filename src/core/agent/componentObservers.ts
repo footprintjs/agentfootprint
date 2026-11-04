@@ -78,7 +78,20 @@ export function componentEvidence(
     reason: 'not-configured' as const,
   };
   if (evidence.availability === 'unavailable') return evidence;
-  const coverage = { ...evidence.coverage, source: binding.origin };
+  const origin = binding.origin;
+  const coverage = {
+    ...evidence.coverage,
+    source: {
+      kind: origin.kind,
+      runId: origin.runId,
+      startedAtMs: origin.startedAtMs,
+      runtimeStageId: origin.runtimeStageId,
+      ...(origin.subflowPath !== undefined && { subflowPath: origin.subflowPath }),
+      ...(origin.parentRuntimeStageId !== undefined && {
+        parentRuntimeStageId: origin.parentRuntimeStageId,
+      }),
+    },
+  };
   return { ...evidence, coverage };
 }
 
