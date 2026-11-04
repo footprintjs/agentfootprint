@@ -17,7 +17,7 @@ import { storeRequestLimit } from './requestLimit.js';
 import type { MemoryIdentity } from '../identity/index.js';
 import { identityNamespace } from '../identity/index.js';
 import type { MemoryEntry } from '../entry/index.js';
-import { cosineSimilarity } from '../embedding/cosine.js';
+import { cosineSimilarity } from '../../lib/cosine.js';
 import type {
   ListOptions,
   ListResult,

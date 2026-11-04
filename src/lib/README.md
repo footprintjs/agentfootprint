@@ -29,6 +29,8 @@ naming `events/types.ts` · `ContextSlot`, is erased and is not an edge;
 `npm run check:layering` refuses a run-time import that would leave the set.
 Every subfolder here has its own role and its own README.
 
+`cosine.ts` is the zero-import vector similarity metric shared by memory stores, influence scoring, context bisection and injection scoring. Its own test lives beside it.
+
 ## What it reads / what it writes
 Nothing on scope. These are zero- or near-zero-import leaves: values in, values
 out, all detached (`spoken()` returns a fresh `{ named, held }`).

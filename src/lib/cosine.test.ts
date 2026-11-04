@@ -9,7 +9,7 @@
  *   - security: length mismatch throws (fail-loud on bad state)
  */
 import { describe, expect, it } from 'vitest';
-import { cosineSimilarity } from '../../../src/memory/embedding/cosine';
+import { cosineSimilarity } from './cosine.js';
 
 // ── Unit ────────────────────────────────────────────────────
 

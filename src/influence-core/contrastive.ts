@@ -29,7 +29,7 @@
  * regression / eval debugging (you have a prior-good or expected output), not
  * cold localization — without a reference, use `scoreInfluence`.
  */
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import {
   adaptWeights,
   assertValidWeights,

@@ -29,7 +29,7 @@
  * are per-item, not additive, not causal attribution). Same inputs →
  * same scores, unlike LLM-as-judge.
  */
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import type {
   Embedder,
   EvidenceInput,

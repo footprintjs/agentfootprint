@@ -44,9 +44,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import layering from '../../scripts/layering.config.cjs';
 
 import {
   artifactStoreConformance,
@@ -429,6 +430,13 @@ describe('the declarations are the whole list, and each one is argued', () => {
   });
 });
 
+function frameworkImportsIn(root: string): string[] {
+  return layering.listSourceFiles(root).filter((file: string) => {
+    const text = readFileSync(join(root, file), 'utf8');
+    return /\bfrom\s+['"](vitest|@jest\/globals|node:test|mocha|chai)['"]/.test(text);
+  });
+}
+
 describe('the battery covers what it claims to', () => {
   it('holds every case the port names, each with a law, each name unique', () => {
     // A battery that quietly lost a case would pass every store trivially.
@@ -442,26 +450,25 @@ describe('the battery covers what it claims to', () => {
     expect(names).toContain('get-stream-does-not-verify-the-digest');
   });
 
-  it('imports NO test framework anywhere under src/ — that is what makes it shippable', () => {
+  it('imports NO test framework in production source — that is what makes it shippable', () => {
     // The whole point of the restyle: an out-of-tree consumer runs these cases
     // under jest, node:test, or no runner at all. One `import { it } from
-    // 'vitest'` in src/ would make the published package depend on a dev tool.
-    const offenders: string[] = [];
-    const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const path = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(path);
-        } else if (entry.name.endsWith('.ts')) {
-          const text = readFileSync(path, 'utf8');
-          if (/\bfrom\s+['"](vitest|@jest\/globals|node:test|mocha|chai)['"]/.test(text)) {
-            offenders.push(path);
-          }
-        }
-      }
-    };
-    walk(join(import.meta.dirname, '../../src'));
-    expect(offenders).toEqual([]);
+    // 'vitest'` in production source would make the package depend on a dev tool.
+    // Use the same production list as the runtime fence; colocated tests do not ship.
+    expect(frameworkImportsIn(join(import.meta.dirname, '../..'))).toEqual([]);
+  });
+
+  it('still finds a framework import in production beside a colocated test', () => {
+    const root = mkdtempSync(join(tmpdir(), 'af-framework-import-'));
+    try {
+      mkdirSync(join(root, 'src'));
+      const source = "import { it } from 'vitest'; it('example', () => undefined);";
+      writeFileSync(join(root, 'src/example.ts'), source);
+      writeFileSync(join(root, 'src/example.test.ts'), source);
+      expect(frameworkImportsIn(root)).toEqual(['src/example.ts']);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('a case that cannot run and was not declared FAILS rather than skipping', async () => {

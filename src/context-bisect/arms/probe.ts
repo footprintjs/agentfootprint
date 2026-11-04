@@ -15,7 +15,7 @@
  * spec types apart.
  */
 
-import { cosineSimilarity } from '../../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../../lib/cosine.js';
 import { costStatsFrom, similarityStats } from '../ablation.js';
 import type { RunManifestLike } from '../../recorders/observability/recordedManifest.js';
 import type { AblationRunStats, Embedder, OutcomeComparator } from '../types.js';
