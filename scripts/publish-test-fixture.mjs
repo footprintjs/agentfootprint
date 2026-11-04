@@ -7,13 +7,14 @@ import {
   writeFileSync,
   mkdirSync,
   mkdtempSync,
+  copyFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import os from 'node:os';
+import { archiveBytes } from './publish-archive/archive-fixture.mjs';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
-const workflow = readFileSync(path.join(ROOT, '.github/workflows/publish.yml'), 'utf8');
 const active = (text) =>
   text
     .split('\n')
@@ -21,6 +22,7 @@ const active = (text) =>
     .join('\n')
     .replace(/\\\r?\n\s*/g, ' ');
 function job(name) {
+  const workflow = readFileSync(path.join(ROOT, '.github/workflows/publish.yml'), 'utf8');
   const start = workflow.indexOf('\n  ' + name + ':\n');
   assert(start >= 0);
   const after = workflow.slice(start + 1),
@@ -34,41 +36,57 @@ export function stagedPublish(
   manifest = {},
   manifestBytes = null,
   sourceManifest = null,
+  options = {},
 ) {
-  const parent = os.tmpdir();
-  mkdirSync(parent, { recursive: true });
-  const root = mkdtempSync(path.join(parent, 'staged-')),
+  const root = mkdtempSync(path.join(os.tmpdir(), 'staged-')),
     bin = path.join(root, 'bin'),
-    output = path.join(root, 'args');
+    incoming = path.join(root, 'incoming'),
+    publish = path.join(root, 'publish'),
+    trusted = path.join(root, 'trusted'),
+    output = path.join(root, 'args'),
+    digest = path.join(root, 'digest');
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(bin);
-  writeFileSync(
-    path.join(root, 'package.json'),
-    manifestBytes ?? JSON.stringify({ name: 'agentfootprint', version, ...manifest }),
-  );
+  for (const folder of [bin, incoming, publish, trusted]) mkdirSync(folder);
+  for (const name of ['archive.cjs', 'verify.cjs'])
+    copyFileSync(path.join(ROOT, 'scripts/publish-archive', name), path.join(trusted, name));
+  const bytes =
+    options.archiveBytes ??
+    archiveBytes({ name: 'agentfootprint', version, ...manifest }, { manifestBytes });
+  writeFileSync(path.join(incoming, 'package.tgz'), bytes);
+  for (const [name, value] of Object.entries(options.artifactSiblings ?? {}))
+    writeFileSync(path.join(incoming, name), value);
+  for (const [name, value] of Object.entries(options.publishSiblings ?? {}))
+    writeFileSync(path.join(publish, name), value);
   const npm = path.join(bin, 'npm');
-  writeFileSync(npm, '#!/bin/sh\nprintf "%s\\n" "$@" > "$NPM_ARGS"\n');
+  writeFileSync(
+    npm,
+    '#!/bin/sh\nif [ "$1" = --version ]; then printf "%s\\n" "$NPM_VERSION"; exit 0; fi\n' +
+      '[ "$1" = publish ] || exit 95\nprintf "%s\\n" "$@" > "$NPM_ARGS"\n' +
+      'node -e \'const fs=require("node:fs"),c=require("node:crypto");fs.writeFileSync(process.env.NPM_DIGEST,c.createHash("sha256").update(fs.readFileSync("./package.tgz")).digest("hex"));\'\n',
+  );
   chmodSync(npm, 0o700);
   const block = job('publish'),
     marker = '        run: |\n',
     at = block.lastIndexOf(marker);
-  assert(at >= 0, 'actual publisher shell missing');
+  assert(at >= 0);
   const script = block
     .slice(at + marker.length)
     .split('\n')
-    .map((l) => (l.startsWith('          ') ? l.slice(10) : l))
+    .map((line) => (line.startsWith('          ') ? line.slice(10) : line))
     .join('\n');
   const r = spawnSync(
     '/bin/bash',
     ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script],
     {
-      cwd: root,
+      cwd: publish,
       encoding: 'utf8',
       timeout: 10000,
       maxBuffer: 512 * 1024,
       env: {
-        PATH: bin + ':/usr/bin:/bin',
+        PATH: bin + ':' + path.dirname(process.execPath) + ':/usr/bin:/bin',
         NPM_ARGS: output,
+        NPM_DIGEST: digest,
+        NPM_VERSION: options.npmVersion ?? '11.19.0',
         PLANNED_VERSION: planned,
         SOURCE_MANIFEST: JSON.stringify(
           sourceManifest ?? {
@@ -76,14 +94,22 @@ export function stagedPublish(
             version: typeof version === 'string' && version.includes('-rc.') ? '13.2.0' : version,
           },
         ),
+        VERIFY_DIR: trusted,
+        INCOMING_DIR: incoming,
       },
     },
   );
   assert.equal(r.error, undefined);
   assert.equal(r.signal, null);
-  assert(
-    !/command not found|SyntaxError/.test(r.stderr),
-    'publisher fixture setup failed: ' + r.stderr,
-  );
-  return { r, args: existsSync(output) ? readFileSync(output, 'utf8').trim().split('\n') : [] };
+  assert(!/command not found|SyntaxError/.test(r.stderr), 'publisher fixture setup failure');
+  return {
+    r,
+    args: existsSync(output) ? readFileSync(output, 'utf8').trim().split('\n') : [],
+    bytes,
+    publishedSha256: existsSync(digest) ? readFileSync(digest, 'utf8') : null,
+    root,
+    incoming,
+    publish,
+    trusted,
+  };
 }

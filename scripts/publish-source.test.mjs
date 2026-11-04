@@ -139,3 +139,34 @@ test('source-reader fixture remains registered in the hosted native release wrap
   assert(wrapper.includes("'scripts/publish-source.test.mjs'"));
   assert(wrapper.includes("'scripts/publish-manifest.test.mjs'"));
 });
+
+test('publisher source reader accepts the actual wrapped public GitHub DTO at the pinned base', (t) => {
+  const dto = JSON.parse(
+    readFileSync(
+      new URL('./publish-archive/fixtures/source-package-3672575f.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(dto.type, 'file');
+  assert.equal(dto.encoding, 'base64');
+  assert(dto.content.includes('\n'));
+  const sha = '3672575fbb918f6faaa66832a9e88ee3db0c43be',
+    f = sourceRead(t, dto, { sha });
+  assert.equal(f.r.status, 0, f.r.stdout);
+  assert(f.args.includes('repos/footprintjs/agentfootprint/contents/package.json?ref=' + sha));
+  const manifest = JSON.parse(f.output.slice('manifest='.length));
+  assert.equal(manifest.name, 'agentfootprint');
+  assert.equal(manifest.version, '13.0.0');
+  assert.equal(f.r.stdout, '');
+  assert.equal(f.r.stderr, '');
+});
+test('publisher source reader handles base64 line wrapping without changing JSON data', (t) => {
+  const manifest = { name: 'agentfootprint', version: '13.2.0', description: 'a'.repeat(200) };
+  for (const width of [1, 60, 76]) {
+    const dto = sourceDto(manifest);
+    dto.content = dto.content.match(new RegExp('.{1,' + width + '}', 'g')).join('\n') + '\n';
+    const f = sourceRead(t, dto);
+    assert.equal(f.r.status, 0, f.r.stdout);
+    assert.deepEqual(JSON.parse(f.output.slice('manifest='.length)), manifest);
+  }
+});

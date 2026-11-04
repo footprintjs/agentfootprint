@@ -184,15 +184,15 @@ test('release route: publisher disables scripts and uses an explicit tag only fo
   const publish = job('publish');
   assert(
     publish.includes('--ignore-scripts'),
-    'folder publication must disable package lifecycle scripts',
+    'archive publication must disable package lifecycle scripts',
   );
   assert(
     !publish.includes('NPM_TAG=latest'),
     'stable must retain implicit npm latest safety checks',
   );
   assert(
-    /jq[^\n]*version[^\n]*package.json/.test(publish),
-    'publish classifies the actual staged package',
+    publish.includes('verify.cjs" stage "$INCOMING_DIR/package.tgz" "$PWD"'),
+    'publish classifies the inspected archive manifest',
   );
 });
 
@@ -216,10 +216,12 @@ test('release route: actual publisher shell binds canonical RC package data to n
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(args, [
     'publish',
+    './package.tgz',
+    '--ignore-scripts',
     '--provenance',
     '--access',
     'public',
-    '--ignore-scripts',
+    '--registry=https://registry.npmjs.org',
     '--tag',
     'next',
   ]);
@@ -227,7 +229,15 @@ test('release route: actual publisher shell binds canonical RC package data to n
 test('release route: actual publisher shell preserves stable implicit latest and disables lifecycle scripts', (t) => {
   const { r, args } = stagedPublish(t, '13.2.0');
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(args, ['publish', '--provenance', '--access', 'public', '--ignore-scripts']);
+  assert.deepEqual(args, [
+    'publish',
+    './package.tgz',
+    '--ignore-scripts',
+    '--provenance',
+    '--access',
+    'public',
+    '--registry=https://registry.npmjs.org',
+  ]);
 });
 for (const version of ['014.0.0', '14.0.0-rc.01', '14.0.0-beta.1', '14.0.0+build.1', 4]) {
   test('release route: publisher refuses unsupported package version ' + String(version), (t) => {
@@ -344,90 +354,6 @@ test('release route: hostile lifecycle declarations cannot remove ignore-scripts
     assert(args.includes('--ignore-scripts'));
   }
 });
-
-for (const [version, config] of [
-  ['13.2.0', undefined],
-  ['14.0.0-rc.10', undefined],
-  ['14.0.0-rc.10', { registry: 'http://127.0.0.1:9/evil/' }],
-])
-  test(
-    'release route: actual native tar staging reaches the guarded publisher ' +
-      version +
-      (config ? ' config' : ' clean'),
-    (t) => {
-      const root = mkdtempSync(path.join(os.tmpdir(), 'release-tar-stage-'));
-      t.after(() => rmSync(root, { recursive: true, force: true }));
-      const input = path.join(root, 'input'),
-        stage = path.join(root, 'stage'),
-        bin = path.join(root, 'bin');
-      for (const dir of [path.join(input, 'package/dist'), stage, bin])
-        mkdirSync(dir, { recursive: true });
-      const manifest = {
-        name: 'agentfootprint',
-        version,
-        scripts: { prepublishOnly: 'exit 91' },
-        ...(config ? { publishConfig: config } : {}),
-      };
-      writeFileSync(path.join(input, 'package/package.json'), JSON.stringify(manifest) + '\n');
-      writeFileSync(path.join(input, 'package/dist/index.js'), 'exports.fixture=true;\n');
-      const archive = path.join(root, 'fixture.tgz');
-      const tar = spawnSync('/usr/bin/tar', ['-czf', archive, '-C', input, 'package'], {
-        encoding: 'utf8',
-        timeout: 10000,
-      });
-      assert.equal(tar.error, undefined);
-      assert.equal(tar.signal, null);
-      assert.equal(tar.status, 0, tar.stderr);
-      const pack = path.join(bin, 'npm');
-      writeFileSync(
-        pack,
-        '#!/bin/sh\n[ "$1" = pack ] || exit 90\n/bin/cp "$FIXTURE_ARCHIVE" "$PACKED_FILE"\n',
-      );
-      chmodSync(pack, 0o700);
-      const build = job('build'),
-        start = build.indexOf('      - name: Stage published package');
-      assert(start >= 0);
-      const block = build.slice(
-        start,
-        build.indexOf('      - uses: actions/upload-artifact@', start),
-      );
-      const match = /        run: \|\n([\s\S]*)/.exec(block);
-      assert(match, 'actual native package staging shell missing');
-      const script = match[1]
-        .split('\n')
-        .map((l) => (l.startsWith('          ') ? l.slice(10) : l))
-        .join('\n');
-      const staged = spawnSync(
-        '/bin/bash',
-        ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script],
-        {
-          cwd: stage,
-          encoding: 'utf8',
-          timeout: 10000,
-          env: {
-            PATH: bin + ':/usr/bin:/bin',
-            FIXTURE_ARCHIVE: archive,
-            PACKED_FILE: path.join(stage, 'packed.tgz'),
-          },
-        },
-      );
-      assert.equal(staged.error, undefined);
-      assert.equal(staged.signal, null);
-      assert.equal(staged.status, 0, staged.stderr);
-      const bytes = readFileSync(path.join(stage, 'pkg/package.json'));
-      const { r, args } = stagedPublish(t, version, version, {}, bytes, {
-        name: 'agentfootprint',
-        version: version.includes('-rc.') ? '13.2.0' : version,
-        scripts: { prepublishOnly: 'exit 91' },
-      });
-      assert.equal(r.status, config ? 1 : 0, r.stderr);
-      if (config) assert.deepEqual(args, []);
-      else {
-        assert(args.includes('--ignore-scripts'));
-        assert.equal(args.includes('--tag'), version.includes('-rc.'));
-      }
-    },
-  );
 
 for (const version of ['13.2.0', '14.0.0-rc.10'])
   for (const [key, value] of [
