@@ -488,7 +488,7 @@ describe('publish.yml · only the verdict can skip a gate, and only a gate', () 
   it('build requires the size gate even when verdict fallback reruns other gates, and nothing reaches npm untagged', () => {
     expect(build).toMatch(/^ {4}needs: \[plan, verdict, file-size\]$/m);
     expect(build).toContain(
-      "if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mode == 'publish' && needs.file-size.result == 'success' }}",
+      "if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc') && needs.file-size.result == 'success' }}",
     );
     expect(jobBlock(PUBLISH, 'release')).toContain("needs.build.result == 'success'");
     // A skipped `release` publishes only on the legacy trigger, whose tag exists.
@@ -501,7 +501,9 @@ describe('publish.yml · only the verdict can skip a gate, and only a gate', () 
     const size = jobBlock(PUBLISH, 'file-size');
     const ciSize = jobBlock(CI, 'file-size');
     expect(size).toMatch(/^ {4}needs: plan$/m);
-    expect(size).toContain("if: needs.plan.outputs.mode == 'publish'");
+    expect(size).toContain(
+      "if: needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc'",
+    );
     expect(size).toContain('source_sha: ${{ needs.plan.outputs.sha }}');
     const uses = /^ {4}uses: (.+)$/m.exec(ciSize)?.[1];
     const pin = uses?.split('@')[1];
