@@ -81,11 +81,27 @@ it('session report keyHash joins the actual public isolation key', async () => {
   expect(actual).toEqual([expected, expected]);
 });
 
-it('local status observes the tier-wide shutdown row without claiming remote closure', () => {
-  expect(localResourceStatus([{ fired: false, scope: 'shutdown' }], 'turn', 'conversation')).toBe(
-    'retained',
-  );
-  expect(localResourceStatus([{ fired: true, scope: 'shutdown' }], 'turn', 'conversation')).toBe(
+it.each([
+  ['own call', [{ fired: false, scope: 'call', partition: 'turn' }], 'retained'],
+  ['own run', [{ fired: false, scope: 'run', partition: 'turn' }], 'retained'],
+  ['own session', [{ fired: false, scope: 'session', partition: 'conversation' }], 'retained'],
+  ['foreign run', [{ fired: false, scope: 'run', partition: 'other' }], 'none-known-locally'],
+  [
+    'foreign session',
+    [{ fired: false, scope: 'session', partition: 'other' }],
     'none-known-locally',
-  );
-});
+  ],
+  ['tier-wide shutdown', [{ fired: false, scope: 'shutdown' }], 'none-known-locally'],
+  ['retired run', [{ fired: true, scope: 'run', partition: 'turn' }], 'none-known-locally'],
+  [
+    'retired session',
+    [{ fired: true, scope: 'session', partition: 'conversation' }],
+    'none-known-locally',
+  ],
+  ['retired shutdown', [{ fired: true, scope: 'shutdown' }], 'none-known-locally'],
+] as const)(
+  'local status reports only matching live registrations: %s',
+  (_case, rows, expected) => {
+    expect(localResourceStatus(rows, 'turn', 'conversation')).toBe(expected);
+  },
+);

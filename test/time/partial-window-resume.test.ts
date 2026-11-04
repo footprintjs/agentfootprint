@@ -145,7 +145,11 @@ for (const mode of ['dynamic', 'dynamic-grouped'])
           },
           admissionWorker,
         );
-        expect(refused.refused).toEqual({ name: 'Error', message: 'Non-JSON value.' });
+        expect(refused.refused).toEqual({
+          name: 'TypeError',
+          message:
+            'Cannot resume this pause: the saved tool ownership carrier is missing or unreadable. Close this question and start a new run.',
+        });
         expect(refused.index).toBe(old.index);
         expect(refused.requests).toEqual([]);
         expect(refused.seen).toEqual([]);
