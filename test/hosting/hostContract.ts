@@ -108,6 +108,7 @@ export const CONTRACT_ASK: PendingAsk = {
 };
 
 let release: (() => void) | undefined;
+let slowRequestEntered: (() => void) | undefined;
 
 /** Let a `SLOW` request finish. Safe to call when nothing is waiting. */
 export function releaseSlowRequest(): void {
@@ -151,6 +152,8 @@ export const contractHandler: HostHandler = async (request, reply) => {
   if (request.input === SLOW) {
     await new Promise<void>((resolve) => {
       release = resolve;
+      slowRequestEntered?.();
+      slowRequestEntered = undefined;
     });
   }
   for (const chunk of EXPECTED_CHUNKS) reply.emit?.(chunk);
@@ -340,19 +343,34 @@ export function describeHostContract(subject: HostUnderTest): void {
       async () => {
         const handle = await serving();
         const slowRequest: ContractRequest = { input: SLOW };
+        const inHandler = new Promise<void>((resolve) => {
+          slowRequestEntered = resolve;
+        });
         const inFlight = subject.invoke(handle, slowRequest);
-        // Give the request time to reach the handler and park there.
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        try {
+          // The handler signals only after installing its release callback.
+          // A request that ends before entry is a failure, never a drain proof.
+          expect(
+            await Promise.race([
+              inHandler.then(() => 'entered'),
+              inFlight.then(() => 'finished before entry'),
+            ]),
+          ).toBe('entered');
 
-        const closing = handle.close();
-        const afterClose = await subject.invoke(handle, { input: 'too late' });
-        expect(afterClose.output).toBeUndefined();
-        expect(afterClose.error).toMatch(/is closed/);
+          const closing = handle.close();
+          const afterClose = await subject.invoke(handle, { input: 'too late' });
+          expect(afterClose.output).toBeUndefined();
+          expect(afterClose.error).toMatch(/is closed/);
 
-        releaseSlowRequest();
-        await closing;
-        const drained = await inFlight;
-        expect(drained.output).toBe(expectedOutput(slowRequest));
+          releaseSlowRequest();
+          await closing;
+          const drained = await inFlight;
+          expect(drained.output).toBe(expectedOutput(slowRequest));
+        } finally {
+          slowRequestEntered = undefined;
+          releaseSlowRequest();
+          await handle.close();
+        }
       },
     );
 
