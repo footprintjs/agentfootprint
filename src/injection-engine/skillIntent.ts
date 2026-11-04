@@ -20,7 +20,7 @@ import { decideTier2, type RoutingPolicy } from './routingPolicy.js';
 import type { GraphCheckup, GraphProblem } from './skillGraphCheckup.js';
 
 /** The slice of an entry declaration this module reads — structural, so
- *  `skillGraph.ts`'s module-private `EntryDecl` satisfies it unchanged. */
+ *  `skillGraph/graphRoutes.ts`'s internal `EntryDecl` satisfies it unchanged. */
 export interface IntentEntryDecl {
   readonly id: string;
   readonly when?: (ctx: InjectionContext) => boolean;

@@ -17,7 +17,8 @@
  * Deliberately engine-type-free (the predicate context is structural —
  * `{ userMessage }` — which the engine's `InjectionContext` satisfies), so
  * `skillGraphCheckup.ts` can import it and keep its own "pure over strings"
- * law intact. Imported by `skillGraph.ts` (compile + caption) and
+ * law intact. Imported by `skillGraph.ts` (compile), `skillGraph/graphDrawing.ts`
+ * (caption) and
  * `skillGraphCheckup.ts` (data type + compare); imports nothing.
  */
 

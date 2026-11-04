@@ -172,7 +172,7 @@ function grantableRows(
 
 // LENS · tool-description · request-ephemeral
 // reads: the role filter ← `skillToolDescriptors.ts` · visibleSkills, applied FIRST so nothing below can name a hidden skill
-//        grantable ← skillGraph.ts · makeReachableSkills ∪ openSkillIds; class ← skillGraph.ts · classifySkillTarget
+//        grantable ← skillGraph/reachability.ts · makeReachableSkills ∪ openSkillIds; class ← skillGraph/reachability.ts · classifySkillTarget
 //        named/held ← spoken (src/lib/spokenIds.ts); the cursor ← offer.cursorId, re-checked against hidden
 // the negative sentence is gated on !hopsSpoken.held: a set the filter emptied drops its clause.
 // law: may omit, never deny; every clause anchored to the call it was composed on.
