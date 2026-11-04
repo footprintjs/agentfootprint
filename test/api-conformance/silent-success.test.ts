@@ -607,7 +607,7 @@ describe('silent success — reading a run', () => {
 
     for (const [file, sentence] of [
       ['core/Agent.ts', 'It is LIVE during a run, not a completed-runs-only view'],
-      ['core/RunnerBase.ts', '**Live during a run.**'],
+      ['core/RunnerBase.ts', 'During preparation before native origin this returns'],
     ] as const) {
       expect(read(file)).toContain(sentence);
     }

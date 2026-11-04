@@ -1,6 +1,6 @@
 import type { buildCallStart } from './callStart.js';
 import type { buildToolArtifactsOperations } from './artifactsOperations.js';
-import type { CallArguments, CallOutcome } from '../contracts/callCells.js';
+import type { CallArguments, CallResultCell } from '../contracts/callCells.js';
 import type { CallArtifactInputs } from '../contracts/invocationInputs.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -16,7 +16,7 @@ interface AdmitWantedArgumentsFrame {
   readonly tool: NonNullable<CallStartFacts['tool']>;
   readonly callArguments: CallArguments;
   readonly wanted: CallArtifactInputs;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
 }
 
 /** Existing wantedArguments body; original guard and native pause return stay with the handler. */

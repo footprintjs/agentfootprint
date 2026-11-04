@@ -1,4 +1,4 @@
-import type { CallArguments, CallExecution, CallOutcome } from '../contracts/callCells.js';
+import type { CallArguments, CallExecution, CallResultCell } from '../contracts/callCells.js';
 import type { buildCallStart } from '../execution/callStart.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
@@ -21,7 +21,7 @@ interface CapabilityQuestionBindings {
   readonly tc: DispatchCall;
   readonly callArguments: CallArguments;
   readonly execution: CallExecution;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
 }
 
 /** Bind the existing per-call capability question to its original live cells. */

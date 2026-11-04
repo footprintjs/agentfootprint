@@ -1,7 +1,7 @@
 import type { buildCallStart } from '../execution/callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type { buildToolSettlementOperations } from '../batch/settlementOperations.js';
-import type { CallArguments, CallConsentGate, CallOutcome } from '../contracts/callCells.js';
+import type { CallArguments, CallConsentGate, CallResultCell } from '../contracts/callCells.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { buildToolArtifactsOperations } from '../execution/artifactsOperations.js';
 import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.js';
@@ -36,7 +36,7 @@ interface AdmitCheckInCallFrame {
   readonly resolved: CallStartFacts['resolved'];
   readonly decisionLedger: DecisionLedger;
   readonly consentGate: CallConsentGate;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly resolution: ReturnType<ReturnType<InputsDispatch['resolutionsFor']>['get']>;
   readonly assertComponentDeliverable: ReturnType<
     typeof buildToolArtifactsOperations

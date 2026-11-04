@@ -1,3 +1,4 @@
+import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
 /**
  * A lookup that pauses still declares what it looked at (9.114.0).
  *
@@ -773,8 +774,9 @@ const REFERENCE = resolve(__dirname, 'reference/paused-lookup-no-absence.json');
 
 /** Every run-varying number dropped: timings and fire times. */
 /** Expected-side clean14 metadata only; historical behavior/payload/order stay exact. */
-const nativeOwnershipKeys = (legacy: readonly string[]): string[] => {
+const nativeOwnershipKeys = (legacy: readonly string[], savedPause = false): string[] => {
   const added = ['runIdentitySource', 'runSessionId', 'toolResourceOwner'];
+  if (savedPause) added.push('servedToolParties');
   for (const key of added) expect(legacy).not.toContain(key);
   return [...legacy, ...added].sort();
 };
@@ -828,9 +830,9 @@ describe('regression: a raise WITHOUT `absence` records what 9.113.0 recorded', 
       expect(existsSync(REFERENCE), 'no reference — capture it on the pre-change tree').toBe(true);
       const legacy = JSON.parse(readFileSync(REFERENCE, 'utf8'));
       expect(record).toEqual({
-        ...legacy,
-        keysAtPause: nativeOwnershipKeys(legacy.keysAtPause),
-        keysAfterResume: nativeOwnershipKeys(legacy.keysAfterResume),
+        ...withNativeResourceObservation(legacy),
+        keysAtPause: nativeOwnershipKeys(legacy.keysAtPause, true),
+        keysAfterResume: nativeOwnershipKeys(legacy.keysAfterResume, true),
       });
     },
   );

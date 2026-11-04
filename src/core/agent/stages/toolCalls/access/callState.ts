@@ -1,6 +1,6 @@
 import type { buildCallStart } from '../execution/callStart.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
-import type { CallOutcome, CallArguments, CallExecution } from '../contracts/callCells.js';
+import type { CallResultCell, CallArguments, CallExecution } from '../contracts/callCells.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 
@@ -14,7 +14,7 @@ export function prepareCallState(
   inputs: InputsDispatch | undefined,
   args: CallStartFacts['args'],
 ) {
-  const outcome: CallOutcome = {
+  const outcome: CallResultCell = {
     result: findingsRefusal,
     error: findingsRefusal === undefined ? undefined : true,
     /** The typed effects channel (9.19.0) — set only when the tool

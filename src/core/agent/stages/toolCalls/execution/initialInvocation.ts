@@ -1,7 +1,7 @@
 import type { buildCallStart } from './callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type { buildToolCatalogOperations } from './catalogOperations.js';
-import type { CallArguments, CallExecution, CallOutcome } from '../contracts/callCells.js';
+import type { CallArguments, CallExecution, CallResultCell } from '../contracts/callCells.js';
 import type { buildToolCredentialsOperations } from './credentialsOperations.js';
 import type { CallCredentialInput, CallArtifactInputs } from '../contracts/invocationInputs.js';
 import type { buildToolContextOperations } from './contextOperations.js';
@@ -70,7 +70,7 @@ interface InvokeInitialToolFrame {
   readonly execution: CallExecution;
   readonly runFactsOf: ReturnType<typeof buildToolResourcesOperations>['runFactsOf'];
   readonly programOfCall: ReturnType<typeof buildToolScriptsOperations>['programOfCall'];
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly takeCodeRun: ReturnType<typeof buildToolScriptsOperations>['takeCodeRun'];
   readonly warnEffect: ReturnType<typeof buildToolEffectsOperations>['warnEffect'];
   readonly declareCoverage: ReturnType<typeof buildToolCoverageOperations>['declareCoverage'];

@@ -1,3 +1,4 @@
+import { productionSources } from '../helpers/productionSources.js';
 /**
  * EVERY CANCELLATION GOES THROUGH THE ONE RULE.
  *
@@ -14,7 +15,7 @@
  * '<path>/lib/abort.js'`.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -36,15 +37,7 @@ const DEFINES = new RegExp(
   'g',
 );
 
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (full.endsWith('.ts')) out.push(full);
-  }
-  return out;
-}
+const walk = productionSources;
 
 /** Every private definition of an owned name in one source, as `file — name`. */
 function privateCopies(file: string, source: string): string[] {

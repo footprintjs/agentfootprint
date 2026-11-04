@@ -530,10 +530,10 @@
       "tool": "withdrawn_tool",
       "epoch": 2,
       "contract": "not offered this epoch",
-      "answered": "refused",
+      "answered": "unroutable",
       "reported": "none",
-      "cause": "offered in an earlier epoch and refused in epoch 2: the last-served party no longer answers, so dispatch refuses rather than substituting another party",
-      "tolerated": "The provider's current catalog withdrew this earlier offer. The retained last-served party is known but has no current implementation, so dispatch returns a named refusal instead of treating the name as unknown. Nothing restores the withdrawn tool or substitutes another party; retaining every implementation would defeat provider withdrawal. The offer-withdrawn divergence remains recorded."
+      "cause": "offered in an earlier epoch and unroutable in epoch 2: the implementation is resolved from this epoch's provider list, so withdrawing the offer withdrew dispatch with it",
+      "tolerated": "The current provider catalog withdrew this name. With no current holder the call is unroutable and receives the unknown-name roster; it never substitutes a different party or revives the withdrawn implementation. The original offer-withdrawn divergence remains recorded; this is the corrected SF1 wording, not a new tolerance."
     },
     "cross-epoch/flat-graph-scoped-out::billing_tool@e1::answered-off-wire": {
       "case": "cross-epoch/flat-graph-scoped-out",
@@ -578,10 +578,10 @@
       "tool": "scoped_tool",
       "epoch": 4,
       "contract": "not offered this epoch",
-      "answered": "refused",
+      "answered": "unroutable",
       "reported": "none",
-      "cause": "offered in an earlier epoch and refused in epoch 4: the last-served party no longer answers, so dispatch refuses rather than substituting another party",
-      "tolerated": "The provider's current catalog withdrew this earlier offer. The retained last-served party is known but has no current implementation, so dispatch returns a named refusal instead of treating the name as unknown. Nothing restores the withdrawn tool or substitutes another party; retaining every implementation would defeat provider withdrawal. The offer-withdrawn divergence remains recorded."
+      "cause": "offered in an earlier epoch and unroutable in epoch 4: the implementation is resolved from this epoch's provider list, so withdrawing the offer withdrew dispatch with it",
+      "tolerated": "The current provider catalog withdrew this name. With no current holder the call is unroutable and receives the unknown-name roster; it never substitutes a different party or revives the withdrawn implementation. The original offer-withdrawn divergence remains recorded; this is the corrected SF1 wording, not a new tolerance."
     },
     "cross-epoch/step-hold-out::export_receipt@e2::answered-off-wire": {
       "case": "cross-epoch/step-hold-out",

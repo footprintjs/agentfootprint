@@ -8,7 +8,7 @@ import type { NegativeDispatch } from '../../../negativeClaims/capture.js';
 
 /** Invocation-local phase cells; never checkpoint state or a run registry. */
 
-export interface CallOutcome {
+export interface CallResultCell {
   result: unknown;
   error: boolean | undefined;
   toolEnvelope: ReadToolResultEnvelope | undefined;

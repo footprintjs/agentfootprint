@@ -1,7 +1,7 @@
 /**
  * Preserve the historical main stream, with the one AF14 migration:
  * domain metadata uses the native run ID instead of a second minted ID.
- * Payloads, event order, field order and all other metadata remain byte-pinned.
+ * One explicit local resource-status event is added; original payloads, event order, field order and all other metadata remain byte-pinned.
  * The historical fixture is NEVER regenerated from this branch.
  */
 import { readFileSync } from 'node:fs';
@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { noPolicyStream } from './noPolicyStream.scenario.js';
 
 describe('no policy preserves the whole stream with native run identity', () => {
-  it('changes only the exact metadata alias mapping of this historical scenario', async () => {
+  it('changes only the exact metadata aliases and one named restoration observation', async () => {
     const golden = readFileSync(join(__dirname, 'fixtures/no-policy-stream.main.json'), 'utf8');
     expect(createHash('sha256').update(golden).digest('hex')).toBe(
       '9cb03cd5de896e574fcf35262ec1954205a6c9f1330412565216166f0cd4d241',
@@ -40,6 +40,18 @@ describe('no policy preserves the whole stream with native run identity', () => 
       if (source?.engineRunId !== undefined) source.engineRunId = nativeAlias(source.engineRunId);
       if (source?.logRunId !== undefined) source.logRunId = nativeAlias(source.logRunId);
     }
+    (events as unknown[]).splice(73, 0, {
+      type: 'agentfootprint.tools.resource_restore',
+      payload: { local: 'none-known-locally', remote: 'unknown' },
+      meta: {
+        wallClockMs: '<n>',
+        runOffsetMs: '<n>',
+        runtimeStageId: 'tool-teardown#0',
+        subflowPath: [],
+        compositionPath: ['Agent:agent'],
+        runId: 'run#2',
+      },
+    });
     expect(await noPolicyStream()).toBe(JSON.stringify(events, null, 1));
   });
 });

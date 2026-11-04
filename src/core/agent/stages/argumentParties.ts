@@ -76,7 +76,8 @@ function callsOfValue(calls: unknown): readonly CallIdentity[] {
 /** Admit the selected native leaf before origin, including omitted ask configuration. */
 export function requireArgumentPartyCheckpoint(checkpoint: FlowchartCheckpoint): void {
   const path = checkpoint.subflowPath;
-  if (!Array.isArray(path)) invalid();
+  if (!Array.isArray(path) || path.some((segment) => typeof segment !== 'string'))
+    throw new Error('Invalid checkpoint: subflowPath must be an array of strings.');
   const last = path[path.length - 1];
   const leaf =
     path.length === 0

@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-384 exported from `agentfootprint`.
+387 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -281,7 +281,10 @@ title: Interfaces
 - [`RunConfigContext`](/docs/api/interfaces/RunConfigContext)
 - [`RunContext`](/docs/api/interfaces/RunContext)
 - [`Runner`](/docs/api/interfaces/Runner)
+- [`RunnerCoreValues`](/docs/api/interfaces/RunnerCoreValues)
+- [`RunnerInvocation`](/docs/api/interfaces/RunnerInvocation)
 - [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)
+- [`RunnerSelection`](/docs/api/interfaces/RunnerSelection)
 - [`RunTime`](/docs/api/interfaces/RunTime)
 - [`S3ArtifactsOptions`](/docs/api/interfaces/S3ArtifactsOptions)
 - [`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder)

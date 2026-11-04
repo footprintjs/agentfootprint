@@ -1,7 +1,7 @@
 import type { buildCallStart } from '../execution/callStart.js';
 import type {
   CallExecution,
-  CallOutcome,
+  CallResultCell,
   CallArgumentGate,
   CallConsentGate,
 } from '../contracts/callCells.js';
@@ -22,7 +22,7 @@ interface ArgumentGateFrame {
   readonly tool: CallStartFacts['tool'];
   readonly iteration: number;
   readonly execution: CallExecution;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
 }
 
 /** The original streamed-argument refusal and ruled-tool admission probes. */

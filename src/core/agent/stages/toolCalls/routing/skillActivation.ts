@@ -1,5 +1,5 @@
 import type {
-  CallOutcome,
+  CallResultCell,
   CallExecution,
   CallSkillRoute,
   CallArguments,
@@ -11,7 +11,7 @@ import type { DispatchCall } from '../contracts/batchCall.js';
 
 interface ActivateLandedSkillFrame {
   readonly tc: DispatchCall;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly execution: CallExecution;
   readonly skillRoute: CallSkillRoute;
   readonly callArguments: CallArguments;

@@ -1,3 +1,4 @@
+import { productionSources } from '../helpers/productionSources.js';
 /**
  * EVERY PROMISED MINIMUM GOES THROUGH THE ONE SLEEP.
  *
@@ -27,22 +28,14 @@
  * flagged, and every non-minimum timer shape in `src/` is not.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(__dirname, '..', '..');
 
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (full.endsWith('.ts')) out.push(full);
-  }
-  return out;
-}
+const walk = productionSources;
 
 const isNamed = (node: ts.Node, name: string): boolean =>
   (ts.isIdentifier(node) && node.text === name) ||

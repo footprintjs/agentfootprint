@@ -1,3 +1,4 @@
+import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
 /**
  * `short` and `kind` on a coverage item are RECORD-ONLY.
  *
@@ -248,7 +249,7 @@ describe('record-only fields — a run that declares neither is byte-identical t
       all[key],
       `no reference for '${key}' — generate it on the pre-change tree`,
     ).toBeDefined();
-    expect(record).toEqual(all[key]);
+    expect(record).toEqual(withNativeResourceObservation(all[key] as { eventTypes: string[] }));
     // And no stamp: the model read `result` itself.
     expect('modelResult' in endOf(h)).toBe(false);
   });

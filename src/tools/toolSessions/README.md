@@ -6,5 +6,6 @@ The canonical toolSessions.ts facade owns the stateful session tier, registratio
 
 - contracts.ts owns teardown contracts and primitive defaults.
 - keys.ts owns partition keys and their digest, including the one lazy crypto cache.
+- localStatus.ts reports only locally known registration retention. It never proves remote liveness or closure.
 
 Public names remain exported by the canonical facade. Neither leaf imports that facade at runtime. No live handle or cache value crosses a checkpoint.

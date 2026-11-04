@@ -1,6 +1,6 @@
 import type { buildCallStart } from '../execution/callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
-import type { CallArguments, CallExecution, CallOutcome } from '../contracts/callCells.js';
+import type { CallArguments, CallExecution, CallResultCell } from '../contracts/callCells.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { buildToolArtifactsOperations } from '../execution/artifactsOperations.js';
 import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.js';
@@ -36,7 +36,7 @@ interface AdmitMiddlewareCallFrame {
   readonly inputs: InputsDispatch | undefined;
   readonly invalidateViews: CallStartFacts['invalidateViews'];
   readonly execution: CallExecution;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly askedLayer: InputsDispatch | undefined;
   readonly resolution: ReturnType<ReturnType<InputsDispatch['resolutionsFor']>['get']>;
   readonly assertComponentDeliverable: ReturnType<

@@ -1,5 +1,5 @@
 import type {
-  CallOutcome,
+  CallResultCell,
   CallExecution,
   CallArguments,
   CallSkillRoute,
@@ -26,7 +26,7 @@ interface ReadSkillRouteBindings {
   readonly iteration: number;
   readonly parkedNow: ToolCatalogOperations['parkedNow'];
   readonly noteSkillRefusal: ToolStepsOperations['noteSkillRefusal'];
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly execution: CallExecution;
   readonly callArguments: CallArguments;
   readonly skillRoute: CallSkillRoute;

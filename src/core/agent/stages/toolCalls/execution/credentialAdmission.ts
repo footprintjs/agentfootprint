@@ -8,7 +8,7 @@ import {
   CONSENT_PAUSE_KEY,
   modelRefusal,
 } from '../../../../../identity/consent.js';
-import type { CallArguments, CallOutcome } from '../contracts/callCells.js';
+import type { CallArguments, CallResultCell } from '../contracts/callCells.js';
 import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import type { TypedScope } from 'footprintjs';
@@ -40,7 +40,7 @@ interface AdmitToolCredentialFrame {
   readonly iteration: number;
   readonly proposedProgram: CallStartFacts['proposedProgram'];
   readonly programOfCall: ReturnType<typeof buildToolScriptsOperations>['programOfCall'];
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly askedLayer: InputsDispatch | undefined;
   readonly resolution: ReturnType<ReturnType<InputsDispatch['resolutionsFor']>['get']>;
 }

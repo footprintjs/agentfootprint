@@ -4,7 +4,7 @@ title: DecisionLedger
 
 # Interface: DecisionLedger
 
-Defined in: [src/core/consentRequest.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L169)
+Defined in: [src/core/consentRequest.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L163)
 
 Where the consent requests that have been answered are recorded, so one
 decision runs one call — once per LEDGER.
@@ -23,7 +23,7 @@ store they all reach (`Agent.create({ decisionLedger })`).
 
 > `readonly` `optional` **storeId?**: `string`
 
-Defined in: [src/core/consentRequest.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L190)
+Defined in: [src/core/consentRequest.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L184)
 
 OPTIONAL — the identity of the store this ledger records into. A host that
 closes a pause no answer can reach asks the ledger the pause was minted
@@ -50,7 +50,7 @@ Spends in it are permanent too (no expiry) — see `spend`.
 
 > `optional` **isSpent**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:219](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L219)
+Defined in: [src/core/consentRequest.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L213)
 
 OPTIONAL — whether `requestId` is recorded as answered, without recording
 it. Asked only after a [DecisionLedger.spend](/docs/api/interfaces/DecisionLedger#spend) for it failed, so a
@@ -80,7 +80,7 @@ elsewhere; only `spend` proves.
 
 > **spend**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L205)
+Defined in: [src/core/consentRequest.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L199)
 
 Record `requestId` as answered. Resolve `true` when THIS call recorded it
 and `false` when it was already recorded — atomically per id: of two

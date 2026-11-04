@@ -80,7 +80,7 @@ beforeAll(async () => {
     admissionWorker,
     WORKER.replace(
       terminal,
-      '  } catch (error) { return {refused:{name:error.name,code:error.code},seen,requests,index}; } finally {await agent.shutdown();}',
+      '  } catch (error) { return {refused:{name:error.name,code:error.code,message:error.message},seen,requests,index}; } finally {await agent.shutdown();}',
     ),
   );
   // A current producer without period forms may keep an ordinary endpoint.
@@ -145,7 +145,7 @@ for (const mode of ['dynamic', 'dynamic-grouped'])
           },
           admissionWorker,
         );
-        expect(refused.refused.name).toBe('ResumeIdentityConflictError');
+        expect(refused.refused).toEqual({ name: 'Error', message: 'Non-JSON value.' });
         expect(refused.index).toBe(old.index);
         expect(refused.requests).toEqual([]);
         expect(refused.seen).toEqual([]);

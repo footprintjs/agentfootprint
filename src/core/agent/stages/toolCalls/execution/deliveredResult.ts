@@ -3,7 +3,7 @@ import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type {
   CallDelivery,
   CallExecution,
-  CallOutcome,
+  CallResultCell,
   CallSkillRoute,
   CallArguments,
 } from '../contracts/callCells.js';
@@ -30,7 +30,7 @@ interface LandCallResultFrame {
   readonly delivery: CallDelivery;
   readonly execution: CallExecution;
   readonly tc: DispatchCall;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly skillRoute: CallSkillRoute;
   readonly callArguments: CallArguments;
   readonly readSkillStepIntroFor: ReturnType<

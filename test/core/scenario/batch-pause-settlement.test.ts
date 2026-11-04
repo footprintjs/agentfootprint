@@ -1,3 +1,4 @@
+import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
 import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * THE BATCH SETTLEMENT (9.113.0) — a paused batch's un-dispatched siblings.
@@ -622,7 +623,7 @@ describe('batch settlement — a batch whose LAST call pauses is byte-identical 
       all[kind],
       `no reference for '${kind}' — generate it on the pre-change tree`,
     ).toBeDefined();
-    expect(record).toEqual(all[kind]);
+    expect(record).toEqual(withNativeResourceObservation(all[kind] as { eventTypes: string[] }));
   });
 });
 

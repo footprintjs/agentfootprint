@@ -4,7 +4,7 @@ title: GraphEdge
 
 # Interface: GraphEdge
 
-Defined in: [src/core-flow/Graph.ts:168](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L168)
+Defined in: [src/core-flow/Graph.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L162)
 
 A directed dependency: `from` must finish before `to` starts.
 
@@ -14,7 +14,7 @@ A directed dependency: `from` must finish before `to` starts.
 
 > `readonly` **from**: `string`
 
-Defined in: [src/core-flow/Graph.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L169)
+Defined in: [src/core-flow/Graph.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L163)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [src/core-flow/Graph.ts:169](https://github.com/footprintjs/agentfoo
 
 > `readonly` **to**: `string`
 
-Defined in: [src/core-flow/Graph.ts:170](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L170)
+Defined in: [src/core-flow/Graph.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L164)

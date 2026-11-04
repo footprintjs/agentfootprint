@@ -122,14 +122,11 @@ Both replace behavior that used to **succeed** while being wrong.
 
 ### A second run while one is in flight
 
-`RunInFlightError`:
+A second operation on the same runner throws the native `RunInFlightError`. Match its `ERR_RUN_IN_FLIGHT` code; `runnerId` names the runner and `activeRunId` may be absent. Await the first operation before starting another on that instance.
 
-```text
-Agent.run: this agent is already running (run 'run-…-3').
-One instance answers one turn at a time — …
-```
+The chart is built once. Invocation data belongs to the native component occurrence, including independently mounted children, rather than a mutable current-run field on the Agent. Checkpoint and snapshot readers select that runner's native view. During preparation before native origin they return `undefined`; commit counts are zero and narrative entries are empty. Capture a completed record before starting the next operation.
 
-An `Agent` keeps its last executor, run context, answer and pause on itself; that is what makes `checkpoint()`, `getLastSnapshot()` and `followUp()` possible. Two overlapping runs both used to finish, both returning plausible answers, and the state afterwards belonged to whichever finished last — so `checkpoint()` could hand you the *other* run's conversation. That is corruption, not concurrency.
+Custom `RunnerBase` subclasses use `RunnerCoreValues` for their private invocation fields and supply the native configuration and initializer to `initChart`. Execute through `runExecution().withRun`, using its `RunnerInvocation` and passing that invocation to `detectPause`. `RunnerSelection` describes a selected value/view and `RunnerMetadata` supplies runner identity and composition coordinates. `lastExecutor` and `openRunRedaction` are removed; rebuild old subclasses using `prepareRunRedaction` and native setup.
 
 Two turns at once: build two agents (a chart is built per instance, and instances are cheap), or serve them through `standingAgent({ onConcurrentInvoke: 'enqueue' })`.
 

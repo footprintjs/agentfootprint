@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-149 exported from `agentfootprint`.
+150 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -106,6 +106,7 @@ title: Type Aliases
 - [`RunbookPresentation`](/docs/api/type-aliases/RunbookPresentation)
 - [`RunbookProcedure`](/docs/api/type-aliases/RunbookProcedure)
 - [`RunConfigFn`](/docs/api/type-aliases/RunConfigFn)
+- [`RunnerMetadata`](/docs/api/type-aliases/RunnerMetadata)
 - [`ScriptBlockVerdict`](/docs/api/type-aliases/ScriptBlockVerdict)
 - [`ScriptLabel`](/docs/api/type-aliases/ScriptLabel)
 - [`SemanticIssueCode`](/docs/api/type-aliases/SemanticIssueCode)

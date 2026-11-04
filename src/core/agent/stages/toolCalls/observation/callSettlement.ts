@@ -1,6 +1,6 @@
 import type { buildCallStart } from '../execution/callStart.js';
 import type { buildToolScriptsOperations } from '../evidence/scriptsOperations.js';
-import type { CallExecution, CallArguments, CallOutcome } from '../contracts/callCells.js';
+import type { CallExecution, CallArguments, CallResultCell } from '../contracts/callCells.js';
 import type { buildToolObservationsOperations } from './observationsOperations.js';
 import type { buildToolLimitsOperations } from '../decorators/limitsOperations.js';
 import type { changedArgKeys } from '../../../../toolShownArgs.js';
@@ -22,7 +22,7 @@ interface RecordCallSettlementFrame {
   readonly emitToolEnd: ReturnType<typeof buildToolObservationsOperations>['emitToolEnd'];
   readonly capped: ReturnType<ReturnType<typeof buildToolLimitsOperations>['capResults']>;
   readonly durationMs: number;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
   readonly modelResult: unknown;
   readonly changedKeys: ReturnType<typeof changedArgKeys>;
 }

@@ -2,7 +2,7 @@ import type { buildCallStart } from '../execution/callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
-import type { CallExecution, CallOutcome } from '../contracts/callCells.js';
+import type { CallExecution, CallResultCell } from '../contracts/callCells.js';
 import { extractSequence } from '../../../../../security/extractSequence.js';
 import { checkerContextOf } from './bindings.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
@@ -24,7 +24,7 @@ interface CheckToolPermissionFrame {
   readonly env: DispatchContext['env'];
   readonly emitSecurity: CallStartFacts['emitSecurity'];
   readonly execution: CallExecution;
-  readonly outcome: CallOutcome;
+  readonly outcome: CallResultCell;
 }
 
 /** Existing toolPermission body; the owning handler retains its admission guard and native pause return. */

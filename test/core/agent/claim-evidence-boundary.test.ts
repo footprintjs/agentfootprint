@@ -496,25 +496,43 @@ describe('public-Agent seam: governed results, identity and replay', () => {
     expect(check.scope.region).toBe('west');
   });
 
-  it('two actual calls in one batch receive distinct host reservations despite the same provider ID', async () => {
-    const fixture = seam({
-      replies: [
-        {
-          toolCalls: [
-            { id: 'repeated', name: 'read_count', args: { region: 'west' } },
-            { id: 'repeated', name: 'read_count', args: { region: 'east' } },
-          ],
-        },
-        { content: 'done' },
-      ],
-    });
-    await fixture.agent.run({ message: 'Read the two regions.' });
-    expect(fixture.executions.map((execution) => execution.args.region)).toEqual(['west', 'east']);
-    const results = [fixture.resultAt(0), fixture.resultAt(1)];
-    expect(new Set(results.map((result) => result.id)).size).toBe(2);
-    expect(new Set(results.map((result) => result.iteration)).size).toBe(1);
-    expect(results.map((result) => result.facts?.[0]?.value)).toEqual([30, 40]);
-  });
+  it.each(['same-batch', 'sequential'] as const)(
+    'physical calls receive distinct host reservations: %s',
+    async (shape) => {
+      const fixture = seam({
+        replies:
+          shape === 'same-batch'
+            ? [
+                {
+                  toolCalls: [
+                    { id: 'west-call', name: 'read_count', args: { region: 'west' } },
+                    { id: 'east-call', name: 'read_count', args: { region: 'east' } },
+                  ],
+                },
+                { content: 'done' },
+              ]
+            : [
+                { toolCalls: [{ id: 'repeated', name: 'read_count', args: { region: 'west' } }] },
+                { toolCalls: [{ id: 'repeated', name: 'read_count', args: { region: 'east' } }] },
+                { content: 'done' },
+              ],
+      });
+      await fixture.agent.run({ message: 'Read the two regions.' });
+      expect(fixture.executions.map((execution) => execution.args.region)).toEqual([
+        'west',
+        'east',
+      ]);
+      const results = [fixture.resultAt(0), fixture.resultAt(1)];
+      expect(new Set(results.map((result) => result.id)).size).toBe(2);
+      expect(new Set(results.map((result) => result.iteration)).size).toBe(
+        shape === 'same-batch' ? 1 : 2,
+      );
+      expect(new Set(results.map((result) => result.toolCallId)).size).toBe(
+        shape === 'same-batch' ? 2 : 1,
+      );
+      expect(results.map((result) => result.facts?.[0]?.value)).toEqual([30, 40]);
+    },
+  );
 
   it('a fresh resumed Agent can repeat provider ID and iteration without replacing the retained receipt', async () => {
     const first = seam();

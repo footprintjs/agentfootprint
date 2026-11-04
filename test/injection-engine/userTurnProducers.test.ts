@@ -1,3 +1,4 @@
+import { productionSources } from '../helpers/productionSources.js';
 /**
  * THE WALK — every producer of a `role: 'user'` message in this tree,
  * classified, with nowhere for a new one to hide (9.86.0).
@@ -60,7 +61,7 @@
  * the window that the two unregistered frames used to fool).
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 import ts from 'typescript';
@@ -120,6 +121,12 @@ interface Site {
  */
 const SITES: Readonly<Record<string, readonly Site[]>> = {
   // ── (a) authored frames — the library writing in a person's voice ──
+  'src/core/agent/stages/toolCalls/batch/refusal.ts': [
+    {
+      cls: 'authored-frame',
+      why: 'Malformed tool-batch feedback opens with TOOL_BATCH_FRAME_PREFIX; the adjacent malformed-tool-batch test exercises its real writer.',
+    },
+  ],
   'src/core/agent/window/notice.ts': [
     { cls: 'authored-frame', why: 'the drop notice — opens with DROP_NOTICE_PREFIX' },
   ],
@@ -345,14 +352,7 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
 // ─── The scan ────────────────────────────────────────────────────────────
 
 /** Every `.ts` file under `src/`, in a stable order. */
-function sourceFiles(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir).sort()) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) sourceFiles(p, out);
-    else if (p.endsWith('.ts') && !p.endsWith('.d.ts')) out.push(p);
-  }
-  return out;
-}
+const sourceFiles = productionSources;
 
 /**
  * Every CONSTRUCTION of an object with `role: 'user'`, as `file:line`.
@@ -464,7 +464,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // marker below instead.
     expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
     for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(9);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(10);
   });
 
   it('the registry cannot be extended at runtime by a consumer', () => {
@@ -472,7 +472,7 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
     // array every reader in this library holds.
     expect(Object.isFrozen(LIBRARY_AUTHORED_PREFIXES)).toBe(true);
     expect(() => (LIBRARY_AUTHORED_PREFIXES as string[]).push('[mine')).toThrow();
-    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(9);
+    expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(10);
   });
 });
 
