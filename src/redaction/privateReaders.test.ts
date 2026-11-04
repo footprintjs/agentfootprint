@@ -1,10 +1,28 @@
 import { expect, it } from 'vitest';
 import { Agent, defineTool, servedViews } from '../index.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../observe.js';
+import { runnerLive } from '../core/runnerLive.js';
 import { SHOWN_ARGS } from '../core/toolShownArgs.js';
 import { declarationOf } from './declared.js';
 import { servedUnderPolicy } from './marker.js';
 import { answer, scripted } from '../../test/core/agent/arguments/askReviewHarness.js';
+
+it('an agent without a hidden argument keeps the native snapshot bytes and no private fields', async () => {
+  const mock = scripted([answer('Public answer')]);
+  const agent = Agent.create({ provider: mock.provider as never, model: 'fixture' }).build();
+  try {
+    await agent.run({ message: 'Public question' });
+    const raw = runnerLive(agent)?.liveSnapshot();
+    const served = agent.getSnapshot();
+    expect(raw).toBeDefined();
+    expect(JSON.stringify(served)).toBe(JSON.stringify(raw));
+    expect(servedUnderPolicy(served)).toBe(false);
+    expect(served).toHaveProperty('initialState');
+    expect(served?.sharedState).not.toHaveProperty('privateRecordFields');
+  } finally {
+    await agent.shutdown();
+  }
+});
 
 it('private-only native coverage keeps public facts readable and reports its missing fold base', async () => {
   const tool = defineTool({
