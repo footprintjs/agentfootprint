@@ -440,7 +440,7 @@ is fabricated, the record is never written to. Absence reads as *cannot say*:
 `servedAt` raises `cache-transform` on a receipt with no `cache.strategy`
 exactly as it does on a receipt with no `cache` and on no receipt at all; only
 a receipt that SAYS `null` lifts it. The basis is the one container the
-narrowing (`servedView.ts` · `readReceipt`) requires, so `basis.*` and every
+narrowing (`servedView/recordReads.ts` · `readReceipt`) requires, so `basis.*` and every
 hash row a vintage carries still verify.
 
 Why it is a law and not a habit: 9.93.0 read `receipt.cache.strategy` off the
@@ -623,7 +623,7 @@ each half is made of. For the preparation, it counts `stateAt` (a fold base
 built) and `splitStageId` (a log position walked), wrapped at
 `foottrace`, the barrel `src` imports them from. For the views, it
 counts `readAtCall`, `readAfterCall` and `readRunConstant` (a piece read),
-wrapped at `epochs.ts`, through which `servedView.ts` · `viewOf` reads every
+wrapped at `epochs.ts`, through which the `servedView/` domain projections read every
 piece it rebuilds. Either way the code is measured untouched. The guard requires
 the scrub's counts to EQUAL the batch's at 13 and at 49 epochs.
 

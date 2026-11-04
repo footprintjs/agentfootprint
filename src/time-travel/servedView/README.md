@@ -4,16 +4,27 @@ This library is sealed by `../servedView.ts`. That facade retains the public
 types, entry functions and catalogue bindings. Other source folders use the
 facade; private modules import one another directly, without a barrel.
 
-The first split moves complete units: `recordReads.ts` owns the existing
-stored-value reads, `gaps.ts` owns the frozen catalogue, and `value.ts` owns
-detachment and freezing. `assembly.ts` temporarily retains the whole epoch
-assembly, and `savedValues.ts` temporarily retains its shape narrowers. The
-next commit splits the assembly into domain projections; the whole-unit move
-is not the completed change.
+`assembly.ts` wires the phases in their original read order and constructs
+the final value. The private owners are:
+
+- `recordReads.ts`: existing stored-value reads and receipt narrowing.
+- `system.ts`: initial system inputs and ordered pieces, with no early join.
+- `conversation.ts`: history/messages-injections selection and stripping.
+- `findings.ts`: saved layout admission, legacy piece and collapse.
+- `ontology.ts`: the recorded map and its hidden-skill selection.
+- `tools.ts`: withheld, lazy schema fallback and forced-tool selection.
+- `requestOnly.ts`: staged refs, time, conclusion and late findings DATA.
+- `gaps.ts`: the frozen catalogue and ordered gap projection.
+- `value.ts`: final detachment and freezing.
+
+Each domain makes its own original fold reads. Explicit inputs and returned
+phase tuples keep the wiring visible; there is no callback or generic read
+context. Only final basis construction and the narrow gap projection read a
+receipt. Request reconstruction never reads its receipt answer sheet.
 
 The contract walk reads public types from the facade, catalogue prose from
-`gaps.ts`, and every `gapOf` call from the single `assembly.ts` producer
-`viewOf`. It refuses computed kinds and calls outside that producer.
+`gaps.ts`, and every `gapOf` call from the single `gaps.ts` producer
+`gapsOf`. It refuses computed kinds and calls outside that producer.
 
 Step 4 does not apply to these readers: `servedAt`, `servedViews` and
 `receiptAt` are synchronous pure operations over a saved record, with no

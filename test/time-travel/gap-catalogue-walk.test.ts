@@ -156,7 +156,7 @@
  * the defect this file exists to prevent was found in the first place. The
  * narrower blind spots, named rather than left to be discovered:
  *
- *   • the gap-kind half reads `gapOf('…')` calls out of `servedView/assembly.ts`'s
+ *   • the gap-kind half reads `gapOf('…')` calls out of `servedView/gaps.ts`'s
  *     source. A kind pushed some other way is invisible to it — so the walk
  *     also fails on any `gapOf` call whose argument is not a string literal,
  *     which is the only shape that could hide one;
@@ -223,6 +223,7 @@ import {
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import { isPaused, pauseHere } from '../../src/core/pause.js';
 import { replayReceiptFixture } from '../helpers/replayReceiptFixture.js';
+import { stripKey, rewriteKey, stripBases } from '../helpers/savedRecordDamage.js';
 // The receipt-LESS shape a shipped chart still produces (9.91.0) — the public
 // barrel carries this chart's deps type and not the builder itself.
 import { buildMessageApiChart } from '../../src/core/agent/buildMessageApiChart.js';
@@ -238,8 +239,8 @@ const RECEIPT_FILE = resolve(__dirname, '../../src/core/agent/receipt/receipt.ts
 const TYPE_FILE = resolve(SRC, 'servedView.ts');
 const CATALOGUE_PROSE_FILE = resolve(SRC, 'servedView/gaps.ts');
 const GAP_PRODUCER = {
-  file: resolve(SRC, 'servedView/assembly.ts'),
-  declaration: 'viewOf',
+  file: resolve(SRC, 'servedView/gaps.ts'),
+  declaration: 'gapsOf',
 } as const;
 
 // ─── (1) the STATIC enumeration — the declarations, expanded ─────────────
@@ -1107,7 +1108,7 @@ describe('every gap sentence says which fields, what they mean, and what to do',
 // ─── Contract: no orphan kind, no unreachable entry ──────────────────────
 
 /**
- * The gap kinds `viewOf` can actually push, read out of `servedView/assembly.ts`'s own
+ * The gap kinds `gapsOf` can actually push, read out of `servedView/gaps.ts`'s own
  * source with the compiler's parser.
  *
  * A source read, because reachability is not a runtime question a test can ask
@@ -1374,67 +1375,6 @@ describe('a ServedView is a value', () => {
 // `provider-defaults` (a receipt exists) and `forced-tool-schema` (a
 // 'tool-forced' output). `receipt-conformance.test.ts` drives each of those on
 // a real run instead, which is the honest place for them.
-
-/** A detached copy with one state key gone from every log and every base. */
-function stripKey<T>(recording: T, key: string): T {
-  type Bundle = { trace: { path: string }[]; overwrite: Record<string, unknown> };
-  type Log = { commitLog?: Bundle[]; history?: Bundle[]; initialState?: Record<string, unknown> };
-  const copy = JSON.parse(JSON.stringify(recording)) as T & {
-    subflowResults?: Record<string, { treeContext?: Log }>;
-  };
-  const scrub = (log: Log | undefined): void => {
-    if (!log) return;
-    for (const bundle of [...(log.commitLog ?? []), ...(log.history ?? [])]) {
-      bundle.trace = bundle.trace.filter((t) => t.path !== key);
-      delete bundle.overwrite[key];
-    }
-    if (log.initialState) delete log.initialState[key];
-  };
-  scrub(copy as Log);
-  for (const entry of Object.values(copy.subflowResults ?? {})) scrub(entry?.treeContext);
-  return copy;
-}
-
-/**
- * A detached copy with one state key REWRITTEN wherever the log wrote it.
- *
- * The other half of `stripKey`, and the crafted damage the second cause needs:
- * no run produces a recording whose receipt key holds a non-receipt, because
- * the mint either runs or does not. A truncated file, a hand-edited log or a
- * consumer that wrote its own value under the key does — and that is the case
- * the read refuses, so it is the case a test has to construct.
- */
-function rewriteKey<T>(recording: T, key: string, value: unknown): T {
-  type Bundle = { trace: { path: string }[]; overwrite: Record<string, unknown> };
-  type Log = { commitLog?: Bundle[]; history?: Bundle[]; initialState?: Record<string, unknown> };
-  const copy = JSON.parse(JSON.stringify(recording)) as T & {
-    subflowResults?: Record<string, { treeContext?: Log }>;
-  };
-  const rewrite = (log: Log | undefined): void => {
-    if (!log) return;
-    for (const bundle of [...(log.commitLog ?? []), ...(log.history ?? [])]) {
-      if (bundle.trace.some((t) => t.path === key)) bundle.overwrite[key] = value;
-    }
-    if (log.initialState && key in log.initialState) log.initialState[key] = value;
-  };
-  rewrite(copy as Log);
-  for (const entry of Object.values(copy.subflowResults ?? {})) rewrite(entry?.treeContext);
-  return copy;
-}
-
-/** A detached copy with every fold base gone — `getSnapshot({ redact: true })`
- *  hands back this shape, and so does any recording that travelled without it. */
-function stripBases<T>(recording: T): T {
-  type Log = { initialState?: unknown };
-  const copy = JSON.parse(JSON.stringify(recording)) as T & {
-    subflowResults?: Record<string, { treeContext?: Log }>;
-  };
-  delete (copy as Log).initialState;
-  for (const entry of Object.values(copy.subflowResults ?? {})) {
-    if (entry?.treeContext) delete entry.treeContext.initialState;
-  }
-  return copy;
-}
 
 /** The values at one dotted path, arrays flattened, `undefined` dropped. */
 function valuesAt(root: unknown, path: string): readonly unknown[] {

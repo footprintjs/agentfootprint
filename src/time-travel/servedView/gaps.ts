@@ -1,5 +1,14 @@
-import { RECEIPT_BOUNDARY } from '../../core/agent/receipt/receipt.js';
+import { RECEIPT_BOUNDARY, type StoredReceipt } from '../../core/agent/receipt/receipt.js';
 import type { ServedGap, ServedGapCause, ServedGapKind } from '../servedView.js';
+import type { LLMMessage } from '../../provider-contract/types.js';
+import type { EpochLocation } from '../epochs.js';
+
+type GapRead =
+  | {
+      readonly receipt: Pick<StoredReceipt, 'cache' | 'replayPreparations'>;
+      readonly cause?: undefined;
+    }
+  | { readonly receipt?: undefined; readonly cause: ServedGapCause };
 
 /**
  * The gap catalogue. Exported because a reader that renders a served view
@@ -432,4 +441,56 @@ export const UNGAPPED_FIELDS: Readonly<Record<string, string>> = Object.freeze({
  *  raises it established one, the cause it read. */
 export function gapOf(kind: ServedGapKind, cause?: ServedGapCause): ServedGap {
   return { gap: kind, ...SERVED_GAPS[kind], ...(cause !== undefined && { cause }) };
+}
+
+/** Project every gap in its original priority order, without additional record reads. */
+export function gapsOf(
+  location: EpochLocation,
+  layoutUnknown: boolean,
+  conversation: readonly LLMMessage[] | undefined,
+  read: GapRead,
+  forced: string | undefined,
+): ServedGap[] {
+  const receipt = read.receipt;
+  // ── what this view cannot prove ────────────────────────────────────────
+  // Order is deliberate: the two that make the WHOLE view suspect come first,
+  // so a renderer that shows one gap shows the one that matters most.
+  const gaps: ServedGap[] = [];
+  if (layoutUnknown) gaps.push(gapOf('findings-layout'));
+  // BOTH bases, because there are two folds above and either can be baseless.
+  // Under 'dynamic-grouped' the epoch's pieces come from the turn's own inner
+  // log (`location.basis`) and every run constant — the forced tool's name, the
+  // `wants` the nudge is composed from — comes from the RUN log
+  // (`location.runBasis`). Raising the gap off the first alone let a grouped
+  // recording that travelled without its RUN base read every constant as absent
+  // and declare NOTHING: a Lens denying rather than omitting, which is the law
+  // this whole file is built on.
+  if (location.basis === 'log-only' || location.runBasis === 'log-only') {
+    gaps.push(gapOf('no-fold-base'));
+  }
+  if (conversation === undefined) gaps.push(gapOf('no-conversation-on-record'));
+  if (!location.hasRunLog) gaps.push(gapOf('no-run-log'));
+  // No receipt ⇒ nothing checks the rebuild, and the receipt-only fields are
+  // absent. Mutually exclusive with `provider-defaults` below, which is the
+  // caveat that applies when a receipt DID record the dials.
+  //
+  // The CAUSE rides along, from the one read that can tell "nothing was
+  // committed" from "something was, and it is not a receipt". The gap's
+  // sentence says neither — see {@link ServedGap.cause}.
+  if (read.receipt === undefined) gaps.push(gapOf('no-receipt-on-chart', read.cause));
+  // A rewrite is possible only where a strategy stood between assembly and
+  // the port. The receipt says whether one did (`cache.strategy`, 9.93.0);
+  // with no receipt, or a receipt minted before the field — or the whole
+  // `cache` container — existed, the record cannot rule one out and the gap
+  // stays — the "you cannot tell" declaration, never an inference from
+  // absence. Only a receipt that SAYS `null` lifts it. The optional chain is
+  // the vintage law, not defensiveness: `StoredReceipt` declares both
+  // containers optional, so this is the one spelling that compiles.
+  if (receipt?.cache?.strategy !== null) {
+    gaps.push(gapOf('cache-transform'));
+  }
+  if (receipt !== undefined) gaps.push(gapOf('provider-defaults'));
+  if (receipt?.replayPreparations !== undefined) gaps.push(gapOf('thinking-replay'));
+  if (forced !== undefined) gaps.push(gapOf('forced-tool-schema'));
+  return gaps;
 }

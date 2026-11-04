@@ -45,10 +45,10 @@
  * - `splitStageId` — a LOG POSITION WALKED. `epochs.ts` · `locate` parses one
  *   stage id per bundle (and one per `subflowResults` mount key) to find the
  *   calls; a question that relocated the epochs would walk the whole log again.
- * Each epoch's view, wrapped at `epochs.ts`, the module `servedView.ts`
- * imports them from:
+ * Each epoch's view, wrapped at `epochs.ts`, reached by the
+ * `servedView/` domain projections:
  * - `readAtCall`, `readAfterCall`, `readRunConstant` — a PIECE READ.
- *   `servedView.ts` · `viewOf` reads every piece it rebuilds through these
+ *   `servedView/` projections read every piece they rebuild through these
  *   three, so a question that built views it was not asked for reads more
  *   pieces than the batch does.
  * Either way `src` runs untouched.
