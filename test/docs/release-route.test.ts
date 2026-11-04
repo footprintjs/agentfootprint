@@ -17,6 +17,7 @@ it('runs the release route and candidate package contract', () => {
         'scripts/publish-archive/route.test.mjs',
         'scripts/publish-archive/build.test.mjs',
         'scripts/publish-archive/profile.test.mjs',
+        'scripts/publish-archive/lifecycle.test.mjs',
         'scripts/publish-archive/wrapper.test.mjs',
         'scripts/release-route-git.test.mjs',
         'scripts/release-route-guards.test.mjs',

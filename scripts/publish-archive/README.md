@@ -23,5 +23,10 @@ distribution remains deferred until after AgentFootprint14.
 
 The native verifier uses closed CODE limits of 20,000 members and 128 MiB expanded
 data for both build and publish, preserving headroom above the current package.
-The compressed-input limit remains 16 MiB. Boundary controls admit 20,000/refuse
-20,001 members and refuse expansion above 128 MiB; format rules stay unchanged.
+The compressed-input limit is 32 MiB, checked before reading and passed to the
+canonical parser. Independent stored-block gzip data admits 32 MiB minus one byte
+and exactly 32 MiB, and refuses one byte above it. Member and expansion controls
+admit 20,000/refuse 20,001 members and refuse expansion above 128 MiB. Format rules
+stay unchanged. The actual directory setup is checked under umask 000 for mode 0700. A real offline npm pack keeps a hostile prepare lifecycle active as a
+counterfactual and verifies suppression at the production npm 11 floor; npm 10
+is retained as its distinct old-toolchain behavior.

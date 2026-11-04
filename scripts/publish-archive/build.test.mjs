@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   rmSync,
   readdirSync,
+  statSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -162,4 +163,43 @@ test('publish installs the trusted toolchain before any candidate source', () =>
       'npm install -g npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts',
     ),
   );
+});
+
+test('actual publish directory setup enforces mode0700 even under umask000', (t) => {
+  const start = workflow.indexOf(
+      '      - name: Prepare separate verifier, incoming and publish directories',
+    ),
+    end = workflow.indexOf('      - run: npm install -g ', start),
+    block = workflow.slice(start, end),
+    marker = '        run: |\n',
+    at = block.indexOf(marker);
+  assert(start > 0 && end > start && at > 0);
+  const script = block
+    .slice(at + marker.length)
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .map((line) => (line.startsWith('          ') ? line.slice(10) : line))
+    .join('\n');
+  const root = mkdtempSync(path.join(os.tmpdir(), 'native-private-dirs-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const directories = {
+    VERIFY_DIR: path.join(root, 'verify'),
+    INCOMING_DIR: path.join(root, 'incoming'),
+    PUBLISH_DIR: path.join(root, 'publish'),
+  };
+  const result = spawnSync(
+    '/bin/bash',
+    ['--noprofile', '--norc', '-e', '-c', 'umask 000\n' + script],
+    {
+      cwd: root,
+      env: { PATH: '/usr/bin:/bin', ...directories },
+      encoding: 'utf8',
+      timeout: 10000,
+    },
+  );
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  for (const directory of Object.values(directories))
+    assert.equal(statSync(directory).mode & 0o777, 0o700);
 });
