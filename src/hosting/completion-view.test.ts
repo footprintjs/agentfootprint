@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest';
-import { Agent } from '../../src/index.js';
-import { memorySessions, readEnvelope, standingAgent } from '../../src/hosting/index.js';
-import { inProcessHost } from './testHost.js';
-import type { LLMRequest } from '../../src/provider-contract/types.js';
+import { Agent } from '../index.js';
+import { memorySessions, readEnvelope, standingAgent } from './index.js';
+import { inProcessHost } from '../../test/hosting/testHost.js';
+import type { LLMRequest } from '../provider-contract/types.js';
 
 function barrier() {
   let release!: () => void;

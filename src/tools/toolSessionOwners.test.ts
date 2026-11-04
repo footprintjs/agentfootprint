@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { ToolSessionTier, toolSessionKey } from '../../src/tools/toolSessions.js';
-import { newToolOwner, nextToolDispatch } from '../../src/tools/toolResourceOwner.js';
+import { ToolSessionTier, toolSessionKey } from './toolSessions.js';
+import { newToolOwner, nextToolDispatch } from './toolResourceOwner.js';
 
 const origin = { tool: 'resource', toolCallId: 'same-provider-id', runId: 'opening-leg' };
 const owner = (ordinal: number) => nextToolDispatch(newToolOwner({ runId: 'native-leg', ordinal }));

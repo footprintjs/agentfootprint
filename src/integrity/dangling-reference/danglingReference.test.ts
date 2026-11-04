@@ -25,12 +25,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { danglingReferencesOf } from '../../src/integrity/dangling-reference/check.js';
-import { Agent, slidingWindow, defineTool } from '../../src/index.js';
-import { mockThinkingHandler } from '../../src/thinking/MockThinkingHandler.js';
-import type { LLMMessage, LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
-import type { AgentRunCheckpoint } from '../../src/index.js';
-import type { WindowRecord } from '../../src/core/agent/window/types.js';
+import { danglingReferencesOf } from './check.js';
+import { Agent, slidingWindow, defineTool } from '../../index.js';
+import { mockThinkingHandler } from '../../thinking/MockThinkingHandler.js';
+import type { LLMMessage, LLMProvider, LLMResponse } from '../../provider-contract/types.js';
+import type { AgentRunCheckpoint } from '../../index.js';
+import type { WindowRecord } from '../../core/agent/window/types.js';
 
 // ---------------------------------------------------------------------------
 // The check, on its own
@@ -260,7 +260,7 @@ describe('functional: the evicted ground files ONE finding through the real loop
 
 const NATIVE_NARRATIVE_REFERENCE = resolve(
   __dirname,
-  'reference/v14-native-dangling-trap-narrative.json',
+  '../../../test/integrity/reference/v14-native-dangling-trap-narrative.json',
 );
 
 describe('regression: the check adds no step to the narrative', () => {

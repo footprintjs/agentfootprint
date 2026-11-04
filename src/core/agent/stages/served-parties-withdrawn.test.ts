@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Agent, defineTool, isPaused, isInputPause, requestInput } from '../../../src/index.js';
-import { defineSkill } from '../../../src/injection-engine.js';
-import type { LLMRequest } from '../../../src/provider-contract/types.js';
+import { Agent, defineTool, isPaused, isInputPause, requestInput } from '../../../index.js';
+import { defineSkill } from '../../../injection-engine.js';
+import type { LLMRequest } from '../../../provider-contract/types.js';
 
 const toolOf = (name: string, stamp: string, ran: string[]) =>
   defineTool({

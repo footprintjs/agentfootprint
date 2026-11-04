@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { Agent, defineTool, requestInput } from '../../src/index.js';
-import { memorySessions, standingAgent } from '../../src/hosting/index.js';
-import { readStoredSession } from '../../src/hosting/answeredPause.js';
-import { inProcessHost } from './testHost.js';
-import type { LLMRequest } from '../../src/provider-contract/types.js';
+import { Agent, defineTool, requestInput } from '../index.js';
+import { memorySessions, standingAgent } from './index.js';
+import { readStoredSession } from './answeredPause.js';
+import { inProcessHost } from '../../test/hosting/testHost.js';
+import type { LLMRequest } from '../provider-contract/types.js';
 
 function barrier() {
   let release!: () => void;
@@ -65,6 +65,7 @@ it('host cancel of an input pause during overlap', async () => {
       sessionId: 's1',
       decision: { requestId, cancel: true },
     });
+    expect(typeof cancelled.error).toBe('string');
     expect(cancelled.error).toMatch(/in.flight/);
     const stored = readStoredSession((await sessions.hydrate('s1')) as any);
     expect(stored.waiting).toBeDefined();

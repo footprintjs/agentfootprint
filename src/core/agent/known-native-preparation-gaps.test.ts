@@ -1,16 +1,9 @@
 import { expect, it } from 'vitest';
-import {
-  Agent,
-  askHuman,
-  defineTool,
-  isInputPause,
-  isPaused,
-  requestInput,
-} from '../../../src/index.js';
-import type { LLMRequest } from '../../../src/provider-contract/types.js';
-import { mock } from '../../../src/llm-providers.js';
-import { memorySessions, readPausedRun, standingAgent } from '../../../src/hosting/index.js';
-import { inProcessHost } from '../../hosting/testHost.js';
+import { Agent, askHuman, defineTool, isInputPause, isPaused, requestInput } from '../../index.js';
+import type { LLMRequest } from '../../provider-contract/types.js';
+import { mock } from '../../llm-providers.js';
+import { memorySessions, readPausedRun, standingAgent } from '../../hosting/index.js';
+import { inProcessHost } from '../../../test/hosting/testHost.js';
 
 function collecting() {
   return Agent.create({

@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { Agent, askHuman, defineTool, isPaused } from '../../../src/index.js';
-import { runnerLive } from '../../../src/core/runnerLive.js';
-import { mock } from '../../../src/llm-providers.js';
-import type { LLMRequest } from '../../../src/provider-contract/types.js';
+import { Agent, askHuman, defineTool, isPaused } from '../../index.js';
+import { runnerLive } from '../runnerLive.js';
+import { mock } from '../../llm-providers.js';
+import type { LLMRequest } from '../../provider-contract/types.js';
 
 function asking(closed: string[] = []) {
   return Agent.create({
@@ -38,10 +38,13 @@ it.each(['malformed', 'missing'] as const)(
     const agent = asking(closed);
     const pause = await agent.run('first');
     if (!isPaused(pause)) throw new Error('Expected pause');
+    const dispositions: unknown[] = [];
+    agent.on('agentfootprint.tools.resource_restore', (event) => dispositions.push(event.payload));
     const bad = structuredClone(pause.checkpoint);
     if (shape === 'missing') delete bad.sharedState.toolResourceOwner;
     else bad.sharedState.toolResourceOwner = { version: 99 };
     await expect(agent.resume(bad, 'yes')).rejects.toBeInstanceOf(Error);
+    expect(dispositions).toEqual([{ local: 'unconfirmed', remote: 'unknown' }]);
     expect(closed).toEqual([]);
     await expect(agent.run('other')).rejects.toMatchObject({ code: 'ERR_PENDING_QUESTION' });
     expect(await agent.resume(pause.checkpoint, 'yes')).toBe('done');
@@ -183,4 +186,61 @@ it('a valid answer followed by a business failure does not revive the answered q
   fail = false;
   expect(await agent.abandonPause()).toBeUndefined();
   expect(isPaused(await agent.run('other'))).toBe(true);
+});
+
+it.each([
+  'missing',
+  'version',
+  'owner',
+  'turn',
+  'duplicate',
+  'party',
+  'inconsistent',
+  'turn-range',
+  'current-null',
+  'budget',
+  'accessor',
+] as const)('served-party checkpoint %s is refused before origin or effects', async (shape) => {
+  const closed: string[] = [],
+    agent = asking(closed);
+  const pause = await agent.run('first');
+  if (!isPaused(pause)) throw new Error('Expected pause');
+  const prior = agent.checkpoint(),
+    bad = structuredClone(pause.checkpoint);
+  const carrier = bad.sharedState.servedToolParties as {
+    version: number;
+    owner: { runId: string };
+    turn: number;
+    current: { name: string; party: unknown }[];
+    last: { name: string; party: unknown }[];
+  };
+  let reads = 0;
+  if (shape === 'missing') delete bad.sharedState.servedToolParties;
+  else if (shape === 'version') carrier.version = 99;
+  else if (shape === 'owner') carrier.owner.runId = 'foreign';
+  else if (shape === 'turn') carrier.turn++;
+  else if (shape === 'duplicate') carrier.current.push({ ...carrier.current[0]! });
+  else if (shape === 'party') carrier.current[0]!.party = { channel: 'not-a-party' };
+  else if (shape === 'inconsistent')
+    carrier.last[0]!.party = { channel: 'provider', id: 'different' };
+  else if (shape === 'turn-range') {
+    carrier.turn = -1;
+    bad.sharedState.turnNumber = -1;
+  } else if (shape === 'current-null') carrier.current[0]!.party = null;
+  else if (shape === 'budget') carrier.current[0]!.name = 'x'.repeat(131_073);
+  else
+    Object.defineProperty(carrier, 'current', {
+      enumerable: true,
+      get: () => {
+        reads++;
+        throw new Error('must not read');
+      },
+    });
+  await expect(agent.resume(bad, 'yes')).rejects.toBeInstanceOf(Error);
+  expect(reads).toBe(0);
+  expect(closed).toEqual([]);
+  expect(agent.checkpoint()?.history).toEqual(prior?.history);
+  await expect(agent.run('other')).rejects.toMatchObject({ code: 'ERR_PENDING_QUESTION' });
+  await agent.abandonPause();
+  expect([...closed].sort()).toEqual(['call', 'run']);
 });

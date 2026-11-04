@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { Agent, defineTool, checkInApproved, isCheckInPause } from '../../src/index.js';
-import { memorySessions, readPausedRun, standingAgent } from '../../src/hosting/index.js';
-import { readStoredSession } from '../../src/hosting/answeredPause.js';
-import { inProcessHost } from './testHost.js';
-import type { LLMRequest } from '../../src/provider-contract/types.js';
+import { Agent, defineTool, checkInApproved, isCheckInPause } from '../index.js';
+import { memorySessions, readPausedRun, standingAgent } from './index.js';
+import { readStoredSession } from './answeredPause.js';
+import { inProcessHost } from '../../test/hosting/testHost.js';
+import type { LLMRequest } from '../provider-contract/types.js';
 
 function barrier() {
   let release!: () => void;

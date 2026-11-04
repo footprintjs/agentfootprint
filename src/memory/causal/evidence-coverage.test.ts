@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { causalEvidenceRecorder } from '../../../src/memory/causal/evidenceRecorder.js';
+import { causalEvidenceRecorder } from './evidenceRecorder.js';
 
 const coverage = {
   scope: 'component-execution-leg',

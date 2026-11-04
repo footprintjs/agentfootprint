@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { flowChart, type FlowChart } from 'footprintjs';
 
-import { RunnerExecution, type RunnerInvocation } from '../../src/core/runnerExecution.js';
+import { RunnerExecution, type RunnerInvocation } from './runnerExecution.js';
 
 it.each(['completed', 'failed'] as const)(
   'releases the previous selection when an invocation body has %s',

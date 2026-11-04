@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { Agent, defineTool } from '../../../src/index.js';
-import type { LLMRequest, LLMResponse } from '../../../src/provider-contract/types.js';
-import { isSaidByPerson } from '../../../src/lib/saidByPerson.js';
-import { toAnthropicMessages } from '../../../src/adapters/llm/anthropicMessageProjection.js';
-import { isLibraryAuthoredTurn } from '../../../src/core/agent/evidence/frames.js';
+import { Agent, defineTool } from '../../../../../index.js';
+import type { LLMRequest, LLMResponse } from '../../../../../provider-contract/types.js';
+import { isSaidByPerson } from '../../../../../lib/saidByPerson.js';
+import { toAnthropicMessages } from '../../../../../adapters/llm/anthropicMessageProjection.js';
+import { isLibraryAuthoredTurn } from '../../../evidence/frames.js';
 
 const call = (id: string, name = 'collect') => ({ id, name, args: {} });
 for (const [shape, calls] of [
@@ -42,7 +42,11 @@ for (const [shape, calls] of [
       .build();
     const starts: unknown[] = [];
     agent.on('agentfootprint.stream.tool_start', (e) => starts.push(e));
-    await expect(agent.run('go')).resolves.toBe('corrected');
+    const outcome = await agent.run('go').then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    expect(outcome).toEqual({ value: 'corrected' });
     expect(ran).toBe(0);
     expect(starts).toEqual([]);
     expect(requests).toHaveLength(2);

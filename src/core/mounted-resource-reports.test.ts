@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { Agent, Sequence, defineTool } from '../../../src/index.js';
-import { mock } from '../../../src/llm-providers.js';
+import { Agent, Sequence, defineTool } from '../index.js';
+import { mock } from '../llm-providers.js';
 
 it('routes a mounted teardown report through its native parent run with readable payload', async () => {
   const member = Agent.create({

@@ -18,8 +18,8 @@ interface Capture {
   readonly commitLog: readonly Commit[];
   readonly served: unknown;
 }
-const root = new URL('./reference/', import.meta.url);
-const native = new URL('./reference/v14-native-components/', import.meta.url);
+const root = new URL('../../test/core/tools/reference/', import.meta.url);
+const native = new URL('../../test/core/tools/reference/v14-native-components/', import.meta.url);
 const read = (base: URL, file: string) => readFileSync(new URL(file, base), 'utf8');
 const digest = (s: string) => createHash('sha256').update(s).digest('hex');
 const fields = new Set([

@@ -211,7 +211,7 @@ really throws as the control. The window's readers are pinned beside their
 own suites (`test/core/window-last-tool-result.test.ts`,
 `test/core/window-drop-observations.test.ts`,
 `test/core/window-ledger-fact-pins.test.ts`,
-`test/integrity/danglingReference.test.ts` — which also holds the dangling
+`src/integrity/dangling-reference/danglingReference.test.ts` — which also holds the dangling
 trap's narrative step for step against 9.112.2, so the check can never add a
 tracked read), and so is the empty-lookup corpus
 (`test/integrity/emptyLookup.test.ts`); the toolpack's arm (stream first,

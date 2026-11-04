@@ -966,7 +966,7 @@ export function buildCallLLMStage(
         // all"). Never a second `scope.history` read: every tracked read is a
         // narrative step, and one more here renumbered every step after it on
         // runs that never settle anything (pinned by
-        // `test/integrity/danglingReference.test.ts` · "the narrative").
+        // `src/integrity/dangling-reference/danglingReference.test.ts` · "the narrative").
         const frame = committed;
         const presentResults = new Set(
           frame

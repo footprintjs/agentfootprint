@@ -5,7 +5,7 @@ import {
   sameToolBirth,
   type ToolTurnBirth,
 } from '../../../tools/toolResourceOwner.js';
-import { readToolParty, type ToolParty } from '../../../tools/toolParty.js';
+import { readToolParty, sameToolParty, type ToolParty } from '../../../tools/toolParty.js';
 import type { ServedToolParties } from '../../slots/buildToolsSlot.js';
 import type { AgentState } from '../types.js';
 
@@ -14,7 +14,7 @@ const MAX_BYTES = 131_072;
 const MAX_ROWS = 1024;
 interface PartyRow {
   readonly name: string;
-  readonly party: ToolParty | null;
+  readonly party: ToolParty;
 }
 export interface ServedPartiesCarrier {
   readonly version: 1;
@@ -26,7 +26,7 @@ export interface ServedPartiesCarrier {
 function invalid(): never {
   throw new TypeError('Invalid served tool parties in pause checkpoint');
 }
-function rows(value: unknown, nullable: boolean): PartyRow[] {
+function rows(value: unknown): PartyRow[] {
   if (!Array.isArray(value) || value.length > MAX_ROWS) invalid();
   const names = new Set<string>();
   return value.map((raw) => {
@@ -39,7 +39,7 @@ function rows(value: unknown, nullable: boolean): PartyRow[] {
     )
       invalid();
     names.add(row.name);
-    const party = nullable && row.party === null ? null : readToolParty(row.party) ?? invalid();
+    const party = readToolParty(row.party) ?? invalid();
     return { name: row.name, party };
   });
 }
@@ -64,16 +64,18 @@ export function readServedParties(state: Record<string, unknown>): ServedParties
     ) ||
     data.version !== 1 ||
     !Number.isSafeInteger(data.turn) ||
+    (data.turn as number) < 1 ||
     data.turn !== fields.turnNumber
   )
     invalid();
-  return {
-    version: 1,
-    owner: expected,
-    turn: data.turn as number,
-    current: rows(data.current, true),
-    last: rows(data.last, false),
-  };
+  const current = rows(data.current),
+    last = rows(data.last);
+  const remembered = new Map(last.map((row) => [row.name, row.party]));
+  for (const row of current) {
+    const party = remembered.get(row.name);
+    if (party === undefined || !sameToolParty(row.party, party)) invalid();
+  }
+  return { version: 1, owner: expected, turn: data.turn as number, current, last };
 }
 /** Written only at an actual pause; no plain-run reads or extra executable state. */
 export function saveServedParties(
@@ -85,7 +87,7 @@ export function saveServedParties(
     version: 1,
     owner: readToolOwner(scope.$getValue('toolResourceOwner')).birth,
     turn: scope.turnNumber as number,
-    current: [...served.current].map(([name, party]) => ({ name, party })),
+    current: [...served.current].map(([name, party]) => ({ name, party: party ?? invalid() })),
     last: [...served.lastServed].map(([name, party]) => ({ name, party })),
   };
   // Apply the same finite decoder at write and restore, without truncating history.
@@ -109,6 +111,6 @@ export function restoreServedParties(
   if (served === undefined) invalid();
   served.current = new Map(carrier.current.map(({ name, party }) => [name, party]));
   served.lastServed.clear();
-  for (const { name, party } of carrier.last) served.lastServed.set(name, party!);
+  for (const { name, party } of carrier.last) served.lastServed.set(name, party);
   scope.servedToolParties = undefined;
 }

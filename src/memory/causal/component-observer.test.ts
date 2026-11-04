@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Agent, Sequence, defineTool } from '../../../src/index.js';
+import { Agent, Sequence, defineTool } from '../../index.js';
 import {
   defineMemory,
   MEMORY_TYPES,
@@ -7,9 +7,9 @@ import {
   SNAPSHOT_PROJECTIONS,
   InMemoryStore,
   mockEmbedder,
-} from '../../../src/memory/index.js';
-import type { SnapshotEntry } from '../../../src/memory/causal/types.js';
-import type { LLMProvider } from '../../../src/provider-contract/types.js';
+} from '../index.js';
+import type { SnapshotEntry } from './types.js';
+import type { LLMProvider } from '../../provider-contract/types.js';
 
 it.each([
   { label: 'plain', env: undefined },

@@ -167,7 +167,7 @@ toolResultPinsOf(segmentTurns(history), history, anchor); // messageIndex, chars
 Pinned by `test/core/window-last-tool-result.test.ts`,
 `test/core/window-drop-observations.test.ts`,
 `test/core/window-ledger-fact-pins.test.ts`,
-`test/integrity/danglingReference.test.ts` (the narrative too) and, end to
+`src/integrity/dangling-reference/danglingReference.test.ts` (the narrative too) and, end to
 end, `test/core/scenario/batch-pause-settlement.test.ts`.
 
 ## A summary carries its fold's exemptions, never its own (evidence gate)

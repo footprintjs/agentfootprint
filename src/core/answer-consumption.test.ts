@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest';
-import { AnswerConsumption } from '../../../src/core/answerConsumption.js';
-import { spendDecision } from '../../../src/core/consentRequest.js';
-import type { DecisionLedger } from '../../../src/core/consentRequest.js';
-import type { CheckInDecision } from '../../../src/core/checkin.js';
+import { AnswerConsumption } from './answerConsumption.js';
+import { spendDecision } from './consentRequest.js';
+import type { DecisionLedger } from './consentRequest.js';
+import type { CheckInDecision } from './checkin.js';
 
 const decision = { requestId: 'request', approved: true, by: 'person' } as CheckInDecision;
 it.each(['before', 'refused', 'unknown', 'during'] as const)(

@@ -1,11 +1,8 @@
 import { FlowChartExecutor, flowChart, type PausableHandler, type TypedScope } from 'footprintjs';
 import { expect, it } from 'vitest';
-import { RunnerExecution } from '../../../src/core/runnerExecution.js';
-import {
-  componentResources,
-  type ComponentResources,
-} from '../../../src/core/agent/componentResources.js';
-import { ToolSessionTier } from '../../../src/tools/toolSessions.js';
+import { RunnerExecution } from '../runnerExecution.js';
+import { componentResources, type ComponentResources } from './componentResources.js';
+import { ToolSessionTier } from '../../tools/toolSessions.js';
 
 function barrier() {
   let release!: () => void;
