@@ -109,7 +109,10 @@ describe('the facts in SKILL.md are pinned to the code that owns them', () => {
   });
 
   it('names every CursorMoveCause, and counts them the way the union does', () => {
-    const causes = unionMembers('src/injection-engine/skillGraph/graphCursor.ts', 'CursorMoveCause');
+    const causes = unionMembers(
+      'src/injection-engine/skillGraph/graphCursor.ts',
+      'CursorMoveCause',
+    );
     const text = canonical();
     for (const cause of causes) expect(text).toContain(`\`'${cause}'\``);
     // The doc says "Nine causes move it"; the union is what makes that true.
