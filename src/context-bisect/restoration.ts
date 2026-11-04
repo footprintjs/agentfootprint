@@ -12,7 +12,7 @@
  * like `AblationRunner`. `RestorationRunner` receives the units to add back
  * (`[]` = the un-restored baseline) plus a seed, and returns the run's output.
  */
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import type { Embedder } from '../influence-core/index.js';
 import { defaultOutcomeComparator, resolveSamples, similarityStats } from './ablation.js';
 import type { ContextUnit } from './missingContext.js';

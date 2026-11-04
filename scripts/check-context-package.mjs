@@ -126,6 +126,10 @@ try {
     ]),
   );
   assert.ok(
+    !packed.files.some((file) => /\.test\./.test(file.path)),
+    'The Agent archive must not include tests.',
+  );
+  assert.ok(
     !packed.files.some((file) => /(?:^|\/)node_modules\/contextfootprint(?:\/|$)/.test(file.path)),
     'The Agent archive must not bundle the registry dependency.',
   );

@@ -13,7 +13,7 @@
  * selection function (RFC-002 §2; tier 3 validates the proxy via
  * choice-entropy sampling).
  */
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import type {
   Embedder,
   PairwiseSimilarityResult,

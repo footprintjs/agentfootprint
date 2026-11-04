@@ -8,8 +8,8 @@ name: Release
 #      CHANGELOG entry, bumps package.json, regenerates every generated doc, and
 #      opens — or updates — ONE pull request, "chore: release vX.Y.Z", from the
 #      branch `release/next`. More fragments merging later update the same PR.
-#   2. That PR runs the full CI like any other PR. With auto-merge on, it merges
-#      itself once CI is green; otherwise a person merges it.
+#   2. That PR runs the full CI like any other PR. It waits for an exact-head
+#      verdict and green checks before a normal merge.
 #   3. Its merge puts a version on main that has no tag yet. This workflow runs
 #      again (`publish` mode): build and stage the package from that exact
 #      tree, then tag, GitHub release and `npm publish --provenance` — in that
@@ -51,8 +51,7 @@ name: Release
 # SETUP (once): a GitHub App with Contents + Pull requests read/write, installed
 # on this repository; its Client ID in the Actions VARIABLE
 # RELEASE_APP_CLIENT_ID and its private key in the Actions SECRET
-# RELEASE_APP_PRIVATE_KEY. For hands-off releases, turn on Settings → General →
-# "Allow auto-merge". CONTRIBUTING.md § Releasing has the steps.
+# RELEASE_APP_PRIVATE_KEY. CONTRIBUTING.md § Releasing has the steps.
 #
 # The file keeps its name, publish.yml, ON PURPOSE: npm trusted publishing is
 # bound to this workflow FILENAME. Renaming it breaks publishing until the
@@ -72,6 +71,10 @@ on:
         type: choice
         options: [auto, patch, minor, major]
         default: auto
+      rc:
+        description: 'Publish an RC from untouched main to npm next. Final waits for all downstream checks against the RC.'
+        type: boolean
+        default: false
   release:
     types: [published]
 
@@ -94,12 +97,12 @@ on:
 permissions:
   contents: read
 
-# One run at a time for main, so two runs never compute the same version. GitHub
-# keeps ONE pending run per group and cancels an older pending one — harmless
-# here, since every run works from the TIP of main. The legacy path gets a group
-# per tag, so a push to main can never cancel a tag that still needs publishing.
+# Main proposals/publications share one queue and work from its current tip.
+# RCs use their own queue: a candidate click must not replace a pending stable
+# publication/proposal, and main/docs runs must not replace a pending candidate.
+# Legacy releases keep a separate group per tag.
 concurrency:
-  group: release-${{ github.event_name == 'release' && github.ref || 'main' }}
+  group: release-${{ github.event_name == 'release' && github.ref || inputs.rc && 'rc' || 'main' }}
   cancel-in-progress: false
 
 jobs:
@@ -128,6 +131,8 @@ jobs:
       - id: plan
         env:
           BUMP: ${{ inputs.bump || 'auto' }}
+          RC: ${{ inputs.rc || false }}
+          EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
@@ -135,26 +140,49 @@ jobs:
           VERSION="$(node -p "require('./package.json').version")"
           SHA="$(git rev-parse HEAD)"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "release" ]; then
+          if [ "$EVENT_NAME" = release ]; then
             # The legacy path publishes what the tag points at, so that commit
             # must already be on main: compare says main is `ahead` of it, or
             # `identical`. Anything else (`behind`, `diverged`) publishes nothing.
             STATUS="$(gh api "repos/$REPO/compare/$SHA...main" --jq .status)"
-            if [ "$STATUS" != "ahead" ] && [ "$STATUS" != "identical" ]; then
+            if [ "$STATUS" != ahead ] && [ "$STATUS" != identical ]; then
               echo "::error::Tag $TAG points at $SHA, which main does not contain (compare: $STATUS). Nothing was published."
               exit 1
             fi
-            echo "mode=publish" >> "$GITHUB_OUTPUT"; exit 0
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "mode=publish" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           node scripts/changes.mjs check
-          if ! git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+          TAGGED=false
+          if TAG_ROWS="$(git ls-remote --exit-code --refs --tags origin "refs/tags/v$VERSION")"; then
+            if awk -v ref="refs/tags/v$VERSION" '$2 == ref { found = 1 } END { exit !found }' <<< "$TAG_ROWS"; then
+              TAGGED=true
+            fi
+          else
+            status=$?
+            if [ "$status" != 2 ]; then
+              echo "::error::Could not establish whether the current version tag exists."
+              exit 1
+            fi
+            TAGGED=false
+          fi
+          if [ "$RC" = true ]; then
+            [ "$TAGGED" = true ] || { echo "::error::A stable release is in flight; an RC cannot start."; exit 1; }
+            git ls-remote --refs --tags origin 'refs/tags/v*-rc.*' > "$RUNNER_TEMP/rc-tags"
+            VERSION="$(node scripts/changes.mjs candidate --tags-file "$RUNNER_TEMP/rc-tags" --bump "$BUMP")"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "mode=rc" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$TAGGED" = false ]; then
             echo "mode=publish" >> "$GITHUB_OUTPUT"
             echo "main names v$VERSION, which has no tag — publishing it." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           count=$(find .changes -maxdepth 1 -name '*.md' ! -name README.md | wc -l)
-          if [ "$count" -gt 0 ] || [ "$BUMP" != "auto" ]; then
+          if [ "$count" -gt 0 ] || [ "$BUMP" != auto ]; then
             echo "mode=propose" >> "$GITHUB_OUTPUT"
             echo "$count .changes/ fragment(s) waiting — opening or updating the release PR." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -283,7 +311,7 @@ jobs:
 
   file-size:
     needs: plan
-    if: needs.plan.outputs.mode == 'publish'
+    if: needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc'
     uses: footprintjs/ci/.github/workflows/file-size.yml@a8ccf97188f64adabd83cbf98677eda501a25ac2
     with:
       tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
@@ -294,7 +322,7 @@ jobs:
     # Runs even when `verdict` failed: its output is then unset, so every gate
     # below runs. The independent source-size ratchet must always pass, even
     # when the other gates reuse an exact previously tested tree.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mode == 'publish' && needs.file-size.result == 'success' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc') && needs.file-size.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -391,6 +419,14 @@ jobs:
       # Stage the EXACT publishable package, files-agnostically: npm computes the
       # tarball (honoring the `files` globs/negations), then we extract it. The
       # publish job re-packs the same bytes.
+      - name: Set only the staged candidate package version
+        if: needs.plan.outputs.mode == 'rc'
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          jq --arg version "$VERSION" '.version = $version' package.json > "$RUNNER_TEMP/package.json"
+          cp "$RUNNER_TEMP/package.json" package.json
+
       - name: Stage published package
         run: |
           npm pack
@@ -424,12 +460,28 @@ jobs:
       - name: Tag
         env:
           VERSION: ${{ needs.plan.outputs.version }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          MODE: ${{ needs.plan.outputs.mode }}
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+          EXISTING=""
+          if TAG_ROWS="$(git ls-remote --exit-code --refs --tags origin "refs/tags/v$VERSION")"; then
+            EXISTING="$(awk -v ref="refs/tags/v$VERSION" '$2 == ref { print $1 }' <<< "$TAG_ROWS")"
+          else
+            status=$?
+            if [ "$status" != 2 ]; then
+              echo "::error::Could not read the exact version tag. Nothing was pushed."
+              exit 1
+            fi
+          fi
+          if [ -n "$EXISTING" ]; then
+            if [ "$MODE" = rc ] && [ "$EXISTING" != "$SHA" ]; then
+              echo "::error::The RC tag does not point at the planned source."
+              exit 1
+            fi
             echo "Tag v$VERSION already on origin — not pushed again."
           else
-            git tag "v$VERSION"
-            git push origin "v$VERSION"
+            git tag "v$VERSION" "$SHA"
+            git push origin "refs/tags/v$VERSION"
           fi
 
       # The notes are the CHANGELOG section the release PR wrote. A release
@@ -439,6 +491,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
+          MODE: ${{ needs.plan.outputs.mode }}
+          SHA: ${{ needs.plan.outputs.sha }}
         run: |
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "GitHub release v$VERSION already exists — not created again."
@@ -452,10 +506,15 @@ jobs:
           if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
             echo "See CHANGELOG.md." > "$RUNNER_TEMP/notes.md"
           fi
-          gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
+          if [ "$MODE" = rc ]; then
+            printf 'Release candidate from commit %s. Final promotion waits for downstream checks.\n' "$SHA" > "$RUNNER_TEMP/notes.md"
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --prerelease --latest=false
+          else
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
+          fi
 
   publish:
-    needs: [build, release]
+    needs: [plan, build, release]
     # `release` is skipped on the legacy trigger (the tag already exists) — and
     # a `release` skipped on any other run publishes nothing, so no version can
     # reach npm untagged.
@@ -488,15 +547,32 @@ jobs:
       # "Re-run failed jobs" — the staged tarball is kept for 30 days, and the
       # release job skips what it already did.
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        env:
+          PLANNED_VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          VERSION="$(jq -er '.version | strings' package.json)"
+          if [ "$VERSION" != "$PLANNED_VERSION" ]; then
+            echo "::error::The staged package version does not match the plan."
+            exit 1
+          fi
+          stable='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+          if [[ "$VERSION" =~ ^$stable$ ]]; then
+            NPM_TAG=latest
+          elif [[ "$VERSION" =~ ^$stable-rc\.(0|[1-9][0-9]*)$ ]]; then
+            NPM_TAG=next
+          else
+            echo "::error::Unsupported staged package version."
+            exit 1
+          fi
+          npm publish --provenance --access public --tag "$NPM_TAG"
 
   # The site documents what npm serves, so it deploys only once npm has the
   # version (see docs.yml). On the legacy path, release.sh starts it itself.
   # docs.yml builds the site, checks its budget and deploys it; its failure
   # leaves the website on the previous version and touches nothing here.
   docs:
-    needs: [release, publish]
-    if: ${{ !cancelled() && needs.release.result == 'success' && needs.publish.result == 'success' }}
+    needs: [plan, release, publish]
+    if: ${{ !cancelled() && needs.plan.outputs.mode == 'publish' && needs.release.result == 'success' && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -598,6 +674,7 @@ jobs:
   # checks would never report. Installs nothing and runs no repository script.
   release-pr:
     needs: [plan, propose]
+    if: needs.plan.outputs.mode == 'propose'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -621,35 +698,62 @@ jobs:
           name: release-pr
           path: ${{ runner.temp }}/release-pr
 
-      # `release/next` belongs to this workflow: it is rebuilt from the tip of
-      # main on every run, so a force-push is the point, not a hazard.
+      # Validate the one-parent bundle, then preserve the previous proposal
+      # with successor parents [main, prior]. The exact prepared tree wins.
       - name: Open or update the release PR
         env:
+          REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ needs.propose.outputs.version }}
           BASE: ${{ needs.plan.outputs.sha }}
         run: |
           git fetch "$RUNNER_TEMP/release-pr/release.bundle" "release/next:release/next"
-          # The bundle is data from a job that ran dependency code: exactly one
-          # commit on the commit `plan` pinned, or nothing is pushed.
-          if [ "$(git rev-parse 'release/next^')" != "$BASE" ] || [ "$(git rev-list --count "$BASE..release/next")" != "1" ]; then
+          # Check the producer bundle before adding the prior proposal parent.
+          PROPOSAL="$(git rev-parse release/next)"
+          if [ "$(git rev-parse 'release/next^')" != "$BASE" ] || [ "$(git rev-list --count "$BASE..release/next")" != 1 ]; then
             echo "::error::The release bundle is not one commit on $BASE. Nothing was pushed."
             exit 1
           fi
-          git push --force origin release/next
+          TREE="$(git rev-parse 'release/next^{tree}')"
+          git ls-remote --heads origin refs/heads/main refs/heads/release/next > "$RUNNER_TEMP/proposal-refs"
+          MAIN="$(awk '$2 == "refs/heads/main" { print $1 }' "$RUNNER_TEMP/proposal-refs")"
+          PRIOR="$(awk '$2 == "refs/heads/release/next" { print $1 }' "$RUNNER_TEMP/proposal-refs")"
+          hex40='^[0-9a-f]{40}$'
+          [[ "$MAIN" =~ $hex40 ]] || exit 1
+          if [ "$MAIN" != "$BASE" ]; then
+            echo "::notice::Main moved; its queued run will prepare the next proposal."
+            exit 0
+          fi
+          PUSH=true
+          if [ -n "$PRIOR" ]; then
+            [[ "$PRIOR" =~ $hex40 ]] || exit 1
+            git fetch --no-tags --depth=2 origin "$PRIOR"
+            PRIOR_PARENT="$(git rev-parse "$PRIOR^")"
+            if [ "$PRIOR_PARENT" = "$BASE" ] && [ "$(git rev-parse "$PRIOR^{tree}")" = "$TREE" ]; then
+              PUSH=false
+            elif [ "$PRIOR" != "$BASE" ]; then
+              NEXT="$(git -c user.name='github-actions[bot]' -c user.email='41898283+github-actions[bot]@users.noreply.github.com' commit-tree "$TREE" -p "$BASE" -p "$PRIOR" -m "chore: release v$VERSION")"
+              git update-ref refs/heads/release/next "$NEXT" "$PROPOSAL"
+            fi
+          fi
+          if [ "$PUSH" = true ]; then
+            git push origin release/next:refs/heads/release/next
+          fi
           {
             cat "$RUNNER_TEMP/release-pr/notes.md"
             echo
             echo "---"
-            echo "Written by the Release workflow from the \`.changes/\` fragments on main. Merging this PR tags v$VERSION, publishes it to npm and deploys the docs site. More fragments merging to main update this PR."
+            echo "Written by the Release workflow from the change fragments on main. Merge only after an exact-head verdict and all required checks."
           } > "$RUNNER_TEMP/body.md"
-          PR="$(gh pr list --head release/next --base main --state open --json number --jq '.[0].number // empty')"
-          if [ -n "$PR" ]; then
+          OWNER="${REPO%%/*}"
+          PRS="$(gh api "repos/$REPO/pulls?state=open&base=main&head=$OWNER:release/next")"
+          COUNT="$(jq 'length' <<< "$PRS")"
+          if [ "$COUNT" = 1 ]; then
+            PR="$(jq -r '.[0].number' <<< "$PRS")"
             gh pr edit "$PR" --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
-          else
+          elif [ "$COUNT" = 0 ]; then
             gh pr create --base main --head release/next --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          else
+            echo "::error::Expected at most one own-repository release PR."
+            exit 1
           fi
-          # Hands-off when the repository allows auto-merge: merges itself once
-          # its required checks are green. Otherwise a person merges it.
-          gh pr merge release/next --auto --squash ||
-            echo "::notice::Auto-merge is not enabled for this repository — merge the release PR when its checks are green."

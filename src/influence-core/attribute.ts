@@ -25,7 +25,7 @@
  * (similarity); Tier 3 (counterfactual ablation of each unit) is the
  * ground truth that would validate it.
  */
-import { cosineSimilarity } from '../memory/embedding/cosine.js';
+import { cosineSimilarity } from '../lib/cosine.js';
 import type { ChoiceAttribution, AttributionUnit, Embedder, UnitScore } from './types.js';
 
 export interface AttributeChoiceArgs {

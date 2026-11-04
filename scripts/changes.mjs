@@ -105,6 +105,37 @@ export function incVersion(version, bump) {
   return `${maj}.${min}.${pat + 1}`;
 }
 
+/** Compute an RC from untouched main and observed tag names. No writes. */
+export function candidateVersion(current, fragments, tags, requested = 'auto') {
+  if (
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(current) ||
+    current.split('.').some((n) => !Number.isSafeInteger(Number(n)))
+  )
+    throw new Error('RC source must name a canonical stable version');
+  const needed = requiredBump(fragments);
+  if (!needed) throw new Error('no fragments waiting for an RC');
+  if (requested !== 'auto' && !BUMPS.includes(requested))
+    throw new Error('RC bump must be auto, patch, minor or major');
+  if (requested !== 'auto' && BUMPS.indexOf(requested) < BUMPS.indexOf(needed))
+    throw new Error('RC bump is lower than the fragment floor');
+  const core = incVersion(current, requested === 'auto' ? needed : requested);
+  if (core.split('.').some((n) => !Number.isSafeInteger(Number(n))))
+    throw new Error('RC version exceeds the supported integer range');
+  const prefix = 'v' + core + '-rc.';
+  let highest = -1;
+  for (const tag of tags) {
+    if (typeof tag !== 'string') throw new Error('RC tag name must be a string');
+    if (!tag.startsWith(prefix)) continue;
+    const value = tag.slice(prefix.length);
+    if (!/^(0|[1-9]\d*)$/.test(value) || !Number.isSafeInteger(Number(value)))
+      throw new Error('noncanonical matching RC tag');
+    highest = Math.max(highest, Number(value));
+  }
+  if (!Number.isSafeInteger(highest + 1))
+    throw new Error('RC number exceeds the supported integer range');
+  return core + '-rc.' + (highest + 1);
+}
+
 /** A fragment body as a CHANGELOG bullet: kept as-is when it is already a list, else one indented bullet. */
 function asBullets(body) {
   if (/^[-*] /.test(body)) return body;
@@ -139,6 +170,25 @@ function changedFilesSince(base) {
 
 function main(argv) {
   const [cmd, ...rest] = argv;
+  if (cmd === 'candidate') {
+    const at = rest.indexOf('--tags-file');
+    if (at < 0 || !rest[at + 1])
+      throw new Error('candidate requires --tags-file from a successful tag query');
+    const text = readFileSync(rest[at + 1], 'utf8');
+    const tags = text
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const row = /^([0-9a-f]{40})\trefs\/tags\/([^\s]+)$/.exec(line);
+        if (!row) throw new Error('tag query returned an invalid row');
+        return row[2];
+      });
+    const bumpAt = rest.indexOf('--bump');
+    const bump = bumpAt < 0 ? 'auto' : rest[bumpAt + 1];
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    console.log(candidateVersion(pkg.version, readFragments(), tags, bump));
+    return 0;
+  }
   if (cmd === 'preview') {
     const fragments = readFragments();
     const bump = requiredBump(fragments);
@@ -186,7 +236,7 @@ function main(argv) {
     console.log(`${fragments.length} change fragment(s) valid; next release: ${requiredBump(fragments) ?? 'none pending'}.`);
     return 0;
   }
-  console.error('usage: node scripts/changes.mjs check [--base <ref>] | preview');
+  console.error('usage: node scripts/changes.mjs check [--base <ref>] | preview | candidate --tags-file <file> [--bump <kind>]');
   return 2;
 }
 

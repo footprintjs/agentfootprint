@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { mockEmbedder } from '../../../src/memory/embedding/mockEmbedder';
-import { cosineSimilarity } from '../../../src/memory/embedding/cosine';
+import { cosineSimilarity } from '../../../src/lib/cosine';
 
 // ── Unit ────────────────────────────────────────────────────
 
