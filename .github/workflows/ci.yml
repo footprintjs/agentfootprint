@@ -112,8 +112,9 @@ jobs:
       - run: npm run test:examples
 
   # The required checks `test (22)` and `test (24)`, by those exact names: the
-  # ruleset and publish.yml · verdict read them. They run no tests. Each passes
-  # only when every job it needs succeeded.
+  # ruleset and publish.yml · verdict read them, and the matrix is here only to
+  # give those two names. They run no tests. Each passes only when every job it
+  # needs succeeded.
   #
   # `if: always()` is what makes a failure count. Without it a failed shard SKIPS
   # this job, and GitHub reports a skipped job as Success, even on a required
