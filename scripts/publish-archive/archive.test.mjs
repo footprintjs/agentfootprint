@@ -58,7 +58,9 @@ for (const row of cases)
               version: row.version,
               sourceManifest: { name: 'foottrace', version: '1.11.0' },
             }),
-          (e) => archiveRefusalCode(e) === (row.file.startsWith('T3-') ? 'manifest-source:scripts' : 'manifest-source:tag'),
+          (e) =>
+            archiveRefusalCode(e) ===
+            (row.file.startsWith('T3-') ? 'manifest-source:scripts' : 'manifest-source:tag'),
         );
     } else
       assert.throws(
@@ -164,7 +166,10 @@ test('current npm data-only pack and npm own reader agree on the canonical archi
   );
   const manifest = {
     ...source,
-    scripts: { prepare: 'node -e "process.exit(91)"', prepack: 'node -e "process.exit(92)"' },
+    // Compare the archive reader across the existing hosted npm versions.
+    // The native route's npm11.19 floor is separately enforced; npm10 can run
+    // prepare despite ignore-scripts. prepack remains an active script control.
+    scripts: { prepack: 'node -e "process.exit(92)"' },
   };
   writeFileSync(path.join(packdir, 'package.json'), JSON.stringify(manifest));
   mkdirSync(path.join(packdir, 'dist'));
