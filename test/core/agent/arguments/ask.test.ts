@@ -856,7 +856,6 @@ describe('askBeforeDispatch â€” a state another batch left is never this batchâ€
     try {
       askBeforeDispatch(scope as never, resolutions, {
         toolOf,
-        partyOf: () => ({ channel: 'registry' }),
         runId: () => 'run-x',
       });
     } catch (error) {

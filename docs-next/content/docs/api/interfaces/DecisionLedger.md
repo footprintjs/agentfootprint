@@ -4,7 +4,7 @@ title: DecisionLedger
 
 # Interface: DecisionLedger
 
-Defined in: [src/core/consentRequest.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L163)
+Defined in: [src/core/consentRequest.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L171)
 
 Where the consent requests that have been answered are recorded, so one
 decision runs one call — once per LEDGER.
@@ -23,7 +23,7 @@ store they all reach (`Agent.create({ decisionLedger })`).
 
 > `readonly` `optional` **storeId?**: `string`
 
-Defined in: [src/core/consentRequest.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L184)
+Defined in: [src/core/consentRequest.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L192)
 
 OPTIONAL — the identity of the store this ledger records into. A host that
 closes a pause no answer can reach asks the ledger the pause was minted
@@ -50,19 +50,18 @@ Spends in it are permanent too (no expiry) — see `spend`.
 
 > `optional` **isSpent**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:213](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L213)
+Defined in: [src/core/consentRequest.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L220)
 
-OPTIONAL — whether `requestId` is recorded as answered, without recording
-it. Asked only after a [DecisionLedger.spend](/docs/api/interfaces/DecisionLedger#spend) for it failed, so a
-host can tell a spend that never landed (the call did not run; the pause
-stays answerable) from one that did. A ledger without it, or one that
-throws or answers anything but `false`, counts as spent: the host stops
-offering the pause. Asked, too, whether a host recorded closing a request
-(`closed-proven:<requestId>`) — so a retried close keeps the verdict the
-first one proved, and a person whose answer arrives after the close is
-told the host closed it. Never asked whether the REQUEST is unspent as a
-proof that its call did not run: a read can be overtaken by a resume
-elsewhere; only `spend` proves.
+OPTIONAL advisory observation after a failed [DecisionLedger.spend](/docs/api/interfaces/DecisionLedger#spend).
+`false` must mean this exact request is absent; `true` must mean it is
+recorded. A throw, a bounded-out wait or any other answer is unknown.
+Unknown counts as POSSIBLY used after an attempted spend, never as proof
+of execution or non-execution. A cautious positive cannot refuse a fresh
+answer or prove a host closed it: only the atomic spend is authority.
+Library-created in-memory ledgers expose their actual Set membership
+privately for synchronous replay refusal before native execution. An
+opaque ledger goes straight to `spend`; its optional boolean is never
+promoted into that definitive capability.
 
 #### Parameters
 
@@ -80,7 +79,7 @@ elsewhere; only `spend` proves.
 
 > **spend**(`requestId`): `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: [src/core/consentRequest.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L199)
+Defined in: [src/core/consentRequest.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/consentRequest.ts#L207)
 
 Record `requestId` as answered. Resolve `true` when THIS call recorded it
 and `false` when it was already recorded — atomically per id: of two

@@ -31,6 +31,7 @@ import type { ProviderToolCache, ServedToolParties } from '../../slots/buildTool
 import { sameToolParty, type ToolParty } from '../../../tools/toolParty.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
+import { keyOfLabel } from '../../../tools/finiteLabel.js';
 
 /** One name, resolved. */
 export interface ToolResolution {
@@ -71,20 +72,35 @@ function providerToolOf(deps: ToolResolverDeps, name: string): Tool | undefined 
 }
 
 /** Every bound path asks the same current-owner policy; a mismatch never falls through. */
-function toolForParty(deps: ToolResolverDeps, name: string, party: ToolParty): Tool | undefined {
+function toolForParty(
+  deps: ToolResolverDeps,
+  name: string,
+  party: ToolParty,
+): ToolResolution | undefined {
   if (party.channel === 'provider') {
-    return deps.externalToolProvider && sameToolParty(party, providerPartyOf(deps))
-      ? providerToolOf(deps, name)
-      : undefined;
+    const declared = providerPartyOf(deps);
+    const tool =
+      deps.externalToolProvider && sameToolParty(party, declared)
+        ? providerToolOf(deps, name)
+        : undefined;
+    return tool === undefined ? undefined : { tool, party: declared };
   }
   const tool = deps.registryByName.get(name);
   if (tool === undefined) return undefined;
   const claims = deps.toolClaimants?.get(name);
-  const matches =
-    claims !== undefined && claims.length > 0
-      ? claims.some((claim) => claim.tool === tool && sameToolParty(claim, party))
-      : sameToolParty(party, { channel: 'registry' });
-  return matches ? tool : undefined;
+  const claim = claims?.find(
+    (candidate) => candidate.tool === tool && sameToolParty(candidate, party),
+  );
+  if (claims !== undefined && claims.length > 0)
+    return claim === undefined
+      ? undefined
+      : {
+          tool,
+          party: { channel: claim.channel, ...(claim.id !== undefined && { id: claim.id }) },
+        };
+  return sameToolParty(party, { channel: 'registry' })
+    ? { tool, party: { channel: 'registry' } }
+    : undefined;
 }
 
 /** A name with no prior party still reports the declaration of its actual current holder. */
@@ -110,34 +126,36 @@ function registryPartyOf(deps: ToolResolverDeps, name: string): ToolParty | unde
  */
 export function buildToolResolver(deps: ToolResolverDeps): ToolResolver {
   return (toolName, pinned) => {
+    if (typeof toolName !== 'string') return {};
     const askParties = deps.servedTools?.pinned;
     const boundAsk = askParties?.has(toolName) === true;
-    // A separately admitted ask receipt binds this batch's original call
-    // parties, including off-wire calls. It never enlarges wire membership.
-    // An explicit paused-call label alone cannot bypass the finite carrier.
+    const key = keyOfLabel(toolName);
+    const currentParty =
+      deps.servedTools?.current.get(toolName) ?? deps.servedTools?.currentProof?.get(key);
+    const previousParty =
+      deps.servedTools?.lastServed.get(toolName) ?? deps.servedTools?.lastProof?.get(key);
+    // The admitted original-batch proof binds paused call parties, including
+    // off-wire calls, without enlarging offered tool membership. A free-standing
+    // paused-call label cannot bypass the finite carrier's validation.
     if (
-      deps.servedTools?.restored === true &&
+      (deps.servedTools?.restored === true || deps.servedTools?.truncated === true) &&
       !boundAsk &&
-      !deps.servedTools.current.has(toolName) &&
-      !deps.servedTools.lastServed.has(toolName)
+      currentParty === undefined &&
+      previousParty === undefined
     )
       return { refusal: deps.notServed(toolName) };
-    const currentParty = deps.servedTools?.current.get(toolName);
     const pinnedParty = boundAsk ? askParties?.get(toolName) : pinned;
-    const party =
-      pinnedParty === undefined
-        ? currentParty ?? deps.servedTools?.lastServed.get(toolName)
-        : pinnedParty;
+    const party = pinnedParty === undefined ? currentParty ?? previousParty : pinnedParty;
     // A saved absence is not an offered contract and cannot select a new holder.
     if (party === null) return {};
     if (party !== undefined) {
-      const tool = toolForParty(deps, toolName, party);
-      if (tool === undefined) {
+      const matched = toolForParty(deps, toolName, party);
+      if (matched === undefined) {
         const otherHolder =
           deps.registryByName.has(toolName) || providerToolOf(deps, toolName) !== undefined;
         return otherHolder ? { party, refusal: deps.notServed(toolName) } : {};
       }
-      return { tool, party, ...(currentParty === undefined && { offWire: true as const }) };
+      return { ...matched, ...(currentParty === undefined && { offWire: true as const }) };
     }
     const registryHolder = deps.registryByName.get(toolName);
     const providerHolder = providerToolOf(deps, toolName);

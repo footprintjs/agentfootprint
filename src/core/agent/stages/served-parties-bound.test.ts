@@ -19,6 +19,8 @@ function scopeOf() {
       nextDispatch: 0,
     },
     turnNumber: 1,
+    iteration: 1,
+    llmLatestToolCalls: [],
   };
   return Object.assign(state, {
     $getValue: (key: string) => state[key],
@@ -46,7 +48,7 @@ it.each([
     expect(carrier.last.length).toBeLessThan(count);
     expect(carrier.last.length).toBeLessThanOrEqual(1024);
     expect(jsonBytes(carrier)).toBeLessThanOrEqual(131072);
-    expect(carrier.last.at(-1)?.name).toBe(names.at(-1));
+    expect(carrier.last.at(-1)?.name.value).toBe(names.at(-1));
     expect(carrier.current).toEqual(carrier.last);
   },
 );
@@ -57,7 +59,7 @@ it('drops old history first and cannot assign an omitted name to a current holde
   const served = offered(names);
   saveServedParties(scope, served);
   const carrier = readServedParties(scope as unknown as Record<string, unknown>);
-  expect(carrier.last[0]?.name).toBe('tool-76');
+  expect(carrier.last[0]?.name.value).not.toBe(names[0]);
   const restored: ServedToolParties = { current: new Map(), lastServed: new Map() };
   restoreServedParties(scope, restored);
   const omitted = defineTool({
@@ -82,9 +84,9 @@ it('bounds remembered epochs independently of the current wire', () => {
   served.current = new Map([[names.at(-1)!, party]]);
   saveServedParties(scope, served);
   const carrier = readServedParties(scope as unknown as Record<string, unknown>);
-  expect(carrier.current).toEqual([{ name: names.at(-1), party }]);
+  expect(carrier.current).toEqual([{ name: { kind: 'plain', value: names.at(-1) }, party }]);
   expect(carrier.last.length).toBeLessThanOrEqual(1024);
-  expect(carrier.last.at(-1)?.name).toBe(names.at(-1));
+  expect(carrier.last.at(-1)?.name.value).toBe(names.at(-1));
 });
 
 it('keeps current wire order and does not inspect unrelated checkpoint fields', () => {
@@ -104,7 +106,7 @@ it('keeps current wire order and does not inspect unrelated checkpoint fields', 
       throw new Error('unrelated getter');
     },
   });
-  expect(readServedParties(leaf).current.map((row) => row.name)).toEqual(['second', 'first']);
+  expect(readServedParties(leaf).current.map((row) => row.name.value)).toEqual(['second', 'first']);
   const bad = { ...scope };
   Object.defineProperty(bad, 'servedToolParties', {
     get: () => {
@@ -171,8 +173,8 @@ it.each(['same', 'fresh'] as const)(
       paused = await agent.run('go');
     if (!isPaused(paused) || paused.awaitingInput === undefined) throw new Error('Expected ask');
     const carrier = readServedParties(paused.checkpoint.sharedState);
-    expect(carrier.current.some((row) => row.name === 'collect')).toBe(false);
-    expect(carrier.last.some((row) => row.name === 'collect')).toBe(false);
+    expect(carrier.current.some((row) => row.name.value === 'collect')).toBe(false);
+    expect(carrier.last.some((row) => row.name.value === 'collect')).toBe(false);
     const resumed = mode === 'same' ? agent : make();
     await expect(
       resumed.resume(paused.checkpoint, {
@@ -247,7 +249,7 @@ it('does not fail a tool that pauses after many rotating provider epochs', async
   const carrier = readServedParties(paused.checkpoint.sharedState);
   expect(carrier.last.length).toBeLessThanOrEqual(1024);
   expect(jsonBytes(carrier)).toBeLessThanOrEqual(131072);
-  expect(carrier.current.some((row) => row.name === 'pauser')).toBe(true);
+  expect(carrier.current.some((row) => row.name.value === 'pauser')).toBe(true);
   await expect(
     agent.resume(paused.checkpoint, {
       requestId: paused.awaitingInput!.requestId,

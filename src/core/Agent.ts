@@ -12,6 +12,7 @@ import {
   pendingQuestionOf,
   preservePendingQuestion,
   abandonStoredPause,
+  abandonPendingQuestion,
 } from './agent/pauseOwnership.js';
 import { registerRunnerLive, runnerLive } from './runnerLive.js';
 import { agentComponentObservers, componentEvidence } from './agent/componentObservers.js';
@@ -2334,9 +2335,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     return this.runExecution().withRun(async (invocation) => {
-      // Refuse BEFORE the timing guards, so "there is nothing to follow up on"
-      // is never reported as "a run is in flight" for an agent that has simply
-      // not run yet.
+      assertIdentityShape(options?.identity, 'Agent.followUp');
+      // A continuation must exist before any history can be selected.
       if (
         invocation.previous?.view.snapshot() === undefined ||
         (this.lastInputRefused(invocation.previous?.view) &&
@@ -2353,7 +2353,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
             : 'last-run-unfinished',
         );
       }
-      refuseFollowUpIdentity(options?.identity, conversation.identity);
+      if (conversation.identity !== undefined)
+        refuseFollowUpIdentity(options?.identity, conversation.identity);
       return this.runOwned(invocation, { message, continueFrom: conversation }, options);
     });
   }
@@ -2377,14 +2378,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     | { readonly toolName?: string; readonly toolCallId?: string; readonly question?: string }
     | undefined
   > {
-    return this.runExecution().withRun(async (invocation) => {
-      const previous = invocation.previous;
-      const dropped = previous?.value.pendingQuestion;
-      if (dropped === undefined) return undefined;
-      await previous?.value.resources?.abandon();
-      if (previous !== undefined) previous.value.pendingQuestion = undefined;
-      return dropped;
-    });
+    return this.runExecution().withRun((invocation) =>
+      abandonPendingQuestion(invocation.previous?.value),
+    );
   }
 
   /**
@@ -2657,6 +2653,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         input,
         gate,
         options?.signal,
+        options?.env?.signal,
       );
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
@@ -2721,7 +2718,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         : options;
     // The leg's policy — the carried one, the caller's, and the paused leg's
     // marks — comes back from the emitter and goes to THIS leg's executor
-    // (`createExecutor` → `openRunRedaction`); nothing per-run is held on the instance.
+    // (native setup → `prepareRunRedaction`); nothing per-run is held on the instance.
     const resumeLeg = this.emitPauseResume(
       checkpoint,
       input,

@@ -1734,9 +1734,8 @@ export async function standingAgent<TH extends HostHandle>(
             paused,
           );
         } catch (err) {
-          // A failure in the resume or in storing its result: when the
-          // decision may have been used, the stored pause is answered before
-          // anyone hears of it (`answeredPause.ts`).
+          // Settle the stored question before reporting a resume or write failure.
+          // Ledger observations follow the request signal (`answeredPause.ts`).
           if (sessionId !== undefined) {
             await afterFailedAnswer({
               store,
@@ -1745,6 +1744,7 @@ export async function standingAgent<TH extends HostHandle>(
               watch,
               answer: request.decision,
               error: err,
+              signal: request.signal,
               settle: () => lane.writer?.settle(),
               runner,
             });

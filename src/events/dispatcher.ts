@@ -432,7 +432,7 @@ export class EventDispatcher {
 
   /**
    * Install what this run's events are served as. Called by the runner when a
-   * run opens (`RunnerBase · openRunRedaction`) and before a resume's reply.
+   * run opens (`prepareRunRedaction`) and before a resume's reply.
    *
    * @param serving  the run's serving — every run has one: covered by a
    *                 policy, or positively none (the identity, which still

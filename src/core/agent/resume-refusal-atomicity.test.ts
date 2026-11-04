@@ -1,3 +1,4 @@
+import { watchDecisionUse } from '../consentRequest.js';
 import { expect, it } from 'vitest';
 import {
   Agent,
@@ -381,67 +382,102 @@ it.each(['without-reader', 'spend-race'] as const)(
   },
 );
 
-it('cancelling a pre-origin ledger read releases the instance and preserves the selected person', async () => {
-  let start!: () => void, release!: (used: boolean) => void;
-  const entered = new Promise<void>((done) => {
-    start = done;
-  });
-  const read = new Promise<boolean>((done) => {
-    release = done;
-  });
-  const ledger: DecisionLedger = {
-    spend: () => true,
-    isSpent: () => {
-      start();
-      return read;
-    },
-  };
-  const tool = defineTool({
-    name: 'hold',
-    description: 'Gate',
-    inputSchema: { type: 'object' },
-    checkIn: 'always',
-    execute: () => 'ran',
-  });
-  const bob = Agent.create({
-    decisionLedger: ledger,
-    provider: mock({ replies: [{ toolCalls: [{ id: 'held', name: 'hold', args: {} }] }] }),
-    model: 'mock',
-  })
-    .tool(tool)
-    .build();
-  const pause = await bob.run({
-    message: 'BOB-PRIVATE',
-    identity: { conversationId: 'b', principal: 'bob' },
-  });
-  if (!isPaused(pause)) throw new Error('Expected pause');
-  const alice = Agent.create({
-    decisionLedger: ledger,
-    provider: mock({ replies: ['ALICE', 'NEXT'] }),
-    model: 'mock',
-  })
-    .tool(tool)
-    .build();
-  await alice.run({ message: 'ALICE', identity: { conversationId: 'a', principal: 'alice' } });
-  const controller = new AbortController(),
-    reason = new Error('cancelled by caller');
-  let failure: unknown;
-  const resumed = alice
-    .resume(pause.checkpoint, checkInApproved({ request: pause.checkIn!, by: 'bob' }), {
-      signal: controller.signal,
+it.each(['signal', 'env-signal', 'timeout', 'deadline', 'env-deadline'] as const)(
+  'opaque reads are skipped and cancellation at atomic spend keeps the actual execution boundary: %s',
+  async (mode) => {
+    let start!: () => void, release!: (used: boolean) => void;
+    const entered = new Promise<void>((done) => {
+      start = done;
+    });
+    const spent = new Promise<boolean>((done) => {
+      release = done;
+    });
+    let reads = 0;
+    const ran: string[] = [];
+    const ledger: DecisionLedger = {
+      spend: () => {
+        start();
+        return spent;
+      },
+      isSpent: () => {
+        reads++;
+        return new Promise<boolean>(() => undefined);
+      },
+    };
+    const tool = defineTool({
+      name: 'hold',
+      description: 'Gate',
+      inputSchema: { type: 'object' },
+      checkIn: 'always',
+      execute: () => {
+        ran.push('ran');
+        return 'ran';
+      },
+    });
+    const bob = Agent.create({
+      decisionLedger: ledger,
+      provider: mock({ replies: [{ toolCalls: [{ id: 'held', name: 'hold', args: {} }] }] }),
+      model: 'mock',
     })
-    .catch((error: unknown) => {
+      .tool(tool)
+      .build();
+    const pause = await bob.run({
+      message: 'BOB-PRIVATE',
+      identity: { conversationId: 'b', principal: 'bob' },
+    });
+    if (!isPaused(pause)) throw new Error('Expected pause');
+    const alice = Agent.create({
+      decisionLedger: ledger,
+      provider: mock({ replies: ['ALICE', 'NEXT'] }),
+      model: 'mock',
+    })
+      .tool(tool)
+      .build();
+    await alice.run({ message: 'ALICE', identity: { conversationId: 'a', principal: 'alice' } });
+    const controller = new AbortController(),
+      reason = new Error('cancelled by caller');
+    const decision = checkInApproved({ request: pause.checkIn!, by: 'bob' });
+    const watch = watchDecisionUse(decision.requestId);
+    const options =
+      mode === 'signal'
+        ? { signal: controller.signal }
+        : mode === 'env-signal'
+        ? { env: { signal: controller.signal } }
+        : mode === 'timeout'
+        ? { timeoutMs: 100 }
+        : mode === 'deadline'
+        ? { deadline: Date.now() + 100 }
+        : { env: { deadline: Date.now() + 100 } };
+    let failure: unknown;
+    const resumed = alice.resume(pause.checkpoint, decision, options).catch((error: unknown) => {
       failure = error;
     });
-  try {
-    await entered;
-    controller.abort(reason);
-    await new Promise<void>((done) => setImmediate(done));
-    expect(failure).toBe(reason);
-    expect(alice.checkpoint()?.identity?.principal).toBe('alice');
-    expect(await alice.followUp('next')).toBe('NEXT');
-  } finally {
-    release(false);
-    await resumed;
-  }
-});
+    try {
+      await entered;
+      expect(reads).toBe(0);
+      expect(await watch.mayHaveBeenUsed()).toBe(true);
+      // An opaque ledger can refuse only at spend, after native origin.
+      expect(alice.checkpoint()?.identity?.principal).toBe('bob');
+      controller.abort(reason);
+      await resumed;
+      if (mode === 'signal' || mode === 'env-signal') expect(failure).toBe(reason);
+      else expect(failure).toBeInstanceOf(Error);
+      expect(ran).toEqual([]);
+      expect(alice.checkpoint()?.identity?.principal).toBe('bob');
+      release(true);
+      await new Promise<void>((done) => setImmediate(done));
+      expect(await watch.mayHaveBeenUsed()).toBe(true);
+      expect(ran).toEqual([]);
+      await expect(
+        alice.followUp('next', { identity: { conversationId: 'a', principal: 'alice' } }),
+      ).rejects.toMatchObject({ code: 'ERR_SESSION_OWNERSHIP_CONFLICT' });
+      expect(await alice.followUp('next')).toBe('NEXT');
+    } finally {
+      release(true);
+      await resumed;
+      watch.release();
+      await alice.shutdown();
+      await bob.shutdown();
+    }
+  },
+);

@@ -475,11 +475,10 @@ export function streamHandler<TRequest, TEvent>(
         settlement = await keep(turn, out, runId);
       }
     } catch (err) {
-      // An answer handed to the runner that then failed — in the run, or in
-      // keeping its result: when its decision may have been used, the stored
-      // pause is answered before the caller hears the end; refused for a
-      // reason no decision can change, it is closed (`answeredPause.ts`). A
-      // caller who left before the run started handed nothing over.
+      // Before replying, settle an answer whose run or result persistence failed.
+      // A possibly used decision consumes the pause; an unanswerable one closes it.
+      // A caller who left before execution handed nothing over. Advisory ledger
+      // observations follow the stream signal (`answeredPause.ts`).
       let outcome: FailedAnswerOutcome = 'kept';
       if (
         answering &&
@@ -494,6 +493,7 @@ export function streamHandler<TRequest, TEvent>(
           watch,
           answer: plan.turn.kind === 'answer' ? plan.turn.answer : undefined,
           error: err,
+          signal,
           runner,
         }).catch((): FailedAnswerOutcome => 'kept');
       }

@@ -405,3 +405,12 @@ Before adding one, verify the behavior can't be expressed as a composition of LL
 - Implement `Runner<TIn, TOut>`
 - Attach the three core recorders (Context / Stream / Agent) internally
 - Document its internal subflow structure + events it emits
+
+
+## Consent ledger observations
+
+`consentRequest.ts` binds decisions to calls and owns the atomic spend.
+`consentLedger.ts` keeps issued in-memory membership capabilities, bounded
+advisory reads and finite local close receipts. Optional positive reads are
+not proof that a call ran or that a host closed it. Local close evidence is
+scoped to the exact ledger identity and request; eviction or restart loses it.

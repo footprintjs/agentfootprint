@@ -1,10 +1,12 @@
-import { throwIfAborted, untilAborted } from '../../lib/abort.js';
+import { throwIfAborted } from '../../lib/abort.js';
+import { knownDecisionState, hasLocalClose } from '../consentLedger.js';
 import type { MemoryIdentity } from '../../memory/identity/types.js';
 import { sameIdentity } from './callerIdentity.js';
 import { ResumeIdentityConflictError } from '../conversation.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import {
   closedProvenKey,
+  ledgerIdentityOf,
   notePreviouslySpentDecision,
   type DecisionLedger,
 } from '../consentRequest.js';
@@ -12,20 +14,22 @@ import { PauseAnswerRequiredError, ResumeDecisionError, type ConsentGate } from 
 import { ownField } from './checkpointDomain.js';
 import { isArgumentAskPause } from './arguments/askMarker.js';
 
-/** A read may refuse a replay; only the later atomic spend authorizes execution. */
+/** A synchronous issued-ledger read may refuse a replay; only atomic spend authorizes execution. */
 export async function refuseKnownSpentAnswer(
   ledger: DecisionLedger,
   input: unknown,
   gate: ConsentGate,
   signal?: AbortSignal,
+  envSignal?: AbortSignal,
 ): Promise<void> {
   throwIfAborted(signal);
-  if (ledger.isSpent === undefined) return;
+  throwIfAborted(envSignal);
   const requestId = ownField(input, 'requestId');
   if (typeof requestId !== 'string') return;
-  if ((await untilAborted(ledger.isSpent(requestId), signal)) !== true) return;
+  const localClose = hasLocalClose(ledgerIdentityOf(ledger), requestId);
+  if (knownDecisionState(ledger, requestId) !== true && !localClose) return;
   notePreviouslySpentDecision(requestId);
-  const closed = (await untilAborted(ledger.isSpent(closedProvenKey(requestId)), signal)) === true;
+  const closed = localClose || knownDecisionState(ledger, closedProvenKey(requestId)) === true;
   throw new ResumeDecisionError(closed ? 'closed-by-host' : 'already-answered', gate.kind);
 }
 

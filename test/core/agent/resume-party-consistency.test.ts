@@ -13,9 +13,12 @@ import type { ToolParty } from '../../../src/core/slots/buildToolsSlot.js';
 import type { Tool } from '../../../src/tools/tools.js';
 import type { LLMRequest } from '../../../src/provider-contract/types.js';
 import {
-  restoreArgumentParties,
-  withArgumentParties,
-} from '../../../src/core/agent/stages/argumentParties.js';
+  readServedParties,
+  saveServedParties,
+  restoreServedParties,
+} from '../../../src/core/agent/stages/servedParties.js';
+import { toolBatchFailure } from '../../../src/core/agent/stages/toolCallShape.js';
+import { jsonBytes } from '../../../src/lib/boundedJson.js';
 import { readToolParty } from '../../../src/tools/toolParty.js';
 
 const NAME = 'read_rows';
@@ -411,20 +414,18 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)(
 );
 
 interface MutableArgumentState {
-  toolParties: {
-    version: number;
-    owner: { runId: string; componentOrdinal: number };
-    turn: number;
-    iteration: number;
-    calls: { id: string; name: string; party: { channel: string; id?: string } }[];
-  };
+  version: number;
+  owner: { runId: string; componentOrdinal: number };
+  turn: number;
+  iteration: number;
+  bound: { index: number; id: unknown; name: unknown; party: { channel: string; id?: string } }[];
 }
 
 function editArgumentState(value: unknown, edit: (state: MutableArgumentState) => void): number {
   if (typeof value !== 'object' || value === null) return 0;
   let count = 0;
   for (const [key, child] of Object.entries(value)) {
-    if (key === 'argumentAsk' && typeof child === 'object' && child !== null) {
+    if (key === 'servedToolParties' && typeof child === 'object' && child !== null) {
       edit(child as MutableArgumentState);
       count++;
     } else count += editArgumentState(child, edit);
@@ -495,7 +496,7 @@ describe('argument party checkpoint admission', () => {
       const checkpoint = structuredClone(pause.checkpoint);
       expect(
         editArgumentState(checkpoint, (state) => {
-          Reflect.deleteProperty(state, 'toolParties');
+          Reflect.deleteProperty(state, 'bound');
         }),
       ).toBeGreaterThan(0);
       // Also strip the complete ask state, leaving the native pause metadata intact.
@@ -521,38 +522,33 @@ describe('argument party checkpoint admission', () => {
           requestId: pause.awaitingInput.requestId,
           values: { [pause.awaitingInput.fields[0]!.id]: '24h' },
         }),
-      ).rejects.toThrow('argumentAsk:');
+      ).rejects.toThrow('saved tool ownership carrier');
       expect(listed).not.toHaveBeenCalled();
       expect(execute).not.toHaveBeenCalled();
     },
   );
   it.each([
+    ['missing binding', (state: MutableArgumentState) => Reflect.deleteProperty(state, 'bound')],
+    ['future version', (state: MutableArgumentState) => (state.version = 99)],
+    ['foreign turn', (state: MutableArgumentState) => (state.turn += 1)],
+    ['foreign owner', (state: MutableArgumentState) => (state.owner.runId = 'other')],
+    ['foreign iteration', (state: MutableArgumentState) => (state.iteration += 1)],
+    ['missing sibling', (state: MutableArgumentState) => state.bound.pop()],
+    ['extra sibling', (state: MutableArgumentState) => state.bound.push(state.bound[0])],
     [
-      'missing binding',
-      (state: MutableArgumentState) => Reflect.deleteProperty(state, 'toolParties'),
+      'rebound sibling indices',
+      (state: MutableArgumentState) => {
+        const a = state.bound[0]!.index;
+        state.bound[0]!.index = state.bound[1]!.index;
+        state.bound[1]!.index = a;
+      },
     ],
-    ['future version', (state: MutableArgumentState) => (state.toolParties.version = 2)],
-    ['foreign turn', (state: MutableArgumentState) => (state.toolParties.turn += 1)],
-    ['foreign owner', (state: MutableArgumentState) => (state.toolParties.owner.runId = 'other')],
-    ['foreign iteration', (state: MutableArgumentState) => (state.toolParties.iteration += 1)],
-    ['missing sibling', (state: MutableArgumentState) => state.toolParties.calls.pop()],
-    [
-      'extra sibling',
-      (state: MutableArgumentState) => state.toolParties.calls.push(state.toolParties.calls[0]),
-    ],
-    ['reordered siblings', (state: MutableArgumentState) => state.toolParties.calls.reverse()],
-    ['foreign call id', (state: MutableArgumentState) => (state.toolParties.calls[0].id = 'other')],
-    [
-      'foreign tool name',
-      (state: MutableArgumentState) => (state.toolParties.calls[0].name = 'other'),
-    ],
-    [
-      'unknown party',
-      (state: MutableArgumentState) => (state.toolParties.calls[0].party.channel = 'unknown'),
-    ],
+    ['foreign call id', (state: MutableArgumentState) => (state.bound[0].id = 'other')],
+    ['foreign tool name', (state: MutableArgumentState) => (state.bound[0].name = 'other')],
+    ['unknown party', (state: MutableArgumentState) => (state.bound[0].party.channel = 'unknown')],
     [
       'inconsistent same-name parties',
-      (state: MutableArgumentState) => (state.toolParties.calls[0].party.id = 'other'),
+      (state: MutableArgumentState) => (state.bound[0].party.id = 'other'),
     ],
   ] as const)('refuses %s before catalog discovery', async (_label, damage) => {
     const execute = vi.fn(() => 'rows');
@@ -574,79 +570,76 @@ describe('argument party checkpoint admission', () => {
         requestId: pause.awaitingInput.requestId,
         values: { [pause.awaitingInput.fields[0]!.id]: '24h' },
       }),
-    ).rejects.toThrow('argumentAsk:');
+    ).rejects.toThrow('saved tool ownership carrier');
     expect(listed).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
   });
 });
 
-describe('finite argument party data', () => {
-  function fixture(count = 2) {
+describe('finite original-party data', () => {
+  function fixture(
+    count = 2,
+    partyOf: () => ToolParty | undefined = () => ({ channel: 'provider', id: 'original' }),
+  ) {
     const calls = Array.from({ length: count }, (_, i) => ({ id: `call-${i}`, name: NAME }));
     const values: Record<string, unknown> = {
       llmLatestToolCalls: calls,
-      runIdentity: { conversationId: 'retained' },
+      iteration: 1,
+      turnNumber: 1,
       toolResourceOwner: {
         version: 1,
         birth: { runId: 'native-run', componentOrdinal: 0 },
         nextDispatch: 0,
       },
     };
-    const scope = new Proxy(
-      {
-        $getValue: (key: string) => values[key],
-        iteration: 1,
-        turnNumber: 1,
-        turnStartMs: 1,
-      },
-      {
-        // TypedScope's native has trap checks defined state without recording a read.
-        has: (target, key) =>
-          key in target || (typeof key === 'string' && values[key] !== undefined),
-      },
-    );
-    const capture = () =>
-      withArgumentParties(scope as never, { iteration: 1, fields: [], progress: [] }, () => ({
-        channel: 'provider',
-        id: 'original',
-      }));
+    const scope = Object.assign(values, { $getValue: (key: string) => values[key] });
+    const capture = () => {
+      saveServedParties(
+        scope as never,
+        { current: new Map(), lastServed: new Map() },
+        {
+          calls,
+          iteration: 1,
+          partyOf,
+          paused: { id: calls.at(-1)?.id, name: NAME },
+        },
+      );
+      return readServedParties(values);
+    };
     return { scope, values, calls, capture };
   }
-
-  it('admits the finite call limit and refuses the next before allocating a saved batch', () => {
-    expect(fixture(1024).capture().toolParties.calls).toHaveLength(1024);
-    expect(() => fixture(1025).capture()).toThrow('argumentAsk:');
+  it('the actual ask count bound remains explicit; generic paused batches retain their selected row', () => {
+    expect(toolBatchFailure(fixture(1024).calls)).toBeUndefined();
+    expect(toolBatchFailure(fixture(1025).calls)).toBe('too-many-calls');
+    const carrier = fixture(1025).capture();
+    expect(carrier.bound[0]?.index).toBe(1024);
+    expect(carrier.bound.length).toBeLessThanOrEqual(1024);
+    expect(carrier.truncated).toBe(true);
+    expect(jsonBytes(carrier)).toBeLessThanOrEqual(131072);
   });
-
-  it('refuses duplicate proposal ids', () => {
+  it('actual ask batches still refuse duplicate proposal ids', () => {
     const f = fixture();
     f.calls[1]!.id = f.calls[0]!.id;
-    expect(f.capture).toThrow('argumentAsk:');
+    expect(toolBatchFailure(f.calls)).toBe('duplicate-call-id');
   });
-
   it('does not partly install a damaged sibling', () => {
     const f = fixture();
-    const saved = structuredClone(f.capture());
-    Reflect.deleteProperty(saved.toolParties.calls[1]!, 'party');
-    f.values.argumentAsk = saved;
+    f.capture();
+    const saved = f.values.servedToolParties as { bound: Record<string, unknown>[] };
+    Reflect.deleteProperty(saved.bound[1]!, 'party');
     const current = new Map<string, ToolParty>([['untouched', { channel: 'registry' }]]);
     const served = { current, lastServed: new Map<string, ToolParty>() };
-    expect(() => restoreArgumentParties(f.scope as never, served)).toThrow('argumentAsk:');
+    expect(() => restoreServedParties(f.scope as never, served)).toThrow();
     expect(served.current).toBe(current);
   });
-
   it('keeps an explicitly unowned name closed instead of choosing a current holder', () => {
-    const f = fixture();
-    f.values.argumentAsk = withArgumentParties(
-      f.scope as never,
-      { iteration: 1, fields: [], progress: [] },
-      () => undefined,
-    );
+    const f = fixture(2, () => undefined);
+    f.capture();
     const served = {
       current: new Map<string, ToolParty | null>(),
       lastServed: new Map<string, ToolParty>(),
     };
-    restoreArgumentParties(f.scope as never, served);
+    restoreServedParties(f.scope as never, served);
     const resolve = buildToolResolver({
       servedTools: served,
       registryByName: new Map([[NAME, rowTool('replacement')]]),
@@ -654,8 +647,7 @@ describe('finite argument party data', () => {
     });
     expect(resolve(NAME)).toEqual({});
   });
-
-  it('reads bounded own data without invoking accessors or adopting inherited labels', () => {
+  it('reads finite own declarations without invoking accessors or adopting inherited labels', () => {
     const getter = vi.fn(() => 'provider');
     expect(readToolParty(Object.defineProperty({}, 'channel', { get: getter }))).toBeUndefined();
     expect(getter).not.toHaveBeenCalled();
@@ -663,6 +655,9 @@ describe('finite argument party data', () => {
       readToolParty(Object.assign(Object.create({ id: 'inherited' }), { channel: 'provider' })),
     ).toBeUndefined();
     expect(readToolParty({ channel: 'provider', id: 'x'.repeat(1024) })).toBeDefined();
-    expect(readToolParty({ channel: 'provider', id: 'x'.repeat(1025) })).toBeUndefined();
+    expect(readToolParty({ channel: 'provider', id: 'x'.repeat(1025) })).toMatchObject({
+      channel: 'provider',
+      idDigest: expect.any(String),
+    });
   });
 });

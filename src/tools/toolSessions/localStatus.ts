@@ -12,9 +12,7 @@ export function localResourceStatus(
   for (const row of rows)
     if (
       !row.fired &&
-      (row.partition === turn ||
-        (row.scope === 'session' && row.partition === conversation) ||
-        (row.scope === 'shutdown' && row.partition === undefined))
+      (row.partition === turn || (row.scope === 'session' && row.partition === conversation))
     )
       return 'retained';
   return 'none-known-locally';

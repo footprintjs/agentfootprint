@@ -40,8 +40,6 @@
  */
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
-import { withArgumentParties } from './argumentParties.js';
-import type { ToolParty } from '../../../tools/toolParty.js';
 import { readToolOwner } from '../../../tools/toolResourceOwner.js';
 
 import { stampInputRequest, type AwaitingInput } from '../../../tools/inputRequest.js';
@@ -182,11 +180,12 @@ export interface ArgumentAskDeps {
   readonly excludedCallIds?: readonly string[];
   readonly admitAnswer?: () => void;
   readonly saveParties?: () => void;
+  readonly pendingAsk?: boolean;
+  readonly settledAsk?: () => void;
   readonly refuseMalformedBatch?: () => boolean;
   readonly argumentSources?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
-  readonly partyOf: (name: string) => ToolParty | undefined;
   /** The run id a stamped request id carries; absent → the turn's start time. */
   readonly runId?: () => string | undefined;
   /** The host's own context for the ask (`AgentOptions.argumentAskContext`). */
@@ -247,7 +246,12 @@ function batchOf(scope: TypedScope<AgentState>): BatchCall[] {
  * batch is not this one's. Read only when the layer named an argument to ask
  * for on a call of this batch, so the key is read only where it can exist.
  */
-function stateFor(scope: TypedScope<AgentState>, iteration: number): ArgumentAskState | undefined {
+function stateFor(
+  scope: TypedScope<AgentState>,
+  iteration: number,
+  pending: boolean,
+): ArgumentAskState | undefined {
+  if (!pending) return undefined;
   const state = scope.$getValue('argumentAsk') as ArgumentAskState | undefined;
   return state !== undefined && state.iteration === iteration
     ? (structuredClone(state) as ArgumentAskState)
@@ -380,7 +384,7 @@ export function askBeforeDispatch(
         ]
       : [],
   );
-  const stored = stateFor(scope, iteration);
+  const stored = stateFor(scope, iteration, deps.pendingAsk === true);
   if (asks.length === 0 && origins.length === 0 && stored === undefined)
     return { resolutions: entries, answered: false };
   if (deps.refuseMalformedBatch?.() === true)
@@ -471,14 +475,13 @@ export function askBeforeDispatch(
   }
   if (round !== undefined) {
     const waiting = stampRound(scope, state, round, deps);
-    scope.argumentAsk = snapshotPartialState(
-      withArgumentParties(scope, withWaiting(state, waiting), deps.partyOf),
-    );
+    scope.argumentAsk = snapshotPartialState(withWaiting(state, waiting));
     deps.saveParties?.();
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');
   }
   if (stored !== undefined) scope.argumentAsk = undefined;
+  deps.settledAsk?.();
   const settled = withSettled(entries, state, calls);
   if (partial && time !== undefined) {
     const currentLedger = scope.findingsLedger as FindingsLedger | undefined;

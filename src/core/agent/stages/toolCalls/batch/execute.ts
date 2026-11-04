@@ -10,7 +10,6 @@ import { completeToolBatch } from './completion.js';
 import type { ToolCallOperations } from '../compose.js';
 import type { DispatchBatchFrame } from '../contracts/dispatchBatch.js';
 import type { DispatchCallRunner } from '../contracts/dispatchCall.js';
-import { restoreArgumentParties } from '../../argumentParties.js';
 
 /** The existing native batch handler: original waits, one serial call loop, and defined pause propagation. */
 export function buildToolBatchExecution(
@@ -19,10 +18,9 @@ export function buildToolBatchExecution(
   dispatchCall: DispatchCallRunner,
 ): PausableHandler<TypedScope<AgentState>>['execute'] {
   const execute: PausableHandler<TypedScope<AgentState>>['execute'] = async (scope) => {
-    if (deps.inputsLayer === true && scope.argumentAsk !== undefined)
-      deps.resources?.expectAnswer();
+    if (deps.servedTools?.argumentAskPending === true) deps.resources?.expectAnswer();
     restoreServedParties(scope, deps.servedTools);
-    if (deps.inputsLayer === true) restoreArgumentParties(scope, deps.servedTools);
+    if (deps.servedTools?.argumentAskPending === true) deps.resources?.expectAnswer();
     // Replay and pausable resume both admit the saved native owner and current executable catalog.
     deps.resources?.restore(scope, operations.resourceFactsOf(scope));
     const catalog = deps.prepareProviderTools?.(scope);
@@ -69,6 +67,10 @@ export function buildToolBatchExecution(
       // graph never carries the ask (`test/trace-toolpack/browserGraph`).
       const { askBeforeDispatch } = await import('../../argumentAsk.js');
       const asked = askBeforeDispatch(scope, resolutions, {
+        pendingAsk: deps.servedTools?.argumentAskPending === true,
+        settledAsk: () => {
+          if (deps.servedTools !== undefined) deps.servedTools.argumentAskPending = false;
+        },
         refuseMalformedBatch: () => {
           const malformed = toolBatchFailure(toolCalls);
           if (malformed === undefined) return false;
@@ -80,9 +82,14 @@ export function buildToolBatchExecution(
           .map((call) => call.id),
         ...(deps.argumentSources === true && { argumentSources: true as const }),
         toolOf: (toolName) => operations.resolveTool(toolName).tool,
-        partyOf: (toolName) => operations.resolveTool(toolName).party,
         admitAnswer: () => deps.resources?.answer.record(),
-        saveParties: () => saveServedParties(scope, deps.servedTools),
+        saveParties: () =>
+          saveServedParties(scope, deps.servedTools, {
+            calls: toolCalls,
+            iteration,
+            partyOf: (name) => operations.resolveTool(name).party,
+            argumentAsk: true,
+          }),
         runId: () => operations.runFactsOf(scope)?.runId,
         ...(deps.argumentAskContext !== undefined && { hostContext: deps.argumentAskContext }),
         ...(deps.time !== undefined && {
@@ -129,21 +136,30 @@ export function buildToolBatchExecution(
     for (const [callIndex, tc] of toolCalls.entries()) {
       const result = await dispatchCall(scope, tc, callIndex, batch);
       if (result.kind === 'paused') {
-        saveServedParties(scope, deps.servedTools);
+        saveServedParties(scope, deps.servedTools, {
+          calls: toolCalls,
+          iteration,
+          partyOf: (name) => operations.resolveTool(name).party,
+          paused: { id: tc.id, name: tc.name },
+        });
         return result.pause;
       }
       if (result.kind === 'halted') return undefined;
     }
     completeToolBatch(scope, {
       askAnswered: oneQuestionAsked,
-      inputsLayer: inputs !== undefined,
+      inputsLayer: deps.servedTools?.argumentAskPending === true,
       newHistory,
       emitTransitionConflict: operations.emitTransitionConflict,
       iteration,
       transitionState,
       toolCalls,
     });
-    if (deps.servedTools !== undefined) deps.servedTools.pinned = undefined;
+    if (deps.servedTools !== undefined) {
+      deps.servedTools.pinned = undefined;
+      deps.servedTools.restored = undefined;
+      deps.servedTools.argumentAskPending = false;
+    }
     return undefined; // explicit: no pause, flow continues to loopTo
   };
   return execute;

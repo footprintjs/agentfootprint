@@ -15,7 +15,7 @@
     {
       "case": "agent-arguments-ask",
       "historicalSha256": "58c2283a5050c1acb763553ab5fc944bbc3428f458b8f43b8ff6da5812f3fb04",
-      "expectedSha256": "0a16a3820afdd7ad74d4c256bf63bae808941e5789a7ca0cbb2737748dd79538"
+      "expectedSha256": "2bbace368950c6e05ed2791f8022d330b244fd7f8033431ad951d35bcea34a19"
     },
     {
       "case": "agent-arguments-assume-limits",

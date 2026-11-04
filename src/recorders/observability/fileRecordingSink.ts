@@ -38,10 +38,8 @@
  *   • **no Windows reserved device names.** `con`, `nul`, `com1` … are devices
  *     with OR without an extension: `con.json` opens the console, not a file.
  *
- * Ids this library mints all satisfy it: `makeRunId()` produces
- * `run-<epoch ms>-<seq>` and the footprintjs engine produces
- * `<epoch ms>-<padded counter>`. The assertion is there for the ids a CALLER
- * states, which is the case that is neither controlled nor rare.
+ * The native lifecycle supplies run IDs. Every id, including one a caller
+ * states, must satisfy this domain before it becomes a file name.
  *
  * ## Atomic, so a reader never sees half an archive
  *

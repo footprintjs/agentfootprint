@@ -262,21 +262,20 @@ export async function afterFailedAnswer(input: {
   readonly error?: unknown;
   readonly settle?: () => Promise<void> | undefined;
   readonly runner?: unknown;
+  readonly signal?: AbortSignal;
 }): Promise<FailedAnswerOutcome> {
   const { store, sessionId, paused, watch } = input;
   const asked = askedRequestOf(paused);
   // Only a consent gate's pause is answered by a decision.
   if (asked === undefined || watch === undefined) return 'kept';
-  // A request a host already closed with the proof that its call never ran —
-  // its closed conversation stored nowhere (the write, or the run after it,
-  // failed): closed again here as not run, never marked as possibly run. Read
-  // from the ledger's close marker, never from what the error calls itself.
-  if (await closedByAHost(neverRanQuestion(paused, { runner: input.runner, store }))) {
-    return closeUnanswerable(store, sessionId, asked, input.runner);
-  }
-  if (!(await watch.mayHaveBeenUsed())) {
+  // No optional marker read precedes the distinction between refusal and use.
+  if (!(await watch.mayHaveBeenUsed(input.signal))) {
     const reason = unanswerableRefusalOf(input.error);
     return reason === undefined ? 'kept' : closeUnanswerable(store, sessionId, asked, input.runner);
+  }
+  // Opaque positives never prove non-execution.
+  if (await closedByAHost(neverRanQuestion(paused, { runner: input.runner, store }))) {
+    return closeUnanswerable(store, sessionId, asked, input.runner);
   }
   try {
     await input.settle?.();

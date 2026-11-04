@@ -412,3 +412,11 @@ agent folder: `../README.md` · "Every library-composed correction is
 past-anchored and names no destination" (9.113.0) — past tense about one named,
 finished event, and no tool, skill or call named as where to go next. The
 batch settlement's `notDispatchedResult` is its example.
+
+
+Paused tool ownership uses one finite carrier in `servedParties.ts`.
+`batchParties.ts` binds original calls to that owner, turn and iteration;
+`argumentParties.ts` admits it before a tool pause resumes. The paused call
+has priority within the saved budget, and truncation never grants a dropped
+name uniqueness-based authority. Tagged labels keep this proof finite without
+renaming public tools or authenticating their declared providers.

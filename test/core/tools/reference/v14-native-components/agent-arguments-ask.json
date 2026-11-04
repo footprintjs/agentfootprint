@@ -724,24 +724,6 @@
               "rounds": 1
             }
           ],
-          "toolParties": {
-            "calls": [
-              {
-                "id": "c1",
-                "name": "search_logs",
-                "party": {
-                  "channel": "registry"
-                }
-              }
-            ],
-            "iteration": 1,
-            "owner": {
-              "componentOrdinal": 0,
-              "runId": "<volatile>"
-            },
-            "turn": 1,
-            "version": 1
-          },
           "waiting": {
             "awaiting": {
               "context": {
@@ -792,17 +774,41 @@
           }
         },
         "servedToolParties": {
-          "current": [
+          "argumentAsk": true,
+          "bound": [
             {
-              "name": "search_logs",
+              "id": {
+                "kind": "plain",
+                "value": "[\"string\",\"c1\"]"
+              },
+              "index": 0,
+              "name": {
+                "kind": "plain",
+                "value": "search_logs"
+              },
               "party": {
                 "channel": "registry"
               }
             }
           ],
+          "current": [
+            {
+              "name": {
+                "kind": "plain",
+                "value": "search_logs"
+              },
+              "party": {
+                "channel": "registry"
+              }
+            }
+          ],
+          "iteration": 1,
           "last": [
             {
-              "name": "search_logs",
+              "name": {
+                "kind": "plain",
+                "value": "search_logs"
+              },
               "party": {
                 "channel": "registry"
               }
@@ -812,8 +818,9 @@
             "componentOrdinal": 0,
             "runId": "<volatile>"
           },
+          "truncated": false,
           "turn": 1,
-          "version": 1
+          "version": 2
         }
       },
       "redactedPaths": [],

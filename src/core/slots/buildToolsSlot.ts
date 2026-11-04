@@ -51,13 +51,8 @@ import type { ZoneName } from '../../time/zone.js';
 import type { TimeLimitFacts } from '../../semantics/coverage/timeLimitFacts.js';
 
 /**
- * Mutable cache shared between `buildToolsSlot` (writer) and
- * `buildToolCallsHandler` (reader) within ONE run. The Tools slot
- * resolves the provider's tools each iteration and stashes the
- * Tool[] here; the toolCalls handler reads on dispatch — so async
- * providers pay the discovery cost once, not twice. Scoped to the
- * native component bank so direct entries and independent mounts never
- * share executable tools, even when they reuse one built chart.
+ * Compose's provider discovery shared with dispatch in one native component.
+ * Independent mounts never share executable tools or repeat the list call.
  */
 export interface ProviderToolCache {
   current: readonly Tool[];
@@ -77,15 +72,16 @@ export interface ToolsSlotRuntime {
 export type { ToolParty } from '../../tools/toolParty.js';
 
 /**
- * WHO PUT EACH NAME ON THE WIRE: Compose writes the same merge it serves as
- * `scope.toolSchemas`; dispatch follows that party's contract. This private
- * component value is never scope state. A restored finite carrier closes
- * omitted names until a new positive wire replaces it; plain runs keep the
- * existing last-served and single-holder fallback.
+ * Private party metadata for the same wire Compose serves. Truncated history
+ * closes uniqueness fallback; a later positive wire still proves its names.
  */
 export interface ServedToolParties {
   /** Saved wire membership is closed until a fresh Compose replaces it. */
   restored?: true;
+  truncated?: true;
+  argumentAskPending?: boolean;
+  currentProof?: ReadonlyMap<string, ToolParty>;
+  lastProof?: ReadonlyMap<string, ToolParty>;
   /** Positive wire acquisition, including an actually empty offer. */
   wireReady?: true;
   pinned?: ReadonlyMap<string, ToolParty | null>;
@@ -938,12 +934,16 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             ? winners
             : new Map([...winners].filter(([name]) => narrowedTo.has(name)));
         servedTools.current = wireWinners;
+        servedTools.currentProof = undefined;
         servedTools.restored = undefined;
         servedTools.wireReady = true;
         // The run's memory of who served what (read by the off-wire fallback).
         // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
         // of a previous run on this same built chart is dropped here.
-        if (iteration === 1) servedTools.lastServed.clear();
+        if (iteration === 1) {
+          servedTools.lastServed.clear();
+          servedTools.lastProof = undefined;
+        }
         for (const [name, party] of wireWinners) servedTools.lastServed.set(name, party);
       }
       // ── Compose-seam integrity backstop (9.60.0) ──────────────────────

@@ -9,11 +9,11 @@ import { bedrock } from '../../../../../adapters/llm/BedrockProvider.js';
 const call = (id: string, name = 'collect') => ({ id, name, args: {} });
 for (const [shape, calls] of [
   ['duplicate', [call('same'), call('same')]],
-  ['long-name', [call('first'), call('second', 'x'.repeat(1025))]],
+  ['empty-name', [call('first'), call('second', '')]],
   ['too-many', Array.from({ length: 1025 }, (_, i) => call(String(i)))],
   ['empty-id', [call('')]],
   ['numeric-id', [{ ...call('numeric'), id: 7 }]],
-  ['long-id', [call('x'.repeat(1025))]],
+  ['nonstring-name', [call('first'), { ...call('second'), name: null }]],
 ] as const) {
   it(`refuses the ${shape} model batch before an ask or tool effect and accepts a corrective response`, async () => {
     const requests: LLMRequest[] = [];

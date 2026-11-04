@@ -7,7 +7,6 @@ import { noteDecisionTakenUp, recordedRequestId } from '../../../../consentReque
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import { findingsReferenceRefusal } from '../../../findings/admission.js';
 import type { ToolCallOperations } from '../compose.js';
-import { restoreArgumentParties } from '../../argumentParties.js';
 
 /** Existing native resume admission and four door-specific continuations. */
 export function buildToolResume(
@@ -17,7 +16,6 @@ export function buildToolResume(
   const resume: PausableHandler<TypedScope<AgentState>>['resume'] = async (scope, input) => {
     deps.resources?.expectAnswer();
     restoreServedParties(scope, deps.servedTools);
-    restoreArgumentParties(scope, deps.servedTools);
     // A consent gate's answer is a DECISION for ONE request: held to the
     // request this run paused on and to the exact call it was bound to —
     // refused (thrown) before anything below writes or runs. The two
@@ -159,5 +157,14 @@ export function buildToolResume(
     }
     return operations.resumePlain(scope, { input, toolName, toolCallId, startMs });
   };
-  return resume;
+  return async (scope, input) => {
+    try {
+      return await resume(scope, input);
+    } finally {
+      if (deps.servedTools !== undefined) {
+        deps.servedTools.pinned = undefined;
+        deps.servedTools.restored = undefined;
+      }
+    }
+  };
 }

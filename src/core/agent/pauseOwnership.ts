@@ -8,6 +8,9 @@ import { callerIdentityOf, restoredIdentityOf } from './callerIdentity.js';
 import { resumeSessionOf, resumeStateOf } from './resumeCheckpoint.js';
 import { ResumeIdentityConflictError } from '../conversation.js';
 
+/** Exact question occurrence → minimal paused-owner cleanup, never a selected run. */
+const questionCleanups = new WeakMap<object, () => Promise<void>>();
+
 /** Only descriptive question fields; no executable authority is inferred. */
 export function pendingQuestionOf(data: unknown): NonNullable<AgentRunValues['pendingQuestion']> {
   const question = data as
@@ -30,6 +33,7 @@ export function capturePauseOwnership(
   const resources = values.resources;
   let settled = false;
   const release = (): void => {
+    questionCleanups.delete(question);
     if (values.pendingQuestion === question) values.pendingQuestion = undefined;
     if (values.pauseOutcome === outcome) values.pauseOutcome = undefined;
   };
@@ -46,6 +50,19 @@ export function capturePauseOwnership(
       release();
     },
   };
+}
+
+/** Abandon the owner that retained this question, even after an uninitialized refused leg. */
+export async function abandonPendingQuestion(
+  values: AgentRunValues | undefined,
+): Promise<AgentRunValues['pendingQuestion']> {
+  const question = values?.pendingQuestion;
+  if (question === undefined) return undefined;
+  const cleanup = questionCleanups.get(question) ?? values?.resources?.captureAbandon();
+  await cleanup?.();
+  questionCleanups.delete(question);
+  if (values?.pendingQuestion === question) values.pendingQuestion = undefined;
+  return question;
 }
 
 /**
@@ -77,9 +94,15 @@ export async function preservePendingQuestion<T>(
   resume: () => T | Promise<T>,
 ): Promise<T> {
   const question = previous?.pendingQuestion;
+  if (question !== undefined && !questionCleanups.has(question)) {
+    const cleanup = previous?.resources?.captureAbandon();
+    if (cleanup !== undefined) questionCleanups.set(question, cleanup);
+  }
   try {
     return await resume();
   } finally {
-    if (previous !== undefined && !answerAdmitted()) previous.pendingQuestion = question;
+    if (answerAdmitted()) {
+      if (question !== undefined) questionCleanups.delete(question);
+    } else if (previous !== undefined) previous.pendingQuestion = question;
   }
 }

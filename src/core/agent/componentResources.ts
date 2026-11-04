@@ -41,6 +41,8 @@ export interface ComponentResources {
   readonly answer: AnswerConsumption;
   /** Explicit host abandonment of this exact retained paused owner. */
   abandon(): Promise<void>;
+  /** Minimal retained cleanup; no component/run-value bank or later selection. */
+  captureAbandon(): (() => Promise<void>) | undefined;
 }
 const KEY = 'toolResourceOwner';
 
@@ -109,7 +111,12 @@ export function componentResources(
     answer,
     async abandon() {
       if (carrier === undefined || binding === undefined) return;
-      await tier().borrow(carrier, binding).finish(false);
+      await retainedResourceCleanup(tier(), carrier, binding.identity, binding.sessionId)();
+    },
+    captureAbandon() {
+      return carrier === undefined || binding === undefined
+        ? undefined
+        : retainedResourceCleanup(tier(), carrier, binding.identity, binding.sessionId);
     },
     context(scope, facts) {
       restore(scope, facts);
@@ -131,5 +138,17 @@ export function componentResources(
       });
       scope.$setValue(KEY, carrier);
     },
+  };
+}
+
+/** Separate activation: the retained closure contains only the pool and owner facts. */
+function retainedResourceCleanup(
+  pool: ToolSessionTier,
+  owner: ToolOwnerCarrier,
+  identity: MemoryIdentity | undefined,
+  sessionId: string | undefined,
+): () => Promise<void> {
+  return async () => {
+    await pool.borrow(owner, { identity, sessionId }).finish(false);
   };
 }
