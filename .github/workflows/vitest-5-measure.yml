@@ -9,6 +9,11 @@ name: Vitest 5 measurement
 # 2. Does the on-disk module cache help CI? Vitest 5.1 turns it on by default and
 #    keeps it in node_modules, which npm ci deletes. So every normal CI job starts
 #    cold. The restored job shows what persisting it with actions/cache would buy.
+#
+# Follow-ups after the first run. Vitest keeps a results file in Vite's cacheDir
+# and uses it to run the longest files first. CI never has that file because
+# npm ci deletes it, and passes that had it ran 15 to 25 seconds slower, so the
+# follow-ups delete it before every pass to make each one look like a CI run.
 on:
   pull_request:
     branches: [main]
@@ -30,6 +35,8 @@ jobs:
   # The two samples use different orders so drift on a runner shows up.
   af-paired:
     name: af paired (sample ${{ matrix.sample }})
+    # Already measured in run 41783334135; the results are on the PR.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -90,6 +97,8 @@ jobs:
   # A fresh runner, as a real CI job would be: npm ci, then restore the cache.
   af-restored:
     name: af restored cache (sample ${{ matrix.sample }})
+    # Already measured in run 41783334135; the results are on the PR.
+    if: false
     needs: af-paired
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -135,6 +144,8 @@ jobs:
   # Coverage on one runner, Vitest 4 against Vitest 5 as CI would run it.
   af-coverage:
     name: af coverage paired (sample ${{ matrix.sample }})
+    # Already measured in run 41783334135; the results are on the PR.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -188,6 +199,8 @@ jobs:
   # This also gives foottrace absolute phase totals without touching its PR.
   foottrace-paired:
     name: foottrace paired
+    # Already measured in run 41783334135; the results are on the PR.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -229,3 +242,188 @@ jobs:
             $run v5-coverage-cache-off "$v5" --coverage --fsModuleCache=false
             $run v5-coverage-cache-warm "$v5" --coverage
           done
+
+  # Cache off, cold and warm in both orders, each pass looking like a CI run.
+  af-cache-crossover:
+    name: af cache crossover (sample ${{ matrix.sample }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sample: 1
+            order: off cold warm
+          - sample: 2
+            order: cold warm off
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Measure
+        env:
+          ORDER: ${{ matrix.order }}
+        run: |
+          for pass in $ORDER; do
+            rm -rf node_modules/.vite
+            case "$pass" in
+              off) bash .github/measure/run.sh v5-cache-off "$GITHUB_WORKSPACE" --fsModuleCache=false ;;
+              cold)
+                rm -rf node_modules/.vitest-cache
+                bash .github/measure/run.sh v5-cache-cold "$GITHUB_WORKSPACE"
+                ;;
+              warm) bash .github/measure/run.sh v5-cache-warm "$GITHUB_WORKSPACE" ;;
+            esac
+          done
+
+  # The case the Vitest docs name for this cache: rerunning a little of the suite.
+  af-small-rerun:
+    name: af small rerun
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Measure
+        run: |
+          for target in "one-file test/api-conformance/door-surface.test.ts" "one-area test/trace-toolpack"; do
+            set -- $target
+            for round in 1 2 3 4 5; do
+              rm -rf node_modules/.vite
+              bash .github/measure/run.sh "$1-off" "$GITHUB_WORKSPACE" --fsModuleCache=false "$2"
+              rm -rf node_modules/.vite node_modules/.vitest-cache
+              bash .github/measure/run.sh "$1-cold" "$GITHUB_WORKSPACE" "$2"
+              rm -rf node_modules/.vite
+              bash .github/measure/run.sh "$1-warm" "$GITHUB_WORKSPACE" "$2"
+            done
+          done
+
+  # Node's own compile cache, which Vitest's docs list next to the module cache.
+  # It has no effect under v8 coverage, so this covers the test jobs only.
+  af-compile-cache:
+    name: af node compile cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Measure
+        run: |
+          compile_cache="$PWD/node_modules/.cache/node-compile-cache"
+          rm -rf node_modules/.vite node_modules/.vitest-cache
+          bash .github/measure/run.sh v5-default "$GITHUB_WORKSPACE"
+          rm -rf node_modules/.vite node_modules/.vitest-cache "$compile_cache"
+          NODE_COMPILE_CACHE="$compile_cache" bash .github/measure/run.sh v5-compile-cold "$GITHUB_WORKSPACE"
+          echo "MEASURE compile-cache-size $(du -sh "$compile_cache" | cut -f1)"
+          rm -rf node_modules/.vite node_modules/.vitest-cache
+          NODE_COMPILE_CACHE="$compile_cache" bash .github/measure/run.sh v5-compile-warm "$GITHUB_WORKSPACE"
+          rm -rf node_modules/.vite node_modules/.vitest-cache
+          bash .github/measure/run.sh v5-default "$GITHUB_WORKSPACE"
+
+  # Vitest's own hint says isolate: false would save about 190 seconds. One pass
+  # shows how close that is and how many tests depend on isolation. Measurement
+  # only: this is not a proposal to turn isolation off.
+  af-no-isolate:
+    name: af isolate false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Measure
+        run: |
+          rm -rf node_modules/.vite node_modules/.vitest-cache
+          bash .github/measure/run.sh v5-default "$GITHUB_WORKSPACE"
+          rm -rf node_modules/.vite node_modules/.vitest-cache
+          timeout --signal=KILL 1500 bash .github/measure/run.sh v5-no-isolate "$GITHUB_WORKSPACE" --no-isolate \
+            || echo "MEASURE no-isolate pass did not finish"
+
+  # Coverage totals moved a little on an unchanged src/. A one-file run still
+  # counts every included file, so three short passes show the file set and
+  # whether the newer coverage mapper explains the move.
+  af-coverage-files:
+    name: af coverage file set
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AF_COVERAGE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and build the Vitest 5 checkout
+        run: |
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp .github/measure/phase-reporter.mjs node_modules/.measure/
+      - name: Install and build the Vitest 4 checkout
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth=1 origin "$BASE_SHA"
+          git worktree add "$RUNNER_TEMP/af-v4" "$BASE_SHA"
+          cd "$RUNNER_TEMP/af-v4"
+          npm ci
+          npm run build
+          mkdir -p node_modules/.measure
+          cp "$GITHUB_WORKSPACE/.github/measure/phase-reporter.mjs" node_modules/.measure/
+      - name: Measure
+        run: |
+          args="--coverage --coverage.reporter=json-summary --coverage.reportsDirectory=coverage test/trace-toolpack/lazyMount.test.ts"
+          v4="$RUNNER_TEMP/af-v4"
+          bash .github/measure/run.sh v4-subset "$v4" $args
+          cp "$v4/coverage/coverage-summary.json" "$RUNNER_TEMP/v4.json"
+          bash .github/measure/run.sh v5-subset "$GITHUB_WORKSPACE" $args
+          cp coverage/coverage-summary.json "$RUNNER_TEMP/v5.json"
+          (cd "$v4" && npm install --no-save --ignore-scripts --no-audit --no-fund ast-v8-to-istanbul@1.0.7)
+          bash .github/measure/run.sh v4-mapper-1.0.7-subset "$v4" $args
+          cp "$v4/coverage/coverage-summary.json" "$RUNNER_TEMP/v4-mapper.json"
+          node .github/measure/coverage-diff.mjs "$RUNNER_TEMP/v4.json" "$RUNNER_TEMP/v4-mapper.json" "$RUNNER_TEMP/v5.json"
