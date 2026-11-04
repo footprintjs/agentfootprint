@@ -104,8 +104,8 @@ time-travel's conformance law — `core/agent/receipt/receipt.ts` · `buildRecei
 `accountForAnswer`).
 
 Mixed folders carrying Fold: `src/injection-engine/`
-(`skillGraph.ts` · `makeReachableSkills`, `skillGraph.ts` ·
-`classifySkillTarget`, `skillGraph.ts` · `makeResolveCursor`, `evaluator.ts`,
+(`skillGraph/reachability.ts` · `makeReachableSkills`, `skillGraph/reachability.ts` ·
+`classifySkillTarget`, `skillGraph/cursorResolution.ts` · `makeResolveCursor`, `evaluator.ts`,
 `routingPolicy.ts`) · `src/context-ledger/` (`contextLedger.ts`) ·
 `src/maps/engagement/` (`lease.ts` — the sole owner of the parked set) ·
 `src/core/agent/evidence/` (`evidenceIndex.ts`) · `src/tools/` (`normalize.ts`,

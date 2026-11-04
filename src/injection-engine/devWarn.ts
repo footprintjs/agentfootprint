@@ -1,11 +1,12 @@
 /**
  * devWarn — the dev-warning SEAM for the pure skill-graph core (9.34.0).
  *
- * THE PROBLEM IT SOLVES. `skillGraph.ts` and `skillIntent.ts` print dev-mode
+ * THE PROBLEM IT SOLVES. `skillGraph.ts`, its `skillGraph/passMemo.ts` and
+ * `skillGraph/treeCompilation.ts` helpers, and `skillIntent.ts` print dev-mode
  * warnings (a throwing matcher, a check-up with problems, a leaf set that did
  * not fire exactly once). Those warnings were gated on `isDevMode()` imported
  * from `footprintjs` — a real dependency on the flowchart engine, inside the
- * two files whose whole point is that they do not depend on one. footprintjs's
+ * modules whose whole point is that they do not depend on one. footprintjs's
  * dev flag is a module-private boolean toggled by `enableDevMode()`, so the
  * pure core cannot read it without importing the engine.
  *

@@ -27,7 +27,7 @@ import { plainMatchCaption, type SkillMatchData } from './skillMatch.js';
 
 /**
  * The slice of an entry declaration a claim question reads — structural, so
- * `skillGraph.ts`'s module-private `EntryDecl` satisfies it unchanged (the same
+ * `skillGraph/graphRoutes.ts`'s internal `EntryDecl` satisfies it unchanged (the same
  * trick `skillIntent.ts` uses).
  */
 export interface StartRuleDecl {

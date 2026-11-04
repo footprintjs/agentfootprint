@@ -137,7 +137,7 @@ export const EXAMPLES_ORDER_NOT_CHECKED =
 /**
  * The slice of an entry declaration this module reads — the shared claim shape
  * ({@link StartRuleDecl}, which owns "who claims a phrase") plus the one field
- * only this check reads. Structural, so `skillGraph.ts`'s module-private
+ * only this check reads. Structural, so `skillGraph/graphRoutes.ts`'s internal
  * `EntryDecl` satisfies it unchanged (the same trick `skillIntent.ts` uses).
  */
 export interface ExampleRuleDecl extends StartRuleDecl {

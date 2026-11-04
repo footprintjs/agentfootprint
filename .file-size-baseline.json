@@ -88,7 +88,7 @@
     "src/index.ts": 1427,
     "src/injection-engine/buildInjectionEngineSubflow.ts": 920,
     "src/injection-engine/README.md": 1007,
-    "src/injection-engine/skillGraph.ts": 2871,
+    "src/injection-engine/skillGraph.ts": 1064,
     "src/injection-engine/skillGraphCheckup.ts": 671,
     "src/injection-engine/skillGuard.ts": 665,
     "src/injection-engine/skillsFromDir.ts": 909,
