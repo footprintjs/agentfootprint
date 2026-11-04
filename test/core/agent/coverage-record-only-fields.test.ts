@@ -1,3 +1,4 @@
+import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
 /**
  * `short` and `kind` on a coverage item are RECORD-ONLY.
  *
@@ -7,7 +8,7 @@
  * `tools.coverage_declared`), the tracked `coverageDeclared` rows and the
  * answer account — never the model's request. The dispatch door removes them
  * from what the model is served (`coverage/read.ts` · `servedToModel`, asked
- * at the entry of `stages/toolCalls.ts` · `afterMoment`, so every after-tool
+ * at the entry of `stages/toolCalls/decorators/middlewareOperations.ts` · `afterMoment`, so every after-tool
  * link sees the served value) and stamps `tool_end.modelResult` where the two
  * differ.
  *
@@ -48,7 +49,7 @@ import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── The harness ─────────────────────────────────────────────────────
 
-/** The five dispatch paths (`toolCalls.ts`: the batch loop + four resume doors). */
+/** The five dispatch paths (`toolCalls/batch/execute.ts`: the batch loop + four resume doors). */
 type Path = 'batch' | 'ask' | 'check-in' | 'consent' | 'pause';
 const PATHS: readonly Path[] = ['batch', 'ask', 'check-in', 'consent', 'pause'];
 
@@ -248,7 +249,7 @@ describe('record-only fields — a run that declares neither is byte-identical t
       all[key],
       `no reference for '${key}' — generate it on the pre-change tree`,
     ).toBeDefined();
-    expect(record).toEqual(all[key]);
+    expect(record).toEqual(withNativeResourceObservation(all[key] as { eventTypes: string[] }));
     // And no stamp: the model read `result` itself.
     expect('modelResult' in endOf(h)).toBe(false);
   });
@@ -339,13 +340,23 @@ describe('record-only fields — every serving path goes through the one strip',
   const SRC = resolve(__dirname, '../../../src');
   const source = (rel: string) => readFileSync(resolve(SRC, rel), 'utf8');
 
-  it('toolCalls.ts calls the after-tool moment on exactly five paths, and the moment strips first', () => {
-    const tc = source('core/agent/stages/toolCalls.ts');
+  it('the tool-call modules call the after-tool moment on exactly five paths, and the moment strips first', () => {
+    const modules: string[] = [];
+    const walkCalls = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walkCalls(full);
+        else if (entry.name.endsWith('.ts')) modules.push(readFileSync(full, 'utf8'));
+      }
+    };
+    walkCalls(resolve(SRC, 'core/agent/stages/toolCalls'));
+    const tc = modules.join('\n');
     // The batch loop + the four resume doors (middleware-ask, check-in,
     // credential-consent, pauseHere/askHuman). A sixth serving path must be
     // added to PATHS above before this count moves.
-    expect(tc.match(/await afterMoment\(scope, \{/g)).toHaveLength(PATHS.length);
-    const body = tc.slice(tc.indexOf('const afterMoment = async'));
+    expect(tc.match(/await (?:[\w$]+\.)?afterMoment\(scope, \{/g)).toHaveLength(PATHS.length);
+    const middleware = source('core/agent/stages/toolCalls/decorators/middlewareOperations.ts');
+    const body = middleware.slice(middleware.indexOf('const afterMoment = async'));
     const strip = body.indexOf('servedToModel(call.result)');
     expect(strip).toBeGreaterThan(-1);
     expect(strip).toBeLessThan(body.indexOf('runToolAfterChain('));
@@ -357,7 +368,7 @@ describe('record-only fields — every serving path goes through the one strip',
     // `afterMoment`) and be driven by this file.
     const PINNED = [
       'core/agent/findings/unsettled.ts', // servedAbsenceOf — reads what WAS served
-      'core/agent/stages/toolCalls.ts', // declareCoverage — records; afterMoment serves
+      'core/agent/stages/toolCalls/evidence/coverageOperations.ts', // declareCoverage — records; afterMoment serves
       'core/runbook/coverage.ts', // foldInnerCoverage — folds declared lists upward
       'semantics/check.ts', // declaresCoverage — the build-time gate asks yes/no
       // composeSearchCoverage — reads the value it composed for its facts; the

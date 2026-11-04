@@ -5,7 +5,7 @@
  * Pattern: stage glue over the pure ask (`arguments/ask.ts`): reads the
  *          layer's resolutions and the ask's working state from scope, files
  *          the answered rows through the one writer, and raises the pause.
- * Role:    core/agent/stages. Called by ToolCalls (`stages/toolCalls.ts`) at
+ * Role:    core/agent/stages. Called by ToolCalls (`stages/toolCalls/batch/execute.ts`) at
  *          the very top of its batch, under the inputs layer's arm, only when
  *          the layer named an argument to ask for on a call of THIS batch.
  * Emits:   `agentfootprint.findings.argument` — one per `answered` /
@@ -40,6 +40,7 @@
  */
 
 import { interrupt, type InterruptPayload, type TypedScope } from 'footprintjs';
+import { readToolOwner } from '../../../tools/toolResourceOwner.js';
 
 import { stampInputRequest, type AwaitingInput } from '../../../tools/inputRequest.js';
 import {
@@ -177,6 +178,11 @@ function windowPlanOf(
 export interface ArgumentAskDeps {
   /** Already refused calls do not acquire new obligations. */
   readonly excludedCallIds?: readonly string[];
+  readonly admitAnswer?: () => void;
+  readonly saveParties?: () => void;
+  readonly pendingAsk?: boolean;
+  readonly settledAsk?: () => void;
+  readonly refuseMalformedBatch?: () => boolean;
   readonly argumentSources?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
@@ -208,6 +214,7 @@ export interface AskedBatch {
   readonly resolutions: ReadonlyMap<string, ArgumentResolution>;
   /** This pass carries the person's answer — the batch's one human question has been asked. */
   readonly answered: boolean;
+  readonly refused?: true;
 }
 
 /** The pause's data — the typed ask, and its question twice over for the pause readers. */
@@ -239,7 +246,12 @@ function batchOf(scope: TypedScope<AgentState>): BatchCall[] {
  * batch is not this one's. Read only when the layer named an argument to ask
  * for on a call of this batch, so the key is read only where it can exist.
  */
-function stateFor(scope: TypedScope<AgentState>, iteration: number): ArgumentAskState | undefined {
+function stateFor(
+  scope: TypedScope<AgentState>,
+  iteration: number,
+  pending: boolean,
+): ArgumentAskState | undefined {
+  if (!pending) return undefined;
   const state = scope.$getValue('argumentAsk') as ArgumentAskState | undefined;
   return state !== undefined && state.iteration === iteration
     ? (structuredClone(state) as ArgumentAskState)
@@ -372,9 +384,13 @@ export function askBeforeDispatch(
         ]
       : [],
   );
-  const stored = stateFor(scope, iteration);
-  // A resume mints a new execution run id; the native checkpoint keeps the seeded turn identity.
-  const owner = JSON.stringify([scope.turnStartMs, scope.$getValue('runIdentity')]);
+  const stored = stateFor(scope, iteration, deps.pendingAsk === true);
+  if (asks.length === 0 && origins.length === 0 && stored === undefined)
+    return { resolutions: entries, answered: false };
+  if (deps.refuseMalformedBatch?.() === true)
+    return { resolutions: entries, answered: false, refused: true };
+  // The admitted resource owner keeps its native birth across SAME and FRESH restore.
+  const owner = readToolOwner(scope.$getValue('toolResourceOwner')).birth;
   const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;
   const identity = { owner, turn, iteration, mention, origins };
   if (
@@ -389,8 +405,6 @@ export function askBeforeDispatch(
   ) {
     throw new TypeError('argumentAsk: meaning role without partial-window owner');
   }
-  if (asks.length === 0 && origins.length === 0 && stored === undefined)
-    return { resolutions: entries, answered: false };
   const partial = origins.length > 0;
   const fillAsks = asks.filter((ask) => ask.window === true);
   const ordinaryAsks = partial ? asks.filter((ask) => ask.window !== true) : asks;
@@ -429,6 +443,7 @@ export function askBeforeDispatch(
       { turn, iteration },
       time,
     );
+    deps.admitAnswer?.();
     recordFindings(scope, bound.rows, { turn });
     state = bound.state;
     answered = true;
@@ -461,9 +476,12 @@ export function askBeforeDispatch(
   if (round !== undefined) {
     const waiting = stampRound(scope, state, round, deps);
     scope.argumentAsk = snapshotPartialState(withWaiting(state, waiting));
+    deps.saveParties?.();
     interrupt(scope, pauseDataOf(waiting));
+    throw new TypeError('argumentAsk: replay is missing its original batch state');
   }
   if (stored !== undefined) scope.argumentAsk = undefined;
+  deps.settledAsk?.();
   const settled = withSettled(entries, state, calls);
   if (partial && time !== undefined) {
     const currentLedger = scope.findingsLedger as FindingsLedger | undefined;

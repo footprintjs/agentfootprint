@@ -1,8 +1,7 @@
 /**
  * Parallel — fan-out composition: N branches run concurrently, then merge.
  *
- * Pattern: Builder (GoF) + Adapter over footprintjs's `addSubFlowChart`
- *          (fork children).
+ * Builder over native fork children.
  * Role:    core-flow/ layer. All branches receive the same input
  *          `{ message }`. Each returns a string. A merge step combines
  *          them: either a pure function OR an LLM.
@@ -13,40 +12,28 @@
 
 import { assertUnreservedSubflowSegment } from '../lib/conventions.js';
 import {
-  FlowChartExecutor,
   flowChart,
   isFlowEvent,
   type CombinedRecorder,
   type FlowChart,
   type FlowchartCheckpoint,
+  type RedactionPolicy,
   type StructureRecorder,
   type TypedScope,
 } from 'footprintjs';
 import type { RunOptions } from '../core/runner.js';
-import type { RedactionPolicy } from 'footprintjs';
 import type { GroupMember, GroupMetadata, GroupTranslator } from '../core/translator.js';
 import type { RunnerPauseOutcome } from '../core/pause.js';
 import type { LLMMessage, LLMProvider, LLMRequest } from '../provider-contract/types.js';
 import { callUnder } from '../lib/abort.js';
 import type { Runner } from '../core/runner.js';
-import { RunnerBase, makeRunId, underRunSignal } from '../core/RunnerBase.js';
+import { RunnerBase, type RunnerCoreValues } from '../core/RunnerBase.js';
+import type { RunnerInvocation } from '../core/runnerExecution.js';
 import { normalizeRunInput } from '../core/runInput.js';
-import {
-  adoptParentRun,
-  parentRunIn,
-  readsParentRun,
-  closeParentRun,
-  openParentRun,
-  reopenParentRun,
-  withParentRun,
-} from '../core/memberRun.js';
+import { parentRunIn, readsParentRun, withParentRun } from '../core/memberRun.js';
 import { requestOf } from '../core/requestOfRun.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
-import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
-import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
-import { streamRecorder } from '../recorders/core/StreamRecorder.js';
-import { agentRecorder } from '../recorders/core/AgentRecorder.js';
-import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
+import { buildEventMeta } from '../bridge/eventMeta.js';
 import { typedEmit } from '../recorders/core/typedEmit.js';
 import { childError, childOutcome } from './childOutcome.js';
 import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
@@ -225,47 +212,16 @@ interface ParallelState {
   [k: string]: unknown;
 }
 
-export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
+interface ParallelRunValues extends RunnerCoreValues {
+  readonly branchErrors: Map<string, BranchErrorRecord>;
+}
+
+export class Parallel extends RunnerBase<ParallelInput, ParallelOutput, ParallelRunValues> {
   readonly name: string;
   readonly id: string;
   private readonly branches: readonly BranchEntry[];
   private readonly merge: MergeStrategy;
   private readonly opts: ParallelOptions;
-
-  private currentRunContext: RunContext = {
-    runStartMs: 0,
-    runId: 'pending',
-    compositionPath: [],
-  };
-
-  /**
-   * Per-branch first-error records captured during the current run.
-   *
-   * Filled by an internal CombinedRecorder attached in `createExecutor()`
-   * that observes footprintjs `FlowErrorEvent`s. Errors are keyed by the
-   * branch id (the first segment of `traversalContext.subflowPath`); only
-   * the first error per branch is kept so the surface mirrors the wrapper
-   * `try/catch` semantics that preceded the v0.x architectural refactor.
-   *
-   * Read by the Merge stage to populate strict-mode error messages and
-   * tolerant-mode `BranchOutcome.error` strings, and by
-   * `rethrowWithBranchAttribution()` to correlate fail-fast rejections by
-   * error IDENTITY (`record.raw`). Cleared at the start of every `run()` /
-   * `resume()`; writes are epoch-guarded (see `runEpoch`) so abandoned
-   * fail-fast stragglers from a dead run cannot contaminate the live one.
-   */
-  private readonly branchErrors = new Map<string, BranchErrorRecord>();
-
-  /**
-   * Monotonic run token — incremented at every `createExecutor()` (i.e.
-   * each `run()` / `resume()`). The branch-error recorder captures the
-   * epoch current at attach time and only writes while it is STILL
-   * current. Under fail-fast, abandoned siblings of a rejected run keep
-   * executing in the background; without this guard a late failure from
-   * run N would land in run N+1's `branchErrors` (first-error-wins would
-   * then block run N+1's real error).
-   */
-  private runEpoch = 0;
 
   /** Ids of branches declared `{ required: true }`. See `ParallelBranchOptions.required`. */
   private readonly requiredIds: ReadonlySet<string>;
@@ -304,12 +260,13 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     this.requiredIds = new Set(branches.filter((b) => b.required === true).map((b) => b.id));
     this.failFastEngaged = branches.every((b) => b.required === true);
     // Eager chart construction — see `RunnerBase.initChart` JSDoc.
-    // Safe: the merge stage's closure captures `this.branchErrors`
-    // (an instance field initialized at declaration time, line 130),
     // It hands the run it serves to its members (`core/memberRun.ts`).
     readsParentRun(this);
-    // which is set BEFORE the constructor body runs.
-    this.initChart(() => this.buildChart());
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [`Parallel:${this.id}`],
+      initialize: () => ({ branchErrors: new Map<string, BranchErrorRecord>() }),
+    });
   }
 
   static create(opts: ParallelOptions = {}): ParallelBuilder {
@@ -359,36 +316,23 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     input: ParallelInput | string,
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
-    // The incoming request, refused here — before anything moves — when
-    // requestContext() did not build it.
-    const request = requestOf(options, 'Parallel.run');
-    const runInput = normalizeRunInput<ParallelInput>(input, 'Parallel.run');
-    const executor = this.createExecutor();
-    this.lastExecutor = executor;
-    // The run every member serves — built once, here, from THIS run's id.
-    const parentRun = openParentRun(
-      this.currentRunContext.runId,
-      runInput.identity,
-      'Parallel.run',
-      request,
-    );
-    try {
+    return this.runExecution().withRun(async (invocation) => {
+      const request = requestOf(options, 'Parallel.run');
+      const runInput = normalizeRunInput<ParallelInput>(input, 'Parallel.run');
+      this.prepareCompositionRun(invocation, runInput.identity, request, 'Parallel.run');
+      const prepared = this.createRunSetup(invocation);
       let result: unknown;
       try {
-        result = await underRunSignal(options, (engine) =>
-          executor.run({
-            input: { message: runInput.message, parentRun: parentRun.link },
-            ...(engine ?? {}),
-          }),
+        result = await invocation.execute(
+          { kind: 'run', options: { ...options, input: { message: runInput.message } } },
+          prepared.setup,
+          prepared.binding,
         );
-      } catch (err) {
-        this.rethrowWithBranchAttribution(err);
+      } catch (error) {
+        this.rethrowWithBranchAttribution(error, invocation);
       }
-      return this.finalizeResult(executor, result);
-    } finally {
-      // Released when the run returns — finished, failed or paused (a resume re-opens it).
-      closeParentRun(parentRun);
-    }
+      return this.finalizeResult(invocation, result);
+    });
   }
 
   async resume(
@@ -396,27 +340,24 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
     input?: unknown,
     options?: RunOptions,
   ): Promise<ParallelOutput | RunnerPauseOutcome> {
-    // The incoming request, and the paused run its members serve (re-opened
-    // from the checkpoint's own record) — both refused before anything moves.
-    const request = requestOf(options, 'Parallel.resume');
-    const parentRun = reopenParentRun(checkpoint.sharedState, 'Parallel.resume', request);
-    try {
-      // The leg's policy — the paused run's marks — goes to ITS executor, never via the instance.
+    this.noteResumeTakenUp(checkpoint);
+    return this.runExecution().withRun(async (invocation) => {
+      const request = requestOf(options, 'Parallel.resume');
+      this.prepareCompositionResume(invocation, checkpoint, request, 'Parallel.resume');
       const resumeLeg = this.emitPauseResume(checkpoint, input);
-      const executor = this.createExecutor(resumeLeg);
-      this.lastExecutor = executor;
+      const prepared = this.createRunSetup(invocation, resumeLeg);
       let result: unknown;
       try {
-        result = await underRunSignal(options, (engine) =>
-          executor.resume(checkpoint, input, engine),
+        result = await invocation.execute(
+          { kind: 'resume', mode: 'fresh', checkpoint, input, options },
+          prepared.setup,
+          prepared.binding,
         );
-      } catch (err) {
-        this.rethrowWithBranchAttribution(err);
+      } catch (error) {
+        this.rethrowWithBranchAttribution(error, invocation);
       }
-      return this.finalizeResult(executor, result);
-    } finally {
-      closeParentRun(parentRun);
-    }
+      return this.finalizeResult(invocation, result);
+    });
   }
 
   /**
@@ -447,12 +388,15 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
    * MOUNTED into an outer composition rejects raw (see
    * `ParallelBranchOptions.required` JSDoc, "Nested-mounting limitation").
    */
-  private rethrowWithBranchAttribution(err: unknown): never {
+  private rethrowWithBranchAttribution(
+    err: unknown,
+    invocation: RunnerInvocation<ParallelRunValues>,
+  ): never {
     if (this.failFastEngaged) {
-      const match = this.correlateBranchError(err);
+      const match = this.correlateBranchError(err, invocation.value.branchErrors);
       if (match !== undefined) {
         const [branchId, recorded] = match;
-        this.emitFailFastAbortExit();
+        this.emitFailFastAbortExit(invocation);
         throw new Error(
           `Parallel '${this.id}': required branch '${branchId}' failed: ${recorded.message}`,
           {
@@ -469,12 +413,15 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
    * identity match on the original thrown value first, bare-message
    * equality second. Returns `undefined` when nothing correlates.
    */
-  private correlateBranchError(err: unknown): readonly [string, BranchErrorRecord] | undefined {
-    for (const entry of this.branchErrors) {
+  private correlateBranchError(
+    err: unknown,
+    branchErrors: ReadonlyMap<string, BranchErrorRecord>,
+  ): readonly [string, BranchErrorRecord] | undefined {
+    for (const entry of branchErrors) {
       if (entry[1].raw === err) return entry;
     }
     const message = err instanceof Error ? err.message : String(err);
-    for (const entry of this.branchErrors) {
+    for (const entry of branchErrors) {
       if (entry[1].message === message) return entry;
     }
     return undefined;
@@ -483,12 +430,12 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
   /**
    * Synthetic `composition.exit` for fail-fast aborts (no stage scope to
    * emit from). Meta is built from the SAME run context the paired
-   * `composition.enter` used (`buildEventMeta` + `currentRunContext`), so
+   * `composition.enter` used (the captured invocation's native context), so
    * the pair shares one real `runId` — Convention 4 run-scoping. Only the
    * `runtimeStageId` degrades (`'unknown#0'`): the abort happens outside
    * any stage, so there is no stage origin to attach.
    */
-  private emitFailFastAbortExit(): void {
+  private emitFailFastAbortExit(invocation: RunnerInvocation<ParallelRunValues>): void {
     this.dispatcher.dispatch({
       type: 'agentfootprint.composition.exit',
       payload: {
@@ -496,54 +443,21 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
         id: this.id,
         name: this.name,
         status: 'err',
-        durationMs: Date.now() - this.currentRunContext.runStartMs,
+        durationMs: Date.now() - invocation.context().runStartMs,
       },
-      meta: buildEventMeta(undefined, this.currentRunContext),
+      meta: buildEventMeta(undefined, invocation.context()),
     });
   }
 
-  private createExecutor(resumeLeg?: RedactionPolicy): FlowChartExecutor {
-    this.currentRunContext = {
-      runStartMs: Date.now(),
-      runId: makeRunId(),
-      compositionPath: [`Parallel:${this.id}`],
-    };
-
-    // Reset per-run branch-error capture. Fork children now mount the
-    // branch runner's own chart (no try/catch wrapper); errors are
-    // captured via FlowRecorder.onError correlation by subflow path.
-    // The epoch bump invalidates recorders of any PREVIOUS run whose
-    // abandoned fail-fast siblings are still executing — their late
-    // errors must not land in this run's map.
-    this.runEpoch += 1;
-    this.branchErrors.clear();
-
-    // THIS run's context, captured: a run that overlaps it on this instance
-    // never restamps its events, so each is served under its own run's policy.
-    const runContext = this.currentRunContext;
-    const getRunCtx = (): RunContext => runContext;
-    // The run's redaction (`src/redaction/`): every policy a branch declared.
-    const redaction = this.openRunRedaction(resumeLeg, getRunCtx);
-
-    // Reuse the cached chart built at constructor time.
-    const spec = this.getSpec();
-    const executor = new FlowChartExecutor(spec, { scopeFactory: redaction.scopeFactoryFor(spec) });
-    redaction.applyTo(executor);
-
+  private createRunSetup(
+    invocation: RunnerInvocation<ParallelRunValues>,
+    resumeLeg?: RedactionPolicy,
+  ) {
     const dispatcher = this.getDispatcher();
-
-    executor.attachCombinedRecorder(
-      new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
-    );
-    executor.attachCombinedRecorder(streamRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(agentRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(compositionRecorder({ dispatcher, getRunContext: getRunCtx }));
-    // Provider-decorator telemetry from the `mergeWithLLM` helper — the
-    // one place a Parallel calls a provider directly.
-    executor.attachCombinedRecorder(resilienceRecorder({ dispatcher, getRunContext: getRunCtx }));
-    executor.attachCombinedRecorder(this.makeBranchErrorRecorder(this.runEpoch));
-    for (const r of this.attachedRecorders) executor.attachCombinedRecorder(r);
-    return executor;
+    return this.compositionRunSetup(invocation, resumeLeg, [
+      resilienceRecorder({ dispatcher, getRunContext: () => invocation.context() }),
+      this.makeBranchErrorRecorder(invocation.value.branchErrors),
+    ]);
   }
 
   /**
@@ -559,18 +473,14 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
    * Only the FIRST error per branch is kept. Errors fired outside any
    * branch (e.g., a Merge-stage error) are ignored.
    *
-   * `epoch` is the run token current at attach time. Under fail-fast, a
-   * rejected run's abandoned siblings keep executing in the background —
-   * THIS recorder (attached to that dead run's executor) may still
-   * receive their late `onError` events while a NEW run is live. The
-   * epoch check drops those writes so the live run's map stays clean.
+   * The captured map belongs to this invocation. A late failure can only
+   * update its old map; no later invocation or mounted runtime shares it.
    */
-  private makeBranchErrorRecorder(epoch: number): CombinedRecorder {
+  private makeBranchErrorRecorder(branchErrors: Map<string, BranchErrorRecord>): CombinedRecorder {
     const branchIds = new Set(this.branches.map((b) => b.id));
     return {
       id: 'parallel-branch-errors',
       onError: (event) => {
-        if (epoch !== this.runEpoch) return; // straggler from a dead run
         if (!isFlowEvent(event)) return;
         const ctx = event.traversalContext;
         if (!ctx) return;
@@ -584,7 +494,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
         const slash = stageId.indexOf('/');
         const branchId = slash >= 0 ? stageId.slice(0, slash) : undefined;
         if (branchId === undefined || !branchIds.has(branchId)) return;
-        if (!this.branchErrors.has(branchId)) {
+        if (!branchErrors.has(branchId)) {
           // `structuredError` preserves both the BARE message (no
           // `TypeError:` / `RateLimitError:` name prefix — consumers
           // expect the original `throw new X(msg)` reason exactly) and
@@ -598,17 +508,17 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
             (event.message.startsWith('Error: ')
               ? event.message.slice('Error: '.length)
               : event.message);
-          this.branchErrors.set(branchId, { message, raw: structured?.raw });
+          branchErrors.set(branchId, { message, raw: structured?.raw });
         }
       },
     };
   }
 
   private finalizeResult(
-    executor: FlowChartExecutor,
+    invocation: RunnerInvocation<ParallelRunValues>,
     result: unknown,
   ): ParallelOutput | RunnerPauseOutcome {
-    const paused = this.detectPause(executor, result);
+    const paused = this.detectPause(invocation, result);
     if (paused) return paused;
     if (result instanceof Error) throw result;
     if (typeof result === 'string') return result;
@@ -623,7 +533,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
 
     const seed = (scope: TypedScope<ParallelState>) => {
       const args = scope.$getArgs<ParallelInput>();
-      adoptParentRun(scope, args, 'Parallel');
+      this.enterComposition(scope, args, 'Parallel');
       scope.userMessage = args.message;
       scope.branchResults = {};
       typedEmit(scope, 'agentfootprint.composition.enter', {
@@ -686,25 +596,26 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
         // The child reads its own outcome (`childOutcome.ts`). A branch that
         // ended on a verdict is a FAILED branch: its mapper throws the child's
         // own error, which the wrapper attributes.
-        outputMapper: wrapBranchOutputMapper(branch.id, this.branchErrors, (sfOutput) => {
-          const outcome = childOutcome(branch.runner, sfOutput);
-          if ('verdict' in outcome) throw childError(outcome.verdict);
-          return {
-            branchResults: {
-              [branch.id]: typeof outcome.answer === 'string' ? outcome.answer : '',
-            },
-          };
-        }),
+        outputMapper: wrapBranchOutputMapper(
+          branch.id,
+          (binding) => this.runExecution().forScope(binding).value.branchErrors,
+          (sfOutput) => {
+            const outcome = childOutcome(branch.runner, sfOutput);
+            if ('verdict' in outcome) throw childError(outcome.verdict);
+            return {
+              branchResults: {
+                [branch.id]: typeof outcome.answer === 'string' ? outcome.answer : '',
+              },
+            };
+          },
+        ),
       });
     }
 
-    // Merge stage — runs after all fork children complete (join point).
-    // Closes over `this.branchErrors` (populated by the internal
-    // `parallel-branch-errors` recorder) so per-branch error messages
-    // survive subflow boundary swallowing in footprintjs.
-    const branchErrors = this.branchErrors;
+    // The merge reads this actual runtime's error map, including mounted use.
     const requiredIds = this.requiredIds;
     const mergeStage = async (scope: TypedScope<ParallelState>): Promise<string> => {
+      const branchErrors = this.runExecution().forScope(scope).value.branchErrors;
       const results = (scope.branchResults as Record<string, string>) ?? {};
 
       // Detect failures by absence: any expected branch id missing
@@ -730,7 +641,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
           id: compositionId,
           name: compositionName,
           status: 'err',
-          durationMs: Date.now() - this.currentRunContext.runStartMs,
+          durationMs: Date.now() - this.runExecution().forScope(scope).context.runStartMs,
         });
         // A REQUIRED branch failed under a tolerant merge: required
         // overrides tolerance — reject the run, naming the branch(es).
@@ -785,7 +696,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
           id: compositionId,
           name: compositionName,
           status: 'err',
-          durationMs: Date.now() - this.currentRunContext.runStartMs,
+          durationMs: Date.now() - this.runExecution().forScope(scope).context.runStartMs,
         });
         throw err;
       }
@@ -807,7 +718,7 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
         id: compositionId,
         name: compositionName,
         status: 'ok',
-        durationMs: Date.now() - this.currentRunContext.runStartMs,
+        durationMs: Date.now() - this.runExecution().forScope(scope).context.runStartMs,
       });
       return merged;
     };
@@ -860,10 +771,11 @@ export class Parallel extends RunnerBase<ParallelInput, ParallelOutput> {
  */
 export function wrapBranchOutputMapper(
   branchId: string,
-  branchErrors: Map<string, BranchErrorRecord>,
+  errorsFor: (binding: unknown) => Map<string, BranchErrorRecord>,
   inner: (sfOutput: unknown) => Record<string, unknown>,
-): (sfOutput: unknown) => Record<string, unknown> {
-  return (sfOutput) => {
+): (sfOutput: unknown, parent?: unknown, binding?: unknown) => Record<string, unknown> {
+  return (sfOutput, _parent, binding) => {
+    const branchErrors = errorsFor(binding);
     try {
       return inner(sfOutput);
     } catch (err) {

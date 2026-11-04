@@ -11,7 +11,7 @@ import { findingsFrame } from '../../../helpers/findingsData.js';
  *
  *   • A SETTLED SIBLING FILES NOTHING. The resume answers a call the paused
  *     batch never dispatched with the library's fixed sentence
- *     (`stages/toolCalls.ts` · `notDispatchedResult`, marked
+ *     (`stages/toolCalls/batch/settle.ts` · `notDispatchedResult`, marked
  *     `LLMMessage.notDispatched`). It never reached the dispatch door
  *     (`declareCoverage`), so the door filed no coverage row for it and
  *     emitted no `tools.absent` — although the tool, had it run, would have
@@ -51,7 +51,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../../../../src/provider-contract/types.js';
-import { notDispatchedResult } from '../../../../src/core/agent/stages/toolCalls.js';
+import { notDispatchedResult } from '../../../../src/core/agent/stages/toolCalls/index.js';
 
 // ─── the harness ─────────────────────────────────────────────────────
 

@@ -30,6 +30,7 @@ function make(options: {
   batchBaseline?: boolean;
   maxRange?: '1h';
   optionalBounds?: boolean;
+  redactIdentity?: true;
 }) {
   const seen: Seen[] = [];
   const requests: LLMRequest[] = [];
@@ -104,7 +105,13 @@ function make(options: {
       },
     }),
   );
-  const agent = Agent.create({ provider, model: 'mock', reactMode: options.mode, maxIterations: 5 })
+  const agent = Agent.create({
+    provider,
+    model: 'mock',
+    reactMode: options.mode,
+    maxIterations: 5,
+    ...(options.redactIdentity && { redact: { keys: ['runIdentity'] } }),
+  })
     .tools(tools)
     .time({
       ...(options.zone !== null && { zone: options.zone ?? 'UTC' }),
@@ -114,6 +121,24 @@ function make(options: {
     .build();
   return { agent, seen, requests };
 }
+
+it('keeps private identity out of both partial-window pause ownership references', async () => {
+  const principal = 'partial-principal-canary';
+  const { agent } = make({
+    mode: 'dynamic',
+    first: 'metric_series',
+    supplied: 'start',
+    redactIdentity: true,
+  });
+  const outcome = await agent.run({
+    message: MESSAGE,
+    time: { now: NOW },
+    identity: { conversationId: 'synthetic-conversation', principal },
+  });
+  expect(isInputPause(outcome)).toBe(true);
+  expect(JSON.stringify(outcome)).toContain(principal);
+  expect(JSON.stringify(agent.getSnapshot())).not.toContain(principal);
+});
 
 for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
   const reply = async (agent: Agent, outcome: unknown, value: unknown) => {

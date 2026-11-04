@@ -1,303 +1,295 @@
 /**
- * causalEvidenceRecorder — the evidence bridge (backlog Phase-1 #5).
- *
- * Harvests, DURING the run, everything a causal snapshot needs beyond
- * (query, finalContent) — from events the engine already fires:
- *
- *   stream.tool_start/tool_end  → ToolCallRecord (name, args, resultPreview, errored)
- *                                 — none for a bracket carrying `notDispatched`
- *                                   (9.113.0): that call never ran
- *   stream.llm_end              → tokenUsage accumulation + iteration high-water
- *   agent.turn_start/turn_end   → durationMs (+ authoritative totals when seen)
- *   FlowRecorder.onDecision     → DecisionRecord with footprintjs decide()/select()
- *                                 operator-level evidence (rule, conditions, chosen)
- *   context.evaluated routing   → DecisionRecord per skill the graph routed to
- *
- * Pattern: CombinedRecorder (Convention 1 — single purpose: evidence
- *          accumulation); per-turn reset anchored on `agent.turn_start`
- *          (Convention 4 — executor `clear()` resets between runs; same-
- *          executor pause/resume PRESERVES pre-pause evidence by design).
- * PII note: tool args/results and decide() evidence persist into snapshots.
- *          A causal memory is working state — a later run replays it to the
- *          model — so the Agent feeds this recorder's tool calls from its
- *          REAL-value path: under an agent's `redact` the snapshot still keeps
- *          the real arguments and results, as it keeps the real question and
- *          answer (`writeSnapshot` reads those from the conversation the run
- *          computed on). The one part it cannot read real is the DECISIONS:
- *          footprintjs serves its flow channel (`onDecision` / `onSelected`)
- *          under the run's policy, so a selected value inside decide()
- *          evidence is the placeholder there (a named limit,
- *          `src/redaction/README.md`). Values are bounded (`maxPreviewChars`
- *          for results, `maxFieldChars` for args/evidence); treat the snapshot
- *          store as PII-bearing and protect it accordingly.
- *
- * The Agent attaches this automatically when a CAUSAL memory is mounted and
- * threads `collect` into the memory write mount (`evidenceSource`) — so
- * `writeSnapshot` persists real evidence instead of zeros.
+ * One component-leg evidence bridge. Each native component setup constructs a
+ * fresh handle. Turn events and restored totals cannot reset or replace its facts.
+ * Private tool facts arrive through the existing pre-serving computation port;
+ * native decisions arrive through the existing scoped recorder dispatcher.
  */
-
 import type { FlowDecisionEvent, FlowSelectedEvent } from 'footprintjs';
 import type { DecisionRecord, ToolCallRecord } from './types.js';
+import {
+  EVIDENCE_CAUSES,
+  EVIDENCE_LIMITS,
+  type EvidenceCoverage,
+  type RunEvidence,
+} from './observation.js';
 import { toWireJson, withWireErrors } from '../../lib/wireJson.js';
 
-/** What the bridge delivers to `writeSnapshot` for one run. */
-export interface RunEvidence {
-  readonly iterations: number;
-  readonly decisions: ReadonlyArray<DecisionRecord>;
-  readonly toolCalls: ReadonlyArray<ToolCallRecord>;
-  readonly durationMs: number;
-  readonly tokenUsage: { readonly input: number; readonly output: number };
-}
+export type { RunEvidence } from './observation.js';
 
 export interface CausalEvidenceRecorderOptions {
-  /** Recorder id (default 'causal-evidence'). */
   readonly id?: string;
-  /** Max chars kept of each tool result preview. Default 200. */
+  /** Captured actual component source; absent means observation is unavailable. */
+  readonly coverage?: EvidenceCoverage;
   readonly maxPreviewChars?: number;
-  /** Max serialized chars kept of tool ARGS and decision EVIDENCE (the
-   *  PII-dense fields). Oversized values are replaced by a truncated
-   *  preview marker. Default 2000. */
   readonly maxFieldChars?: number;
 }
 
 export interface CausalEvidenceRecorderHandle {
   readonly id: string;
-  /** Snapshot the evidence accumulated for the CURRENT run. */
   collect(): RunEvidence;
-  clear(): void;
-  // CombinedRecorder hooks (routed by method-shape detection):
   onEmit(event: { name: string; payload: unknown }): void;
   onDecision(event: FlowDecisionEvent): void;
   onSelected(event: FlowSelectedEvent): void;
 }
 
+function boundOption(value: number | undefined, fallback: number): number {
+  const result = value ?? fallback;
+  if (!Number.isSafeInteger(result) || result < 1 || result > 65_536) {
+    throw new TypeError('Causal evidence field bound must be an integer between 1 and 65536');
+  }
+  return result;
+}
+
 function preview(value: unknown, max: number): string {
-  let s: string | undefined;
-  if (typeof value === 'string') s = value;
-  else {
-    try {
-      s = toWireJson(value);
-    } catch {
-      s = String(value);
-    }
-  }
-  // `toWireJson(undefined)` has no text; an absent result previews as itself.
-  if (typeof s !== 'string') s = String(value);
-  return s.length > max ? `${s.slice(0, max)}…` : s;
+  const serialized = typeof value === 'string' ? value : toWireJson(value);
+  const text = typeof serialized === 'string' ? serialized : String(value);
+  return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
-/** Bound a record-ish value: oversized serializations become a truncated
- *  preview marker so snapshots can't grow unbounded (and PII exposure is
- *  capped). Small values pass through untouched. */
-function bounded(
-  value: Readonly<Record<string, unknown>> | undefined,
-  max: number,
-): Readonly<Record<string, unknown>> | undefined {
+function bounded(value: unknown, max: number): Readonly<Record<string, unknown>> | undefined {
   if (value === undefined) return undefined;
-  try {
-    const s = toWireJson(value);
-    // Kept as a value (not the text), so rendered the same way: an Error in
-    // it keeps its name, message, code and cause and nothing else.
-    if (s.length <= max) return withWireErrors(value);
-    return { __truncated: `${s.slice(0, max)}…` };
-  } catch {
-    return { __truncated: String(value).slice(0, max) };
-  }
+  const projected = withWireErrors(value);
+  const record =
+    projected !== null && typeof projected === 'object' && !Array.isArray(projected)
+      ? (projected as Readonly<Record<string, unknown>>)
+      : {
+          __invalidArguments:
+            value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
+        };
+  const text = toWireJson(record);
+  return text.length <= max ? record : { __truncated: text.slice(0, max) + '…' };
 }
 
-/** Build the evidence-harvesting recorder. Attach via `.watch(rec)` (the
- *  Agent does this automatically for CAUSAL memories). */
 export function causalEvidenceRecorder(
   options: CausalEvidenceRecorderOptions = {},
 ): CausalEvidenceRecorderHandle {
-  const maxPreview = options.maxPreviewChars ?? 200;
-  const maxField = options.maxFieldChars ?? 2000;
+  const maxPreview = boundOption(options.maxPreviewChars, 200);
+  const maxField = boundOption(options.maxFieldChars, 2000);
+  const coverage =
+    options.coverage &&
+    Object.freeze({
+      scope: options.coverage.scope,
+      runId: options.coverage.runId,
+      entry: Object.freeze({ ...options.coverage.entry }),
+      priorLegs: options.coverage.priorLegs,
+    });
+  const startedAt = Date.now();
+  const decisions: DecisionRecord[] = [];
+  const toolCalls: ToolCallRecord[] = [];
+  const pending = new Map<string, { name: string; args: Readonly<Record<string, unknown>> }>();
+  const omitted = { decisions: 0, toolCalls: 0, pendingStarts: 0 };
+  let failed = false;
+  let boundedObservation = false;
+  let unmatchedEnds = 0;
+  let duplicateStarts = 0;
+  let observedCalls = 0;
+  let missingUsage = 0;
+  let observedIterationStarts = 0;
+  let lastObservedIteration: number | undefined;
+  let input = 0;
+  let output = 0;
 
-  // ── per-turn accumulators (reset on agent.turn_start; executor clear()
-  //    resets between runs; pause/resume keeps pre-pause evidence) ──
-  let decisions: DecisionRecord[] = [];
-  let toolCalls: ToolCallRecord[] = [];
-  let pendingTools = new Map<string, { name: string; args: Readonly<Record<string, unknown>> }>();
-  let tokens = { input: 0, output: 0 };
-  let iterations = 0;
-  let turnStartMs: number | undefined;
-  let authoritative:
-    | { iterations: number; input: number; output: number; durationMs: number }
-    | undefined;
-
-  const reset = (): void => {
-    decisions = [];
-    toolCalls = [];
-    pendingTools = new Map();
-    tokens = { input: 0, output: 0 };
-    iterations = 0;
-    turnStartMs = undefined;
-    authoritative = undefined;
+  const add = (count: number, amount = 1): number => {
+    if (!Number.isSafeInteger(amount) || amount < 0 || count > Number.MAX_SAFE_INTEGER - amount) {
+      boundedObservation = true;
+      return Number.MAX_SAFE_INTEGER;
+    }
+    return count + amount;
   };
+  const decision = (value: DecisionRecord): void => {
+    if (decisions.length === EVIDENCE_LIMITS.decisions) {
+      omitted.decisions = add(omitted.decisions);
+      boundedObservation = true;
+    } else decisions.push(value);
+  };
+  const observe = (body: () => void): void => {
+    if (!coverage) return;
+    try {
+      body();
+    } catch {
+      failed = true;
+    }
+  };
+  const usable = (value: unknown): value is number =>
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= Number.MAX_SAFE_INTEGER;
 
   return {
     id: options.id ?? 'causal-evidence',
-
     onEmit(event): void {
-      const { name, payload: raw } = event as { name: string; payload: unknown };
-      // An Agent feeds this from its REAL-value path (`core/Agent.ts`): a
-      // causal memory is working state a later run replays to the model, so
-      // its evidence keeps the real tool calls whatever the agent's `redact`.
-      // Attached to an executor by hand it receives that executor's emits as
-      // served there — a placeholder string for an event `emitPatterns`
-      // selects whole, whose fields then read as absent.
-      const whole = raw !== null && typeof raw === 'object' ? undefined : raw;
-      const payload = (whole === undefined ? raw : {}) as Record<string, unknown>;
-      switch (name) {
-        case 'agentfootprint.agent.turn_start':
-          // A new turn on the same executor — start fresh (one snapshot per turn).
-          reset();
-          turnStartMs = Date.now();
-          break;
-        case 'agentfootprint.stream.tool_start': {
-          // A call the batch settlement answered (9.113.0) passed no args to a
-          // tool and got no result back — not tool evidence, so no record.
-          // Read off the bracket's typed `notDispatched`, never inferred from
-          // its `durationMs: 0` or its sentence: filed, it would put a call
-          // that never ran into the snapshot as a tool call, with the
-          // library's sentence as its result, and into the DECISIONS
-          // projection a later prompt replays.
-          if (payload.notDispatched !== undefined) break;
-          const id = String(payload.toolCallId ?? '');
-          pendingTools.set(id, {
-            name: String(payload.toolName ?? 'unknown'),
-            args:
-              bounded((payload.args ?? {}) as Readonly<Record<string, unknown>>, maxField) ?? {},
-          });
-          break;
-        }
-        case 'agentfootprint.stream.tool_end': {
-          if (payload.notDispatched !== undefined) break; // settled — see tool_start
-          const id = String(payload.toolCallId ?? '');
-          const started = pendingTools.get(id);
-          pendingTools.delete(id);
-          toolCalls.push({
-            name: started?.name ?? 'unknown',
-            args: started?.args ?? {},
-            resultPreview: preview(whole ?? payload.result, maxPreview),
-            errored: payload.error === true,
-          });
-          break;
-        }
-        case 'agentfootprint.stream.llm_end': {
-          const usage = payload.usage as { input?: number; output?: number } | undefined;
-          tokens = {
-            input: tokens.input + (usage?.input ?? 0),
-            output: tokens.output + (usage?.output ?? 0),
-          };
-          const iter = Number(payload.iteration ?? 0);
-          if (iter > iterations) iterations = iter;
-          break;
-        }
-        case 'agentfootprint.context.evaluated': {
-          // Skill-graph routing provenance → one DecisionRecord per routed skill.
-          const routing = payload.routing as
-            | ReadonlyArray<{
-                injectionId?: string;
-                id?: string;
-                via?: string;
-                label?: string;
-                path?: unknown;
-              }>
-            | undefined;
-          if (Array.isArray(routing)) {
-            for (const r of routing) {
-              decisions.push({
+      observe(() => {
+        const raw = event.payload;
+        const payload = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<
+          string,
+          unknown
+        >;
+        switch (event.name) {
+          case 'agentfootprint.agent.iteration_start':
+            observedIterationStarts = add(observedIterationStarts);
+            if (Number.isSafeInteger(payload.iterIndex) && (payload.iterIndex as number) >= 0) {
+              lastObservedIteration = payload.iterIndex as number;
+            }
+            break;
+          case 'agentfootprint.stream.tool_start': {
+            if (payload.notDispatched !== undefined) break;
+            const id = payload.toolCallId;
+            if (typeof id !== 'string' || id.length === 0) {
+              failed = true;
+              break;
+            }
+            if (pending.has(id)) {
+              duplicateStarts = add(duplicateStarts);
+              break;
+            }
+            if (pending.size === EVIDENCE_LIMITS.pendingStarts) {
+              omitted.pendingStarts = add(omitted.pendingStarts);
+              boundedObservation = true;
+              break;
+            }
+            pending.set(id, {
+              name: preview(payload.toolName ?? 'unknown', maxField),
+              args: bounded(payload.args, maxField) ?? {},
+            });
+            break;
+          }
+          case 'agentfootprint.stream.tool_end': {
+            if (payload.notDispatched !== undefined) break;
+            const id = payload.toolCallId;
+            if (typeof id !== 'string' || id.length === 0) {
+              failed = true;
+              break;
+            }
+            const start = pending.get(id);
+            if (!start) {
+              unmatchedEnds = add(unmatchedEnds);
+              break;
+            }
+            pending.delete(id);
+            if (toolCalls.length === EVIDENCE_LIMITS.toolCalls) {
+              omitted.toolCalls = add(omitted.toolCalls);
+              boundedObservation = true;
+              break;
+            }
+            toolCalls.push({
+              ...start,
+              resultPreview: preview(payload.result, maxPreview),
+              errored: payload.error === true,
+            });
+            break;
+          }
+          case 'agentfootprint.stream.llm_end': {
+            const usage = payload.usage as { input?: unknown; output?: unknown } | undefined;
+            if (!usable(usage?.input) || !usable(usage?.output)) {
+              missingUsage = add(missingUsage);
+              break;
+            }
+            observedCalls = add(observedCalls);
+            const nextInput = input + usage.input,
+              nextOutput = output + usage.output;
+            if (nextInput > Number.MAX_SAFE_INTEGER || nextOutput > Number.MAX_SAFE_INTEGER) {
+              boundedObservation = true;
+              input = Math.min(Number.MAX_SAFE_INTEGER, nextInput);
+              output = Math.min(Number.MAX_SAFE_INTEGER, nextOutput);
+            } else {
+              input = nextInput;
+              output = nextOutput;
+            }
+            break;
+          }
+          case 'agentfootprint.context.evaluated': {
+            const routing = payload.routing;
+            if (!Array.isArray(routing)) break;
+            for (const row of routing) {
+              decision({
                 stageId: 'skill-graph',
-                chosen: String(r.injectionId ?? r.id ?? 'unknown'),
-                ...(r.label !== undefined || r.via !== undefined
-                  ? { rule: r.label ?? `via ${r.via}` }
+                chosen: preview(row.injectionId ?? row.id ?? 'unknown', maxField),
+                ...(row.label !== undefined || row.via !== undefined
+                  ? { rule: preview(row.label ?? 'via ' + String(row.via), maxField) }
                   : {}),
-                ...(r.path !== undefined && {
-                  evidence: { path: r.path } as Readonly<Record<string, unknown>>,
-                }),
+                ...(row.path !== undefined
+                  ? { evidence: bounded({ path: row.path }, maxField) }
+                  : {}),
               });
             }
+            break;
           }
-          break;
+          // Turn boundaries/totals describe the whole conversation, not this leg.
+          default:
+            break;
         }
-        case 'agentfootprint.agent.turn_end': {
-          // Authoritative totals when the write runs after turn_end.
-          authoritative = {
-            iterations: Number(payload.iterationCount ?? iterations),
-            input: Number(payload.totalInputTokens ?? tokens.input),
-            output: Number(payload.totalOutputTokens ?? tokens.output),
-            durationMs: Number(payload.durationMs ?? 0),
-          };
-          break;
-        }
-        default:
-          break;
-      }
-    },
-
-    /** footprintjs FlowRecorder channel — decide() decision evidence.
-     *  FlowDecisionEvent carries `decider` (display name), `chosen`, optional
-     *  `evidence` from decide(), and `traversalContext.stageId` (the stable,
-     *  subflow-prefixed stage id — preferred for DecisionRecord.stageId). */
-    onDecision(event: FlowDecisionEvent): void {
-      const stageId = event.traversalContext?.stageId ?? event.decider;
-      // Internal agent plumbing (the cache-gate decider) is not domain
-      // decision evidence. `includes` (not startsWith): in reactMode
-      // 'dynamic-grouped' the names are double-prefixed
-      // ('sf-llm-call/sf-cache/…').
-      if (String(event.chosen ?? '').includes('sf-cache/') || String(stageId).includes('sf-cache'))
-        return;
-      const evidence = event.evidence as
-        | { rule?: string; label?: string; conditions?: unknown }
-        | undefined;
-      decisions.push({
-        stageId: String(stageId),
-        chosen: String(event.chosen ?? 'unknown'),
-        ...(evidence?.label !== undefined || evidence?.rule !== undefined
-          ? { rule: String(evidence.label ?? evidence.rule) }
-          : {}),
-        ...(evidence !== undefined && {
-          evidence: bounded(evidence as Readonly<Record<string, unknown>>, maxField),
-        }),
       });
     },
-
-    /** footprintjs FlowRecorder channel — select() selection evidence. */
-    onSelected(event: FlowSelectedEvent): void {
-      const stageId = event.traversalContext?.stageId ?? event.parent;
-      if (String(stageId).includes('sf-cache')) return;
-      // The agent's own Context slot-fork is a selector — plumbing, not domain.
-      if (String(stageId).includes('context') && event.selected.every((s) => s.startsWith('sf-')))
-        return;
-      decisions.push({
-        stageId: String(stageId),
-        chosen: event.selected.join(', '),
-        ...(event.evidence !== undefined && {
-          evidence: bounded(
-            event.evidence as unknown as Readonly<Record<string, unknown>>,
-            maxField,
-          ),
-        }),
+    onDecision(event): void {
+      observe(() => {
+        const stageId = event.traversalContext?.stageId ?? event.decider;
+        if (
+          String(event.chosen ?? '').includes('sf-cache/') ||
+          String(stageId).includes('sf-cache')
+        )
+          return;
+        const evidence = event.evidence as { rule?: string; label?: string } | undefined;
+        decision({
+          stageId: preview(stageId, maxField),
+          chosen: preview(event.chosen ?? 'unknown', maxField),
+          ...(evidence?.label !== undefined || evidence?.rule !== undefined
+            ? { rule: preview(evidence.label ?? evidence.rule, maxField) }
+            : {}),
+          ...(evidence !== undefined
+            ? { evidence: bounded(evidence as Readonly<Record<string, unknown>>, maxField) }
+            : {}),
+        });
       });
     },
-
+    onSelected(event): void {
+      observe(() => {
+        const stageId = event.traversalContext?.stageId ?? event.parent;
+        if (String(stageId).includes('sf-cache')) return;
+        if (String(stageId).includes('context') && event.selected.every((s) => s.startsWith('sf-')))
+          return;
+        decision({
+          stageId: preview(stageId, maxField),
+          chosen: preview(event.selected.join(', '), maxField),
+          ...(event.evidence !== undefined
+            ? {
+                evidence: bounded(
+                  event.evidence as unknown as Readonly<Record<string, unknown>>,
+                  maxField,
+                ),
+              }
+            : {}),
+        });
+      });
+    },
     collect(): RunEvidence {
-      return {
-        iterations: authoritative?.iterations ?? iterations,
+      if (!coverage) return { availability: 'unavailable', reason: 'not-configured' };
+      const flags = {
+        'observer-failed': failed,
+        'bounded-observation': boundedObservation,
+        'incomplete-tool-pairs': pending.size > 0 || unmatchedEnds > 0,
+        'duplicate-tool-start': duplicateStarts > 0,
+        'missing-usage': missingUsage > 0,
+      };
+      const causes = EVIDENCE_CAUSES.filter((cause) => flags[cause]);
+      const elapsed = Date.now() - startedAt;
+      const facts = {
+        coverage,
         decisions: [...decisions],
         toolCalls: [...toolCalls],
-        durationMs:
-          authoritative?.durationMs ?? (turnStartMs !== undefined ? Date.now() - turnStartMs : 0),
-        tokenUsage: {
-          input: authoritative?.input ?? tokens.input,
-          output: authoritative?.output ?? tokens.output,
-        },
+        observedIterationStarts,
+        ...(lastObservedIteration !== undefined ? { lastObservedIteration } : {}),
+        toolAccounting: { unmatchedStarts: pending.size, unmatchedEnds, duplicateStarts },
+        usageAccounting: { observedCalls, missingUsage },
+        omittedObservations: { ...omitted },
+        duration: usable(elapsed)
+          ? { kind: 'measured' as const, observationWindowMs: elapsed }
+          : { kind: 'unavailable' as const },
+        tokenUsage: { input, output },
       };
-    },
-
-    clear(): void {
-      reset();
+      return causes.length
+        ? { ...facts, availability: 'partial', causes }
+        : { ...facts, availability: 'observed' };
     },
   };
 }

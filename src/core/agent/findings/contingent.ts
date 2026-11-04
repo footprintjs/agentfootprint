@@ -10,7 +10,7 @@
  *          from results the model itself set aside?".
  * Role:    core/ layer leaf. Two moments call it: `stages/route.ts ·
  *          judgeEvidence` over the values the extractor found in the answer
- *          (the gate's `EvidenceVerdict.grounded`), and `stages/toolCalls.ts`
+ *          (the gate's `EvidenceVerdict.grounded`), and `stages/toolCalls/execution/callStart.ts`
  *          over the DATA values of a call's arguments (`groundedArgumentValues`
  *          below). Both hand the rows to `ledger.ts · recordFindings`, the one
  *          writer.

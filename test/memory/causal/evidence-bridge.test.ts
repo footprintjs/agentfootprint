@@ -4,7 +4,7 @@
  * harvested by `causalEvidenceRecorder` instead of TODO-zeros.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Agent, defineTool } from '../../../src/index.js';
 import {
   defineMemory,
@@ -15,12 +15,32 @@ import {
   mockEmbedder,
 } from '../../../src/memory/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import { causalEvidenceRecorder } from '../../../src/memory/causal/evidenceRecorder.js';
+import {
+  causalEvidenceRecorder,
+  type CausalEvidenceRecorderOptions,
+} from '../../../src/memory/causal/evidenceRecorder.js';
 import type { SnapshotEntry } from '../../../src/memory/causal/types.js';
 import type { MemoryEntry } from '../../../src/memory/entry/types.js';
 import { expectScalesLinearly } from '../../helpers/perf.js';
 
 const IDENTITY = { tenant: 'acme', conversationId: 'conv-1' };
+
+/** Synthetic unit coverage; native producer/writer joins are tested separately. */
+const UNIT_COVERAGE = {
+  scope: 'component-execution-leg',
+  runId: 'r1',
+  entry: { kind: 'run' },
+  priorLegs: 'not-carried',
+} as const;
+function coveredRecorder(options: Omit<CausalEvidenceRecorderOptions, 'coverage'> = {}) {
+  return causalEvidenceRecorder({ ...options, coverage: UNIT_COVERAGE });
+}
+function collected(rec: ReturnType<typeof causalEvidenceRecorder>) {
+  const value = rec.collect();
+  expect(value.availability).not.toBe('unavailable');
+  if (value.availability === 'unavailable') throw new Error('Unit collector lacks coverage');
+  return value;
+}
 
 function causalMemory(store: InMemoryStore) {
   return defineMemory({
@@ -84,6 +104,10 @@ describe('evidence bridge — snapshot round-trip', () => {
     const snaps = await snapshotsIn(store);
     expect(snaps.length).toBe(1);
     const s = snaps[0]!;
+    expect(s.schemaVersion).toBe(2);
+    expect(s.availability).not.toBe('unavailable');
+    if (s.availability === 'unavailable') throw new Error('Expected actual leg evidence');
+    expect(s.coverage.priorLegs).toBe('not-carried');
 
     // toolCalls — name, args, result preview, no error
     expect(s.toolCalls.length).toBe(1);
@@ -102,9 +126,11 @@ describe('evidence bridge — snapshot round-trip', () => {
     expect(chosenValues.some((c) => /final/i.test(c))).toBe(true);
 
     // iterations / tokens / duration — real values
-    expect(s.iterations).toBeGreaterThanOrEqual(2);
+    expect(s.observedIterationStarts).toBeGreaterThanOrEqual(2);
     expect(s.tokenUsage).toEqual({ input: 250, output: 50 });
-    expect(s.durationMs).toBeGreaterThanOrEqual(0);
+    expect(s.duration.kind).toBe('measured');
+    if (s.duration.kind === 'measured')
+      expect(s.duration.observationWindowMs).toBeGreaterThanOrEqual(0);
     expect(s.finalContent).toContain('REJECTED');
   });
 
@@ -132,9 +158,18 @@ describe('evidence bridge — snapshot round-trip', () => {
 
 // ─── Unit (the recorder in isolation) ─────────────────────────────────
 describe('evidence bridge — causalEvidenceRecorder unit', () => {
-  it('accumulates tool calls + tokens + iterations and resets on turn_start', () => {
+  it('an unconfigured collector reports unavailable instead of measured zeros', () => {
     const rec = causalEvidenceRecorder();
-    rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: { turnIndex: 0 } });
+    rec.onEmit({
+      name: 'agentfootprint.stream.llm_end',
+      payload: { usage: { input: 10, output: 5 } },
+    });
+    expect(rec.collect()).toEqual({ availability: 'unavailable', reason: 'not-configured' });
+  });
+
+  it('accumulates this leg and ignores turn_start; a fresh handle starts separately', () => {
+    const rec = coveredRecorder();
+    rec.onEmit({ name: 'agentfootprint.agent.iteration_start', payload: { iterIndex: 2 } });
     rec.onEmit({
       name: 'agentfootprint.stream.tool_start',
       payload: { toolCallId: 't1', toolName: 'x', args: { a: 1 } },
@@ -147,39 +182,55 @@ describe('evidence bridge — causalEvidenceRecorder unit', () => {
       name: 'agentfootprint.stream.llm_end',
       payload: { iteration: 2, usage: { input: 10, output: 5 } },
     });
-    let e = rec.collect();
-    expect(e.toolCalls).toEqual([
+    const observed = collected(rec);
+    expect(observed.toolCalls).toEqual([
       { name: 'x', args: { a: 1 }, resultPreview: 'ok', errored: false },
     ]);
-    expect(e.tokenUsage).toEqual({ input: 10, output: 5 });
-    expect(e.iterations).toBe(2);
-
+    expect(observed.tokenUsage).toEqual({ input: 10, output: 5 });
+    expect(observed.observedIterationStarts).toBe(1);
+    expect(observed.lastObservedIteration).toBe(2);
     rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: { turnIndex: 1 } });
-    e = rec.collect();
-    expect(e.toolCalls).toEqual([]); // fresh per turn
-    expect(e.tokenUsage).toEqual({ input: 0, output: 0 });
+    expect(collected(rec).toolCalls).toEqual(observed.toolCalls);
+    expect(collected(rec).tokenUsage).toEqual({ input: 10, output: 5 });
+    expect(collected(coveredRecorder())).toMatchObject({
+      toolCalls: [],
+      tokenUsage: { input: 0, output: 0 },
+      observedIterationStarts: 0,
+    });
   });
 
-  it('turn_end totals are authoritative when present', () => {
-    const rec = causalEvidenceRecorder();
-    rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: {} });
-    rec.onEmit({
-      name: 'agentfootprint.stream.llm_end',
-      payload: { iteration: 1, usage: { input: 1, output: 1 } },
-    });
-    rec.onEmit({
-      name: 'agentfootprint.agent.turn_end',
-      payload: { iterationCount: 3, totalInputTokens: 99, totalOutputTokens: 42, durationMs: 1234 },
-    });
-    expect(rec.collect()).toMatchObject({
-      iterations: 3,
-      tokenUsage: { input: 99, output: 42 },
-      durationMs: 1234,
-    });
+  it('turn_end totals cannot overwrite this leg observed usage, iterations or duration', () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(50);
+    try {
+      const rec = coveredRecorder();
+      rec.onEmit({ name: 'agentfootprint.agent.iteration_start', payload: { iterIndex: 1 } });
+      rec.onEmit({
+        name: 'agentfootprint.stream.llm_end',
+        payload: { iteration: 1, usage: { input: 1, output: 1 } },
+      });
+      rec.onEmit({
+        name: 'agentfootprint.agent.turn_end',
+        payload: {
+          iterationCount: 3,
+          totalInputTokens: 99,
+          totalOutputTokens: 42,
+          durationMs: 1234,
+        },
+      });
+      clock.mockReturnValue(57);
+      expect(collected(rec)).toMatchObject({
+        observedIterationStarts: 1,
+        lastObservedIteration: 1,
+        tokenUsage: { input: 1, output: 1 },
+        duration: { kind: 'measured', observationWindowMs: 7 },
+      });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('onDecision maps the REAL FlowDecisionEvent shape (decider + traversalContext)', () => {
-    const rec = causalEvidenceRecorder();
+    const rec = coveredRecorder();
     // The real engine event: { decider, chosen, evidence?, traversalContext? } —
     // no stageId/stageName at the top level (the panel caught a fabricated-shape test).
     rec.onDecision({
@@ -198,16 +249,16 @@ describe('evidence bridge — causalEvidenceRecorder unit', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     });
-    const d = rec.collect().decisions[0]!;
+    const d = collected(rec).decisions[0]!;
     expect(d).toMatchObject({ stageId: 'classify-risk', chosen: 'rejected', rule: 'Good credit' });
     expect(d.evidence).toBeTruthy();
     // without traversalContext, the decider display name is the fallback
     rec.onDecision({ decider: 'Route', chosen: 'Final' });
-    expect(rec.collect().decisions[1]).toMatchObject({ stageId: 'Route', chosen: 'Final' });
+    expect(collected(rec).decisions[1]).toMatchObject({ stageId: 'Route', chosen: 'Final' });
   });
 
   it('onSelected maps select() evidence; cache + context-fork plumbing filtered', () => {
-    const rec = causalEvidenceRecorder();
+    const rec = coveredRecorder();
     rec.onSelected({
       parent: 'PickStrategy',
       selected: ['aggressive'],
@@ -216,13 +267,13 @@ describe('evidence bridge — causalEvidenceRecorder unit', () => {
       evidence: { chosen: ['aggressive'] } as any,
     });
     rec.onSelected({ parent: 'context', selected: ['sf-system-prompt', 'sf-messages'], total: 3 });
-    const ds = rec.collect().decisions;
+    const ds = collected(rec).decisions;
     expect(ds.length).toBe(1); // the context slot-fork was filtered
     expect(ds[0]).toMatchObject({ stageId: 'PickStrategy', chosen: 'aggressive' });
   });
 
   it('oversized tool args are bounded (PII cap)', () => {
-    const rec = causalEvidenceRecorder({ maxFieldChars: 100 });
+    const rec = coveredRecorder({ maxFieldChars: 100 });
     rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: {} });
     rec.onEmit({
       name: 'agentfootprint.stream.tool_start',
@@ -232,7 +283,7 @@ describe('evidence bridge — causalEvidenceRecorder unit', () => {
       name: 'agentfootprint.stream.tool_end',
       payload: { toolCallId: 'b', result: 'ok' },
     });
-    const args = rec.collect().toolCalls[0]!.args;
+    const args = collected(rec).toolCalls[0]!.args;
     expect(JSON.stringify(args).length).toBeLessThan(200);
     expect(args.__truncated).toBeTruthy();
   });
@@ -251,8 +302,8 @@ describe('evidence bridge — causalEvidenceRecorder unit', () => {
 // ─── Property ─────────────────────────────────────────────────────────
 describe('evidence bridge — property', () => {
   it('result previews are truncated to maxPreviewChars for any size', () => {
-    const rec = causalEvidenceRecorder({ maxPreviewChars: 50 });
     for (const size of [0, 10, 50, 51, 5000]) {
+      const rec = coveredRecorder({ maxPreviewChars: 50 });
       rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: {} });
       rec.onEmit({
         name: 'agentfootprint.stream.tool_start',
@@ -262,7 +313,7 @@ describe('evidence bridge — property', () => {
         name: 'agentfootprint.stream.tool_end',
         payload: { toolCallId: 'p', result: 'x'.repeat(size) },
       });
-      const p = rec.collect().toolCalls[0]!.resultPreview;
+      const p = collected(rec).toolCalls[0]!.resultPreview;
       expect(p.length).toBeLessThanOrEqual(51); // 50 + ellipsis
     }
   });
@@ -271,7 +322,7 @@ describe('evidence bridge — property', () => {
 // ─── Security ─────────────────────────────────────────────────────────
 describe('evidence bridge — security', () => {
   it('evidence does not capture untracked secrets: only event-visible data lands in the snapshot', async () => {
-    // The recorder only sees what the emit channel carries (post-RedactionPolicy);
+    // The private computation port sees emitted tool facts before record serving;
     // a closure-local secret used inside a tool never reaches the snapshot.
     const SECRET = 'sk-super-secret-9876';
     const store = new InMemoryStore();
@@ -306,14 +357,12 @@ describe('evidence bridge — security', () => {
 // ─── Performance + Load ──────────────────────────────────────────────
 describe('evidence bridge — performance/load', () => {
   it(
-    'handles 50,000 events at ten times the cost of 5,000 — collect() stays O(run-size)',
+    'processes a tenfold event load while retaining only the fixed observation bound',
     { timeout: 30_000, retry: 2 },
     async () => {
-      // Pairing a tool_end with its tool_start must be a keyed lookup, not a
-      // scan of everything recorded so far. At ten times the events a scan
-      // costs a hundred times the work, which this ratio refuses.
+      // Event processing stays bounded per event; retention and omissions remain explicit.
       const record = (pairs: number): void => {
-        const rec = causalEvidenceRecorder();
+        const rec = coveredRecorder();
         rec.onEmit({ name: 'agentfootprint.agent.turn_start', payload: {} });
         for (let i = 0; i < pairs; i++) {
           rec.onEmit({
@@ -325,7 +374,14 @@ describe('evidence bridge — performance/load', () => {
             payload: { toolCallId: `t${i}`, result: 'r' },
           });
         }
-        expect(rec.collect().toolCalls.length).toBe(pairs);
+        const evidence = collected(rec);
+        expect(evidence.toolCalls).toHaveLength(256);
+        expect(evidence).toMatchObject({
+          availability: 'partial',
+          causes: ['bounded-observation'],
+          omittedObservations: { toolCalls: pairs - 256, pendingStarts: 0, decisions: 0 },
+          toolAccounting: { unmatchedStarts: 0, unmatchedEnds: 0, duplicateStarts: 0 },
+        });
       };
       await expectScalesLinearly({
         small: () => record(2_500),

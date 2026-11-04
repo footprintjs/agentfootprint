@@ -76,7 +76,7 @@ Each `Runner` holds a `currentRunContext` that refreshes on every `.run()` call:
 ```typescript
 {
   runStartMs: Date.now(),
-  runId: makeRunId(),
+  runId: admittedOrigin.runId,
   compositionPath: [`Agent:${this.id}`],
   // turnIndex, iterIndex set by the runner as iterations progress
 }

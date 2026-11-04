@@ -137,6 +137,8 @@ export const LIBRARY_NOTE_OPENING =
 export const STAGED_DATA_FRAME_PREFIX = '[staged data';
 
 /** Request-only findings DATA, quoted from the record rather than a person's message. */
+export const TOOL_BATCH_FRAME_PREFIX = '[Tool batch refusal';
+
 export const FINDINGS_DATA_FRAME_PREFIX = '[AgentFootprint findings DATA v1]';
 
 /**
@@ -168,6 +170,7 @@ export const LIBRARY_AUTHORED_PREFIXES: readonly string[] = Object.freeze([
   LIBRARY_NOTE_OPENING,
   STAGED_DATA_FRAME_PREFIX,
   FINDINGS_DATA_FRAME_PREFIX,
+  TOOL_BATCH_FRAME_PREFIX,
 ]);
 
 /** True when this user-role message opens with a frame this library authored. */

@@ -17,7 +17,7 @@
  * name-only policies: none leaves raw. No policy is byte-identical.
  */
 import { RedactionRule } from 'footprintjs/advanced';
-import type { FlowChart, RedactionPolicy } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
@@ -215,15 +215,11 @@ describe('ids, declared names and who asked are content in this release', () => 
       dispatcher: new EventDispatcher(),
       getRunContext: () => ({ runId: NOT_KEPT.run, principal: 'alice@example.com' } as never),
     });
-    const factory = run.scopeFactoryFor({
-      scopeFactory: () => ({ $emit: (_name: string, payload?: unknown) => emitted.push(payload) }),
-    } as unknown as FlowChart);
-    const scope = factory(
-      { runtimeStageId: NOT_KEPT.stage, getRedactionRule: () => undefined } as never,
-      'stage',
-      {},
-      undefined as never,
-    ) as { $emit(name: string, payload?: unknown): void };
+    const scope = { $emit: (_name: string, payload?: unknown) => emitted.push(payload) };
+    run.bindScope(scope, {
+      runtimeStageId: NOT_KEPT.stage,
+      getRedactionRule: () => undefined,
+    } as never);
     emitServed(scope, 'agentfootprint.stream.tool_start', {
       toolName: NOT_KEPT.tool,
       toolCallId: NOT_KEPT.call,

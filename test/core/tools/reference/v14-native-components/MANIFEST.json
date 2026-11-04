@@ -1,0 +1,164 @@
+{
+  "version": 14,
+  "scope": "Exact complete captures; unchanged served projection; named identity/transport/resource/served-party and argument-party writes/traces; only the two context slots may interleave",
+  "changed": [
+    {
+      "case": "agent-answer-layer",
+      "historicalSha256": "ee0af9399cd33b3a32aee207866034e63a7202beca275cd51432b1a4be1a3d13",
+      "expectedSha256": "f70c70fe8ef7b596afe41975b14c2d521785ed46a2ee7b97898a307f15d15c0d"
+    },
+    {
+      "case": "agent-arguments-ask-resumed",
+      "historicalSha256": "8e0d0a01b97e7a2ab291b77aabcd32ea43de17e8d73152d611c4a1fbe92e8cc7",
+      "expectedSha256": "a0ec7c6186cdc08e4843c5c703731fcc7b4b22b7f8c496e527fc1e4613629d83"
+    },
+    {
+      "case": "agent-arguments-ask",
+      "historicalSha256": "58c2283a5050c1acb763553ab5fc944bbc3428f458b8f43b8ff6da5812f3fb04",
+      "expectedSha256": "2bbace368950c6e05ed2791f8022d330b244fd7f8033431ad951d35bcea34a19"
+    },
+    {
+      "case": "agent-arguments-assume-limits",
+      "historicalSha256": "60f62414331cafc5122272f0446b0c5ee06bd4da60c99cc5b01186e6df7618b8",
+      "expectedSha256": "f634df7de101513d9c9dd37485bc67c49aefaafae7cc4132a5bb71ff662c19df"
+    },
+    {
+      "case": "agent-arguments-assume",
+      "historicalSha256": "60f62414331cafc5122272f0446b0c5ee06bd4da60c99cc5b01186e6df7618b8",
+      "expectedSha256": "f634df7de101513d9c9dd37485bc67c49aefaafae7cc4132a5bb71ff662c19df"
+    },
+    {
+      "case": "agent-arguments-sources-only",
+      "historicalSha256": "669bc90a7a0cd89bffc2b7d2720a647025d886e6f6e7c06b2f9a02d51574c167",
+      "expectedSha256": "3ef85eddea8565ea4d99dd7e3f5849732d6e4139fefc06fdc7ddb81085a71aa7"
+    },
+    {
+      "case": "agent-arguments-sources",
+      "historicalSha256": "02386f46a82bc8f175dae0266840e62057f064ade444c1f8d49df92783cf2c8a",
+      "expectedSha256": "a20ecda5881fc444fa22f9c0cb1084dda752e6f6134ab58679b1b443aa8e4d4f"
+    },
+    {
+      "case": "agent-dynamic-graph-hop",
+      "historicalSha256": "02004386aa6f9552450b51d5828619fdf5589a646416bba338949a0400c4f3cb",
+      "expectedSha256": "f50fea0e064b0af46bf50316309e22ea91d9aa7e7129acdef090cfa296999f27"
+    },
+    {
+      "case": "agent-dynamic-static-tool",
+      "historicalSha256": "d8b56ea1c0e8ad57f1fe491e31642f85f65de9811389d3fd6e1807d54ba1a4f7",
+      "expectedSha256": "e96a04e01110a7ef15ed4ad9aed383a639ebc50340cd62c01e7933af8635f897"
+    },
+    {
+      "case": "agent-findings-contingent",
+      "historicalSha256": "852dd2c42898bdea23ab2aa6cdc9b2202c2908e282ec518cc8969dbbe77c3104",
+      "expectedSha256": "ca63bd52f99c7f4e4f803af14d4f11862ad6b1cb948ef2c0e0c77b57e9d4b2fa"
+    },
+    {
+      "case": "agent-findings-judge",
+      "historicalSha256": "19c686092b85865fac5d98518f8b29f952121b2ab88f12a0abf1e2f13c077ee5",
+      "expectedSha256": "f14fe4ea6b35ac2feabebdcb4418a759e0eb39df65e4b7c2c98ba7b4c2d29acd"
+    },
+    {
+      "case": "agent-findings-window",
+      "historicalSha256": "1d066e894ca8f144965d3a95230fd47541c69049fe152cfcf310109a450d6a1f",
+      "expectedSha256": "1d05a1d5e3b3a888a8b30866d3e6bb50b3b710676b12e8dcb269065c75a4bb44"
+    },
+    {
+      "case": "agent-findings",
+      "historicalSha256": "133bf81b6c25a3f635362ca787561a0f5a0b736f1c80518d6fe800fc13891551",
+      "expectedSha256": "4204d6ca084e5f76703c3822df5eab2c1558092395042acd2a7db63eb5e4e728"
+    },
+    {
+      "case": "agent-from-active-skill",
+      "historicalSha256": "1a736ba9967379b9b385249d6c51b98e01fdd22e8ffbaa5d388975ad5e656449",
+      "expectedSha256": "7377d88c888f481c0db5d50a7751f4febfc2720dd734d060ce960e96d3d4b6f1"
+    },
+    {
+      "case": "agent-grouped-graph-hop",
+      "historicalSha256": "6cd124adfbbd748270638ce5d5cbbdd073cd515ab9afe1ae0ddb81dc3220bfd4",
+      "expectedSha256": "c7a90ec16ea3d1fe2561f91ac6a79ad7a5658375e00bbf0dd674615b20483829"
+    },
+    {
+      "case": "agent-grouped-static-tool",
+      "historicalSha256": "197932fec1b9790504635bae93916ca8a5f2e0e485b9bf83917aa02f2be52c31",
+      "expectedSha256": "58fa4eff01f3973a8b1141001c91c4493806edef762b52a9abe1648a6315fb97"
+    },
+    {
+      "case": "agent-ontology",
+      "historicalSha256": "0bc9f6311ac189107e01f1e71c15f9fcd8c98978539a48c8c32fe750e2113856",
+      "expectedSha256": "913eaac73138fd416ed5dcc1adfbda926a41e263e68d4bab288ab8c5948075b8"
+    },
+    {
+      "case": "agent-parked-map",
+      "historicalSha256": "5f1145533ce4dd98cc9488c39d6052a6795c2b82c18fcfcb7636a466c2c14feb",
+      "expectedSha256": "f48f1b7adcfa52ae02355c7c98114db08b8b7db9c7fb0693d627079f76d8e805"
+    },
+    {
+      "case": "agent-provider-three-sources",
+      "historicalSha256": "df23e76a99b59a0e52fda273e42240f58933a0015a7d46f0c1b6f8bdaacdc949",
+      "expectedSha256": "06fad78f947cd7cb693fbcc1ba3d7cc35c7599c288e57b303dd0a434fa2884d3"
+    },
+    {
+      "case": "agent-results-period",
+      "historicalSha256": "cbbb1c355f05482204f61ac6f78ba2884008f6eb2fb5556088cd2e427d5fc64d",
+      "expectedSha256": "708675bcc10104c0d779cdbc64b358894e123cb11a38c36f2cba28e03b37406b"
+    },
+    {
+      "case": "agent-scoped-provider",
+      "historicalSha256": "6add5c7952b5d4130f231a28be057e195a53d0b27be1530694f24968471163a4",
+      "expectedSha256": "056ac30a7d92dfeab31654593acb258e755f245598e18488313965977d0bbbd3"
+    },
+    {
+      "case": "agent-script-artifact",
+      "historicalSha256": "4d9222389e10222217b07bfd56fc42eb5dcb2fc8888048d60806abe3bf7abb29",
+      "expectedSha256": "3f37f75c2e6768c916e23a6b5eefd89f7e9609ffad5ea32bd2c32f073b42321b"
+    },
+    {
+      "case": "agent-shared-tool-reference",
+      "historicalSha256": "ac83ac688d25ceea3eb7a4294d73e3c68d907a3754da66a04a3d4c091b2e82ac",
+      "expectedSha256": "d84fd681e5106d01e8595dd2a70e7549ee73b6c1f89ea14f738c1df17a89dbd6"
+    },
+    {
+      "case": "agent-stepped-skill",
+      "historicalSha256": "e9be43186c782ce54e3590c12f7ff1cbc41d2a04d19509143c36948ce285211f",
+      "expectedSha256": "419b423a5caaf9e3c7c4de46f5174e78e465fcf35470f4dba0d4ae55e17c58b6"
+    },
+    {
+      "case": "agent-time-clock",
+      "historicalSha256": "19e03911c3e34cabf056c2dc4209085caaafe41cf0a11abd4307be5ceac4c968",
+      "expectedSha256": "65eead7100a487dc0150beb37273e91eee9b06c0113cca7bf37d5c87128ac740"
+    },
+    {
+      "case": "agent-tool-choice",
+      "historicalSha256": "a0e5b9a4ef044e3a7c8695b50338609e72afc73c20c2eed7c2430e8072fa863c",
+      "expectedSha256": "a3f3ce5548f1b129c464e5909990aeecdc6a4230e9db3725a944fdf46f58f83d"
+    },
+    {
+      "case": "agent-tool-forced",
+      "historicalSha256": "4c63fce2c26e6136b474ae5ec6ac817f3e8e83f042438d5b818ca51e4a6b7779",
+      "expectedSha256": "6fcc5af56409fbf7cd53ed284bb1738754611e904152daa07f11916055d1a9a0"
+    },
+    {
+      "case": "agent-wrap-up",
+      "historicalSha256": "a6058c8164efb4af1924dd97dd98ef6ef2f27ad58fa691603b6903082b18481c",
+      "expectedSha256": "8f1841be04e122bc2197c7a8ea4feb2c37c3b75fd48593f5bc901328c2ca0daa"
+    }
+  ],
+  "unchanged": [
+    {
+      "case": "agent-message-api-chart-one-turn",
+      "historicalSha256": "657e9bea97aa6a04713427bf8ec11e95cd56cc2246c53ccb2adb384ae475b1fb",
+      "expectedSha256": "657e9bea97aa6a04713427bf8ec11e95cd56cc2246c53ccb2adb384ae475b1fb"
+    },
+    {
+      "case": "llmcall",
+      "historicalSha256": "2941eaafd217ee180c6cdd01fa5d6f7fa58229dbef882a63b892897a2659e30e",
+      "expectedSha256": "2941eaafd217ee180c6cdd01fa5d6f7fa58229dbef882a63b892897a2659e30e"
+    },
+    {
+      "case": "message-api-chart",
+      "historicalSha256": "e47cbf10e00f3ff2af5fc1a248cf993941806b12425b4fb39e62fab09c76350d",
+      "expectedSha256": "e47cbf10e00f3ff2af5fc1a248cf993941806b12425b4fb39e62fab09c76350d"
+    }
+  ],
+  "qualification": "Historical references retained. Carrier additions and repeated observed parallel completion schedule are explicit expected record changes, not whole legacy equality, future scheduling determinism or source approval."
+}

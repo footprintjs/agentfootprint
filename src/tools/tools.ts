@@ -16,16 +16,10 @@ import { assertToolWants, type ToolWants } from '../artifacts/wants.js';
 import type { Credential, CredentialNeed, CredentialProvider } from '../identity/types.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import { RESULT_CLASSES, type ToolResultClass } from '../semantics/types.js';
-import {
-  assertResultColumns,
-  COLUMN_TYPES,
-  type ColumnDeclaration,
-  type ColumnType,
-  type ToolResultColumns,
-} from '../integrity/column-types/types.js';
+import { assertResultColumns, type ToolResultColumns } from '../integrity/column-types/types.js';
 import { assertAskComponent, type AskComponent } from './askComponent.js';
 import { warnIfInvalidToolName } from '../lib/toolName.js';
-import { displayNameProblem } from '../lib/displayName.js';
+import '../lib/displayName.js';
 import { assertAskOrAssume, type AskOrAssume, type ToolPeriod } from './declare.js';
 import { assertToolScript, copyToolScript, type ToolScript } from './script.js';
 import {
@@ -40,6 +34,8 @@ import { isDevMode } from 'footprintjs';
 import type { TimeContext } from '../time/wire.js';
 import type { CheckInDemand } from '../core/checkin.js';
 import type { TeardownOptions, TeardownScope } from './toolSessions.js';
+import { assertDisplayName } from './displayName.js';
+export { assertDisplayName } from './displayName.js';
 
 /**
  * One executable tool the Agent can call.
@@ -485,17 +481,6 @@ export interface Tool<TArgs = Record<string, unknown>, TResult = unknown> {
   execute(args: TArgs, ctx: ToolExecutionContext): Promise<TResult> | TResult;
 }
 
-/**
- * Refuse a `displayName` a person should not read, at definition time — the
- * rule (`lib/displayName.ts` · `displayNameProblem`) asked for a tool built by
- * `defineTool` and, at registration, for one assembled by hand.
- */
-export function assertDisplayName(toolName: string, displayName: unknown): void {
-  if (displayName === undefined) return;
-  const problem = displayNameProblem(`defineTool('${toolName}'): \`displayName\``, displayName);
-  if (problem !== undefined) throw new Error(problem);
-}
-
 /** The tools whose `effects: 'read'` was written in `defineTool` — the app's own word. */
 const DECLARED_READ_ONLY = new WeakSet<object>();
 
@@ -651,7 +636,7 @@ export {
   type ColumnDeclaration,
   type ColumnType,
   type ToolResultColumns,
-};
+} from '../integrity/column-types/types.js';
 
 /**
  * Refuse a `resultKind` that could never be redeemed, at definition time —
@@ -859,6 +844,8 @@ export interface ToolDispatch {
 
 /** Runtime context passed to tool.execute(). */
 export interface ToolExecutionContext {
+  /** Agent component/call coordinate for resource isolation; data, never authorization. */
+  readonly resourceOwner?: import('./toolResourceOwner.js').ToolCallOwner;
   /** Unique id of THIS tool invocation (matches stream.tool_start.toolCallId). */
   readonly toolCallId: string;
   /** Current iteration number of the ReAct loop. */

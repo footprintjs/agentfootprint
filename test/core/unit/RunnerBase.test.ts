@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import type { CombinedRecorder, FlowChart, RunOptions } from 'footprintjs';
-import { RunnerBase, makeRunId } from '../../../src/core/RunnerBase.js';
+import { RunnerBase } from '../../../src/core/RunnerBase.js';
 import type { AgentfootprintEventMap } from '../../../src/events/registry.js';
 
 class TestRunner extends RunnerBase<string, string> {
@@ -111,14 +111,5 @@ describe('RunnerBase — .emit for consumer custom events', () => {
     const spy = vi.spyOn(r.getInternalDispatcher(), 'dispatch');
     r.emit('myapp.nobody.listens', { x: 1 });
     expect(spy).not.toHaveBeenCalled();
-  });
-});
-
-describe('makeRunId', () => {
-  it('produces distinct ids across calls', () => {
-    const a = makeRunId();
-    const b = makeRunId();
-    expect(a).not.toBe(b);
-    expect(a).toMatch(/^run-\d+-\d+$/);
   });
 });

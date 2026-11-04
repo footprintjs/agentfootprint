@@ -1,3 +1,4 @@
+import { productionSources } from '../helpers/productionSources.js';
 /**
  * EVERY SERIALIZER OF THE EVENT RECORD GOES THROUGH THE WIRE RULE.
  *
@@ -21,7 +22,7 @@
  * message, say): raise the file's count here and say why.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -66,15 +67,7 @@ const ALLOWED: Readonly<Record<string, { readonly count: number; readonly why: s
   },
 };
 
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (full.endsWith('.ts')) out.push(full);
-  }
-  return out;
-}
+const walk = productionSources;
 
 /** Direct calls outside comments. */
 function directCalls(source: string): number {

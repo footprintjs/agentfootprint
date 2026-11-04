@@ -27,10 +27,35 @@
  * record. The registry is weak: a runner that is collected takes its taps along.
  */
 
-import type { RuntimeSnapshot } from 'footprintjs';
+import type { RuntimeSnapshot, FlowchartCheckpoint, RunView, CombinedRecorder } from 'footprintjs';
+import type { RunnerPauseOutcome } from './pause.js';
+import type { AgentInput } from './agent/types.js';
+import type { AgentRunOptions } from './Agent.js';
+import type { AgentRunCheckpoint } from './runCheckpoint.js';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
+
+/** Private occurrence ownership; never serialized into a checkpoint or exposed on Runner. */
+export interface PauseOwnership {
+  release(): void;
+  abandon(): Promise<void>;
+}
+
+/** Captured inside one invocation, before its lease ends or a host awaits. */
+export interface HostedTurn {
+  readonly output: unknown;
+  readonly conversation: AgentRunCheckpoint | undefined;
+  readonly ownership: PauseOwnership | undefined;
+}
+
+/** The invocation a host admitted, independent of the runner's selected view. */
+export interface HostedInvocation {
+  readonly view: RunView;
+  runId(): string | undefined;
+}
+
+export type BindHostedInvocation = (invocation: HostedInvocation) => CombinedRecorder | undefined;
 
 /** What the library reads live from a runner. */
 export interface RunnerLive {
@@ -40,6 +65,25 @@ export interface RunnerLive {
   liveState(): Readonly<Record<string, unknown>> | undefined;
   /** The current (or last) run's snapshot, live and unserved. */
   liveSnapshot(): RuntimeSnapshot | undefined;
+  /** Agent-only execution port; never follows a later selected run. */
+  readonly turn?: {
+    run(
+      input: AgentInput | string,
+      options?: AgentRunOptions,
+      bind?: BindHostedInvocation,
+    ): Promise<HostedTurn>;
+    resume(
+      checkpoint: FlowchartCheckpoint,
+      input?: unknown,
+      options?: AgentRunOptions,
+      bind?: BindHostedInvocation,
+    ): Promise<HostedTurn>;
+  };
+  /** Agent-only host ownership transfer, captured synchronously from an actual result. */
+  readonly pause?: {
+    capture(outcome: RunnerPauseOutcome): PauseOwnership | undefined;
+    abandon(checkpoint: FlowchartCheckpoint): Promise<void>;
+  };
 }
 
 const taps = new WeakMap<object, RunnerLive>();

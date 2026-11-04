@@ -410,16 +410,25 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the repeated-call notes appended to a tool result ('has now been called N times this turn') — `now` points at the moment of reading, and the count was true only of the call that produced it",
     },
   ],
-  'src/core/agent/stages/toolCalls.ts': [
+  'src/core/agent/stages/toolCalls/access/toolPermission.ts': [
     {
       kind: 'unrepaired',
-      count: 2,
-      why: "both permission-denied tool results ('could not be authorized. This will not change during this run') — a per-call refusal anchored to the run rather than to the call it refused",
+      count: 1,
+      why: "permission-denied tool result ('could not be authorized. This will not change during this run') — the existing per-call refusal classification follows its owner",
     },
+  ],
+  'src/core/agent/stages/toolCalls/access/capabilityQuestion.ts': [
+    {
+      kind: 'unrepaired',
+      count: 1,
+      why: "permission-denied capability result ('could not be authorized. This will not change during this run') — the existing per-call refusal classification follows its owner",
+    },
+  ],
+  'src/core/agent/stages/toolCalls/execution/artifactsOperations.ts': [
     {
       kind: 'not-model-facing',
       count: 2,
-      why: 'an event payload `detail` and the InvalidAskComponentError thrown to the consumer that raised the ask',
+      why: 'an event payload detail and the InvalidAskComponentError thrown to the consumer that raised the ask — the existing classification follows its owner',
     },
   ],
   'src/hosting/answeredPause.ts': [
@@ -583,6 +592,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       kind: 'not-model-facing',
       count: 9,
       why: "typed-output, option-validation, forced-tool and native-output (`strategy: 'native'` run-start) errors thrown to the caller, the build-time refusal of `.toolChoice()` under reactMode 'classic' (findings is still refused, but its corrected sentence no longer matches this grammar), plus one console warning about a cached menu",
+    },
+  ],
+  'src/core/conversation.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: "ResumeIdentityConflictError's followUp guidance ('Use a separate instance…') is thrown to the caller by refuseFollowUpIdentity before the continuation starts; the refusal is not appended to history or sent on a model wire",
     },
   ],
   'src/core/agent/toolChoice/pick.ts': [
@@ -1315,16 +1331,17 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // clause (scripts/recovery.ts) is request-only and registered in
         // modelFacingSurfaces; it matches no persistent rule. files 105 → 106,
         // total 204 → 206, notModelFacing 135 → 137.
-        // Trace Stage A: the same4 ephemeral/13 unrepaired literals move from
-        // one file to8 owners. No literal/category total changes; the same
-        // unrepaired arms now occupy6 owner entries instead of1.
-        files: 113,
-        total: 206,
+        // Trace and ToolCalls splits retain all206 literals and their categories.
+        // The independent owner moves produce115 classified files and21 unrepaired entries.
+        // Follow-up identity admission adds one host-only teaching refusal:
+        // conversation.ts, files115→116, total206→207, notModelFacing137→138.
+        files: 116,
+        total: 207,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 137,
-        unrepairedEntries: 20,
+        notModelFacing: 138,
+        unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —
       // the two halves of the same census, which is what makes the bucket a work

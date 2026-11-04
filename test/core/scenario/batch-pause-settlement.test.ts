@@ -1,3 +1,4 @@
+import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
 import { findingsFrame } from '../../helpers/findingsData.js';
 /**
  * THE BATCH SETTLEMENT (9.113.0) — a paused batch's un-dispatched siblings.
@@ -11,7 +12,7 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  * fewer `tool_result`s than that — a shape a provider refuses.
  *
  * Every resume path now SETTLES each un-dispatched sibling: one fixed,
- * past-anchored sentence as its result (`toolCalls.ts` · `notDispatchedResult`),
+ * past-anchored sentence as its result (`toolCalls/batch/settle.ts` · `notDispatchedResult`),
  * its own bracket (`tool_start`, then `tool_end` with `durationMs: 0` and no
  * `error` — the call neither ran nor failed), and a place in the resume leg's
  * `iteration_end.toolCallCount`. Nothing is dispatched on resume. The same
@@ -64,7 +65,10 @@ import type {
   LLMResponse,
   PermissionChecker,
 } from '../../../src/provider-contract/types.js';
-import { notDispatchedResult, pausedBatchOf } from '../../../src/core/agent/stages/toolCalls.js';
+import {
+  notDispatchedResult,
+  pausedBatchOf,
+} from '../../../src/core/agent/stages/toolCalls/index.js';
 import { stripFrameworkFields } from '../../../src/core/agent/composeRequest.js';
 import { extractSequence, SYNTHETIC_DENY_PREFIX } from '../../../src/security/extractSequence.js';
 import { PolicyHaltError } from '../../../src/security/index.js';
@@ -72,7 +76,7 @@ import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ─── The harness ─────────────────────────────────────────────────────
 
-/** The four doors a pause comes back through (`toolCalls.ts` · `resume`). */
+/** The four doors a pause comes back through (`toolCalls/resume/handler.ts` · `resume`). */
 type PauseKind = 'input' | 'ask' | 'check-in' | 'consent';
 const KINDS: readonly PauseKind[] = ['input', 'ask', 'check-in', 'consent'];
 
@@ -255,7 +259,7 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
       // of the stream alone never has to guess from `durationMs: 0` whether
       // the call ran. No `error`: the call did not fail — the library chose
       // not to dispatch it, as it does for a denied call, whose bracket
-      // carries none either (`toolCalls.ts` · `bracketSettled`).
+      // carries none either (`toolCalls/batch/settlementOperations.ts` · `bracketSettled`).
       const MARKER = { pausedCall: { toolCallId: 'c2', toolName: 'second' } };
       const start = forCall(h, 'agentfootprint.stream.tool_start', 'c3');
       const end = forCall(h, 'agentfootprint.stream.tool_end', 'c3');
@@ -517,7 +521,7 @@ describe('batch settlement — a paused batch settles its un-dispatched siblings
 
   it("armed `.findings()`: a settled call's bracket carries the args the batch loop would have peeled", async () => {
     // The reserved `_findings` argument never reaches a bracket on the batch
-    // loop (`toolCalls.ts` · `peelCall`); a settled call's bracket is read off
+    // loop (`toolCalls/execution/catalogOperations.ts` · `peelCall`); a settled call's bracket is read off
     // the assistant turn, where the emission keeps it verbatim, so the same
     // peel has to happen there.
     const events: { type: string; payload: Record<string, unknown> }[] = [];
@@ -619,7 +623,7 @@ describe('batch settlement — a batch whose LAST call pauses is byte-identical 
       all[kind],
       `no reference for '${kind}' — generate it on the pre-change tree`,
     ).toBeDefined();
-    expect(record).toEqual(all[kind]);
+    expect(record).toEqual(withNativeResourceObservation(all[kind] as { eventTypes: string[] }));
   });
 });
 

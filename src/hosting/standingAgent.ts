@@ -52,20 +52,10 @@
  * engine continues from its own checkpoint, and no earlier tool call re-runs.
  *
  * ── Why one run at a time, and where that bound actually is ─────────────────
- * An Agent instance holds per-run state on itself. Two runs overlapping on ONE
- * instance do not crash — which is precisely the danger. They both finish, and
- * the state the composer reads afterwards belongs to whichever started last, so
- * one session's envelope can end up holding another session's conversation.
- * Nothing in the recording would say so. **Runs on one instance are therefore
- * serialized, and that is a correctness requirement rather than a tuning
- * choice.**
- *
- * What CHANGED in 9.10.0 is not that rule but its scope. `{ agent }` hands this
- * composer one instance to share, so the serialization is global — the shape
- * every earlier release had, unchanged to the byte. `{ agentFactory }` hands it
- * a way to MAKE instances, so each session gets its own and the same rule binds
- * per session: sessions run in parallel, each session's turns queue behind that
- * session's own instance.
+ * Native admission refuses overlapping use of one Agent instance. This host
+ * serializes a lane's turns through persistence and delivery too. `{ agent }`
+ * shares one global lane; `{ agentFactory }` creates a lane for each session.
+ * Independent sessions can then run concurrently on separate instances.
  *
  *   standingAgent({ agent })          → one instance,  global queue
  *   standingAgent({ agentFactory })   → one per session, a queue each
@@ -129,6 +119,7 @@ import {
   openToolCalls,
   readStoredSession,
   unanswerablePause,
+  UNANSWERABLE_QUESTION,
   watchAnswer,
 } from './answeredPause.js';
 import { envelopeOwner, envelopeTranscript, toEnvelope, toPausedEnvelope } from './envelope.js';
@@ -182,7 +173,7 @@ import {
   TURN_ARTIFACTS_TIMEOUT_MS,
 } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
-import { runnerLive } from '../core/runnerLive.js';
+import { runnerLive, type HostedInvocation, type HostedTurn } from '../core/runnerLive.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
@@ -212,10 +203,9 @@ function laneKeyOf(sessionId: string | undefined): string {
  * same code rather than being a second implementation of it. `{ agentFactory }`
  * builds one per active session plus one for anonymous traffic.
  *
- * The listener wiring, the durable writer and the "which reply is live" slot
- * are all per lane because they are all per INSTANCE: a token event carries no
- * session, so the only honest way to know which reply it belongs to is to have
- * subscribed on the agent that produced it.
+ * Lane wiring survives turns; delivery and progress bind the admitted native
+ * invocation. Direct or mounted uses of the same runner belong to no hosted
+ * turn, even while this lane is still awaiting persistence or reply delivery.
  */
 interface Lane {
   /** How the pool holds it — {@link laneKeyOf}. */
@@ -239,23 +229,16 @@ interface Lane {
    * anonymous turn, or with no verifier.
    */
   activeOwner?: string;
-  activeReply?: HostReply;
+  turn?: {
+    readonly invocation: HostedInvocation;
+    readonly reply: HostReply;
+    readonly spendKey?: string;
+  };
   /** Requests admitted and not yet finished. A lane with work is never evicted. */
   admitted: number;
   /** When this lane last took a request — the LRU key. */
   lastUsedMs: number;
   writer?: DurableWriter;
-  /**
-   * The ledger key of the run in flight (9.26.0), so the token and cost events
-   * this lane emits are billed to whoever caused them.
-   *
-   * Per LANE and set for the duration of one run, which is exact rather than
-   * approximate: a lane runs one request at a time, and an event names no
-   * caller of its own — the agent that produced it is the only thing that says
-   * whose it was. `undefined` with no admission policy, and then nothing
-   * subscribes at all.
-   */
-  activeSpendKey?: string;
   /** Undo everything this composer attached to the agent. */
   detach: () => void;
 }
@@ -471,32 +454,10 @@ export async function standingAgent<TH extends HostHandle>(
       lastUsedMs: Date.now(),
       detach: () => undefined,
     };
-    // ── The lane's own events, as the run made them ──────────────────
-    // Every subscription below reads the agent's REAL-value path
-    // (`core/runnerLive.ts` · `runnerLive`), never the served stream: the reply is the
-    // caller's own answer and the spend ledger is an admission decision, so an
-    // agent's `redact` — which governs what the RECORD keeps — must reach
-    // neither (`src/redaction/runRedaction.ts`). One subscription, one switch.
-    //
-    // Tokens reach the caller only if the host streams; `emit` on a host that
-    // does not is a no-op by design, so this needs no capability check. The
-    // subscription is per LANE because a token event names no session — the
-    // agent that produced it is the only thing that identifies whose it is,
-    // and with a pool that is the whole reason two sessions' tokens cannot mix.
-    //
-    // ── Spend accounting (9.26.0) ────────────────────────────────────
-    // Only with an admission policy. Without one the two spend arms are never
-    // taken — the agent is untouched and the events cost their usual nothing.
-    //
-    // Two sources, because they answer two different questions honestly:
-    // `llm_end` always carries TOKENS, and `cost.tick` carries MONEY only
-    // where a pricing table turned tokens into it. Summing an invented rate
-    // here would be a number that looks like a bill.
-    // Read live (`core/runnerLive.ts`): the reply goes to the person who asked
-    // and the ledger counts what was spent — neither is a record, so neither
-    // is served under the agent's `redact`.
-    // Every `Agent` is a runner of this library, so its live taps exist; one
-    // that does not is refused here rather than served placeholders or nothing.
+    // Real values serve the caller and the admission ledger, never the record.
+    // Each event must match the invocation this host admitted, even when this
+    // runner is used directly or mounted while persistence/delivery still waits.
+    // Tokens and measured money are distinct facts, both bound to that turn.
     const live = runnerLive(agent);
     if (live === undefined) {
       throw new TypeError(
@@ -506,18 +467,21 @@ export async function standingAgent<TH extends HostHandle>(
       );
     }
     const offLane = live.onRealEvent((event: AgentfootprintEvent) => {
+      const turn = lane.turn;
+      const runId = turn?.invocation.runId();
+      if (turn === undefined || runId === undefined || event.meta?.runId !== runId) return;
       switch (event.type) {
         case 'agentfootprint.agent.turn_start':
           lane.activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
           return;
         case 'agentfootprint.stream.token': {
           const content = (event as { payload?: { content?: string } }).payload?.content;
-          if (typeof content === 'string' && content.length > 0) lane.activeReply?.emit?.(content);
+          if (typeof content === 'string' && content.length > 0) turn.reply.emit?.(content);
           return;
         }
         case 'agentfootprint.stream.llm_end': {
           if (ledger === undefined) return;
-          const key = lane.activeSpendKey;
+          const key = turn.spendKey;
           if (key === undefined) return;
           const usage = (event as { payload?: { usage?: { input?: number; output?: number } } })
             .payload?.usage;
@@ -529,7 +493,7 @@ export async function standingAgent<TH extends HostHandle>(
         }
         case 'agentfootprint.cost.tick': {
           if (ledger === undefined) return;
-          const key = lane.activeSpendKey;
+          const key = turn.spendKey;
           if (key === undefined) return;
           const usd = (event as { payload?: { estimatedUsd?: number } }).payload?.estimatedUsd;
           if (typeof usd === 'number' && Number.isFinite(usd)) ledger.add(key, { usd });
@@ -547,22 +511,14 @@ export async function standingAgent<TH extends HostHandle>(
         ? undefined
         : durableWriter({
             mode: durability,
-            session: () => lane.activeSessionId,
-            runId: () => lane.activeRunId,
-            // The conversation is read from the run's LIVE committed state,
-            // never from the commit event's (served) values: the store holds
-            // what the next turn resumes from (`hosting/durability.ts`).
-            state: () => live.liveState(),
             write: (sessionId, conversation) =>
               sessions.persist(sessionId, toEnvelope(conversation)),
           });
-    const detachWriter = writer ? agent.attach(writer.recorder) : undefined;
     const uninstallBarrier = writer?.install(agent);
     lane.writer = writer;
     lane.detach = (): void => {
       offLane();
       uninstallBarrier?.();
-      detachWriter?.();
     };
     return lane;
   }
@@ -1557,15 +1513,18 @@ export async function standingAgent<TH extends HostHandle>(
     note: IngressNote | undefined,
   ): Promise<void> {
     const runner = lane.agent;
-    lane.activeReply = reply;
     // The writer only ever writes for the run it is inside; an anonymous
     // request has nowhere to write to and gets nothing.
     lane.activeSessionId = sessionId;
     lane.activeOwner = verified?.userId;
-    // Whose usage this lane's next token and cost events belong to. Set only
-    // with an admission policy; the subscriptions that read it do not exist
-    // otherwise.
-    if (ledger !== undefined) lane.activeSpendKey = spendKey;
+    const bind = (invocation: HostedInvocation) => {
+      lane.turn = { invocation, reply, ...(spendKey !== undefined && { spendKey }) };
+      return lane.writer?.capture({
+        sessionId,
+        runId: invocation.runId,
+        state: () => invocation.view.liveState(),
+      });
+    };
     try {
       let prior: AgentRunCheckpoint | undefined;
       let paused: PausedRun | undefined;
@@ -1705,6 +1664,16 @@ export async function standingAgent<TH extends HostHandle>(
           reply.fail(new NoPendingAskError(sessionId ?? '(anonymous)'));
           return;
         }
+        if (unanswerablePause(paused, runner) === 'carrier-unreadable') {
+          await lane.writer?.settle();
+          if (sessionId !== undefined)
+            await store.persist(
+              sessionId,
+              toEnvelope(await closedConversation(paused, { runner, store })),
+            );
+          reply.complete(UNANSWERABLE_QUESTION);
+          return;
+        }
         const inputRequest =
           pauseDemandsDecision(paused.checkpoint.pauseData) === undefined
             ? readAwaitingInput(paused.checkpoint.pauseData)
@@ -1732,15 +1701,15 @@ export async function standingAgent<TH extends HostHandle>(
             history.push({ role: 'assistant', content: output });
             const { skillCursor: _cursor, ...conversation } = paused.conversation;
             void _cursor;
+            const control = runnerLive(runner)?.pause;
+            if (control === undefined) throw new TypeError('Agent pause ownership is unavailable');
+            await control.abandon(paused.checkpoint);
             await lane.writer?.settle();
             if (sessionId !== undefined)
               await store.persist(
                 sessionId,
                 toEnvelope({ ...conversation, history, checkpointedAt: Date.now() }),
               );
-            runner.abandonPause();
-            if (sessionId !== undefined)
-              await runner.closeToolSessions({ scope: 'run', sessionId });
             // A turn that ends, so the host is offered its binding like any
             // other — but no run happened, so there is no run id to stamp.
             await offerTurnArtifacts(runner, reply, offer, () => undefined);
@@ -1753,9 +1722,11 @@ export async function standingAgent<TH extends HostHandle>(
         // failure below may have used the decision (`answeredPause.ts`).
         const watch = watchAnswer(paused);
         try {
+          const turn = runnerLive(runner)?.turn;
+          if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
           await deliver(
             lane,
-            await runner.resume(paused.checkpoint, request.decision, resumeOptions),
+            await turn.resume(paused.checkpoint, request.decision, resumeOptions, bind),
             store,
             reply,
             sessionId,
@@ -1763,9 +1734,8 @@ export async function standingAgent<TH extends HostHandle>(
             paused,
           );
         } catch (err) {
-          // A failure in the resume or in storing its result: when the
-          // decision may have been used, the stored pause is answered before
-          // anyone hears of it (`answeredPause.ts`).
+          // Settle the stored question before reporting a resume or write failure.
+          // Ledger observations follow the request signal (`answeredPause.ts`).
           if (sessionId !== undefined) {
             await afterFailedAnswer({
               store,
@@ -1774,6 +1744,7 @@ export async function standingAgent<TH extends HostHandle>(
               watch,
               answer: request.decision,
               error: err,
+              signal: request.signal,
               settle: () => lane.writer?.settle(),
               runner,
             });
@@ -1803,10 +1774,14 @@ export async function standingAgent<TH extends HostHandle>(
       }
 
       const turnOptions = await withSealedRequest();
-      const output = prior
-        ? await runner.run({ message: request.input, continueFrom: prior }, turnOptions)
-        : await runner.run({ message: request.input }, turnOptions);
-      await deliver(lane, output, store, reply, sessionId, offer);
+      const turn = runnerLive(runner)?.turn;
+      if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
+      const completed = await turn.run(
+        { message: request.input, ...(prior !== undefined && { continueFrom: prior }) },
+        turnOptions,
+        bind,
+      );
+      await deliver(lane, completed, store, reply, sessionId, offer);
     } catch (err) {
       // A run that threw still has to drain. A write left in flight would race
       // the NEXT turn's terminal write and could land after it. The drain's own
@@ -1816,17 +1791,16 @@ export async function standingAgent<TH extends HostHandle>(
       await lane.writer?.settle().catch(() => undefined);
       throw err;
     } finally {
-      lane.activeReply = undefined;
+      lane.turn = undefined;
       lane.activeSessionId = undefined;
       lane.activeOwner = undefined;
-      lane.activeSpendKey = undefined;
     }
   }
 
   /** Store what the run left behind, then end the reply with the right terminal. */
   async function deliver(
     lane: Lane,
-    output: unknown,
+    completed: HostedTurn,
     store: SessionLifecycle,
     reply: HostReply,
     sessionId: string | undefined,
@@ -1834,29 +1808,28 @@ export async function standingAgent<TH extends HostHandle>(
     priorPause?: PausedRun,
   ): Promise<void> {
     const runner = lane.agent;
-    // Mid-run writes settle FIRST. Ordering, not tidiness: an 'async' write
-    // still in flight would otherwise land after the terminal envelope and
-    // overwrite it — a stored pause quietly demoted back to a conversation,
-    // and the question a person was asked gone with it. It also rethrows a
-    // store that refused this run's progress, so a broken store fails the
-    // request rather than being reported as a clean answer.
-    await lane.writer?.settle();
-
+    const { output, ownership } = completed;
     if (isPaused(output)) {
-      const pending = describePause(output, sessionId);
-      const conversation =
-        sessionId === undefined
-          ? undefined
-          : output.awaitingInput !== undefined &&
-            output.awaitingInput.requestId === priorPause?.pending.awaitingInput?.requestId
-          ? priorPause.conversation
-          : runner.checkpoint();
+      let stored = false;
       try {
+        // Progress must settle before the terminal envelope. A failed writer,
+        // failed persistence or unsupported reply still disposes only this
+        // captured occurrence when ownership did not reach the store.
+        await lane.writer?.settle();
+        const pending = describePause(output, sessionId);
+        const conversation =
+          sessionId === undefined
+            ? undefined
+            : output.awaitingInput !== undefined &&
+              output.awaitingInput.requestId === priorPause?.pending.awaitingInput?.requestId
+            ? priorPause.conversation
+            : completed.conversation;
         if (sessionId !== undefined && conversation) {
           await store.persist(
             sessionId,
             toPausedEnvelope({ checkpoint: output.checkpoint, conversation, pending }),
           );
+          stored = true;
           if (reply.awaiting) {
             // The run id for `origin` comes from the conversation just
             // snapshotted. When that is the PRIOR pause's — re-used because
@@ -1876,34 +1849,19 @@ export async function standingAgent<TH extends HostHandle>(
         reply.fail(new PauseNotCarriedError(pending.tool, sessionId, conversation !== undefined));
         return;
       } finally {
-        // ── OWNERSHIP MOVES HERE ────────────────────────────────────────
-        // A pause belongs to a SESSION. In the shared shape one Agent carries
-        // every session, and the Agent's own pending-question guard (9.2.0) is
-        // right for a script driving one instance and wrong here: the instance
-        // would go on holding session A's question, and session B's next
-        // message — a different conversation, a different person — would be
-        // refused on behalf of an answer B was never asked for.
-        //
-        // Once the pause is in the STORE, the store owns it: a later request
-        // for that session carrying `decision` continues it from exactly
-        // where it stopped, and nothing about that consults the instance. So
-        // the instance is released, here, at the moment ownership transfers.
-        // On the failure path above it is released for the opposite reason —
-        // the question could not be carried at all, and blocking every other
-        // session on one nobody can ever answer is strictly worse.
-        //
-        // The pooled shape releases it too, and for a reason of its own: this
-        // session's instance can be EVICTED while the question is outstanding,
-        // and a pause held only in an instance nobody can reach again is a
-        // question nobody could ever answer. The store is the one place it can
-        // survive that, so the store is the only place it is kept.
-        runner.abandonPause();
+        // Successful persistence transfers the captured question guard only.
+        // Without a store, dispose that actual occurrence's resources. Neither
+        // operation follows the shared instance's later selected run.
+        if (stored) ownership?.release();
+        else await ownership?.abandon();
       }
     }
 
+    // A progress write may not overtake the final completed conversation.
+    await lane.writer?.settle();
     let conversation: AgentRunCheckpoint | undefined;
     if (sessionId !== undefined) {
-      conversation = runner.checkpoint();
+      conversation = completed.conversation;
       // Persist BEFORE answering: the caller learns the answer only once the
       // conversation that produced it is durable, so a queued next turn can
       // never read state older than the answer already given.

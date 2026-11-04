@@ -217,7 +217,7 @@ describe('inspect_tool_call — outcomes', () => {
  * (`requestInput`). On resume the third call is SETTLED: the library answers it
  * with a fixed sentence and brackets it (`tool_end { durationMs: 0 }`, the
  * sentence as its `result`), and never executes it
- * (`core/agent/stages/toolCalls.ts` · "── The batch settlement (9.113.0)").
+ * (`core/agent/stages/toolCalls/batch/settle.ts` · `notDispatchedResult`).
  * Its history message and both halves of its bracket carry `notDispatched`,
  * the one owner of "this call never ran". The join must read that marker.
  * Reading the bracket as the record of a call that ran would tell a debugging

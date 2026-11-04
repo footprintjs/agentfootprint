@@ -8,7 +8,7 @@
  *          asks "did the model set something aside on a result that held
  *          nothing?".
  * Role:    core/ layer leaf. The two moments that file standings —
- *          `stages/toolCalls.ts` (a call's `_findings.previous`) and
+ *          `stages/toolCalls/execution/callStart.ts` (a call's `_findings.previous`) and
  *          `stages/route.ts` (the answer's) — pass their standing rows
  *          through `withUnsettledRows` on the way to `ledger.ts ·
  *          recordFindings`, the one writer, so a derived row lands in the
@@ -33,10 +33,10 @@
  *
  * The fences, because they are the rule's honesty:
  * - TWO FACTS, TWO OWNERS, BOTH REQUIRED. "Did the tool return an absence?"
- *   has one owner: the dispatch door (`stages/toolCalls.ts ·
+ *   has one owner: the dispatch door (`stages/toolCalls/evidence/coverageOperations.ts ·
  *   declareCoverage`), which reads the value the tool RETURNED, or the
  *   `absence` a `requestInput` it raised declared (9.114.0,
- *   `stages/toolCalls.ts · declareRaisedAbsence`), through the one
+ *   `stages/toolCalls/evidence/coverageOperations.ts · declareRaisedAbsence`), through the one
  *   recognizer (`semantics/coverage/read.ts · readCoverageResult`), delivers the
  *   status `'absent'` (a returned one only — a raised one is not settled),
  *   emits `tools.absent` and files the call's rows on

@@ -7,7 +7,7 @@
  *          reference holders it is handed — the tools slot's per-epoch records
  *          (`servedTools`, `providerToolCache`) are shared by REFERENCE, so a
  *          resolver built once answers for the current epoch whenever it runs.
- * Role:    core/agent. Two readers: `stages/toolCalls.ts` (dispatch, and the
+ * Role:    core/agent. Two readers: `stages/toolCalls/execution/catalogOperations.ts` (dispatch, and the
  *          four resume doors) and the inputs layer (`honesty/mounts.ts`), which
  *          reads a call's argument rules off the implementation that WILL run
  *          — never off a re-derivation that could name a different party.
@@ -27,13 +27,11 @@
  */
 
 import type { ToolProvider } from '../../../tools/toolProvider.js';
-import type {
-  ProviderToolCache,
-  ServedToolParties,
-  ToolParty,
-} from '../../slots/buildToolsSlot.js';
+import type { ProviderToolCache, ServedToolParties } from '../../slots/buildToolsSlot.js';
+import { sameToolParty, type ToolParty } from '../../../tools/toolParty.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolClaim } from '../buildToolRegistry.js';
+import { keyOfLabel } from '../../../tools/finiteLabel.js';
 
 /** One name, resolved. */
 export interface ToolResolution {
@@ -61,6 +59,61 @@ export interface ToolResolverDeps {
 /** `resolve(name, pinned?)` — `pinned` is a paused call's recorded party. */
 export type ToolResolver = (toolName: string, pinned?: ToolParty) => ToolResolution;
 
+/** The declaration currently labeling the provider, not its implementation identity. */
+function providerPartyOf(deps: ToolResolverDeps): ToolParty {
+  const id = deps.externalToolProvider?.id;
+  return { channel: 'provider', ...(id !== undefined && { id }) };
+}
+
+function providerToolOf(deps: ToolResolverDeps, name: string): Tool | undefined {
+  return deps.externalToolProvider
+    ? (deps.providerToolCache?.current ?? []).find((tool) => tool.schema.name === name)
+    : undefined;
+}
+
+/** Every bound path asks the same current-owner policy; a mismatch never falls through. */
+function toolForParty(
+  deps: ToolResolverDeps,
+  name: string,
+  party: ToolParty,
+): ToolResolution | undefined {
+  if (party.channel === 'provider') {
+    const declared = providerPartyOf(deps);
+    const tool =
+      deps.externalToolProvider && sameToolParty(party, declared)
+        ? providerToolOf(deps, name)
+        : undefined;
+    return tool === undefined ? undefined : { tool, party: declared };
+  }
+  const tool = deps.registryByName.get(name);
+  if (tool === undefined) return undefined;
+  const claims = deps.toolClaimants?.get(name);
+  const claim = claims?.find(
+    (candidate) => candidate.tool === tool && sameToolParty(candidate, party),
+  );
+  if (claims !== undefined && claims.length > 0)
+    return claim === undefined
+      ? undefined
+      : {
+          tool,
+          party: { channel: claim.channel, ...(claim.id !== undefined && { id: claim.id }) },
+        };
+  return sameToolParty(party, { channel: 'registry' })
+    ? { tool, party: { channel: 'registry' } }
+    : undefined;
+}
+
+/** A name with no prior party still reports the declaration of its actual current holder. */
+function registryPartyOf(deps: ToolResolverDeps, name: string): ToolParty | undefined {
+  const claims = deps.toolClaimants?.get(name);
+  if (claims === undefined || claims.length === 0) return { channel: 'registry' };
+  const tool = deps.registryByName.get(name);
+  const claim = claims.find((candidate) => candidate.tool === tool);
+  return claim === undefined
+    ? undefined
+    : { channel: claim.channel, ...(claim.id !== undefined && { id: claim.id }) };
+}
+
 /**
  * Build the resolver over the dispatch deps. Every reader that must agree with
  * dispatch builds it from the SAME deps objects, so the answers are the same.
@@ -72,50 +125,49 @@ export type ToolResolver = (toolName: string, pinned?: ToolParty) => ToolResolut
  * ```
  */
 export function buildToolResolver(deps: ToolResolverDeps): ToolResolver {
-  const { registryByName, externalToolProvider, providerToolCache, servedTools, toolClaimants } =
-    deps;
-  const fromProviderCache = (toolName: string): Tool | undefined =>
-    externalToolProvider
-      ? (providerToolCache?.current ?? []).find((t) => t.schema.name === toolName)
-      : undefined;
-  const providerParty: ToolParty = {
-    channel: 'provider',
-    ...(externalToolProvider?.id !== undefined && { id: externalToolProvider.id }),
-  };
-  /** The party a registry-routed name belongs to — its first build-time claimant. */
-  const registryPartyOf = (toolName: string): ToolParty => {
-    const first = toolClaimants?.get(toolName)?.[0];
-    return first === undefined
-      ? { channel: 'registry' }
-      : { channel: first.channel, ...(first.id !== undefined && { id: first.id }) };
-  };
   return (toolName, pinned) => {
-    const wireParty = pinned ?? servedTools?.current.get(toolName);
-    if (wireParty !== undefined) {
-      const owner =
-        wireParty.channel === 'provider'
-          ? fromProviderCache(toolName)
-          : registryByName.get(toolName);
-      return owner !== undefined
-        ? { tool: owner, party: wireParty }
-        : { refusal: deps.notServed(toolName) };
+    if (typeof toolName !== 'string') return {};
+    const askParties = deps.servedTools?.pinned;
+    const boundAsk = askParties?.has(toolName) === true;
+    const key = keyOfLabel(toolName);
+    const currentParty =
+      deps.servedTools?.current.get(toolName) ?? deps.servedTools?.currentProof?.get(key);
+    const previousParty =
+      deps.servedTools?.lastServed.get(toolName) ?? deps.servedTools?.lastProof?.get(key);
+    // The admitted original-batch proof binds paused call parties, including
+    // off-wire calls, without enlarging offered tool membership. A free-standing
+    // paused-call label cannot bypass the finite carrier's validation.
+    if (
+      (deps.servedTools?.restored === true || deps.servedTools?.truncated === true) &&
+      !boundAsk &&
+      currentParty === undefined &&
+      previousParty === undefined
+    )
+      return { refusal: deps.notServed(toolName) };
+    const pinnedParty = boundAsk ? askParties?.get(toolName) : pinned;
+    const party = pinnedParty === undefined ? currentParty ?? previousParty : pinnedParty;
+    // A saved absence is not an offered contract and cannot select a new holder.
+    if (party === null) return {};
+    if (party !== undefined) {
+      const matched = toolForParty(deps, toolName, party);
+      if (matched === undefined) {
+        const otherHolder =
+          deps.registryByName.has(toolName) || providerToolOf(deps, toolName) !== undefined;
+        return otherHolder ? { party, refusal: deps.notServed(toolName) } : {};
+      }
+      return { ...matched, ...(currentParty === undefined && { offWire: true as const }) };
     }
-    const registryHolder = registryByName.get(toolName);
-    const providerHolder = fromProviderCache(toolName);
-    if (registryHolder === undefined && providerHolder === undefined) return {};
-    const last = servedTools?.lastServed.get(toolName);
-    if (last !== undefined) {
-      const owner = last.channel === 'provider' ? providerHolder : registryHolder;
-      return owner !== undefined
-        ? { tool: owner, party: last, offWire: true }
-        : { refusal: deps.notServed(toolName) };
-    }
+    const registryHolder = deps.registryByName.get(toolName);
+    const providerHolder = providerToolOf(deps, toolName);
+    const tool = registryHolder ?? providerHolder;
+    if (tool === undefined) return {};
     if (registryHolder !== undefined && providerHolder !== undefined) {
       return { refusal: deps.notServed(toolName) };
     }
-    return registryHolder !== undefined
-      ? { tool: registryHolder, party: registryPartyOf(toolName), offWire: true }
-      : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        { tool: providerHolder!, party: providerParty, offWire: true };
+    const fallbackParty =
+      registryHolder === undefined ? providerPartyOf(deps) : registryPartyOf(deps, toolName);
+    return fallbackParty === undefined
+      ? { refusal: deps.notServed(toolName) }
+      : { tool, party: fallbackParty, offWire: true };
   };
 }

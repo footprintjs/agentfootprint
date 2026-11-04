@@ -7,7 +7,7 @@
  *          with, the rewrites a before-tool chain made — each returning the
  *          value the loop uses next.
  * Role:    core/ layer leaf of the inputs layer (honesty layer 2). ToolCalls
- *          (`stages/toolCalls.ts`) loads this module through `import()` only
+ *          (`stages/toolCalls/batch/execute.ts`) loads this module through `import()` only
  *          when the layer is armed, or when a call's tool declares rules on an
  *          agent built without it — the optional-family law of docs-next's
  *          site budget (`scripts/check-site-budget.mjs`, the `findings/peel.ts`

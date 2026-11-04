@@ -179,13 +179,14 @@ Key footprintjs primitives agentfootprint leans on:
 
 `src/core/RunnerBase.ts` — abstract base for every primitive/composition (Template Method).
 
-- **`initChart(() => buildChart())`** — called *once* in the subclass constructor. Eager build so:
+- **`initChart(() => buildChart(), execution)`** — called *once* in the subclass constructor. Eager build so:
   StructureRecorder fires exactly N times, `getSpec()` is reference-stable (Lens/OpenAPI memos),
   no `_mergeStageMap` false-positives. Throws if called twice.
 - **`getSpec()`** — returns the cached chart; reference-stable across all calls.
-- **`createExecutor()`** (per concrete runner, per `run()`) — mints a fresh `RunContext`
-  (`makeRunId()` = `run-${Date.now()}-${++seq}`), `new FlowChartExecutor(getSpec())`,
-  `enableNarrative()`, then **auto-attaches recorders** (table below), then consumer recorders.
+- **Native admission** — `RunnerExecution` adapts one footprintjs lifecycle.
+  `withRun` admits before normalization or callbacks; native execution supplies
+  run identity, clocks, scope binding, cancellation and finalizers. Component setup
+  installs private values, serving and inline computation before stages run.
 - **`run()/resume()`** — abstract; each subclass implements. Both end in `finalizeResult()`, which
   calls `detectPause()` first (→ `RunnerPauseOutcome` if paused), then type-specific result handling.
 - **`attach(recorder)`** — pushes a `CombinedRecorder` applied to every future executor.
@@ -199,9 +200,11 @@ agentRecorder, errorBridge, evalRecorder, memoryRecorder, skillRecorder, toolsRe
 reliabilityRecorder (always); costRecorder (if pricingTable); permissionRecorder (if permissionChecker).
 LLMCall attaches a subset (no agent/tools/permission).
 
-> **Concurrency:** an Agent instance is **not** concurrency-safe — `createExecutor()` mutates
-> `this.currentRunContext`/`this.lastExecutor`, and `providerToolCache` is chart-scoped. Use one
-> instance per concurrent request (factory-build the chart).
+> **Concurrency:** a second owned invocation on one runner rejects with
+> `ERR_RUN_IN_FLIGHT` before effects. Every entry point uses the same native
+> lifecycle. Independent parents may mount a shared child: native component
+> identity isolates its values. Run IDs alone do not distinguish sibling mounts.
+
 
 ---
 
@@ -373,19 +376,20 @@ plus an identity-scoped store.
 and `mountMemoryWrite` (in the final branch). Read writes `memoryInjection_${id}` to parent scope;
 write persists `newMessages`. Identity = `{tenant?, principal?, conversationId}` → `identityNamespace`.
 
-**Causal memory** stores `SnapshotEntry{query, finalContent, decisions[], toolCalls[], narrative?}`,
-embeds `query` for cosine recall, projects the stored run back as a system message for
-"why did you decide X?" follow-ups. `decisions[]`/`toolCalls[]`/tokens/duration are harvested
-automatically by `causalEvidenceRecorder` (the #5 evidence bridge). *This is the capability no
-other library has* (footprintjs captures WHY, not just WHAT). Not yet captured: commitLog,
-narrative. `exportForTraining` (snapshots as RL/SFT data) is the v2.1 hook.
+**Causal memory** stores schemaVersion:2 snapshots with query, finalContent and an
+observed, partial or unavailable component-leg observation. Private tool/usage facts
+and served native decisions are captured in that actual component; the memory
+writer records its native source coordinates. Each leg has bounded retention and
+explicit omissions; resumed legs do not inherit earlier observation totals.
+Empty observations prove neither no operations nor the whole answer's cost.
+Readers skip/count unsupported or invalid snapshots rather than upgrading them.
+Commit logs and narratives are not collected by this observer.
 
 > **⚠ LATENT GAP (verified):** the Agent chart does **not** merge `memoryInjection_${id}` into
 > `scope.history`/the LLM request. The read pipeline runs and writes the scope key, but nothing
 > consumes it into the prompt — there is no merge stage. Writes persist correctly; reads don't reach
 > the LLM in the current chart. (`buildDynamicAgentChart` threads the key through the boundary, so it
-> preserves — not worsens — this behavior.) Also: causal `decisions`/`toolCalls` are written empty
-> (TODO), `COMMITS` projection falls back to decisions,
+> preserves — not worsens — this behavior.) `COMMITS` projection falls back to decisions,
 > `HYBRID`-episodic uses only the first sub-strategy, topK/causal threshold is strict (no
 > below-threshold fallback). (`DECAY` threw when this was written; wired in 9.5.0.)
 
@@ -450,7 +454,7 @@ Swarm — see §1 for their recipes. None add primitives.
 **Pipeline:** footprintjs 3 channels → recorder bridges → **`EventDispatcher`** (one per Runner,
 O(1) hash-dispatch, typed `on/off/once` + domain-wildcards + `'*'`, error-isolated) → consumers/Lens.
 
-**127 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(15 — incl.
+**128 typed events / 27 domains**, all `agentfootprint.*`: `composition.*`(8) `agent.*`(15 — incl.
 `run_configured`, the run-configuration manifest; `budget_exhausted`, what a
 turn that ran out of budget then DID about it; and `grounding_nudged`, the
 staged-refs nudge's one record — the late line itself is request-only; and
@@ -600,7 +604,7 @@ Five places where reality bends the rule (each is a backlog task):
    (Naming caveat retained: the firing is deterministic capture, not output-quality *scoring* — see
    §17; the event name follows the established `context.*` family.)
 2. **Permission `gate_open` — RESOLVED ON REVIEW, not a gap.** `permission.check` fires
-   **unconditionally** for every result including `gate_open` (`toolCalls.ts:176`), so the decision
+   **unconditionally** for every result including `gate_open` (`toolCalls/access/toolPermission.ts`), so the decision
    *is* on the audit stream. The separate `gate_opened`/`gate_closed` span-events are unused, but
    that's a reserved gate-span semantic, not a leak. No action.
 3. **Reliability per-attempt visibility — RESOLVED (Task 2, 2026-05-30; Option A).**

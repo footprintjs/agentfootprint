@@ -53,7 +53,13 @@ const call = (args: Record<string, unknown>, id = 'c1'): BatchCall => ({
 const original = call({ start: FROM });
 const origin = partialOriginOf(original, toolOf, TIME);
 if (origin === undefined || origin === 'ambiguous') throw new Error('invalid test fixture');
-const identity = { owner: 'synthetic-owner', turn: 1, iteration: 2, mention: 0, origins: [origin] };
+const identity = {
+  owner: { runId: 'synthetic-owner', componentOrdinal: 0 },
+  turn: 1,
+  iteration: 2,
+  mention: 0,
+  origins: [origin],
+};
 
 describe('partial-window admission', () => {
   it('detaches private pause progress and keeps repeated snapshots finite', () => {
@@ -184,7 +190,7 @@ describe('partial-window admission', () => {
   for (const [name, value] of Object.entries({
     version: 2,
     phase: 'unknown',
-    owner: 'another-owner',
+    owner: { runId: 'another-owner', componentOrdinal: 0 },
     turn: 2,
     iteration: 3,
     mention: 1,

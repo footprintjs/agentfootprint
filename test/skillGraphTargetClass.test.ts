@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { classifySkillTarget } from '../src/injection-engine.js';
-import { atMountedCursor } from '../src/core/agent/stages/toolCalls.js';
+import { atMountedCursor } from '../src/core/agent/stages/toolCalls/index.js';
 import { classifySkillTarget as fromDoor } from '../src/doors/skill-graph.js';
 
 describe('classifySkillTarget — the four classes', () => {

@@ -1,55 +1,11 @@
 /**
- * llmSwarm — the classic Swarm, with the LLM doing the routing.
- *
- * WHY this exists: `swarm()` gives you the hand-off machinery but asks you
- * for a sync `route()` function; `llmRouter()` gives you the LLM decision
- * but asks you to place it in the chain yourself. Placing it correctly is
- * the fiddly half — the decision for a message must be made BEFORE that
- * message reaches `route()`, which means one router call before the first
- * turn and one after every turn. Get it wrong and the swarm halts on turn
- * one for no visible reason. This wires it, once:
- *
- *   Sequence
- *     ├── router.step                      ← the first decision
- *     └── swarm({ agents, route })         ← Loop(Conditional(agent))
- *           └── per agent: Sequence(agent → router.step)
- *                                            ↑ the next decision, made on
- *                                              the text it hands forward
- *
- * Every `route()` call is then a lookup of a decision already made for
- * that exact message. No LLM call ever happens inside `route()` — which
- * matters, because `swarm()` evaluates it once per branch predicate AND
- * again in the loop's exit guard.
- *
- * Pattern: Facade (GoF) over `llmRouter` + `swarm` + `Sequence`. No new
- *          control flow — everything here is composition.
- *
- * Cost shape: one routing call per turn, plus one to start. A 2-hand-off
- * conversation costs 3 routing calls and 2 specialist calls.
- *
- * @example
- * ```ts
- * const desk = llmSwarm({
- *   provider,
- *   model: 'claude-sonnet-4-5',
- *   agents: [
- *     { id: 'billing', description: 'Invoices, refunds, payment methods.', runner: billingAgent },
- *     { id: 'tech', description: 'Login problems, errors, outages.', runner: techAgent },
- *   ],
- *   maxHandoffs: 4,
- * });
- *
- * desk.on('agentfootprint.composition.route_decided', (e) =>
- *   console.log(e.payload.chosen, '←', e.payload.rationale),
- * );
- *
- * const answer = await desk.run({ message: 'my invoice is wrong' });
- * ```
+ * llmSwarm adapts a shared roster to the typed routing strategy and Swarm.
+ * Each dispatched agent turn needs one routing call. A final halt decision
+ * is returned as data; there is no speculative call after the handoff budget.
  */
 
 import type { LLMProvider } from '../provider-contract/types.js';
 import type { Runner } from '../core/runner.js';
-import { Sequence } from '../core-flow/Sequence.js';
 import { llmRouter, type LlmRouter } from './LlmRouter.js';
 import { swarm, type SwarmAgent } from './Swarm.js';
 
@@ -78,7 +34,7 @@ export interface LlmSwarmOptions {
   readonly temperature?: number;
   /**
    * Maximum agent turns before the loop halts. Default 10 (the swarm's
-   * own default). The router runs once per turn plus once to start.
+   * own default). The router runs once per dispatch; no extra call follows the budget.
    */
   readonly maxHandoffs?: number;
   /** Stable id for the swarm's composition events. Default `'swarm'`. */
@@ -92,8 +48,7 @@ export interface LlmSwarmOptions {
  *
  * Halting: the router omits `agentId` when it judges the work done — the
  * swarm stops and that decision's `message` is the answer. An id that is
- * not in the roster follows `swarm()`'s existing law (the `done` fallback
- * echoes the message and the loop guard halts), so a hallucinated agent
+ * not in the roster follows `swarm()`'s existing law (the native halt branch returns that decision's message), so a hallucinated agent
  * ends the run instead of silently picking someone.
  *
  * Watching it: subscribe to `agentfootprint.composition.route_decided` —
@@ -120,31 +75,11 @@ export function llmSwarm(opts: LlmSwarmOptions): Runner<{ message: string }, str
     name: `${name} router`,
   });
 
-  // Each turn is "agent answers, then the router reads that answer" — so
-  // the decision for the text the loop carries forward exists before the
-  // next iteration's route() and before the loop's exit guard.
-  const agents: SwarmAgent[] = opts.agents.map((a) => ({
-    id: a.id,
-    ...(a.name !== undefined && { name: a.name }),
-    runner: Sequence.create({
-      id: `${id}-${a.id}-turn`,
-      name: `${a.name ?? a.id} turn`,
-    })
-      .step('agent', a.runner)
-      .step('route', router.step)
-      .build(),
-  }));
-
-  const dispatch = swarm({
-    agents,
-    route: router.route,
+  return swarm({
+    agents: opts.agents,
+    router,
     ...(opts.maxHandoffs !== undefined && { maxHandoffs: opts.maxHandoffs }),
     id,
     name,
   });
-
-  return Sequence.create({ id: `${id}-chain`, name })
-    .step('route', router.step)
-    .step('swarm', dispatch)
-    .build();
 }

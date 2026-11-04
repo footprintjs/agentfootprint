@@ -4,13 +4,13 @@
  *
  * When a batch pauses, the resume SETTLES each call after the paused one: a
  * fixed sentence as its result and a bracket — `tool_start`, then `tool_end`
- * with `durationMs: 0` (`core/agent/stages/toolCalls.ts` · "── The batch
+ * with `durationMs: 0` (`core/agent/stages/toolCalls/batch/settle.ts` · "── The batch
  * settlement (9.113.0)"). Both payloads carry
  * `notDispatched: { pausedCall: { toolCallId, toolName } }`, the same shape as
  * the history message's `LLMMessage.notDispatched` — the ONE owner of "this
  * call never ran" on the stream. The `tool_end` carries no `error`: the call
  * did not fail — the library chose not to dispatch it, the permission-deny
- * precedent (`toolCalls.ts` · `bracketSettled`).
+ * precedent (`toolCalls/batch/settlementOperations.ts` · `bracketSettled`).
  *
  * One REAL run feeds every reader here: a batch of three whose MIDDLE call
  * asks a person (`requestInput`), then — after the answer — a call to a tool
@@ -60,7 +60,7 @@ import {
 } from '../../../src/recorders/observability/BoundaryRecorder.js';
 import { buildStepGraphFromEvents } from '../../../src/recorders/observability/FlowchartRecorder.js';
 import { routeRecorder } from '../../../src/recorders/observability/RouteRecorder.js';
-import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls.js';
+import { notDispatchedResult } from '../../../src/core/agent/stages/toolCalls/index.js';
 
 // ─── The run ───────────────────────────────────────────────────────────
 
@@ -99,7 +99,6 @@ async function settledRun(): Promise<SettledRun> {
         return `${name} ran`;
       },
     });
-  const evidence = causalEvidenceRecorder();
   const thinking = agentThinkingTrace({ agent: 'Acme' });
   const agent = Agent.create({
     provider: mock({
@@ -118,7 +117,6 @@ async function settledRun(): Promise<SettledRun> {
     model: 'mock',
   })
     .tools(['first', 'second', 'third', 'broken'].map(tool))
-    .watch(evidence)
     .watch(thinking)
     .build();
 
@@ -143,6 +141,20 @@ async function settledRun(): Promise<SettledRun> {
   expect(answer).toBe('done');
   const domain = recorder.boundary.getEvents();
   recorder.stop();
+  // Offline reader fixture for the actual resumed leg only. The checkpoint
+  // supplies its native ID; prior-leg tool starts are deliberately not carried.
+  const runId = agent.checkpoint()?.runId;
+  if (runId === undefined) throw new Error('Resumed fixture has no run identity');
+  const evidence = causalEvidenceRecorder({
+    coverage: {
+      scope: 'component-execution-leg',
+      runId,
+      entry: { kind: 'resume', mode: 'fresh' },
+      priorLegs: 'not-carried',
+    },
+  });
+  for (const event of events)
+    if (event.meta.runId === runId) evidence.onEmit({ name: event.type, payload: event.payload });
   return { events, evidence, thinking, domain, liveAtStart, ran };
 }
 
@@ -196,7 +208,10 @@ describe('the settled bracket on the stream', () => {
 describe('causal evidence (`memory/causal/evidenceRecorder.ts`)', () => {
   it('files no ToolCallRecord for the settled call — it passed no args to a tool and got no result', async () => {
     const { evidence } = await settledRun();
-    const calls = evidence.collect().toolCalls;
+    const facts = evidence.collect();
+    expect(facts.availability).not.toBe('unavailable');
+    if (facts.availability === 'unavailable') throw new Error('Resumed fixture lacks coverage');
+    const calls = facts.toolCalls;
     expect(calls.map((c) => c.name)).not.toContain('third');
     expect(calls.some((c) => c.resultPreview.includes('was not executed'))).toBe(false);
     // The control: a tool that really threw is still filed as errored.

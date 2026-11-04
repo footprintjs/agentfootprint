@@ -17,7 +17,7 @@ after the standing it is beside, keyed to that standing's `toolCallId`.
 The model's `StandingRow` is untouched and served exactly as declared.
 
 TWO WITNESSES, BOTH REQUIRED. A row is filed only when the dispatch door
-recorded the standing's result as an absence (`stages/toolCalls.ts ·
+recorded the standing's result as an absence (`stages/toolCalls/evidence/coverageOperations.ts ·
 declareCoverage` — the delivered status `'absent'`, the `tools.absent`
 event, a `kind: 'absence'` row on `AgentState.coverageDeclared`; the rule
 never re-reads a return to decide that, so the record holds one answer to

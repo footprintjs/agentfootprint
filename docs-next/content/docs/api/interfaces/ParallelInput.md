@@ -4,7 +4,7 @@ title: ParallelInput
 
 # Interface: ParallelInput
 
-Defined in: [src/core-flow/Parallel.ts:92](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L92)
+Defined in: [src/core-flow/Parallel.ts:79](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L79)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Parallel.ts:92](https://github.com/footprintjs/agentf
 
 > `readonly` `optional` **identity?**: `MemoryIdentity`
 
-Defined in: [src/core-flow/Parallel.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L100)
+Defined in: [src/core-flow/Parallel.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L87)
 
 WHO this run is for — the same tuple as `AgentInput.identity`. Every
 member runs for it: its memory, its tools' `ctx.identity`. Omitted, every
@@ -25,4 +25,4 @@ never a namespace another run shares (`core/memberRun.ts`).
 
 > `readonly` **message**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:93](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L93)
+Defined in: [src/core-flow/Parallel.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L80)

@@ -75,7 +75,8 @@ import {
   watchAnswer,
   type FailedAnswerOutcome,
 } from './answeredPause.js';
-import type { DecisionUseWatch, UnanswerableReason } from '../core/consentRequest.js';
+import type { DecisionUseWatch } from '../core/consentRequest.js';
+import type { UnanswerablePauseReason } from './answeredPause.js';
 import { checkSessionId, doorGuard, type CrossSiteOptions } from './doorGuard.js';
 import { envelopeOwner, toEnvelope, toPausedEnvelope } from './envelope.js';
 import { RequestTooLargeError, WireRequestRefusal } from './errors.js';
@@ -168,7 +169,6 @@ export type StreamHandler = (request: Request) => Promise<Response>;
 interface Held {
   readonly view: HeldConversation;
   readonly prior?: AgentRunCheckpoint;
-  /** The pause still waiting on a person — the only one an answer may continue. */
   readonly paused?: PausedRun;
   /** A pause whose decision a resume already used (`answeredPause.ts`). */
   readonly answered?: PausedRun;
@@ -177,7 +177,7 @@ interface Held {
    * the conversation it goes on from (`answeredPause.ts`), settled once the
    * request's runner is built (`settleClosed`).
    */
-  readonly closed?: { readonly paused: PausedRun; readonly reason: UnanswerableReason };
+  readonly closed?: { readonly paused: PausedRun; readonly reason: UnanswerablePauseReason };
 }
 
 /** Everything one accepted request runs with. */
@@ -475,11 +475,10 @@ export function streamHandler<TRequest, TEvent>(
         settlement = await keep(turn, out, runId);
       }
     } catch (err) {
-      // An answer handed to the runner that then failed — in the run, or in
-      // keeping its result: when its decision may have been used, the stored
-      // pause is answered before the caller hears the end; refused for a
-      // reason no decision can change, it is closed (`answeredPause.ts`). A
-      // caller who left before the run started handed nothing over.
+      // Before replying, settle an answer whose run or result persistence failed.
+      // A possibly used decision consumes the pause; an unanswerable one closes it.
+      // A caller who left before execution handed nothing over. Advisory ledger
+      // observations follow the stream signal (`answeredPause.ts`).
       let outcome: FailedAnswerOutcome = 'kept';
       if (
         answering &&
@@ -494,6 +493,7 @@ export function streamHandler<TRequest, TEvent>(
           watch,
           answer: plan.turn.kind === 'answer' ? plan.turn.answer : undefined,
           error: err,
+          signal,
           runner,
         }).catch((): FailedAnswerOutcome => 'kept');
       }

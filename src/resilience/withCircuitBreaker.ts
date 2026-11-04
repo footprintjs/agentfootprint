@@ -71,7 +71,7 @@
  * iteration at your full QPS, and a failure aborts the call path. Tool
  * failures don't share that shape — the agent's tool dispatch catches a
  * tool throw and feeds the error message back to the model as the tool
- * result (see `core/agent/stages/toolCalls.ts`), so the ReAct loop
+ * result (see `core/agent/stages/toolCalls/index.ts`), so the ReAct loop
  * itself absorbs and adapts (retry, alternate tool, give up), serialized
  * and bounded by the iteration budget. A flaky tool can't hammer
  * anything the way provider QPS can. For the rare tool that needs a

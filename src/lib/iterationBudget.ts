@@ -33,3 +33,11 @@
 export function iterationsRemainingOf(maxIterations: number, iteration: number): number {
   return Math.max(0, maxIterations - iteration);
 }
+
+/** Shared finite bound for native loop compositions. */
+export const HARD_ITERATION_CAP = 500;
+
+export function clampIterations(value: number): number {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) return 1;
+  return Math.min(value, HARD_ITERATION_CAP);
+}

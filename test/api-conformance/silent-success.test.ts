@@ -233,7 +233,7 @@ describe('silent success — timing', () => {
     const first = agent.run({ message: 'alpha' });
     await expect(agent.run({ message: 'beta' })).rejects.toThrow(RunInFlightError);
     await expect(agent.run({ message: 'beta' })).rejects.toThrow(
-      /already running.*One instance answers one turn at a time/s,
+      /already has an in-flight execution/,
     );
     await first;
 
@@ -271,7 +271,7 @@ describe('silent success — timing', () => {
     // Refused because a question is pending — and the refusal must not leave
     // `foreign` armed on this agent.
     await expect(agent.resumeOnError(foreign)).rejects.toThrow(PendingQuestionError);
-    agent.abandonPause();
+    await agent.abandonPause();
     await agent.run({ message: 'a fresh start' });
 
     const history = (agent.getLastSnapshot()?.sharedState as { history?: { content: string }[] })
@@ -325,7 +325,7 @@ describe('silent success — timing', () => {
     const agent = pausingAgent();
     await agent.run({ message: 'refund order 7712' });
 
-    const dropped = agent.abandonPause();
+    const dropped = await agent.abandonPause();
     expect(dropped).toEqual({
       toolName: 'ask',
       toolCallId: 'c1',
@@ -333,7 +333,7 @@ describe('silent success — timing', () => {
     });
     await expect(agent.run({ message: 'different question' })).resolves.toBe('approved and done');
     // Nothing pending now, so a second abandon has nothing to report.
-    expect(agent.abandonPause()).toBeUndefined();
+    await expect(agent.abandonPause()).resolves.toBeUndefined();
   });
 
   it('ADAPTED: answering the question clears it — resume() is the door', async () => {
@@ -607,7 +607,7 @@ describe('silent success — reading a run', () => {
 
     for (const [file, sentence] of [
       ['core/Agent.ts', 'It is LIVE during a run, not a completed-runs-only view'],
-      ['core/RunnerBase.ts', '**Live during a run.**'],
+      ['core/RunnerBase.ts', 'During preparation before native origin this returns'],
     ] as const) {
       expect(read(file)).toContain(sentence);
     }

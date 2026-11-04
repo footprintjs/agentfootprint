@@ -4,7 +4,7 @@ title: ResumeIdentityConflictError
 
 # Class: ResumeIdentityConflictError
 
-Defined in: [src/core/conversation.ts:145](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L145)
+Defined in: [src/core/conversation.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L109)
 
 Thrown by `resume(checkpoint, input, options)` when the run would carry two
 identities — refused before anything runs:
@@ -37,9 +37,15 @@ provoked it. Nothing has run and no state has moved when it is thrown.
 
 ### Constructor
 
-> **new ResumeIdentityConflictError**(): `ResumeIdentityConflictError`
+> **new ResumeIdentityConflictError**(`operation?`): `ResumeIdentityConflictError`
 
-Defined in: [src/core/conversation.ts:148](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L148)
+Defined in: [src/core/conversation.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L112)
+
+#### Parameters
+
+##### operation?
+
+`"session"` \| `"resume"` \| `"followUp"`
 
 #### Returns
 
@@ -67,7 +73,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_SESSION_OWNERSHIP_CONFLICT"`
 
-Defined in: [src/core/conversation.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L146)
+Defined in: [src/core/conversation.ts:110](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L110)
 
 ***
 

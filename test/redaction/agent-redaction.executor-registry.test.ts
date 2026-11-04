@@ -1,13 +1,6 @@
 /**
- * Every executor a runner opens is KNOWN to the redaction — `covered` with its
- * policy, or positively `declared-none` — and an executor no run opened is
- * `unknown`, which a reader refuses rather than serve raw (`runRedaction.ts` ·
- * `coverageOfExecutor`, `redaction/coverage.ts`).
- *
- * A snapshot is served under the coverage of the executor it comes from. A
- * lookup that missed used to read as "no policy" and serve the record as it
- * is; now "this run had no policy" is an explicit state, and a miss — an
- * executor no run of this library opened — serves nothing.
+ * Coverage belongs to the actual admitted native record. An independently
+ * executed chart cannot replace that record; missing domain coverage refuses.
  */
 import { FlowChartExecutor } from 'footprintjs';
 import type { RedactionPolicy } from 'footprintjs';
@@ -27,9 +20,12 @@ import {
 import type { LLMProvider, LLMResponse } from '../../src/provider-contract/types.js';
 import type { Runner } from '../../src/core/runner.js';
 import { mock } from '../../src/doors/providers.js';
-import { coverageOfExecutor } from '../../src/redaction/runRedaction.js';
+import { servedUnderPolicy } from '../../src/redaction/marker.js';
+import { carriedConversationPolicy, locationsOf } from './fixture.js';
+import { UnknownRun } from './nativeRun.fixture.js';
 
-const KEYS: RedactionPolicy = { keys: ['ssn'] };
+// Select the fixture canary where each runner records its input.
+const KEYS: RedactionPolicy = carriedConversationPolicy();
 
 const text = (reply: string): LLMProvider => mock({ chunkDelayMs: 0, reply });
 
@@ -60,10 +56,6 @@ const router = () =>
       { id: 'tech', description: 'Outages.' },
     ],
   }).step;
-
-/** The executor a runner last opened — protected on the class, read here only. */
-const lastExecutorOf = (runner: Runner): object | undefined =>
-  (runner as unknown as { lastExecutor?: object }).lastExecutor;
 
 /** Every runner kind the library builds, with the policy its run must be known by. */
 const KINDS: readonly (readonly [string, () => Runner, RedactionPolicy | undefined])[] = [
@@ -96,57 +88,54 @@ const KINDS: readonly (readonly [string, () => Runner, RedactionPolicy | undefin
   ['Graph', () => graph({ nodes: [{ id: 'a', runner: agent(KEYS) }], edges: [] }), KEYS],
 ];
 
-describe('every executor a runner opens is known, with its policy or explicitly none', () => {
+describe('every runner serves its actual native record under its declared coverage', () => {
   for (const [kind, make, expected] of KINDS) {
     it(kind, async () => {
       const runner = make();
-      await runner.run({ message: 'go' });
-      const executor = lastExecutorOf(runner);
-      expect(executor).toBeDefined();
-      const coverage = coverageOfExecutor(executor as object);
-      if (expected === undefined) expect(coverage).toEqual({ state: 'declared-none' });
-      else {
-        expect(coverage.state).toBe('covered');
-        if (coverage.state === 'covered') {
-          expect(coverage.policy.keys).toEqual(expect.arrayContaining(expected.keys ?? []));
-        }
-      }
-      // …and its snapshot is served.
-      expect(runner.getLastSnapshot()).toBeDefined();
+      const secret = 'SSN-ADMITTED-8541';
+      await runner.run({ message: secret });
+      const snapshot = runner.getLastSnapshot();
+      expect(snapshot).toBeDefined();
+      expect(servedUnderPolicy(snapshot)).toBe(expected !== undefined);
+      if (expected === undefined) expect(locationsOf(snapshot, secret).length).toBeGreaterThan(0);
+      else expect(locationsOf(snapshot, secret), kind).toEqual([]);
     });
   }
 });
 
-describe('an executor no run opened is unknown — and refused, never served raw', () => {
-  it('a foreign executor reads as unknown, not as "no policy"', () => {
-    const foreign = new FlowChartExecutor(agent().getSpec());
-    expect(coverageOfExecutor(foreign)).toEqual({ state: 'unknown' });
-  });
-
-  it('a runner whose last executor is one no run opened serves no snapshot', async () => {
+describe('native record selection never follows a foreign executor', () => {
+  it('an independently executed chart cannot replace the runner’s admitted view', async () => {
     const runner = agent(KEYS);
     await runner.run({ message: 'go' });
-    expect(runner.getLastSnapshot()).toBeDefined();
+    const before = runner.getLastSnapshot();
+    const narrative = runner.getLastNarrativeEntries();
+    expect(before).toBeDefined();
     const foreign = new FlowChartExecutor(runner.getSpec());
-    // A chart run by an executor its runner did not open is a mount: it must be
-    // handed the identity it runs for (`core/memberRun.ts`).
     await foreign.run({
       input: { message: 'ssn SSN-FOREIGN-1', identity: { conversationId: 'foreign-1' } },
     });
-    expect(runner.getLastNarrativeEntries().length).toBeGreaterThan(0);
-    (runner as unknown as { lastExecutor: object }).lastExecutor = foreign;
+    expect(foreign.getSnapshot()).toBeDefined();
+    expect(runner.getLastSnapshot()).toEqual(before);
+    expect(runner.getSnapshot()).toEqual(before);
+    expect(runner.getLastNarrativeEntries()).toEqual(narrative);
+  });
+
+  it('an actual native run without a domain declaration refuses its raw snapshot', async () => {
+    const runner = new UnknownRun('SSN-UNKNOWN-8542');
+    await runner.run('go');
+    expect(locationsOf(runner.rawSnapshot(), 'SSN-UNKNOWN-8542').length).toBeGreaterThan(0);
+    expect(locationsOf(runner.rawNarrative(), 'SSN-UNKNOWN-8542').length).toBeGreaterThan(0);
     expect(runner.getLastSnapshot()).toBeUndefined();
     expect(runner.getSnapshot()).toBeUndefined();
-    // The narrative is the snapshot's twin: nothing from an executor no run opened.
     expect(runner.getLastNarrativeEntries()).toEqual([]);
   });
 
-  it('a runner with NO policy still serves its record: "none" is known, not missing', async () => {
+  it('a runner with NO policy still serves its record: none is known, not missing', async () => {
     const runner = agent();
-    await runner.run({ message: 'go' });
-    expect(coverageOfExecutor(lastExecutorOf(runner) as object)).toEqual({
-      state: 'declared-none',
-    });
-    expect(runner.getLastSnapshot()).toBeDefined();
+    await runner.run({ message: 'SSN-NONE-8543' });
+    const snapshot = runner.getLastSnapshot();
+    expect(snapshot).toBeDefined();
+    expect(servedUnderPolicy(snapshot)).toBe(false);
+    expect(locationsOf(snapshot, 'SSN-NONE-8543').length).toBeGreaterThan(0);
   });
 });

@@ -60,6 +60,8 @@ const folder = mkdtempSync(join(tmpdir(), 'af-partial-resume-'));
 const api = join(folder, 'api.cjs');
 const worker = join(folder, 'worker.cjs');
 const zoneWorker = join(folder, 'worker-zone.cjs');
+const admissionWorker = join(folder, 'worker-admission.cjs');
+const unperiodedWorker = join(folder, 'worker-unperioded.cjs');
 let attempt = 0;
 beforeAll(async () => {
   writeFileSync(worker, WORKER);
@@ -70,6 +72,25 @@ beforeAll(async () => {
   writeFileSync(
     zoneWorker,
     WORKER.replace(zoneConfig, ".time({...(options.zone === null ? {} : {zone:'UTC'}),reader:"),
+  );
+  // Distinct current workers; the historical WORKER remains byte-exact.
+  const terminal = '  } finally {await agent.shutdown();}';
+  expect(WORKER.split(terminal)).toHaveLength(2);
+  writeFileSync(
+    admissionWorker,
+    WORKER.replace(
+      terminal,
+      '  } catch (error) { return {refused:{name:error.name,code:error.code,message:error.message},seen,requests,index}; } finally {await agent.shutdown();}',
+    ),
+  );
+  // A current producer without period forms may keep an ordinary endpoint.
+  // A later current consumer with period forms must re-read its meaning.
+  const periodLine = WORKER.split('\n').find((line) => line.trim().startsWith('period:{forms:'));
+  if (periodLine === undefined) throw new Error('worker period declaration missing');
+  const period = periodLine.trim().replace(/,$/, '');
+  writeFileSync(
+    unperiodedWorker,
+    WORKER.replace(periodLine, '    ...(options.withoutPeriod ? {} : {' + period + '}),'),
   );
   await build({
     entryPoints: [join(ROOT, 'src/index.ts')],
@@ -107,6 +128,34 @@ const reply = (outcome: any, value: unknown) => ({
 });
 for (const mode of ['dynamic', 'dynamic-grouped'])
   describe(`fresh process ${mode}`, () => {
+    it.each(['ordinary', 'kept'] as const)(
+      'refuses historical %s pauses before provider/tool work',
+      (kind) => {
+        const old = fixtures[mode][kind];
+        expect(old.outcome.checkpoint.sharedState.runIdentitySource).toBeUndefined();
+        expect(old.outcome.checkpoint.sharedState.runSessionId).toBeUndefined();
+        expect(old.outcome.checkpoint.sharedState.toolResourceOwner).toBeUndefined();
+        const refused = run(
+          {
+            mode,
+            kept: kind === 'kept',
+            index: old.index,
+            checkpoint: old.outcome.checkpoint,
+            reply: reply(old.outcome, kind === 'kept' ? true : '2026-10-09T15:00:00Z'),
+          },
+          admissionWorker,
+        );
+        expect(refused.refused).toEqual({
+          name: 'TypeError',
+          message:
+            'Cannot resume this pause: the saved tool ownership carrier is missing or unreadable. Close this question and start a new run.',
+        });
+        expect(refused.index).toBe(old.index);
+        expect(refused.requests).toEqual([]);
+        expect(refused.seen).toEqual([]);
+      },
+    );
+
     it('keeps the original tool scope through fresh ordinary, zone and native-range processes', () => {
       const ordinary = run({ mode, zone: null }, zoneWorker);
       expect(ordinary.seen).toEqual([]);
@@ -154,13 +203,13 @@ for (const mode of ['dynamic', 'dynamic-grouped'])
       });
       expect(done.findings.filter((row: any) => row.kind === 'time-answer')).toHaveLength(1);
     });
-    it('old ordinary checkpoint regates from original partial call, then resumes meaning in another process', () => {
-      const old = fixtures[mode].ordinary;
+    it('current ordinary checkpoint regates its partial call across fresh processes', () => {
+      const current = run({ mode });
       const meaning = run({
         mode,
-        index: old.index,
-        checkpoint: old.outcome.checkpoint,
-        reply: reply(old.outcome, '2026-10-09T15:00:00Z'),
+        index: current.index,
+        checkpoint: current.outcome.checkpoint,
+        reply: reply(current.outcome, '2026-10-09T15:00:00Z'),
       });
       expect(meaning.seen).toEqual([]);
       expect(meaning.requests).toEqual([]);
@@ -179,17 +228,20 @@ for (const mode of ['dynamic', 'dynamic-grouped'])
       });
       expect(done.findings.filter((r: any) => r.kind === 'time-answer')).toHaveLength(1);
     });
-    it('real old kept endpoint reaches an ask-free target batch after a separate inert bridge', () => {
-      const old = fixtures[mode].kept;
-      expect(old.seen).toEqual([]);
-      expect(old.outcome.awaitingInput.id).toBe('bridge');
-      expect(old.findings.filter((r: any) => r.kind === 'time-answer')).toHaveLength(0);
+    it('current kept endpoint crosses from an unperioded producer to a period-declaring consumer', () => {
+      const current = run(
+        { mode, kept: true, completeOrdinary: true, withoutPeriod: true },
+        unperiodedWorker,
+      );
+      expect(current.seen).toEqual([]);
+      expect(current.outcome.awaitingInput.id).toBe('bridge');
+      expect(current.findings.filter((r: any) => r.kind === 'time-answer')).toHaveLength(0);
       const meaning = run({
         mode,
         kept: true,
-        index: old.index,
-        checkpoint: old.outcome.checkpoint,
-        reply: reply(old.outcome, true),
+        index: current.index,
+        checkpoint: current.outcome.checkpoint,
+        reply: reply(current.outcome, true),
       });
       expect(meaning.seen).toEqual([]);
       expect(meaning.requests).toHaveLength(1); // Only the target reproposal, never a second model call for this gate.

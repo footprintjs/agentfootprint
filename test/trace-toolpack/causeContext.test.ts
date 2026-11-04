@@ -284,27 +284,51 @@ describe('cause questions through the real inner entry points', () => {
 });
 
 describe('delegated self explanation shares caller cancellation', () => {
-  it('forwards the caller signal into the nested mock debugger request', async () => {
+  it('caller cancellation aborts the nested debugger without serving its later answer', async () => {
     const controller = new AbortController();
     const seen: Array<AbortSignal | undefined> = [];
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const binding = new SelfExplainBinding();
     binding.bindTo(() => snapshot());
     binding.recorder().onRunEnd?.({} as never);
-    const provider = buildSelfExplainToolProvider(binding, {
-      delegate: {
-        provider: mock({
-          respond: (request) => {
-            seen.push(request.signal);
-            return 'Recorded evidence only.';
-          },
-        }),
-        model: 'mock',
+    const debuggerProvider = {
+      name: 'scripted-debugger',
+      complete: async (request: import('../../src/provider-contract/types.js').LLMRequest) => {
+        seen.push(request.signal);
+        entered();
+        await gate;
+        return {
+          content: 'MUST NOT SERVE AFTER ABORT',
+          toolCalls: [],
+          usage: { input: 1, output: 1 },
+        };
       },
+    };
+    const provider = buildSelfExplainToolProvider(binding, {
+      delegate: { provider: debuggerProvider, model: 'mock' },
     });
     const tools = await provider.list({ activeSkillId: 'self-explain' } as never);
     const tool = tools.find((candidate) => candidate.schema.name === 'explain_run')!;
-    await tool.execute({ question: 'Why?' }, context(controller.signal));
+    const outcome = Promise.resolve(
+      tool.execute({ question: 'Why?' }, context(controller.signal)),
+    ).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    await started;
     expect(seen).toHaveLength(1);
-    expect(seen[0]).toBe(controller.signal);
+    expect(seen[0]?.aborted).toBe(false);
+    const reason = new Error('local debugger cancelled');
+    controller.abort(reason);
+    expect(seen[0]?.aborted).toBe(true);
+    expect(seen[0]?.reason).toBe(reason);
+    release();
+    expect(await outcome).toHaveProperty('error');
   });
 });

@@ -6,7 +6,7 @@ title: LIBRARY_AUTHORED_PREFIXES
 
 > `const` **LIBRARY\_AUTHORED\_PREFIXES**: readonly `string`[]
 
-Defined in: [src/lib/saidByPerson.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L161)
+Defined in: [src/lib/saidByPerson.ts:163](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L163)
 
 Every opening this library puts on a `role: 'user'` message it wrote itself.
 

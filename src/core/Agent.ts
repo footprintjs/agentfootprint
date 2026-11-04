@@ -1,3 +1,29 @@
+import {
+  refuseFollowUpIdentity,
+  refuseKnownSpentAnswer,
+  refuseMissingPlainAnswer,
+} from './agent/resumeAnswer.js';
+import { hostedTurns } from './agent/hostTurn.js';
+import type { TypedScope, NativeMappingBinding } from 'footprintjs';
+import { componentResources } from './agent/componentResources.js';
+import { resumeStateOf, resumeSessionOf } from './agent/resumeCheckpoint.js';
+import {
+  capturePauseOwnership,
+  pendingQuestionOf,
+  preservePendingQuestion,
+  abandonStoredPause,
+  abandonPendingQuestion,
+} from './agent/pauseOwnership.js';
+import { registerRunnerLive, runnerLive } from './runnerLive.js';
+import { agentComponentObservers, componentEvidence } from './agent/componentObservers.js';
+import { bindScopeComputation, captureLateEmitter } from '../redaction/runRedaction.js';
+import { createAgentRunValues, type AgentRunValues } from './agent/runValues.js';
+import {
+  bindRunnerStage,
+  type RunnerScopeValues,
+  type RunnerInvocation,
+  type RunnerSelection,
+} from './runnerExecution.js';
 import { findingsContextBytes } from './agent/findings/context.js';
 /**
  * Agent — ReAct primitive (LLM + tools + iteration loop).
@@ -16,7 +42,6 @@ import { findingsContextBytes } from './agent/findings/context.js';
  */
 
 import {
-  FlowChartExecutor,
   type AttachRecorderOptions,
   type CombinedNarrativeEntry,
   type CombinedRecorder,
@@ -26,6 +51,7 @@ import {
   type ReadTrackingMode,
   type RedactionPolicy,
   type RuntimeSnapshot,
+  type RunSetup,
 } from 'footprintjs';
 import type { RunOptions } from './runner.js';
 import { type CommitValuesMode } from 'foottrace';
@@ -51,8 +77,6 @@ import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../lib/conventions.js';
 import { readDisplayName } from '../lib/displayName.js';
 import {
-  DecisionRequiredError,
-  ResumeDecisionError,
   assertDecisionIsNotStale,
   isPaused,
   pauseDemandsDecision,
@@ -60,8 +84,6 @@ import {
 } from './pause.js';
 import {
   checkDecisionAgainst,
-  noteDecisionTakenUp,
-  pausedRequestIdOf,
   processDecisionLedger,
   registerConsentLedger,
   registerConsentRules,
@@ -102,15 +124,12 @@ import { toolsRecorder } from '../recorders/core/ToolsRecorder.js';
 import { reliabilityRecorder } from '../recorders/core/ReliabilityRecorder.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import { checkInEventsBridge } from '../recorders/core/CheckInRecorder.js';
-import { compactionMeter, type CompactionMeterHandle } from '../recorders/core/CompactionMeter.js';
+
 import { assertRedactionPolicy, unionRedactionPolicies } from '../redaction/policy.js';
-import { coverageOfExecutor } from '../redaction/runRedaction.js';
 import { policyOfCoverage } from '../redaction/coverage.js';
 import { ResumeRedactionError } from './conversation.js';
 import { declareRedaction, redactionDeclaredBy } from '../redaction/declared.js';
 import { carriedRunPolicy, conversationRedaction } from '../redaction/conversation.js';
-import { createEvictedTurnsHandle, type EvictedTurnsHandle } from './agent/window/evictedTurns.js';
-import { createReceiptDigests, type ReceiptDigests } from './agent/receipt/receiptDigests.js';
 import { packRecording } from '../recorders/observability/recordingPack.js';
 import { pendingDurableWrite } from './durabilityBarrier.js';
 import {
@@ -123,7 +142,6 @@ import { buildEventMeta, eventBelongsToRun } from '../bridge/eventMeta.js';
 import {
   assertIdentityShape,
   callerIdentityOf,
-  pausedSessionOf,
   restoredIdentityOf,
   sameIdentity,
 } from './agent/callerIdentity.js';
@@ -140,7 +158,6 @@ import type {
 } from '../events/registry.js';
 import { buildRunManifest } from './agent/runManifest.js';
 import { beginIntegrityRun, type IntegrityPosture } from '../integrity/disposition/lifecycle.js';
-import type { DispositionLedger } from '../integrity/disposition/ledger.js';
 import type { SkillGraphDeclaredMap } from './agent/skillGraphDeclared.js';
 import type { AppliedRecipe } from '../recipes/types.js';
 
@@ -165,17 +182,11 @@ import type { MemoryDefinition } from '../memory/define.types.js';
 import type { MemoryStore } from '../memory/store/index.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 import type { SelfExplainBinding } from '../trace-toolpack/selfExplain.js';
-import {
-  causalEvidenceRecorder,
-  type CausalEvidenceRecorderHandle,
-} from '../memory/causal/evidenceRecorder.js';
+
 import { buildSystemPromptSlot, type SystemPromptSlotArgs } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
-import {
-  buildToolsSlot,
-  type ProviderToolCache,
-  type ServedToolParties,
-} from './slots/buildToolsSlot.js';
+import { buildToolsSlot } from './slots/buildToolsSlot.js';
+import { ensureDiscoveredTools } from './slots/discoverTools.js';
 import { isDevMode } from 'footprintjs';
 import { buildReadSkillTool } from '../injection-engine/skillTools.js';
 import { foldStepPlans } from '../injection-engine/skillSteps.js';
@@ -233,10 +244,9 @@ import {
   type OutputSchemaParser,
 } from '../answer-validation/outputSchema.js';
 import { InvalidRunInputError, normalizeRunInput } from './runInput.js';
-import { clockOf } from '../time/rows.js';
+import '../time/rows.js';
 import {
   draftClock,
-  readRunTime,
   readTimeOptions,
   type ClockDraft,
   type ReadRunTime,
@@ -245,7 +255,7 @@ import {
 } from '../time/clock.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
-import { RunnerBase, makeRunId, runSignalOf } from './RunnerBase.js';
+import { RunnerBase } from './RunnerBase.js';
 import type { Tool, ToolRegistryEntry } from '../tools/tools.js';
 import type { ToolProvider } from '../tools/toolProvider.js';
 import {
@@ -286,10 +296,10 @@ import {
   type ResolvedAnswerValidation,
   resolveAnswerValidation,
 } from '../answer-validation/index.js';
-import { buildSeedStage, type PendingResumeHistory } from './agent/stages/seed.js';
+import { buildSeedStage } from './agent/stages/seed.js';
 import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
 import { buildCallLLMStage } from './agent/stages/callLLM.js';
-import { buildToolCallsHandler, notServedResult } from './agent/stages/toolCalls.js';
+import { buildToolCallsHandler, notServedResult } from './agent/stages/toolCalls/index.js';
 import { buildToolResolver } from './agent/stages/toolResolver.js';
 import { answeredValuesOf, declaredDefaultsFrom } from './agent/stages/route.js';
 import { isRefused, rulesOf } from '../tools/declare.js';
@@ -324,9 +334,14 @@ import {
   GRAPH_DECLARED_STAGE_ID,
 } from './agent/run/eventStageIds.js';
 import { requireKeepLedgerFacts, resolveKeepLedgerFacts } from './agent/run/ledgerFacts.js';
-import { MAX_REMEMBERED_RUNS, boundInsertionOrder } from './agent/run/rememberedRuns.js';
 import { withoutTime } from './agent/run/withoutTime.js';
 import { resumeRedactionOf } from './agent/run/resumeRedaction.js';
+import {
+  draftAgentClock,
+  clockForSeed,
+  readAgentTime,
+  agentTimeAnswerContext,
+} from './agent/run/clocks.js';
 export { AgentBuilder };
 
 // Re-export public Agent types so the 28+ existing import sites
@@ -352,8 +367,7 @@ export type {
  * `correlationId`/`traceId` are NOT footprintjs concepts — footprintjs's
  * `RunOptions.env` is an intentionally closed infra bag (signal/timeoutMs/
  * traceId only; see footprintjs's `ExecutionEnv`). These two ride separately
- * into `Agent.currentRunContext` and from there into every emitted event's
- * `EventMeta` via `buildEventMeta` (`RunContext` already declares both —
+ * into the native invocation metadata, then each event's `EventMeta` via `buildEventMeta` (`RunContext` already declares both —
  * `../bridge/eventMeta.ts`), so a caller can join agentfootprint's event
  * stream against an external system (a upstream request id, an OTEL trace,
  * a cross-tier why() join key) without threading it through tool args.
@@ -443,7 +457,7 @@ export interface AgentRunOptions extends RunOptions {
 
 // AgentState extracted to ./agent/types.ts (v2.11.1).
 
-export class Agent extends RunnerBase<AgentInput, AgentOutput> {
+export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   readonly name: string;
   readonly id: string;
   private readonly provider: LLMProvider;
@@ -553,7 +567,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   };
   /** Side channel for the conversation's inherited skill cursor (SG-C) —
    *  stashed by `applyContinuation`, consumed-and-cleared by seed. */
-  private pendingResumeSkillCursor?: string;
   private readonly pricingTable?: PricingTable;
   /** Normalized at construction: a bare number is `{ usd, onExceed: 'warn' }`. */
   private readonly costBudget?: ResolvedCostBudget;
@@ -622,18 +635,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  cleared when `run()` ends, so a later turn this agent did not start (its
    *  chart mounted in a composition) never stamps a clock nobody declared for
    *  it (`seedClockDraft`). */
-  private runClockDraft: ClockDraft | undefined;
   /** The incoming request each of this agent's OWN scopes serves — recorded
    *  by the executor that made the scope (`createExecutor`), so a scope keeps
    *  ITS run's request for as long as it lives: a stage still running after
    *  its run was aborted can never be served the next run's request. A stage
    *  mounted in another runner's executor reads its run's request by link
    *  (`memberRun.ts`). Never written to scope. */
-  private readonly scopeRequests = new WeakMap<object, RequestContext>();
   /** The `time` the CURRENT resume passed, as read — TAKEN once by the first
    *  ToolCalls pass of the resumed leg (`ToolCallsHandlerDeps.time`), and
    *  cleared when `run()` or `resume()` ends. */
-  private resumePassedTime: ReadRunTime | undefined;
   /** Tool choice by classifier (9.105.0, `.toolChoice()`): the classifier,
    *  the serve dial and the app's own doors. Threaded to the tools slot (the
    *  pick and the narrowing), to call-llm (`toolChoice: true`, the outcome
@@ -677,13 +687,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The message chain (`.messageMiddleware()`), in declaration order. Empty
    *  keeps seed synchronous and prepare-final untouched. */
   private readonly messageMiddleware: readonly MessageMiddleware[];
-  /** The instrument the window stage reads mid-run (adapter-reported usage +
-   *  per-message provenance). Only ever created alongside a strategy. */
-  private readonly compactionMeterHandle?: CompactionMeterHandle;
-  /** The window stage's seam to the receipt (9.93.0): what left the window at
-   *  this iteration's head, read by the call-llm mint in the same iteration.
-   *  Only ever created alongside a strategy, like the meter. */
-  private readonly evictedTurnsHandle?: EvictedTurnsHandle;
   /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
@@ -733,9 +736,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * plumbing, never scope state). `run()` resets it; the run boundary
    * files its report and clears it.
    */
-  private readonly integrityLedgerHolder: { current: DispositionLedger | undefined } = {
-    current: undefined,
-  };
   /** Set at chart build: whether any tool in the FULL declared catalog
    *  (static registry + skill-carried tools) declared `argumentsFrom`. */
   private integrityDanglingPresent = false;
@@ -770,18 +770,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * every `run()` / `resume()` so one run can never raise on another's block,
    * and cleared per service the moment that credential is issued.
    */
-  private readonly consentOutstanding = new Map<
-    string,
-    {
-      readonly service: string;
-      readonly authorizationUrl: string;
-      readonly sessionId: string;
-      readonly tool: string;
-      readonly iteration: number;
-    }
-  >();
-  /** Evidence bridge (#5) — present iff a CAUSAL memory is mounted. */
-  private readonly causalEvidence?: CausalEvidenceRecorderHandle;
+
   /** Observer delivery tier (RFC-001 Block 10). `'inline'` (default) is
    *  byte-identical to pre-10 releases; `'deferred'` routes the bridge
    *  recorders + consumer attachments through footprintjs's bounded
@@ -802,12 +791,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   readonly commentaryTemplates: Readonly<Record<string, string>>;
   readonly thinkingTemplates: Readonly<Record<string, string>>;
 
-  private currentRunContext: RunContext = {
-    runStartMs: 0,
-    runId: 'pending',
-    compositionPath: [],
-  };
-
   /**
    * The typed ask the CURRENT run's resume answered — set by
    * `resume()` when a person's answer completed an `awaitingInput`, cleared
@@ -816,9 +799,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `ToolCallsHandlerDeps.answeredAsk`. The count crosses checkpoints on the
    * awaiting-input shape itself (`repeat.count`), not here.
    */
-  private answeredAsk: AnsweredAsk | undefined;
 
-  // `lastExecutor` is now inherited as a protected field from RunnerBase
   // (single canonical source for footprintjs snapshot access across all
   // runners). Agent's `getLastSnapshot()` delegates to the inherited
   // implementation but is kept here for the JSDoc + clearer return type.
@@ -867,31 +848,24 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  instead of starting fresh, and appends this turn's user entry when
    *  `appendsUserTurn` says so. Cleared on first read so subsequent runs
    *  start clean. */
-  private pendingResumeHistory?: PendingResumeHistory;
   /** Retried request's repair state; never inherited by a new human turn. */
-  private pendingEvidenceRecovery?: EvidenceRecoveryCheckpoint;
 
   /** Its sibling for the folded spans. A restored conversation that dropped
    *  them would carry summaries nobody could unpack — the evidence would be
    *  destroyed by the act of continuing, which is the one thing retention
    *  exists to prevent. Cleared on first read, exactly like the history. */
-  private pendingResumeFolded?: readonly FoldedSpan[];
 
   /** Its sibling for the findings ledger (9.101.0) — the model's standings
    *  on results this process never saw, carried by the checkpoint and
    *  restored as a stored record. Cleared on first read, like the history. */
-  private pendingResumeFindingsLedger?: FindingsLedger;
 
   /** The last completed run's final answer — see `checkpoint()` for why it is
    *  kept here rather than read back from the recording. Undefined after a run
    *  that failed or paused. */
-  private lastRunAnswer?: string;
   /** Last run's checkpoint owner, including explicit replay edits from a failed child stage. */
-  private checkpointTracker?: RunCheckpointTracker;
   /** Whether any run on this instance got past input admission — so a
    *  refused FIRST turn is reported as 'never-run', never as "continue from
    *  your earlier accepted checkpoint" when there is none. */
-  private hadAdmittedRun = false;
 
   /** The id the CONSUMER chose, or undefined when they took the default.
    *  `this.id` cannot answer that question — it is `'agent'` either way — and
@@ -909,17 +883,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *  paused run's own record (`agent/callerIdentity.ts · callerIdentityOf`).
    *  A resume that inherited it instead stored another person's identity on
    *  a shared agent and none on a rebuilt pooled one. */
-  private lastRunIdentity?: MemoryIdentity;
 
   /** Run ids this instance minted, most recent last (bounded) — evidence that a
    *  checkpoint's `{ conversationId: '<runId>' }` is the per-run default
    *  (`agent/callerIdentity.ts`). */
-  private readonly mintedRunIds = new Set<string>();
 
   /** The self-explain evidence key of the run in flight (or served last):
    *  its session, else a host's per-request key, else undefined
    *  (`agent/servingConversation.ts`). */
-  private servingConversation?: string;
 
   /** How long ONE tool teardown may take before the runner stops waiting.
    *  See `AgentOptions.toolTeardownTimeoutMs`. */
@@ -928,19 +899,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** The run in flight, by id — the whole of the one-turn-at-a-time guard.
    *  Set before the executor is built and cleared in `finally`, so a run that
    *  throws does not leave the agent permanently refusing. */
-  private inFlightRunId?: string;
 
   /** The scopes this agent's OWN executors made — see the `isOwnRun` seed dep. */
-  private readonly ownScopes = new WeakSet<object>();
 
   /** The question a person still owes this agent an answer to. Set when a run
    *  ends paused, cleared by `resume()`, `abandonPause()`, or a run that
    *  completes. Read by the `run()` guard — see `PendingQuestionError`. */
-  private pendingQuestion?: {
-    readonly toolName?: string;
-    readonly toolCallId?: string;
-    readonly question?: string;
-  };
 
   /** The `.selfExplain()` binding, when the builder mounted one. Held so
    *  `canExplain()` can answer the same question the trace tools answer, from
@@ -1018,9 +982,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   /** `AgentOptions.recordReceipt` (9.88.0) — ON by default. `false` declines
    *  the mint at `callLLM`; nothing else about the run changes. */
   private readonly recordReceiptValue: boolean = true;
-  /** The receipt memo every call of a run mints through — one per agent,
-   *  rebinding itself to each run id (`core/agent/receipt/receiptDigests.ts`). */
-  private readonly receiptDigests: ReceiptDigests = createReceiptDigests();
   private readonly answerValidationConfig?: ResolvedAnswerValidation;
   private readonly negativeClaimsConfig?: ResolvedNegativeClaims;
   private readonly typedNegativeClaimsConfig?: ResolvedTypedNegativeClaims;
@@ -1081,11 +1042,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Which conversation this instance's self-explain evidence belongs to —
     // held in a module registry, not on the class, so it is not public API
     // (`agent/servingConversation.ts`).
-    registerServingConversation(this, () => ({
-      conversation: this.servingConversation,
-      runId: this.currentRunContext.runId,
-      ...(this.servingConversation?.startsWith('hosted:') === true && { oneShot: true }),
-    }));
+    registerServingConversation(this, () => {
+      const selected = this.runExecution().selected();
+      const conversation = selected?.value.servingConversation;
+      return {
+        conversation,
+        runId: selected?.context.runId ?? 'pending',
+        ...(conversation?.startsWith('hosted:') === true && { oneShot: true }),
+      };
+    });
     this.negativeClaimsConfig = negativeClaimsConfig;
     this.typedNegativeClaimsConfig =
       negativeClaimsConfig?.mode === 'typed' ? negativeClaimsConfig : undefined;
@@ -1176,22 +1141,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // Eager validation: memory ids must be unique so per-id scope keys
     // (`memoryInjection_${id}`) don't collide.
     validateMemoryIdUniqueness(memories);
-    // Evidence bridge (#5): a CAUSAL memory gets a run-scoped harvest recorder
-    // (decisions/toolCalls/iterations/duration/tokens). Attached per run below;
-    // its `collect` is threaded into the write mount via chartDeps.
-    if (memories.some((m) => m.type === 'causal')) {
-      const evidence = causalEvidenceRecorder();
-      this.causalEvidence = evidence;
-      // A causal memory is working state: its store keeps what a later run
-      // replays to the MODEL, so its tool calls are read on the real-value
-      // path, never off the served events — a policy keeps a run's records
-      // clean, never what the agent will compute on (`src/redaction/`). The
-      // decisions it keeps come from footprintjs's flow channel, which serves
-      // them under the policy (a named limit in `src/redaction/README.md`).
-      this.dispatcher.onRealEvent((event) =>
-        evidence.onEmit({ name: event.type, payload: event.payload } as never),
-      );
-    }
     // A dial without its switch — refused rather than run as a no-op (8.13.0).
     // Same policy as `observerDeliveryOptions` below; the message and the check
     // are shared with LLMCall, which takes the identical pair.
@@ -1273,19 +1222,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // (attached per run, cleared between runs like every other recorder)
     // because the window stage closes over it at chart-build time — and the
     // chart is built once.
-    if (windowStrategy !== undefined) {
-      this.windowStrategy = windowStrategy;
-      const meter = compactionMeter();
-      this.compactionMeterHandle = meter;
-      this.evictedTurnsHandle = createEvictedTurnsHandle();
-      // The provider's token count is a MEASUREMENT the window decides on, so
-      // the meter reads it on the real-value path, never off the served event:
-      // a redaction pattern that happens to match `input` must not switch
-      // compaction off (`src/redaction/runRedaction.ts`).
-      this.dispatcher.onRealEvent((event) => {
-        if (event.type === 'agentfootprint.stream.llm_end') meter.noteLlmEnd(event.payload);
-      });
-    }
+    if (windowStrategy !== undefined) this.windowStrategy = windowStrategy;
     // The two governance chains. Empty arrays (not undefined) so every read
     // site is a plain `.length > 0` test rather than an optional dance.
     this.toolMiddleware = toolMiddleware ?? [];
@@ -1536,20 +1473,67 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     this.commentaryTemplates = voice.commentaryTemplates;
     this.thinkingTemplates = voice.thinkingTemplates;
 
-    // Eager chart construction — see `RunnerBase.initChart` JSDoc.
-    // Note re Agent specifics (footprintjs inventor's review):
-    // - `providerToolCache: { current: Tool[] }` is closed over by the
-    //   chart's Discover + dispatch stages. It's shared across
-    //   sequential runs of this Agent instance, but the Discover stage
-    //   overwrites `current` at the start of every iteration (line 158
-    //   of `buildToolsSlot.ts`), so stale data never reaches a tool
-    //   call. Concurrent runs on the SAME Agent instance already share
-    //   `currentRunContext` and the recorder dispatcher — eager build
-    //   doesn't change that constraint.
-    // - `currentRunContext` is read by the per-stage `getRunCtx`
-    //   lambda at execution time (not at chart-build time), so a fresh
-    //   value per run still flows through correctly.
-    this.initChart(() => this.buildChart());
+    // Build the chart once. Private executable tool catalogs and their domain
+    // handlers are initialized in the actual native component, shared with
+    // its internal charts and isolated from other mounts and admissions.
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [`Agent:${this.id}`],
+      initialize: () => {
+        const values = createAgentRunValues({ window: this.windowStrategy !== undefined });
+        this.beginIntegrityLedger(values);
+        return values;
+      },
+      options: {
+        readTracking: this.readTracking,
+        commitValues: this.commitValues,
+        writeProvenance: this.writeProvenance,
+      },
+      componentSetup: (component, value, entry) => {
+        value.resources = componentResources(component, () => this.toolSessions());
+        if (entry?.kind === 'resume') value.resources.expectAnswer();
+        const observers = agentComponentObservers(component, value, entry, {
+          causal: this.memories.some((memory) => memory.type === 'causal'),
+          window: this.windowStrategy !== undefined,
+        });
+        return {
+          recorder: observers.recorder,
+          bindScope: (scope) => {
+            const run = this.runExecution().forScope(scope);
+            value.resources?.bindReporter((status) =>
+              captureLateEmitter(scope as object, TOOL_TEARDOWN_STAGE_ID)?.(
+                'agentfootprint.tools.resource_restore',
+                status,
+              ),
+            );
+            bindScopeComputation(scope, {
+              owner: component,
+              retired: () => run.retired,
+              emit: observers.emit,
+            });
+          },
+        };
+      },
+    });
+    const live = runnerLive(this);
+    if (live === undefined) throw new TypeError('Agent live taps were not initialized');
+    registerRunnerLive(this, {
+      ...live,
+      turn: hostedTurns(this.runExecution(), {
+        run: (run, input, options) => this.runOwned(run, input, options),
+        resume: (run, checkpoint, input, options) =>
+          this.resumeOwned(run, checkpoint, input, options),
+        prepareResume: (checkpoint) => this.noteResumeTakenUp(checkpoint),
+        checkpoint: (run) => this.checkpointFor(run),
+      }),
+      pause: {
+        capture: (outcome) => capturePauseOwnership(this.runExecution().selected()?.value, outcome),
+        abandon: (checkpoint) =>
+          this.runExecution().withRun(() =>
+            abandonStoredPause(checkpoint, () => this.toolSessions()),
+          ),
+      },
+    });
   }
 
   static create(opts: AgentOptions): AgentBuilder {
@@ -1599,12 +1583,30 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * The one difference is the timeline's filter: a recording filed FOR a
    * person keeps only the events of that person's run.
    */
-  private startRunRecording(): RunRecorder | undefined {
+  private startRunRecording(
+    invocation: RunnerInvocation<AgentRunValues>,
+  ): { complete(outcome: AgentOutput | RunnerPauseOutcome): void } | undefined {
     if (this.artifactRecordings === undefined || this.artifactStore === undefined) return undefined;
     // Only THIS run's events: on an instance serving several sessions, the
     // hosting door emits facts for other sessions while this run is in flight,
     // and a recording is redeemable by the person it was filed for.
-    return recordRunWhere(this, (event) => this.ownsEvent(event));
+    const recording = recordRunWhere(
+      this,
+      (event) =>
+        invocation.run.origin !== undefined && eventBelongsToRun(event.meta, invocation.context()),
+    );
+    let outcome: AgentOutput | RunnerPauseOutcome | undefined;
+    // Registered before component setup. Native reverse finalization joins
+    // resource cleanup first, then files this recording, then detaches it.
+    invocation.run.onFinalize(() => recording.stop());
+    invocation.run.onFinalize(async () => {
+      if (outcome !== undefined) await this.fileRunRecording(invocation, recording, outcome);
+    });
+    return {
+      complete(value) {
+        outcome = value;
+      },
+    };
   }
 
   /**
@@ -1616,14 +1618,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * @internal
    */
   ownsEvent(event: AgentfootprintEvent): boolean {
-    return eventBelongsToRun(event.meta, this.currentRunContext);
+    const selected = this.runExecution().selected();
+    return selected !== undefined && eventBelongsToRun(event.meta, selected.context);
   }
 
   /**
    * File the finished recording into the artifact store.
    *
    * ── When ────────────────────────────────────────────────────────────────
-   * After the answer is composed, and only for a run that COMPLETED. A pause
+   * After the answer and joined component resource cleanup, only for a run that COMPLETED. A pause
    * is not a finished run (the turn continues, and the resume mints its own);
    * a throw never reaches here at all.
    *
@@ -1648,6 +1651,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `artifacts.minted` event describing itself.
    */
   private async fileRunRecording(
+    invocation: RunnerInvocation<AgentRunValues>,
     recorder: RunRecorder | undefined,
     outcome: AgentOutput | RunnerPauseOutcome,
   ): Promise<void> {
@@ -1656,7 +1660,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       return;
     }
     if (isPaused(outcome)) return;
-    const runId = this.currentRunContext?.runId;
+    const runId = invocation.context().runId;
     let input;
     try {
       const recording = recorder.toRecording();
@@ -1674,7 +1678,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       return;
     }
     try {
-      const result = await store.put(this.runArtifactScope(), input);
+      const result = await store.put(this.runArtifactScope(invocation), input);
       // Sweeps ride the put result, so retention that evicted an older
       // recording to make room says so on the record — the same law a tool's
       // own mint follows.
@@ -1719,14 +1723,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * the one the run's tools used, and a recording filed in a different scope
    * from the artifacts it describes is a recording nobody can find.
    */
-  private runArtifactScope(): ArtifactScope {
-    const identity = (this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)
+  private runArtifactScope(invocation: RunnerInvocation<AgentRunValues>): ArtifactScope {
+    const identity = (invocation.view.snapshot()?.sharedState as Partial<AgentState> | undefined)
       ?.runIdentity;
     if (identity === undefined) {
       // No state to read means no run happened, which this path cannot reach —
       // but a scope is required and inventing a tenant would be worse than a
       // conversation id that names the run itself.
-      return { conversationId: this.currentRunContext?.runId ?? 'unknown' };
+      return { conversationId: invocation.context().runId };
     }
     return {
       conversationId: identity.conversationId,
@@ -1774,12 +1778,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * read or write of a selected key reads `[REDACTED]`, and an `[emit]` line
    * shows the event's served payload (`src/redaction/runRedaction.ts`).
    */
+  /** Empty during preparation before native origin; capture prior entries before the next call. */
   getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
-    if (this.lastExecutor === undefined) return [];
-    // The snapshot's terms: an executor no run of this agent opened serves
-    // nothing — its narrative was written under no rule anyone knows.
-    if (coverageOfExecutor(this.lastExecutor).state === 'unknown') return [];
-    return this.lastExecutor.getNarrativeEntries();
+    const selected = this.runExecution().selected();
+    const coverage = selected?.value.redaction?.coverage;
+    if (selected === undefined || coverage === undefined || coverage.state === 'unknown') return [];
+    return selected.view.getNarrativeEntries();
   }
 
   /**
@@ -1873,7 +1877,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `OutputSchemaError` — hand it to the 3-tier fallback. The one settle for
    * `parseOutputAsync`'s parse failure and `runTyped`'s native stop failure.
    */
-  private async settleTypedFailure<T>(raw: string, err: unknown): Promise<T> {
+  private async settleTypedFailure<T>(
+    raw: string,
+    err: unknown,
+    invocation?: RunnerInvocation<AgentRunValues>,
+  ): Promise<T> {
     const parser = this.outputSchemaParser as OutputSchemaParser<T>;
     if (!this.outputFallbackCfg || !(err instanceof OutputSchemaError)) throw err;
     // Engage the 3-tier fallback. The dispatcher gives us the
@@ -1888,6 +1896,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           type: eventType,
           timestamp: Date.now(),
           payload,
+          ...(invocation !== undefined && {
+            meta: buildEventMeta({ runtimeStageId: '__typed_output__' }, invocation.context()),
+          }),
         } as unknown as AgentfootprintEventMap[typeof eventType]);
       } catch {
         /* observability errors must not poison the fallback path */
@@ -1899,7 +1910,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       this.outputFallbackCfg as ResolvedOutputFallback<T>,
       emit,
       err,
-      this.lastRunRetriesSpent(),
+      invocation === undefined ? undefined : this.retriesSpent(invocation),
     );
   }
 
@@ -1910,8 +1921,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * any string, including one that never came from this agent, and reporting
    * `0` for "I do not know" would be an invented fact in an event payload.
    */
-  private lastRunRetriesSpent(): number | undefined {
-    const state = this.liveSnapshot()?.sharedState as
+  private retriesSpent(invocation: RunnerInvocation<AgentRunValues>): number | undefined {
+    const state = invocation.view.snapshot()?.sharedState as
       | Pick<AgentState, 'outputAttempts'>
       | undefined;
     if (state === undefined) return undefined;
@@ -1934,44 +1945,54 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * `agent.answerCoverage()`.
    */
   async runTyped<T = unknown>(input: AgentInput | string, options?: AgentRunOptions): Promise<T> {
-    if (!this.outputSchemaParser) {
-      throw new Error(
-        `Agent.runTyped: this agent has no outputSchema. Use ` +
-          `Agent.create({...}).outputSchema(parser).build() to enable typed output.`,
-      );
-    }
-    const out = await this.run(input, options);
-    if (typeof out !== 'string') {
-      throw new Error(
-        'Agent.runTyped: run paused — typed mode does not support pauses. ' +
-          'Use agent.run() + agent.parseOutput(...) after resume.',
-      );
-    }
-    // `strategy: 'native'`: an answer whose last attempt failed on a refusal
-    // or truncation stop is refused here even when its text parses — the
-    // format did not hold for it (outputEnforcement.ts · nativeStopFailure).
-    // FIRST, before any delivery path. It takes the same path a parse failure
-    // takes, `.outputFallback()` included.
-    const stopped =
-      this.outputEnforcement?.outputFormat !== undefined ? this.outputContractUnmet() : undefined;
-    if (stopped?.stopReason !== undefined) {
-      return this.settleTypedFailure<T>(
-        out,
-        new OutputSchemaError(stopped.error, { rawOutput: out, stage: stopped.stage }),
-      );
-    }
-    if (this.answerValidationConfig !== undefined) {
-      // The validator judged the schema's JSON output. Do not run a transforming
-      // or stateful parser again and hand back a value the validator never saw.
-      if (this.answerValidation()?.schemaAccepted !== true) {
-        throw new OutputSchemaError('Answer validation could not establish a JSON schema result.', {
-          rawOutput: out,
-          stage: 'schema-validate',
-        });
+    return this.runExecution().withRun(async (invocation) => {
+      if (!this.outputSchemaParser) {
+        throw new Error(
+          `Agent.runTyped: this agent has no outputSchema. Use ` +
+            `Agent.create({...}).outputSchema(parser).build() to enable typed output.`,
+        );
       }
-      return applyOutputSchema(out, { parse: (value: unknown) => value as T });
-    }
-    return this.parseOutputAsync<T>(out);
+      const out = await this.runOwned(invocation, input, options);
+      if (typeof out !== 'string') {
+        throw new Error(
+          'Agent.runTyped: run paused — typed mode does not support pauses. ' +
+            'Use agent.run() + agent.parseOutput(...) after resume.',
+        );
+      }
+      // `strategy: 'native'`: an answer whose last attempt failed on a refusal
+      // or truncation stop is refused here even when its text parses — the
+      // format did not hold for it (outputEnforcement.ts · nativeStopFailure).
+      // FIRST, before any delivery path. It takes the same path a parse failure
+      // takes, `.outputFallback()` included.
+      const stopped =
+        this.outputEnforcement?.outputFormat !== undefined ? this.outputContractUnmet() : undefined;
+      if (stopped?.stopReason !== undefined) {
+        return this.settleTypedFailure<T>(
+          out,
+          new OutputSchemaError(stopped.error, { rawOutput: out, stage: stopped.stage }),
+          invocation,
+        );
+      }
+      if (this.answerValidationConfig !== undefined) {
+        // The validator judged the schema's JSON output. Do not run a transforming
+        // or stateful parser again and hand back a value the validator never saw.
+        if (this.answerValidation()?.schemaAccepted !== true) {
+          throw new OutputSchemaError(
+            'Answer validation could not establish a JSON schema result.',
+            {
+              rawOutput: out,
+              stage: 'schema-validate',
+            },
+          );
+        }
+        return applyOutputSchema(out, { parse: (value: unknown) => value as T });
+      }
+      try {
+        return applyOutputSchema(out, this.outputSchemaParser as OutputSchemaParser<T>);
+      } catch (error) {
+        return this.settleTypedFailure<T>(out, error, invocation);
+      }
+    });
   }
 
   /**
@@ -2015,6 +2036,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     input: AgentInput | string,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
+    return this.runExecution().withRun((invocation) => this.runOwned(invocation, input, options));
+  }
+
+  private async runOwned(
+    invocation: RunnerInvocation<AgentRunValues>,
+    input: AgentInput | string,
+    options?: AgentRunOptions,
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
+    invocation.value.hadAdmitted = invocation.previous?.value.hadAdmitted === true;
     // Normalize or refuse BEFORE anything is created. A bare string is the
     // message; anything that is not a message is named and refused here
     // rather than becoming `content: undefined` inside the messages slot.
@@ -2045,13 +2075,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // never on the server's zone.
     const clockDraft = this.clockDraftFor(runInput.time ?? options?.time, 'Agent.run');
     // The engine's options; the run's signal (and its deadline) is armed just
-    // before the run starts and released in its `finally` (`runSignalOf`).
+    // before native execution, whose lifecycle releases it.
     const engineOptions = withoutTime(options);
     // Timing next, and before the executor exists: both of these refuse a call
     // that would have SUCCEEDED into corrupted per-instance state or an
     // orphaned human question. See ./conversation.ts for why they are throws.
-    this.assertNotRunning('Agent.run');
-    this.assertNoPendingQuestion('Agent.run');
+    this.assertNoPendingQuestion('Agent.run', invocation.previous?.value);
     // A conversation handed in continues through the same side channel
     // `resumeOnError` uses — one restoration path, so the two doors cannot
     // drift about what "continue" means. This turn's message IS appended:
@@ -2060,31 +2089,29 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     let continued: AgentRunCheckpoint | undefined;
     if (runInput.continueFrom !== undefined) {
       continued = validateCheckpoint(runInput.continueFrom);
-      this.applyContinuation(continued, 'Agent.run({ continueFrom })', true);
+      this.applyContinuation(invocation.value, continued, 'Agent.run({ continueFrom })', true);
     }
     // Only an EXPLICIT identity is remembered for `checkpoint()`; see the
     // field's note. `input.identity` wins over `options.identity` because the
     // input bag is where a caller looks first, and both win over the stored
     // conversation's — but the conversation's is used when neither was given,
     // so a continued turn stays in the namespace it started in.
-    this.lastRunIdentity =
+    invocation.value.identity =
       runInput.identity ?? options?.identity ?? (continued ? continued.identity : undefined);
     // Recordings-as-artifacts (9.26.0). BEFORE `createExecutor`, because
     // `attach()` collects recorders for the executor that has not been built
     // yet — a recording started one line later would be missing its
     // boundaries, which is the failure mode `recordRun` exists to prevent.
     // Returns `undefined` (and touches nothing) unless the dial is on.
-    const recording = this.startRunRecording();
+    const recording = this.startRunRecording(invocation);
     // (helper used in the catch block below — module-private function
     // declared at file end via hoisting)
-    this.answeredAsk = undefined;
-    this.resumePassedTime = undefined;
-    const executor = this.createExecutor(engineOptions, runRequest);
-    this.inFlightRunId = this.currentRunContext.runId;
+    invocation.value.answeredAsk = undefined;
+    invocation.value.resumePassedTime = undefined;
+    const prepared = this.prepareAgentRun(invocation, engineOptions, runRequest);
     // One disposition ledger per run (9.60.0) — registration mirrors what
     // this agent's configuration makes applicable; dev posture runs the
     // canaries here, BEFORE any real work, so a dead check is named first.
-    this.beginIntegrityLedger();
 
     // Auto-checkpoint at iteration boundaries — captures the latest
     // conversation history into a per-run tracker. On error, we
@@ -2092,65 +2119,72 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // this checkpoint so `agent.resumeOnError(checkpoint)` can
     // continue from the last good iteration.
     const tracker: RunCheckpointTracker = {
-      runId: this.currentRunContext?.runId ?? 'unknown',
+      get runId() {
+        return invocation.context().runId;
+      },
       originalInput: { message: runInput.message },
       history: [],
       lastCompletedIteration: 0,
     };
-    this.checkpointTracker = tracker;
-    const stopTracking = this.installCheckpointTracker(tracker);
+    invocation.value.checkpointTracker = tracker;
     // The answer this run produces is the only place the final assistant turn
     // exists (nothing writes it back into `scope.history`), so `checkpoint()`
     // keeps it. Cleared here so a failed or paused run cannot hand back the
     // previous run's answer.
-    this.lastRunAnswer = undefined;
+    invocation.value.answer = undefined;
     // One run can never raise on another run's consent block.
-    this.consentOutstanding.clear();
+    invocation.value.consentOutstanding.clear();
     // Set here, beside the `try` whose `finally` clears it, so no exit path
     // can leave it behind for a turn this `run()` did not start.
-    this.runClockDraft = clockDraft;
+    invocation.value.clockDraft = clockDraft;
     // Armed here, beside the `try` whose `finally` releases it: no refused
     // call above can leave a deadline running.
-    const runSignal = runSignalOf(engineOptions);
 
     try {
-      const result = await executor.run({
-        input: {
-          message: runInput.message,
-          ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
-          // A composed message reaches seed only on an agent that reads it
-          // (declared sources, or the time layer's reader) — every other run's
-          // input is the bytes it was.
-          ...(messageFrom === 'composed' &&
-            (this.argumentSourcesArmed === true || this.timeOptions?.reader !== undefined) && {
-              messageFrom: 'composed',
-            }),
+      const result = await invocation.execute(
+        {
+          kind: 'run',
+          options: {
+            input: {
+              message: runInput.message,
+              ...(invocation.value.identity !== undefined && {
+                identity: invocation.value.identity,
+              }),
+              // A composed message reaches seed only on an agent that reads it
+              // (declared sources, or the time layer's reader) — every other run's
+              // input is the bytes it was.
+              ...(messageFrom === 'composed' &&
+                (this.argumentSourcesArmed === true || this.timeOptions?.reader !== undefined) && {
+                  messageFrom: 'composed',
+                }),
+            },
+            // Co-engineered boundary (#16): the engine's loop-iteration limit
+            // (footprintjs 9 default 1000) must never fire BELOW the agent's own
+            // budget — give it headroom (×2 + 10 covers double-hop loop shapes).
+            // Consumer-provided options win.
+            maxIterations: this.maxIterations * 2 + 10,
+            ...(engineOptions ?? {}),
+          },
         },
-        // Co-engineered boundary (#16): the engine's loop-iteration limit
-        // (footprintjs 9 default 1000) must never fire BELOW the agent's own
-        // budget — give it headroom (×2 + 10 covers double-hop loop shapes).
-        // Consumer-provided options win.
-        maxIterations: this.maxIterations * 2 + 10,
-        ...(runSignal.options ?? {}),
-      });
-      const finalized = this.finalizeResult(executor, result);
-      if (typeof finalized === 'string') this.lastRunAnswer = finalized;
-      this.recordPendingQuestion(finalized);
-      await this.endRunToolSessions(finalized);
+        prepared.setup,
+        prepared.binding,
+      );
+      const finalized = this.finalizeResult(invocation, result);
+      if (typeof finalized === 'string') invocation.value.answer = finalized;
+      this.recordPendingQuestion(invocation.value, finalized);
       // The answer is FINISHED before this line and cannot be changed by it.
       // The liveness theorems (9.60.0, dev posture only) — a run that would
       // return green while its registered checkers demonstrably never ran
       // fails HERE instead, before the recording is filed. A finished run is
       // itself the proof work existed: the loop cannot finish without at
       // least one model call.
-      this.assertIntegrityAlive();
+      this.assertIntegrityAlive(invocation);
       // See `fileRunRecording` for why the write is awaited rather than left
       // in flight, and why it can never fail the run.
-      await this.fileRunRecording(recording, finalized);
+      recording?.complete(finalized);
       return finalized;
     } catch (cause) {
       // A THROWN pause is still a pause — see `endRunToolSessions`.
-      await this.endRunToolSessions(cause);
       // Wrap recoverable errors with the last-known-good checkpoint.
       // Don't wrap intentional terminal signals — let them propagate as
       // their typed shapes so callers can `instanceof` them:
@@ -2190,7 +2224,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // 9.60.0 — a dead checker is a WIRING verdict on this build, not a
           // recoverable run state: resuming would run the same dead wiring.
           cause.name === 'CheckerDeadError');
-      if (cause instanceof Error && !isTerminalTypedError && tracker.history.length > 0) {
+      if (
+        cause instanceof Error &&
+        !isTerminalTypedError &&
+        !invocation.value.checkpointObservationFailed &&
+        tracker.history.length > 0
+      ) {
         // Observation beats the heuristic: if a bracket was open, it says
         // exactly what the run was doing. `classifyFailurePhase` only decides
         // when nothing was — a failure between brackets, where the error's own
@@ -2214,7 +2253,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // resuming after a crash would be the one path that still lost the
           // identity, and the memory written after the recovery would land
           // where nothing could read it.
-          this.conversationOwner(),
+          this.conversationOwner(invocation.value),
           // …and the same graph cursor (SG-C), from the same snapshot reader —
           // one reader, two carriers, so neither can lose what the other keeps.
           this.continuityCursorOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
@@ -2234,32 +2273,28 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       }
       throw cause;
     } finally {
-      // The run's deadline and signal links end with the run (`runSignalOf`).
-      runSignal.release();
+      // Native admission owns deadlines, signal links and final joining.
       // The time layer's per-run inputs end with the run: a stale draft would
       // be stamped by the next seed this agent did not start (a composition
       // mounting its chart) as if the app had declared it.
-      this.runClockDraft = undefined;
-      this.resumePassedTime = undefined;
+      invocation.value.clockDraft = undefined;
+      invocation.value.resumePassedTime = undefined;
       // The run's disposition rows, on EVERY path — success, failure, pause —
       // and BEFORE the recording stops, so a recording carries its run's
       // checker accounting (9.60.0).
-      this.fileIntegrityDisposition();
+      this.fileIntegrityDisposition(invocation);
       // Always released: a recording left subscribed would keep listening
       // through the next run and grow a tail nobody reads.
-      this.noteAdmittedRun();
-      recording?.stop();
-      stopTracking();
-      this.inFlightRunId = undefined;
+      this.noteAdmittedRun(invocation);
       // `seed` consumes the restored conversation on its way past. A run that
       // died BEFORE seed never did, and a history left armed here would be
       // picked up by the next run — which would then continue a conversation
       // nobody asked it to. One run, one continuation.
-      this.pendingResumeHistory = undefined;
-      this.pendingResumeFolded = undefined;
-      this.pendingResumeFindingsLedger = undefined;
-      this.pendingResumeSkillCursor = undefined;
-      this.pendingEvidenceRecovery = undefined;
+      invocation.value.pendingResumeHistory = undefined;
+      invocation.value.pendingResumeFolded = undefined;
+      invocation.value.pendingResumeFindingsLedger = undefined;
+      invocation.value.pendingResumeSkillCursor = undefined;
+      invocation.value.pendingEvidenceRecovery = undefined;
     }
   }
 
@@ -2299,20 +2334,29 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     message: string,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
-    // Refuse BEFORE the timing guards, so "there is nothing to follow up on"
-    // is never reported as "a run is in flight" for an agent that has simply
-    // not run yet.
-    if (this.liveSnapshot() === undefined || (this.lastInputRefused() && !this.hadAdmittedRun)) {
-      throw new NoConversationError('Agent.followUp', 'never-run');
-    }
-    const conversation = this.checkpoint();
-    if (conversation === undefined || conversation.history.length === 0) {
-      throw new NoConversationError(
-        'Agent.followUp',
-        this.lastInputRefused() ? 'last-input-refused' : 'last-run-unfinished',
-      );
-    }
-    return this.run({ message, continueFrom: conversation }, options);
+    return this.runExecution().withRun(async (invocation) => {
+      assertIdentityShape(options?.identity, 'Agent.followUp');
+      // A continuation must exist before any history can be selected.
+      if (
+        invocation.previous?.view.snapshot() === undefined ||
+        (this.lastInputRefused(invocation.previous?.view) &&
+          !invocation.previous?.value.hadAdmitted)
+      ) {
+        throw new NoConversationError('Agent.followUp', 'never-run');
+      }
+      const conversation = this.checkpointFor(invocation.previous);
+      if (conversation === undefined || conversation.history.length === 0) {
+        throw new NoConversationError(
+          'Agent.followUp',
+          this.lastInputRefused(invocation.previous?.view)
+            ? 'last-input-refused'
+            : 'last-run-unfinished',
+        );
+      }
+      if (conversation.identity !== undefined)
+        refuseFollowUpIdentity(options?.identity, conversation.identity);
+      return this.runOwned(invocation, { message, continueFrom: conversation }, options);
+    });
   }
 
   /**
@@ -2330,12 +2374,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * does not touch the paused run's checkpoint: if you still hold that, it
    * remains resumable.
    */
-  abandonPause():
+  async abandonPause(): Promise<
     | { readonly toolName?: string; readonly toolCallId?: string; readonly question?: string }
-    | undefined {
-    const dropped = this.pendingQuestion;
-    this.pendingQuestion = undefined;
-    return dropped;
+    | undefined
+  > {
+    return this.runExecution().withRun((invocation) =>
+      abandonPendingQuestion(invocation.previous?.value),
+    );
   }
 
   /**
@@ -2408,35 +2453,37 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     checkpoint: AgentRunCheckpoint | unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
-    const cp = validateCheckpoint(checkpoint);
-    // The timing guards run HERE, not only inside `run()`, because the line
-    // below writes the side channel: a refusal after that write would leave a
-    // restored history armed and the NEXT run would silently continue somebody
-    // else's conversation.
-    this.assertNotRunning('Agent.resumeOnError');
-    this.assertNoPendingQuestion('Agent.resumeOnError');
-    // A request `run()` would refuse is refused HERE, before the side channel
-    // below is armed — a refusal after it would leave the restored history for
-    // the next, unrelated run.
-    requestOf(options, 'Agent.resumeOnError');
-    // Stash the checkpointed history on the side channel; the seed function
-    // reads + clears it before scope.history initializes. No message is
-    // appended — the failing run's message is already the last user turn in
-    // that history, and adding it again would ask twice.
-    this.applyContinuation(cp, 'Agent.resumeOnError', false);
-    return this.run(
-      {
-        message: cp.originalInput.message,
-        // The conversation's own identity, unless this call named one. Until
-        // 9.2.0 there was no way to pass either, so a recovered run silently
-        // re-namespaced its memory under a fresh runId and wrote turn two
-        // where turn three could not read it.
-        ...(this.identityFor(options, cp) !== undefined && {
-          identity: this.identityFor(options, cp),
-        }),
-      },
-      options,
-    );
+    return this.runExecution().withRun(async (invocation) => {
+      const cp = validateCheckpoint(checkpoint);
+      // The timing guards run HERE, not only inside `run()`, because the line
+      // below writes the side channel: a refusal after that write would leave a
+      // restored history armed and the NEXT run would silently continue somebody
+      // else's conversation.
+      this.assertNoPendingQuestion('Agent.resumeOnError', invocation.previous?.value);
+      // A request `run()` would refuse is refused HERE, before the side channel
+      // below is armed — a refusal after it would leave the restored history for
+      // the next, unrelated run.
+      requestOf(options, 'Agent.resumeOnError');
+      // Stash the checkpointed history on the side channel; the seed function
+      // reads + clears it before scope.history initializes. No message is
+      // appended — the failing run's message is already the last user turn in
+      // that history, and adding it again would ask twice.
+      this.applyContinuation(invocation.value, cp, 'Agent.resumeOnError', false);
+      return this.runOwned(
+        invocation,
+        {
+          message: cp.originalInput.message,
+          // The conversation's own identity, unless this call named one. Until
+          // 9.2.0 there was no way to pass either, so a recovered run silently
+          // re-namespaced its memory under a fresh runId and wrote turn two
+          // where turn three could not read it.
+          ...(this.identityFor(options, cp) !== undefined && {
+            identity: this.identityFor(options, cp),
+          }),
+        },
+        options,
+      );
+    });
   }
 
   /**
@@ -2452,132 +2499,16 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return options?.identity ?? cp.identity;
   }
 
-  /**
-   * A run's `time`, read into the turn's clock draft (the time layer) — or
-   * refused, before the turn starts: `time` on an agent without `.time()` or
-   * a malformed value. No zone anywhere (the run's, else the builder's) is no
-   * refusal: the zone is UNKNOWN (`zoneSource: 'unknown'`, G15) — never the
-   * server's, never guessed; the person is asked it before any time they
-   * wrote is read. `undefined` on an agent without the layer.
-   *
-   * @internal
-   */
   private clockDraftFor(time: unknown, runner: string): ClockDraft | undefined {
-    const passed = this.passedTimeFor(time, runner);
-    if (this.timeOptions === undefined) return undefined;
-    return draftClock(passed, this.timeOptions);
+    return draftAgentClock(time, runner, this.timeOptions);
   }
 
-  /**
-   * The clock draft seed stamps (the time layer): the one `run()` read — or,
-   * for a turn this agent's `run()` did not start (its chart mounted in a
-   * composition, which passes no `time`), the builder's fallback zone with
-   * the turn's start as `now` (`zoneSource: 'builder'`, `nowSource:
-   * 'default'` — the same record a `run()` with no `time` files). With no
-   * fallback zone that turn's zone is unknown, as a `run()`'s is (G15): the
-   * server's zone is never used.
-   *
-   * @internal
-   */
-  private seedClockDraft(): ClockDraft {
-    if (this.runClockDraft !== undefined) return this.runClockDraft;
-    return draftClock(undefined, this.timeOptions ?? {});
+  private seedClockDraft(values: AgentRunValues): ClockDraft {
+    return clockForSeed(values, this.timeOptions);
   }
 
-  /**
-   * A `time` passed to a run or a resume, read — or refused by name: passed to
-   * an agent without `.time()` (a door that ignored it would look configured
-   * and do nothing), or malformed.
-   *
-   * @internal
-   */
   private passedTimeFor(time: unknown, runner: string): ReadRunTime | undefined {
-    if (time === undefined) return undefined;
-    if (this.timeOptions === undefined) {
-      throw new InvalidRunInputError({
-        runner,
-        received: 'time',
-        hint: 'this agent reads no clock — arm the time layer with .time() to pass time',
-      });
-    }
-    const read = readRunTime(time);
-    if ('problem' in read) {
-      throw new InvalidRunInputError({ runner, received: 'a malformed time', hint: read.problem });
-    }
-    return read.value;
-  }
-
-  /**
-   * Install a per-run checkpoint tracker. Listens for the agent's own
-   * iteration and stream brackets and snapshots the conversation history into
-   * the tracker. Returns a stop function.
-   *
-   * It listens on the REAL-value path (`EventDispatcher · onRealEvent`), never
-   * on the served one: the crash checkpoint it builds is what
-   * `resumeOnError` replays to the model, and a resume checkpoint keeps real
-   * values — a redaction policy that names `history` must not turn the
-   * conversation a crash resumes into placeholders (`src/redaction/`).
-   *
-   * @internal
-   */
-  private installCheckpointTracker(tracker: RunCheckpointTracker): () => void {
-    return this.dispatcher.onRealEvent((event) => {
-      switch (event.type) {
-        case 'agentfootprint.agent.iteration_start': {
-          const p = event.payload as { iterIndex?: number } | undefined;
-          if (typeof p?.iterIndex === 'number') tracker.inFlightIteration = p.iterIndex;
-          return;
-        }
-        // Phase OBSERVATION (8.14.0) — the run's own stream brackets. A crash
-        // inside one of these is attributable without asking the error to
-        // describe itself. `'call-llm'` is a literal and `toolName` is a name
-        // the app declared: no URL, no credential, no payload ever reaches the
-        // checkpoint.
-        case 'agentfootprint.stream.llm_start':
-          tracker.inFlightPhase = { phase: 'llm', stage: 'call-llm' };
-          return;
-        case 'agentfootprint.stream.llm_end':
-          tracker.inFlightPhase = undefined;
-          return;
-        // A bracket carrying `notDispatched` (9.113.0) is a call a paused batch
-        // never dispatched: nothing of it was ever in flight, so it neither
-        // opens nor clears the phase. Nothing observable depends on this today
-        // — the settlement emits both halves back to back with no await between
-        // them (`toolCalls.ts` · `bracketSettled`), so a crash can never land
-        // inside one — it keeps the phase true to the marker should that ever
-        // change.
-        case 'agentfootprint.stream.tool_start': {
-          const p = event.payload as { toolName?: string; notDispatched?: unknown } | undefined;
-          if (p?.notDispatched !== undefined) return;
-          const name = p?.toolName;
-          tracker.inFlightPhase = {
-            phase: 'tool',
-            stage: typeof name === 'string' ? name : 'tool',
-          };
-          return;
-        }
-        case 'agentfootprint.stream.tool_end': {
-          const p = event.payload as { notDispatched?: unknown } | undefined;
-          if (p?.notDispatched !== undefined) return;
-          tracker.inFlightPhase = undefined;
-          return;
-        }
-        case 'agentfootprint.agent.iteration_end': {
-          const p = event.payload as
-            | { iterIndex?: number; history?: ReadonlyArray<unknown> }
-            | undefined;
-          if (typeof p?.iterIndex === 'number') tracker.lastCompletedIteration = p.iterIndex;
-          if (Array.isArray(p?.history)) {
-            tracker.history = p.history as readonly LLMMessage[];
-          }
-          tracker.inFlightIteration = undefined;
-          tracker.inFlightPhase = undefined;
-          return;
-        }
-        default:
-          return;
-      }
-    });
+    return readAgentTime(time, runner, this.timeOptions);
   }
 
   /**
@@ -2585,7 +2516,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * WHO the resumed run is for is the paused run's caller, read off the
    * checkpoint (`agent/callerIdentity.ts`) — never whatever this instance ran
-   * last; which SESSION, the call's `sessionId`, else the paused run's. A
+   * last; the session is the paused run's. A supplied `sessionId` must match. A
    * checkpoint names who it is for; it is not proof: a host that lets
    * checkpoints leave its trust boundary signs them or keeps them
    * server-side, and passes the identity it verified as `options.identity`.
@@ -2612,11 +2543,27 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     input?: unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
+    this.noteResumeTakenUp(checkpoint);
+    return this.runExecution().withRun((invocation) =>
+      preservePendingQuestion(
+        invocation.previous?.value,
+        () => invocation.value.resources?.answer.consumed === true,
+        () => this.resumeOwned(invocation, checkpoint, input, options),
+      ),
+    );
+  }
+
+  private async resumeOwned(
+    invocation: RunnerInvocation<AgentRunValues>,
+    checkpoint: FlowchartCheckpoint,
+    input?: unknown,
+    options?: AgentRunOptions,
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
     // Taken up, before anything can refuse: from here every use of a consent
     // decision passes through the one spend a door watching this pause sees
     // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
     // without reaching it, refused or aborted, used nothing.
-    noteDecisionTakenUp(pausedRequestIdOf(checkpoint));
+    resumeStateOf(checkpoint);
     // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
     // Refused HERE, before the engine is handed the checkpoint, so nothing
     // executes and the checkpoint is unchanged — the caller can answer the same
@@ -2633,8 +2580,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The incoming request is the RESUMING caller's — never the paused one's:
     // a checkpoint carries no request, and a resume without one serves none.
     const resumeRequest = requestOf(options, 'Agent.resume');
-    // Native guard lands with the new checkpoint protocol, before its runtime
-    // opt-in is mounted. Until then no Agent is armed to consume this carrier.
     requireVerificationOnResume(checkpoint.sharedState ?? {}, false);
     if (this.negativeClaimsConfig !== undefined) {
       const prior = negativeCheckpointOf(checkpoint.sharedState ?? {});
@@ -2667,10 +2612,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // principal and stored ownership. A checkpoint names who it is for; it is
     // not proof — a host that lets checkpoints leave its trust boundary signs
     // them or keeps them server-side, and passes the identity it verified here.
-    const pausedFor = callerIdentityOf(checkpoint.sharedState, {
-      ...(this.lastRunIdentity !== undefined && { named: this.lastRunIdentity }),
-      minted: this.mintedRunIds,
-    });
+    const pausedFor = callerIdentityOf(checkpoint.sharedState);
     // The identity the run's memory namespace and credentials are restored
     // from, WHATEVER its source (a caller's, the session rung, the per-run
     // default). One run, one identity: a call that names an identity must
@@ -2685,6 +2627,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     ) {
       throw new ResumeIdentityConflictError();
     }
+    const sessionId = resumeSessionOf(checkpoint);
+    if (options?.sessionId !== undefined && options.sessionId !== sessionId)
+      throw new ResumeIdentityConflictError('session');
     // …and the decision must be for THIS request and this exact call
     // (`core/consentRequest.ts`): refused here, before anything moves, when it
     // names no request, another request, a call the checkpoint no longer
@@ -2702,11 +2647,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         this.decisionLedger ?? processDecisionLedger(),
       );
     }
+    if (gate !== undefined)
+      await refuseKnownSpentAnswer(
+        this.decisionLedger ?? processDecisionLedger(),
+        input,
+        gate,
+        options?.signal,
+        options?.env?.signal,
+      );
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
     let answeredAsk: AnsweredAsk | undefined;
     if (awaitingInput !== undefined) {
-      this.assertNotRunning('Agent.resume');
       const answered = applyInputResponse(
         awaitingInput,
         input,
@@ -2729,7 +2681,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           pauseData,
           awaitingInput: answered,
         };
-        this.recordPendingQuestion(outcome);
+        this.recordPendingQuestion(invocation.value, outcome);
         return outcome;
       }
       answeredAsk = {
@@ -2750,38 +2702,23 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // the same door and before any state moves, because a resume that has begun
     // is a resume that has already used the value.
     assertDecisionIsNotStale(checkpoint.pauseData, input);
-    // The same one-turn-at-a-time guard `run()` carries: a resume writes the
-    // same per-instance state a run does. Answering the question is what this
-    // door is FOR, so it never checks `pendingQuestion` — it clears it.
-    this.assertNotRunning('Agent.resume');
-    // Settled the moment the answer is handed over, not when the resumed run
-    // finishes: a resume that then FAILS must not leave the agent refusing
-    // every later message on behalf of a question that has been answered.
-    // Kept to put back when the run refuses the answer itself (a replay of a
-    // request already answered): that resume answered nothing.
-    const questionBefore = this.pendingQuestion;
-    this.pendingQuestion = undefined;
-    // WHO this resumed run is for — set BEFORE the executor exists, because the
-    // run context's principal (every event's `EventMeta.principal`), a tool's
-    // `ctx.identity` and `checkpoint()` all read it: the identity the PAUSED
-    // run's caller named (a named `options.identity` was checked equal to the
-    // restored one at the top of this method) — never the identity of whatever
-    // this instance ran last, which on a shared or pooled agent is another
-    // person's, or nobody's (`callerIdentity.ts`).
-    this.lastRunIdentity = options?.identity ?? pausedFor;
-    // …and WHICH session: the call's, else the one the paused run recorded in
-    // its own state (`runSessionId`, or the session rung's) — one source, no
-    // instance memory — so a host that resumes without repeating the session
-    // does not file the resumed turn (its tool teardown, its events, its
-    // self-explain evidence) as sessionless.
-    const sessionId = options?.sessionId ?? pausedSessionOf(checkpoint.sharedState);
+    if (gate === undefined && awaitingInput === undefined)
+      refuseMissingPlainAnswer(checkpoint, input);
+    // A native-admitted answer settles the old question even if its leg fails.
+    // The outer pause-ownership boundary restores pre-origin refusals; named
+    // unanswered refusals after origin are restored below.
+    const questionBefore = invocation.previous?.value.pendingQuestion;
+    // Capture this paused conversation's identity before native origin; selected readers
+    // on a shared instance can belong to another conversation (`callerIdentity.ts`).
+    invocation.value.identity = options?.identity ?? pausedFor;
+    // Resume retains the paused transport session; an override was checked equal above.
     const sessionResumeOptions: AgentRunOptions | undefined =
       sessionId !== undefined && options?.sessionId === undefined
         ? { ...options, sessionId }
         : options;
     // The leg's policy — the carried one, the caller's, and the paused leg's
     // marks — comes back from the emitter and goes to THIS leg's executor
-    // (`createExecutor` → `openRunRedaction`); nothing per-run is held on the instance.
+    // (native setup → `prepareRunRedaction`); nothing per-run is held on the instance.
     const resumeLeg = this.emitPauseResume(
       checkpoint,
       input,
@@ -2791,41 +2728,40 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       resumeLeg === sessionResumeOptions?.redact
         ? sessionResumeOptions
         : { ...sessionResumeOptions, redact: resumeLeg };
-    // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
-    // `checkpoint.sharedState` (and nested subflow states) automatically
-    // on a fresh executor's `resume()`. No need to retain a paused
-    // executor between run/resume.
-    // Recorded on the same terms a fresh run is (9.26.0) — and the recording
-    // covers the RESUMED run, which is what the recorder saw. A turn that
-    // paused and resumed is two runs, and each mints its own recording when
-    // (and only when) it completes.
-    const recording = this.startRunRecording();
-    this.answeredAsk = answeredAsk;
-    const executor = this.createExecutor(resumeOptions, resumeRequest);
+    // Fresh native execution restores its checkpoint; no paused executor is retained.
+    // Each resumed native leg files its own recording when it completes.
+    const recording = this.startRunRecording(invocation);
+    invocation.value.answeredAsk = answeredAsk;
+    const prepared = this.prepareAgentRun(invocation, resumeOptions, resumeRequest);
     // The leg's WHOLE policy rides its own state too (`runRedaction`), so a
     // later pause carries what this leg was covered by — names the resume
     // added included — and a third leg is never less covered than this one.
     // `createExecutor` opened this executor's run; one it did not is refused
     // before anything is held or runs — a leg whose policy nothing knows must
     // not start.
-    const legCoverage = coverageOfExecutor(executor);
+    const legCoverage = invocation.value.redaction?.coverage;
+    if (legCoverage === undefined) throw new ResumeRedactionError('unreadable');
     if (legCoverage.state === 'unknown') throw new ResumeRedactionError('unreadable');
     const leg = { policy: policyOfCoverage(legCoverage) };
-    this.inFlightRunId = this.currentRunContext.runId;
     // A resumed turn is two runs, and each keeps its own ledger — exactly
     // the recording's terms one comment up.
-    this.beginIntegrityLedger();
-    this.lastRunAnswer = undefined;
-    this.checkpointTracker = {
-      runId: this.currentRunContext.runId,
-      originalInput: { message: '' },
-      history: [],
-      lastCompletedIteration: 0,
-    };
+    invocation.value.answer = undefined;
+    const resumedMessage = checkpoint.sharedState.userMessage;
+    invocation.value.checkpointTracker =
+      typeof resumedMessage === 'string'
+        ? {
+            get runId() {
+              return invocation.context().runId;
+            },
+            originalInput: { message: resumedMessage },
+            history: [],
+            lastCompletedIteration: 0,
+          }
+        : undefined;
     // One run can never raise on another run's consent block.
-    this.consentOutstanding.clear();
+    invocation.value.consentOutstanding.clear();
     // Beside the `try` whose `finally` clears it (the fresh-run path's terms).
-    this.resumePassedTime = passedTime;
+    invocation.value.resumePassedTime = passedTime;
     const legCheckpoint: FlowchartCheckpoint =
       leg.policy === undefined
         ? checkpoint
@@ -2836,74 +2772,38 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
               runRedaction: carriedRunPolicy(leg.policy),
             },
           };
-    // A resume arms its own run signal and deadline (`runSignalOf`), released in
-    // the `finally` below.
-    const runSignal = runSignalOf(resumeOptions);
+    // The native resumed leg owns its signal and deadline.
     try {
-      const result = await executor.resume(legCheckpoint, input, runSignal.options);
-      const finalized = this.finalizeResult(executor, result);
-      if (typeof finalized === 'string') this.lastRunAnswer = finalized;
+      const result = await invocation.execute(
+        { kind: 'resume', mode: 'fresh', checkpoint: legCheckpoint, input, options: resumeOptions },
+        prepared.setup,
+        prepared.binding,
+      );
+      const finalized = this.finalizeResult(invocation, result);
+      if (typeof finalized === 'string') invocation.value.answer = finalized;
       // The question this resume answered is settled; a resume that paused
       // AGAIN has asked a new one, and that one is outstanding from here.
-      this.recordPendingQuestion(finalized);
-      await this.endRunToolSessions(finalized);
+      this.recordPendingQuestion(invocation.value, finalized);
       // Same liveness gate the fresh-run path applies (9.60.0).
-      this.assertIntegrityAlive();
-      await this.fileRunRecording(recording, finalized);
+      this.assertIntegrityAlive(invocation);
+      recording?.complete(finalized);
       return finalized;
-    } catch (cause) {
-      // An answer the run refused ran nothing and answered nothing: the
-      // question this agent was waiting on (if any) is still outstanding, and
-      // no tool session ended — a replayed decision must not tear down the
-      // sandbox a live pause is holding.
-      if (cause instanceof ResumeDecisionError || cause instanceof DecisionRequiredError) {
-        this.pendingQuestion = questionBefore;
-        throw cause;
-      }
-      await this.endRunToolSessions(cause);
-      throw cause;
     } finally {
-      runSignal.release();
+      if (invocation.value.resources?.answer.consumed === true) {
+        if (invocation.previous !== undefined)
+          invocation.previous.value.pendingQuestion = undefined;
+      } else {
+        invocation.value.pendingQuestion = questionBefore;
+        if (invocation.previous !== undefined)
+          invocation.previous.value.pendingQuestion = questionBefore;
+      }
       // A resume's passed `time` ends with the resume (the fresh-run path's terms).
-      this.resumePassedTime = undefined;
+      invocation.value.resumePassedTime = undefined;
       // Same terms as the fresh-run path: rows on every exit, before the
       // recording stops (9.60.0).
-      this.fileIntegrityDisposition();
-      this.noteAdmittedRun();
-      recording?.stop();
-      this.inFlightRunId = undefined;
+      this.fileIntegrityDisposition(invocation);
+      this.noteAdmittedRun(invocation);
     }
-  }
-
-  /**
-   * Fire `'run'`-scoped tool teardown — IF this run really ended.
-   *
-   * **Not on `finally`, and that is the whole point.** `finally` runs on every
-   * exit including a pause, and a pause exits TWO ways: a returned
-   * `RunnerPauseOutcome` and a thrown `PauseSignal`. A check-in on a
-   * code-interpreter call pauses the run so a person can approve the code —
-   * tearing the sandbox down there destroys the exact state the resume needs,
-   * and it fails QUIETLY, as a resumed run that "just re-ran everything".
-   * Both shapes are discriminated here and both are skipped.
-   *
-   * An error IS a terminal: the run is over, nobody is coming back, and a
-   * sandbox held by a run that crashed is the clearest kind of leak. Only a
-   * pause survives.
-   *
-   * Fired for the TURN, not for `currentRunContext.runId` — `resume()` mints a
-   * fresh run id, so a pause and its resume are one turn across two runs, and
-   * filtering on the id would leave everything a paused turn opened alive
-   * forever. Hosted turns are scoped to their session, preserving other pauses. See `ToolSessionTier.fireRun`.
-   *
-   * @param outcome what `run()`/`resume()` is about to return, or about to throw.
-   */
-  private async endRunToolSessions(outcome: unknown): Promise<void> {
-    if (!this.toolSessionTier) return;
-    if (isPaused(outcome)) return;
-    if (outcome instanceof Error && outcome.name === 'PauseSignal') return;
-    if (this.currentRunContext.sessionId !== undefined)
-      await this.toolSessionTier.fireSessionRuns(this.currentRunContext.sessionId);
-    else await this.toolSessionTier.fireRun();
   }
 
   /**
@@ -2960,35 +2860,42 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * // it does not rewrite entries manually appended to that history.
    * ```
    */
+  /** During preparation before native origin this is undefined; capture before the next call. */
   checkpoint(): AgentRunCheckpoint | undefined {
-    const snapshot = this.liveSnapshot();
+    return this.checkpointFor(this.runExecution().selected());
+  }
+
+  private checkpointFor(
+    selected: RunnerSelection<AgentRunValues> | undefined,
+  ): AgentRunCheckpoint | undefined {
+    const snapshot = selected?.view.snapshot();
     if (!snapshot) return undefined;
     const state = snapshot.sharedState as Partial<AgentState> | undefined;
     // Admission is decided by seed, before any conversation state is written.
     // Do not manufacture a blank replay carrier for an unadmitted attempt.
-    if (this.lastInputRefused()) return undefined;
+    if (this.lastInputRefused(selected?.view)) return undefined;
     const recorded = (state?.history ?? []) as readonly LLMMessage[];
     const history: LLMMessage[] = [...recorded];
     if (
-      this.lastRunAnswer !== undefined &&
-      (this.lastRunAnswer.length > 0 || state?.llmLatestReplay !== undefined)
+      selected!.value.answer !== undefined &&
+      (selected!.value.answer.length > 0 || state?.llmLatestReplay !== undefined)
     ) {
       history.push({
         role: 'assistant',
-        content: this.lastRunAnswer,
+        content: selected!.value.answer,
         ...assistantReplayFields(state ?? {}),
       });
     }
     const folded = this.foldedSpansOf(state);
-    const owner = this.conversationOwner();
+    const owner = this.conversationOwner(selected!.value);
     const skillCursor = this.continuityCursorOf(state);
     const evidenceRecovery = this.evidenceRecoveryOf(state);
     const findingsLedger = this.findingsLedgerOf(state);
     const turnNumber = this.turnNumberOf(state);
     return {
       version: 1,
-      runId: this.currentRunContext.runId,
-      history: structuredClone(checkpointReplayHistory(history, this.checkpointTracker)),
+      runId: selected!.context.runId,
+      history: structuredClone(checkpointReplayHistory(history, selected!.value.checkpointTracker)),
       lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
       originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
       checkpointedAt: Date.now(),
@@ -3017,9 +2924,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /** Called as each run/resume ends: remember a run that got past input admission. */
-  private noteAdmittedRun(): void {
-    if (this.liveSnapshot() !== undefined && !this.lastInputRefused()) {
-      this.hadAdmittedRun = true;
+  private noteAdmittedRun(invocation: RunnerInvocation<AgentRunValues>): void {
+    if (invocation.view.snapshot() !== undefined && !this.lastInputRefused(invocation.view)) {
+      invocation.value.hadAdmitted = true;
     }
   }
 
@@ -3037,8 +2944,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   /** Whether input middleware refused the last run's message — the one reading both doors ask. */
-  private lastInputRefused(): boolean {
-    const state = this.liveSnapshot()?.sharedState as Partial<AgentState> | undefined;
+  private lastInputRefused(view: import('footprintjs').RunView | undefined): boolean {
+    const state = view?.snapshot()?.sharedState as Partial<AgentState> | undefined;
     return state?.messageDeniedPhase === 'input';
   }
 
@@ -3096,26 +3003,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return structuredClone(spans) as readonly FoldedSpan[];
   }
 
-  /**
-   * What the resume door checks a time field's answer with (the time design
-   * § 6.2, step T4): the paused turn's clock zone — the kept `clock` row, so
-   * a resume that passes another `time` changes nothing — and the app's
-   * catalog overrides. `undefined` without `.time()`: a `format` field is
-   * then judged for shape, order and offset only, in the default words.
-   *
-   * @internal
-   */
   private timeAnswerContextOf(state: unknown): TimeAnswerContext | undefined {
-    if (this.timeOptions === undefined) return undefined;
-    const ledger = (state as Partial<AgentState> | undefined)?.findingsLedger;
-    const clock = clockOf(Array.isArray(ledger) ? ledger : undefined);
-    // An unknown zone (G15) judges no wall time: `zone` is then only the UTC spelling.
-    const zone = clock?.zoneSource === 'unknown' ? undefined : clock?.zone;
-    const messages = this.timeOptions.messages;
-    return {
-      ...(zone !== undefined && { zone }),
-      ...(messages !== undefined && { messages }),
-    };
+    return agentTimeAnswerContext(state, this.timeOptions);
   }
 
   /**
@@ -3161,9 +3050,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * @internal
    */
-  private conversationOwner(): { identity?: MemoryIdentity; agentId?: string } {
+  private conversationOwner(values: AgentRunValues): {
+    identity?: MemoryIdentity;
+    agentId?: string;
+  } {
     return {
-      ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
+      ...(values.identity !== undefined && { identity: values.identity }),
       ...(this.explicitId !== undefined && { agentId: this.explicitId }),
     };
   }
@@ -3191,14 +3083,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * @internal
    */
-  private applyContinuation(cp: AgentRunCheckpoint, door: string, appendsUserTurn: boolean): void {
+  private applyContinuation(
+    values: AgentRunValues,
+    cp: AgentRunCheckpoint,
+    door: string,
+    appendsUserTurn: boolean,
+  ): void {
     assertContinuable(cp, this.explicitId, door);
     requireVerificationOnResume(cp, false);
     if (this.negativeClaimsConfig === undefined && negativeCheckpointOf(cp) !== undefined)
       throw new TypeError(
         'Continuation requires the negative-claims setting used by the recording agent.',
       );
-    this.pendingResumeHistory = {
+    values.pendingResumeHistory = {
       history: cp.history as readonly LLMMessage[],
       appendsUserTurn,
       // The turn the stored history ends on (honesty layers) — seed continues
@@ -3209,38 +3106,31 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // The folded spans beside it. A conversation stored before 8.2 has none,
     // and `undefined` is the right answer there — it means "this conversation
     // recorded no folds", which is exactly true.
-    this.pendingResumeFolded = cp.folded;
+    values.pendingResumeFolded = cp.folded;
     // The findings ledger beside it (9.101.0). Stashed whether or not THIS
     // agent is armed: seed restores it only under `.findings()` (the deps
     // gate), and an unarmed continuation consumes and ignores it — exactly
     // like a `folded` field on an agent that never folds.
-    this.pendingResumeFindingsLedger = cp.findingsLedger;
+    values.pendingResumeFindingsLedger = cp.findingsLedger;
     // The conversation's skill cursor (SG-C). Stashed unconditionally —
     // whether it is HONORED is seed's `restoreSkillCursor` gate, which reads
     // the mounted graph's `continuity` declaration; a checkpoint written by a
     // continuity graph and continued on a `'turn'` one is consumed and
     // ignored, exactly like a `folded` field on an agent that never folds.
-    this.pendingResumeSkillCursor = cp.skillCursor;
+    values.pendingResumeSkillCursor = cp.skillCursor;
     // Same failed request retains its single repair budget. A new user turn
     // receives neither the rejected draft nor a spent retry allowance.
-    this.pendingEvidenceRecovery =
+    values.pendingEvidenceRecovery =
       !appendsUserTurn && cp.evidenceRecovery !== undefined
         ? structuredClone(cp.evidenceRecovery)
         : undefined;
   }
 
-  /** One turn at a time — see `RunInFlightError`. @internal */
-  private assertNotRunning(door: string): void {
-    if (this.inFlightRunId !== undefined) {
-      throw new RunInFlightError(door, this.id, this.inFlightRunId);
-    }
-  }
-
   /** A person's unanswered question outranks a new message — see
    *  `PendingQuestionError`. @internal */
-  private assertNoPendingQuestion(door: string): void {
-    if (this.pendingQuestion !== undefined) {
-      throw new PendingQuestionError(door, this.pendingQuestion);
+  private assertNoPendingQuestion(door: string, values: AgentRunValues | undefined): void {
+    if (values?.pendingQuestion !== undefined) {
+      throw new PendingQuestionError(door, values.pendingQuestion);
     }
   }
 
@@ -3254,19 +3144,17 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    *
    * @internal
    */
-  private recordPendingQuestion(outcome: AgentOutput | RunnerPauseOutcome): void {
+  private recordPendingQuestion(
+    values: AgentRunValues,
+    outcome: AgentOutput | RunnerPauseOutcome,
+  ): void {
     if (typeof outcome === 'string') {
-      this.pendingQuestion = undefined;
+      values.pauseOutcome = undefined;
+      values.pendingQuestion = undefined;
       return;
     }
-    const data = outcome.pauseData as
-      | { toolName?: unknown; toolCallId?: unknown; question?: unknown }
-      | undefined;
-    this.pendingQuestion = {
-      ...(typeof data?.toolName === 'string' && { toolName: data.toolName }),
-      ...(typeof data?.toolCallId === 'string' && { toolCallId: data.toolCallId }),
-      ...(typeof data?.question === 'string' && { question: data.question }),
-    };
+    values.pauseOutcome = outcome;
+    values.pendingQuestion = pendingQuestionOf(outcome.pauseData);
   }
 
   /**
@@ -3336,27 +3224,27 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * is withheld here for that reason — `sessionId` beside it is the fact the
    * transport really delivered.
    */
-  private toolRunFacts(): {
+  private toolRunFacts(run: RunnerScopeValues<AgentRunValues>): {
     readonly runContext: RunContext;
     readonly runId: string;
     readonly sessionId?: string;
     readonly identity?: MemoryIdentity;
   } {
     return {
-      runContext: { ...this.currentRunContext },
-      runId: this.currentRunContext.runId,
-      ...(this.currentRunContext.sessionId !== undefined && {
-        sessionId: this.currentRunContext.sessionId,
+      runContext: { ...run.context },
+      runId: run.context.runId,
+      ...(run.context.sessionId !== undefined && {
+        sessionId: run.context.sessionId,
       }),
-      ...(this.lastRunIdentity !== undefined && { identity: this.lastRunIdentity }),
+      ...(run.value.identity !== undefined && { identity: run.value.identity }),
     };
   }
 
   /**
-   * The teardown tier, built on FIRST registration.
+   * The existing teardown tier, built on first component resource admission.
    *
-   * An agent whose tools never hold a session never allocates one, and its
-   * terminals stay a single `undefined` check.
+   * Admission precedes tool resource effects so restored owners cannot be
+   * borrowed concurrently. Components without tool admission do not allocate it.
    */
   private toolSessions(): ToolSessionTier {
     if (!this.toolSessionTier) {
@@ -3404,15 +3292,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       report.kind === 'closed'
         ? 'agentfootprint.tools.session_closed'
         : 'agentfootprint.tools.session_close_failed';
+    const { kind: _kind, ...payload } = report;
+    if (origin.emit !== undefined) {
+      origin.emit(type, payload);
+      return;
+    }
     const dispatcher = this.getDispatcher();
     if (!dispatcher.hasListenersFor(type)) return;
-    const { kind: _kind, ...payload } = report;
     dispatcher.dispatch({
       type,
       payload,
       meta: buildEventMeta(
         { runtimeStageId: TOOL_TEARDOWN_STAGE_ID },
-        origin.runContext ?? this.currentRunContext,
+        origin.runContext ?? { runId: 'consumer-scope', runStartMs: 0, compositionPath: [] },
       ),
     } as unknown as AgentfootprintEventMap[typeof type]);
   }
@@ -3558,7 +3450,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     return async (scope: object): Promise<readonly string[]> => {
       // The caller of THIS run: the instance's caller on its own run, the
       // member's run (never the instance's last caller) on a mount.
-      const identity = this.ownScopes.has(scope) ? this.lastRunIdentity : memberIdentityIn(scope);
+      const run = this.runExecution().forScope(scope);
+      const identity = run.own ? run.value.identity : memberIdentityIn(scope);
       const hidden: string[] = [];
       for (const id of skillIds) {
         let allowed = false;
@@ -3691,10 +3584,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     );
   }
 
-  private createExecutor(
+  private prepareAgentRun(
+    invocation: RunnerInvocation<AgentRunValues>,
     runOptions?: AgentRunOptions,
     request?: RequestContext,
-  ): FlowChartExecutor {
+  ): {
+    readonly setup: RunSetup;
+    readonly binding: Parameters<RunnerInvocation<AgentRunValues>['execute']>[2];
+  } {
     this.assertDeliverableRoles();
     this.assertForcedToolChoiceSupported();
     this.assertNativeOutputSchemaSupported();
@@ -3716,73 +3613,37 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // is exactly the string an auditor must not read as "who did this".
     // `conversationId` is deliberately not carried: it is a thread, not a
     // person, and `sessionId` beside it is the fact the transport delivered.
-    const actor = runOptions?.identity ?? this.lastRunIdentity;
+    const actor = runOptions?.identity ?? invocation.value.identity;
+    invocation.value.request = request;
     // A fresh run starts with no evictions filed — the previous run's last
     // visit must not be read as this run's (`window/evictedTurns.ts`).
-    this.evictedTurnsHandle?.clear();
-    const runId = makeRunId();
-    this.mintedRunIds.add(runId);
-    boundInsertionOrder(this.mintedRunIds, MAX_REMEMBERED_RUNS);
     const hosted = hostedConversationOf(runOptions);
-    this.servingConversation =
+    invocation.value.servingConversation =
       sessionId !== undefined
         ? sessionConversationKey(sessionId)
         : hosted !== undefined
         ? hostedConversationKey(hosted)
         : undefined;
-    this.currentRunContext = {
-      runStartMs: Date.now(),
-      runId,
+    const metadata = {
       compositionPath: [`Agent:${this.id}`],
       ...(correlationId !== undefined && { correlationId }),
       ...(traceId !== undefined && { traceId }),
-      // Session identity rides beside runId, not instead of it: one session
-      // produces many runs, and an event needs to say which of each it is.
       ...(sessionId !== undefined && { sessionId }),
       ...(actor?.principal !== undefined && { principal: actor.principal }),
       ...(actor?.tenant !== undefined && { tenant: actor.tenant }),
     };
 
-    const getRunCtx = (): RunContext => this.currentRunContext;
+    const getRunCtx = (): RunContext => invocation.context();
     // The run's redaction (`src/redaction/`): this agent's `redact` joined
     // with any policy the caller handed down for this run (a tool's
     // `ctx.redact`). Opened for EVERY run — with no policy the serving is the
     // identity, but the stages' scopes still feed the real-value path the
     // crash checkpoint and the window's meter read.
-    const redaction = this.openRunRedaction(runOptions?.redact, getRunCtx);
+    const redaction = this.prepareRunRedaction(invocation, runOptions?.redact);
 
-    // Reuse the cached chart built at constructor time.
-    // The Agent's executor dials: readTracking (#18/#14, snapshot stageReads),
-    // commitValues (#13c-B, commit-log value encoding) and writeProvenance
-    // (#P1, per-write read provenance — the exact-dataflow debugging dial).
-    const spec = this.getSpec();
-    // Every scope THIS executor makes is marked as the agent's own, so a stage
-    // can tell its own run from a mount in another runner's executor
-    // (`memberRun.ts`) — per scope, never by instance state.
-    const scopeFactory = redaction.scopeFactoryFor(spec);
-    const ownScopes = this.ownScopes;
-    const scopeRequests = this.scopeRequests;
-    const executor = new FlowChartExecutor(spec, {
-      readTracking: this.readTracking,
-      commitValues: this.commitValues,
-      writeProvenance: this.writeProvenance,
-      scopeFactory: (...args: Parameters<typeof scopeFactory>) => {
-        const scope = scopeFactory(...args);
-        if (scope !== null && typeof scope === 'object') {
-          ownScopes.add(scope as object);
-          // THIS executor's request, bound to the scope for its whole life.
-          if (request !== undefined) scopeRequests.set(scope as object, request);
-        }
-        return scope;
-      },
-    });
-    redaction.applyTo(executor);
-    // Enable structured narrative so `getLastNarrativeEntries()` can
-    // hand a populated array to consumer Trace views (ExplainableShell).
-    // Cheap when no consumer reads it; the recorder accumulates only.
-    executor.enableNarrative();
-    this.lastExecutor = executor;
-
+    const attachments: NonNullable<RunSetup['attachments']>[number][] = redaction.recorders.map(
+      (recorder) => ({ recorder }),
+    );
     const dispatcher = this.getDispatcher();
 
     // RFC-001 Block 10 — observer delivery tier. With 'deferred', every
@@ -3796,36 +3657,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         ? { delivery: 'deferred', ...this.observerDeliveryOptions }
         : undefined;
     const attachObserver = (rec: CombinedRecorder): void => {
-      if (deferredOpts) executor.attachCombinedRecorder(rec, deferredOpts);
-      else executor.attachCombinedRecorder(rec);
+      attachments.push({ recorder: rec, ...(deferredOpts && { options: deferredOpts }) });
     };
 
     attachObserver(
       new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
     );
-    // Evidence bridge (#5): harvest decisions/toolCalls/tokens for causal snapshots.
-    // ALWAYS INLINE — never routed through the deferred queue: the memory
-    // write stage consumes its accumulators MID-run (`collect()` via
-    // `evidenceSource`, mountMemoryPipeline). Deferred delivery would run
-    // `collect()` before the queue flushed the turn's tool/token/decision
-    // events, persisting an incomplete causal snapshot.
-    if (this.causalEvidence) {
-      // Its emits arrive on the real-value path (constructor); the executor
-      // feeds it the flow channel's decisions and the per-run reset only.
-      const evidence = this.causalEvidence;
-      executor.attachCombinedRecorder({
-        id: evidence.id,
-        onDecision: (event) => evidence.onDecision(event),
-        onSelected: (event) => evidence.onSelected(event),
-        clear: () => evidence.clear(),
-      });
-    }
-    // Compaction's instrument. ALWAYS INLINE, for the same reason the evidence
-    // bridge is: the compaction stage reads it MID-run, at the loop head, to
-    // decide whether this iteration's window is over budget. A measurement
-    // delivered one beat behind would be a measurement of the wrong window.
-    if (this.compactionMeterHandle) {
-      executor.attachCombinedRecorder(this.compactionMeterHandle);
+    // Computational observers belong to native component setup, always inline.
+    if (this.windowStrategy !== undefined) {
       // Folds speak the context vocabulary consumers already subscribe to
       // (`context.evicted` / `context.budget_pressure`) — no new event types.
       // ContextRecorder only dispatches those from writes INSIDE a slot
@@ -3995,16 +3834,29 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // field rules). This gives consumers a per-recorder escape hatch:
       // `{ id, delivery: 'inline', ...hooks }` stays inline under an
       // observerDelivery: 'deferred' agent, and vice versa.
-      if (r.delivery !== undefined) executor.attachCombinedRecorder(r);
+      if (r.delivery !== undefined) attachments.push({ recorder: r });
       else attachObserver(r);
     }
-    // LAST, so the manifest describes a fully-wired run — and so it is the
-    // first event of this runId that any listener sees.
-    this.emitRunManifest();
-    // …then the declared skill map (9.50.0), so a recording opens with the
-    // arm's configuration and the author's topology before any stage event.
-    this.emitSkillGraphDeclared();
-    return executor;
+    return {
+      setup: {
+        redaction: redaction.policy,
+        narrative: {},
+        attachments,
+        onOrigin: () => {
+          // Native is the only ID/clock authority. Remaining domain consumers
+          // still migrate to captured component values; no private ID is minted.
+          this.bindRunServing(invocation);
+          this.emitRunManifest(invocation.context());
+          this.emitSkillGraphDeclared(invocation.context());
+        },
+      },
+      binding: {
+        metadata,
+        bindScope: (scope, context) => {
+          redaction.bindScope(scope, context);
+        },
+      },
+    };
   }
 
   /**
@@ -4033,8 +3885,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * with `'*'` before the run starts, so every recording carries one.
    */
   /** Fresh per-run ledger — see AgentOptions.integrityPosture (9.60.0). */
-  private beginIntegrityLedger(): void {
-    this.integrityLedgerHolder.current = beginIntegrityRun(
+  private beginIntegrityLedger(values: AgentRunValues): void {
+    values.integrityLedger.current = beginIntegrityRun(
       {
         wire: true,
         composeInvariant: this.mapsPlan !== undefined,
@@ -4064,10 +3916,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * uncaught. Called on the SUCCESS path before the recording files, so the
    * failure is the run's result, never a masked afterthought.
    */
-  private assertIntegrityAlive(): void {
+  private assertIntegrityAlive(invocation: RunnerInvocation<AgentRunValues>): void {
     if (this.integrityPosture !== 'dev') return;
-    this.integrityLedgerHolder.current?.assertAlive({
-      workExisted: this.integrityWorkExisted(),
+    invocation.value.integrityLedger.current?.assertAlive({
+      workExisted: this.integrityWorkExisted(invocation),
     });
   }
 
@@ -4083,8 +3935,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * circular: an unhooked check would report "no work existed" and silence
    * the very alarm it should be tripping.
    */
-  private integrityWorkExisted(): boolean {
-    const state = this.liveSnapshot()?.sharedState as { llmLatestContent?: unknown } | undefined;
+  private integrityWorkExisted(invocation: RunnerInvocation<AgentRunValues>): boolean {
+    const state = invocation.view.snapshot()?.sharedState as
+      | { llmLatestContent?: unknown }
+      | undefined;
     return state !== undefined && state.llmLatestContent !== undefined;
   }
 
@@ -4094,9 +3948,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * before the recording stops. Listener-gated like every typed event, and
    * deliberately throw-proof: accounting must never change a run's outcome.
    */
-  private fileIntegrityDisposition(): void {
-    const ledger = this.integrityLedgerHolder.current;
-    this.integrityLedgerHolder.current = undefined;
+  private fileIntegrityDisposition(invocation: RunnerInvocation<AgentRunValues>): void {
+    const ledger = invocation.value.integrityLedger.current;
+    invocation.value.integrityLedger.current = undefined;
     if (ledger === undefined) return;
     try {
       const type = 'agentfootprint.integrity.disposition';
@@ -4106,12 +3960,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
         type,
         payload: {
           posture: this.integrityPosture,
-          workExisted: this.integrityWorkExisted(),
+          workExisted: this.integrityWorkExisted(invocation),
           rows: ledger.report(),
         },
         meta: buildEventMeta(
           { runtimeStageId: INTEGRITY_DISPOSITION_STAGE_ID },
-          this.currentRunContext,
+          invocation.context(),
         ),
       });
     } catch {
@@ -4119,7 +3973,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     }
   }
 
-  private emitRunManifest(): void {
+  private emitRunManifest(context: RunContext): void {
     const type = 'agentfootprint.agent.run_configured';
     const dispatcher = this.getDispatcher();
     if (!dispatcher.hasListenersFor(type)) return;
@@ -4169,7 +4023,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           },
         }),
       }),
-      meta: buildEventMeta({ runtimeStageId: RUN_MANIFEST_STAGE_ID }, this.currentRunContext),
+      meta: buildEventMeta({ runtimeStageId: RUN_MANIFEST_STAGE_ID }, context),
     });
   }
 
@@ -4189,7 +4043,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * No graph, or a graph that could not state its map ⇒ no event — absent,
    * never guessed.
    */
-  private emitSkillGraphDeclared(): void {
+  private emitSkillGraphDeclared(context: RunContext): void {
     if (this.skillGraphDeclared === undefined) return;
     const type = 'agentfootprint.skill.graph_declared';
     const dispatcher = this.getDispatcher();
@@ -4197,7 +4051,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     dispatcher.dispatch({
       type,
       payload: this.skillGraphDeclared,
-      meta: buildEventMeta({ runtimeStageId: GRAPH_DECLARED_STAGE_ID }, this.currentRunContext),
+      meta: buildEventMeta({ runtimeStageId: GRAPH_DECLARED_STAGE_ID }, context),
     });
   }
 
@@ -4222,8 +4076,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   drainObservers(opts?: { timeoutMs?: number }): Promise<ObserverDrainResult> {
-    if (!this.lastExecutor) return Promise.resolve({ done: 0, failed: 0, pending: 0 });
-    return this.lastExecutor.drainObservers(opts);
+    const view = this.runExecution().view();
+    if (view === undefined) return Promise.resolve({ done: 0, failed: 0, pending: 0 });
+    return view.drainObservers(opts);
   }
 
   /**
@@ -4481,14 +4336,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
    * ```
    */
   async assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
-    const snapshot = this.liveSnapshot();
+    const selected = this.runExecution().selected();
+    const snapshot = selected?.view.snapshot();
     if (snapshot === undefined) return undefined;
     // Settled before the fold, which cannot tell a crash from its committed state: an answer
     // this run RETURNED (`lastRunAnswer`, cleared at every run's start), or a pause — the fold
     // reads that one from the committed state itself. Read BEFORE the import resolves, so a
     // run started meanwhile cannot change which run is assessed.
-    const paused = this.lastExecutor?.isPaused() === true;
-    if (!paused && this.lastRunAnswer === undefined) return undefined;
+    const paused = selected?.view.isPaused() === true;
+    if (!paused && selected?.value.answer === undefined) return undefined;
     // Loaded on first use, off the default graph (the findings/peel.ts precedent).
     // The live state, read as values — never as a served record (`assess.ts` · `assessLive`).
     const { assessLive } = await import('./agent/assessment/assess.js');
@@ -4637,12 +4493,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
   }
 
   private finalizeResult(
-    executor: FlowChartExecutor,
+    invocation: RunnerInvocation<AgentRunValues>,
     result: unknown,
   ): AgentOutput | RunnerPauseOutcome {
-    const paused = this.detectPause(executor, result);
+    const paused = this.detectPause(invocation, result);
     if (paused) return paused;
-    const snap = executor.getSnapshot();
+    const snap = invocation.view.snapshot();
+    if (snap === undefined) throw new TypeError('The native execution has no ready snapshot');
     const state = snap.sharedState as Record<string, unknown>;
     const refusal = this.refusalVerdictOf(state);
     if (refusal !== undefined) {
@@ -4658,7 +4515,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             stage: '__output_admission__',
             scope: 'run',
           },
-          meta: buildEventMeta({ runtimeStageId: '__output_admission__' }, this.currentRunContext),
+          meta: buildEventMeta({ runtimeStageId: '__output_admission__' }, invocation.context()),
         });
       }
       // The verdict was decoded from the LIVE state above; the snapshot a
@@ -4679,10 +4536,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // `'pause'` this is unreachable for the first block (the run pauses and
     // `detectPause` returned above); it still fires if a RESUME found consent
     // ungranted and the model then finished the turn on its own.
-    if (this.consentOutstanding.size > 0) {
-      const [record] = [...this.consentOutstanding.values()];
+    if (invocation.value.consentOutstanding.size > 0) {
+      const [record] = [...invocation.value.consentOutstanding.values()];
       if (record) {
-        this.consentOutstanding.clear();
+        invocation.value.consentOutstanding.clear();
         throw new CredentialConsentRequiredError(record);
       }
     }
@@ -4769,165 +4626,182 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // layers. Still value-conditional inside seed (only when rows exist).
     let ledgerRestoreArmed =
       this.findingsOptions !== undefined || this.negativeClaimsConfig !== undefined;
-    const consumeResumeLedger = (): FindingsLedger | undefined => {
-      const l = this.pendingResumeFindingsLedger;
-      this.pendingResumeFindingsLedger = undefined;
-      return l;
-    };
-    const seed = buildSeedStage({
-      maxIterations,
-      // The forced-output tool's name (9.88.0) — a build-time constant, put on
-      // the record once so a rebuild can name it without reading a receipt.
-      ...(this.outputEnforcement?.schemaTool !== undefined && {
-        forcedOutputToolName: this.outputEnforcement.schemaTool.name,
-      }),
-      cachingDisabled,
-      ...(costBudget !== undefined && { costBudgetOnExceed: costBudget.onExceed }),
-      get toolSchemas() {
-        return toolSchemasResolved;
-      },
-      get toolWantsByName() {
-        return seededToolWants;
-      },
-      get ruledTools() {
-        return seededRuledTools;
-      },
-      get honestyLayers() {
-        return seededHonestyLayers;
-      },
-      // The time layer's clock: the draft `run()` read (refusing a run with no
-      // zone), stamped by seed as the turn's one `clock` row. Absent → the
-      // deps object seed always had.
-      // The caller's clock belongs to the agent's OWN run: a member (another
-      // runner's executor) gets the builder's fallback, never a concurrent
-      // direct caller's `time` (`memberRun.ts`).
-      ...(this.timeOptions !== undefined && {
-        timeClock: (scope: object) =>
-          this.ownScopes.has(scope)
-            ? this.seedClockDraft()
-            : draftClock(undefined, this.timeOptions ?? {}),
-      }),
-      // The time layer's reader: seed reads the person's words once per turn,
-      // after the clock. Absent → nothing is read.
-      ...(this.timeOptions?.reader !== undefined &&
-        this.timeOptions.policy !== undefined && {
-          timeReader: { reader: this.timeOptions.reader, policy: this.timeOptions.policy },
+    const seedFor = (run: RunnerScopeValues<AgentRunValues>) => {
+      const consumeResumeLedger = (): FindingsLedger | undefined => {
+        const l = run.value.pendingResumeFindingsLedger;
+        run.value.pendingResumeFindingsLedger = undefined;
+        return l;
+      };
+      return buildSeedStage({
+        maxIterations,
+        // The forced-output tool's name (9.88.0) — a build-time constant, put on
+        // the record once so a rebuild can name it without reading a receipt.
+        ...(this.outputEnforcement?.schemaTool !== undefined && {
+          forcedOutputToolName: this.outputEnforcement.schemaTool.name,
         }),
-      // Declared sources (honesty layer 2): the seed twin plants `_findings.from`
-      // on ruled tools, and the run's `messageFrom` constant is written — only
-      // under the arm (refused at build without the inputs layer).
-      ...(this.argumentSourcesArmed === true && { argumentSources: true as const }),
-      // The answer check's tool-call ledger — value-conditional, so an agent
-      // without answer validation or negative claims keeps its prior shape.
-      ...((this.answerValidationConfig !== undefined ||
-        this.negativeClaimsConfig !== undefined) && { toolCallLedger: true }),
-      ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
-      get consumePendingResumeFindingsLedger() {
-        return ledgerRestoreArmed ? consumeResumeLedger : undefined;
-      },
-      consumePendingResumeHistory: () => {
-        const h = this.pendingResumeHistory;
-        this.pendingResumeHistory = undefined;
-        return h;
-      },
-      ...(this.evidenceGate !== undefined &&
-        this.evidenceGate.posture !== 'assist' && {
-          consumePendingEvidenceRecovery: () => {
-            const recovery = this.pendingEvidenceRecovery;
-            this.pendingEvidenceRecovery = undefined;
-            return recovery;
+        cachingDisabled,
+        ...(costBudget !== undefined && { costBudgetOnExceed: costBudget.onExceed }),
+        get toolSchemas() {
+          return toolSchemasResolved;
+        },
+        get toolWantsByName() {
+          return seededToolWants;
+        },
+        get ruledTools() {
+          return seededRuledTools;
+        },
+        get honestyLayers() {
+          return seededHonestyLayers;
+        },
+        // The time layer's clock: the draft `run()` read (refusing a run with no
+        // zone), stamped by seed as the turn's one `clock` row. Absent → the
+        // deps object seed always had.
+        // The caller's clock belongs to the agent's OWN run: a member (another
+        // runner's executor) gets the builder's fallback, never a concurrent
+        // direct caller's `time` (`memberRun.ts`).
+        ...(this.timeOptions !== undefined && {
+          timeClock: () =>
+            run.own
+              ? this.seedClockDraft(run.value)
+              : draftClock(undefined, this.timeOptions ?? {}),
+        }),
+        // The time layer's reader: seed reads the person's words once per turn,
+        // after the clock. Absent → nothing is read.
+        ...(this.timeOptions?.reader !== undefined &&
+          this.timeOptions.policy !== undefined && {
+            timeReader: { reader: this.timeOptions.reader, policy: this.timeOptions.policy },
+          }),
+        // Declared sources (honesty layer 2): the seed twin plants `_findings.from`
+        // on ruled tools, and the run's `messageFrom` constant is written — only
+        // under the arm (refused at build without the inputs layer).
+        ...(this.argumentSourcesArmed === true && { argumentSources: true as const }),
+        // The answer check's tool-call ledger — value-conditional, so an agent
+        // without answer validation or negative claims keeps its prior shape.
+        ...((this.answerValidationConfig !== undefined ||
+          this.negativeClaimsConfig !== undefined) && { toolCallLedger: true }),
+        ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
+        get consumePendingResumeFindingsLedger() {
+          return ledgerRestoreArmed ? consumeResumeLedger : undefined;
+        },
+        consumePendingResumeHistory: () => {
+          const h = run.value.pendingResumeHistory;
+          run.value.pendingResumeHistory = undefined;
+          return h;
+        },
+        ...(this.evidenceGate !== undefined &&
+          this.evidenceGate.posture !== 'assist' && {
+            consumePendingEvidenceRecovery: () => {
+              const recovery = run.value.pendingEvidenceRecovery;
+              run.value.pendingEvidenceRecovery = undefined;
+              return recovery;
+            },
+          }),
+        consumePendingResumeFolded: () => {
+          const f = run.value.pendingResumeFolded;
+          run.value.pendingResumeFolded = undefined;
+          return f;
+        },
+        // The findings ledger (9.101.0): the arm, the serve mode it puts on the
+        // record (the `forcedOutputToolName` precedent — a build-time constant
+        // the rebuild reads instead of the receipt), and the continued
+        // conversation's rows, all under the one gate — an unarmed agent hands
+        // seed exactly the deps object it always did.
+        ...(this.findingsOptions !== undefined && {
+          findings: true as const,
+          findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
+          findingsContextBytes: this.findingsOptions.maxContextBytes,
+          // The answer-turn ask (9.103.0): VALUE-conditional inside the arm —
+          // the default `'none'` threads nothing and writes no key.
+          ...(this.findingsOptions.answerAsk === 'quote-facts' && {
+            findingsAnswerAsk: 'quote-facts' as const,
+          }),
+        }),
+        // The declared ontology (9.106.0): the whole frozen map, which seed
+        // writes ONCE as the run constant `ontology` — the `findingsServe`
+        // precedent, a build-time fact the rebuild reads from the RECORD. An
+        // unarmed agent hands seed exactly the deps object it always did.
+        ...(this.ontology !== undefined && {
+          ontology: this.ontology,
+          ontologyTools: () => this.ontologyTools,
+        }),
+        // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
+        // on every run; HONORED only when the mounted graph declared
+        // `continuity: 'conversation'` — the same one-option-one-behavior gate
+        // the write side (`checkpoint()`) applies.
+        consumePendingResumeSkillCursor: () => {
+          const c = run.value.pendingResumeSkillCursor;
+          run.value.pendingResumeSkillCursor = undefined;
+          return c;
+        },
+        restoreSkillCursor: this.skillGraphCascade?.continuity === 'conversation',
+        // Steps (9.18.0): gate the per-run stepPointer/stepNudgeSpent reset on
+        // the feature, so every other agent seeds exactly the keys it always did.
+        ...(stepPlanFor !== undefined && { hasSteps: true }),
+        // Escalation (9.19.0): same gate discipline — the per-run counter/flip
+        // reset exists only when the policy does (de-escalation IS the seed).
+        ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
+        // The evidence gate's one bounded revision (9.35.0) — a per-turn budget,
+        // reset here. Only a posture that can revise writes the key.
+        ...((this.typedNegativeClaimsConfig !== undefined ||
+          (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
+          hasEvidenceRevision: true,
+        }),
+        // Under an enforcing answer validation the tools stay off for a run
+        // resumed after its revision was asked (`toolsOffAfterRevision`).
+        ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
+        getCurrentRunId: () => run.context.runId,
+        // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
+        // it for exactly one rung of the identity ladder — see `seedFrom` — and
+        // an explicit identity outranks it there. Read through an accessor for
+        // the same reason the runId is: the chart is built once, and this
+        // changes every run.
+        getCurrentSessionId: () => run.context.sessionId,
+        // Whether this stage runs in THIS agent's own executor, or inside another
+        // runner's (a composition, a chart a caller built) — where the accessors
+        // above describe some other run (`memberRun.ts`). Asked per scope.
+        isOwnRun: () => run.own,
+        // WHICH TURN THIS IS (9.6.0). Only memories that WRITE the conversation
+        // are consulted: they are the ones whose entry ids are turn-stamped, and
+        // a corpus (`.rag(...)`, which reads under its own namespace) has no
+        // turns at all. Empty list → seed stays synchronous and makes no store
+        // call, so an agent without memory is unchanged.
+        ...(conversationStores.length > 0 && { conversationStores }),
+        // The `'input'` half of the message chain, run BEFORE `userMessage` and
+        // `history` are committed — see SeedStageDeps.messageMiddleware.
+        ...(this.messageMiddleware.length > 0 && { messageMiddleware: this.messageMiddleware }),
+        // `.configure()` — seed is where run-level facts are decided and
+        // committed, so the resolver rides that commit. The closure supplies
+        // the build-time defaults so a resolver can decide RELATIVE to them
+        // ("upgrade the model when the message is long") instead of having to
+        // restate them.
+        ...(this.runConfigFn && {
+          resolveRunConfig: (input: AgentInput): RunConfig | undefined => {
+            const ctx: RunConfigContext = {
+              message: input.message,
+              ...(input.identity !== undefined && { identity: input.identity }),
+              runId: run.context.runId ?? 'unknown',
+              defaults: { model, instructions: systemPromptValue },
+            };
+            return this.runConfigFn?.(ctx);
           },
         }),
-      consumePendingResumeFolded: () => {
-        const f = this.pendingResumeFolded;
-        this.pendingResumeFolded = undefined;
-        return f;
+      });
+    };
+    const seed = bindRunnerStage(
+      (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
+      (run) => (scope) => {
+        run.value.resources?.seed(scope);
+        // Mounted runs have no Agent.run() admission. Seed's actual input is
+        // their original message; never read another run's selected values.
+        run.value.checkpointTracker ??= {
+          runId: run.context.runId,
+          originalInput: { message: scope.$getArgs<AgentInput>().message },
+          history: [],
+          lastCompletedIteration: 0,
+        };
+        return (run.value.seed ??= seedFor(run))(scope);
       },
-      // The findings ledger (9.101.0): the arm, the serve mode it puts on the
-      // record (the `forcedOutputToolName` precedent — a build-time constant
-      // the rebuild reads instead of the receipt), and the continued
-      // conversation's rows, all under the one gate — an unarmed agent hands
-      // seed exactly the deps object it always did.
-      ...(this.findingsOptions !== undefined && {
-        findings: true as const,
-        findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
-        findingsContextBytes: this.findingsOptions.maxContextBytes,
-        // The answer-turn ask (9.103.0): VALUE-conditional inside the arm —
-        // the default `'none'` threads nothing and writes no key.
-        ...(this.findingsOptions.answerAsk === 'quote-facts' && {
-          findingsAnswerAsk: 'quote-facts' as const,
-        }),
-      }),
-      // The declared ontology (9.106.0): the whole frozen map, which seed
-      // writes ONCE as the run constant `ontology` — the `findingsServe`
-      // precedent, a build-time fact the rebuild reads from the RECORD. An
-      // unarmed agent hands seed exactly the deps object it always did.
-      ...(this.ontology !== undefined && {
-        ontology: this.ontology,
-        ontologyTools: () => this.ontologyTools,
-      }),
-      // The conversation's inherited skill cursor (SG-C). Consumed (cleared)
-      // on every run; HONORED only when the mounted graph declared
-      // `continuity: 'conversation'` — the same one-option-one-behavior gate
-      // the write side (`checkpoint()`) applies.
-      consumePendingResumeSkillCursor: () => {
-        const c = this.pendingResumeSkillCursor;
-        this.pendingResumeSkillCursor = undefined;
-        return c;
-      },
-      restoreSkillCursor: this.skillGraphCascade?.continuity === 'conversation',
-      // Steps (9.18.0): gate the per-run stepPointer/stepNudgeSpent reset on
-      // the feature, so every other agent seeds exactly the keys it always did.
-      ...(stepPlanFor !== undefined && { hasSteps: true }),
-      // Escalation (9.19.0): same gate discipline — the per-run counter/flip
-      // reset exists only when the policy does (de-escalation IS the seed).
-      ...(this.skillBrains?.escalation !== undefined && { hasEscalation: true }),
-      // The evidence gate's one bounded revision (9.35.0) — a per-turn budget,
-      // reset here. Only a posture that can revise writes the key.
-      ...((this.typedNegativeClaimsConfig !== undefined ||
-        (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
-        hasEvidenceRevision: true,
-      }),
-      // Under an enforcing answer validation the tools stay off for a run
-      // resumed after its revision was asked (`toolsOffAfterRevision`).
-      ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
-      getCurrentRunId: () => this.currentRunContext?.runId,
-      // WHO this run is for, when the caller named nobody (9.10.0). Seed uses
-      // it for exactly one rung of the identity ladder — see `seedFrom` — and
-      // an explicit identity outranks it there. Read through an accessor for
-      // the same reason the runId is: the chart is built once, and this
-      // changes every run.
-      getCurrentSessionId: () => this.currentRunContext?.sessionId,
-      // Whether this stage runs in THIS agent's own executor, or inside another
-      // runner's (a composition, a chart a caller built) — where the accessors
-      // above describe some other run (`memberRun.ts`). Asked per scope.
-      isOwnRun: (scope) => this.ownScopes.has(scope),
-      // WHICH TURN THIS IS (9.6.0). Only memories that WRITE the conversation
-      // are consulted: they are the ones whose entry ids are turn-stamped, and
-      // a corpus (`.rag(...)`, which reads under its own namespace) has no
-      // turns at all. Empty list → seed stays synchronous and makes no store
-      // call, so an agent without memory is unchanged.
-      ...(conversationStores.length > 0 && { conversationStores }),
-      // The `'input'` half of the message chain, run BEFORE `userMessage` and
-      // `history` are committed — see SeedStageDeps.messageMiddleware.
-      ...(this.messageMiddleware.length > 0 && { messageMiddleware: this.messageMiddleware }),
-      // `.configure()` — seed is where run-level facts are decided and
-      // committed, so the resolver rides that commit. The closure supplies
-      // the build-time defaults so a resolver can decide RELATIVE to them
-      // ("upgrade the model when the message is long") instead of having to
-      // restate them.
-      ...(this.runConfigFn && {
-        resolveRunConfig: (input: AgentInput): RunConfig | undefined => {
-          const ctx: RunConfigContext = {
-            message: input.message,
-            ...(input.identity !== undefined && { identity: input.identity }),
-            runId: this.currentRunContext?.runId ?? 'unknown',
-            defaults: { model, instructions: systemPromptValue },
-          };
-          return this.runConfigFn?.(ctx);
-        },
-      }),
-    });
+    );
 
     // Tool registry composition extracted to ./agent/buildToolRegistry.ts.
     // Composes static .tool() registry + auto-attached read_skill (+ the
@@ -5212,46 +5086,26 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const messagesSubflow = buildMessagesSlot({
       ...(budget?.messages !== undefined && { budgetCap: budget.messages }),
     });
-    // Cache shared between buildToolsSlot (writer, each iteration) and
-    // buildToolCallsHandler (reader, same iteration). Holds the resolved
-    // Tool[] from `provider.list(ctx)` so dispatch doesn't re-invoke `list()`
-    // — vital for async network providers.
-    //
-    // LIFETIME, stated correctly (9.92.0): the chart is built ONCE, at
-    // construction (`initChart`), and reused by every `run()` and `resume()`
-    // of this Agent — so this cache and the record below outlive a run. They
-    // are safe because one Agent runs one turn at a time and the slot
-    // overwrites them every iteration before dispatch reads them. What that
-    // does NOT cover is a resume in a FRESH instance, whose closure is empty
-    // and whose Compose never re-runs before the resumed dispatch — which is
-    // why the pause paths carry `pausedToolParty` on the checkpoint.
-    const providerToolCache: ProviderToolCache = { current: [] };
-    // Who put each name on the wire (9.92.0) — the same closure-shared shape,
-    // written by the tools slot's merge and read by dispatch so the party
-    // whose contract the model read is the party that answers. `lastServed`
-    // is the run's memory of the same fact, for a name that left the wire.
-    const servedTools: ServedToolParties = { current: new Map(), lastServed: new Map() };
-    // THE ONE DISPATCH RESOLVER, for the inputs layer (honesty layer 2): built
-    // from the SAME deps objects the dispatch handler builds its own from, so
-    // the layer reads a call's rules off the implementation that will answer.
-    const resolveForLayer = buildToolResolver({
-      registryByName,
-      ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
-      ...(this.externalToolProvider && { providerToolCache }),
-      servedTools,
-      toolClaimants,
-      notServed: notServedResult,
-    });
-    // A tool's `displayName` — the app's words for a call, read by a person — read
-    // through the same resolver, so a ToolProvider's tool is read as well, and through
-    // the one rule (`lib/displayName.ts` · `readDisplayName`), so a value nobody vetted
-    // is never printed. Wired only where a tool can declare one: on every other agent
-    // the final branch is the one it always was.
-    const displayNameOf =
+    // Every reader binds the same native component's private catalog.
+    const resolverForValues = (values: AgentRunValues) =>
+      buildToolResolver({
+        registryByName,
+        ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
+        ...(this.externalToolProvider && { providerToolCache: values.providerToolCache }),
+        servedTools: values.servedTools,
+        toolClaimants,
+        notServed: notServedResult,
+      });
+    const resolveForLayer = (scope: object) =>
+      resolverForValues(this.runExecution().forScope(scope).value);
+    const displayNameOfFor =
       this.externalToolProvider !== undefined ||
       [...registryByName.values()].some((tool) => tool.displayName !== undefined)
-        ? (toolName: string): string | undefined =>
-            readDisplayName(resolveForLayer(toolName).tool?.displayName)
+        ? (scope: object) => {
+            const resolve = resolveForLayer(scope);
+            return (toolName: string): string | undefined =>
+              readDisplayName(resolve(toolName).tool?.displayName);
+          }
         : undefined;
     const readSkillFor = this.readSkillOfferFor();
     // Per-role skill visibility. The Injection Engine resolves the ids once per
@@ -5260,9 +5114,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     // mount. Since 9.86.0 the description is NOT the only reader — the read_skill gate's refusals, the
     // `skill.rejected` payload, the propose-transition refusal and the dispatch
     // roster all filter through that published set
-    // (`stages/toolCalls.ts` · "── Skill-graph read_skill GATE" the gate, `toolCalls.ts` ·
+    // (`stages/toolCalls/routing/readSkillRoute.ts` · `applyReadSkillRoute` the gate, `toolCalls/routing/effectsOperations.ts` ·
     // "── THE REFUSAL SPEAKS WITH THE FILTERED SETS" the propose-transition refusal,
-    // `toolCalls.ts` · `dispatchRoster`). Nothing is cached here: an
+    // `toolCalls/execution/catalogOperations.ts` · `dispatchRoster`). Nothing is cached here: an
     // earlier draft of 9.84.0 cached the resolved ids so the gate could filter
     // the self-call notice's move offer through them; the notice no longer names
     // a destination at all (see `selfCallNotice`), so there is nothing left to
@@ -5338,18 +5192,21 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       ...(this.mapsPlan !== undefined && {
         mountedMaps: this.mapsPlan.maps.map((m) => ({ id: m.id, toolNames: m.toolNames })),
       }),
-      integrityLedger: this.integrityLedgerHolder,
+      runtime: (scope) => {
+        const value = this.runExecution().forScope(scope).value;
+        return { ...value, integrityLedger: value.integrityLedger };
+      },
       ...(this.externalToolProvider && { toolProvider: this.externalToolProvider }),
-      ...(this.externalToolProvider && { providerToolCache }),
       // The caller of THIS run, for `ToolDispatchContext.callerIdentity`: the
       // instance's caller on its own run, the member's run on a mount — never a
       // derived identity (the `hiddenSkillIdsNow` precedent).
       ...(this.externalToolProvider && {
         callerIdentity: (scope: object) =>
-          this.ownScopes.has(scope) ? this.lastRunIdentity : memberIdentityIn(scope),
+          this.runExecution().forScope(scope).own
+            ? this.runExecution().forScope(scope).value.identity
+            : memberIdentityIn(scope),
       }),
       toolClaimants,
-      servedTools,
       ...(readSkillFor && { readSkillFor }),
       ...(budget?.tools !== undefined && { budgetCap: budget.tools }),
       // Steps (9.18.0): per-step narrowing + banner + the skip_step offer.
@@ -5393,183 +5250,195 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
 
     // callLLM extracted to ./agent/stages/callLLM.ts (v2.11.2). Same
     // late-binding pattern as seed for toolSchemas (computed below).
-    const callLLM = buildCallLLMStage({
-      onReplayPrepared: (preparation) => {
-        if (
-          this.checkpointTracker !== undefined &&
-          this.inFlightRunId === this.checkpointTracker.runId
-        )
-          retainReplayRetirements(this.checkpointTracker, preparation);
-      },
-      ...((this.typedNegativeClaimsConfig !== undefined ||
-        (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
-        hasEvidenceRecovery: true,
-      }),
-      // The revision calls no tools under an enforcing answer validation: only
-      // then does request assembly read `toolsOffAfterRevision`.
-      ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
-      // The findings ledger (9.101.0): the choice seam and `postValidate`
-      // read peeled args / content under `findings`; the SERVING (step 3) —
-      // the ledger piece after the recovery piece, the wire-only collapse of
-      // judged results — rides `hasFindingsLedger` with its mode, the same
-      // value seed records as the run constant `findingsServe`. One gate,
-      // the `hasEvidenceRecovery` grammar: an unarmed agent hands the stage
-      // exactly the deps it always did and reads no new key.
-      ...(this.findingsOptions !== undefined && {
-        findings: true as const,
-        hasFindingsLedger: true as const,
-        findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
-        findingsContextBytes: this.findingsOptions.maxContextBytes,
-        // The answer-turn ask (9.103.0): the same value seed records, so the
-        // wire and the rebuild append it from one fact; absent on `'none'`.
-        ...(this.findingsOptions.answerAsk === 'quote-facts' && {
-          findingsAnswerAsk: 'quote-facts' as const,
+    const callLLMFor = (run: RunnerScopeValues<AgentRunValues>) =>
+      buildCallLLMStage({
+        onReplayPrepared: (preparation) => {
+          if (
+            run.value.checkpointTracker !== undefined &&
+            run.context.runId === run.value.checkpointTracker.runId
+          )
+            retainReplayRetirements(run.value.checkpointTracker, preparation);
+        },
+        ...((this.typedNegativeClaimsConfig !== undefined ||
+          (this.evidenceGate !== undefined && this.evidenceGate.posture !== 'assist')) && {
+          hasEvidenceRecovery: true,
         }),
-      }),
-      // Declared sources (honesty layer 2): without the ledger, the choice
-      // seam peels `_findings` where the served schema carries it (ruled
-      // tools only) — value-conditional, the same grammar.
-      ...(argumentSources && { argumentSources: true as const }),
-      ...((this.answerValidationConfig !== undefined || governsOutput) && {
-        suppressDraftTokens: true,
-        withholdDraftContent: true,
-      }),
-      // Tool choice by classifier (9.105.0): the outcome row after the reply.
-      ...(this.toolChoiceOptions !== undefined && { toolChoice: true as const }),
-      // The declared ontology (9.106.0): the piece served from the run
-      // constant on every call, under the one gate — an unarmed agent reads
-      // no new key.
-      ...(this.ontology !== undefined && { ontology: true as const }),
-      // The time layer's served line (step T6b): read wherever the Tools mount
-      // composes it — under `.time()` (G14: the control window needs no inputs
-      // layer). Step T8: the same line carries the turn's time limits.
-      ...(this.timeOptions !== undefined && { timeLine: true as const }),
-      // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
-      getRunId: () => this.currentRunContext?.runId,
-      // …and its off switch. Value-conditional, so an agent on the default
-      // hands `callLLM` exactly the dep bag it always did.
-      ...(this.recordReceiptValue === false && { recordReceipt: false }),
-      // …and the window's evictions for `omittedForAttention` (9.93.0) — only
-      // an agent with a window strategy has any, and only it hands the seam.
-      ...(this.evictedTurnsHandle !== undefined && { evictedTurns: this.evictedTurnsHandle }),
-      // …and the receipt memo, so a run hashes each message once rather than
-      // once per call (`core/agent/receipt/receiptDigests.ts`). Only where a
-      // receipt is minted at all.
-      ...(this.recordReceiptValue !== false && { receiptDigests: this.receiptDigests }),
-      provider,
-      model,
-      ...(temperature !== undefined && { temperature }),
-      ...(maxTokens !== undefined && { maxTokens }),
-      ...(pricingTable !== undefined && { pricingTable }),
-      ...(costBudget !== undefined && { costBudget }),
-      maxIterations,
-      cacheStrategy,
-      ...(this.cacheStrategyIsOverride && { cacheStrategyIsOverride: true as const }),
-      get toolSchemas() {
-        return toolSchemasResolved;
-      },
-      // The declared argument-ground edges (9.60.0) — value-conditional, so
-      // an agent whose tools declare none runs the exact bytes it always did.
-      ...(toolGrounding.size > 0 && { toolGrounding }),
-      // The staged-refs nudge (grounded numbers) — armed only when the dial
-      // is ON and a registered tool declares `wants`; otherwise the stage
-      // reads nothing new and every request keeps its exact bytes.
-      ...(this.evidenceGate?.nudge === true && toolWants.size > 0 && { toolWants }),
-      // The external-ground door (9.72.0) — value-conditional for the same
-      // reason: no provider, no key, byte-identical corpus assembly.
-      ...(this.externalGrounds !== undefined && { externalGrounds: this.externalGrounds }),
-      // The write-seam advisory's arming (9.77.0) — this stage owns only the
-      // "no armed call this response" not-applicable note; the check itself
-      // runs where the result is. Value-conditional on BOTH halves, so an
-      // agent that never asked for it reads no new key.
-      ...(this.noticeEmptyLookups && toolGrounding.size > 0 && { noticeEmptyLookups: true }),
-      // The column-type contract's arming (9.78.0), same job and same
-      // value-conditional law: this stage owns only the "no declaring tool
-      // was called this response" not-applicable notes.
-      ...(this.checkColumnTypes !== 'off' &&
-        toolColumns.size > 0 && { columnDeclaringTools: new Set(toolColumns.keys()) }),
-      integrityLedger: this.integrityLedgerHolder,
-      ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
-      ...(this.outputSchemaParser !== undefined && {
-        outputSchemaParser: this.outputSchemaParser,
-      }),
-      // 7.26 — the synthetic tool, under `strategy: 'tool-forced'` only.
-      ...(this.outputEnforcement?.schemaTool !== undefined && {
-        schemaTool: this.outputEnforcement.schemaTool,
-      }),
-      // The native format candidate; auto selects it for the effective request.
-      ...(this.outputEnforcement?.outputFormat !== undefined && {
-        outputFormat: this.outputEnforcement.outputFormat,
-        ...(this.outputEnforcement.nativeOutputAuto === true && {
-          nativeOutputAuto: true as const,
-        }),
-      }),
-      ...(this.thinkingBudget !== undefined && { thinkingBudget: this.thinkingBudget }),
-      // Only a configured agent reads `scope.resolvedModel` — see the dep's
-      // JSDoc for why this is a build-time flag and not a runtime fallback.
-      ...(this.runConfigFn && { runConfigured: true }),
-      // Opt-in system-prompt capture (9.50.0) — value-conditional, so an agent
-      // that never asked keeps byte-identical llm_start events.
-      ...(this.recordSystemPromptValue && { recordSystemPrompt: true }),
-      // "The cursor picks the brain" (9.19.0) — wired only when a per-skill
-      // brain or an escalation exists, so every other agent's stage reads no
-      // new scope key and resolves on the exact line it always did. The
-      // per-brain cache strategies resolve HERE, once, where the agent's own
-      // strategy (override included) is known: a brain on the agent's own
-      // provider keeps it, any other provider gets the strategy its declared
-      // `promptCaching` selects (markers are provider-aware — the one
-      // genuinely risky seam, resolved statically).
-      ...(this.skillBrains !== undefined &&
-        (this.skillBrains.bySkill.size > 0 || this.skillBrains.escalation !== undefined) && {
-          brainFor: buildBrainFor({
-            brains: this.skillBrains,
-            agentProvider: provider,
-            agentCacheStrategy: cacheStrategy,
-            agentModel: model,
-            ...(this.cacheStrategyIsOverride && { agentCacheStrategyIsOverride: true as const }),
+        // The revision calls no tools under an enforcing answer validation: only
+        // then does request assembly read `toolsOffAfterRevision`.
+        ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
+        // The findings ledger (9.101.0): the choice seam and `postValidate`
+        // read peeled args / content under `findings`; the SERVING (step 3) —
+        // the ledger piece after the recovery piece, the wire-only collapse of
+        // judged results — rides `hasFindingsLedger` with its mode, the same
+        // value seed records as the run constant `findingsServe`. One gate,
+        // the `hasEvidenceRecovery` grammar: an unarmed agent hands the stage
+        // exactly the deps it always did and reads no new key.
+        ...(this.findingsOptions !== undefined && {
+          findings: true as const,
+          hasFindingsLedger: true as const,
+          findingsServe: this.findingsOptions.serve ?? 'ledger-and-facts',
+          findingsContextBytes: this.findingsOptions.maxContextBytes,
+          // The answer-turn ask (9.103.0): the same value seed records, so the
+          // wire and the rebuild append it from one fact; absent on `'none'`.
+          ...(this.findingsOptions.answerAsk === 'quote-facts' && {
+            findingsAnswerAsk: 'quote-facts' as const,
           }),
         }),
-    });
+        // Declared sources (honesty layer 2): without the ledger, the choice
+        // seam peels `_findings` where the served schema carries it (ruled
+        // tools only) — value-conditional, the same grammar.
+        ...(argumentSources && { argumentSources: true as const }),
+        ...((this.answerValidationConfig !== undefined || governsOutput) && {
+          suppressDraftTokens: true,
+          withholdDraftContent: true,
+        }),
+        // Tool choice by classifier (9.105.0): the outcome row after the reply.
+        ...(this.toolChoiceOptions !== undefined && { toolChoice: true as const }),
+        // The declared ontology (9.106.0): the piece served from the run
+        // constant on every call, under the one gate — an unarmed agent reads
+        // no new key.
+        ...(this.ontology !== undefined && { ontology: true as const }),
+        // The time layer's served line (step T6b): read wherever the Tools mount
+        // composes it — under `.time()` (G14: the control window needs no inputs
+        // layer). Step T8: the same line carries the turn's time limits.
+        ...(this.timeOptions !== undefined && { timeLine: true as const }),
+        // The receipt's salt (9.88.0) — read per call, like seed's own accessor.
+        getRunId: () => run.context.runId,
+        // …and its off switch. Value-conditional, so an agent on the default
+        // hands `callLLM` exactly the dep bag it always did.
+        ...(this.recordReceiptValue === false && { recordReceipt: false }),
+        // …and the window's evictions for `omittedForAttention` (9.93.0) — only
+        // an agent with a window strategy has any, and only it hands the seam.
+        ...(run.value.evictedTurnsHandle !== undefined && {
+          evictedTurns: run.value.evictedTurnsHandle,
+        }),
+        // …and the receipt memo, so a run hashes each message once rather than
+        // once per call (`core/agent/receipt/receiptDigests.ts`). Only where a
+        // receipt is minted at all.
+        ...(this.recordReceiptValue !== false && { receiptDigests: run.value.receiptDigests }),
+        provider,
+        model,
+        ...(temperature !== undefined && { temperature }),
+        ...(maxTokens !== undefined && { maxTokens }),
+        ...(pricingTable !== undefined && { pricingTable }),
+        ...(costBudget !== undefined && { costBudget }),
+        maxIterations,
+        cacheStrategy,
+        ...(this.cacheStrategyIsOverride && { cacheStrategyIsOverride: true as const }),
+        get toolSchemas() {
+          return toolSchemasResolved;
+        },
+        // The declared argument-ground edges (9.60.0) — value-conditional, so
+        // an agent whose tools declare none runs the exact bytes it always did.
+        ...(toolGrounding.size > 0 && { toolGrounding }),
+        // The staged-refs nudge (grounded numbers) — armed only when the dial
+        // is ON and a registered tool declares `wants`; otherwise the stage
+        // reads nothing new and every request keeps its exact bytes.
+        ...(this.evidenceGate?.nudge === true && toolWants.size > 0 && { toolWants }),
+        // The external-ground door (9.72.0) — value-conditional for the same
+        // reason: no provider, no key, byte-identical corpus assembly.
+        ...(this.externalGrounds !== undefined && { externalGrounds: this.externalGrounds }),
+        // The write-seam advisory's arming (9.77.0) — this stage owns only the
+        // "no armed call this response" not-applicable note; the check itself
+        // runs where the result is. Value-conditional on BOTH halves, so an
+        // agent that never asked for it reads no new key.
+        ...(this.noticeEmptyLookups && toolGrounding.size > 0 && { noticeEmptyLookups: true }),
+        // The column-type contract's arming (9.78.0), same job and same
+        // value-conditional law: this stage owns only the "no declaring tool
+        // was called this response" not-applicable notes.
+        ...(this.checkColumnTypes !== 'off' &&
+          toolColumns.size > 0 && { columnDeclaringTools: new Set(toolColumns.keys()) }),
+        integrityLedger: run.value.integrityLedger,
+        ...(this.reliabilityConfig !== undefined && { reliability: this.reliabilityConfig }),
+        ...(this.outputSchemaParser !== undefined && {
+          outputSchemaParser: this.outputSchemaParser,
+        }),
+        // 7.26 — the synthetic tool, under `strategy: 'tool-forced'` only.
+        ...(this.outputEnforcement?.schemaTool !== undefined && {
+          schemaTool: this.outputEnforcement.schemaTool,
+        }),
+        // The native format candidate; auto selects it for the effective request.
+        ...(this.outputEnforcement?.outputFormat !== undefined && {
+          outputFormat: this.outputEnforcement.outputFormat,
+          ...(this.outputEnforcement.nativeOutputAuto === true && {
+            nativeOutputAuto: true as const,
+          }),
+        }),
+        ...(this.thinkingBudget !== undefined && { thinkingBudget: this.thinkingBudget }),
+        // Only a configured agent reads `scope.resolvedModel` — see the dep's
+        // JSDoc for why this is a build-time flag and not a runtime fallback.
+        ...(this.runConfigFn && { runConfigured: true }),
+        // Opt-in system-prompt capture (9.50.0) — value-conditional, so an agent
+        // that never asked keeps byte-identical llm_start events.
+        ...(this.recordSystemPromptValue && { recordSystemPrompt: true }),
+        // "The cursor picks the brain" (9.19.0) — wired only when a per-skill
+        // brain or an escalation exists, so every other agent's stage reads no
+        // new scope key and resolves on the exact line it always did. The
+        // per-brain cache strategies resolve HERE, once, where the agent's own
+        // strategy (override included) is known: a brain on the agent's own
+        // provider keeps it, any other provider gets the strategy its declared
+        // `promptCaching` selects (markers are provider-aware — the one
+        // genuinely risky seam, resolved statically).
+        ...(this.skillBrains !== undefined &&
+          (this.skillBrains.bySkill.size > 0 || this.skillBrains.escalation !== undefined) && {
+            brainFor: buildBrainFor({
+              brains: this.skillBrains,
+              agentProvider: provider,
+              agentCacheStrategy: cacheStrategy,
+              agentModel: model,
+              ...(this.cacheStrategyIsOverride && { agentCacheStrategyIsOverride: true as const }),
+            }),
+          }),
+      });
 
     // Window stage (7.16 as compaction; the strategy family since 7.17) —
     // built ONLY when `.window()` / `.compaction()` was called. When present
     // it becomes the ReAct loop target (see the chart builders), so it runs
     // once per iteration boundary with the previous call's adapter-reported
     // usage already measured by the meter.
-    const windowStage =
-      this.windowStrategy && this.compactionMeterHandle
-        ? {
-            strategyName: this.windowStrategy.name,
-            run: buildWindowStage({
-              strategy: this.windowStrategy,
-              meter: this.compactionMeterHandle,
-              ...(this.evictedTurnsHandle !== undefined && {
-                evictedTurns: this.evictedTurnsHandle,
-              }),
-              agentModel: model,
-              providerName: provider.name,
-              getRunId: () => this.currentRunContext?.runId,
-              // Value-conditional (the `repeatedCallNudge` precedent): an
-              // agent on the default hands the stage exactly the deps object
-              // it always did.
-              ...(this.keepLastToolResults !== undefined && {
-                keepLastToolResults: this.keepLastToolResults,
-              }),
-              // The findings ledger (9.102.0): the arm and the RESOLVED
-              // ledger-fact ceiling, together or not at all. `keepLedgerFacts`
-              // is set exactly when `.findings()` is on, so an unarmed agent
-              // hands the stage exactly the deps object it always did; an
-              // armed agent with no window strategy threads nothing, because
-              // this whole stage does not exist for it.
-              ...(this.keepLedgerFacts !== undefined && {
-                hasFindingsLedger: true as const,
-                keepLedgerFacts: this.keepLedgerFacts,
-              }),
-              ...(pricingTable !== undefined && { pricingTable }),
-              ...(costBudget !== undefined && { costBudget }),
-            }),
-          }
-        : undefined;
+    const callLLM = bindRunnerStage(
+      (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
+      (run) => (run.value.callLLM ??= callLLMFor(run)),
+    );
+
+    const configuredWindow = this.windowStrategy;
+    const windowStage = configuredWindow
+      ? {
+          strategyName: this.windowStrategy.name,
+          run: bindRunnerStage(
+            (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
+            (run) =>
+              (run.value.window ??= buildWindowStage({
+                strategy: configuredWindow,
+                meter: run.value.compactionMeter!,
+                ...(run.value.evictedTurnsHandle !== undefined && {
+                  evictedTurns: run.value.evictedTurnsHandle,
+                }),
+                agentModel: model,
+                providerName: provider.name,
+                getRunId: () => run.context.runId,
+                // Value-conditional (the `repeatedCallNudge` precedent): an
+                // agent on the default hands the stage exactly the deps object
+                // it always did.
+                ...(this.keepLastToolResults !== undefined && {
+                  keepLastToolResults: this.keepLastToolResults,
+                }),
+                // The findings ledger (9.102.0): the arm and the RESOLVED
+                // ledger-fact ceiling, together or not at all. `keepLedgerFacts`
+                // is set exactly when `.findings()` is on, so an unarmed agent
+                // hands the stage exactly the deps object it always did; an
+                // armed agent with no window strategy threads nothing, because
+                // this whole stage does not exist for it.
+                ...(this.keepLedgerFacts !== undefined && {
+                  hasFindingsLedger: true as const,
+                  keepLedgerFacts: this.keepLedgerFacts,
+                }),
+                ...(pricingTable !== undefined && { pricingTable }),
+                ...(costBudget !== undefined && { costBudget }),
+              })),
+          ),
+        }
+      : undefined;
 
     // routeDecider extracted to ./agent/stages/route.ts (v2.11.2).
     // The Route decider carries the `'output'` half of the message chain when
@@ -5600,330 +5469,363 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const canCallTools = registryByName.size > 0 || this.externalToolProvider !== undefined;
     const hasWrapUp = canCallTools && this.wrapUpAtMaxIterations !== false;
 
-    const baseRouteDecider = buildRouteDeciderStage(
-      this.messageMiddleware,
-      this.outputEnforcement,
-      stepPlanFor,
-      this.evidenceGate,
-      hasWrapUp,
-      this.claimContract,
-      this.integrityLedgerHolder,
-      // THE CLAIM SEAM'S RECENCY READ (9.83.0). Value-conditional on both
-      // halves, so an agent that armed neither hands the decider builder
-      // exactly the arguments it always did — and `buildRouteDeciderStage`'s
-      // no-judge fast path still returns the very function reference every
-      // pre-9.83.0 chart was given.
-      this.noticePriorTurnEvidence && this.evidenceGate !== undefined ? true : undefined,
-      // THE ANSWER TURN'S STANDINGS (9.101.0) — the same value-conditional
-      // trailing positional, for the same reason: an unarmed agent hands the
-      // builder exactly the arguments it always did.
-      this.findingsOptions !== undefined ? true : undefined,
-      // THE INPUTS LAYER (honesty layer 2) — the same value-conditional
-      // trailing positional: the rows this decider files carry the turn
-      // stamp, and with the evidence gate armed too, the gate's exempt corpus
-      // gains this turn's assumed values, read from the tools' declarations,
-      // and the values the person gave the layer's batch ask (step 4). The
-      // results layer (step 7b) arms the stamp alone — "while any layer is
-      // armed, the one writer stamps the turn" — and nothing else.
-      inputsArmed || resultsArmed
-        ? {
-            ...(inputsArmed &&
-              this.evidenceGate !== undefined && {
-                declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
-                  const rules = rulesOf(resolveForLayer(toolName).tool);
-                  if (rules === undefined || isRefused(rules)) return undefined;
-                  return rules.ruled.find((r) => r.argument === argument)?.assume;
-                }),
-                answeredValues: answeredValuesOf,
-                // Under `.time()` (step T7): the turn's time spellings by
-                // lineage — said ones exempt, derived ones filed, not flagged.
-                ...(this.timeOptions !== undefined && { timeLineage: true as const }),
-              }),
-          }
-        : undefined,
-      // THE ANSWER LAYER (honesty layer 4) — the same value-conditional
-      // trailing positional: the judges file the answer's witness rows, and
-      // every row this decider files carries the turn stamp.
-      answerArmed ? true : undefined,
-    );
-
-    const validatedRouteDecider =
-      this.answerValidationConfig === undefined
-        ? baseRouteDecider
-        : withAnswerValidation(
-            baseRouteDecider,
-            this.answerValidationConfig,
-            this.outputSchemaParser,
-            artifactStore,
-            () => this.consentOutstanding.size > 0,
-            this.outputEnforcement?.outputFormat !== undefined,
-            // Read only when `agentChecks` lists 'claims' (the agent's own rows).
-            this.claimContract,
-            this.typedNegativeClaimsConfig === undefined
-              ? undefined
-              : {
-                  config: this.typedNegativeClaimsConfig,
-                  phrases: this.typedNegativeClaimsConfig.phrases,
-                  applicationValidation: this.applicationAnswerValidation,
-                  runId: () => this.currentRunContext.runId,
-                },
-          );
-    const routeDecider =
-      this.negativeClaimsConfig?.mode === 'prose'
-        ? withNegativeProse(validatedRouteDecider, {
-            runId: () => this.currentRunContext.runId,
-            hasOutstandingConsent: () => this.consentOutstanding.size > 0,
-            structured: this.outputSchemaParser !== undefined,
-            phrases: this.negativeClaimsConfig.phrases,
-          })
-        : validatedRouteDecider;
-    // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
-    // An output schema makes the answer JSON, and the appended block would
-    // make it JSON followed by prose, which `runTyped()` cannot parse. So the
-    // limits travel as DATA: the Route decider's terminal decision commits the
-    // fold (`withAnswerCoverage`) and the Final branch projects it onto
-    // `turn_end`. A prose answer keeps the block; an agent that asked for
-    // neither is handed the decider it always had.
     const limitsAsData =
       this.limitsTravelWithTheAnswerValue && this.outputSchemaParser !== undefined;
-    // With the inputs layer armed, the typed answer's limits carry this
-    // turn's assumed values too — the same rows the prose "Assumed" block
-    // prints (`withAnswerCoverage`'s second argument); a rewrite by a
-    // before-tool chain is read only when the agent has one.
-    const terminalRouteDecider = limitsAsData
-      ? withAnswerCoverage(
-          routeDecider,
-          inputsArmed ? { rewrites: this.toolMiddleware.length > 0 } : undefined,
-        )
-      : routeDecider;
-
-    // toolCallsHandler extracted to ./agent/stages/toolCalls.ts (v2.11.2).
-    const toolCallsHandler = buildToolCallsHandler({
-      registryByName,
-      // WHICH SKILLS DECLARE EACH TOOL NAME (9.86.0) — read by the unknown-tool
-      // roster so a role that may not see a skill is not told the names of the
-      // tools that skill brought. Value-conditional: an agent whose skills carry
-      // no tools hands the handler exactly the deps object it always did.
-      ...(toolDeclaringSkills.size > 0 && { toolDeclaringSkills }),
-      // The claim ledger accumulates only for an agent that declared a
-      // contract to read it (9.61.0) — value-conditional, so every other
-      // agent commits exactly what it always did.
-      ...(this.claimContract !== undefined && { collectClaimFacts: true }),
-      // The findings ledger (9.101.0) — the peel, the basis row and the
-      // previous batch's standings all live in this handler under this gate.
-      ...(this.findingsOptions !== undefined && { findings: true as const }),
-      // The script record — `code: 'match'` or `.scriptTravelsWithTheAnswer()`:
-      // one `script` row per call of a tool that declares `Tool.script`.
-      ...(scriptRecordArmed && { scriptRecord: true as const }),
-      // The inputs layer (honesty layer 2) — the fills, the refusals and the
-      // note; absent → a ruled tool's call is refused (fail closed).
-      ...(inputsArmed && { inputsLayer: true as const }),
-      // Declared sources: the peel reads `_findings.from` as the layer did.
-      ...(argumentSources && { argumentSources: true as const }),
-      // The results layer (honesty layer 3, step 7b) — read in one place: a
-      // period a result declares with NO layer mounted is dev-warned (nobody
-      // will file its verdict). And the turn stamp, as under any layer.
-      ...(resultsArmed && { resultsLayer: true as const }),
-      // The answer layer (honesty layer 4) — only the turn stamp on the rows
-      // this handler files (adopted Q6).
-      ...(answerArmed && { answerLayer: true as const }),
-      // …and the host's own context for the layer's batch ask (step 4),
-      // value-conditional inside the arm.
-      ...(inputsArmed &&
-        this.argumentAskContext !== undefined && { argumentAskContext: this.argumentAskContext }),
-      // The judge (9.104.0) — VALUE-conditional inside the arm: an armed
-      // agent without one hands the handler exactly the deps it did before.
-      ...(this.findingsOptions?.judge !== undefined && {
-        findingsJudge: this.findingsOptions.judge,
-      }),
-      // THE TOWERS AT DISPATCH (9.110.0) — the contingent check's second
-      // moment. VALUE-conditional on BOTH doors: the ledger (the standings)
-      // and the evidence gate (the corpus and the extractor's rule); an
-      // agent with one or neither hands the handler exactly the deps it did
-      // before. The same resolved gate the route decider judges the answer
-      // with, so the two moments read one extractor and one set of shapes.
-      ...(this.findingsOptions !== undefined &&
-        this.evidenceGate !== undefined && { evidenceGate: this.evidenceGate }),
-      // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
-      // map callLLM reads at the choice seam, so the two stages agree by
-      // construction about which calls are armed. Value-conditional on both
-      // halves — the operator's dial and at least one `argumentsFrom`
-      // declaration — so an agent that asked for neither hands the handler
-      // exactly the deps object it always did.
-      ...(this.noticeEmptyLookups &&
-        toolGrounding.size > 0 && {
-          emptyLookupGrounding: toolGrounding,
-          integrityLedger: this.integrityLedgerHolder,
-        }),
-      // THE WRITE SEAM'S other check (9.78.0) — the column-type contract.
-      // Value-conditional on both halves for the same reason, so an agent
-      // that asked for neither hands the handler exactly the deps object it
-      // always did.
-      ...(this.checkColumnTypes !== 'off' &&
-        toolColumns.size > 0 && {
-          columnDeclarations: toolColumns,
-          columnCheckMode: this.checkColumnTypes,
-          integrityLedger: this.integrityLedgerHolder,
-        }),
-      ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
-      ...(this.externalToolProvider && { providerToolCache }),
-      servedTools,
-      toolClaimants,
-      ...(permissionChecker && { permissionChecker }),
-      ...(credentialProvider && { credentialProvider }),
-      // The request a call's credential is read for: this agent's own run's,
-      // or — on a mount — the run its link names (`memberRun.ts`). An accessor,
-      // because the chart is built once and the request is per run.
-      ...(credentialProvider && {
-        currentRequest: (scope: object) =>
-          this.ownScopes.has(scope) ? this.scopeRequests.get(scope) : memberRequestIn(scope),
-      }),
-      // The claim-check store (9.21.0). Absent → not one new line runs in
-      // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
-      // event can fire (zero-cost-when-unused).
-      ...(artifactStore && { artifactStore }),
-      // The placement threshold (9.22.0) — only ever set beside a store (the
-      // option's own shape enforces it). Absent → results are never measured
-      // against it and never placed.
-      ...(this.artifactPlacement !== undefined && { placement: this.artifactPlacement }),
-      ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
-      ...(this.maxToolResultChars !== undefined && {
-        maxToolResultChars: this.maxToolResultChars,
-      }),
-      // The repeated-call nudge (9.26.0). Threaded ONLY when switched off —
-      // the VALUE-conditional pattern, so an agent on the default hands the
-      // handler exactly the deps object it always did.
-      ...(this.repeatedCallNudge === false && { repeatedCallNudge: false }),
-      // The answer check's tool-call ledger (`context.toolCalls`) — kept ONLY
-      // for answer validation or negative claims; other records stay unchanged.
-      ...((this.answerValidationConfig !== undefined ||
-        this.negativeClaimsConfig !== undefined) && {
-        toolCallLedger: { maxCalls: this.answerValidationConfig?.limits.maxToolCalls ?? 1000 },
-      }),
-      ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
-      // Skill-graph read_skill gate: bound the model's read_skill jumps to the
-      // reachable set from the current cursor. Undefined → gate off (back-compat).
-      ...(this.skillGraphReachable && {
-        allowedSkillIds: this.skillGraphReachable,
-        openSkillIds: this.openSkillIds(),
-        skillGraphIsTree: this.skillGraphIsTree,
-      }),
-      // The mount kernel's plan (9.59.0) — the gate's THIRD admission class.
-      // A `read_skill` pick of a PARKED map's member is a re-engagement, not
-      // a hop: admitted even though the reachable set excludes the node the
-      // cursor already stands on, and it never touches the cursor. Value-
-      // conditional, so an agent without `.maps()` hands the handler exactly
-      // the deps object it always did.
-      ...(this.mapsPlan !== undefined && { engagementPlan: this.mapsPlan }),
-      // The mount's routing posture (SG-C). `'assist'` — the default — is
-      // deliberately NOT threaded: undefined keeps the gate byte-identical.
-      ...(this.skillGraphCascade !== undefined &&
-        this.skillGraphCascade.strictness !== 'assist' && {
-          skillStrictness: this.skillGraphCascade.strictness,
-        }),
-      // Steps (9.18.0): advance/skip at the result boundary — the batch loop
-      // AND every pausable resume path (an askHuman step advances on resume).
-      ...(stepPlanFor !== undefined && { stepPlanFor }),
-      // Escalate-on-evidence (9.19.0): the refusal budget + flip, wired only
-      // when the policy exists. `describeFrom` resolves the event's honest
-      // `from` by the same chain callLLM applies.
-      ...(this.skillBrains?.escalation !== undefined && {
-        escalation: {
-          afterRefusals: this.skillBrains.escalation.afterRefusals,
-          to: {
-            provider: this.skillBrains.escalation.provider.name,
-            ...(this.skillBrains.escalation.model !== undefined && {
-              model: this.skillBrains.escalation.model,
-            }),
-          },
-          describeFrom: (cursor: string | undefined, resolvedModel: string | undefined) =>
-            describeServingBrain({
-              brains: this.skillBrains!,
-              cursor,
-              agentProviderName: provider.name,
-              defaultModel: model,
-              ...(resolvedModel !== undefined && { resolvedModel }),
-            }),
-        },
-      }),
-      // The require-instruction catalog (9.19.0): every registered injection
-      // id + the one delivery fact its check-up needs. Wired whenever
-      // injections exist; nothing runs until a tool returns an effect.
-      ...(this.injections.length > 0 && {
-        leaseTargets: new Map(
-          this.injections.map((inj) => {
-            const surfaceMode = (inj.metadata as { surfaceMode?: string } | undefined)?.surfaceMode;
-            return [inj.id, { ...(surfaceMode !== undefined && { surfaceMode }) }] as const;
-          }),
-        ),
-      }),
-      // Check-in (evidence-carrying human consent). Always threaded (resolved
-      // default); the gate fires only for tools that declared `checkIn`.
-      checkIn: this.checkInConfig,
-      // Where a decision's request is spent, once (`core/consentRequest.ts`).
-      // Absent → this process's ledger, shared by every agent that names none.
-      ...(this.decisionLedger !== undefined && { decisionLedger: this.decisionLedger }),
-      // The governance chain. Threaded only when non-empty so an agent without
-      // one produces the same handler behaviour it always did.
-      ...(this.toolMiddleware.length > 0 && { toolMiddleware: this.toolMiddleware }),
-      // Durable-write barrier. An ACCESSOR, never a captured value: the chart is
-      // built once at construction and a session composer installs its barrier
-      // later, so a direct field read here would be stale forever. Answers
-      // `undefined` — no await, no microtask — until one is installed.
-      awaitDurable: () => pendingDurableWrite(this),
-      // 9.7.0 — run/session identity and the teardown registrar. BOTH are
-      // accessors for the reason `awaitDurable` is one: the chart is built once
-      // at construction, and a captured value would be run #1's forever. The
-      // tier one is lazy on top of that — an agent whose tools hold no sessions
-      // never allocates it.
-      currentRun: () => this.toolRunFacts(),
-      isOwnRun: (scope) => this.ownScopes.has(scope),
-      answeredAsk: () => this.answeredAsk,
-      // The time layer: each dispatched call files its `call` row, and the
-      // resume door compares a resume's passed `time` with the kept clock.
-      ...(this.timeOptions !== undefined && {
-        time: {
-          takePassedOnResume: (scope: object) => {
-            // Only the agent's own resumed leg takes it — never a member's.
-            if (!this.ownScopes.has(scope)) return undefined;
-            const passed = this.resumePassedTime;
-            this.resumePassedTime = undefined;
-            return passed;
-          },
-          ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
-          // The reader (step T6b): the batch ask asks an open mention's window.
-          ...(this.timeOptions.reader !== undefined &&
-            this.timeOptions.policy !== undefined && {
-              reader: {
-                policy: this.timeOptions.policy,
-                ...(this.timeOptions.messages !== undefined && {
-                  messages: this.timeOptions.messages,
+    const routeFor = (run: RunnerScopeValues<AgentRunValues>) => {
+      const resolve = resolverForValues(run.value);
+      const baseRouteDecider = buildRouteDeciderStage(
+        this.messageMiddleware,
+        this.outputEnforcement,
+        stepPlanFor,
+        this.evidenceGate,
+        hasWrapUp,
+        this.claimContract,
+        run.value.integrityLedger,
+        // THE CLAIM SEAM'S RECENCY READ (9.83.0). Value-conditional on both
+        // halves, so an agent that armed neither hands the decider builder
+        // exactly the arguments it always did — and `buildRouteDeciderStage`'s
+        // no-judge fast path still returns the very function reference every
+        // pre-9.83.0 chart was given.
+        this.noticePriorTurnEvidence && this.evidenceGate !== undefined ? true : undefined,
+        // THE ANSWER TURN'S STANDINGS (9.101.0) — the same value-conditional
+        // trailing positional, for the same reason: an unarmed agent hands the
+        // builder exactly the arguments it always did.
+        this.findingsOptions !== undefined ? true : undefined,
+        // THE INPUTS LAYER (honesty layer 2) — the same value-conditional
+        // trailing positional: the rows this decider files carry the turn
+        // stamp, and with the evidence gate armed too, the gate's exempt corpus
+        // gains this turn's assumed values, read from the tools' declarations,
+        // and the values the person gave the layer's batch ask (step 4). The
+        // results layer (step 7b) arms the stamp alone — "while any layer is
+        // armed, the one writer stamps the turn" — and nothing else.
+        inputsArmed || resultsArmed
+          ? {
+              ...(inputsArmed &&
+                this.evidenceGate !== undefined && {
+                  declaredDefaults: declaredDefaultsFrom((toolName, argument) => {
+                    const rules = rulesOf(resolve(toolName).tool);
+                    if (rules === undefined || isRefused(rules)) return undefined;
+                    return rules.ruled.find((r) => r.argument === argument)?.assume;
+                  }),
+                  answeredValues: answeredValuesOf,
+                  // Under `.time()` (step T7): the turn's time spellings by
+                  // lineage — said ones exempt, derived ones filed, not flagged.
+                  ...(this.timeOptions !== undefined && { timeLineage: true as const }),
                 }),
+            }
+          : undefined,
+        // THE ANSWER LAYER (honesty layer 4) — the same value-conditional
+        // trailing positional: the judges file the answer's witness rows, and
+        // every row this decider files carries the turn stamp.
+        answerArmed ? true : undefined,
+      );
+
+      const validatedRouteDecider =
+        this.answerValidationConfig === undefined
+          ? baseRouteDecider
+          : withAnswerValidation(
+              baseRouteDecider,
+              this.answerValidationConfig,
+              this.outputSchemaParser,
+              artifactStore,
+              () => run.value.consentOutstanding.size > 0,
+              this.outputEnforcement?.outputFormat !== undefined,
+              // Read only when `agentChecks` lists 'claims' (the agent's own rows).
+              this.claimContract,
+              this.typedNegativeClaimsConfig === undefined
+                ? undefined
+                : {
+                    config: this.typedNegativeClaimsConfig,
+                    phrases: this.typedNegativeClaimsConfig.phrases,
+                    applicationValidation: this.applicationAnswerValidation,
+                    runId: () => run.context.runId,
+                  },
+            );
+      const routeDecider =
+        this.negativeClaimsConfig?.mode === 'prose'
+          ? withNegativeProse(validatedRouteDecider, {
+              runId: () => run.context.runId,
+              hasOutstandingConsent: () => run.value.consentOutstanding.size > 0,
+              structured: this.outputSchemaParser !== undefined,
+              phrases: this.negativeClaimsConfig.phrases,
+            })
+          : validatedRouteDecider;
+      // `.limitsTravelWithTheAnswer()` on a TYPED answer — decided once, here.
+      // An output schema makes the answer JSON, and the appended block would
+      // make it JSON followed by prose, which `runTyped()` cannot parse. So the
+      // limits travel as DATA: the Route decider's terminal decision commits the
+      // fold (`withAnswerCoverage`) and the Final branch projects it onto
+      // `turn_end`. A prose answer keeps the block; an agent that asked for
+      // neither is handed the decider it always had.
+      // With the inputs layer armed, the typed answer's limits carry this
+      // turn's assumed values too — the same rows the prose "Assumed" block
+      // prints (`withAnswerCoverage`'s second argument); a rewrite by a
+      // before-tool chain is read only when the agent has one.
+      const terminalRouteDecider = limitsAsData
+        ? withAnswerCoverage(
+            routeDecider,
+            inputsArmed ? { rewrites: this.toolMiddleware.length > 0 } : undefined,
+          )
+        : routeDecider;
+
+      // toolCallsHandler extracted to ./agent/stages/toolCalls/index.ts (v2.11.2).
+      return terminalRouteDecider;
+    };
+    const terminalRouteDecider = bindRunnerStage(
+      (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
+      (run) => (run.value.route ??= routeFor(run)),
+    );
+    const toolCallsFor = (run: RunnerScopeValues<AgentRunValues>) =>
+      buildToolCallsHandler({
+        registryByName,
+        // WHICH SKILLS DECLARE EACH TOOL NAME (9.86.0) — read by the unknown-tool
+        // roster so a role that may not see a skill is not told the names of the
+        // tools that skill brought. Value-conditional: an agent whose skills carry
+        // no tools hands the handler exactly the deps object it always did.
+        ...(toolDeclaringSkills.size > 0 && { toolDeclaringSkills }),
+        // The claim ledger accumulates only for an agent that declared a
+        // contract to read it (9.61.0) — value-conditional, so every other
+        // agent commits exactly what it always did.
+        ...(this.claimContract !== undefined && { collectClaimFacts: true }),
+        // The findings ledger (9.101.0) — the peel, the basis row and the
+        // previous batch's standings all live in this handler under this gate.
+        ...(this.findingsOptions !== undefined && { findings: true as const }),
+        // The script record — `code: 'match'` or `.scriptTravelsWithTheAnswer()`:
+        // one `script` row per call of a tool that declares `Tool.script`.
+        ...(scriptRecordArmed && { scriptRecord: true as const }),
+        // The inputs layer (honesty layer 2) — the fills, the refusals and the
+        // note; absent → a ruled tool's call is refused (fail closed).
+        ...(inputsArmed && { inputsLayer: true as const }),
+        // Declared sources: the peel reads `_findings.from` as the layer did.
+        ...(argumentSources && { argumentSources: true as const }),
+        // The results layer (honesty layer 3, step 7b) — read in one place: a
+        // period a result declares with NO layer mounted is dev-warned (nobody
+        // will file its verdict). And the turn stamp, as under any layer.
+        ...(resultsArmed && { resultsLayer: true as const }),
+        // The answer layer (honesty layer 4) — only the turn stamp on the rows
+        // this handler files (adopted Q6).
+        ...(answerArmed && { answerLayer: true as const }),
+        // …and the host's own context for the layer's batch ask (step 4),
+        // value-conditional inside the arm.
+        ...(inputsArmed &&
+          this.argumentAskContext !== undefined && { argumentAskContext: this.argumentAskContext }),
+        // The judge (9.104.0) — VALUE-conditional inside the arm: an armed
+        // agent without one hands the handler exactly the deps it did before.
+        ...(this.findingsOptions?.judge !== undefined && {
+          findingsJudge: this.findingsOptions.judge,
+        }),
+        // THE TOWERS AT DISPATCH (9.110.0) — the contingent check's second
+        // moment. VALUE-conditional on BOTH doors: the ledger (the standings)
+        // and the evidence gate (the corpus and the extractor's rule); an
+        // agent with one or neither hands the handler exactly the deps it did
+        // before. The same resolved gate the route decider judges the answer
+        // with, so the two moments read one extractor and one set of shapes.
+        ...(this.findingsOptions !== undefined &&
+          this.evidenceGate !== undefined && { evidenceGate: this.evidenceGate }),
+        // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
+        // map callLLM reads at the choice seam, so the two stages agree by
+        // construction about which calls are armed. Value-conditional on both
+        // halves — the operator's dial and at least one `argumentsFrom`
+        // declaration — so an agent that asked for neither hands the handler
+        // exactly the deps object it always did.
+        ...(this.noticeEmptyLookups &&
+          toolGrounding.size > 0 && {
+            emptyLookupGrounding: toolGrounding,
+            integrityLedger: run.value.integrityLedger,
+          }),
+        // THE WRITE SEAM'S other check (9.78.0) — the column-type contract.
+        // Value-conditional on both halves for the same reason, so an agent
+        // that asked for neither hands the handler exactly the deps object it
+        // always did.
+        ...(this.checkColumnTypes !== 'off' &&
+          toolColumns.size > 0 && {
+            columnDeclarations: toolColumns,
+            columnCheckMode: this.checkColumnTypes,
+            integrityLedger: run.value.integrityLedger,
+          }),
+        ...(this.externalToolProvider && { externalToolProvider: this.externalToolProvider }),
+        ...(this.externalToolProvider && {
+          providerToolCache: run.value.providerToolCache,
+          prepareProviderTools: (scope: TypedScope<AgentState>) =>
+            ensureDiscoveredTools(scope, {
+              provider: this.externalToolProvider!,
+              cache: run.value.providerToolCache,
+              callerIdentity: run.own ? run.value.identity : memberIdentityIn(scope),
+              get iteration() {
+                return scope.iteration ?? 1;
               },
             }),
+        }),
+        servedTools: run.value.servedTools,
+        toolClaimants,
+        ...(permissionChecker && { permissionChecker }),
+        ...(credentialProvider && { credentialProvider }),
+        // The request a call's credential is read for: this agent's own run's,
+        // or — on a mount — the run its link names (`memberRun.ts`). An accessor,
+        // because the chart is built once and the request is per run.
+        ...(credentialProvider && {
+          currentRequest: (scope: object) => (run.own ? run.value.request : memberRequestIn(scope)),
+        }),
+        // The claim-check store (9.21.0). Absent → not one new line runs in
+        // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
+        // event can fire (zero-cost-when-unused).
+        ...(artifactStore && { artifactStore }),
+        // The placement threshold (9.22.0) — only ever set beside a store (the
+        // option's own shape enforces it). Absent → results are never measured
+        // against it and never placed.
+        ...(this.artifactPlacement !== undefined && { placement: this.artifactPlacement }),
+        ...(this.toolArgValidation && { toolArgValidation: this.toolArgValidation }),
+        ...(this.maxToolResultChars !== undefined && {
+          maxToolResultChars: this.maxToolResultChars,
+        }),
+        // The repeated-call nudge (9.26.0). Threaded ONLY when switched off —
+        // the VALUE-conditional pattern, so an agent on the default hands the
+        // handler exactly the deps object it always did.
+        ...(this.repeatedCallNudge === false && { repeatedCallNudge: false }),
+        // The answer check's tool-call ledger (`context.toolCalls`) — kept ONLY
+        // for answer validation or negative claims; other records stay unchanged.
+        ...((this.answerValidationConfig !== undefined ||
+          this.negativeClaimsConfig !== undefined) && {
+          toolCallLedger: { maxCalls: this.answerValidationConfig?.limits.maxToolCalls ?? 1000 },
+        }),
+        ...(this.negativeClaimsConfig !== undefined && { negativeClaimsArmed: true }),
+        // Skill-graph read_skill gate: bound the model's read_skill jumps to the
+        // reachable set from the current cursor. Undefined → gate off (back-compat).
+        ...(this.skillGraphReachable && {
+          allowedSkillIds: this.skillGraphReachable,
+          openSkillIds: this.openSkillIds(),
+          skillGraphIsTree: this.skillGraphIsTree,
+        }),
+        // The mount kernel's plan (9.59.0) — the gate's THIRD admission class.
+        // A `read_skill` pick of a PARKED map's member is a re-engagement, not
+        // a hop: admitted even though the reachable set excludes the node the
+        // cursor already stands on, and it never touches the cursor. Value-
+        // conditional, so an agent without `.maps()` hands the handler exactly
+        // the deps object it always did.
+        ...(this.mapsPlan !== undefined && { engagementPlan: this.mapsPlan }),
+        // The mount's routing posture (SG-C). `'assist'` — the default — is
+        // deliberately NOT threaded: undefined keeps the gate byte-identical.
+        ...(this.skillGraphCascade !== undefined &&
+          this.skillGraphCascade.strictness !== 'assist' && {
+            skillStrictness: this.skillGraphCascade.strictness,
+          }),
+        // Steps (9.18.0): advance/skip at the result boundary — the batch loop
+        // AND every pausable resume path (an askHuman step advances on resume).
+        ...(stepPlanFor !== undefined && { stepPlanFor }),
+        // Escalate-on-evidence (9.19.0): the refusal budget + flip, wired only
+        // when the policy exists. `describeFrom` resolves the event's honest
+        // `from` by the same chain callLLM applies.
+        ...(this.skillBrains?.escalation !== undefined && {
+          escalation: {
+            afterRefusals: this.skillBrains.escalation.afterRefusals,
+            to: {
+              provider: this.skillBrains.escalation.provider.name,
+              ...(this.skillBrains.escalation.model !== undefined && {
+                model: this.skillBrains.escalation.model,
+              }),
+            },
+            describeFrom: (cursor: string | undefined, resolvedModel: string | undefined) =>
+              describeServingBrain({
+                brains: this.skillBrains!,
+                cursor,
+                agentProviderName: provider.name,
+                defaultModel: model,
+                ...(resolvedModel !== undefined && { resolvedModel }),
+              }),
+          },
+        }),
+        // The require-instruction catalog (9.19.0): every registered injection
+        // id + the one delivery fact its check-up needs. Wired whenever
+        // injections exist; nothing runs until a tool returns an effect.
+        ...(this.injections.length > 0 && {
+          leaseTargets: new Map(
+            this.injections.map((inj) => {
+              const surfaceMode = (inj.metadata as { surfaceMode?: string } | undefined)
+                ?.surfaceMode;
+              return [inj.id, { ...(surfaceMode !== undefined && { surfaceMode }) }] as const;
+            }),
+          ),
+        }),
+        // Check-in (evidence-carrying human consent). Always threaded (resolved
+        // default); the gate fires only for tools that declared `checkIn`.
+        checkIn: this.checkInConfig,
+        // Where a decision's request is spent, once (`core/consentRequest.ts`).
+        // Absent → this process's ledger, shared by every agent that names none.
+        ...(this.decisionLedger !== undefined && { decisionLedger: this.decisionLedger }),
+        // The governance chain. Threaded only when non-empty so an agent without
+        // one produces the same handler behaviour it always did.
+        ...(this.toolMiddleware.length > 0 && { toolMiddleware: this.toolMiddleware }),
+        // Durable-write barrier. An ACCESSOR, never a captured value: the chart is
+        // built once at construction and a session composer installs its barrier
+        // later, so a direct field read here would be stale forever. Answers
+        // `undefined` — no await, no microtask — until one is installed.
+        awaitDurable: () => pendingDurableWrite(this),
+        // 9.7.0 — run/session identity and the teardown registrar. BOTH are
+        // accessors for the reason `awaitDurable` is one: the chart is built once
+        // at construction, and a captured value would be run #1's forever. The
+        // tier one is lazy on top of that — an agent whose tools hold no sessions
+        // never allocates it.
+        currentRun: () => this.toolRunFacts(run),
+        isRunRetired: () => run.retired,
+        isOwnRun: () => run.own,
+        answeredAsk: () => run.value.answeredAsk,
+        // The time layer: each dispatched call files its `call` row, and the
+        // resume door compares a resume's passed `time` with the kept clock.
+        ...(this.timeOptions !== undefined && {
+          time: {
+            takePassedOnResume: () => {
+              // Only the agent's own resumed leg takes it — never a member's.
+              if (!run.own) return undefined;
+              const passed = run.value.resumePassedTime;
+              run.value.resumePassedTime = undefined;
+              return passed;
+            },
+            ...(this.timeOptions.zone !== undefined && { appZone: this.timeOptions.zone }),
+            // The reader (step T6b): the batch ask asks an open mention's window.
+            ...(this.timeOptions.reader !== undefined &&
+              this.timeOptions.policy !== undefined && {
+                reader: {
+                  policy: this.timeOptions.policy,
+                  ...(this.timeOptions.messages !== undefined && {
+                    messages: this.timeOptions.messages,
+                  }),
+                },
+              }),
+          },
+        }),
+        emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
+        resources: run.value.resources,
+        // 8.6.0 — what a run does when a declared credential needs 3LO consent.
+        onAuthorizationRequired: this.onAuthorizationRequired,
+        // The `'tell-model'` consent record travels OFF tracked state (a tracked
+        // write is a commit-log entry, and the URL is a bearer capability), so
+        // these two callbacks are its whole route to the caller. Cleared at the
+        // top of every run; read in `finalizeResult`.
+        reportConsentOutstanding: (record) => {
+          run.value.consentOutstanding.set(record.service, record);
         },
-      }),
-      emitForRun: (type, payload, runContext) => this.emitLateFact(type, payload, runContext),
-      toolSessions: () => this.toolSessions(),
-      // 8.6.0 — what a run does when a declared credential needs 3LO consent.
-      onAuthorizationRequired: this.onAuthorizationRequired,
-      // The `'tell-model'` consent record travels OFF tracked state (a tracked
-      // write is a commit-log entry, and the URL is a bearer capability), so
-      // these two callbacks are its whole route to the caller. Cleared at the
-      // top of every run; read in `finalizeResult`.
-      reportConsentOutstanding: (record) => {
-        this.consentOutstanding.set(record.service, record);
-      },
-      clearConsentOutstanding: (service) => {
-        this.consentOutstanding.delete(service);
-      },
-    });
+        clearConsentOutstanding: (service) => {
+          run.value.consentOutstanding.delete(service);
+        },
+      });
 
     // v2.14 — Build the NormalizeThinking sub-subflow only when a
     // ThinkingHandler resolved (declared by the provider OR
     // explicitly set via .thinkingHandler()). Conditional mount ensures
     // zero overhead for non-thinking agents — the chart has zero extra
     // stages when undefined.
+    const handlerFor = (run: RunnerScopeValues<AgentRunValues>) =>
+      (run.value.toolCalls ??= toolCallsFor(run));
+    const toolCallsHandler: ReturnType<typeof buildToolCallsHandler> = {
+      execute: bindRunnerStage(
+        (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
+        (run) => (scope) => handlerFor(run).execute(scope),
+      ),
+      resume: bindRunnerStage(
+        (scope: TypedScope<AgentState>) => this.runExecution().forScope(scope),
+        (run) => (scope, input) => handlerFor(run).resume(scope, input),
+      ),
+    };
     const thinkingSubflow = this.thinkingHandler
       ? buildThinkingSubflow(this.thinkingHandler, this.provider.name)
       : undefined;
@@ -5934,7 +5836,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
     const chartDeps = {
       memories: this.memories,
       // Evidence bridge (#5): closure hand-off to the CAUSAL write mounts.
-      ...(this.causalEvidence && { causalEvidenceSource: this.causalEvidence.collect }),
+      ...(this.memories.some((memory) => memory.type === 'causal') && {
+        causalEvidenceSource: (binding: NativeMappingBinding) =>
+          componentEvidence(this.runExecution().forScope(binding).value, binding),
+      }),
       systemPromptCachePolicy,
       maxIterations,
       seed,
@@ -6000,7 +5905,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
           // Route's sixth dispatch value, read only by an agent whose revision
           // turns the tools off (an enforcing answer validation).
           ...(this.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
-          toolOf: (toolName: string) => resolveForLayer(toolName).tool,
+          toolOfFor: (scope: object) => {
+            const resolve = resolveForLayer(scope);
+            return (toolName: string) => resolve(toolName).tool;
+          },
           ...(this.toolMiddleware.length > 0 && { rewrites: true as const }),
           // The time layer (step T5a): a tool whose period declares forms is filled from the
           // turn's one window, bound to the person's window, or recorded as the model's.
@@ -6038,7 +5946,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
       // head, in both builders through one helper, reading each call's
       // `ToolPeriod` off the implementation that answered it; absent → untouched.
       ...(resultsArmed && {
-        resultsLayer: { toolOf: (toolName: string) => resolveForLayer(toolName).tool },
+        resultsLayer: {
+          toolOfFor: (scope: object) => {
+            const resolve = resolveForLayer(scope);
+            return (toolName: string) => resolve(toolName).tool;
+          },
+        },
       }),
       // The answer layer (honesty layer 4): its stage heads the final branch
       // in both builders through one helper, reading only the committed keys
@@ -6056,11 +5969,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput> {
             standingLine: this.answerLayerOption.standingLine,
           }),
           ...(this.answerValidationConfig !== undefined && { validated: true as const }),
-          ...(displayNameOf !== undefined && { displayNameOf }),
+          ...(displayNameOfFor !== undefined && { displayNameOfFor }),
         },
       }),
       // The prose limits block names an item's calls in the app's words — under the same wiring.
-      ...(displayNameOf !== undefined && { displayNameOf }),
+      ...(displayNameOfFor !== undefined && { displayNameOfFor }),
       // Tool choice by classifier (9.105.0): the mount args on the Tools
       // branch and the key across the sf-llm-call boundary, under the arm.
       ...(this.toolChoiceOptions !== undefined && { hasToolChoice: true }),

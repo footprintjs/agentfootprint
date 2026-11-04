@@ -62,7 +62,7 @@ import { defineSkill, skillGraph, buildReadSkillTool } from '../src/injection-en
 import { mock } from '../src/llm-providers.js';
 import { PermissionPolicy } from '../src/security/PermissionPolicy.js';
 import { selfCallNotice, selfSkillTools } from '../src/core/agent/selfCallNotice.js';
-import { composeReadSkillRefusal } from '../src/core/agent/stages/toolCalls.js';
+import { composeReadSkillRefusal } from '../src/core/agent/stages/toolCalls/index.js';
 import { WRAP_UP_FRAME_PREFIX } from '../src/lib/saidByPerson.js';
 import {
   unprovable as unprovableOn,

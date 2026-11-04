@@ -1,7 +1,7 @@
 {
   "name": "agentfootprint",
   "version": "13.0.0",
-  "description": "The explainable agent framework — backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
+  "description": "The explainable agent framework \u2014 backtrack a wrong answer to the exact context that caused it (evidence, not guesses). Built on footprintjs.",
   "license": "MIT",
   "type": "commonjs",
   "author": "Sanjay Krishna Anbalagan",
@@ -396,7 +396,7 @@
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
     "@yarflam/potion-base-8m": "*",
-    "footprintjs": "^10.6.0",
+    "footprintjs": "^11.0.0-rc.1",
     "google-auth-library": "*",
     "ioredis": "*",
     "jose": "*",
@@ -512,7 +512,7 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^6.15.0",
     "eslint-plugin-import": "^2.32.0",
-    "footprintjs": "^10.6.0",
+    "footprintjs": "^11.0.0-rc.1",
     "github-slugger": "^2.0.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
@@ -532,6 +532,6 @@
   },
   "dependencies": {
     "contextfootprint": "0.1.1",
-    "foottrace": "^1.8.0"
+    "foottrace": "^1.11.0"
   }
 }

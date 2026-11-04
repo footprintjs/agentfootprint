@@ -37,7 +37,11 @@ class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
     this.id = id;
     this.name = id;
     this.fn = fn;
-    this.initChart(() => this.buildChart());
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [this.name],
+      initialize: () => ({}),
+    });
   }
 
   private buildChart(): FlowChart {
@@ -50,10 +54,14 @@ class Step<TIn extends object, TOut> extends RunnerBase<TIn, TOut> {
   }
 
   async run(input: TIn): Promise<TOut | RunnerPauseOutcome> {
-    const { FlowChartExecutor } = await import('footprintjs');
-    const executor = new FlowChartExecutor(this.getSpec());
-    this.lastExecutor = executor;
-    return (await executor.run({ input: { ...input } })) as TOut;
+    return this.runExecution().withRun(async (invocation) => {
+      const prepared = this.compositionRunSetup(invocation);
+      return (await invocation.execute(
+        { kind: 'run', options: { input: { ...input } } },
+        prepared.setup,
+        prepared.binding,
+      )) as TOut;
+    });
   }
 
   async resume(

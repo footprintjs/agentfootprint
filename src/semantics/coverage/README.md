@@ -4,7 +4,7 @@ Map: `types.ts`, `items.ts`, `refusal.ts`, `absent.ts`, `ledger.ts` (what a tool
 declares), and `period.ts` (the one period shape a result declares, its one
 rule set, and the verdict row the results layer files — honesty step 7b).
 Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
-(`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) call.
+(`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`) call.
 Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground)
 and `emptiness.ts` (`readEmptiness` — the ONE reader of what came back, shared by
 the answer account and the answer's standing), `period.ts` · `periodVerdict`
@@ -282,7 +282,7 @@ The laws:
   account — never the model's request. `read.ts` · `servedToModel` removes
   them from every recognized envelope OBJECT: a bare absence, and a ledger —
   its own lists and, recursively, whatever it bounds (an absence, another
-  ledger, a semantic envelope). `../../core/agent/stages/toolCalls.ts` · `afterMoment` asks
+  ledger, a semantic envelope). `../../core/agent/stages/toolCalls/decorators/middlewareOperations.ts` · `afterMoment` asks
   it FIRST, so all five dispatch paths strip and every after-tool link is
   handed the served value. (A top-level semantic envelope is already reduced
   to `semanticsForModel`, which drops the coverage detail, before
@@ -347,7 +347,7 @@ collection tool that asks BEFORE the query runs stays the documented shape —
 `../../core/pause.ts` · `requestInput`; this section is the case where a lookup
 has already looked when it asks.) Before this release
 that miss left no record: the dispatch door reads coverage off a RETURNED
-value (`../../core/agent/stages/toolCalls.ts` · `declareCoverage`), and a pause returns its
+value (`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareCoverage`), and a pause returns its
 checkpoint before the door is reached. No `tools.absent`, no
 `coverageDeclared` row, nothing for a coverage band — and the app could not
 file it, because the declaration's `context` rides to the model on resume,
@@ -397,7 +397,7 @@ defineTool({
   give, nothing pauses, nothing is filed, and the run goes on.
 - **Filed at the raise, by the returned path's readers, before anything is
   written for the pause.** The batch loop's pause branch
-  (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) runs `declareCoverage`
+  (`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`) runs `declareCoverage`
   over it — the same `tools.absent` payload and `coverageDeclared` row a
   lookup returning the same `absent(…)` files — and, when the tool is
   grounded (`argumentsFrom` under `noticeEmptyLookups`), the empty-lookup
@@ -439,7 +439,7 @@ defineTool({
   — a `pauseHere`/`askHuman` whose `inputRequest` never went through
   `requestInput` — leaves the committed record it always left, WHETHER OR NOT
   it carries `absence`: its error leaves the stage only after the pause
-  writes are made (`../../core/agent/stages/toolCalls.ts` · `writePause`), so the failed
+  writes are made (`../../core/agent/stages/toolCalls/execution/initialInvocation.ts` · `writePause`), so the failed
   run's record keeps the in-flight batch (the assistant turn, every sibling's
   result, the paused keys). Its error TEXT can differ from 9.113.0's where
   9.113.0 stopped first at the then-unknown `absence` key. All pinned against
@@ -447,7 +447,7 @@ defineTool({
 - **Not covered, named here so nobody reads it as covered:**
   - a raise the library refuses — a tool that pauses on any RESUMED dispatch
     (an approved middleware ask, an approved check-in, granted credential
-    consent — all three run `../../core/agent/stages/toolCalls.ts` ·
+    consent — all three run `../../core/agent/stages/toolCalls/execution/resumedInvocation.ts` ·
     `resolveCredentialAndExecute`, whose pause catch refuses every pause,
     worded for a check-in): that call settles as an ERROR, and an errored
     call files no coverage on any door;
@@ -1011,7 +1011,7 @@ armed: the final branch cannot write back, and one key has one writer.
 | `among.ts`      | the `among` rule set (§ 9): `mintAmong` (the names facet, the irremovable gap, the count check) and `namesFacetOf` |
 | `ledger.ts`     | `coverage()` and the static note; re-exports its recognizer                                                                                                                                                                                                                                   |
 | `emptiness.ts`  | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
-| `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../../core/agent/stages/toolCalls.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
+| `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
 | `evidence.ts`   | what an absence is allowed to ground                                                                                                                                                                                                                                                          |
 | `period.ts`     | the ONE period shape (`DeclaredPeriod`), its ONE rule set (`periodProblem` — asked by every mint and every reader), the verdict (`periodVerdict`), the person's line (`periodLine`), the wire spelling as data (`PERIOD_WIRE`), and the results layer's `period` row with its checkpoint door |
 | `inProgress.ts` | the third outcome (§ 8) — the ONE rule set for `inProgress` (`readInProgressList`: the mint refuses by it, the dispatch door reads by it), the served clause and its inverse, the person's line, and the wire spelling as data (`IN_PROGRESS_WIRE`)                                           |

@@ -194,7 +194,7 @@ export interface InjectionContext {
    * store and both the model and this field get the claim ticket instead —
    * `{"placed":true,"ref":"art_…","kind":"tool-result/<tool>",…}` — or the
    * tool's declared `resultKind` in place of that default kind (see
-   * `placeResults` in stages/toolCalls.ts, where the other end of this note
+   * `placeResults` in stages/toolCalls/execution/artifactsOperations.ts, where the other end of this note
    * lives). So a predicate matching on payload text stops firing once an
    * operator turns placement on or lowers the threshold, and one matching on
    * the ticket's `kind` only fires after it. Deliberate: routing judges what

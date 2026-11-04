@@ -6,7 +6,7 @@ title: toolSessionKey
 
 > **toolSessionKey**(`ctx`, `scope`): `string` \| `undefined`
 
-Defined in: [src/tools/toolSessions.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions.ts#L192)
+Defined in: [src/tools/toolSessions/keys.ts:38](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/toolSessions/keys.ts#L38)
 
 Derive the isolation key a tool should hold a session under.
 
@@ -37,7 +37,7 @@ hold one session under. Ask for it and you get `undefined`.
 
 ### ctx
 
-`Pick`\<[`ToolExecutionContext`](/docs/api/interfaces/ToolExecutionContext), `"toolCallId"` \| `"runId"` \| `"sessionId"` \| `"identity"`\>
+`Pick`\<[`ToolExecutionContext`](/docs/api/interfaces/ToolExecutionContext), `"toolCallId"` \| `"runId"` \| `"sessionId"` \| `"identity"` \| `"resourceOwner"`\>
 
 ### scope
 

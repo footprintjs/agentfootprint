@@ -113,12 +113,27 @@ describe('a composition resumed with a new request', () => {
   });
 
   it('a malformed request is refused before the resume moves anything', async () => {
-    const member = Agent.create({ provider: mock({ reply: 'hi' }), model: 'mock' }).build();
+    const member = Agent.create({
+      provider: mock({ replies: [{ toolCalls: [{ id: 'ask', name: 'ask', args: {} }] }] }),
+      model: 'mock',
+    })
+      .tool(
+        defineTool({
+          name: 'ask',
+          description: 'Ask',
+          inputSchema: { type: 'object' },
+          execute: () => pauseHere({ question: 'Continue?' }),
+        }),
+      )
+      .build();
     const flow = Sequence.create({ id: 's' }).step('m', member).build();
+    const paused = await flow.run({ message: 'first' });
+    if (typeof paused !== 'object' || paused === null || !('checkpoint' in paused))
+      throw new Error('Expected a real pause');
     const resumed: unknown[] = [];
     flow.on('agentfootprint.pause.resume', (e) => resumed.push(e));
     await expect(
-      flow.resume({ sharedState: {} } as never, 'yes', { request: { a: TOKEN } as never }),
+      flow.resume(paused.checkpoint, 'yes', { request: { a: TOKEN } as never }),
     ).rejects.toThrow(/Sequence\.resume: `request` must be built by requestContext/);
     expect(resumed).toEqual([]);
   });

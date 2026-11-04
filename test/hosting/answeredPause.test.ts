@@ -40,6 +40,7 @@ import {
 import type { LLMMessage } from '../../src/provider-contract/types.js';
 import { Agent } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
+import { saveServedParties } from '../../src/core/agent/stages/servedParties.js';
 
 /** Two refunds asked in one turn; only the first has its result. */
 const halfAnswered: LLMMessage[] = [
@@ -221,13 +222,39 @@ describe('listedFormatOf — what a session listing says a stored session is', (
       tool: 'refund',
       toolCallId: 'b',
       args: { order: 2 },
+      party: { channel: 'registry' },
     });
     if (minted === undefined) throw new Error('expected the call to bind');
-    const base = pausedOver(halfAnswered, {
+    const originalCalls = halfAnswered.find((message) => message.role === 'assistant')!.toolCalls!;
+    const shared: Record<string, unknown> = {
+      toolResourceOwner: {
+        version: 1,
+        birth: { runId: 'r-1', componentOrdinal: 0 },
+        nextDispatch: 0,
+      },
+      turnNumber: 1,
+      iteration: 1,
+      llmLatestToolCalls: originalCalls,
       pausedToolName: 'refund',
       pausedToolCallId: 'b',
+      pausedToolParty: { channel: 'registry' },
       pausedRequest: minted.request,
       pausedCheckInArgs: minted.args,
+    };
+    const scope = { ...shared, $getValue: (key: string) => shared[key] };
+    saveServedParties(
+      scope as never,
+      { current: new Map(), lastServed: new Map() },
+      {
+        calls: originalCalls,
+        iteration: 1,
+        partyOf: () => ({ channel: 'registry' }),
+        paused: { id: 'b', name: 'refund' },
+      },
+    );
+    const base = pausedOver(halfAnswered, {
+      ...shared,
+      servedToolParties: (scope as Record<string, unknown>).servedToolParties,
       ...state,
     });
     return {

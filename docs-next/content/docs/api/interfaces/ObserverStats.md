@@ -20,7 +20,7 @@ Present on `RuntimeSnapshot` only when a deferred observer was attached.
 
 > `readonly` **budgetExhausted**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:100
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:102
 
 Flushes cut short by `flushBudgetMs` (A1).
 
@@ -34,7 +34,7 @@ Flushes cut short by `flushBudgetMs` (A1).
 
 > `readonly` **depth**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:94
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:96
 
 Current backlog.
 
@@ -48,7 +48,7 @@ Current backlog.
 
 > `readonly` **drops**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:96
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:98
 
 Events LOST (overflow) — never silent; also visible as seq gaps.
 
@@ -62,7 +62,7 @@ Events LOST (overflow) — never silent; also visible as seq gaps.
 
 > `readonly` **flushes**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:98
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:100
 
 Completed checkpoint flushes.
 
@@ -76,7 +76,7 @@ Completed checkpoint flushes.
 
 > `readonly` **inflight**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:106
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:108
 
 Async listener continuations not yet settled.
 
@@ -90,7 +90,7 @@ Async listener continuations not yet settled.
 
 > `readonly` **inlineDeliveries**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:104
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:106
 
 `'block'`-policy refusals delivered synchronously inline.
 
@@ -104,7 +104,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDisp
 
 > `readonly` **p95FlushMs**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:102
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:104
 
 p95 flush duration, ms (rolling window).
 
@@ -118,7 +118,7 @@ p95 flush duration, ms (rolling window).
 
 > `readonly` **perListener**: `Readonly`\<`Record`\<`string`, `ListenerStats`\>\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:108
+Defined in: node\_modules/footprintjs/dist/types/lib/observer-queue/deferredDispatcher.d.ts:110
 
 Per-listener time accounting — "name the hog" (A2).
 

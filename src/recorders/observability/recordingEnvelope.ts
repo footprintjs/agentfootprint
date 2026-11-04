@@ -56,17 +56,13 @@
  * guarantee whole: an anonymous run produces an envelope with no `principal`
  * key at all, not a placeholder and not a session id wearing an actor's name.
  *
- * ## `runId` has two namespaces, and this one is deliberate
+ * ## `runId` comes from the recorded events
  *
- * A footprintjs snapshot carries its OWN engine-level `runId`
- * (`<timestamp>-<padded counter>`, minted per `executor.run()`), while the
- * agentfootprint events carry `run-<timestamp>-<seq>` from `makeRunId()`. They
- * are different ids for different layers and they do not match. This envelope
- * uses the EVENT-meta one exclusively, because that is the id `sessionId`,
- * `principal` and `tenant` ride beside and the one every typed-event consumer
- * correlates on. When the events cannot supply it, this refuses rather than
- * falling back to the snapshot's — quietly substituting an id from another
- * namespace would make two envelopes look comparable when they are not.
+ * The native lifecycle supplies typed-event run IDs. A selected snapshot or
+ * log can describe a different component or resume leg, so this envelope uses
+ * EVENT-meta exclusively: that is the id `sessionId`, `principal` and `tenant`
+ * ride beside and every typed-event consumer correlates on. Missing event
+ * identity refuses rather than substituting a selected snapshot's id.
  */
 
 import type { AgentfootprintEvent } from '../../events/registry.js';

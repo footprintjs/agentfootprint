@@ -6,7 +6,7 @@
  *
  *   - integration: a hand-off happens and the swarm halts on the
  *                  router's final answer
- *   - property:    one routing call per turn, plus one to start
+ *   - property:    one decision per dispatch or explicit halt, no speculative call
  *   - honesty:     an id the roster doesn't contain follows swarm()'s
  *                  existing done/fallback law — nobody is picked instead
  *   - budget:      maxHandoffs still bounds the loop
@@ -112,7 +112,7 @@ describe('llmSwarm — hand-off and halt', () => {
     expect(asked[1]).toContain('billing handled "please refund invoice 42"');
   });
 
-  it('calls the router once per turn, plus once to start', async () => {
+  it('calls the router for dispatch and the explicit final-answer halt', async () => {
     const router = scriptedRouter([HANDOFF, FINISH]);
     const desk = llmSwarm({
       provider: router,
@@ -125,7 +125,7 @@ describe('llmSwarm — hand-off and halt', () => {
 
     await desk.run({ message: 'my invoice is wrong' });
 
-    // 1 opening decision + 1 after the single specialist turn.
+    // One dispatch decision and one explicit halt decision.
     expect(router.seen).toHaveLength(2);
   });
 
@@ -227,6 +227,7 @@ describe('llmSwarm — halting laws', () => {
 
     expect(turns).toBe(3);
     expect(billing.calls()).toBe(3);
+    expect(router.seen).toHaveLength(3); // no fourth decision after the handoff budget
   });
 
   it('rejects a roster smaller than 2, naming the call the consumer made', () => {

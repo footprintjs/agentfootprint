@@ -124,7 +124,7 @@ export function selfSkillTools(
 
 // LENS · tool-result · persistent-history
 // reads: skillId ← the request, verbatim; tools ← selfSkillTools(active injections ∩ the wire); body ← the surviving result
-// known: the wire handed in is scope.dynamicToolSchemas (toolCalls.ts · "── The SELF-CALL arm (9.84.0) — BEFORE reachability"), which is the PRE-withholding list;
+// known: the wire handed in is scope.dynamicToolSchemas (toolCalls/routing/readSkillRoute.ts · "── The SELF-CALL arm (9.84.0) — BEFORE reachability"), which is the PRE-withholding list;
 // that same arm argues the wrap-up latch can never be up when a self-call is composed.
 // law: may omit, never deny; every clause anchored to the call it was composed on.
 /**

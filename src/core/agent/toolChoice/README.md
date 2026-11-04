@@ -81,7 +81,7 @@ true` and `served` names exactly N + the doors. The full wire is served,
   treats the call exactly as it treated an off-wire call before this
   release — a registry tool the model last read under a party that can
   still answer RUNS, recorded as `tools.answered_off_wire`
-  (`stages/toolCalls.ts · resolveTool`); a name no party can answer is
+  (`stages/toolResolver.ts · buildToolResolver`); a name no party can answer is
   refused as a tool result, as before. The NEXT call serves the full wire
   (`after-miss`). So on a provider whose wire lets the model name an
   unserved tool, a miss costs a record and one full-width call, never the

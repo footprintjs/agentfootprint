@@ -1,19 +1,7 @@
 /**
- * Event registry — every typed `agentfootprint.*` event (see ALL_EVENT_TYPES;
- * the event/domain counts in the docs are asserted against this file by
- * test/events/unit/registry.test.ts, so don't hardcode counts here).
- *
- * Pattern: Discriminated Union + Typed Factory (Gang of Four adapted for TS).
- * Role:    The stable public event contract — the "ports" of the hexagonal
- *          architecture (Cockburn, 2005).
- * Emits:   N/A — this file DEFINES event types and factory helpers.
- *
- * Consumers subscribe via `.on(type, listener)`. Emitters construct events
- * via typed helpers (e.g. `makeContextInjected(payload)`) rather than raw
- * strings — compile-time safety prevents typos and payload drift.
- *
- * Events are additive within a major version; breaking changes require a
- * major bump. See agentfootprint_v2_detailed_design.md for rules.
+ * Public event payload contracts, typed factories and exhaustive event names.
+ * Registry tests derive counts here; consumers subscribe with on(type, listener).
+ * Breaking payload changes require a major version.
  */
 
 import type { AgentfootprintEventEnvelope } from './types.js';
@@ -212,6 +200,7 @@ export const EVENT_NAMES = {
     shadowed: 'agentfootprint.tools.shadowed',
     claimSwallowed: 'agentfootprint.tools.claim_swallowed',
     answeredOffWire: 'agentfootprint.tools.answered_off_wire',
+    resourceRestore: 'agentfootprint.tools.resource_restore',
     sessionStarted: 'agentfootprint.tools.session_started',
     sessionReused: 'agentfootprint.tools.session_reused',
     sessionClosed: 'agentfootprint.tools.session_closed',
@@ -546,6 +535,13 @@ export interface AgentfootprintEventMap {
   'agentfootprint.tools.answered_off_wire': AgentfootprintEventEnvelope<
     'agentfootprint.tools.answered_off_wire',
     ToolsAnsweredOffWirePayload
+  >;
+  'agentfootprint.tools.resource_restore': AgentfootprintEventEnvelope<
+    'agentfootprint.tools.resource_restore',
+    {
+      readonly local: 'retained' | 'none-known-locally' | 'unconfirmed';
+      readonly remote: 'unknown';
+    }
   >;
   'agentfootprint.tools.session_started': AgentfootprintEventEnvelope<
     'agentfootprint.tools.session_started',
@@ -937,6 +933,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.tools.shadowed',
   'agentfootprint.tools.claim_swallowed',
   'agentfootprint.tools.answered_off_wire',
+  'agentfootprint.tools.resource_restore',
   'agentfootprint.tools.session_started',
   'agentfootprint.tools.session_reused',
   'agentfootprint.tools.session_closed',

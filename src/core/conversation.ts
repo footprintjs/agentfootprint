@@ -3,10 +3,9 @@
  *
  * Pattern: teaching refusal at a boundary (the shape `runInput` uses for a
  *          caller's message, applied to a caller's TIMING).
- * Role:    core/ layer. An `Agent` keeps the last run's executor, run context,
- *          answer and pause on ITSELF — that is what makes `checkpoint()`,
- *          `getLastSnapshot()` and `followUp()` possible at all. Those fields
- *          have exactly one owner at a time, and until 9.2.0 nothing said so.
+ * Role:    core/ layer. The native lifecycle owns execution and selected views;
+ *          the domain guards keep questions and named conversation identity
+ *          consistent at its public entry points.
  * Emits:   N/A — these fire before a run starts.
  *
  * ## Why these are refusals and not warnings
@@ -38,46 +37,11 @@
  */
 
 /**
- * Thrown when `run()` / `resume()` is called on a runner that is already
- * running.
- *
- * One instance answers one turn at a time. To run two turns at once, build two
- * agents — a chart is built once per instance and instances are cheap — or put
- * the turns behind `standingAgent({ onConcurrentInvoke: 'enqueue' })`, which
- * queues them.
- *
- * @example
- * ```ts
- * // Refused: both would write the same instance's last-run state.
- * await Promise.all([agent.run({ message: 'a' }), agent.run({ message: 'b' })]);
- *
- * // Fine: two instances, two sets of state.
- * await Promise.all([agentA.run({ message: 'a' }), agentB.run({ message: 'b' })]);
- * ```
+ * One shared native refusal class across logical runners and raw executors.
+ * Migration: runnerId replaces agentId; activeRunId is absent during setup
+ * before native origin exists. Match code ERR_RUN_IN_FLIGHT across formats.
  */
-export class RunInFlightError extends Error {
-  readonly code = 'ERR_RUN_IN_FLIGHT' as const;
-  /** The runner that is busy, by its configured id. */
-  readonly agentId: string;
-  /** The run already in flight, so a log line can be joined to its trace. */
-  readonly activeRunId: string;
-
-  constructor(door: string, agentId: string, activeRunId: string) {
-    super(
-      `${door}: this agent is already running (run '${activeRunId}'). One instance answers one ` +
-        `turn at a time — its last executor, run context, answer and pause all live on the ` +
-        `instance, so two overlapping runs would each finish having overwritten the other's. ` +
-        `Both would return a plausible answer and checkpoint() would then hand back whichever ` +
-        `finished last, which is why this is refused rather than left to look like it worked. ` +
-        `Await the run in flight, build a second Agent for the second turn (charts are ` +
-        `built per instance and instances are cheap), or serve the agent through ` +
-        `standingAgent({ onConcurrentInvoke: 'enqueue' }) to queue turns behind each other.`,
-    );
-    this.name = 'RunInFlightError';
-    this.agentId = agentId;
-    this.activeRunId = activeRunId;
-  }
-}
+export { RunInFlightError } from 'footprintjs';
 
 /**
  * Thrown when a new message is sent to an agent whose last run PAUSED to ask a
@@ -109,7 +73,7 @@ export class PendingQuestionError extends Error {
         `${asked} raised the question and nothing has answered it.${quoted} Answer it with ` +
         `agent.resume(outcome.checkpoint, decision) — that continues the paused run from where ` +
         `it stopped, with no earlier tool re-executed. If the question really is being dropped, ` +
-        `call agent.abandonPause() first and then run() again: a pending question that a later ` +
+        `await agent.abandonPause() first and then run() again: a pending question that a later ` +
         `message silently discards is a consent gate anyone can walk around.`,
     );
     this.name = 'PendingQuestionError';
@@ -145,13 +109,13 @@ export class PendingQuestionError extends Error {
 export class ResumeIdentityConflictError extends Error {
   readonly code = 'ERR_SESSION_OWNERSHIP_CONFLICT' as const;
 
-  constructor() {
+  constructor(operation: 'resume' | 'followUp' | 'session' = 'resume') {
     super(
-      'Agent.resume: the identity passed to resume() is not the one the paused run was for. ' +
-        "A resumed run keeps the paused run's memory namespace and credentials, so it cannot " +
-        'also run as somebody else. Resume with the identity the paused run was started with ' +
-        "(or none, and the checkpoint's is used), or start a new run for the other person. " +
-        'Neither identity appears in this message on purpose.',
+      operation === 'session'
+        ? 'Agent.resume: the supplied sessionId must match the paused transport session. No state moved.'
+        : operation === 'followUp'
+        ? 'Agent.followUp: the supplied identity differs from the selected conversation. Use a separate instance or start an explicit new conversation. No state moved.'
+        : 'Agent.resume: the supplied identity differs from the paused conversation. Resume with its original identity or start a new conversation. Neither identity is included in this message.',
     );
     this.name = 'ResumeIdentityConflictError';
   }

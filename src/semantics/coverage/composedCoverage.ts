@@ -5,7 +5,7 @@
  * Pattern: one row type, read by the claim checker. Pure data; TYPE-only
  *          imports, and one type guard.
  * Role:    the contract between the dispatch funnel that writes the row
- *          (`../../core/agent/stages/toolCalls.ts` · `declareCoverage`, via
+ *          (`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareCoverage`, via
  *          `search/compose.ts`) and every reader that judges a "not found",
  *          "none" or "the full list" against it.
  * Emits:   N/A.

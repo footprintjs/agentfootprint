@@ -158,7 +158,7 @@ describe('the round trip, no host — pause → resume → checkpoint', () => {
     const paused = (await agent.run({ message: 'refund me', identity: xavier })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     await agent.run({ message: 'hi', identity: { principal: 'yara', conversationId: 'cy' } });
 
     const principals = principalsByRun(agent);
@@ -198,7 +198,7 @@ describe('the round trip, no host — pause → resume → checkpoint', () => {
     const perRun = (await agent.run({ message: 'refund me' })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     await agent.run({ message: 'hi', identity: yara });
     await agent.resume(perRun.checkpoint, 'yes');
     expect(agent.checkpoint()?.identity).toBeUndefined();
@@ -207,7 +207,7 @@ describe('the round trip, no host — pause → resume → checkpoint', () => {
     const session = (await agent.run({ message: 'refund me' }, { sessionId: 's-1' })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     await agent.run({ message: 'hi', identity: yara });
     await agent.resume(session.checkpoint, 'yes', { sessionId: 's-1' });
     expect(agent.checkpoint()?.identity).toBeUndefined();

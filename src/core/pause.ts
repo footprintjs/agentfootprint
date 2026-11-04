@@ -414,11 +414,11 @@ export type ResumeDecisionRefusal =
  * (`checkInApproved({ request, by })`), and a resume holds the decision to it:
  * the same request, the same call, once.
  *
- * Every refusal but `'already-answered'` is decided before anything moves on
- * an agent's own `resume()`; the checkpoint is unchanged and can be answered
- * with the right decision. `'already-answered'` — and every refusal of a
- * composition's nested agent — is decided where the decision is used, inside
- * the resumed run and still before the tool. See {@link ResumeDecisionRefusal}.
+ * An Agent refuses invalid decision shape and checkpoint binding before native execution.
+ * Known issued-ledger replays and witnessed local closes can also refuse there.
+ * Opaque-ledger refusals, spend races and nested decisions occur inside execution,
+ * still before the tool. An unchanged checkpoint does not prove no execution began;
+ * selected readers follow the actual leg. See {@link ResumeDecisionRefusal}.
  *
  * **It names no request id** — not in its message, not on a field — and a
  * host sends its message as the refusal's body. A refusal that named the

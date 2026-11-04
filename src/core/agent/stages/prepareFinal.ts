@@ -49,6 +49,8 @@ import {
   type AttachmentBoundary,
 } from '../scripts/attachment.js';
 import type { ResolvedScriptTravel, ScriptRow, TurnEndScripts } from '../scripts/types.js';
+import type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
+export type { FinalStageArms, DisplayNameOf } from './finalStageContract.js';
 
 type FinalStage = (scope: TypedScope<AgentState>) => void | Promise<void>;
 
@@ -478,49 +480,9 @@ export function prepareFinalWithLimitsAndAssumedStage(
     captureTurnPayload(scope, answer, false, undefined, undefined, releaseTokens);
   };
 }
-
-// ─── The answer layer (honesty layer 4) ─────────────────────────────────
-
-/** Which PrepareFinal body the final branch mounts — the arms both chart builders read. */
-export interface FinalStageArms {
-  readonly hasAnswerValidation?: boolean;
-  readonly releaseOutputTokens?: true;
-  readonly coverageLimitsAsData?: boolean;
-  readonly attachCoverageLimits?: boolean;
-  /** The inputs layer is armed; `rewrites` — a before-tool chain can rewrite a filled value. */
-  readonly inputsLayer?: { readonly rewrites?: true };
-  /**
-   * The answer layer is armed; `standingLine` — its one line travels with a
-   * prose answer, in the answers its mode says it for (`'always'` for
-   * `standingLine: true`).
-   */
-  readonly answerLayer?: {
-    readonly standingLine?: import('../assessment/compose.js').StandingLineWhen;
-  };
-  /** The time layer is armed — the limits block's `Period:` lines render in the clock's zone. */
-  readonly timeLayer?: true;
-  /** The evidence gate's `'rails'` posture — a refused answer is recorded flagged and ends the branch. */
-  readonly evidenceRails?: true;
-  /**
-   * A tool's `displayName`, read through the agent's own tools — present only
-   * on an agent where a tool can declare one. The prose limits block then names
-   * an item's declaring calls in the app's words (`coverage/answer.ts` ·
-   * `composeAnswerWithCoverage`). Absent → the stage each combination of arms
-   * has always mounted, same reference, same bytes.
-   */
+type BoundFinalStageArms = Omit<FinalStageArms, 'displayNameOfFor'> & {
   readonly displayNameOf?: DisplayNameOf;
-  /**
-   * `.scriptTravelsWithTheAnswer()` — the recorded programs of this turn's
-   * code-running calls travel with the answer: as `turn_end.scripts` always,
-   * and as text after the `---` separator on a prose answer (`typed` — the
-   * answer has an output schema — gets the data only). Absent → the stage
-   * each combination of arms has always mounted, same reference, same bytes.
-   */
-  readonly scriptTravel?: ResolvedScriptTravel & { readonly typed?: true };
-}
-
-/** A tool's registered name → the app's words for a call of it, when its tool declares them. */
-export type DisplayNameOf = (toolName: string) => string | undefined;
+};
 
 /**
  * THE ONE CHOICE of PrepareFinal's body, for both chart builders (the twins
@@ -531,6 +493,18 @@ export type DisplayNameOf = (toolName: string) => string | undefined;
  */
 export function prepareFinalFor(
   arms: FinalStageArms,
+): (scope: TypedScope<AgentState>) => void | Promise<void> {
+  const { displayNameOfFor, ...declarations } = arms;
+  if (displayNameOfFor === undefined) return prepareFinalBound(declarations);
+  return (scope) =>
+    prepareFinalBound({
+      ...declarations,
+      displayNameOf: displayNameOfFor(scope),
+    })(scope);
+}
+
+function prepareFinalBound(
+  arms: BoundFinalStageArms,
 ): (scope: TypedScope<AgentState>) => void | Promise<void> {
   const chosen = finalStageFor(arms);
   const composed =
@@ -600,7 +574,7 @@ function withScripts(
 }
 
 /** Pick the existing composer; output admission wraps it without recomposing the answer. */
-function finalStageFor(arms: FinalStageArms): FinalStage {
+function finalStageFor(arms: BoundFinalStageArms): FinalStage {
   const releaseTokens = arms.releaseOutputTokens === true;
   const displayNameOf = arms.displayNameOf;
   // A stage's second argument belongs to the engine. Bind delivery (and the

@@ -9,8 +9,8 @@
  *     second. Before this, every turn got `{ conversationId: '<runId>' }` — a
  *     fresh namespace per turn — and the recall was silently empty.
  *   • AN EXPLICIT IDENTITY ALWAYS WINS, including over a session.
- *   • NO SESSION AND NO IDENTITY IS UNCHANGED, to the committed key: the
- *     per-run default, and no `runIdentitySource` at all.
+ *   • NO SESSION AND NO IDENTITY uses the native id as its per-run default,
+ *     explicitly marked run; caller origins are explicit too.
  *   • THE DERIVATION IS VISIBLE BUT NOT CLAIMED AS THE CALLER'S. It is recorded
  *     as `runIdentitySource: 'session'`, and it still does NOT reach
  *     `tool.execute` as `ctx.identity` — "absent" keeps meaning "nobody named
@@ -73,13 +73,13 @@ describe('run identity — where it comes from', () => {
     expect(identityOf(agent)).toEqual({ conversationId: 'sess-42', source: 'session' });
   });
 
-  it('an explicit identity wins over the session, and is NOT marked derived', async () => {
+  it('an explicit identity wins over the session and is marked caller', async () => {
     const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'm' }).build();
     await agent.run(
       { message: 'hello', identity: { tenant: 'acme', conversationId: 'chosen' } },
       { sessionId: 'sess-42' },
     );
-    expect(identityOf(agent)).toEqual({ conversationId: 'chosen' });
+    expect(identityOf(agent)).toEqual({ conversationId: 'chosen', source: 'caller' });
   });
 
   it('an identity on the OPTIONS bag wins too — whichever door it came through', async () => {
@@ -88,20 +88,20 @@ describe('run identity — where it comes from', () => {
       { message: 'hello' },
       { sessionId: 'sess-42', identity: { conversationId: 'from-options' } },
     );
-    expect(identityOf(agent)).toEqual({ conversationId: 'from-options' });
+    expect(identityOf(agent)).toEqual({ conversationId: 'from-options', source: 'caller' });
   });
 
-  it('BOUNDARY — no session and no identity is exactly what it always was', async () => {
+  it('BOUNDARY — no session or caller uses the actual native id with explicit run origin', async () => {
     const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'm' }).build();
+    let nativeRunId: string | undefined;
+    agent.on('agentfootprint.agent.run_configured', (event) => {
+      nativeRunId = event.meta?.runId;
+    });
     await agent.run({ message: 'hello' });
     const seen = identityOf(agent);
-    // The per-run default, unchanged since 1.x…
-    expect(seen.conversationId).toMatch(/^run-/);
-    // …and NOTHING extra committed. A key that appeared on every run would
-    // change the commit log of every agent that never asked for any of this.
-    expect(seen.source).toBeUndefined();
-    const state = agent.getLastSnapshot()?.sharedState as Record<string, unknown>;
-    expect('runIdentitySource' in state).toBe(false);
+    expect(nativeRunId).toBeTypeOf('string');
+    expect(seen.conversationId).toBe(nativeRunId);
+    expect(seen.source).toBe('run');
   });
 
   it('two runs of ONE session land in ONE namespace — the regression, stated', async () => {
@@ -260,12 +260,17 @@ describe('run identity — standingAgent gets it for free', () => {
     const { provider } = capturingProvider('ok');
     const host = inProcessHost();
     const agent = Agent.create({ provider, model: 'm', maxIterations: 1 }).build();
+    let nativeRunId: string | undefined;
+    agent.on('agentfootprint.agent.run_configured', (event) => {
+      nativeRunId = event.meta?.runId;
+    });
     const handle = await standingAgent({ agent, sessions: memorySessions(), host });
     try {
       await host.deliver({ input: 'hello' });
       const seen = identityOf(agent);
-      expect(seen.conversationId).toMatch(/^run-/);
-      expect(seen.source).toBeUndefined();
+      expect(nativeRunId).toBeTypeOf('string');
+      expect(seen.conversationId).toBe(nativeRunId);
+      expect(seen.source).toBe('run');
     } finally {
       await handle.close();
     }

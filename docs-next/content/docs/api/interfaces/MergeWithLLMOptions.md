@@ -4,7 +4,7 @@ title: MergeWithLLMOptions
 
 # Interface: MergeWithLLMOptions
 
-Defined in: [src/core-flow/Parallel.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L124)
+Defined in: [src/core-flow/Parallel.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L111)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core-flow/Parallel.ts:124](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core-flow/Parallel.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L130)
+Defined in: [src/core-flow/Parallel.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L117)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/core-flow/Parallel.ts:130](https://github.com/footprintjs/agent
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L126)
+Defined in: [src/core-flow/Parallel.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L113)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/core-flow/Parallel.ts:126](https://github.com/footprintjs/agent
 
 > `readonly` **prompt**: `string`
 
-Defined in: [src/core-flow/Parallel.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L128)
+Defined in: [src/core-flow/Parallel.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L115)
 
 Prompt prepended to the branch results when feeding the merge LLM.
 
@@ -38,7 +38,7 @@ Prompt prepended to the branch results when feeding the merge LLM.
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core-flow/Parallel.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L125)
+Defined in: [src/core-flow/Parallel.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L112)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [src/core-flow/Parallel.ts:125](https://github.com/footprintjs/agent
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core-flow/Parallel.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L129)
+Defined in: [src/core-flow/Parallel.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Parallel.ts#L116)

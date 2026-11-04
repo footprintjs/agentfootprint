@@ -1313,6 +1313,10 @@
     "toolCallId": "kept",
     "toolName": "kept"
   },
+  "agentfootprint.tools.resource_restore": {
+    "local": "kept",
+    "remote": "kept"
+  },
   "agentfootprint.tools.result_refused": {
     "declaredStatus": "kept",
     "iteration": "kept",

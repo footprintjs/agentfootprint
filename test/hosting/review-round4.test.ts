@@ -347,7 +347,7 @@ describe('RS1 — the session marker on an edited checkpoint does not bypass the
     const paused = (await agent.run({ message: 'refund me', identity: bob })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     const tampered = structuredClone(paused.checkpoint) as FlowchartCheckpoint & {
       sharedState: Record<string, unknown>;
     };
@@ -369,7 +369,7 @@ describe('RS2 — an ownerless pause resumed by a named person is refused', () =
     const paused = (await agent.run({ message: 'refund me' })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     seen.length = 0;
     const bob: MemoryIdentity = { principal: 'bob', conversationId: 'cb' };
     await expect(agent.resume(paused.checkpoint, 'yes', { identity: bob })).rejects.toBeInstanceOf(
@@ -386,7 +386,7 @@ describe('RS2 — an ownerless pause resumed by a named person is refused', () =
     const paused = (await agent.run({ message: 'refund me' }, { sessionId: 's' })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     await expect(
       agent.resume(paused.checkpoint, 'yes', {
         sessionId: 's',
@@ -412,7 +412,7 @@ describe('RS3 — two sessions pausing in the same millisecond do not collide', 
         },
         { sessionId: 'sA' },
       )) as never;
-      agent.abandonPause();
+      await agent.abandonPause();
       await agent.run(
         {
           message: 'ASKSTASH SECRET-bob c-bob',
@@ -420,7 +420,7 @@ describe('RS3 — two sessions pausing in the same millisecond do not collide', 
         },
         { sessionId: 'sB' },
       );
-      agent.abandonPause();
+      await agent.abandonPause();
     } finally {
       now.mockRestore();
     }
@@ -445,10 +445,10 @@ describe('RS3 — no bound to fall off: 256 later pauses change nothing', () => 
       { message: 'ASKSTASH SECRET-alice c-alice', identity: alice },
       { sessionId: 'sA' },
     )) as { checkpoint: FlowchartCheckpoint };
-    agent.abandonPause();
+    await agent.abandonPause();
     for (let i = 0; i < 256; i++) {
       await agent.run({ message: `ASKSTASH s${i} c${i}` }, { sessionId: `other-${i}` });
-      agent.abandonPause();
+      await agent.abandonPause();
     }
     await agent.resume(pa.checkpoint, 'yes', { identity: alice });
     since();
@@ -603,7 +603,7 @@ describe('RS4 — the owner descends into a call made by a run that FAILED', () 
 // ─── NIT 3 — the stated edge, pinned as documented ────────────────────
 
 describe('NIT 3 (documented edge) — a run-shaped NAMED identity, a bare resume after someone else ran', () => {
-  it('{conversationId:"run-1-1"} is read as the per-run default — pass identity on resume to keep it', async () => {
+  it('a run-shaped caller identity survives bare and explicit resume after another caller ran', async () => {
     const { agent } = spyAgent([
       ASK,
       { content: 'hi' },
@@ -616,12 +616,12 @@ describe('NIT 3 (documented edge) — a run-shaped NAMED identity, a bare resume
     const paused = (await agent.run({ message: 'refund me', identity: named })) as {
       checkpoint: FlowchartCheckpoint;
     };
-    agent.abandonPause();
+    await agent.abandonPause();
     await agent.run({ message: 'hi', identity: { principal: 'yara', conversationId: 'y' } });
     await agent.resume(structuredClone(paused.checkpoint), 'yes');
-    expect(agent.checkpoint()?.identity).toBeUndefined(); // the documented edge
+    expect(agent.checkpoint()?.identity).toEqual(named); // explicit caller provenance, no spelling inference
     await agent.resume(paused.checkpoint, 'yes', { identity: named });
-    expect(agent.checkpoint()?.identity).toEqual(named); // the documented remedy
+    expect(agent.checkpoint()?.identity).toEqual(named); // explicitly repeating the same caller remains valid
   });
 });
 

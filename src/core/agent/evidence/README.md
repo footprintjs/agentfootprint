@@ -5,7 +5,7 @@ carriers), `extract.ts`, `types.ts`, and the spelling they share,
 `../../../lib/normalize.ts` (a leaf, below every layer: the inputs layer reads it too). One fold, asked at two
 moments and never stored: `../stages/route.ts` · `judgeEvidence` at the
 answer (handed to `gate.ts` as a parameter), and since 9.110.0
-`../stages/toolCalls.ts` · `towersFor` at dispatch, under `.findings()`
+`../stages/toolCalls/evidence/towers.ts` · `towersFor` at dispatch, under `.findings()`
 beside the gate only, for the contingent check's second moment.
 Lens: `recovery.ts` · `buildEvidenceRecovery` — request-only system context for
 the revision. `gate.ts` · `buildEvidenceCorrection` remains a legacy compatibility

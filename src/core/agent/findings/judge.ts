@@ -5,7 +5,7 @@
  *          (`judgeResult`) that spends a `Classifier` call per tool result
  *          and files what came back through `recordFindings` — the ONE
  *          writer of `AgentState.findingsLedger` stays the one writer.
- * Role:    core/ layer. The dispatch loop (`stages/toolCalls.ts`) calls
+ * Role:    core/ layer. The dispatch loop (`stages/toolCalls/evidence/judgeLanded.ts`) calls
  *          `judgeResult` right after a tool result is committed to
  *          `toolResults`, and only under `.findings({ judge })`; an agent
  *          with no judge never reaches this file.

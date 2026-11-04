@@ -17,7 +17,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { FlowChartExecutor, flowChart } from 'footprintjs';
-import type { CombinedRecorder, RedactionPolicy } from 'footprintjs';
+import type { CombinedRecorder, RedactionPolicy, ScopeFactory } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
 import { Agent, defineTool, Sequence } from '../../src/index.js';
@@ -26,8 +26,8 @@ import { mock } from '../../src/doors/providers.js';
 import { recordRun } from '../../src/doors/observe.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import { EventDispatcher } from '../../src/events/dispatcher.js';
-import { retiredRule, servingAhead } from '../../src/redaction/runRedaction.js';
-import { RedactionRule } from 'footprintjs/advanced';
+import { createRunRedaction, retiredRule, servingAhead } from '../../src/redaction/runRedaction.js';
+import { createTypedScopeFactory, RedactionRule } from 'footprintjs/advanced';
 import { carriedConversationPolicy, locationsOf } from './fixture.js';
 
 /** An agent that calls `lookup` with `field: secret`, then answers. */
@@ -146,13 +146,23 @@ describe('(a) an event of one run reaches only its own runner’s listeners, und
   });
 });
 
-describe('(a) overlapping runs of ONE composition instance each keep their own run', () => {
-  it('every event is stamped with the run that produced it, never the one started last', async () => {
-    // A step whose model answers only after a pause, so the two runs overlap.
+describe('(a) one composition instance admits one outstanding run', () => {
+  it('rejects the second invocation before a provider call or composition event', async () => {
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
     const slow: LLMProvider = {
       name: 'slow',
       complete: async (): Promise<LLMResponse> => {
-        await new Promise((resolve) => setTimeout(resolve, 15));
+        calls += 1;
+        entered();
+        await blocked;
         return { content: 'ok', toolCalls: [], usage: { input: 1, output: 1 }, stopReason: 'stop' };
       },
     };
@@ -161,16 +171,24 @@ describe('(a) overlapping runs of ONE composition instance each keep their own r
     const events: AgentfootprintEvent[] = [];
     sequence.on('*', (e) => events.push(e));
     const first = sequence.run({ message: 'first' });
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await Promise.all([first, sequence.run({ message: 'second' })]);
+    await started;
+    try {
+      await expect(sequence.run({ message: 'second' })).rejects.toMatchObject({
+        code: 'ERR_RUN_IN_FLIGHT',
+      });
+      expect(calls).toBe(1);
+      expect(events.filter((e) => e.type === 'agentfootprint.composition.enter')).toHaveLength(1);
+    } finally {
+      release();
+      await first;
+    }
     const byRun = new Map<string, string[]>();
     for (const e of events) {
       if (!e.type.startsWith('agentfootprint.composition.')) continue;
       const run = (e.meta as { runId: string }).runId;
       byRun.set(run, [...(byRun.get(run) ?? []), e.type]);
     }
-    // Two runs, each with its own enter and its own exit.
-    expect(byRun.size).toBe(2);
+    expect(byRun.size).toBe(1);
     for (const types of byRun.values()) {
       expect(types.filter((t) => t === 'agentfootprint.composition.enter')).toHaveLength(1);
       expect(types.filter((t) => t === 'agentfootprint.composition.exit')).toHaveLength(1);
@@ -362,31 +380,41 @@ describe('(b, d) the registries the redaction keeps: weak, keyed by identity, no
     expect(cache(retired)).toBeUndefined();
   });
 
-  it('a covered run retires its rule when it settles — its late facts keep its names', async () => {
-    const agent = Agent.create({
-      provider: mock({ chunkDelayMs: 0, reply: 'ok' }),
-      model: 'm',
-      redact: { keys: ['attempt'] },
-    }).build();
+  it('a covered native run retires its rule when it settles — late facts keep its names', async () => {
+    const policy = { keys: ['attempt'] };
+    const dispatcher = new EventDispatcher();
+    const run = createRunRedaction({
+      policy,
+      dispatcher,
+      getRunContext: () => ({ runId: 'retired-run' } as never),
+    });
+    const chart = flowChart('Capture', () => undefined, 'capture').build();
+    const base = chart.scopeFactory ?? createTypedScopeFactory();
+    const rules: RedactionRule[] = [];
+    const scopeFactory: ScopeFactory = (...args) => {
+      const scope = base(...args);
+      run.bindScope(scope, args[0]);
+      const live = args[0].getRedactionRule();
+      if (live !== undefined) rules.push(live);
+      return scope;
+    };
+    const executor = new FlowChartExecutor({ ...chart, scopeFactory });
+    executor.setRedactionPolicy(policy);
+    for (const recorder of run.recorders) executor.attachCombinedRecorder(recorder);
+    await executor.run({ input: {} });
+    expect(rules.length).toBeGreaterThan(0);
+    for (const live of rules) live.mark('iteration');
     const events: AgentfootprintEvent[] = [];
-    agent.on('*', (e) => events.push(e));
-    await agent.run({ message: 'go' });
-    const runId = (events[0]?.meta as { runId: string }).runId;
-    // The executor's own LIVE rule, marked after the run settled: a serving that
-    // still held it would now keep `iteration` out of the run's late facts too.
-    const executor = (agent as unknown as { lastExecutor: FlowChartExecutor }).lastExecutor;
-    const live = executor.getRuntime().rootStageContext.getRedactionRule();
-    expect(live).toBeDefined();
-    live?.mark('iteration');
-    agent.emitAttributed(
-      'app.late_fact',
-      { attempt: 8400, iteration: 8401 },
-      { sessionId: 's', runId },
+    dispatcher.on('*', (e) => events.push(e));
+    dispatcher.dispatchForRun(
+      {
+        type: 'app.late_fact',
+        payload: { attempt: 8400, iteration: 8401 },
+        meta: { runId: 'retired-run' },
+      } as unknown as AgentfootprintEvent,
+      run.serving,
     );
-    const fact = events.find((e) => (e.type as string) === 'app.late_fact');
-    // Its names stay (the policy's `attempt`); the live rule is no longer read,
-    // so `iteration` — a number, which the value-kind rule keeps — is not selected.
-    expect(fact?.payload).toEqual({ attempt: '[REDACTED]', iteration: 8401 });
+    expect(events[0]?.payload).toEqual({ attempt: '[REDACTED]', iteration: 8401 });
   });
 
   it('served.ts keeps nothing at module scope but frozen constants', () => {

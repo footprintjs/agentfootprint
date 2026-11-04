@@ -8,7 +8,7 @@
  *          row — moved out of the two stages verbatim, each taking the
  *          stage's own scope and deps.
  * Role:    core/ layer leaf of the time layer. seed (`stages/seed.ts`) and
- *          ToolCalls (`stages/toolCalls.ts`) load it through `import()` only
+ *          ToolCalls (`stages/toolCalls/execution/initialInvocation.ts`) load it through `import()` only
  *          when the agent armed `.time()` (`deps.timeClock`, `deps.timeReader`,
  *          `deps.time`) — the optional-family law of docs-next's site budget
  *          (`scripts/check-site-budget.mjs`; the `arguments/dispatch.ts`
@@ -44,7 +44,7 @@ import { recordFindings } from '../findings/ledger.js';
 import type { FindingsLedger } from '../findings/types.js';
 import type { AgentInput, AgentState } from '../types.js';
 import type { SeedStageDeps } from './seed.js';
-import type { ToolCallsHandlerDeps } from './toolCalls.js';
+import type { ToolCallsHandlerDeps } from './toolCalls/index.js';
 
 // ─── seed ────────────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ import type { ToolCallsHandlerDeps } from './toolCalls.js';
  * turn number is final (`anchorTurnNumber` may raise it), so the row names
  * the turn every later row of this turn names. One row per run; the clock is
  * a run constant from here on and is never written again this turn (a
- * resume keeps it — `stages/toolCalls.ts` records a differing `time` as
+ * resume keeps it — `stages/timeLayer.ts` records a differing `time` as
  * `clock-on-resume`). No accessor, or no draft → nothing is written. A draft
  * whose zone is unknown (G15) takes the zone the person answered in an earlier
  * turn (`time/rows.ts` · `answeredZoneOf`, `zoneSource: 'answered'`), else stays

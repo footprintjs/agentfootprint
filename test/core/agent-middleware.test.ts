@@ -1029,19 +1029,9 @@ describe('middleware — security', () => {
       })
       .build();
 
-    // `redact` is a footprintjs executor policy; reach it through the same
-    // internal seam the checkpoint tests use.
-    const withPolicy = agent as unknown as {
-      createExecutor(): {
-        setRedactionPolicy(p: { keys: string[] }): void;
-        run(input: unknown): Promise<unknown>;
-        getSnapshot(): { sharedState: Record<string, unknown>; commitLog: readonly unknown[] };
-      };
-    };
-    const executor = withPolicy.createExecutor();
-    executor.setRedactionPolicy({ keys: ['middlewareDecisions'] });
-    await executor.run({ message: 'ssn 123-45-6789' });
-    const snap = executor.getSnapshot();
+    // The public run door admits and serves the whole native execution.
+    await agent.run({ message: 'ssn 123-45-6789' }, { redact: { keys: ['middlewareDecisions'] } });
+    const snap = agent.getLastSnapshot()!;
 
     // Half one — protection: the pre-scrub text is nowhere in the record.
     expect(JSON.stringify(snap.commitLog)).not.toContain('123-45-6789');
@@ -1819,19 +1809,13 @@ describe('middleware — the after-tool moment', () => {
       .toolMiddleware({ name: 'no-raw-pii', onToolResult: () => deny('raw record withheld') })
       .build();
 
-    const withPolicy = agent as unknown as {
-      createExecutor(): {
-        setRedactionPolicy(p: { keys: string[] }): void;
-        run(input: unknown): Promise<unknown>;
-        getSnapshot(): { sharedState: Record<string, unknown>; commitLog: readonly unknown[] };
-      };
-    };
-    const executor = withPolicy.createExecutor();
-    executor.setRedactionPolicy({ keys: ['middlewareDecisions'] });
     // The full run shape: a tool-calling turn needs the iteration headroom
     // `Agent.run` normally supplies.
-    await executor.run({ input: { message: 'go' }, maxIterations: 30 });
-    const raw = JSON.stringify(executor.getSnapshot().commitLog);
+    await agent.run(
+      { message: 'go' },
+      { maxIterations: 30, redact: { keys: ['middlewareDecisions'] } },
+    );
+    const raw = JSON.stringify(agent.getLastSnapshot()!.commitLog);
 
     expect(raw).not.toContain('123-45-6789');
     expect(raw).toContain('middlewareDecisions');
@@ -1850,17 +1834,11 @@ describe('middleware — the after-tool moment', () => {
       })
       .build();
 
-    const withPolicy = agent as unknown as {
-      createExecutor(): {
-        setRedactionPolicy(p: { keys: string[] }): void;
-        run(input: unknown): Promise<unknown>;
-        getSnapshot(): { sharedState: Record<string, unknown>; commitLog: readonly unknown[] };
-      };
-    };
-    const executor = withPolicy.createExecutor();
-    executor.setRedactionPolicy({ keys: ['middlewareDecisions'] });
-    await executor.run({ input: { message: 'go' }, maxIterations: 30 });
-    const raw = JSON.stringify(executor.getSnapshot().commitLog);
+    await agent.run(
+      { message: 'go' },
+      { maxIterations: 30, redact: { keys: ['middlewareDecisions'] } },
+    );
+    const raw = JSON.stringify(agent.getLastSnapshot()!.commitLog);
 
     // Protection: neither version of the value is in the ledger key.
     expect(raw).not.toContain('sk-live-42');

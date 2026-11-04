@@ -5,9 +5,11 @@ description: staticTools + gatedTools — chainable tool dispatch primitives. Co
 
 > A read-only support agent has 25 tools registered, but on a refund turn the LLM should only see the 3 billing tools. **Putting the gating logic inside each tool's `execute` is wrong** — the tool runs AFTER the LLM has already chosen it. The right place to gate is BEFORE the LLM sees the menu. That's what `ToolProvider` exists for.
 
+A provider's `id` is a cooperative label used to keep a resumed call with its original declared owner. It does not authenticate that provider or prove that a same-ID implementation is unchanged.
+
 ## What `ToolProvider` is
 
-A `ToolProvider` answers ONE question per iteration: *"what tools should the LLM see right now?"* It's pure compute — given the current iteration context, return the visible tool set.
+A `ToolProvider` answers ONE question per iteration: _"what tools should the LLM see right now?"_ It's pure compute — given the current iteration context, return the visible tool set.
 
 Three implementations ship:
 
@@ -16,6 +18,7 @@ Three implementations ship:
 - **`skillScopedTools(skillId, arr)`** — exposes a tool subset only while `ctx.activeSkillId === skillId`. Returns `[]` when a different skill (or no skill) is active. Compose with `staticTools` for the always-on baseline.
 
 Plus tool sources from the same subpath:
+
 - **`mcpClient(opts)`** — connect to a real MCP server
 - **`mockMcpClient({ tools })`** — in-memory MCP source for dev / tests
 
@@ -23,13 +26,21 @@ Plus tool sources from the same subpath:
 
 ## staticTools — the simplest provider
 
-<CodeFile path="src/tool-providers/staticTools.ts" region="staticTools" title="src/tool-providers/staticTools.ts (region: staticTools)" />
+<CodeFile
+  path="src/tool-providers/staticTools.ts"
+  region="staticTools"
+  title="src/tool-providers/staticTools.ts (region: staticTools)"
+/>
 
 That's the whole implementation. Captures the input list defensively (mutating the source array doesn't leak), returns a fresh array each `list()` call so reference-equality checks see the update.
 
 ## gatedTools — the decorator
 
-<CodeFile path="src/tool-providers/gatedTools.ts" region="gatedTools" title="src/tool-providers/gatedTools.ts (region: gatedTools)" />
+<CodeFile
+  path="src/tool-providers/gatedTools.ts"
+  region="gatedTools"
+  title="src/tool-providers/gatedTools.ts (region: gatedTools)"
+/>
 
 Takes any inner `ToolProvider` and a per-tool predicate. Filters the inner output. Predicates that throw propagate — better to fail closed than silently allow tools through a broken policy.
 
@@ -47,15 +58,15 @@ const skillToolMap: Record<string, readonly string[]> = {
 };
 
 const provider = gatedTools(
-  gatedTools(staticTools(allTools), isReadonly),                        // (1) read-only
-  (name, ctx) =>                                                         // (2) skill-gated
-    ctx.activeSkillId
-      ? (skillToolMap[ctx.activeSkillId] ?? []).includes(name)
-      : true,
+  gatedTools(staticTools(allTools), isReadonly), // (1) read-only
+  (
+    name,
+    ctx, // (2) skill-gated
+  ) => (ctx.activeSkillId ? (skillToolMap[ctx.activeSkillId] ?? []).includes(name) : true),
 );
 ```
 
-Reads as: *"static list of all tools, filtered by readonly policy, then further filtered by the active skill's tool set."* Each gate is one concern; composition handles the rest.
+Reads as: _"static list of all tools, filtered by readonly policy, then further filtered by the active skill's tool set."_ Each gate is one concern; composition handles the rest.
 
 When the LLM is on a billing turn (`ctx.activeSkillId === 'billing'`), the visible tool set becomes `['read_billing']` — both gates pass. When no skill is active, the read-only gate alone applies.
 
@@ -81,13 +92,13 @@ Tools the provider emits flow into the Tools slot alongside any static tools reg
 
 Predicates receive a read-only context per iteration:
 
-| Field | Meaning |
-|---|---|
-| `iteration` | Current ReAct iteration (1-based) |
-| `activeSkillId?` | The id of the currently-activated Skill, if any. Set by `read_skill(id)` — and **only** by it |
+| Field             | Meaning                                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `iteration`       | Current ReAct iteration (1-based)                                                                                                            |
+| `activeSkillId?`  | The id of the currently-activated Skill, if any. Set by `read_skill(id)` — and **only** by it                                                |
 | `activeSkillIds?` | **Every** skill active this iteration, however it got there: a `read_skill` call, an entry rule, a `skillGraph()` route, a tree leaf (8.7.0) |
-| `identity?` | Caller identity tuple — `{ tenant?, principal?, conversationId }` for role checks |
-| `signal?` | Optional `AbortSignal` propagated from `run({ env })`. Async (discovery) providers MUST honor it; sync providers ignore it |
+| `identity?`       | Caller identity tuple — `{ tenant?, principal?, conversationId }` for role checks                                                            |
+| `signal?`         | Optional `AbortSignal` propagated from `run({ env })`. Async (discovery) providers MUST honor it; sync providers ignore it                   |
 
 Predicates MUST be pure — no side effects, no async. They run dozens of times per `agent.run()`.
 
@@ -156,13 +167,13 @@ not advance on a call whose contract the model read from somebody else.
 
 ## When to use this vs flat `agent.tools(arr)`
 
-| Situation | Use |
-|---|---|
-| All tools always visible | `agent.tools(arr)` (top-level builder) |
-| Permission filtering needed | `gatedTools(staticTools(arr), permissionPredicate)` |
+| Situation                            | Use                                                                                 |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| All tools always visible             | `agent.tools(arr)` (top-level builder)                                              |
+| Permission filtering needed          | `gatedTools(staticTools(arr), permissionPredicate)`                                 |
 | Per-skill tool gating (autoActivate) | `skillScopedTools(skillId, arr)`, or `gatedTools(staticTools(arr), skillPredicate)` |
-| Both stacked | Layer two `gatedTools` calls — each one concern |
-| Wire any of the above into an agent | `Agent.create(...).toolProvider(provider)` |
+| Both stacked                         | Layer two `gatedTools` calls — each one concern                                     |
+| Wire any of the above into an agent  | `Agent.create(...).toolProvider(provider)`                                          |
 
 ## Anti-patterns
 

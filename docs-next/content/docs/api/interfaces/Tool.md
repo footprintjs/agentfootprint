@@ -4,7 +4,7 @@ title: Tool<TArgs, TResult>
 
 # Interface: Tool\<TArgs, TResult\>
 
-Defined in: [src/tools/tools.ts:52](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L52)
+Defined in: [src/tools/tools.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L48)
 
 One executable tool the Agent can call.
 
@@ -29,7 +29,7 @@ One executable tool the Agent can call.
 
 > `readonly` `optional` **argumentsFrom?**: readonly `string`[]
 
-Defined in: [src/tools/tools.ts:282](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L282)
+Defined in: [src/tools/tools.ts:278](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L278)
 
 WHERE THIS TOOL'S ARGUMENTS COME FROM (9.60.0) — the names of tools
 whose RESULTS ground what a caller passes here (`screen_fire` fires at
@@ -46,7 +46,7 @@ tool is never that check's subject, byte-identical.
 
 > `readonly` `optional` **askOrAssume?**: `Readonly`\<`Record`\<`string`, `ArgumentRule`\>\>
 
-Defined in: [src/tools/tools.ts:393](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L393)
+Defined in: [src/tools/tools.ts:389](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L389)
 
 PER-ARGUMENT RULES (the inputs layer, honesty layer 2) — what the library
 does when a call leaves an argument out. `{ assume: value }`: the library
@@ -80,7 +80,7 @@ askOrAssume: { window: { ask: 'Which period should the search cover?', choices: 
 
 > `readonly` `optional` **capabilities?**: readonly [`ToolCapability`](/docs/api/type-aliases/ToolCapability)[]
 
-Defined in: [src/tools/tools.ts:155](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L155)
+Defined in: [src/tools/tools.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L151)
 
 What this tool touches, DECLARED by whoever wrote it (9.11.0).
 
@@ -116,7 +116,7 @@ a tool the operator wants governed as a network egress
 
 > `readonly` `optional` **checkIn?**: [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)
 
-Defined in: [src/tools/tools.ts:99](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L99)
+Defined in: [src/tools/tools.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L95)
 
 Declarative demand for a human check-in BEFORE this tool runs — consent
 for a consequential action, with an evidence pack riding the ask.
@@ -137,7 +137,7 @@ exposes a predicate typed to the tool's args at the CALL site.
 
 > `readonly` `optional` **checkInComponent?**: [`AskComponent`](/docs/api/interfaces/AskComponent)
 
-Defined in: [src/tools/tools.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L111)
+Defined in: [src/tools/tools.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L107)
 
 Which REGISTERED screen component collects this tool's check-in decision
 (9.24.0) — ids and props only, never markup. Rides the `CheckInRequest`
@@ -155,7 +155,7 @@ static declarations usually want inline `props`.
 
 > `readonly` `optional` **composedOf?**: readonly `string`[]
 
-Defined in: [src/tools/tools.ts:303](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L303)
+Defined in: [src/tools/tools.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L299)
 
 THE NAMED INGREDIENT TOOLS THIS TOOL IS COMPOSED OF (9.76.0) — the
 registered tools its body calls through the run's own dispatch
@@ -182,7 +182,7 @@ Omitted → nothing is checked, byte-identical.
 
 > `readonly` `optional` **displayName?**: `string`
 
-Defined in: [src/tools/tools.ts:484](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L484)
+Defined in: [src/tools/tools.ts:480](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L480)
 
 THE APP'S OWN WORDS for what a call of this tool does — "loading the
 attached data" — read by a PERSON. The registered name (`schema.name`) is
@@ -209,7 +209,7 @@ Omitted → byte-identical.
 
 > `readonly` `optional` **effects?**: `"read"`
 
-Defined in: [src/tools/tools.ts:438](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L438)
+Defined in: [src/tools/tools.ts:434](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L434)
 
 `'read'` — this tool changes nothing (design R6). A declaration a later
 check reads, never one that governs execution: only an `effects: 'read'`
@@ -225,7 +225,7 @@ byte-identical.
 
 > `readonly` `optional` **gates?**: `boolean`
 
-Defined in: [src/tools/tools.ts:317](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L317)
+Defined in: [src/tools/tools.ts:313](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L313)
 
 WHETHER THIS TOOL'S PROCEDURE CAN RAISE AN APPROVAL GATE (9.76.0) — a
 mid-run pause that asks a human before continuing. Declared, never
@@ -245,7 +245,7 @@ from saying nothing. Omitted → byte-identical.
 
 > `readonly` `optional` **needs?**: `CredentialNeed`
 
-Defined in: [src/tools/tools.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L57)
+Defined in: [src/tools/tools.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L53)
 
 Declare-and-push: a credential this tool needs. The framework resolves it
  BEFORE invoking and injects `ctx.credential`; it is NOT in `schema`, so the
@@ -257,7 +257,7 @@ Declare-and-push: a credential this tool needs. The framework resolves it
 
 > `readonly` `optional` **owner?**: `ToolOwner`
 
-Defined in: [src/tools/tools.ts:271](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L271)
+Defined in: [src/tools/tools.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L267)
 
 WHO OWNS THIS TOOL (9.60.0) — the identity edge, stamped at the one
 moment the code demonstrably knows both ends: registration. Before
@@ -276,7 +276,7 @@ Omitted → exactly today's bytes (`source: 'registry'`).
 
 > `readonly` `optional` **period?**: [`ToolPeriod`](/docs/api/interfaces/ToolPeriod)
 
-Defined in: [src/tools/tools.ts:410](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L410)
+Defined in: [src/tools/tools.ts:406](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L406)
 
 WHICH ARGUMENTS SET THE PERIOD the answer covers, how their values are
 spelled, and the facts about the source. Today's single argument
@@ -299,7 +299,7 @@ person's window, and hands the tool `ctx.time`. Carried over MCP in
 
 > `readonly` `optional` **repeatedWhen?**: `"arguments"`
 
-Defined in: [src/tools/tools.ts:366](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L366)
+Defined in: [src/tools/tools.ts:362](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L362)
 
 FINGERPRINT THE REPEATED-CALL LEDGER ON ARGUMENTS ALONE (9.62.0) —
 `'arguments'` tells `core/agent/repeatedCall.ts` that this tool's own
@@ -358,7 +358,7 @@ a screen tool whose result always carries a fresh version stamp
 
 > `readonly` `optional` **resultCeiling?**: [`ToolResultCeiling`](/docs/api/interfaces/ToolResultCeiling)
 
-Defined in: [src/tools/tools.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L164)
+Defined in: [src/tools/tools.ts:160](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L160)
 
 The refusing ceiling on THIS tool's result (9.20.0): when the handler's
 stringified return exceeds `maxChars`, the model reads a teaching refusal
@@ -373,7 +373,7 @@ byte-identical behavior (nothing measured, nothing emitted).
 
 > `readonly` `optional` **resultClass?**: [`ToolResultClass`](/docs/api/type-aliases/ToolResultClass)
 
-Defined in: [src/tools/tools.ts:175](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L175)
+Defined in: [src/tools/tools.ts:171](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L171)
 
 The declared CLASS of this tool's results (9.53.0) — what kind of answer
 it gives (`'triage'` — a health/fault verdict; `'inventory'` — a
@@ -390,7 +390,7 @@ result that carries the `af_semantics` marker.
 
 > `readonly` `optional` **resultColumns?**: `Readonly`\<`Record`\<`string`, [`ColumnType`](/docs/api/type-aliases/ColumnType) \| [`ColumnDeclaration`](/docs/api/interfaces/ColumnDeclaration)\>\>
 
-Defined in: [src/tools/tools.ts:258](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L258)
+Defined in: [src/tools/tools.ts:254](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L254)
 
 WHAT THIS TOOL'S ROWS CONTAIN (9.78.0) — column name to type, the
 sibling of [Tool.resultKind](/docs/api/interfaces/Tool#resultkind). `resultKind` says what the result IS;
@@ -447,7 +447,7 @@ the LUN report that lost its zeroes
 
 > `readonly` `optional` **resultKind?**: `string`
 
-Defined in: [src/tools/tools.ts:211](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L211)
+Defined in: [src/tools/tools.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L207)
 
 THE ARTIFACT KIND A PLACED RESULT IS MINTED UNDER (9.70.0) — this tool's
 result in the CONSUMER's vocabulary (`'dataset/rows'`), not the
@@ -493,7 +493,7 @@ a tool whose placed result a `wants` consumer can spend
 
 > `readonly` **schema**: [`LLMToolSchema`](/docs/api/interfaces/LLMToolSchema)
 
-Defined in: [src/tools/tools.ts:53](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L53)
+Defined in: [src/tools/tools.ts:49](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L49)
 
 ***
 
@@ -501,7 +501,7 @@ Defined in: [src/tools/tools.ts:53](https://github.com/footprintjs/agentfootprin
 
 > `readonly` `optional` **script?**: [`ToolScript`](/docs/api/interfaces/ToolScript)
 
-Defined in: [src/tools/tools.ts:463](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L463)
+Defined in: [src/tools/tools.ts:459](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L459)
 
 THIS TOOL RUNS A PROGRAM, and `argument` is the ONE string argument that
 carries it (`language` is the program's language, the info string of the
@@ -533,7 +533,7 @@ script: { argument: 'query', language: 'sql' }
 
 > `readonly` `optional` **search?**: [`ToolSearch`](/docs/api/interfaces/ToolSearch)
 
-Defined in: [src/tools/tools.ts:428](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L428)
+Defined in: [src/tools/tools.ts:424](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L424)
 
 WHAT ONE CALL OF THIS TOOL SEARCHES — declared once, as typed data, so the
 library composes each call's coverage from the arguments the call actually
@@ -557,7 +557,7 @@ again at the agent's registration, when malformed. Carried over MCP in
 
 > `readonly` `optional` **source?**: `string`
 
-Defined in: [src/tools/tools.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L129)
+Defined in: [src/tools/tools.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L125)
 
 Where this tool came from — the name of the MCP server that served it.
 
@@ -581,7 +581,7 @@ when it is genuinely relaying another source's tool.
 
 > `readonly` `optional` **wants?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/tools/tools.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L84)
+Defined in: [src/tools/tools.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L80)
 
 Declared artifact ARGUMENTS (9.22.0) — argument name → the artifact
 `kind` it must resolve to (e.g. `wants: { dataset: 'dataset/rows' }`).
@@ -614,7 +614,7 @@ Omitted → byte-identical behavior (nothing resolved, nothing measured).
 
 > **execute**(`args`, `ctx`): `TResult` \| `Promise`\<`TResult`\>
 
-Defined in: [src/tools/tools.ts:485](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L485)
+Defined in: [src/tools/tools.ts:481](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/tools.ts#L481)
 
 #### Parameters
 

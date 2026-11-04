@@ -3,10 +3,10 @@
  * decided by, and the two places an event leaves a stage.
  *
  * Pattern: a per-run object (`createRunRedaction`) opened by the runner that
- *          owns the executor (`RunnerBase · openRunRedaction`), plus a scope
+ *          owns the native component (`RunnerBase · prepareRunRedaction`), plus a scope
  *          registry so the one emit helper can find the run a stage belongs to.
  * Role:    the Walker half of `src/redaction/` — the wiring every runner's
- *          `createExecutor` goes through, for every run, policy or not.
+ *          native component setup goes through, for every run, policy or not.
  *
  * WHY EVENTS ARE SERVED AT THEIR SOURCE. A typed event leaves a stage through
  * footprintjs's `$emit`, and footprintjs hands that payload to every channel
@@ -19,16 +19,13 @@
  * the same served payload — footprintjs's own rule for a record handed out
  * whole: decided once, at the boundary, before any observer sees it.
  *
- * WHY THERE IS A SECOND, REAL-VALUE PATH. A handful of the library's own
- * mechanisms run ON events: the crash checkpoint `resumeOnError` replays
- * (`Agent · installCheckpointTracker`), the window strategy's token reading
- * (`CompactionMeter`), the reply a hosted agent streams to the person who
- * asked (`standingAgent`), the reply `toSSE({ format: 'text' })` streams. Each
- * is what the agent computes on or hands back to its caller — the class the
- * redaction law never covers (live state, the resume checkpoint, the caller's
- * own answer). They read the event as the stage produced it, through
- * `EventDispatcher · onRealEvent`, which no consumer can reach. Nothing on
- * that path is a record: it is never stored, exported or shown.
+ * PRIVATE COMPUTATION PRECEDES SERVING. Native component setup installs a
+ * captured computation port in the same scope registration. Causal evidence,
+ * checkpoint tracking and the token meter reduce that component's raw events
+ * there, before exactly one served $emit. The native scoped recorder supplies
+ * served decisions and history-write provenance through its ordinary dispatcher.
+ * Instance-wide real-event listeners remain for hosting/live replies, not
+ * component accumulators. These are working-data ports, never export surfaces.
  *
  * WHY A FEW WRITES ARE RELAYED. Some events are DERIVED from scope writes
  * rather than emitted: the context recorder turns each slot's injection and
@@ -50,8 +47,8 @@
  * stands in: it has marked nothing, and neither has the run.
  */
 
-import { createTypedScopeFactory, RedactionRule } from 'footprintjs/advanced';
-import type { FlowChart, FlowChartExecutor, RedactionPolicy, ScopeFactory } from 'footprintjs';
+import { RedactionRule } from 'footprintjs/advanced';
+import type { CombinedRecorder, RedactionPolicy, ScopeFactory } from 'footprintjs';
 
 import { buildEventMeta, type RunContext } from '../bridge/eventMeta.js';
 import type { EventDispatcher } from '../events/dispatcher.js';
@@ -74,17 +71,12 @@ export interface RunRedaction {
   readonly policy: RedactionPolicy | undefined;
   /** What this run's events are served as. */
   readonly serving: EventServing;
-  /**
-   * The scope factory for this run's executor: the chart's own factory, with
-   * every scope it makes tied to this run (source serving and the real-value
-   * path both find the run through it).
-   */
-  scopeFactoryFor(spec: FlowChart): ScopeFactory;
-  /**
-   * Hand the policy to the executor — before `run()` / `resume()` — and mark
-   * its served snapshot as served under one (`marker.ts`).
-   */
-  applyTo(executor: FlowChartExecutor): void;
+  /** The positive coverage declaration for this exact run, without an executor handle. */
+  readonly coverage: RedactionCoverage;
+  /** Native attachments that mark a served record and retire its live rule. */
+  readonly recorders: readonly CombinedRecorder[];
+  /** Tie an already-created native scope to this exact run and its rule. */
+  bindScope(scope: unknown, context: Parameters<ScopeFactory>[0]): void;
   /**
    * The value the stage `runtimeStageId` wrote under `key` through
    * `setEventSource` — the oldest one not yet taken — for a recorder whose
@@ -113,55 +105,48 @@ export interface ScopeRun {
   readonly serving: EventServing;
   /** Deliver an event, as made, to the real-value path — from the stage `stageId` that emitted it. */
   real(type: string, payload: unknown, stageId: string): void;
+  /** Capture metadata/serving only, so retained cleanup cannot keep a run bank alive. */
+  captureLate?(stageId: string): (type: string, payload: unknown) => void;
   noteWrite(runtimeStageId: string, key: string, value: unknown): void;
   /** Whether the run's rule keeps `name` out of its records. */
   keepsOut(name: string): boolean;
 }
 
-/**
- * Every executor a run opened → what the run was covered by (`coverage.ts`):
- * `covered` with its policy, or `declared-none` — set by `applyTo`, the one
- * place an executor gets its policy, so what a snapshot is served under is a
- * fact about THAT executor and can never be another run's
- * (`coverageOfExecutor`). An executor this map does not hold is `unknown`,
- * never "no policy". Weak: dies with the executor.
- */
-const executorCoverage = new WeakMap<object, RedactionCoverage>();
-
-/**
- * What `executor`'s run was covered by: `covered`, `declared-none`, or
- * `unknown` — an executor no run of this library opened, whose records
- * nothing vouches for. A reader serves an unknown executor's records under
- * nothing it could guess: it refuses (`RunnerBase · getLastSnapshot` hands
- * back nothing).
- */
-export function coverageOfExecutor(executor: object): RedactionCoverage {
-  return executorCoverage.get(executor) ?? UNKNOWN_COVERAGE;
-}
-
-/**
- * Every executor a run opened → that run's serving, set by `applyTo` beside
- * its policy — for a fact the runner files about THAT run after its executor
- * returned (its pause request), whatever run opened on the instance since
- * (`servingOfExecutor`). Weak: dies with the executor.
- */
-const executorServings = new WeakMap<object, EventServing>();
-
-/**
- * The serving of the run that opened `executor` — what a fact the runner
- * files about that run is served as. `undefined` for an executor no run of
- * this library opened: such a fact is refused (`EventDispatcher ·
- * dispatchForRun`).
- */
-export function servingOfExecutor(executor: object): EventServing | undefined {
-  return executorServings.get(executor);
-}
-
 /** Every scope a run's executor made → that run, and the stage it was made for. Weak: a scope dies with its stage. */
-const scopeRuns = new WeakMap<object, { readonly run: ScopeRun; readonly stageId: string }>();
+interface ScopeServing {
+  readonly run: ScopeRun;
+  readonly stageId: string;
+}
+
+/** Private working input, never a recorder/export or an instance-wide subscription. */
+export interface ScopeComputation {
+  readonly owner: object;
+  retired(): boolean;
+  emit(type: string, payload: unknown): void;
+}
+
+interface ScopeRegistration {
+  readonly serving?: ScopeServing;
+  readonly computation?: ScopeComputation;
+}
+
+const scopeRuns = new WeakMap<object, ScopeRegistration>();
+
+/** Preserve the exact serving registration; only native component setup calls this. */
+export function bindScopeComputation(scope: unknown, computation: ScopeComputation): void {
+  if (scope === null || typeof scope !== 'object')
+    throw new TypeError('A component computation requires its actual native scope');
+  const previous = scopeRuns.get(scope);
+  if (previous?.computation !== undefined) {
+    if (previous.computation.owner !== computation.owner)
+      throw new TypeError('A scope already belongs to a different computation owner');
+    return;
+  }
+  scopeRuns.set(scope, { ...previous, computation });
+}
 
 /**
- * Open the redaction for one run. Called by every runner's `createExecutor`
+ * Open the redaction for one run. Called inside every runner's native admission
  * for every run — with no policy the serving is the identity and nothing is
  * walked, but the scopes are still tied to the run, because the real-value path
  * is wiring, not redaction.
@@ -200,6 +185,9 @@ export function createRunRedaction(args: {
         meta: buildEventMeta(origin, getRunContext()),
       } as unknown as AgentfootprintEvent);
     },
+    captureLate(stageId) {
+      return lateEmitter(dispatcher, serving, Object.freeze({ ...getRunContext() }), stageId);
+    },
     keepsOut(name) {
       return policy !== undefined && decided.rule.isKeyRedacted(name);
     },
@@ -213,39 +201,30 @@ export function createRunRedaction(args: {
       else queue.push(written);
     },
   };
+  const bindScope = (scope: unknown, context: Parameters<ScopeFactory>[0]): void => {
+    if (scope !== null && typeof scope === 'object') {
+      scopeRuns.set(scope, {
+        ...scopeRuns.get(scope),
+        serving: { run, stageId: context?.runtimeStageId ?? '' },
+      });
+    }
+    const own = context?.getRedactionRule?.();
+    if (own !== undefined) decided.rule = own;
+  };
+  const recorders =
+    policy === undefined
+      ? []
+      : [
+          redactionMarker(() => {
+            decided.rule = retiredRule(decided.rule, policy);
+          }),
+        ];
   return {
     policy,
     serving,
-    scopeFactoryFor(spec) {
-      // Every chart the builder makes carries its factory; the fallback is the
-      // builder's own default, so a hand-built chart scopes the same way.
-      const base: ScopeFactory = spec.scopeFactory ?? createTypedScopeFactory();
-      return (context, stageName, readOnlyContext, executionEnv) => {
-        const scope = base(context, stageName, readOnlyContext, executionEnv);
-        if (scope !== null && typeof scope === 'object') {
-          // The traverser stamps the stage's runtimeStageId before it builds the scope.
-          scopeRuns.set(scope as object, { run, stageId: context?.runtimeStageId ?? '' });
-        }
-        const own = context?.getRedactionRule?.();
-        if (own !== undefined) decided.rule = own;
-        return scope;
-      };
-    },
-    applyTo(executor) {
-      executorCoverage.set(executor, coverage);
-      executorServings.set(executor, serving);
-      if (policy === undefined) return;
-      executor.setRedactionPolicy(policy);
-      // The served snapshot says so itself (`marker.ts`): readers of the record
-      // read a placeholder as kept out only when a policy covered the run.
-      // Once the run settles, its serving — kept by the dispatcher for the
-      // run's late facts — holds the rule's NAMES only (`retiredRule`).
-      executor.attachCombinedRecorder(
-        redactionMarker(() => {
-          decided.rule = retiredRule(decided.rule, policy);
-        }),
-      );
-    },
+    coverage,
+    recorders,
+    bindScope,
     takeRealWrite(runtimeStageId, key) {
       const at = slot(runtimeStageId, key);
       const queue = waiting.get(at);
@@ -255,6 +234,24 @@ export function createRunRedaction(args: {
       return written;
     },
   };
+}
+
+/** The returned closure has no shared activation with a run-context reader. */
+function lateEmitter(
+  dispatcher: EventDispatcher,
+  serving: EventServing,
+  context: RunContext,
+  stageId: string,
+): (type: string, payload: unknown) => void {
+  return (type, payload) =>
+    dispatcher.dispatchForRun(
+      {
+        type,
+        payload,
+        meta: buildEventMeta({ runtimeStageId: stageId }, context),
+      } as unknown as AgentfootprintEvent,
+      serving,
+    );
 }
 
 /**
@@ -381,8 +378,17 @@ const REFUSING_SERVING: EventServing = Object.freeze({
  */
 export function adoptScopeOutsideRun(scope: unknown, outside: OutsideRun): void {
   if (scope === null || typeof scope !== 'object') return;
-  if (scopeRuns.has(scope)) return;
-  scopeRuns.set(scope, { run: outside.scopeRun, stageId: '' });
+  const previous = scopeRuns.get(scope);
+  if (previous?.serving !== undefined) return;
+  scopeRuns.set(scope, { ...previous, serving: { run: outside.scopeRun, stageId: '' } });
+}
+
+/** The actual parent run's late fact channel; no retired native scope emit is used. */
+export function captureLateEmitter(
+  scope: object,
+  stageId: string,
+): ((type: string, payload: unknown) => void) | undefined {
+  return scopeRuns.get(scope)?.serving?.run.captureLate?.(stageId);
 }
 
 /** A scope that can emit — structurally footprintjs's `TypedScope` `$emit`. */
@@ -392,7 +398,7 @@ export interface EmitScope {
 
 /**
  * THE way a typed event leaves a stage. The real value goes to the run's own
- * mechanisms (`onRealEvent`), the served value to footprintjs's `$emit` — and
+ * captured component computation, then the existing live-reply relay; the served value goes to footprintjs's `$emit` — and
  * from there to every channel at once. A runner's chart mounted into an
  * executor the app built is tied to the runner's declaration as each stage
  * starts (`adoptScopeOutsideRun`). A scope NOTHING tied — not made by a run of
@@ -400,7 +406,12 @@ export interface EmitScope {
  * payload is the placeholder (fail closed), never the payload as made.
  */
 export function emitServed(scope: EmitScope, type: string, payload: unknown): void {
-  const entry = scopeRuns.get(scope as object);
+  const registration = scopeRuns.get(scope as object);
+  const computation = registration?.computation;
+  // Private reduction precedes native $emit: native's later stale-scope refusal
+  // cannot protect an already-delivered private event.
+  if (computation !== undefined && !computation.retired()) computation.emit(type, payload);
+  const entry = registration?.serving;
   if (entry === undefined) {
     scope.$emit(type, SERVED_PLACEHOLDER);
     return;
@@ -422,7 +433,7 @@ export interface SetValueScope {
  * key itself out of the record. A scope no run made just writes.
  */
 export function setEventSource(scope: SetValueScope, key: string, value: unknown): void {
-  const entry = scopeRuns.get(scope as object);
+  const entry = scopeRuns.get(scope as object)?.serving;
   entry?.run.noteWrite(entry.stageId, key, value);
   scope.$setValue(key, value);
 }
@@ -435,7 +446,7 @@ export function setEventSource(scope: SetValueScope, key: string, value: unknown
  * run's state is unknown, so the value is left out (fail closed).
  */
 export function runKeepsOut(scope: object, name: string): boolean {
-  return scopeRuns.get(scope)?.run.keepsOut(name) ?? true;
+  return scopeRuns.get(scope)?.serving?.run.keepsOut(name) ?? true;
 }
 
 /**
@@ -443,7 +454,7 @@ export function runKeepsOut(scope: object, name: string): boolean {
  * for a scope no run of this library made.
  */
 export function coverageInForce(scope: object): RedactionCoverage {
-  return scopeRuns.get(scope)?.run.coverage ?? UNKNOWN_COVERAGE;
+  return scopeRuns.get(scope)?.serving?.run.coverage ?? UNKNOWN_COVERAGE;
 }
 
 /**

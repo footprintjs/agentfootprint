@@ -55,16 +55,22 @@ import type { DurabilityMode } from './types.js';
 export interface DurableWriterOptions {
   /** `'async'` or `'sync'`. `'exit'` never builds a writer at all. */
   readonly mode: Exclude<DurabilityMode, 'exit'>;
+  /** Where the conversation goes. */
+  readonly write: (sessionId: string, conversation: AgentRunCheckpoint) => Promise<void>;
+}
+
+/** A writer's input for exactly one admitted invocation. */
+export interface DurableInvocation {
   /**
-   * The session this run belongs to, asked at every commit. `undefined` means
+   * The session captured for this invocation. `undefined` means
    * "nothing to write to" — an anonymous request, or no run of ours in flight —
    * and the commit is ignored.
    */
-  readonly session: () => string | undefined;
+  readonly sessionId: string | undefined;
   /** The run id to stamp on the conversation, for correlating back to the run. */
   readonly runId: () => string | undefined;
   /**
-   * The run's committed root state, live (`core/runnerLive.ts` · `RunnerLive`). The
+   * This invocation's committed root state, live, through its captured native view. The
    * conversation is READ here, at the commit that moved it — never off the
    * commit event, whose values are the RECORD's form: under an agent's
    * `redact` footprintjs serves a selected key as a placeholder there, and a
@@ -72,14 +78,12 @@ export interface DurableWriterOptions {
    * placeholders.
    */
   readonly state: () => Readonly<Record<string, unknown>> | undefined;
-  /** Where the conversation goes. */
-  readonly write: (sessionId: string, conversation: AgentRunCheckpoint) => Promise<void>;
 }
 
 /** The composer's handle on its own durability. */
 export interface DurableWriter {
-  /** Attach this to the agent to start observing commits. */
-  readonly recorder: CombinedRecorder;
+  /** Attach only to this native invocation, never to the mutable runner. */
+  capture(invocation: DurableInvocation): CombinedRecorder;
   /** Install the tool-dispatch barrier. Returns the uninstall function. */
   install(agent: object): () => void;
   /**
@@ -106,7 +110,7 @@ export interface DurableWriter {
  * "we write often" into a bound on how much can re-run.
  */
 export function durableWriter(options: DurableWriterOptions): DurableWriter {
-  const { mode, session, runId, state, write } = options;
+  const { mode, write } = options;
 
   /** The write currently on the wire, or `undefined` when nothing is. */
   let inFlight: Promise<void> | undefined;
@@ -151,6 +155,7 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
 
   function enqueue(
     sessionId: string,
+    runId: string,
     history: readonly LLMMessage[],
     userMessage: string,
     iteration: number,
@@ -159,7 +164,7 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
       sessionId,
       conversation: {
         version: 1,
-        runId: runId() ?? 'unknown',
+        runId,
         // Read from the run's live committed state. Clone on the way to a
         // store so nothing a persistence layer does can reach back into the
         // run's own state.
@@ -172,7 +177,7 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
     pump();
   }
 
-  const recorder: CombinedRecorder = {
+  const capture = ({ sessionId, runId, state }: DurableInvocation): CombinedRecorder => ({
     id: 'af-hosting-durability',
     // INLINE, always. A write delivered one beat behind is a write that can be
     // lost by the very crash it exists to survive — and under `'sync'` the
@@ -188,8 +193,9 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
     // which an agent's `redact` may have turned into placeholders.
     onCommit(event: CommitEvent): void {
       if (!event.mutations.some((mutation) => mutation.key === 'history')) return;
-      const sessionId = session();
       if (sessionId === undefined) return;
+      const origin = runId();
+      if (origin === undefined) return;
       const live = state();
       const history = live?.['history'];
       if (!Array.isArray(history)) return;
@@ -197,12 +203,13 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
       const iteration = live?.['iteration'];
       enqueue(
         sessionId,
+        origin,
         history as readonly LLMMessage[],
         typeof userMessage === 'string' ? userMessage : '',
         typeof iteration === 'number' ? iteration : 0,
       );
     },
-  };
+  });
 
   const settle = async (): Promise<void> => {
     // Loop rather than await once: a write that completes may release a queued
@@ -215,7 +222,7 @@ export function durableWriter(options: DurableWriterOptions): DurableWriter {
   };
 
   return {
-    recorder,
+    capture,
     install(agent: object): () => void {
       // `'async'` deliberately takes NO barrier: its whole promise is that the
       // run does not wait, and a barrier would be that promise broken quietly.

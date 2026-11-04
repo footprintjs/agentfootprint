@@ -345,16 +345,16 @@ describe('6. a name off the wire is never handed to a party the model was not sh
     expect(obs.offWire).toEqual([]);
   });
 
-  it('fresh-instance resume: the served party rides the checkpoint, so an empty closure cannot fall back to the inactive skill', async () => {
+  it('fresh-instance resume: reacquires the saved provider and never dispatches the inactive skill', async () => {
     const { obs } = await runWalkCase(
       'cross-epoch/fresh-instance-resume-provider-vs-inactive-skill',
     );
     expect(wireContract(obs, 1, 'shared_tool')).toBe('provider');
-    // The provider's list is not resolved on the fresh instance, so the party
-    // the model read cannot answer — and nobody else may. On the tree the
-    // review saw, `[impl:skill-inactive]` answered here.
-    expect(answerImpl(obs, 'e1:shared_tool')).toBeUndefined();
-    expect(obs.answers.get('e1:shared_tool')).toContain('did not run on that call');
+    // Native resume reacquires this component's executable catalog, then
+    // dispatches only through the saved provider party. The inactive skill
+    // must never answer the provider's paused call.
+    expect(obs.runError).toBeUndefined();
+    expect(answerImpl(obs, 'e1:shared_tool')).toBe('provider');
     expect(obs.offWire).toEqual([]);
   });
 

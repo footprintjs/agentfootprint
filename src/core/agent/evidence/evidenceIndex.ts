@@ -400,7 +400,7 @@ function indexResult(content: string, sink: Sink): void {
 }
 
 // FOLD · the one owner of the corpus of values this run can prove it read from a tool result
-// consumers read this and never re-derive it: gate.ts · checkAnswer, which is HANDED the corpus rather than building one, and findings/contingent.ts · contingentRowsOf, handed its `carriers`; built at two moments by one fold — stages/route.ts · `judgeEvidence` (the answer) and stages/toolCalls.ts · `towersFor` (dispatch, under `.findings()` beside the gate only)
+// consumers read this and never re-derive it: gate.ts · checkAnswer, which is HANDED the corpus rather than building one, and findings/contingent.ts · contingentRowsOf, handed its `carriers`; built at two moments by one fold — stages/route.ts · `judgeEvidence` (the answer) and stages/toolCalls/evidence/towers.ts · `towersFor` (dispatch, under `.findings()` beside the gate only)
 // detached: yes — never stored; rebuilt per judgement, and the verdict is committed as plain data.
 /**
  * Build the evidence corpus from the history AS IT STANDS: every `role: 'tool'`

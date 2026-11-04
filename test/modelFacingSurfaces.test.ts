@@ -70,7 +70,7 @@ import {
   composeReadSkillRefusal,
   notDispatchedResult,
   unknownToolResult,
-} from '../src/core/agent/stages/toolCalls.js';
+} from '../src/core/agent/stages/toolCalls/index.js';
 import { servedToModel } from '../src/semantics/coverage/read.js';
 import { semanticsForModel } from '../src/semantics/envelope.js';
 import { WRAP_UP_INSTRUCTION } from '../src/core/agent/stages/wrapUp.js';
@@ -1551,7 +1551,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'skill-graph — the read_skill REFUSAL composer',
-    module: 'src/core/agent/stages/toolCalls.ts',
+    module: 'src/core/agent/stages/toolCalls/helpers/readSkillRefusal.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'the gate returns it as the result of the `read_skill` call it declined, so it is ' +
@@ -1581,7 +1581,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'dispatch — the unknown-tool result',
-    module: 'src/core/agent/stages/toolCalls.ts',
+    module: 'src/core/agent/stages/toolCalls/helpers/dispatchRefusals.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'both dispatch doors return it as the tool result of a call they could not route, so ' +
@@ -1595,7 +1595,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'dispatch — the batch settlement (a paused batch’s un-dispatched siblings, 9.113.0)',
-    module: 'src/core/agent/stages/toolCalls.ts',
+    module: 'src/core/agent/stages/toolCalls/batch/settle.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'every resume path appends it as the `role: "tool"` result of a call the paused batch ' +

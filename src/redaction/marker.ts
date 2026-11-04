@@ -4,7 +4,7 @@
  *
  * Pattern: a recorder with no data but a snapshot bundle, attached to a run's
  *          executor only when a policy covers the run
- *          (`runRedaction.ts` · `applyTo`).
+ *          (`RunRedaction.recorders`).
  * Role:    the Lens half's guard. A reader of a record (the answer account,
  *          `assessAnswer`, the served views) reads footprintjs's placeholder
  *          as a value KEPT OUT only when the record says a policy covered the

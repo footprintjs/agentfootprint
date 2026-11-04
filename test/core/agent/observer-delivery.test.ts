@@ -288,7 +288,9 @@ describe("observerDelivery — causal evidence is complete under 'deferred'", ()
     const result = await store.list<{
       toolCalls?: readonly { name: string }[];
       tokenUsage?: { input: number; output: number };
-      iterations?: number;
+      schemaVersion?: 2;
+      availability?: 'observed' | 'partial' | 'unavailable';
+      observedIterationStarts?: number;
     }>(IDENTITY);
     const snaps = result.entries
       .map((e) => e.value)
@@ -300,7 +302,9 @@ describe("observerDelivery — causal evidence is complete under 'deferred'", ()
     expect(s.toolCalls?.[0]?.name).toBe('credit_check');
     expect(s.tokenUsage?.input).toBeGreaterThan(0);
     expect(s.tokenUsage?.output).toBeGreaterThan(0);
-    expect(s.iterations).toBeGreaterThan(0);
+    expect(s.schemaVersion).toBe(2);
+    expect(s.availability).toBe('observed');
+    expect(s.observedIterationStarts).toBeGreaterThan(0);
   });
 });
 

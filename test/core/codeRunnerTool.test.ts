@@ -188,8 +188,7 @@ describe('one session, many calls', () => {
     await agent.run({ message: 'turn one' }, { sessionId: 'sess-1' });
     await agent.run({ message: 'turn two' }, { sessionId: 'sess-1' });
 
-    // One interpreter across two turns: this is what "variables persist between
-    // turns" actually is.
+    // One interpreter across turns preserves the conversation's files and variables.
     expect(starts).toHaveLength(1);
     expect(stops).toHaveLength(0);
 

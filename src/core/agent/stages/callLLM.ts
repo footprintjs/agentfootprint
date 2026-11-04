@@ -630,7 +630,7 @@ export function buildCallLLMStage(
     // function of the spec and nothing else (no call number, no clock — the
     // findings piece's cache law), so an unchanged map serves unchanged bytes
     // on every call of the run. The composer is loaded through `import()` —
-    // the optional-family law of docs-next's site budget (`toolCalls.ts ·
+    // the optional-family law of docs-next's site budget (`toolCalls/evidence/judgeLanded.ts ·
     // judgeLanded`): an unarmed agent never loads the module. The event
     // carries identities and counts only.
     let ontologyPieceRecord: OntologyPiece | undefined;
@@ -966,7 +966,7 @@ export function buildCallLLMStage(
         // all"). Never a second `scope.history` read: every tracked read is a
         // narrative step, and one more here renumbered every step after it on
         // runs that never settle anything (pinned by
-        // `test/integrity/danglingReference.test.ts` · "the narrative").
+        // `src/integrity/dangling-reference/danglingReference.test.ts` · "the narrative").
         const frame = committed;
         const presentResults = new Set(
           frame
@@ -1545,7 +1545,7 @@ export function buildCallLLMStage(
     // nothing to choose among filed no pick and gets no outcome).
     if (deps.toolChoice === true) {
       // `import()` — the optional-family law of docs-next's site budget (the
-      // `toolCalls.ts · judgeLanded` precedent): an unarmed agent never loads
+      // `toolCalls/evidence/judgeLanded.ts · judgeLanded` precedent): an unarmed agent never loads
       // the module; the slot loads the same one under the same gate.
       const { outcomeRowFor, pickAttemptedFor, pickRowFor, recordToolChoice } = await import(
         '../toolChoice/record.js'

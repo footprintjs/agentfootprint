@@ -19,15 +19,15 @@
  */
 
 import type { LLMProvider } from '../provider-contract/types.js';
-import { flowChart, FlowChartExecutor, type FlowChart, type TypedScope } from 'footprintjs';
+import { flowChart, type FlowChart, type TypedScope } from 'footprintjs';
 import { LLMCall } from '../core/LLMCall.js';
 import { RunnerBase } from '../core/RunnerBase.js';
-import type { Runner } from '../core/runner.js';
+import type { Runner, RunOptions } from '../core/runner.js';
 import type { MergeFn, MergeWithLLMOptions } from '../core-flow/Parallel.js';
 import { Parallel } from '../core-flow/Parallel.js';
 import { Sequence } from '../core-flow/Sequence.js';
-import { adoptMemberRedaction, redactionDeclaredBy } from '../redaction/declared.js';
-import { adoptParentRun, parentRunIn, readsParentRun, withParentRun } from '../core/memberRun.js';
+import { adoptMemberRedaction } from '../redaction/declared.js';
+import { parentRunIn, readsParentRun, withParentRun } from '../core/memberRun.js';
 
 const SHARD_DELIMITER = '\u001F'; // ASCII Unit Separator — unlikely in real text.
 
@@ -134,9 +134,14 @@ class ShardSplitRunner extends RunnerBase<{ message: string }, string> {
     super();
     this.splitFn = splitFn;
     this.shardCount = shardCount;
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [`MapReduce:${this.id}`],
+      initialize: () => ({}),
+    });
   }
 
-  getSpec(): FlowChart {
+  private buildChart(): FlowChart {
     const splitFn = this.splitFn;
     const shardCount = this.shardCount;
     return flowChart<{ packed: string }>(
@@ -154,11 +159,17 @@ class ShardSplitRunner extends RunnerBase<{ message: string }, string> {
       .build();
   }
 
-  async run(input: { message: string }): Promise<string> {
-    const executor = new FlowChartExecutor(this.getSpec());
-    const result = await executor.run({ input: { message: input.message } });
-    if (typeof result === 'string') return result;
-    throw new Error('ShardSplit: unexpected result shape');
+  async run(input: { message: string }, options?: RunOptions): Promise<string> {
+    return this.runExecution().withRun(async (invocation) => {
+      const prepared = this.compositionRunSetup(invocation);
+      const result = await invocation.execute(
+        { kind: 'run', options: { ...options, input: { message: input.message } } },
+        prepared.setup,
+        prepared.binding,
+      );
+      if (typeof result === 'string') return result;
+      throw new Error('ShardSplit: unexpected result shape');
+    });
   }
 
   async resume(): Promise<string> {
@@ -187,9 +198,14 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
     adoptMemberRedaction(this, [inner]);
     // It hands the run it serves on to the wrapped runner (`core/memberRun.ts`).
     readsParentRun(this);
+    this.initChart(() => this.buildChart(), {
+      runnerId: this.id,
+      compositionPath: [`MapReduce:${this.id}`],
+      initialize: () => ({}),
+    });
   }
 
-  getSpec(): FlowChart {
+  private buildChart(): FlowChart {
     // Build a wrapper chart that unpacks the shard and invokes the
     // inner chart. The inner LLMCall's chart runs as a subflow whose
     // input is the extracted shard.
@@ -210,7 +226,7 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
         scope.shard = parts[shardIndex] ?? '';
         scope.result = '';
         // The run the shard serves, handed on to the wrapped runner (`core/memberRun.ts`).
-        adoptParentRun(scope, args, 'mapReduce shard');
+        this.enterComposition(scope, args, 'mapReduce shard');
       },
       'unpack',
     )
@@ -225,15 +241,18 @@ class ShardBranchRunner extends RunnerBase<{ message: string }, string> {
       .build();
   }
 
-  async run(input: { message: string }): Promise<string> {
-    const executor = new FlowChartExecutor(this.getSpec());
-    // Run on its own (it never is inside `mapReduce`, which mounts it), it
-    // still keeps the wrapped runner's records under that runner's policy.
-    const policy = redactionDeclaredBy(this);
-    if (policy !== undefined) executor.setRedactionPolicy(policy);
-    const result = await executor.run({ input: { message: input.message } });
-    if (typeof result === 'string') return result;
-    throw new Error('ShardBranch: unexpected result shape');
+  async run(input: { message: string }, options?: RunOptions): Promise<string> {
+    return this.runExecution().withRun(async (invocation) => {
+      this.prepareCompositionRun(invocation, undefined, undefined, 'mapReduce shard');
+      const prepared = this.compositionRunSetup(invocation);
+      const result = await invocation.execute(
+        { kind: 'run', options: { ...options, input: { message: input.message } } },
+        prepared.setup,
+        prepared.binding,
+      );
+      if (typeof result === 'string') return result;
+      throw new Error('ShardBranch: unexpected result shape');
+    });
   }
 
   async resume(): Promise<string> {

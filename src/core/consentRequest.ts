@@ -1,17 +1,19 @@
+import {
+  inMemoryDecisionLedger,
+  knownDecisionState,
+  observeDecisionState,
+  rememberLocalClose,
+  hasLocalClose,
+} from './consentLedger.js';
+export { inMemoryDecisionLedger } from './consentLedger.js';
+import type { AnswerConsumption } from './answerConsumption.js';
 /**
  * consentRequest — the request a consent gate puts to a person: how it is
  * named, what it is bound to, and how a decision is held to it, once.
  *
- * Role:   the ONE owner of that law. A consent gate (a tool's `checkIn`, a
- *         middleware's `ask`) pauses the run; `mintConsentRequest` mints the request
- *         at the pause, and `heldDecision` + `spendDecision` hold a resume's
- *         decision to it. The dispatch loop (`agent/stages/toolCalls.ts`) is
- *         the only writer and the only place a decision is used; `Agent.resume`
- *         asks the same pure question earlier, so a mismatch is refused before
- *         anything moves.
- * Reads:  the call about to pause; at a resume, the paused run's own state
- *         (`gatedCallOf`) and the decision.
- * Writes: nothing — the dispatch loop writes what `mintConsentRequest` returns.
+ * Binds a pause to its exact call; heldDecision checks it and spendDecision
+ * records ledger use. The dispatch stage owns checkpoint writes. Agent.resume
+ * applies the same pure admission before execution.
  *
  * ── WHY THE ID IS A COMMITMENT, NOT ONLY A NAME ─────────────────────────────
  * `id = sha256(domain ‖ nonce ‖ canonicalJson(call))`, where the call is
@@ -204,42 +206,18 @@ export interface DecisionLedger {
    */
   spend(requestId: string): boolean | Promise<boolean>;
   /**
-   * OPTIONAL — whether `requestId` is recorded as answered, without recording
-   * it. Asked only after a {@link DecisionLedger.spend} for it failed, so a
-   * host can tell a spend that never landed (the call did not run; the pause
-   * stays answerable) from one that did. A ledger without it, or one that
-   * throws or answers anything but `false`, counts as spent: the host stops
-   * offering the pause. Asked, too, whether a host recorded closing a request
-   * (`closed-proven:<requestId>`) — so a retried close keeps the verdict the
-   * first one proved, and a person whose answer arrives after the close is
-   * told the host closed it. Never asked whether the REQUEST is unspent as a
-   * proof that its call did not run: a read can be overtaken by a resume
-   * elsewhere; only `spend` proves.
+   * OPTIONAL advisory observation after a failed {@link DecisionLedger.spend}.
+   * `false` must mean this exact request is absent; `true` must mean it is
+   * recorded. A throw, a bounded-out wait or any other answer is unknown.
+   * Unknown counts as POSSIBLY used after an attempted spend, never as proof
+   * of execution or non-execution. A cautious positive cannot refuse a fresh
+   * answer or prove a host closed it: only the atomic spend is authority.
+   * Library-created in-memory ledgers expose their actual Set membership
+   * privately for synchronous replay refusal before native execution. An
+   * opaque ledger goes straight to `spend`; its optional boolean is never
+   * promoted into that definitive capability.
    */
   isSpent?(requestId: string): boolean | Promise<boolean>;
-}
-
-/**
- * A NEW {@link DecisionLedger} in this process's memory. Grows by one id per
- * answered request.
- *
- * Agents that name no ledger already share one of these per process, so this
- * is for a ledger of their own: agents given different ledgers spend
- * separately, and a decision spent in one is not known to the others.
- */
-export function inMemoryDecisionLedger(): DecisionLedger {
-  const spent = new Set<string>();
-  const ledger: DecisionLedger = {
-    spend(requestId: string): boolean {
-      if (spent.has(requestId)) return false;
-      spent.add(requestId);
-      return true;
-    },
-    isSpent(requestId: string): boolean {
-      return spent.has(requestId);
-    },
-  };
-  return ledger;
 }
 
 /** One attempt to spend a watched request, as a door learns of it. */
@@ -253,6 +231,7 @@ interface SpendAttempt {
 /** What one door's watch has seen of its request ({@link watchDecisionUse}). */
 interface WatchedUse {
   takenUp: boolean;
+  previouslySpent?: true;
   readonly attempts: SpendAttempt[];
 }
 
@@ -435,14 +414,12 @@ function provingLedger(question: NeverRanQuestion): DecisionLedger | undefined {
   return ledger;
 }
 
-/** Whether `ledger` says a host recorded closing `requestId` — `false` when it cannot say. */
+/** Actual issued-ledger membership or a bounded locally witnessed close, never an opaque read. */
 async function closeRecorded(ledger: DecisionLedger, requestId: string): Promise<boolean> {
-  if (typeof ledger.isSpent !== 'function') return false;
-  try {
-    return (await ledger.isSpent(closedProvenKey(requestId))) === true;
-  } catch {
-    return false;
-  }
+  return (
+    knownDecisionState(ledger, closedProvenKey(requestId)) === true ||
+    hasLocalClose(ledgerIdentityOf(ledger), requestId)
+  );
 }
 
 /**
@@ -458,10 +435,10 @@ async function closeRecorded(ledger: DecisionLedger, requestId: string): Promise
  * IDEMPOTENT. Having won the request, the closer spends a second key,
  * {@link closedProvenKey}, to record that it closed it. The closed pause is
  * stored only afterwards, and that can fail (the store's write, the run that
- * goes on from it); a retried close finds the request spent and reads the
- * marker (`isSpent`) — present: the verdict the first close proved; absent
- * (a crash between the two spends, a ledger without `isSpent`): not proven, the
- * safe direction. A request a DECISION spent never has the marker.
+ * goes on from it). A retry needs actual issued-ledger membership or this
+ * process's bounded receipt of BOTH successful spends, scoped to the admitted
+ * ledger identity and request. An opaque read cannot supply the proof; a
+ * missing receipt, restart or eviction means unknown. A decision has no marker.
  *
  * CONSUMES the request: asked only for a pause being closed.
  *
@@ -493,7 +470,9 @@ export async function proveNeverRan(question: NeverRanQuestion): Promise<boolean
       // Recorded for a retry and for a late answer; the proof is the win
       // above, so a marker that does not land costs only that.
       try {
-        await ledger.spend(closedProvenKey(id));
+        const recorded = await ledger.spend(closedProvenKey(id));
+        if (recorded === true && knownDecisionState(ledger, id) === undefined)
+          rememberLocalClose(ledgerIdentityOf(ledger), id);
       } catch {
         // a retry will read "not proven" — the safe direction
       }
@@ -505,12 +484,11 @@ export async function proveNeverRan(question: NeverRanQuestion): Promise<boolean
 }
 
 /**
- * Whether a host already closed this paused request with the proof that its
- * call never ran — read, never spent: the ledger it was minted under holds the
- * close marker for every id ({@link closedProvenKey}). Asked by a door whose
- * answer to the pause failed because the request was already spent, so a pause
- * closed elsewhere (whose closed conversation was never stored) is closed as
- * not run rather than marked as possibly run.
+ * Whether this process can still prove the host closed these exact requests:
+ * actual issued-ledger membership or a bounded acknowledged local close.
+ * An opaque boolean never proves non-execution; restart or cache eviction
+ * degrades to unknown. A door with this proof may retain its not-run notice
+ * after the closed conversation's own write failed.
  */
 export async function closedByAHost(question: NeverRanQuestion): Promise<boolean> {
   const ledger = provingLedger(question);
@@ -779,6 +757,7 @@ export async function spendDecision(
   decision: CheckInDecision,
   gate: ConsentGateKind,
   signal?: AbortSignal,
+  consumption?: AnswerConsumption,
 ): Promise<void> {
   refuseIfAborted(signal);
   const attempts = attemptsOn(decision.requestId, ledger, decision.approved === false);
@@ -791,13 +770,16 @@ export async function spendDecision(
   }
   for (const attempt of attempts) attempt.outcome = fresh === true ? 'spent' : 'refused';
   if (fresh !== true) {
-    // A host that closed the request recorded it (`proveNeverRan`): the
-    // person is told so — the call did not run — not "already answered".
+    // Retain a host-close reason only while its local proof is available.
+    // An opaque read alone cannot distinguish it from another prior spend.
     throw new ResumeDecisionError(
       (await closeRecorded(ledger, decision.requestId)) ? 'closed-by-host' : 'already-answered',
       gate,
     );
   }
+  // Confirmed consumption precedes cancellation, and may be observed after
+  // retirement. This fact never reopens a retired component or authorizes IO.
+  consumption?.record();
   refuseIfAborted(signal);
 }
 
@@ -805,7 +787,7 @@ export async function spendDecision(
  * What an aborted run ended with — the signal's own reason, as the engine
  * reports it — or `undefined` while the run goes on. Asked before the spend,
  * after it, and by the dispatch loop once more at the last moment before an
- * approved call runs (`toolCalls.ts` · `resolveCredentialAndExecute`): the
+ * approved call runs (`toolCalls/execution/resumedInvocation.ts` · `resolveCredentialAndExecute`): the
  * engine stops waiting on an aborted run's stage, but the stage goes on, and
  * nothing may run for a caller who was already told the run ended.
  */
@@ -832,34 +814,34 @@ function attemptsOn(requestId: string, ledger: DecisionLedger, declined: boolean
   return attempts;
 }
 
-/**
- * A resume of this library has taken up the request `requestId` names: from
- * here every use of its decision passes through {@link spendDecision}, where a
- * watch sees it. Called by every runner's resume (`RunnerBase` ·
- * `emitPauseResume`, and `Agent.resume` before its first check) and by the
- * dispatch loop where it takes the decision up.
- */
+/** Library take-up precedes refusal; spends and positive prior-spend observations are tracked separately. */
 export function noteDecisionTakenUp(requestId: string | undefined): void {
   if (requestId === undefined) return;
   for (const watch of processState().watches.get(requestId) ?? []) watch.takenUp = true;
 }
 
+/** Definitive membership or a locally witnessed close, never an opaque read or a new attempt. */
+export function notePreviouslySpentDecision(requestId: string): void {
+  for (const watch of processState().watches.get(requestId) ?? []) watch.previouslySpent = true;
+}
+
 /** What a door that keeps a pause learns, for one resume, about its request ({@link watchDecisionUse}). */
 export interface DecisionUseWatch {
   /**
-   * Whether the request's decision may have been used while watched — by
-   * this resume, or by any other in this process:
+   * Whether this watch observed possible use, including definitive prior
+   * membership or an acknowledged local host close. Neither authorizes execution:
    *
    *  - taken to a ledger that spent it, refused it (an earlier resume had)
    *    or has not answered yet → `true`;
    *  - taken to a ledger whose spend failed → asked again of that ledger
    *    (`DecisionLedger.isSpent`): `false` there means the spend never landed;
-   *    no answer, a throw, or a ledger that cannot be asked → `true`;
-   *  - never taken to a ledger, by a resume this library took up → `false`;
+   *    bounded-out/failed/unknown observation → possibly used (`true`);
+   *  - a pre-origin definitive membership/close observation → `true`;
+   *  - never taken to a ledger or positively observed spent, by a resume this library took up → `false`;
    *  - never taken up by this library at all → `true`: that cannot be told
    *    apart from a use.
    */
-  mayHaveBeenUsed(): Promise<boolean>;
+  mayHaveBeenUsed(signal?: AbortSignal): Promise<boolean>;
   /**
    * Whether a ledger SPENT the request for a decline while watched, and no
    * approval of it was taken to a ledger meanwhile: the decline won the
@@ -886,11 +868,12 @@ export function watchDecisionUse(requestId: string): DecisionUseWatch {
   open.add(watched);
   watches.set(requestId, open);
   return {
-    async mayHaveBeenUsed(): Promise<boolean> {
+    async mayHaveBeenUsed(signal?: AbortSignal): Promise<boolean> {
+      if (watched.previouslySpent === true) return true;
       if (watched.attempts.length === 0) return !watched.takenUp;
       for (const attempt of [...watched.attempts]) {
         if (attempt.outcome !== 'failed') return true;
-        if (!(await neverLanded(attempt.ledger, requestId))) return true;
+        if ((await observeDecisionState(attempt.ledger, requestId, signal)) !== false) return true;
       }
       return false;
     },
@@ -906,16 +889,6 @@ export function watchDecisionUse(requestId: string): DecisionUseWatch {
       if (open.size === 0 && watches.get(requestId) === open) watches.delete(requestId);
     },
   };
-}
-
-/** Whether `ledger` says, when asked, that its failed spend of `requestId` never landed. */
-async function neverLanded(ledger: DecisionLedger, requestId: string): Promise<boolean> {
-  if (typeof ledger.isSpent !== 'function') return false;
-  try {
-    return (await ledger.isSpent(requestId)) === false;
-  } catch {
-    return false;
-  }
 }
 
 /** The id of the request a paused run's state records (`pausedRequest`), or `undefined`. */

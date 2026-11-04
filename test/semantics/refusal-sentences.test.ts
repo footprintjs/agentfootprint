@@ -36,7 +36,7 @@ import {
 } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import { applyResultCeiling } from '../../src/core/agent/resultCeiling.js';
-import { notServedResult, unknownToolResult } from '../../src/core/agent/stages/toolCalls.js';
+import { notServedResult, unknownToolResult } from '../../src/core/agent/stages/toolCalls/index.js';
 import { formatToolArgIssues } from '../../src/tools/toolArgsValidation.js';
 import { nonExistencePhrase, wrongnessPhrase } from '../../src/semantics/overclaim.js';
 import type { LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';

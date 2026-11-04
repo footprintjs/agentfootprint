@@ -1,35 +1,9 @@
 /**
- * auditShapes — WHAT the audit chain's bounded mode keeps of each event: one
- * shape per registered event type, every field of its payload ruled.
- *
- * Pattern: a declarative table, total over the registry
- *          (`{ [T in keyof AgentfootprintEventMap]-?: BoundRule }`), built from
- *          the combinators in `auditBounding.ts`.
- * Role:    the bounding layer's data. `audit.ts` asks it for every event in
- *          `payloadMode: 'bounded'`; an event type it does not know is
- *          `unknownEventShape` — every field a marker.
- * Emits:   N/A.
- *
- * A new event type, or a new field on a payload, does not compile until it is
- * classified here. Content (what a person, the model, a tool or the data
- * wrote, or a message composed from it) is a marker; structure (ids, names,
- * kinds, codes, verdicts, counts, the library's own sentences, the words the
- * app declared up front) is kept — and every kept value is CHECKED at runtime
- * as the kind its type declares: `num`, `bool`, `str` (an open string: an id,
- * a name, a label), `oneOf` (a closed union: exactly its words). No container
- * is kept whole; each is spelled out field by field, so a child its type does
- * not declare is a marker. The type walker
- * (`test/type-regressions/AuditBoundingDepth.test.ts`) holds every rule here
- * to the type beneath it; the runtime sweep
- * (`test/observability-providers/audit-bounded-sweep.test.ts`) hands every rule
- * what its kind forbids.
- *
- * The positions a record keeps although their value may come from the run —
- * meta's who, decision evidence, a policy's tag, an app's reason word, a seen
- * tool's name — are the rules `auditKeptByContract.ts` names, placed here.
- *
- * `audit.ts` looks an event's shape up in `eventShapeTable` — a `Map`, so an
- * event NAME is never a key into a plain object (`constructor`, `__proto__`).
+ * Exhaustive bounded audit shapes, one checked rule for every event payload field.
+ * Content becomes a marker; structural fields use runtime-checked primitive,
+ * closed-union, list and object rules. No container passes through wholesale.
+ * The event table is a Map, so inherited names cannot select a known shape.
+ * AuditBoundingDepth and audit-bounded-sweep pin type depth and runtime damage.
  */
 
 import type {
@@ -1607,6 +1581,10 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       iteration: num,
       answeredBy: oneOf('framework', 'provider', 'registry', 'skill'),
       answeredById: str,
+    }),
+    'agentfootprint.tools.resource_restore': eventShape<'agentfootprint.tools.resource_restore'>({
+      local: oneOf('retained', 'none-known-locally', 'unconfirmed'),
+      remote: oneOf('unknown'),
     }),
     'agentfootprint.tools.session_started': eventShape<'agentfootprint.tools.session_started'>({
       tool: str,

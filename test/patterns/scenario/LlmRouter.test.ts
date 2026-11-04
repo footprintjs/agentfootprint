@@ -5,11 +5,11 @@
  * consumer, not an implementation detail.
  *
  *   - unit:        prompt compilation, decision parsing, validation
- *   - integration: the decision reaches `route()` through a real run
+ *   - integration: the typed decision is returned by a real run
  *   - property:    the roster is byte-stable for the same options
  *   - security:    a hostile description stays DATA (cannot escape its
  *                  roster line, cannot get the last word)
- *   - honesty:     no decision recorded ⇒ halt; never guess
+ *   - honesty:     missing observational history remains unknown
  *   - privacy:     `reason` rides the trace only, never a prompt
  *   - adapter:     the whole thing runs deterministically on a mock
  */
@@ -43,8 +43,8 @@ function decisionJson(d: { agentId?: string; message?: string; reason?: string }
   return JSON.stringify(d);
 }
 
-describe('llmRouter — the decision reaches route()', () => {
-  it('records the decision under the message it hands on, so route() finds it', async () => {
+describe('llmRouter — the decision is returned as data', () => {
+  it('returns the decision and records a detached observation', async () => {
     const router = llmRouter({
       provider: scripted([
         decisionJson({ agentId: 'billing', message: 'refund for invoice 42', reason: 'money' }),
@@ -55,14 +55,18 @@ describe('llmRouter — the decision reaches route()', () => {
 
     const handoff = await router.step.run({ message: 'my invoice is wrong' });
 
-    expect(handoff).toBe('refund for invoice 42');
-    expect(router.route({ message: 'refund for invoice 42' })).toBe('billing');
+    expect(handoff).toEqual({
+      agentId: 'billing',
+      message: 'refund for invoice 42',
+      reason: 'money',
+    });
+    expect(router.decisionFor('refund for invoice 42')?.agentId).toBe('billing');
     expect(router.decisions()).toEqual([
       { agentId: 'billing', message: 'refund for invoice 42', reason: 'money' },
     ]);
   });
 
-  it('halts (returns undefined) when the decision omits agentId — the final-answer case', async () => {
+  it('returns a final-answer decision when it omits agentId — the final-answer case', async () => {
     const router = llmRouter({
       provider: scripted([decisionJson({ message: 'nothing to route — all set', reason: 'done' })]),
       model: 'm',
@@ -71,8 +75,8 @@ describe('llmRouter — the decision reaches route()', () => {
 
     const answer = await router.step.run({ message: 'thanks!' });
 
-    expect(answer).toBe('nothing to route — all set');
-    expect(router.route({ message: 'nothing to route — all set' })).toBeUndefined();
+    expect(answer).toEqual({ message: 'nothing to route — all set', reason: 'done' });
+    expect(router.decisionFor('nothing to route — all set')?.agentId).toBeUndefined();
     expect(router.decisions()[0]?.agentId).toBeUndefined();
   });
 
@@ -87,17 +91,17 @@ describe('llmRouter — the decision reaches route()', () => {
 
     // Not rewritten to undefined, not rewritten to a roster member —
     // hiding a hallucinated agent would hide a real routing failure.
-    expect(router.route({ message: 'sue them' })).toBe('legal');
+    expect(router.decisionFor('sue them')?.agentId).toBe('legal');
   });
 
-  it('never guesses: a message with no recorded decision routes nowhere', () => {
+  it('observation for an unseen message is unknown', () => {
     const router = llmRouter({
       provider: scripted([decisionJson({ agentId: 'billing', message: 'x' })]),
       model: 'm',
       agents: [...ROSTER],
     });
 
-    expect(router.route({ message: 'a message nobody decided about' })).toBeUndefined();
+    expect(router.decisionFor('a message nobody decided about')?.agentId).toBeUndefined();
     expect(router.decisionFor('a message nobody decided about')).toBeUndefined();
   });
 
@@ -221,7 +225,7 @@ describe('llmRouter — the answer is validated', () => {
 
     await router.step.run({ message: 'x' });
 
-    expect(router.route({ message: 'fenced' })).toBe('tech');
+    expect(router.decisionFor('fenced')?.agentId).toBe('tech');
   });
 
   it('throws RoutingDecisionError with the raw text when the model answers in prose', async () => {
@@ -279,8 +283,8 @@ describe('llmRouter — the answer is validated', () => {
 
     const handoff = await router.step.run({ message: 'the original question' });
 
-    expect(handoff).toBe('the original question');
-    expect(router.route({ message: 'the original question' })).toBe('billing');
+    expect(handoff).toEqual({ agentId: 'billing', message: 'the original question' });
+    expect(router.decisionFor('the original question')?.agentId).toBe('billing');
   });
 
   it('treats a null agentId as "no agent" (models write both)', async () => {
@@ -292,7 +296,7 @@ describe('llmRouter — the answer is validated', () => {
 
     await router.step.run({ message: 'x' });
 
-    expect(router.route({ message: 'done here' })).toBeUndefined();
+    expect(router.decisionFor('done here')?.agentId).toBeUndefined();
   });
 });
 
@@ -370,8 +374,8 @@ describe('llmRouter — a long-lived router stays bounded', () => {
     for (let i = 0; i < 70; i++) await router.step.run({ message: `ask-${i}` });
 
     expect(router.decisions()).toHaveLength(64);
-    // The newest decisions are still resolvable…
-    expect(router.route({ message: 'turn-69' })).toBe('billing');
+    // The newest observation remains available…
+    expect(router.decisionFor('turn-69')?.agentId).toBe('billing');
     // …the oldest have aged out rather than accumulating forever.
     expect(router.decisionFor('turn-0')).toBeUndefined();
   });

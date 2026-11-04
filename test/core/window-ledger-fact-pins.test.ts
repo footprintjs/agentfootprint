@@ -170,7 +170,7 @@ describe('turnStandingOf', () => {
 
   it('a SETTLED message is no result: it takes no part in the ranking (9.113.0)', () => {
     // The batch [1 a, 2 collect, 3 c] paused on 2; the resume answered 2 and
-    // SETTLED 3 without running it (`stages/toolCalls.ts` · "── The batch
+    // SETTLED 3 without running it (`stages/toolCalls/batch/settle.ts` · "── The batch
     // settlement (9.113.0)"). Counted, the settled message would rank as an
     // UNDECLARED result and lift a batch the model judged all noise above noise.
     const settledBatch = segmentTurns([

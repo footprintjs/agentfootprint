@@ -826,7 +826,15 @@ describe('askBeforeDispatch â€” a state another batch left is never this batchâ€
         planAskFields([{ toolCallId: 'c1', ask: ['window'] }], [call('c1', 'search_logs')], toolOf),
       ),
     );
-    const store: Record<string, unknown> = { argumentAsk: stale };
+    const store: Record<string, unknown> = {
+      argumentAsk: stale,
+      toolResourceOwner: {
+        version: 1,
+        birth: { runId: 'native-run', componentOrdinal: 0 },
+        nextDispatch: 0,
+      },
+      llmLatestToolCalls: [{ id: 'c9', name: 'search_logs', args: { host: 'db-1' } }],
+    };
     const scope = {
       $getValue: (key: string) => store[key],
       iteration: 2,
@@ -846,7 +854,10 @@ describe('askBeforeDispatch â€” a state another batch left is never this batchâ€
     ]);
     let thrown: unknown;
     try {
-      askBeforeDispatch(scope as never, resolutions, { toolOf, runId: () => 'run-x' });
+      askBeforeDispatch(scope as never, resolutions, {
+        toolOf,
+        runId: () => 'run-x',
+      });
     } catch (error) {
       thrown = error;
     }

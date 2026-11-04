@@ -2,7 +2,7 @@
 title: Functions
 ---
 
-157 exported from `agentfootprint`.
+156 exported from `agentfootprint`.
 
 - [`absenceSignalOf`](/docs/api/functions/absenceSignalOf)
 - [`absent`](/docs/api/functions/absent)
@@ -96,7 +96,6 @@ title: Functions
 - [`keyedFold`](/docs/api/functions/keyedFold)
 - [`llmRouter`](/docs/api/functions/llmRouter)
 - [`llmSwarm`](/docs/api/functions/llmSwarm)
-- [`makeRunId`](/docs/api/functions/makeRunId)
 - [`mapReduce`](/docs/api/functions/mapReduce)
 - [`messageDigestInput`](/docs/api/functions/messageDigestInput)
 - [`milestoneFor`](/docs/api/functions/milestoneFor)

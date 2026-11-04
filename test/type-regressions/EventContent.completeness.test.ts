@@ -217,6 +217,7 @@ export const EVENT_CONTENT = {
   // ids, digests, evidence and outcomes of one MCP client-pool use
   'agentfootprint.tools.mcp_client': 'structure',
   'agentfootprint.tools.request_attempts': 'structure',
+  'agentfootprint.tools.resource_restore': 'structure',
   'agentfootprint.tools.result_refused': 'structure',
   'agentfootprint.tools.semantics_declared': 'shape',
   'agentfootprint.tools.session_close_failed': 'fields',

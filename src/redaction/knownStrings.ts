@@ -1,38 +1,9 @@
 /**
- * knownStrings — THE one rule an event is served by under ANY policy that
- * selects at least one name: every value is checked by its KIND, wherever it
- * sits.
- *
- * Pattern: one small pure function (`keepKnownValues`) over the closed sets
- *          the library and the run declared.
- * Role:    what makes the served path SAFE without a per-field list. A record
- *          handed out whole can carry the conversation anywhere — a field
- *          nobody listed, a list inside a record, a key of a map, a copy the
- *          library derives from a selected value under a name of its own — so
- *          nothing is trusted by its position. A value is kept only when its
- *          kind says it cannot be what a person, the model, a tool or the data
- *          wrote:
- *
- *   - numbers, booleans and null pass;
- *   - a string passes only when it is one of the library's own WORDS — an
- *     event type, a status, verdict or stop word, a fixed sentence:
- *     {@link LIBRARY_WORDS}, built from the code's own types and exhaustive by
- *     type (a word added to a payload union does not compile until it is
- *     listed). Ids, the names an app declared and the host's identity are not
- *     words: they are the placeholder too (a run's minted ids and its
- *     declared names come back later, each with a single owner and its own
- *     review);
- *   - every other string is the placeholder, inside lists and records too;
- *   - an object's KEY is a field name when the library's payload types name
- *     that field ({@link FIELD_NAMES}); any other key is data, checked by the
- *     same rule — the keys that fail are kept out together, as one
- *     placeholder entry;
- *   - a value that is not plain data (a class instance, a Map, a Date) cannot
- *     be vouched for and is the placeholder.
- *
- * What it serves is always a fresh copy of plain data (`keepKnownValues`).
- * State, the snapshot and the commit log are not served by it: footprintjs's
- * rule decides those, by name.
+ * Under a policy selecting any name, keepKnownValues serves a fresh plain copy.
+ * Numbers, booleans and null pass; strings pass only from closed LIBRARY_WORDS.
+ * Other strings are masked, including unknown object keys. Known FIELD_NAMES
+ * retain their names; unknown keys share one placeholder entry. Non-plain data
+ * is masked. Native state, snapshots and commit logs use footprintjs's own rule.
  */
 
 import type { ABSENCE_NOTE, ABSENCE_NOTE_COMPOSED } from '../semantics/coverage/absent.js';
@@ -280,6 +251,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'agentfootprint.tools.offered': true,
   'agentfootprint.tools.repeated_call': true,
   'agentfootprint.tools.request_attempts': true,
+  'agentfootprint.tools.resource_restore': true,
   'agentfootprint.tools.result_refused': true,
   'agentfootprint.tools.semantics_declared': true,
   'agentfootprint.tools.session_close_failed': true,
@@ -542,6 +514,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'no-time-left': true,
   noise: true,
   none: true,
+  'none-known-locally': true,
   'not-applicable': true,
   'not-assessed': true,
   'not-entered': true,
@@ -651,6 +624,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   result: true,
   'result-period': true,
   'result-shape': true,
+  retained: true,
   retry: true,
   'retry-other': true,
   retryable: true,
@@ -737,6 +711,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   turn: true,
   unavailable: true,
   uncheckable: true,
+  unconfirmed: true,
   undeclared: true,
   'unit-scale': true,
   unknown: true,
@@ -1072,6 +1047,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   lines: true,
   link: true,
   llm: true,
+  local: true,
   localeCompare: true,
   lookedFor: true,
   lookedForRef: true,

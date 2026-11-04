@@ -79,6 +79,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm ls foottrace
       - run: npm run test:contract:foottrace
       - run: npx tsc --noEmit
       # Compile-level regression tests (test/type-regressions/) — ordinary

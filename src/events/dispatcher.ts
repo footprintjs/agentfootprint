@@ -432,7 +432,7 @@ export class EventDispatcher {
 
   /**
    * Install what this run's events are served as. Called by the runner when a
-   * run opens (`RunnerBase · openRunRedaction`) and before a resume's reply.
+   * run opens (`prepareRunRedaction`) and before a resume's reply.
    *
    * @param serving  the run's serving — every run has one: covered by a
    *                 policy, or positively none (the identity, which still
@@ -454,7 +454,7 @@ export class EventDispatcher {
   /**
    * Dispatch a fact the runner files about ONE run after its executor returned
    * (its pause request) — served under THAT run's serving
-   * (`runRedaction.ts` · `servingOfExecutor`), never the run in force now: on
+   * (`RunnerInvocation.value.redaction.serving`), never the run in force now: on
    * an instance whose runs overlap, the last run opened is another run. A fact
    * whose run has no serving (`undefined` — an executor no run of this library
    * opened) is refused: served as the placeholder. The real-value path

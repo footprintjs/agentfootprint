@@ -158,7 +158,7 @@
  *     reached only for the party the model LAST read the name under, or the
  *     name's only holder when it was never served, and put on the record by
  *     `agentfootprint.tools.answered_off_wire`; a name whose last-served
- *     party can no longer answer is refused (`toolCalls.ts` ·
+ *     party can no longer answer is refused (`toolCalls/helpers/dispatchRefusals.ts` ·
  *     `notServedResult`), never handed to a party the model was not shown
  *     under that name. The
  *     collision itself is still REPORTED rather than refused, because nothing

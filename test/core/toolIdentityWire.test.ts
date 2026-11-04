@@ -61,7 +61,7 @@ describe('the identity wire — what a tool is told', () => {
 
     expect(seen).toHaveLength(1);
     expect(typeof seen[0]?.runId).toBe('string');
-    expect(seen[0]?.runId).toMatch(/^run-/);
+    expect(seen[0]?.runId).toBe(agent.checkpoint()?.runId);
   });
 
   it('SCENARIO — two runs of ONE agent are told two different runIds', async () => {
@@ -396,7 +396,7 @@ describe('the four events a session leaves behind', () => {
     // `runId: 'consumer-scope'` — unjoinable to the run that opened the
     // session, which is the exact unjoinability 9.4.0 fixed for credentials.
     const closed = rows[1];
-    expect(closed?.runId).toMatch(/^run-/);
+    expect(closed?.runId).toBe(agent.checkpoint()?.runId);
     expect(closed?.runId).toBe(rows[0]?.runId);
     expect(closed?.stage).toBe('tool-teardown#0');
     expect(closed?.payload).toMatchObject({

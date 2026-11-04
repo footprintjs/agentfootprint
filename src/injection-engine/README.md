@@ -526,7 +526,7 @@ Advance the cursor exactly once per iteration off the SAME ctx the triggers
 read (the keystone); enforce `reachableSkills` at pick time; publish
 `pendingSkillPick` only after acceptance, and clear it every iteration; carry
 the advanced cursor into the next iteration; emit the routing decisions.
-`buildInjectionEngineSubflow.ts` + `core/agent/stages/toolCalls.ts` are its
+`buildInjectionEngineSubflow.ts` + `core/agent/stages/toolCalls/index.ts` are its
 reference implementation. It is documentation-as-a-type — nothing constructs
 one, nothing consumes one, and implementing it does not start a run. This
 package still has exactly one run door.

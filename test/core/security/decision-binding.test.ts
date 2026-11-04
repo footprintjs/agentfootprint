@@ -12,8 +12,9 @@
  *     checkpoint's arguments, tool, call or middleware position were altered);
  *   - names a request that was already answered (a replay).
  *
- * The tool never runs on a refusal (fail closed), and the refusal is a typed
- * `ResumeDecisionError` whose `reason` says which of the four it was.
+ * The tool never runs on a refusal (fail closed). Inconsistent ownership
+ * carriers fail admission first; admitted decisions use `ResumeDecisionError`
+ * whose `reason` says which binding failed.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -277,7 +278,16 @@ describe('decision binding — an approval binds to the exact paused call', () =
     (altered.sharedState as Record<string, unknown>).pausedToolName = 'delete_account';
     await expect(
       agent.resume(altered, checkInApproved({ request: paused.checkIn, by: 'maya' })),
-    ).rejects.toMatchObject(refusal('call-changed'));
+    ).rejects.toMatchObject({
+      name: 'TypeError',
+      message:
+        'Cannot resume this pause: the saved tool ownership carrier is missing or unreadable. Close this question and start a new run.',
+    });
+    expect(exec).not.toHaveBeenCalled();
+    await expect(
+      agent.resume(paused.checkpoint, checkInApproved({ request: paused.checkIn, by: 'maya' })),
+    ).resolves.toBe('done after 1');
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 });
 

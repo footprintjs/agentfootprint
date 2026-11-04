@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { importedFoottrace } from './foottrace.imports.mjs';
+import { assertSingleFoottrace } from './foottrace.install.mjs';
 
 const require = createRequire(import.meta.url);
 const imported = importedFoottrace();
@@ -271,6 +283,66 @@ function contracts(ft, cause) {
 
   return cases;
 }
+
+test('the installed consumer and footprintjs share one physical Foottrace image', () => {
+  assertSingleFoottrace();
+});
+
+function withInstallFixture(behavior) {
+  const directory = mkdtempSync(join(tmpdir(), 'foottrace-install-contract-'));
+  function installed(name, parent = directory) {
+    const location = join(parent, 'node_modules', name);
+    mkdirSync(location, { recursive: true });
+    writeFileSync(
+      join(location, 'package.json'),
+      JSON.stringify({ name, version: '1.11.0', main: 'index.cjs' }),
+    );
+    // Resolution data only. No fixture module is imported or executed.
+    writeFileSync(join(location, 'index.cjs'), '// Inert package-resolution fixture.\n');
+    return location;
+  }
+  try {
+    const manifest = join(directory, 'package.json');
+    writeFileSync(manifest, '{"private":true}\n');
+    const root = installed('foottrace');
+    const engine = installed('footprintjs');
+    behavior({ directory, manifest, root, engine, installed });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+test('physical singleton control accepts a deduped installation', () => {
+  withInstallFixture(({ manifest, root }) => {
+    const image = realpathSync(join(root, 'index.cjs'));
+    assert.deepEqual(assertSingleFoottrace(manifest), { root: image, footprintjs: image });
+  });
+});
+
+test('physical singleton control accepts a symlink alias to the same image', () => {
+  withInstallFixture(({ manifest, root, engine }) => {
+    mkdirSync(join(engine, 'node_modules'));
+    symlinkSync(root, join(engine, 'node_modules/foottrace'), 'junction');
+    const image = realpathSync(join(root, 'index.cjs'));
+    assert.deepEqual(assertSingleFoottrace(manifest), { root: image, footprintjs: image });
+  });
+});
+
+test('physical singleton control refuses a nested copy with identical version and bytes', () => {
+  withInstallFixture(({ manifest, root, engine, installed }) => {
+    const nested = installed('foottrace', engine);
+    for (const file of ['package.json', 'index.cjs'])
+      assert.deepEqual(readFileSync(join(root, file)), readFileSync(join(nested, file)));
+    const consumer = createRequire(manifest);
+    const engineRequire = createRequire(consumer.resolve('footprintjs'));
+    assert.notEqual(
+      realpathSync(consumer.resolve('foottrace')),
+      realpathSync(engineRequire.resolve('foottrace')),
+      'The fixture must demonstrate two actual physical resolutions before checking refusal',
+    );
+    assert.throws(() => assertSingleFoottrace(manifest), { code: 'ERR_ASSERTION' });
+  });
+});
 
 test('every source-imported runtime symbol has a behavior contract, with no extra Foottrace features', () => {
   assert.deepEqual(

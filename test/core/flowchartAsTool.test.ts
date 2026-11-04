@@ -504,7 +504,30 @@ describe('flowchartAsTool — recorders option (multi-invocation)', () => {
 
 describe('flowchartAsTool — recorders option (integration: Agent end-to-end)', () => {
   it('decide() evidence inside a tool-mounted chart reaches the causal-evidence recorder DURING the agent run', async () => {
-    const evidence = causalEvidenceRecorder();
+    let evidence: ReturnType<typeof causalEvidenceRecorder> | undefined;
+    const bridge: CombinedRecorder = {
+      onRunStart(event) {
+        const runId = event.traversalContext?.runId;
+        if (typeof runId !== 'string') throw new Error('Tool chart did not supply native origin');
+        evidence = causalEvidenceRecorder({
+          coverage: {
+            scope: 'component-execution-leg',
+            runId,
+            entry: { kind: 'run' },
+            priorLegs: 'not-carried',
+          },
+        });
+      },
+      onDecision(event) {
+        evidence?.onDecision(event);
+      },
+    };
+    const collected = () => {
+      if (evidence === undefined) throw new Error('Tool chart did not begin');
+      const value = evidence.collect();
+      if (value.availability === 'unavailable') throw new Error('Actual chart coverage missing');
+      return value;
+    };
     const tool = flowchartAsTool({
       name: 'adjudicate_loan',
       description: 'Apply the lending policy and return the outcome.',
@@ -514,7 +537,7 @@ describe('flowchartAsTool — recorders option (integration: Agent end-to-end)',
         required: ['credit_score'],
       },
       flowchart: buildPolicyChart(),
-      recorders: [evidence],
+      recorders: [bridge],
     });
 
     let calls = 0;
@@ -530,7 +553,7 @@ describe('flowchartAsTool — recorders option (integration: Agent end-to-end)',
         }
         // Second LLM call happens AFTER the tool ran but BEFORE the run
         // ends — proof the evidence was captured during the agent run.
-        decisionsSeenMidRun = evidence.collect().decisions.length;
+        decisionsSeenMidRun = collected().decisions.length;
         return { content: 'Application declined.', toolCalls: [] };
       },
     });
@@ -544,7 +567,7 @@ describe('flowchartAsTool — recorders option (integration: Agent end-to-end)',
     expect(result).toBe('Application declined.');
     expect(decisionsSeenMidRun).toBe(1);
 
-    const { decisions } = evidence.collect();
+    const { decisions } = collected();
     expect(decisions).toHaveLength(1);
     expect(decisions[0].stageId).toBe('adjudicate');
     expect(decisions[0].chosen).toBe('Decline'); // branch display name (event contract)

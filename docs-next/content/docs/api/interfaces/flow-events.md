@@ -105,7 +105,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/scope/types.d.ts:17
 
 ## Interface: FlowBreakEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:309
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:304
 
 Event passed to FlowRecorder.onBreak.
 
@@ -115,7 +115,7 @@ Event passed to FlowRecorder.onBreak.
 
 > `optional` **propagatedFromSubflow?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:325
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:320
 
 When true, this break event was raised on the PARENT because an inner
 subflow's break propagated up (via `SubflowMountOptions.propagateBreak`).
@@ -128,7 +128,7 @@ The originating inner break fires its own `onBreak` event separately
 
 > `optional` **reason?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:318
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:313
 
 Optional free-form reason supplied by `scope.$break(reason)`. Absent
 when the stage invoked `$break()` without an argument. Propagates when
@@ -141,200 +141,7 @@ event carries the inner break's reason too.
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:310
-
-***
-
-#### traversalContext?
-
-> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:311
-
-
----
-
-
-## Interface: FlowDecisionEvent
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:252
-
-Event passed to FlowRecorder.onDecision.
-
-### Properties
-
-#### chosen
-
-> **chosen**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:254
-
-***
-
-#### decider
-
-> **decider**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:253
-
-***
-
-#### description?
-
-> `optional` **description?**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:256
-
-***
-
-#### evidence?
-
-> `optional` **evidence?**: `DecisionEvidence`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:259
-
-Structured decision evidence from decide() helper.
-
-***
-
-#### rationale?
-
-> `optional` **rationale?**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:255
-
-***
-
-#### traversalContext?
-
-> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:257
-
-
----
-
-
-## Interface: FlowErrorEvent
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:328
-
-Event passed to FlowRecorder.onError.
-
-### Properties
-
-#### channel?
-
-> `optional` **channel?**: `"flow"`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:340
-
-Explicit channel discriminant — `'flow'` on every engine-dispatched
-event. `isFlowEvent()` checks it first (backlog B3); optional so
-consumer-fabricated events (tests, replays) remain type-valid and fall
-back to the legacy pipelineId-absence heuristic.
-
-***
-
-#### message
-
-> **message**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:330
-
-***
-
-#### stageName
-
-> **stageName**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:329
-
-***
-
-#### structuredError
-
-> **structuredError**: `StructuredErrorInfo`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:332
-
-Structured error details — preserves field-level issues, error codes, etc.
-
-***
-
-#### traversalContext?
-
-> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:333
-
-
----
-
-
-## Interface: FlowForkEvent
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:262
-
-Event passed to FlowRecorder.onFork.
-
-### Properties
-
-#### children
-
-> **children**: `string`[]
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:264
-
-***
-
-#### parent
-
-> **parent**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:263
-
-***
-
-#### traversalContext?
-
-> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:265
-
-
----
-
-
-## Interface: FlowLoopEvent
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:302
-
-Event passed to FlowRecorder.onLoop.
-
-### Properties
-
-#### description?
-
-> `optional` **description?**: `string`
-
 Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:305
-
-***
-
-#### iteration
-
-> **iteration**: `number`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:304
-
-***
-
-#### target
-
-> **target**: `string`
-
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:303
 
 ***
 
@@ -348,9 +155,202 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 ---
 
 
+## Interface: FlowDecisionEvent
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:247
+
+Event passed to FlowRecorder.onDecision.
+
+### Properties
+
+#### chosen
+
+> **chosen**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:249
+
+***
+
+#### decider
+
+> **decider**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:248
+
+***
+
+#### description?
+
+> `optional` **description?**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:251
+
+***
+
+#### evidence?
+
+> `optional` **evidence?**: `DecisionEvidence`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:254
+
+Structured decision evidence from decide() helper.
+
+***
+
+#### rationale?
+
+> `optional` **rationale?**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:250
+
+***
+
+#### traversalContext?
+
+> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:252
+
+
+---
+
+
+## Interface: FlowErrorEvent
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:323
+
+Event passed to FlowRecorder.onError.
+
+### Properties
+
+#### channel?
+
+> `optional` **channel?**: `"flow"`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:335
+
+Explicit channel discriminant — `'flow'` on every engine-dispatched
+event. `isFlowEvent()` checks it first (backlog B3); optional so
+consumer-fabricated events (tests, replays) remain type-valid and fall
+back to the legacy pipelineId-absence heuristic.
+
+***
+
+#### message
+
+> **message**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:325
+
+***
+
+#### stageName
+
+> **stageName**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:324
+
+***
+
+#### structuredError
+
+> **structuredError**: `StructuredErrorInfo`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:327
+
+Structured error details — preserves field-level issues, error codes, etc.
+
+***
+
+#### traversalContext?
+
+> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:328
+
+
+---
+
+
+## Interface: FlowForkEvent
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:257
+
+Event passed to FlowRecorder.onFork.
+
+### Properties
+
+#### children
+
+> **children**: `string`[]
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:259
+
+***
+
+#### parent
+
+> **parent**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:258
+
+***
+
+#### traversalContext?
+
+> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:260
+
+
+---
+
+
+## Interface: FlowLoopEvent
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:297
+
+Event passed to FlowRecorder.onLoop.
+
+### Properties
+
+#### description?
+
+> `optional` **description?**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:300
+
+***
+
+#### iteration
+
+> **iteration**: `number`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:299
+
+***
+
+#### target
+
+> **target**: `string`
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:298
+
+***
+
+#### traversalContext?
+
+> `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
+
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:301
+
+
+---
+
+
 ## Interface: FlowNextEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:245
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:240
 
 Event passed to FlowRecorder.onNext.
 
@@ -360,7 +360,7 @@ Event passed to FlowRecorder.onNext.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:248
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:243
 
 ***
 
@@ -368,7 +368,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **from**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:246
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:241
 
 ***
 
@@ -376,7 +376,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **to**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:247
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:242
 
 ***
 
@@ -384,7 +384,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:249
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:244
 
 
 ---
@@ -392,7 +392,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ## Interface: FlowSelectedEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:268
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:263
 
 Event passed to FlowRecorder.onSelected.
 
@@ -402,7 +402,7 @@ Event passed to FlowRecorder.onSelected.
 
 > `optional` **evidence?**: `SelectionEvidence`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:274
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:269
 
 Structured selection evidence from select() helper.
 
@@ -412,7 +412,7 @@ Structured selection evidence from select() helper.
 
 > **parent**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:269
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:264
 
 ***
 
@@ -420,7 +420,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **selected**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:270
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:265
 
 ***
 
@@ -428,7 +428,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **total**: `number`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:271
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:266
 
 ***
 
@@ -436,7 +436,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:272
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:267
 
 
 ---
@@ -444,7 +444,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ## Interface: FlowStageEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:232
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:227
 
 Event passed to FlowRecorder.onStageExecuted.
 
@@ -454,7 +454,7 @@ Event passed to FlowRecorder.onStageExecuted.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:234
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:229
 
 ***
 
@@ -462,7 +462,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:233
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:228
 
 ***
 
@@ -470,7 +470,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **stageType**: `StageType`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:242
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:237
 
 Which kind of stage completed. The engine fires `onStageExecuted`
 uniformly for every stage kind (proposal #003); consumers route by
@@ -482,7 +482,7 @@ uniformly for every stage kind (proposal #003); consumers route by
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:236
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:231
 
 Traversal context from the engine — read-only, set by traverser.
 
@@ -492,7 +492,7 @@ Traversal context from the engine — read-only, set by traverser.
 
 ## Interface: FlowSubflowEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:277
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:272
 
 Event passed to FlowRecorder.onSubflow.
 
@@ -502,7 +502,7 @@ Event passed to FlowRecorder.onSubflow.
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:282
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:277
 
 Build-time description of what this subflow does.
 
@@ -512,7 +512,7 @@ Build-time description of what this subflow does.
 
 > `optional` **mappedInput?**: `Record`\<`string`, `unknown`\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:285
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:280
 
 Mapped input values sent INTO the subflow (from inputMapper/inputKeys). Present on entry events.
 
@@ -522,7 +522,7 @@ Mapped input values sent INTO the subflow (from inputMapper/inputKeys). Present 
 
 > **name**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:278
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:273
 
 ***
 
@@ -530,7 +530,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > `optional` **outputState?**: `Record`\<`string`, `unknown`\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:287
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:282
 
 Subflow shared state at exit. Present on exit events.
 
@@ -540,7 +540,7 @@ Subflow shared state at exit. Present on exit events.
 
 > `optional` **subflowId?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:280
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:275
 
 Subflow identifier — use this to look up the full spec via the manifest.
 
@@ -550,7 +550,7 @@ Subflow identifier — use this to look up the full spec via the manifest.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:283
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:278
 
 
 ---
@@ -558,7 +558,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ## Interface: FlowSubflowRegisteredEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:290
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:285
 
 Event passed to FlowRecorder.onSubflowRegistered (dynamic subflow attachment).
 
@@ -568,7 +568,7 @@ Event passed to FlowRecorder.onSubflowRegistered (dynamic subflow attachment).
 
 > `optional` **description?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:296
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:291
 
 Build-time description.
 
@@ -578,7 +578,7 @@ Build-time description.
 
 > **name**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:294
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:289
 
 Human-readable name.
 
@@ -588,7 +588,7 @@ Human-readable name.
 
 > `optional` **specStructure?**: `unknown`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:298
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:293
 
 Full spec structure (when available from buildTimeStructure).
 
@@ -598,7 +598,7 @@ Full spec structure (when available from buildTimeStructure).
 
 > **subflowId**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:292
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:287
 
 Subflow identifier.
 
@@ -608,4 +608,4 @@ Subflow identifier.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:299
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:294

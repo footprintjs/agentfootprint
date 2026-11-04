@@ -300,18 +300,18 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 
 ## A hosted agent under `redact` — the record served, the person answered
 
-A hosted agent built with `Agent.create({ redact })` keeps what its policy names
-out of everything the host files or serves about a run — the recordings it mints
-(`recording/run` artifacts), so the `answer-account` op explains from a served
-record and says what it keeps out. What the host hands back to the PERSON and
-what the next turn resumes from are never redacted, and each reads the real
-value, never the record:
+Hosted delivery, token/spend events and durable progress belong to one invocation, including during terminal persistence.
+Direct and mounted runs cannot enter its session or reply. A refused question carrier closes so the next message runs.
+`standingAgent` explains obsolete decisions/cancels in plain words; `streamHandler` settles them as cancelled.
+
+`Agent.create({ redact })` keeps selected values out of retained/served records, including `recording/run` artifacts.
+`answer-account` explains a served record and states what it keeps out. The caller's reply and the next turn's
+conversation instead read real values, never the served record:
 
 - the streamed reply and the spend ledger — `standingAgent.ts` reads the run
   through `core/runnerLive.ts` · `runnerLive`, the library's real-value path;
-- the session store — `durability.ts · durableWriter` reads the conversation
-  from the run's LIVE committed state (`core/runnerLive.ts` · `RunnerLive`) at the commit
-  that moved `history`; the commit event's values are the record's form.
+- the session store — `durability.ts · durableWriter` reads the invocation's LIVE committed state through
+  `core/runnerLive.ts · RunnerLive` when a commit moves `history`; commit event values are served record values.
 
 ```ts
 await standingAgent({
@@ -441,7 +441,7 @@ promote one the library derived (the session rung, the per-run default).
 ```ts
 // No host: the checkpoint carries who the paused run was for.
 const paused = await agent.run({ message: 'refund me', identity: xavier }, { sessionId: 's-x' });
-agent.abandonPause();
+await agent.abandonPause();
 await agent.run({ message: 'hi', identity: yara });                 // somebody else, same instance
 await agent.resume(paused.checkpoint, 'yes', { sessionId: 's-x' }); // for xavier, in xavier's session
 agent.checkpoint()?.identity;                                        // → xavier

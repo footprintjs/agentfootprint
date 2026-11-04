@@ -200,7 +200,7 @@ describe('toolResultPinsOf', () => {
   it('a SETTLED sibling is not the tool answering again — the earlier real result stays pinned (9.113.0)', () => {
     // The batch [collect_input, whats_here] paused on collect_input; the
     // resume answered it and SETTLED whats_here without running it
-    // (`stages/toolCalls.ts` · "── The batch settlement (9.113.0)"). That
+    // (`stages/toolCalls/batch/settle.ts` · `notDispatchedResult`). That
     // message has `role: 'tool'` and a `toolName`, and it is still not a
     // result: `notDispatched` says so. Taken as whats_here's "latest result",
     // it would move the pin off the evidence onto the library's sentence.

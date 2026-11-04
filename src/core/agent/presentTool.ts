@@ -5,7 +5,7 @@
  * schema the model reads; the AUTHORITATIVE work — `head` the ref under the
  * run's scope, compose the description-snapshot result, emit
  * `agentfootprint.artifacts.presented` — lives in the tool-calls stage
- * (`applyPresent` in `stages/toolCalls.ts`), which OVERWRITES this
+ * (`applyPresent` in `stages/toolCalls/execution/artifactsOperations.ts`), which OVERWRITES this
  * placeholder's result. Bookkeeping lives where the batch order lives: the
  * stage owns the scope, the store, and the typed emit channel; a tool's
  * execute owns none of them.

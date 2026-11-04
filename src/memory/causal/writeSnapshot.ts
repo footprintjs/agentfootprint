@@ -62,6 +62,7 @@ import type { MemoryIdentity } from '../identity/index.js';
 import type { MemoryState } from '../stages/index.js';
 import { maxStoredTurn, normalizeHostTurn } from '../turn/resolveTurnNumber.js';
 import type { SnapshotEntry } from './types.js';
+import { readSnapshot } from './snapshotSchema.js';
 
 /** Ids written by this stage: `snap-{turn}`. Used to find the highest
  *  turn already persisted for a conversation (other entry kinds sharing
@@ -137,7 +138,7 @@ export function writeSnapshot(config: WriteSnapshotConfig) {
     const query = (userMsg?.content as string | undefined) ?? '';
     const finalContent = (assistantMsg?.content as string | undefined) ?? '';
 
-    if (query.length === 0) return; // No query → no useful snapshot.
+    if (query.length === 0 || !assistantMsg) return; // Answer-triggered snapshots only.
 
     // Effective turn — anchored on the store, not the host's counter
     // (see header: "Turn derivation"). Guarantees distinct, ordered ids for
@@ -157,19 +158,22 @@ export function writeSnapshot(config: WriteSnapshotConfig) {
     const now = Date.now();
     const ttl = config.ttlMs ? now + config.ttlMs : undefined;
 
-    // Evidence bridge (#5): the wire layer delivers run evidence harvested by
-    // `causalEvidenceRecorder` via the write mount's `evidenceSource`. Absent
-    // (non-agent hosts, no recorder attached) → zeros, as before.
-    const evidence = scope.runEvidence;
-    const snapshot: SnapshotEntry = {
-      query,
-      finalContent,
-      iterations: evidence?.iterations ?? 0,
-      decisions: evidence?.decisions ?? [],
-      toolCalls: evidence?.toolCalls ?? [],
-      durationMs: evidence?.durationMs ?? 0,
-      tokenUsage: evidence?.tokenUsage ?? { input: 0, output: 0 },
+    const evidence = scope.runEvidence ?? {
+      availability: 'unavailable' as const,
+      reason: 'not-configured' as const,
     };
+    const candidate = { schemaVersion: 2, query, finalContent, ...evidence };
+    const admitted = readSnapshot(candidate);
+    const snapshot: SnapshotEntry =
+      admitted.kind === 'accepted'
+        ? admitted.value
+        : {
+            schemaVersion: 2,
+            query,
+            finalContent,
+            availability: 'unavailable',
+            reason: 'collector-failed',
+          };
 
     const entry: MemoryEntry<SnapshotEntry> = {
       id: `snap-${turn}`,

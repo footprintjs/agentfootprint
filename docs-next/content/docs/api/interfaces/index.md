@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-384 exported from `agentfootprint`.
+387 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -269,6 +269,7 @@ title: Interfaces
 - [`RetrievedCandidate`](/docs/api/interfaces/RetrievedCandidate)
 - [`RouterAgent`](/docs/api/interfaces/RouterAgent)
 - [`RoutingDecision`](/docs/api/interfaces/RoutingDecision)
+- [`RoutingStrategy`](/docs/api/interfaces/RoutingStrategy)
 - [`RowsetReading`](/docs/api/interfaces/RowsetReading)
 - [`RunbookAsToolOptions`](/docs/api/interfaces/RunbookAsToolOptions)
 - [`RunbookEnvelope`](/docs/api/interfaces/RunbookEnvelope)
@@ -280,7 +281,10 @@ title: Interfaces
 - [`RunConfigContext`](/docs/api/interfaces/RunConfigContext)
 - [`RunContext`](/docs/api/interfaces/RunContext)
 - [`Runner`](/docs/api/interfaces/Runner)
+- [`RunnerCoreValues`](/docs/api/interfaces/RunnerCoreValues)
+- [`RunnerInvocation`](/docs/api/interfaces/RunnerInvocation)
 - [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)
+- [`RunnerSelection`](/docs/api/interfaces/RunnerSelection)
 - [`RunTime`](/docs/api/interfaces/RunTime)
 - [`S3ArtifactsOptions`](/docs/api/interfaces/S3ArtifactsOptions)
 - [`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder)
@@ -320,7 +324,6 @@ title: Interfaces
 - [`StandingRow`](/docs/api/interfaces/StandingRow)
 - [`StepsUnfinishedRow`](/docs/api/interfaces/StepsUnfinishedRow)
 - [`SwarmAgent`](/docs/api/interfaces/SwarmAgent)
-- [`SwarmOptions`](/docs/api/interfaces/SwarmOptions)
 - [`SweptArtifact`](/docs/api/interfaces/SweptArtifact)
 - [`TeardownOptions`](/docs/api/interfaces/TeardownOptions)
 - [`TimeAnswerRow`](/docs/api/interfaces/TimeAnswerRow)

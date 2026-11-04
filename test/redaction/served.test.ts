@@ -11,7 +11,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { RedactionRule } from 'footprintjs/advanced';
-import type { FlowChart, RedactionPolicy } from 'footprintjs';
+import type { RedactionPolicy } from 'footprintjs';
 
 import { eventServing, SERVED_PLACEHOLDER } from '../../src/redaction/served.js';
 import {
@@ -140,27 +140,19 @@ describe('eventServing — one event, decided once', () => {
   });
 });
 
-/** A chart whose factory hands back a bare scope — the run wrapper is what is under test. */
+/** Scope registration and private write relay, below the native adapter. */
 function scopedRun(policy: RedactionPolicy | undefined) {
   const dispatcher = new EventDispatcher();
   const run = createRunRedaction({ policy, dispatcher, getRunContext: () => ({} as never) });
   const emitted: { name: string; payload: unknown }[] = [];
-  const factory = run.scopeFactoryFor({
-    scopeFactory: () => ({
+  const scopeFor = (runtimeStageId: string) => {
+    const scope = {
       $emit: (name: string, payload?: unknown) => emitted.push({ name, payload }),
       $setValue: vi.fn(),
-    }),
-  } as unknown as FlowChart);
-  const scopeFor = (runtimeStageId: string) =>
-    factory(
-      { runtimeStageId, getRedactionRule: () => undefined } as never,
-      'stage',
-      {},
-      undefined as never,
-    ) as {
-      $emit(name: string, payload?: unknown): void;
-      $setValue: ReturnType<typeof vi.fn>;
     };
+    run.bindScope(scope, { runtimeStageId, getRedactionRule: () => undefined } as never);
+    return scope;
+  };
   return { run, dispatcher, emitted, scopeFor };
 }
 

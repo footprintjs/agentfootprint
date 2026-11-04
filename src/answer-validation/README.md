@@ -35,7 +35,7 @@ replace redaction.
 The check also reads this run's tool calls: `name`, `callId` and `outcome`
 (`ok` / `error` / `not-run`), never arguments or results. The ledger is tracked
 state of the run that owns the check (`AgentState.toolCallLedger`), written beside
-every `stream.tool_end` bracket (`src/core/agent/stages/toolCalls.ts` · `emitToolEnd`) and only
+every `stream.tool_end` bracket (`src/core/agent/stages/toolCalls/observation/observationsOperations.ts` · `emitToolEnd`) and only
 on an agent with `answerValidation`, so it cannot hold another run's calls and
 no other agent's record changes. It is read at the moment of the check
 (`toolLedger.ts` · `ledgerAtCheck`). `complete: false` says the list may

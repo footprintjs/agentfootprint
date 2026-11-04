@@ -57,7 +57,7 @@ about the answer they gave — a silent loop any app can fall into.
   where the question already travels. `null` is the field omitted.
 - `awaitingInput.repeat: { count, previousAnswer? }` — stamped by the runtime
   (`../tools/inputRequest.ts` · `repeatOf`, called at the raise in
-  `agent/stages/toolCalls.ts`) when the ask this run's resume answered is raised
+  `agent/stages/toolCalls/resume/ask.ts`) when the ask this run's resume answered is raised
   again with the same `id`. `count` is how many times the person already
   answered it this turn; it crosses checkpoints on the awaiting-input shape
   itself (`Agent.resume` reads `repeat.count` and adds one). `previousAnswer` is
@@ -131,10 +131,10 @@ resume path used to answer the paused call and stop: the next request carried a
 the pause had no `tool_start` / `tool_end` at all.
 
 **How.** All four resume paths go through one settlement
-(`agent/stages/toolCalls.ts` · "── The batch settlement (9.113.0)"). Each call
+(`agent/stages/toolCalls/batch/settle.ts` · `notDispatchedResult`). Each call
 after the paused one gets:
 
-- one fixed sentence as its result (`toolCalls.ts` · `notDispatchedResult`):
+- one fixed sentence as its result (`toolCalls/batch/settle.ts` · `notDispatchedResult`):
   past tense, anchored to the paused call by id and by tool, naming no
   destination — the law a library correction is written against is in
   `agent/README.md`;
@@ -153,7 +153,7 @@ Nothing is dispatched on resume: a resumed dispatch has no second checkpoint,
 so a call that would ask a person, meet a check-in or wait on consent could
 not. The model reads the fact and decides whether to propose the call again.
 The batch is read from the assistant turn in `history` that proposed it
-(`toolCalls.ts` · `pausedBatchOf`) — the message the `tool_use` blocks are
+(`toolCalls/batch/paused.ts` · `pausedBatchOf`) — the message the `tool_use` blocks are
 built from — so the checkpoint gains no key and one written before this
 release settles the same way. The calls before the paused one keep today's
 behaviour: they ran, and closed their brackets, on the leg that paused. A
@@ -211,7 +211,7 @@ really throws as the control. The window's readers are pinned beside their
 own suites (`test/core/window-last-tool-result.test.ts`,
 `test/core/window-drop-observations.test.ts`,
 `test/core/window-ledger-fact-pins.test.ts`,
-`test/integrity/danglingReference.test.ts` — which also holds the dangling
+`src/integrity/dangling-reference/danglingReference.test.ts` — which also holds the dangling
 trap's narrative step for step against 9.112.2, so the check can never add a
 tracked read), and so is the empty-lookup corpus
 (`test/integrity/emptyLookup.test.ts`); the toolpack's arm (stream first,
@@ -247,8 +247,8 @@ named follow-up; a halt needs its own anchor, since "halted" is not "paused".
 
 **The fact has ONE definition — `LLMMessage.notDispatched`
 (`provider-contract/types.ts`) — ONE writer, and two carriers: the settled message in
-`history` (`agent/stages/toolCalls.ts` · `settleBatch`) and both halves of its
-bracket (`toolCalls.ts` · `bracketSettled`, the one stamping site;
+`history` (`agent/stages/toolCalls/batch/settlementOperations.ts` · `settleBatch`) and both halves of its
+bracket (`toolCalls/batch/settlementOperations.ts` · `bracketSettled`, the one stamping site;
 `ToolStartPayload.notDispatched` and `ToolEndPayload.notDispatched` in
 `events/payloads.ts` are typed off the same field). It is absent on every
 other message and every other bracket. A reader asks the marker — never the
@@ -273,7 +273,7 @@ The readers, and what each does with it (paths from `src/`):
 | reader | carrier | a settled call is… |
 |---|---|---|
 | `security/extractSequence.ts` — a policy's `sequence`, `PolicyHaltError.sequence` | history | left out: "verify before transfer" is not met by a verify that never ran. Each marker settles the ONE proposal it answers, paired by position (`settledProposals`), never by id alone: a provider may reuse an id — the library's own fallback ids are minted per provider instance, so a fresh process mints them again — and a call that really ran under the same id, before the settled one or after it, is counted while the settled one is not |
-| `core/agent/stages/toolCalls.ts` · `producerCorpusOf` — the empty-lookup check's producer corpus (`noticeEmptyLookup`) | history | no producer text: a value only the sentence carries is not one "this run produced", and a ground that was only ever settled served nothing (the row reads `unreachable`) |
+| `core/agent/stages/toolCalls/evidence/producerCorpus.ts` · `producerCorpusOf` — the empty-lookup check's producer corpus (`noticeEmptyLookup`) | history | no producer text: a value only the sentence carries is not one "this run produced", and a ground that was only ever settled served nothing (the row reads `unreachable`) |
 | `core/checkin.ts` · `buildTrail` — the check-in trail's `toolCalls` | history | left out: never shown as a receipt |
 | `core/agent/window/toolNames.ts` · `toolNameOfMessage` — the last-tool-result pin, the drop notice, the dangling-reference check (`core/agent/stages/callLLM.ts`, which names the frame from the history the stage already read at its top — never a second read, which would add a narrative step to every run) | history | named as no tool: the pin stays on the tool's real result |
 | `core/agent/findings/offer.ts` · `isResultMessage` — the offer, `knownResults`, the piece's `undeclared:` line, the collapse (`core/agent/findings/serve.ts` · `collapseJudged`), `WindowRecord.droppedStandings` (`core/agent/stages/window.ts`) | history | no result to judge: never offered, never resolved (a model that names it files `unknownId`), never undeclared, never collapsed, never listed as dropped — the request and its rebuild (`time-travel/servedView.ts`) both read the committed conversation |
@@ -302,7 +302,7 @@ keeps the marker (identifiers only).
 History readers that go by the role on purpose, because a settled message IS
 what they ask about: what pairs a `tool_use` with its `tool_result` on the
 wire (`core/agent/window/turns.ts` · `answeredCallIds` and `segmentTurns`;
-`core/agent/delivery/rules.ts`; `toolCalls.ts` · `pausedBatchOf`; the hosting
+`core/agent/delivery/rules.ts`; `toolCalls/batch/paused.ts` · `pausedBatchOf`; the hosting
 door's cancel in `hosting/standingAgent.ts`) — the sentence does answer its
 call; what the model read — the check-in's `read` frames and `drivers`
 (`core/checkin.ts` · `unitsFromHistory`; the `trail`, which claims
@@ -319,7 +319,7 @@ settled message as a tool's served result, and each is a named follow-up
 (`core/agent/evidence/evidenceIndex.ts` · `evidenceFromHistory` indexes the
 sentence, counts it in `toolResultsThisTurn`, and files its words under the
 settled id in `carriers` — read by the evidence gate and, under `.findings()`,
-by the dispatch-time towers and contingent rows, `core/agent/stages/toolCalls.ts`
+by the dispatch-time towers and contingent rows, `core/agent/stages/toolCalls/evidence/towers.ts`
 · `towersFor` → `core/agent/findings/contingent.ts` · `contingentRowsOf`); the
 prior-turn-evidence check that reads that count
 (`integrity/prior-turn-evidence/check.ts`); the heuristic memory extractor
@@ -405,3 +405,12 @@ Before adding one, verify the behavior can't be expressed as a composition of LL
 - Implement `Runner<TIn, TOut>`
 - Attach the three core recorders (Context / Stream / Agent) internally
 - Document its internal subflow structure + events it emits
+
+
+## Consent ledger observations
+
+`consentRequest.ts` binds decisions to calls and owns the atomic spend.
+`consentLedger.ts` keeps issued in-memory membership capabilities, bounded
+advisory reads and finite local close receipts. Optional positive reads are
+not proof that a call ran or that a host closed it. Local close evidence is
+scoped to the exact ledger identity and request; eviction or restart loses it.
