@@ -1,5 +1,6 @@
 import { refuseToolBatch } from './refusal.js';
 import { toolBatchFailure } from '../../toolCallShape.js';
+import { hasUnbindableCallId } from '../../batchParties.js';
 import { restoreServedParties, saveServedParties } from '../../servedParties.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { PausableHandler, TypedScope } from 'footprintjs';
@@ -41,6 +42,10 @@ export function buildToolBatchExecution(
       (await import('../../timeLayer.js')).recordClockOnResume(scope, deps.time);
     }
     const { toolCalls, iteration, findingsRefusals } = operations.admitFindingsBatch(scope);
+    if (hasUnbindableCallId(toolCalls)) {
+      refuseToolBatch(scope, 'invalid-call-id');
+      return;
+    }
     // THE INPUTS LAYER'S HALF OF DISPATCH (honesty layer 2) — loaded through
     // `import()` only under the arm, so an unarmed batch awaits nothing new.
     const inputs: InputsDispatch | undefined =

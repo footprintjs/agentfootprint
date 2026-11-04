@@ -24,6 +24,14 @@ export function ownCall(
     ? { id: id !== undefined && 'value' in id ? id.value : undefined, name: name.value }
     : undefined;
 }
+/** Refuse an ID the saved binding cannot represent before any call can ask. */
+export function hasUnbindableCallId(calls: readonly unknown[]): boolean {
+  return calls.some((value) => {
+    if (value === null || typeof value !== 'object') return false;
+    const id = Object.getOwnPropertyDescriptor(value, 'id');
+    return id !== undefined && (!('value' in id) || callIdLabel(id.value) === undefined);
+  });
+}
 export function originalPartyRow(
   value: unknown,
   index: number,

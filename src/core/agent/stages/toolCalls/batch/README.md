@@ -7,6 +7,9 @@ The stage passes scope and call facts explicitly. Neither file owns a second
 batch ledger or dispatcher. The existing stage path re-exports its public
 paused-batch type and helper functions.
 
-Only a batch that actually needs an argument or time ask is admitted against
-the finite checkpoint call bounds. Its refusal is framework feedback before
-dispatch. Non-asking model batches retain ordinary per-call dispatch semantics.
+Every batch refuses tool-call IDs the private binding cannot represent before
+any question or tool dispatch: non-primitive values and accessor IDs are never
+coerced into correlation keys. Refusal is framework feedback for the whole batch.
+Other finite checkpoint call bounds apply only when the batch needs an argument
+or time ask. Ordinary non-asking batches with primitive IDs retain their existing
+per-call semantics, including numeric, empty, duplicate and long IDs.
