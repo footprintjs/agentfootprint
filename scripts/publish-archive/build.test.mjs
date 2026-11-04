@@ -137,3 +137,14 @@ test('workflow binds trusted verifier, incoming archive and empty npm cwd indepe
   assert(block.includes('npm pack --ignore-scripts --json --pack-destination "$ARCHIVE_DIR"'));
   assert(workflow.slice(end, end + 500).includes('/package.tgz'));
 });
+
+test('trusted npm setup precedes dispatch-source checkout in the native build', () => {
+  const start = workflow.indexOf('\n  build:\n'),
+    end = workflow.indexOf('\n  release:\n', start),
+    build = workflow.slice(start, end);
+  assert(
+    build.indexOf('npm install -g npm@11.19.0') < build.indexOf('actions/checkout@'),
+    'source configuration must not influence the trusted npm installation',
+  );
+  assert(build.includes('npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts'));
+});

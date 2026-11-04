@@ -326,6 +326,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Install the pinned toolchain before any source configuration arrives.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - run: npm install -g npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts
+      - name: Require pinned npm for canonical archive build
+        run: test "$(npm --version)" = '11.19.0'
+
       # The commit `plan` pinned: the tip of main (or the release's tag), which
       # only a merged pull request or a maintainer moves. No credentials are
       # left in .git/config for the dependency install scripts below to read.
@@ -333,15 +343,6 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.sha }}
           persist-credentials: false
-
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: 22
-          package-manager-cache: false
-
-      - run: npm install -g npm@11.19.0
-      - name: Require pinned npm for canonical archive build
-        run: test "$(npm --version)" = '11.19.0'
 
       # The tracked lock installs the exact published ContextFootprint dependency.
       - run: npm ci
@@ -597,7 +598,7 @@ jobs:
           path: ${{ runner.temp }}/af-incoming-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Trusted npm only; no dependency resolution or package lifecycle.
-      - run: npm install -g npm@11.19.0 --registry=https://registry.npmjs.org
+      - run: npm install -g npm@11.19.0 --registry=https://registry.npmjs.org --ignore-scripts
         working-directory: ${{ runner.temp }}/af-publish-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Stage the inspected buffer in an empty npm directory, without extraction.
