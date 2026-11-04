@@ -37,8 +37,10 @@ export interface TeardownOptions {
    *  {@link ToolExecutionContext.teardownScopes}. */
   readonly scope?: TeardownScope;
   /**
-   * Dedup key within `(tool, scope)`. Omitted → the tool gets one registration
-   * per scope, which is right for a tool that holds exactly one thing.
+   * Dedup key within `(tool, scope, key)`: session rows are additionally isolated
+   * by tenant/principal/session; shutdown rows are process-wide for this tier.
+   * Call and run rows also retain their native owner. Omitted → one registration
+   * per tool and scope within that boundary.
    *
    * Derive it with {@link toolSessionKey} rather than by hand: a key that is
    * narrower than the identity it isolates is the cross-binding bug, and a key

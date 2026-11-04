@@ -186,16 +186,7 @@ export function createRunRedaction(args: {
       } as unknown as AgentfootprintEvent);
     },
     captureLate(stageId) {
-      const context = Object.freeze({ ...getRunContext() });
-      return (type, payload) =>
-        dispatcher.dispatchForRun(
-          {
-            type,
-            payload,
-            meta: buildEventMeta({ runtimeStageId: stageId }, context),
-          } as unknown as AgentfootprintEvent,
-          serving,
-        );
+      return lateEmitter(dispatcher, serving, Object.freeze({ ...getRunContext() }), stageId);
     },
     keepsOut(name) {
       return policy !== undefined && decided.rule.isKeyRedacted(name);
@@ -243,6 +234,24 @@ export function createRunRedaction(args: {
       return written;
     },
   };
+}
+
+/** The returned closure has no shared activation with a run-context reader. */
+function lateEmitter(
+  dispatcher: EventDispatcher,
+  serving: EventServing,
+  context: RunContext,
+  stageId: string,
+): (type: string, payload: unknown) => void {
+  return (type, payload) =>
+    dispatcher.dispatchForRun(
+      {
+        type,
+        payload,
+        meta: buildEventMeta({ runtimeStageId: stageId }, context),
+      } as unknown as AgentfootprintEvent,
+      serving,
+    );
 }
 
 /**

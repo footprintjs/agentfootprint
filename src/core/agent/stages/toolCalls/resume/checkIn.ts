@@ -49,7 +49,12 @@ interface ResumeCheckInLinks {
 export function buildResumeCheckIn(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'resources' | 'negativeClaimsArmed' | 'stepPlanFor' | 'findings' | 'findingsJudge'
+    | 'inputsLayer'
+    | 'resources'
+    | 'negativeClaimsArmed'
+    | 'stepPlanFor'
+    | 'findings'
+    | 'findingsJudge'
   >,
   links: ResumeCheckInLinks,
 ) {
@@ -257,7 +262,7 @@ export function buildResumeCheckIn(
       toolCallCount: 1 + decisionSettlement.settled.length,
       history: decisionHistory,
     });
-    if ('argumentAsk' in scope) scope.argumentAsk = undefined;
+    if (deps.inputsLayer === true) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     // Clear ALL pause checkpoint fields (shared + check-in).
     await links.endCall(scope);

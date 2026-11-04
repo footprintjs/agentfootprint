@@ -44,7 +44,12 @@ interface ResumeCredentialLinks {
 export function buildResumeCredential(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'resources' | 'negativeClaimsArmed' | 'stepPlanFor' | 'findings' | 'findingsJudge'
+    | 'inputsLayer'
+    | 'resources'
+    | 'negativeClaimsArmed'
+    | 'stepPlanFor'
+    | 'findings'
+    | 'findingsJudge'
   >,
   links: ResumeCredentialLinks,
 ) {
@@ -203,7 +208,7 @@ export function buildResumeCredential(
       toolCallCount: 1 + consentSettlement.settled.length,
       history: consentHistory,
     });
-    if ('argumentAsk' in scope) scope.argumentAsk = undefined;
+    if (deps.inputsLayer === true) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     // Clear ALL pause checkpoint fields (shared + credential).
     await links.endCall(scope);

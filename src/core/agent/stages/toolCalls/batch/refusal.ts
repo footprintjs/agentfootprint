@@ -10,7 +10,14 @@ export function refuseToolBatch(scope: TypedScope<AgentState>, reason: ToolBatch
   const iteration = scope.iteration as number;
   const history: LLMMessage[] = [...scope.history];
   const text = scope.llmLatestContent;
-  if (text) history.push({ role: 'assistant', content: text });
+  // A blank model response supplies no assistant wire turn. Keep the fixed
+  // framework notice explicit, so Bedrock never receives adjacent user turns.
+  history.push({
+    role: 'assistant',
+    content:
+      text ||
+      `${TOOL_BATCH_FRAME_PREFIX} — framework notice: the proposed calls could not be dispatched.]`,
+  });
   history.push({
     role: 'user',
     content:

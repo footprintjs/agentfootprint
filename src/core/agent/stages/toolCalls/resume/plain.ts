@@ -39,7 +39,7 @@ interface ResumePlainLinks {
 export function buildResumePlain(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'resources' | 'negativeClaimsArmed' | 'stepPlanFor' | 'findingsJudge'
+    'inputsLayer' | 'resources' | 'negativeClaimsArmed' | 'stepPlanFor' | 'findingsJudge'
   >,
   links: ResumePlainLinks,
 ) {
@@ -193,7 +193,7 @@ export function buildResumePlain(
       // Plain local array — see the matching note on the execute path.
       history: newHistory,
     });
-    if ('argumentAsk' in scope) scope.argumentAsk = undefined;
+    if (deps.inputsLayer === true) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     // Clear pause checkpoint fields.
     await links.endCall(scope);

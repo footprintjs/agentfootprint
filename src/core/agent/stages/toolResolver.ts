@@ -110,8 +110,20 @@ function registryPartyOf(deps: ToolResolverDeps, name: string): ToolParty | unde
  */
 export function buildToolResolver(deps: ToolResolverDeps): ToolResolver {
   return (toolName, pinned) => {
+    const askParties = deps.servedTools?.pinned;
+    const boundAsk = askParties?.has(toolName) === true;
+    // A separately admitted ask receipt binds this batch's original call
+    // parties, including off-wire calls. It never enlarges wire membership.
+    // An explicit paused-call label alone cannot bypass the finite carrier.
+    if (
+      deps.servedTools?.restored === true &&
+      !boundAsk &&
+      !deps.servedTools.current.has(toolName) &&
+      !deps.servedTools.lastServed.has(toolName)
+    )
+      return { refusal: deps.notServed(toolName) };
     const currentParty = deps.servedTools?.current.get(toolName);
-    const pinnedParty = pinned ?? deps.servedTools?.pinned?.get(toolName);
+    const pinnedParty = boundAsk ? askParties?.get(toolName) : pinned;
     const party =
       pinnedParty === undefined
         ? currentParty ?? deps.servedTools?.lastServed.get(toolName)

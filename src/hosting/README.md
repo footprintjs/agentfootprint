@@ -300,6 +300,13 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 
 ## A hosted agent under `redact` — the record served, the person answered
 
+Delivery, streamed tokens, spend accounting and durable progress bind the host's
+admitted invocation. An unrelated direct or mounted run cannot write into that
+session or reply while its terminal persistence is still pending. A stored
+question whose executable carrier this build refuses is closed, so a later
+message can continue the conversation. `standingAgent` answers the obsolete
+decision or cancel with a plain notice; `streamHandler` settles it as cancelled.
+
 A hosted agent built with `Agent.create({ redact })` keeps what its policy names
 out of everything the host files or serves about a run — the recordings it mints
 (`recording/run` artifacts), so the `answer-account` op explains from a served

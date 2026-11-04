@@ -27,7 +27,7 @@
  * record. The registry is weak: a runner that is collected takes its taps along.
  */
 
-import type { RuntimeSnapshot, FlowchartCheckpoint } from 'footprintjs';
+import type { RuntimeSnapshot, FlowchartCheckpoint, RunView, CombinedRecorder } from 'footprintjs';
 import type { RunnerPauseOutcome } from './pause.js';
 import type { AgentInput } from './agent/types.js';
 import type { AgentRunOptions } from './Agent.js';
@@ -49,6 +49,14 @@ export interface HostedTurn {
   readonly ownership: PauseOwnership | undefined;
 }
 
+/** The invocation a host admitted, independent of the runner's selected view. */
+export interface HostedInvocation {
+  readonly view: RunView;
+  runId(): string | undefined;
+}
+
+export type BindHostedInvocation = (invocation: HostedInvocation) => CombinedRecorder | undefined;
+
 /** What the library reads live from a runner. */
 export interface RunnerLive {
   /** Subscribe to every event as its producer made it — never served. */
@@ -59,11 +67,16 @@ export interface RunnerLive {
   liveSnapshot(): RuntimeSnapshot | undefined;
   /** Agent-only execution port; never follows a later selected run. */
   readonly turn?: {
-    run(input: AgentInput | string, options?: AgentRunOptions): Promise<HostedTurn>;
+    run(
+      input: AgentInput | string,
+      options?: AgentRunOptions,
+      bind?: BindHostedInvocation,
+    ): Promise<HostedTurn>;
     resume(
       checkpoint: FlowchartCheckpoint,
       input?: unknown,
       options?: AgentRunOptions,
+      bind?: BindHostedInvocation,
     ): Promise<HostedTurn>;
   };
   /** Agent-only host ownership transfer, captured synchronously from an actual result. */

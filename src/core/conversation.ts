@@ -3,10 +3,9 @@
  *
  * Pattern: teaching refusal at a boundary (the shape `runInput` uses for a
  *          caller's message, applied to a caller's TIMING).
- * Role:    core/ layer. An `Agent` keeps the last run's executor, run context,
- *          answer and pause on ITSELF — that is what makes `checkpoint()`,
- *          `getLastSnapshot()` and `followUp()` possible at all. Those fields
- *          have exactly one owner at a time, and until 9.2.0 nothing said so.
+ * Role:    core/ layer. The native lifecycle owns execution and selected views;
+ *          the domain guards keep questions and named conversation identity
+ *          consistent at its public entry points.
  * Emits:   N/A — these fire before a run starts.
  *
  * ## Why these are refusals and not warnings
@@ -110,13 +109,13 @@ export class PendingQuestionError extends Error {
 export class ResumeIdentityConflictError extends Error {
   readonly code = 'ERR_SESSION_OWNERSHIP_CONFLICT' as const;
 
-  constructor() {
+  constructor(operation: 'resume' | 'followUp' | 'session' = 'resume') {
     super(
-      'Agent.resume: the identity passed to resume() is not the one the paused run was for. ' +
-        "A resumed run keeps the paused run's memory namespace and credentials, so it cannot " +
-        'also run as somebody else. Resume with the identity the paused run was started with ' +
-        "(or none, and the checkpoint's is used), or start a new run for the other person. " +
-        'Neither identity appears in this message on purpose.',
+      operation === 'session'
+        ? 'Agent.resume: the supplied sessionId must match the paused transport session. No state moved.'
+        : operation === 'followUp'
+        ? 'Agent.followUp: the supplied identity differs from the selected conversation. Use a separate instance or start an explicit new conversation. No state moved.'
+        : 'Agent.resume: the supplied identity differs from the paused conversation. Resume with its original identity or start a new conversation. Neither identity is included in this message.',
     );
     this.name = 'ResumeIdentityConflictError';
   }

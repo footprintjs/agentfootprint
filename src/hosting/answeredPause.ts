@@ -20,28 +20,10 @@
  *           unanswerablePause   a pause no answer can reach any more, and
  *           closedConversation  the conversation it goes on from
  *
- * ── MARKED WHEN ITS DECISION MAY HAVE BEEN USED ─────────────────────────────
- * The call may have run only if the decision reached a ledger, and
- * `spendDecision` is the one place it does — so a door asks the watch it
- * opened before handing the answer over (`core/consentRequest.ts` ·
- * `watchDecisionUse`). Spent, refused as spent already, still unanswered, or a
- * failed spend its ledger cannot say never landed: marked. Taken up by this
- * library and never taken to a ledger — refused, or aborted before the spend:
- * the pause stays answerable. Never taken up at all: marked, because that
- * cannot be told apart from a use. What an error calls itself proves nothing,
- * and nothing is read from the decision object for it, which a door may copy
- * or wrap on its way to the resume.
- *
- * ── A PAUSE NO ANSWER CAN REACH IS CLOSED, NOT HELD ─────────────────────────
- * A consent pause that recorded no request (stored before requests were
- * named), whose call changed after the ask, or an ask made under rules the
- * resuming agent no longer runs (a redeploy) can never be answered — every
- * decision is refused. Held, it would hold the session for good. So a door
- * closes it: the next message continues the conversation with the calls it
- * left open settled, and a decision refused for one of those reasons — having
- * used nothing — closes it too, when its question names the request it asked
- * (one stored before requests were named names none: the next message closes
- * that one).
+ * A failed answer is marked only when its decision may have reached its
+ * ledger. The watch distinguishes an unused refusal from a consumed decision.
+ * A pause whose carrier or consent binding no answer can reach is closed,
+ * rather than holding the session forever. Closure does not prove non-execution.
  *
  * ── "DID NOT RUN" ONLY ON PROOF ─────────────────────────────────────────────
  * A pause that still says it is waiting is no proof its call never ran: a
@@ -86,6 +68,7 @@ import {
   type UnanswerableReason,
 } from '../core/consentRequest.js';
 import { pauseDemandsDecision, ResumeDecisionError } from '../core/pause.js';
+import { requireArgumentPartyCheckpoint } from '../core/agent/stages/argumentParties.js';
 import type { AgentRunCheckpoint } from '../core/runCheckpoint.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import { readEnvelope, readPausedRun, toEnvelope, toPausedEnvelope } from './envelope.js';
@@ -284,16 +267,16 @@ export async function afterFailedAnswer(input: {
   const asked = askedRequestOf(paused);
   // Only a consent gate's pause is answered by a decision.
   if (asked === undefined || watch === undefined) return 'kept';
-  if (!(await watch.mayHaveBeenUsed())) {
-    const reason = unanswerableRefusalOf(input.error);
-    return reason === undefined ? 'kept' : closeUnanswerable(store, sessionId, asked, input.runner);
-  }
   // A request a host already closed with the proof that its call never ran —
   // its closed conversation stored nowhere (the write, or the run after it,
   // failed): closed again here as not run, never marked as possibly run. Read
   // from the ledger's close marker, never from what the error calls itself.
   if (await closedByAHost(neverRanQuestion(paused, { runner: input.runner, store }))) {
     return closeUnanswerable(store, sessionId, asked, input.runner);
+  }
+  if (!(await watch.mayHaveBeenUsed())) {
+    const reason = unanswerableRefusalOf(input.error);
+    return reason === undefined ? 'kept' : closeUnanswerable(store, sessionId, asked, input.runner);
   }
   try {
     await input.settle?.();
@@ -420,6 +403,11 @@ const ASK_THE_PERSON = 'Tell the person it may already have happened and ask the
  */
 export const OUTCOME_UNKNOWN_UNANSWERABLE = `This call may have run; no result was kept. Do not run it again. ${ASK_THE_PERSON}`;
 
+/** The question's saved executable binding is no longer readable by this build. */
+export type UnanswerablePauseReason = UnanswerableReason | 'carrier-unreadable';
+export const UNANSWERABLE_QUESTION =
+  'That question can no longer be answered. Send a new message to continue.';
+
 /**
  * Why the stored pause can never be answered by `runner` — `undefined` when it
  * can, or when that cannot be told (`core/consentRequest.ts` ·
@@ -430,7 +418,12 @@ export const OUTCOME_UNKNOWN_UNANSWERABLE = `This call may have run; no result w
 export function unanswerablePause(
   paused: PausedRun,
   runner?: unknown,
-): UnanswerableReason | undefined {
+): UnanswerablePauseReason | undefined {
+  try {
+    requireArgumentPartyCheckpoint(paused.checkpoint);
+  } catch {
+    return 'carrier-unreadable';
+  }
   let gate: ReturnType<typeof pauseDemandsDecision>;
   try {
     gate = pauseDemandsDecision(paused.checkpoint.pauseData);

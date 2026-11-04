@@ -224,6 +224,19 @@ describe('listedFormatOf — what a session listing says a stored session is', (
     });
     if (minted === undefined) throw new Error('expected the call to bind');
     const base = pausedOver(halfAnswered, {
+      toolResourceOwner: {
+        version: 1,
+        birth: { runId: 'r-1', componentOrdinal: 0 },
+        nextDispatch: 0,
+      },
+      turnNumber: 1,
+      servedToolParties: {
+        version: 1,
+        owner: { runId: 'r-1', componentOrdinal: 0 },
+        turn: 1,
+        current: [],
+        last: [],
+      },
       pausedToolName: 'refund',
       pausedToolCallId: 'b',
       pausedRequest: minted.request,

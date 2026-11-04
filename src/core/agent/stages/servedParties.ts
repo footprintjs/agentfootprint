@@ -1,5 +1,5 @@
 import type { TypedScope } from 'footprintjs';
-import { copyJson, ownData } from '../../../lib/boundedJson.js';
+import { copyJson, jsonBytes, ownData } from '../../../lib/boundedJson.js';
 import {
   readToolOwner,
   sameToolBirth,
@@ -45,7 +45,18 @@ function rows(value: unknown): PartyRow[] {
 }
 /** Pure admission; declarations establish consistency, never authority. */
 export function readServedParties(state: Record<string, unknown>): ServedPartiesCarrier {
-  const fields = ownData(state);
+  // The checkpoint leaf holds many unrelated domains. Admit this carrier's
+  // own data fields only, never its neighbours or an inherited getter.
+  const own = (key: string): unknown => {
+    if (state === null || typeof state !== 'object') return undefined;
+    const field = Object.getOwnPropertyDescriptor(state, key);
+    return field !== undefined && 'value' in field ? field.value : undefined;
+  };
+  const fields = {
+    [KEY]: own(KEY),
+    toolResourceOwner: own('toolResourceOwner'),
+    turnNumber: own('turnNumber'),
+  };
   const data = ownData(copyJson(fields[KEY], MAX_BYTES, false, 8), [
     'version',
     'owner',
@@ -87,12 +98,48 @@ export function saveServedParties(
     version: 1,
     owner: readToolOwner(scope.$getValue('toolResourceOwner')).birth,
     turn: scope.turnNumber as number,
-    current: [...served.current].map(([name, party]) => ({ name, party: party ?? invalid() })),
-    last: [...served.lastServed].map(([name, party]) => ({ name, party })),
+    current: [],
+    last: [],
   };
-  // Apply the same finite decoder at write and restore, without truncating history.
+  // Bounds limit what a later resume can prove; they never fail a legal pause.
+  // Keep the newest remembered names. Each name costs its last row and, when
+  // currently offered, its current row, including exact JSON escaping/commas.
+  const last: PartyRow[] = [],
+    current: PartyRow[] = [];
+  let bytes = jsonBytes(carrier);
+  const recent = new Map(served.lastServed);
+  for (const [name, value] of served.current) {
+    if (value === null) continue;
+    recent.delete(name);
+    recent.set(name, value);
+  }
+  for (const [name, value] of [...recent].reverse()) {
+    if (last.length === MAX_ROWS) break;
+    const party = readToolParty(value);
+    if (name.length === 0 || name.length > 1024 || party === undefined) continue;
+    const row = { name, party };
+    const active = served.current.get(name);
+    const onWire = active !== undefined && active !== null && sameToolParty(active, party);
+    const cost =
+      jsonBytes(row) +
+      (last.length > 0 ? 1 : 0) +
+      (onWire ? jsonBytes(row) + (current.length > 0 ? 1 : 0) : 0);
+    if (bytes + cost > MAX_BYTES) break;
+    bytes += cost;
+    last.push(row);
+    if (onWire) current.push(row);
+  }
+  const keptCurrent = new Map(current.map((row) => [row.name, row]));
+  const bounded = {
+    ...carrier,
+    current: [...served.current.keys()].flatMap((name) => {
+      const row = keptCurrent.get(name);
+      return row === undefined ? [] : [row];
+    }),
+    last: last.reverse(),
+  };
   scope.servedToolParties = readServedParties({
-    [KEY]: carrier,
+    [KEY]: bounded,
     toolResourceOwner: { version: 1, birth: carrier.owner, nextDispatch: 0 },
     turnNumber: carrier.turn,
   });
@@ -102,7 +149,7 @@ export function restoreServedParties(
   scope: TypedScope<AgentState>,
   served: ServedToolParties | undefined,
 ): void {
-  if (!(KEY in scope)) return;
+  if (served === undefined || served.wireReady === true) return;
   const carrier = readServedParties({
     [KEY]: scope.$getValue(KEY),
     toolResourceOwner: scope.$getValue('toolResourceOwner'),
@@ -112,5 +159,7 @@ export function restoreServedParties(
   served.current = new Map(carrier.current.map(({ name, party }) => [name, party]));
   served.lastServed.clear();
   for (const { name, party } of carrier.last) served.lastServed.set(name, party);
+  served.restored = true;
+  served.wireReady = true;
   scope.servedToolParties = undefined;
 }

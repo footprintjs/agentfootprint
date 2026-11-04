@@ -247,6 +247,7 @@ interface SpendAttempt {
 /** What one door's watch has seen of its request ({@link watchDecisionUse}). */
 interface WatchedUse {
   takenUp: boolean;
+  previouslySpent?: true;
   readonly attempts: SpendAttempt[];
 }
 
@@ -830,30 +831,30 @@ function attemptsOn(requestId: string, ledger: DecisionLedger, declined: boolean
   return attempts;
 }
 
-/**
- * A resume of this library has taken up the request `requestId` names: from
- * here every use of its decision passes through {@link spendDecision}, where a
- * watch sees it. Called by every runner's resume (`RunnerBase` ·
- * `emitPauseResume`, and `Agent.resume` before its first check) and by the
- * dispatch loop where it takes the decision up.
- */
+/** Library take-up precedes refusal; spends and positive prior-spend observations are tracked separately. */
 export function noteDecisionTakenUp(requestId: string | undefined): void {
   if (requestId === undefined) return;
   for (const watch of processState().watches.get(requestId) ?? []) watch.takenUp = true;
 }
 
+/** Positive read-only evidence of a previous spend; never an authorization or a new attempt. */
+export function notePreviouslySpentDecision(requestId: string): void {
+  for (const watch of processState().watches.get(requestId) ?? []) watch.previouslySpent = true;
+}
+
 /** What a door that keeps a pause learns, for one resume, about its request ({@link watchDecisionUse}). */
 export interface DecisionUseWatch {
   /**
-   * Whether the request's decision may have been used while watched — by
-   * this resume, or by any other in this process:
+   * Whether this watch observed possible use, including a prior spend read
+   * from a shared ledger. A positive read never authorizes another execution:
    *
    *  - taken to a ledger that spent it, refused it (an earlier resume had)
    *    or has not answered yet → `true`;
    *  - taken to a ledger whose spend failed → asked again of that ledger
    *    (`DecisionLedger.isSpent`): `false` there means the spend never landed;
    *    no answer, a throw, or a ledger that cannot be asked → `true`;
-   *  - never taken to a ledger, by a resume this library took up → `false`;
+   *  - a pre-origin read positively observed an earlier spend → `true`;
+   *  - never taken to a ledger or positively observed spent, by a resume this library took up → `false`;
    *  - never taken up by this library at all → `true`: that cannot be told
    *    apart from a use.
    */
@@ -885,6 +886,7 @@ export function watchDecisionUse(requestId: string): DecisionUseWatch {
   watches.set(requestId, open);
   return {
     async mayHaveBeenUsed(): Promise<boolean> {
+      if (watched.previouslySpent === true) return true;
       if (watched.attempts.length === 0) return !watched.takenUp;
       for (const attempt of [...watched.attempts]) {
         if (attempt.outcome !== 'failed') return true;

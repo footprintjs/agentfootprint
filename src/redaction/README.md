@@ -174,7 +174,7 @@ and that the answer account says the question and the answer are kept out.
 
 ## How it works
 
-1. `RunnerBase · openRunRedaction` runs for EVERY run of every runner: it joins
+1. `RunnerBase · prepareRunRedaction` runs for EVERY run of every runner: it joins
    the runner's declaration with any policy the caller handed down, hands the
    result to footprintjs (`executor.setRedactionPolicy`), installs the serving on
    the runner's dispatcher, and wraps the chart's scope factory so each stage's

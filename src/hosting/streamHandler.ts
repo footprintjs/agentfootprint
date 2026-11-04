@@ -75,7 +75,8 @@ import {
   watchAnswer,
   type FailedAnswerOutcome,
 } from './answeredPause.js';
-import type { DecisionUseWatch, UnanswerableReason } from '../core/consentRequest.js';
+import type { DecisionUseWatch } from '../core/consentRequest.js';
+import type { UnanswerablePauseReason } from './answeredPause.js';
 import { checkSessionId, doorGuard, type CrossSiteOptions } from './doorGuard.js';
 import { envelopeOwner, toEnvelope, toPausedEnvelope } from './envelope.js';
 import { RequestTooLargeError, WireRequestRefusal } from './errors.js';
@@ -168,7 +169,6 @@ export type StreamHandler = (request: Request) => Promise<Response>;
 interface Held {
   readonly view: HeldConversation;
   readonly prior?: AgentRunCheckpoint;
-  /** The pause still waiting on a person — the only one an answer may continue. */
   readonly paused?: PausedRun;
   /** A pause whose decision a resume already used (`answeredPause.ts`). */
   readonly answered?: PausedRun;
@@ -177,7 +177,7 @@ interface Held {
    * the conversation it goes on from (`answeredPause.ts`), settled once the
    * request's runner is built (`settleClosed`).
    */
-  readonly closed?: { readonly paused: PausedRun; readonly reason: UnanswerableReason };
+  readonly closed?: { readonly paused: PausedRun; readonly reason: UnanswerablePauseReason };
 }
 
 /** Everything one accepted request runs with. */

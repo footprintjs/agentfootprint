@@ -179,7 +179,7 @@ A composition runs its members as subflows of ONE executor, so a member's
 composition ADOPTS its members' declarations at construction
 (`redaction/declared.ts` · `adoptMemberRedaction`, after
 `readsMessageFromIfAny`) and its one run applies their union
-(`RunnerBase · openRunRedaction`): what any member keeps out is kept out of the
+(`RunnerBase · prepareRunRedaction`): what any member keeps out is kept out of the
 composition's snapshot, events and recordings. A composition relays its members'
 words under its OWN keys (`current`, `results`, `branchResults`, `graphInput`),
 which no member names — `conversationRedaction()` names them, so a member

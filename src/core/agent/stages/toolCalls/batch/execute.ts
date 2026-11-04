@@ -1,4 +1,5 @@
 import { refuseToolBatch } from './refusal.js';
+import { toolBatchFailure } from '../../toolCallShape.js';
 import { restoreServedParties, saveServedParties } from '../../servedParties.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { PausableHandler, TypedScope } from 'footprintjs';
@@ -18,9 +19,10 @@ export function buildToolBatchExecution(
   dispatchCall: DispatchCallRunner,
 ): PausableHandler<TypedScope<AgentState>>['execute'] {
   const execute: PausableHandler<TypedScope<AgentState>>['execute'] = async (scope) => {
-    if ('argumentAsk' in scope) deps.resources?.expectAnswer();
+    if (deps.inputsLayer === true && scope.argumentAsk !== undefined)
+      deps.resources?.expectAnswer();
     restoreServedParties(scope, deps.servedTools);
-    restoreArgumentParties(scope, deps.servedTools);
+    if (deps.inputsLayer === true) restoreArgumentParties(scope, deps.servedTools);
     // Replay and pausable resume both admit the saved native owner and current executable catalog.
     deps.resources?.restore(scope, operations.resourceFactsOf(scope));
     const catalog = deps.prepareProviderTools?.(scope);
@@ -40,12 +42,7 @@ export function buildToolBatchExecution(
     if (deps.time !== undefined) {
       (await import('../../timeLayer.js')).recordClockOnResume(scope, deps.time);
     }
-    const { toolCalls, iteration, findingsRefusals, malformed } =
-      operations.admitFindingsBatch(scope);
-    if (malformed !== undefined) {
-      refuseToolBatch(scope, malformed);
-      return;
-    }
+    const { toolCalls, iteration, findingsRefusals } = operations.admitFindingsBatch(scope);
     // THE INPUTS LAYER'S HALF OF DISPATCH (honesty layer 2) — loaded through
     // `import()` only under the arm, so an unarmed batch awaits nothing new.
     const inputs: InputsDispatch | undefined =
@@ -72,6 +69,12 @@ export function buildToolBatchExecution(
       // graph never carries the ask (`test/trace-toolpack/browserGraph`).
       const { askBeforeDispatch } = await import('../../argumentAsk.js');
       const asked = askBeforeDispatch(scope, resolutions, {
+        refuseMalformedBatch: () => {
+          const malformed = toolBatchFailure(toolCalls);
+          if (malformed === undefined) return false;
+          refuseToolBatch(scope, malformed);
+          return true;
+        },
         excludedCallIds: toolCalls
           .filter((_, index) => findingsRefusals[index] !== undefined)
           .map((call) => call.id),
@@ -89,6 +92,7 @@ export function buildToolBatchExecution(
           },
         }),
       });
+      if (asked.refused === true) return;
       resolutions = asked.resolutions;
       if (asked.answered) askedLayer = inputs;
     }
@@ -132,6 +136,7 @@ export function buildToolBatchExecution(
     }
     completeToolBatch(scope, {
       askAnswered: oneQuestionAsked,
+      inputsLayer: inputs !== undefined,
       newHistory,
       emitTransitionConflict: operations.emitTransitionConflict,
       iteration,

@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest';
-import { Agent, askHuman, defineTool, isPaused } from '../../index.js';
+import {
+  Agent,
+  askHuman,
+  defineTool,
+  isPaused,
+  checkInApproved,
+  type DecisionLedger,
+} from '../../index.js';
 import { runnerLive } from '../runnerLive.js';
 import { mock } from '../../llm-providers.js';
 import type { LLMRequest } from '../../provider-contract/types.js';
@@ -139,9 +146,11 @@ it.each(['same', 'fresh'] as const)(
       local: shape === 'same' ? 'retained' : 'none-known-locally',
       remote: 'unknown',
     });
-    await expect(resumer.run('other')).rejects.toMatchObject({ code: 'ERR_PENDING_QUESTION' });
+    if (shape === 'same')
+      await expect(resumer.run('other')).rejects.toMatchObject({ code: 'ERR_PENDING_QUESTION' });
     fail = false;
-    expect(await resumer.abandonPause()).toBeDefined();
+    if (shape === 'same') expect(await resumer.abandonPause()).toBeDefined();
+    else expect(await resumer.abandonPause()).toBeUndefined();
     // A fresh instance has no handle in its local tier; original host cleanup stays explicit.
     if (shape === 'same') expect(closed).toEqual(['run']);
     else {
@@ -243,4 +252,196 @@ it.each([
   await expect(agent.run('other')).rejects.toMatchObject({ code: 'ERR_PENDING_QUESTION' });
   await agent.abandonPause();
   expect([...closed].sort()).toEqual(['call', 'run']);
+});
+
+it('a host-transferred question is never manufactured by a failed resume', async () => {
+  let fail = false;
+  const tool = defineTool({
+    name: 'hold',
+    description: 'Ask',
+    inputSchema: { type: 'object' },
+    execute: () => askHuman({ question: 'PRIVATE QUESTION' }),
+  });
+  const agent = Agent.create({
+    provider: mock({ replies: [{ toolCalls: [{ id: 'held', name: 'hold', args: {} }] }, 'bob'] }),
+    model: 'mock',
+  })
+    .toolProvider({
+      id: 'catalog',
+      list: () => {
+        if (fail) throw new Error('catalog failed');
+        return [tool];
+      },
+    })
+    .build();
+  const pause = await agent.run('alice');
+  if (!isPaused(pause)) throw new Error('Expected pause');
+  const owned = runnerLive(agent)?.pause?.capture(pause);
+  expect(owned).toBeDefined();
+  owned!.release();
+  fail = true;
+  await expect(agent.resume(pause.checkpoint, 'answer')).rejects.toThrow('catalog failed');
+  expect(await agent.abandonPause()).toBeUndefined();
+  fail = false;
+  await expect(agent.run('bob')).resolves.toBe('bob');
+});
+
+it.each(['plain', 'replay'] as const)(
+  '%s refusal preserves every selected reader and followUp',
+  async (door) => {
+    const tool = defineTool({
+      name: 'hold',
+      description: 'Ask',
+      inputSchema: { type: 'object' },
+      ...(door === 'replay' && { checkIn: 'always' as const }),
+      execute: () => (door === 'plain' ? askHuman({ question: 'Question' }) : 'ran'),
+    });
+    const provider = {
+      name: 'rule',
+      complete: async (request: LLMRequest) => {
+        const first = request.messages.find((m) => m.role === 'user')?.content;
+        return String(first).startsWith('BOB') && !request.messages.some((m) => m.role === 'tool')
+          ? {
+              content: '',
+              toolCalls: [{ id: 'call', name: 'hold', args: {} }],
+              usage: { input: 1, output: 1 },
+            }
+          : { content: `answer:${String(first)}`, toolCalls: [], usage: { input: 1, output: 1 } };
+      },
+    };
+    const make = () => Agent.create({ provider, model: 'mock' }).tool(tool).build();
+    const bob = make(),
+      pause = await bob.run({
+        message: 'BOB-PRIVATE',
+        identity: { conversationId: 'b', principal: 'bob' },
+      });
+    if (!isPaused(pause)) throw new Error('Expected pause');
+    const answer =
+      door === 'replay' ? checkInApproved({ request: pause.checkIn!, by: 'bob' }) : undefined;
+    if (door === 'replay') await bob.resume(pause.checkpoint, answer);
+    const alice = make();
+    await alice.run({ message: 'ALICE', identity: { conversationId: 'a', principal: 'alice' } });
+    const before = alice.checkpoint();
+    await expect(alice.resume(pause.checkpoint, answer)).rejects.toBeInstanceOf(Error);
+    // checkpointedAt is the capture clock; all stored conversation fields remain exact.
+    expect(alice.checkpoint()).toEqual({ ...before, checkpointedAt: expect.any(Number) });
+    expect(JSON.stringify(alice.getLastSnapshot())).not.toContain('BOB-PRIVATE');
+    expect(JSON.stringify(alice.getLastNarrativeEntries())).not.toContain('BOB-PRIVATE');
+    expect(await alice.abandonPause()).toBeUndefined();
+    expect(await alice.followUp('next')).toBe('answer:ALICE');
+  },
+);
+
+it.each(['without-reader', 'spend-race'] as const)(
+  'known boundary: a %s ledger refusal after origin remains the latest execution',
+  async (kind) => {
+    const seen = new Set<string>();
+    const ledger: DecisionLedger = {
+      ...(kind === 'spend-race' && { isSpent: () => false }),
+      spend: (id) => {
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      },
+    };
+    const make = () =>
+      Agent.create({
+        decisionLedger: ledger,
+        provider: mock({
+          replies: [{ toolCalls: [{ id: 'call', name: 'hold', args: {} }] }, 'done'],
+        }),
+        model: 'mock',
+      })
+        .tool(
+          defineTool({
+            name: 'hold',
+            description: 'Gate',
+            inputSchema: { type: 'object' },
+            checkIn: 'always',
+            execute: () => 'ran',
+          }),
+        )
+        .build();
+    const bob = make(),
+      pause = await bob.run({
+        message: 'BOB-BOUNDARY',
+        identity: { conversationId: 'b', principal: 'bob' },
+      });
+    if (!isPaused(pause)) throw new Error('Expected pause');
+    const answer = checkInApproved({ request: pause.checkIn!, by: 'bob' });
+    await bob.resume(pause.checkpoint, answer);
+    const shared = make();
+    await expect(shared.resume(pause.checkpoint, answer)).rejects.toMatchObject({
+      reason: 'already-answered',
+    });
+    expect(JSON.stringify(shared.getLastSnapshot())).toContain('BOB-BOUNDARY');
+    await expect(
+      shared.followUp('alice', { identity: { conversationId: 'a', principal: 'alice' } }),
+    ).rejects.toMatchObject({ code: 'ERR_SESSION_OWNERSHIP_CONFLICT' });
+  },
+);
+
+it('cancelling a pre-origin ledger read releases the instance and preserves the selected person', async () => {
+  let start!: () => void, release!: (used: boolean) => void;
+  const entered = new Promise<void>((done) => {
+    start = done;
+  });
+  const read = new Promise<boolean>((done) => {
+    release = done;
+  });
+  const ledger: DecisionLedger = {
+    spend: () => true,
+    isSpent: () => {
+      start();
+      return read;
+    },
+  };
+  const tool = defineTool({
+    name: 'hold',
+    description: 'Gate',
+    inputSchema: { type: 'object' },
+    checkIn: 'always',
+    execute: () => 'ran',
+  });
+  const bob = Agent.create({
+    decisionLedger: ledger,
+    provider: mock({ replies: [{ toolCalls: [{ id: 'held', name: 'hold', args: {} }] }] }),
+    model: 'mock',
+  })
+    .tool(tool)
+    .build();
+  const pause = await bob.run({
+    message: 'BOB-PRIVATE',
+    identity: { conversationId: 'b', principal: 'bob' },
+  });
+  if (!isPaused(pause)) throw new Error('Expected pause');
+  const alice = Agent.create({
+    decisionLedger: ledger,
+    provider: mock({ replies: ['ALICE', 'NEXT'] }),
+    model: 'mock',
+  })
+    .tool(tool)
+    .build();
+  await alice.run({ message: 'ALICE', identity: { conversationId: 'a', principal: 'alice' } });
+  const controller = new AbortController(),
+    reason = new Error('cancelled by caller');
+  let failure: unknown;
+  const resumed = alice
+    .resume(pause.checkpoint, checkInApproved({ request: pause.checkIn!, by: 'bob' }), {
+      signal: controller.signal,
+    })
+    .catch((error: unknown) => {
+      failure = error;
+    });
+  try {
+    await entered;
+    controller.abort(reason);
+    await new Promise<void>((done) => setImmediate(done));
+    expect(failure).toBe(reason);
+    expect(alice.checkpoint()?.identity?.principal).toBe('alice');
+    expect(await alice.followUp('next')).toBe('NEXT');
+  } finally {
+    release(false);
+    await resumed;
+  }
 });

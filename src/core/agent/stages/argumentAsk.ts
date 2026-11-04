@@ -182,6 +182,7 @@ export interface ArgumentAskDeps {
   readonly excludedCallIds?: readonly string[];
   readonly admitAnswer?: () => void;
   readonly saveParties?: () => void;
+  readonly refuseMalformedBatch?: () => boolean;
   readonly argumentSources?: true;
   /** The implementation that will answer a name — the shared dispatch resolver's. */
   readonly toolOf: ToolOf;
@@ -214,6 +215,7 @@ export interface AskedBatch {
   readonly resolutions: ReadonlyMap<string, ArgumentResolution>;
   /** This pass carries the person's answer — the batch's one human question has been asked. */
   readonly answered: boolean;
+  readonly refused?: true;
 }
 
 /** The pause's data — the typed ask, and its question twice over for the pause readers. */
@@ -246,7 +248,6 @@ function batchOf(scope: TypedScope<AgentState>): BatchCall[] {
  * for on a call of this batch, so the key is read only where it can exist.
  */
 function stateFor(scope: TypedScope<AgentState>, iteration: number): ArgumentAskState | undefined {
-  if (!('argumentAsk' in scope)) return undefined;
   const state = scope.$getValue('argumentAsk') as ArgumentAskState | undefined;
   return state !== undefined && state.iteration === iteration
     ? (structuredClone(state) as ArgumentAskState)
@@ -382,6 +383,8 @@ export function askBeforeDispatch(
   const stored = stateFor(scope, iteration);
   if (asks.length === 0 && origins.length === 0 && stored === undefined)
     return { resolutions: entries, answered: false };
+  if (deps.refuseMalformedBatch?.() === true)
+    return { resolutions: entries, answered: false, refused: true };
   // The admitted resource owner keeps its native birth across SAME and FRESH restore.
   const owner = readToolOwner(scope.$getValue('toolResourceOwner')).birth;
   const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;

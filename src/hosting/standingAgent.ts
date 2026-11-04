@@ -119,6 +119,7 @@ import {
   openToolCalls,
   readStoredSession,
   unanswerablePause,
+  UNANSWERABLE_QUESTION,
   watchAnswer,
 } from './answeredPause.js';
 import { envelopeOwner, envelopeTranscript, toEnvelope, toPausedEnvelope } from './envelope.js';
@@ -172,7 +173,7 @@ import {
   TURN_ARTIFACTS_TIMEOUT_MS,
 } from './types.js';
 import type { Agent, AgentRunOptions } from '../core/Agent.js';
-import { runnerLive, type HostedTurn } from '../core/runnerLive.js';
+import { runnerLive, type HostedInvocation, type HostedTurn } from '../core/runnerLive.js';
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { MemoryIdentity } from '../memory/identity/types.js';
 
@@ -202,10 +203,9 @@ function laneKeyOf(sessionId: string | undefined): string {
  * same code rather than being a second implementation of it. `{ agentFactory }`
  * builds one per active session plus one for anonymous traffic.
  *
- * The listener wiring, the durable writer and the "which reply is live" slot
- * are all per lane because they are all per INSTANCE: a token event carries no
- * session, so the only honest way to know which reply it belongs to is to have
- * subscribed on the agent that produced it.
+ * Lane wiring survives turns; delivery and progress bind the admitted native
+ * invocation. Direct or mounted uses of the same runner belong to no hosted
+ * turn, even while this lane is still awaiting persistence or reply delivery.
  */
 interface Lane {
   /** How the pool holds it — {@link laneKeyOf}. */
@@ -229,23 +229,16 @@ interface Lane {
    * anonymous turn, or with no verifier.
    */
   activeOwner?: string;
-  activeReply?: HostReply;
+  turn?: {
+    readonly invocation: HostedInvocation;
+    readonly reply: HostReply;
+    readonly spendKey?: string;
+  };
   /** Requests admitted and not yet finished. A lane with work is never evicted. */
   admitted: number;
   /** When this lane last took a request — the LRU key. */
   lastUsedMs: number;
   writer?: DurableWriter;
-  /**
-   * The ledger key of the run in flight (9.26.0), so the token and cost events
-   * this lane emits are billed to whoever caused them.
-   *
-   * Per LANE and set for the duration of one run, which is exact rather than
-   * approximate: a lane runs one request at a time, and an event names no
-   * caller of its own — the agent that produced it is the only thing that says
-   * whose it was. `undefined` with no admission policy, and then nothing
-   * subscribes at all.
-   */
-  activeSpendKey?: string;
   /** Undo everything this composer attached to the agent. */
   detach: () => void;
 }
@@ -461,32 +454,10 @@ export async function standingAgent<TH extends HostHandle>(
       lastUsedMs: Date.now(),
       detach: () => undefined,
     };
-    // ── The lane's own events, as the run made them ──────────────────
-    // Every subscription below reads the agent's REAL-value path
-    // (`core/runnerLive.ts` · `runnerLive`), never the served stream: the reply is the
-    // caller's own answer and the spend ledger is an admission decision, so an
-    // agent's `redact` — which governs what the RECORD keeps — must reach
-    // neither (`src/redaction/runRedaction.ts`). One subscription, one switch.
-    //
-    // Tokens reach the caller only if the host streams; `emit` on a host that
-    // does not is a no-op by design, so this needs no capability check. The
-    // subscription is per LANE because a token event names no session — the
-    // agent that produced it is the only thing that identifies whose it is,
-    // and with a pool that is the whole reason two sessions' tokens cannot mix.
-    //
-    // ── Spend accounting (9.26.0) ────────────────────────────────────
-    // Only with an admission policy. Without one the two spend arms are never
-    // taken — the agent is untouched and the events cost their usual nothing.
-    //
-    // Two sources, because they answer two different questions honestly:
-    // `llm_end` always carries TOKENS, and `cost.tick` carries MONEY only
-    // where a pricing table turned tokens into it. Summing an invented rate
-    // here would be a number that looks like a bill.
-    // Read live (`core/runnerLive.ts`): the reply goes to the person who asked
-    // and the ledger counts what was spent — neither is a record, so neither
-    // is served under the agent's `redact`.
-    // Every `Agent` is a runner of this library, so its live taps exist; one
-    // that does not is refused here rather than served placeholders or nothing.
+    // Real values serve the caller and the admission ledger, never the record.
+    // Each event must match the invocation this host admitted, even when this
+    // runner is used directly or mounted while persistence/delivery still waits.
+    // Tokens and measured money are distinct facts, both bound to that turn.
     const live = runnerLive(agent);
     if (live === undefined) {
       throw new TypeError(
@@ -496,18 +467,21 @@ export async function standingAgent<TH extends HostHandle>(
       );
     }
     const offLane = live.onRealEvent((event: AgentfootprintEvent) => {
+      const turn = lane.turn;
+      const runId = turn?.invocation.runId();
+      if (turn === undefined || runId === undefined || event.meta?.runId !== runId) return;
       switch (event.type) {
         case 'agentfootprint.agent.turn_start':
           lane.activeRunId = (event as { meta?: { runId?: string } }).meta?.runId;
           return;
         case 'agentfootprint.stream.token': {
           const content = (event as { payload?: { content?: string } }).payload?.content;
-          if (typeof content === 'string' && content.length > 0) lane.activeReply?.emit?.(content);
+          if (typeof content === 'string' && content.length > 0) turn.reply.emit?.(content);
           return;
         }
         case 'agentfootprint.stream.llm_end': {
           if (ledger === undefined) return;
-          const key = lane.activeSpendKey;
+          const key = turn.spendKey;
           if (key === undefined) return;
           const usage = (event as { payload?: { usage?: { input?: number; output?: number } } })
             .payload?.usage;
@@ -519,7 +493,7 @@ export async function standingAgent<TH extends HostHandle>(
         }
         case 'agentfootprint.cost.tick': {
           if (ledger === undefined) return;
-          const key = lane.activeSpendKey;
+          const key = turn.spendKey;
           if (key === undefined) return;
           const usd = (event as { payload?: { estimatedUsd?: number } }).payload?.estimatedUsd;
           if (typeof usd === 'number' && Number.isFinite(usd)) ledger.add(key, { usd });
@@ -537,22 +511,14 @@ export async function standingAgent<TH extends HostHandle>(
         ? undefined
         : durableWriter({
             mode: durability,
-            session: () => lane.activeSessionId,
-            runId: () => lane.activeRunId,
-            // The conversation is read from the run's LIVE committed state,
-            // never from the commit event's (served) values: the store holds
-            // what the next turn resumes from (`hosting/durability.ts`).
-            state: () => live.liveState(),
             write: (sessionId, conversation) =>
               sessions.persist(sessionId, toEnvelope(conversation)),
           });
-    const detachWriter = writer ? agent.attach(writer.recorder) : undefined;
     const uninstallBarrier = writer?.install(agent);
     lane.writer = writer;
     lane.detach = (): void => {
       offLane();
       uninstallBarrier?.();
-      detachWriter?.();
     };
     return lane;
   }
@@ -1547,15 +1513,18 @@ export async function standingAgent<TH extends HostHandle>(
     note: IngressNote | undefined,
   ): Promise<void> {
     const runner = lane.agent;
-    lane.activeReply = reply;
     // The writer only ever writes for the run it is inside; an anonymous
     // request has nowhere to write to and gets nothing.
     lane.activeSessionId = sessionId;
     lane.activeOwner = verified?.userId;
-    // Whose usage this lane's next token and cost events belong to. Set only
-    // with an admission policy; the subscriptions that read it do not exist
-    // otherwise.
-    if (ledger !== undefined) lane.activeSpendKey = spendKey;
+    const bind = (invocation: HostedInvocation) => {
+      lane.turn = { invocation, reply, ...(spendKey !== undefined && { spendKey }) };
+      return lane.writer?.capture({
+        sessionId,
+        runId: invocation.runId,
+        state: () => invocation.view.liveState(),
+      });
+    };
     try {
       let prior: AgentRunCheckpoint | undefined;
       let paused: PausedRun | undefined;
@@ -1695,6 +1664,16 @@ export async function standingAgent<TH extends HostHandle>(
           reply.fail(new NoPendingAskError(sessionId ?? '(anonymous)'));
           return;
         }
+        if (unanswerablePause(paused, runner) === 'carrier-unreadable') {
+          await lane.writer?.settle();
+          if (sessionId !== undefined)
+            await store.persist(
+              sessionId,
+              toEnvelope(await closedConversation(paused, { runner, store })),
+            );
+          reply.complete(UNANSWERABLE_QUESTION);
+          return;
+        }
         const inputRequest =
           pauseDemandsDecision(paused.checkpoint.pauseData) === undefined
             ? readAwaitingInput(paused.checkpoint.pauseData)
@@ -1747,7 +1726,7 @@ export async function standingAgent<TH extends HostHandle>(
           if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
           await deliver(
             lane,
-            await turn.resume(paused.checkpoint, request.decision, resumeOptions),
+            await turn.resume(paused.checkpoint, request.decision, resumeOptions, bind),
             store,
             reply,
             sessionId,
@@ -1800,6 +1779,7 @@ export async function standingAgent<TH extends HostHandle>(
       const completed = await turn.run(
         { message: request.input, ...(prior !== undefined && { continueFrom: prior }) },
         turnOptions,
+        bind,
       );
       await deliver(lane, completed, store, reply, sessionId, offer);
     } catch (err) {
@@ -1811,10 +1791,9 @@ export async function standingAgent<TH extends HostHandle>(
       await lane.writer?.settle().catch(() => undefined);
       throw err;
     } finally {
-      lane.activeReply = undefined;
+      lane.turn = undefined;
       lane.activeSessionId = undefined;
       lane.activeOwner = undefined;
-      lane.activeSpendKey = undefined;
     }
   }
 

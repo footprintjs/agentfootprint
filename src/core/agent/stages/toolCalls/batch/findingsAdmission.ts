@@ -1,4 +1,3 @@
-import { toolBatchFailure } from '../../toolCallShape.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
@@ -33,8 +32,6 @@ export function buildFindingsAdmission(
       }[]),
     ];
     const iteration = scope.iteration as number;
-    const malformed = toolBatchFailure(toolCalls);
-    if (malformed !== undefined) return { toolCalls, iteration, findingsRefusals: [], malformed };
     // ── STANDINGS OF EARLIER RESULTS AND REFERENCE ADMISSION ───────
     // Freeze admission before batch asks, kept-answer consumption or any
     // policy/credential callback. A sibling result never enlarges it.
@@ -90,7 +87,7 @@ export function buildFindingsAdmission(
         turnStampOf(scope),
       );
     }
-    return { toolCalls, iteration, findingsRefusals, malformed };
+    return { toolCalls, iteration, findingsRefusals };
   };
   return { admitFindingsBatch };
 }

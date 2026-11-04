@@ -78,7 +78,7 @@ Under a run's redaction policy (an agent's `redact`, `src/redaction/`) an event 
 a record, and every listener — `.on()`, `'*'`, an attached recorder, an exporter —
 receives it served: footprintjs's placeholder wherever the policy selects a name.
 The dispatcher serves what it fans out ONCE per event (`EventServing`, installed
-per run by `RunnerBase · openRunRedaction`); an event already served at its
+per run by `RunnerBase · prepareRunRedaction`); an event already served at its
 source arrives through `dispatchServed` and is not served twice.
 
 A handful of the library's own mechanisms compute on events and hand the result

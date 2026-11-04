@@ -4,6 +4,7 @@ import type { LLMRequest, LLMResponse } from '../../../../../provider-contract/t
 import { isSaidByPerson } from '../../../../../lib/saidByPerson.js';
 import { toAnthropicMessages } from '../../../../../adapters/llm/anthropicMessageProjection.js';
 import { isLibraryAuthoredTurn } from '../../../evidence/frames.js';
+import { bedrock } from '../../../../../adapters/llm/BedrockProvider.js';
 
 const call = (id: string, name = 'collect') => ({ id, name, args: {} });
 for (const [shape, calls] of [
@@ -11,6 +12,8 @@ for (const [shape, calls] of [
   ['long-name', [call('first'), call('second', 'x'.repeat(1025))]],
   ['too-many', Array.from({ length: 1025 }, (_, i) => call(String(i)))],
   ['empty-id', [call('')]],
+  ['numeric-id', [{ ...call('numeric'), id: 7 }]],
+  ['long-id', [call('x'.repeat(1025))]],
 ] as const) {
   it(`refuses the ${shape} model batch before an ask or tool effect and accepts a corrective response`, async () => {
     const requests: LLMRequest[] = [];
@@ -21,7 +24,7 @@ for (const [shape, calls] of [
         complete: async (request: LLMRequest): Promise<LLMResponse> => {
           requests.push(JSON.parse(JSON.stringify(request)) as LLMRequest);
           return requests.length === 1
-            ? { content: '', toolCalls: calls, usage: { input: 1, output: 1 } }
+            ? { content: '', toolCalls: calls as never, usage: { input: 1, output: 1 } }
             : { content: 'corrected', toolCalls: [], usage: { input: 1, output: 1 } };
         },
       },
@@ -60,6 +63,29 @@ for (const [shape, calls] of [
     expect(wire).toContain('Tool batch refusal');
     expect(wire).not.toContain('tool_use');
     expect(wire).not.toContain('tool_result');
+    const sent: { role: string; content: unknown[] }[][] = [];
+    class Command {
+      constructor(readonly input: { messages: { role: string; content: unknown[] }[] }) {}
+    }
+    const provider = bedrock({
+      _commands: { Converse: Command, ConverseStream: Command },
+      _client: {
+        send: async (command: unknown) => {
+          sent.push((command as Command).input.messages);
+          return { output: { message: { role: 'assistant', content: [{ text: 'corrected' }] } } };
+        },
+      },
+    });
+    await provider.complete({ model: 'mock', messages });
+    expect(sent).toHaveLength(1);
+    expect(
+      sent[0]!.some(
+        (message, index, all) =>
+          index > 0 && message.role === 'user' && all[index - 1]!.role === 'user',
+      ),
+    ).toBe(false);
+    expect(JSON.stringify(sent)).not.toContain('toolUse');
+    expect(JSON.stringify(sent)).not.toContain('toolResult');
     expect(JSON.stringify(agent.getLastSnapshot())).toContain('llmLatestToolCalls');
   });
 }

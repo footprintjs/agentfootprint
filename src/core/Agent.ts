@@ -1,3 +1,8 @@
+import {
+  refuseFollowUpIdentity,
+  refuseKnownSpentAnswer,
+  refuseMissingPlainAnswer,
+} from './agent/resumeAnswer.js';
 import { hostedTurns } from './agent/hostTurn.js';
 import type { TypedScope, NativeMappingBinding } from 'footprintjs';
 import { componentResources } from './agent/componentResources.js';
@@ -1485,6 +1490,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       },
       componentSetup: (component, value, entry) => {
         value.resources = componentResources(component, () => this.toolSessions());
+        if (entry?.kind === 'resume') value.resources.expectAnswer();
         const observers = agentComponentObservers(component, value, entry, {
           causal: this.memories.some((memory) => memory.type === 'causal'),
           window: this.windowStrategy !== undefined,
@@ -1499,8 +1505,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
                 status,
               ),
             );
-            if (scope !== null && typeof scope === 'object' && 'servedToolParties' in scope)
-              value.resources?.expectAnswer();
             bindScopeComputation(scope, {
               owner: component,
               retired: () => run.retired,
@@ -2349,6 +2353,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
             : 'last-run-unfinished',
         );
       }
+      refuseFollowUpIdentity(options?.identity, conversation.identity);
       return this.runOwned(invocation, { message, continueFrom: conversation }, options);
     });
   }
@@ -2579,8 +2584,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // The incoming request is the RESUMING caller's — never the paused one's:
     // a checkpoint carries no request, and a resume without one serves none.
     const resumeRequest = requestOf(options, 'Agent.resume');
-    // Native guard lands with the new checkpoint protocol, before its runtime
-    // opt-in is mounted. Until then no Agent is armed to consume this carrier.
     requireVerificationOnResume(checkpoint.sharedState ?? {}, false);
     if (this.negativeClaimsConfig !== undefined) {
       const prior = negativeCheckpointOf(checkpoint.sharedState ?? {});
@@ -2630,7 +2633,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     }
     const sessionId = resumeSessionOf(checkpoint);
     if (options?.sessionId !== undefined && options.sessionId !== sessionId)
-      throw new ResumeIdentityConflictError();
+      throw new ResumeIdentityConflictError('session');
     // …and the decision must be for THIS request and this exact call
     // (`core/consentRequest.ts`): refused here, before anything moves, when it
     // names no request, another request, a call the checkpoint no longer
@@ -2648,6 +2651,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         this.decisionLedger ?? processDecisionLedger(),
       );
     }
+    if (gate !== undefined)
+      await refuseKnownSpentAnswer(
+        this.decisionLedger ?? processDecisionLedger(),
+        input,
+        gate,
+        options?.signal,
+      );
     // Typed data collection is not consent. Validate before changing any run state.
     const awaitingInput = gate === undefined ? readAwaitingInput(checkpoint.pauseData) : undefined;
     let answeredAsk: AnsweredAsk | undefined;
@@ -2695,18 +2705,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // the same door and before any state moves, because a resume that has begun
     // is a resume that has already used the value.
     assertDecisionIsNotStale(checkpoint.pauseData, input);
+    if (gate === undefined && awaitingInput === undefined)
+      refuseMissingPlainAnswer(checkpoint, input);
     // A native-admitted answer settles the old question even if its leg fails.
     // The outer pause-ownership boundary restores pre-origin refusals; named
     // unanswered refusals after origin are restored below.
-    const questionBefore =
-      invocation.previous?.value.pendingQuestion ?? pendingQuestionOf(checkpoint.pauseData);
-    // WHO this resumed run is for — set BEFORE the executor exists, because the
-    // run context's principal (every event's `EventMeta.principal`), a tool's
-    // `ctx.identity` and `checkpoint()` all read it: the identity the PAUSED
-    // run's caller named (a named `options.identity` was checked equal to the
-    // restored one at the top of this method) — never the identity of whatever
-    // this instance ran last, which on a shared or pooled agent is another
-    // person's, or nobody's (`callerIdentity.ts`).
+    const questionBefore = invocation.previous?.value.pendingQuestion;
+    // Capture this paused conversation's identity before native origin; selected readers
+    // on a shared instance can belong to another conversation (`callerIdentity.ts`).
     invocation.value.identity = options?.identity ?? pausedFor;
     // Resume retains the paused transport session; an override was checked equal above.
     const sessionResumeOptions: AgentRunOptions | undefined =
@@ -2725,14 +2731,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       resumeLeg === sessionResumeOptions?.redact
         ? sessionResumeOptions
         : { ...sessionResumeOptions, redact: resumeLeg };
-    // Fresh executor — footprintjs 4.17.0+ seeds the runtime from
-    // `checkpoint.sharedState` (and nested subflow states) automatically
-    // on a fresh executor's `resume()`. No need to retain a paused
-    // executor between run/resume.
-    // Recorded on the same terms a fresh run is (9.26.0) — and the recording
-    // covers the RESUMED run, which is what the recorder saw. A turn that
-    // paused and resumed is two runs, and each mints its own recording when
-    // (and only when) it completes.
+    // Fresh native execution restores its checkpoint; no paused executor is retained.
+    // Each resumed native leg files its own recording when it completes.
     const recording = this.startRunRecording(invocation);
     invocation.value.answeredAsk = answeredAsk;
     const prepared = this.prepareAgentRun(invocation, resumeOptions, resumeRequest);
@@ -5654,7 +5654,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
               provider: this.externalToolProvider!,
               cache: run.value.providerToolCache,
               callerIdentity: run.own ? run.value.identity : memberIdentityIn(scope),
-              iteration: scope.iteration ?? 1,
+              get iteration() {
+                return scope.iteration ?? 1;
+              },
             }),
         }),
         servedTools: run.value.servedTools,

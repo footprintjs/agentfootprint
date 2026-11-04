@@ -77,20 +77,17 @@ export interface ToolsSlotRuntime {
 export type { ToolParty } from '../../tools/toolParty.js';
 
 /**
- * WHO PUT EACH NAME ON THIS EPOCH'S WIRE (9.92.0) — written by Compose from
- * the same merge that produces `scope.toolSchemas`, read by the tool-calls
- * handler's `lookupTool` so that DISPATCH FOLLOWS THE OFFER: a name the model
- * was served resolves to the implementation of the party whose contract it
- * read, never to whichever map happened to be consulted first.
- *
- * The `ProviderToolCache` pattern, and for the same reason: build-closure
- * plumbing shared by the slot (writer) and the handler (reader) within one
- * chart, never scope state — so a run with no collision commits the exact
- * bytes it always did. Overwritten every iteration; a name absent from it was
- * not on the wire this epoch and dispatch falls back to the build-time map,
- * which is the capability law's held-out clause unchanged.
+ * WHO PUT EACH NAME ON THE WIRE: Compose writes the same merge it serves as
+ * `scope.toolSchemas`; dispatch follows that party's contract. This private
+ * component value is never scope state. A restored finite carrier closes
+ * omitted names until a new positive wire replaces it; plain runs keep the
+ * existing last-served and single-holder fallback.
  */
 export interface ServedToolParties {
+  /** Saved wire membership is closed until a fresh Compose replaces it. */
+  restored?: true;
+  /** Positive wire acquisition, including an actually empty offer. */
+  wireReady?: true;
   pinned?: ReadonlyMap<string, ToolParty | null>;
   current: ReadonlyMap<string, ToolParty | null>;
   /**
@@ -941,6 +938,8 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             ? winners
             : new Map([...winners].filter(([name]) => narrowedTo.has(name)));
         servedTools.current = wireWinners;
+        servedTools.restored = undefined;
+        servedTools.wireReady = true;
         // The run's memory of who served what (read by the off-wire fallback).
         // Iteration 1 is a run's first epoch — `seed` sets it — so the memory
         // of a previous run on this same built chart is dropped here.

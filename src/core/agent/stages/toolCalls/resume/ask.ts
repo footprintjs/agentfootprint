@@ -476,7 +476,7 @@ export function buildResumeAsk(
       toolCallCount: 1 + askSettlement.settled.length,
       history: askHistory,
     });
-    if ('argumentAsk' in scope) scope.argumentAsk = undefined;
+    if (deps.inputsLayer === true) scope.argumentAsk = undefined;
     scope.iteration = iteration + 1;
     await links.endCall(scope);
     scope.pausedToolCallId = '';

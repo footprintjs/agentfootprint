@@ -34,7 +34,7 @@ import { localResourceStatus } from './toolSessions/localStatus.js';
  * ── The seven laws ──────────────────────────────────────────────────────────
  *  1. **At most once, ever** per registration — the `stopped`-flag mechanism
  *     `strategies/lifecycle.ts` uses for strategies, applied one layer down.
- *  2. **Idempotent within the owner partition (and call for call scope), then `(tool, scope, key)`, first wins.** A second registration
+ *  2. **Idempotent by `(tool, scope, key)`, first wins. Session rows add the identity/session partition, call/run rows add the native owner; shutdown rows span the tier.** A second registration
  *     under the same key does not replace the first — the first is the one
  *     holding the live handle; replacing it would drop that handle on the
  *     floor. The repeat is a TOUCH: it refreshes liveness (that is how the
@@ -201,12 +201,12 @@ export class ToolSessionTier {
           this.rejectLate(origin, cleanup, options);
           throw new ToolResourceClosedError();
         }
-        const persistent = options.scope === 'session' || options.scope === 'shutdown';
+        const persistent = options.scope === 'session';
         return this.registerOwned(
           origin,
           cleanup,
           options,
-          persistent ? conversation : partition,
+          options.scope === 'shutdown' ? undefined : persistent ? conversation : partition,
           logicalCall.key,
         );
       },
@@ -359,7 +359,7 @@ export class ToolSessionTier {
       tool: origin.tool,
       scope,
       key,
-      keyHash: hashSessionKey(partition === undefined ? key : mapKey),
+      keyHash: hashSessionKey(key),
       origin,
       cleanup,
       ...(options.runnerId !== undefined && { runnerId: options.runnerId }),
