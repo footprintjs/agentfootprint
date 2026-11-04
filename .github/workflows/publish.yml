@@ -97,12 +97,12 @@ on:
 permissions:
   contents: read
 
-# One run at a time for main, so two runs never compute the same version. GitHub
-# keeps ONE pending run per group and cancels an older pending one — harmless
-# here, since every run works from the TIP of main. The legacy path gets a group
-# per tag, so a push to main can never cancel a tag that still needs publishing.
+# Main proposals/publications share one queue and work from its current tip.
+# RCs use their own queue: a candidate click must not replace a pending stable
+# publication/proposal, and main/docs runs must not replace a pending candidate.
+# Legacy releases keep a separate group per tag.
 concurrency:
-  group: release-${{ github.event_name == 'release' && github.ref || 'main' }}
+  group: release-${{ github.event_name == 'release' && github.ref || inputs.rc && 'rc' || 'main' }}
   cancel-in-progress: false
 
 jobs:
@@ -154,8 +154,11 @@ jobs:
             exit 0
           fi
           node scripts/changes.mjs check
-          if git ls-remote --exit-code --refs --tags origin "refs/tags/v$VERSION" >/dev/null; then
-            TAGGED=true
+          TAGGED=false
+          if TAG_ROWS="$(git ls-remote --exit-code --refs --tags origin "refs/tags/v$VERSION")"; then
+            if awk -v ref="refs/tags/v$VERSION" '$2 == ref { found = 1 } END { exit !found }' <<< "$TAG_ROWS"; then
+              TAGGED=true
+            fi
           else
             status=$?
             if [ "$status" != 2 ]; then
@@ -457,12 +460,28 @@ jobs:
       - name: Tag
         env:
           VERSION: ${{ needs.plan.outputs.version }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          MODE: ${{ needs.plan.outputs.mode }}
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+          EXISTING=""
+          if TAG_ROWS="$(git ls-remote --exit-code --refs --tags origin "refs/tags/v$VERSION")"; then
+            EXISTING="$(awk -v ref="refs/tags/v$VERSION" '$2 == ref { print $1 }' <<< "$TAG_ROWS")"
+          else
+            status=$?
+            if [ "$status" != 2 ]; then
+              echo "::error::Could not read the exact version tag. Nothing was pushed."
+              exit 1
+            fi
+          fi
+          if [ -n "$EXISTING" ]; then
+            if [ "$MODE" = rc ] && [ "$EXISTING" != "$SHA" ]; then
+              echo "::error::The RC tag does not point at the planned source."
+              exit 1
+            fi
             echo "Tag v$VERSION already on origin — not pushed again."
           else
-            git tag "v$VERSION"
-            git push origin "v$VERSION"
+            git tag "v$VERSION" "$SHA"
+            git push origin "refs/tags/v$VERSION"
           fi
 
       # The notes are the CHANGELOG section the release PR wrote. A release
@@ -489,13 +508,13 @@ jobs:
           fi
           if [ "$MODE" = rc ]; then
             printf 'Release candidate from commit %s. Final promotion waits for downstream checks.\n' "$SHA" > "$RUNNER_TEMP/notes.md"
-            gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --prerelease --latest=false
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --prerelease --latest=false
           else
-            gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
           fi
 
   publish:
-    needs: [build, release]
+    needs: [plan, build, release]
     # `release` is skipped on the legacy trigger (the tag already exists) — and
     # a `release` skipped on any other run publishes nothing, so no version can
     # reach npm untagged.
@@ -528,8 +547,14 @@ jobs:
       # "Re-run failed jobs" — the staged tarball is kept for 30 days, and the
       # release job skips what it already did.
       - name: Publish to npm
+        env:
+          PLANNED_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           VERSION="$(jq -er '.version | strings' package.json)"
+          if [ "$VERSION" != "$PLANNED_VERSION" ]; then
+            echo "::error::The staged package version does not match the plan."
+            exit 1
+          fi
           stable='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
           if [[ "$VERSION" =~ ^$stable$ ]]; then
             NPM_TAG=latest
@@ -677,6 +702,7 @@ jobs:
       # with successor parents [main, prior]. The exact prepared tree wins.
       - name: Open or update the release PR
         env:
+          REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ needs.propose.outputs.version }}
           BASE: ${{ needs.plan.outputs.sha }}
@@ -719,11 +745,11 @@ jobs:
             echo "---"
             echo "Written by the Release workflow from the change fragments on main. Merge only after an exact-head verdict and all required checks."
           } > "$RUNNER_TEMP/body.md"
-          PRS="$(gh pr list --head release/next --base main --state open --json number,isCrossRepository)"
-          OWN_PRS="$(jq '[.[] | select(.isCrossRepository == false)]' <<< "$PRS")"
-          COUNT="$(jq 'length' <<< "$OWN_PRS")"
+          OWNER="${REPO%%/*}"
+          PRS="$(gh api "repos/$REPO/pulls?state=open&base=main&head=$OWNER:release/next")"
+          COUNT="$(jq 'length' <<< "$PRS")"
           if [ "$COUNT" = 1 ]; then
-            PR="$(jq -r '.[0].number' <<< "$OWN_PRS")"
+            PR="$(jq -r '.[0].number' <<< "$PRS")"
             gh pr edit "$PR" --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
           elif [ "$COUNT" = 0 ]; then
             gh pr create --base main --head release/next --title "chore: release v$VERSION" --body-file "$RUNNER_TEMP/body.md"

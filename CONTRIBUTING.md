@@ -91,7 +91,7 @@ src/
    regenerates every generated doc, and opens (or updates) **one** PR, `chore: release vX.Y.Z`,
    from the branch `release/next`. Later fragments update the same PR.
 2. That PR runs the full CI, except the docs-site build (`docs`), which it skips: the website
-   never holds up a release. It waits for an exact-head review and all required checks before a normal merge.
+   never holds up a release. It waits for an exact-head review and all required checks before a **squash merge**.
 3. Its merge builds the package from the exact release tree, checks its packaging (publint,
    attw, the packed ContextFootprint consumers), tags, creates the GitHub release and publishes
    to npm with provenance — each step only if the one before succeeded. The other gates do not
@@ -119,7 +119,8 @@ docs deployment or follow-up dispatch is made.
 
 The ordinary final release PR waits for exact-head review and every downstream PR
 to be green against the RC. If source changed after the RC, cut a new candidate
-first. The final route computes the stable version and consumes fragments as usual.
+first. **Squash-merge** the final release PR; rebasing a two-parent proposal would replay
+prior proposals. The final route computes the stable version and consumes fragments as usual.
 
 Normal Git pushes preserve prior proposals and reject a concurrent branch move.
 Repeated runs converge on one own-repository PR. After fixing a failed release or
@@ -144,6 +145,7 @@ never report. The release PR is opened by a small GitHub App instead:
    - Variables tab → **New repository variable** `RELEASE_APP_CLIENT_ID` = the Client ID.
    - Secrets tab → **New repository secret** `RELEASE_APP_PRIVATE_KEY` = the whole `.pem`
      file's contents. Then delete the downloaded file.
+
 The workflow never enables automatic merging or force-pushes a release proposal.
 
 ### Protecting `main`

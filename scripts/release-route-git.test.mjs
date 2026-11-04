@@ -112,8 +112,12 @@ const fs = require('node:fs'), a = process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS, JSON.stringify(a) + '\n');
 const own = JSON.parse(fs.readFileSync(process.env.PR_STATE, 'utf8'));
 if (a[0] === 'pr' && a[1] === 'list') {
- const fork = process.env.FORK === 'true' ? [{number:999,isCrossRepository:true}] : [];
- process.stdout.write(JSON.stringify([...fork,...own]) + '\n'); process.exit(0);
+ const fork = process.env.FORK === 'true' ? Array.from({length:30},(_,i)=>({number:900+i,isCrossRepository:true})) : [];
+ process.stdout.write(JSON.stringify([...fork,...own].slice(0,30)) + '\n'); process.exit(0);
+}
+if (a[0] === 'api') {
+ if(a[1] !== 'repos/fixture-owner/fixture-repo/pulls?state=open&base=main&head=fixture-owner:release/next') process.exit(91);
+ process.stdout.write(JSON.stringify(own) + '\n');process.exit(0);
 }
 if (a[0] === 'pr' && a[1] === 'create') {
  if (own.length) process.exit(1);
@@ -167,6 +171,7 @@ const r = cp.spawnSync('/usr/bin/git', a, {stdio:'inherit',timeout:5000}); proce
           BASE: base,
           VERSION: version,
           GH_TOKEN: 'synthetic',
+          REPO: 'fixture-owner/fixture-repo',
           CALLS: calls,
           GIT_CALLS: gitCalls,
           PR_STATE: state,
@@ -331,4 +336,20 @@ test('release proposal: a lone fork row does not replace own-repository creation
   assert.equal(f.calls().filter((a) => a[1] === 'edit').length, 0);
   assert.equal(f.calls().filter((a) => a[1] === 'create').length, 1);
   assert.equal(f.pulls().length, 1);
+});
+
+test('release proposal: exact owner/head query is not truncated by thirty newer fork PRs', (t) => {
+  const f = fixture(t, { fork: true, ownPr: true }),
+    r = f.run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(f.calls().filter((a) => a[0] === 'pr' && a[1] === 'list').length, 0);
+  assert.deepEqual(
+    f.calls().filter((a) => a[0] === 'api'),
+    [
+      [
+        'api',
+        'repos/fixture-owner/fixture-repo/pulls?state=open&base=main&head=fixture-owner:release/next',
+      ],
+    ],
+  );
 });

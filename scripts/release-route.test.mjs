@@ -208,7 +208,7 @@ test('release route: candidate preserves raise-only explicit bump selection', ()
   assert.throws(() => changes.candidateVersion('13.2.0', [breaking()], [], 'patch'), /floor/);
 });
 
-function stagedPublish(t, version) {
+function stagedPublish(t, version, planned = version) {
   const parent = os.tmpdir();
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'staged-')),
@@ -240,7 +240,7 @@ function stagedPublish(t, version) {
       encoding: 'utf8',
       timeout: 10000,
       maxBuffer: 512 * 1024,
-      env: { PATH: bin + ':/usr/bin:/bin', NPM_ARGS: output },
+      env: { PATH: bin + ':/usr/bin:/bin', NPM_ARGS: output, PLANNED_VERSION: planned },
     },
   );
   assert.equal(r.error, undefined);
@@ -323,4 +323,19 @@ test('release route: data-only candidate staging leaves lock and fragments uncha
   );
   assert.equal(readFileSync(path.join(pkg, 'package-lock.json'), 'utf8'), lock);
   assert.equal(readFileSync(path.join(pkg, '.changes/change.md'), 'utf8'), fragment);
+});
+
+for (const [staged, planned] of [
+  ['14.0.0', '14.0.0-rc.0'],
+  ['14.0.0-rc.0', '13.2.0'],
+]) {
+  test('release route: publisher refuses staged version different from plan ' + staged, (t) => {
+    const { r, args } = stagedPublish(t, staged, planned);
+    assert.notEqual(r.status, 0);
+    assert.deepEqual(args, []);
+  });
+}
+test('release route: OIDC publisher directly needs the plan version', () => {
+  assert(/needs: \[plan, build, release\]/.test(job('publish')));
+  assert(job('publish').includes('PLANNED_VERSION: ${{ needs.plan.outputs.version }}'));
 });
