@@ -1,3 +1,4 @@
+import { PageJsonLd } from '@/components/site/PageJsonLd';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ContextStory } from '@/components/context-story/ContextStory';
@@ -11,19 +12,38 @@ export const metadata: Metadata = {
   title: { absolute: title },
   description,
   alternates: { canonical: `${SITE.url}/context-engineering/` },
-  openGraph: { title, description, url: `${SITE.url}/context-engineering/`, type: 'website' },
+  openGraph: {
+    title,
+    description,
+    url: `${SITE.url}/context-engineering/`,
+    type: 'website',
+    siteName: SITE.name,
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: title }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    site: SITE.twitter,
+    creator: SITE.twitter,
+    title,
+    description,
+    images: [SITE.ogImage],
+  },
 };
 
 export default function ContextEngineeringPage() {
   return (
     <main className="cx-page">
+      <PageJsonLd
+        name="Context engineering"
+        path="/context-engineering/"
+        description={description}
+      />
       <header className="cx-intro">
         <p className="cx-eyebrow">
           <span /> CONTEXT ENGINEERING, MADE VISIBLE
         </p>
         <h1>
-          Give the model
-          <br />
+          Give the model <br />
           <em>less to guess.</em>
         </h1>
         <p>

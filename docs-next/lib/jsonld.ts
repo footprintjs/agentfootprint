@@ -34,9 +34,7 @@ export function siteJsonLd() {
     isPartOf: { '@id': ECOSYSTEM_ID },
     sameAs: [project.repo, ...('npm' in project ? [project.npm] : [])],
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    ...(project.id === 'agentfootprint'
-      ? { license: 'https://opensource.org/licenses/MIT' }
-      : {}),
+    ...(project.id === 'agentfootprint' ? { license: 'https://opensource.org/licenses/MIT' } : {}),
   }));
 
   return {
@@ -86,6 +84,37 @@ export function siteJsonLd() {
         })),
       },
       ...software,
+    ],
+  };
+}
+
+/** One page's place on the site: what it is, and the path to it, which search engines read as breadcrumbs. */
+export function pageJsonLd(page: {
+  readonly name: string;
+  readonly description: string;
+  readonly path: string;
+}) {
+  const url = `${SITE.url}${page.path}`;
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebPage',
+        '@id': `${url}#page`,
+        url,
+        name: page.name,
+        description: page.description,
+        inLanguage: 'en',
+        isPartOf: { '@id': `${SITE.url}/#website` },
+        about: { '@id': `${SITE.url}/#software` },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE.url}/` },
+          { '@type': 'ListItem', position: 2, name: page.name, item: url },
+        ],
+      },
     ],
   };
 }

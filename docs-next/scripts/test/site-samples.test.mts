@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { AGENT_BRIEF } from '../../lib/agent-brief';
+import { pageJsonLd } from '../../lib/jsonld';
+import { SITE } from '../../lib/site';
 import { buildRouteSet } from '../../lib/doc-ids.mjs';
 import { SITE_NAV, isCurrent, isNavGroup } from '../../lib/site-nav';
 
@@ -389,5 +391,22 @@ test('what we hand a coding agent describes the library, gives no orders, and po
   for (const route of ['app/llms.txt/route.ts', 'app/llms-full.txt/route.ts', 'app/llms.mdx/docs/[[...slug]]/route.ts', 'app/(home)/how-to-build/page.tsx', 'content/docs/getting-started/quick-start.mdx']) {
     assert.ok(existsSync(new URL(`../../${route}`, import.meta.url)), route);
   }
+});
+
+test('search engines get a title and description that fit, a share image with a real file type, and page data', () => {
+  assert.ok(SITE.description.length <= 160, `site description is ${SITE.description.length}`);
+  assert.ok(SITE.ogImage.endsWith('.png'));
+  assert.ok(existsSync(new URL('../../app/og.png/route.tsx', import.meta.url)));
+  for (const page of ['features', 'how-it-stands', 'how-we-debug', 'how-to-build', 'engineering', 'security', 'context-engineering']) {
+    const text = readFileSync(new URL(`../../app/(home)/${page}/page.tsx`, import.meta.url), 'utf8');
+    const title = /const (?:TITLE|title) =\s*'([^']*)'/.exec(text)?.[1] ?? '';
+    const description = /const (?:DESCRIPTION|DESC|description) =\s*'([^']*)'/.exec(text)?.[1] ?? '';
+    assert.ok(title.length > 0 && title.length <= 65, `${page} title: ${title.length}`);
+    assert.ok(description.length > 0 && description.length <= 160, `${page} description: ${description.length}`);
+    assert.match(text, /<PageJsonLd /, page);
+    assert.doesNotMatch(text, /opengraph-image/, page);
+  }
+  const data = pageJsonLd({ name: 'Security', description: 'x', path: '/security/' });
+  assert.equal(data['@graph'][1]?.['@type'], 'BreadcrumbList');
 });
 

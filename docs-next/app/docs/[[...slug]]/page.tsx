@@ -47,6 +47,20 @@ export async function generateStaticParams() {
   return source.generateParams();
 }
 
+const API_KINDS: Readonly<Record<string, string>> = {
+  classes: 'class',
+  functions: 'function',
+  interfaces: 'interface',
+  'type-aliases': 'type',
+  variables: 'constant',
+};
+
+/** About 800 generated API pages have no description of their own. Giving each one keeps them from all repeating the site's. */
+function fallbackDescription(url: string, title: string): string {
+  const kind = API_KINDS[url.split('/')[3] ?? ''];
+  return kind ? `${title}: a ${kind} in the agentfootprint TypeScript API.` : SITE.description;
+}
+
 export async function generateMetadata(props: {
   params: Promise<{ slug?: string[] }>;
 }): Promise<Metadata> {
@@ -54,7 +68,7 @@ export async function generateMetadata(props: {
   const page = pageFor(params.slug);
 
   const url = `${SITE.url}${page.url}`;
-  const description = page.data.description ?? SITE.description;
+  const description = page.data.description ?? fallbackDescription(page.url, page.data.title);
   return {
     title: page.data.title,
     description,
@@ -65,7 +79,7 @@ export async function generateMetadata(props: {
       siteName: SITE.name,
       title: page.data.title,
       description,
-      images: [`${SITE.url}/opengraph-image`],
+      images: [SITE.ogImage],
     },
     twitter: {
       card: 'summary_large_image',
@@ -73,7 +87,7 @@ export async function generateMetadata(props: {
       creator: SITE.twitter,
       title: page.data.title,
       description,
-      images: [`${SITE.url}/opengraph-image`],
+      images: [SITE.ogImage],
     },
   };
 }

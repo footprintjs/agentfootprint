@@ -1,3 +1,4 @@
+import { PageJsonLd } from '@/components/site/PageJsonLd';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { HowToBuild } from '@/components/build/HowToBuild';
@@ -10,7 +11,7 @@ import '@/components/site/reading.css';
 
 const TITLE = 'Demo to App: how to build an agent — AgentFootprint';
 const DESCRIPTION =
-  'Build an agent against a scripted model, debug it from its own record, deploy it on AWS, Google Cloud, Azure or your own machines through adapters, and monitor it with OpenTelemetry or your own recorder.';
+  'Build an agent against a scripted model, debug it from its own record, deploy it on AWS, Google Cloud, Azure or your own machines, and monitor it.';
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: TITLE }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -30,13 +31,14 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: TITLE,
     description: DESCRIPTION,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
 };
 
 export default function HowToBuildPage() {
   return (
     <div className="v2-home">
+      <PageJsonLd name="Demo to App" path="/how-to-build/" description={DESCRIPTION} />
       <HowToBuild />
       <nav className="hs-next" aria-label="Where to go next">
         <div className="sc-links">

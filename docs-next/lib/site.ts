@@ -14,7 +14,8 @@ export const SITE = {
   title: 'agentfootprint — Build agents you can hold to the record',
   tagline: 'The model can say anything. The record shows what it rests on.',
   description:
-    'Build TypeScript agents you can hold to the record, with the STAND pattern: state the rules, trace the run, assess the claims, name the answer’s standing and decide what happens. Built on FootprintJS execution provenance.',
+    'Build TypeScript agents you can hold to the record: state the rules, trace the run, assess the claims, name the answer’s standing and decide what happens.',
+  ogImage: 'https://agentfootprint.dev/og.png',
   author: 'Sanjay', // display byline ("Created by Sanjay")
   authorName: 'Sanjay Krishna Anbalagan', // full legal name — copyright line + schema (matches LICENSE + npm author)
   authorUrl: 'https://github.com/sanjay1909', // primary profile — footer rel=author link + JSON-LD Person.url

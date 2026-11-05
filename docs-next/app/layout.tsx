@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     title: SITE.title,
     description: SITE.description,
     locale: 'en_US',
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: SITE.title }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: SITE.title }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: SITE.title,
     description: SITE.description,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
   // Favicon / apple-icon come from the file convention (app/icon.png, app/apple-icon.png) —
   // small, optimized versions of the yellow footprint mark. Next emits the <link> with the
