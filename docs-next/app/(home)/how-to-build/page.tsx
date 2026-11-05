@@ -5,6 +5,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '../v2.css';
 import '@/components/home/stand/stand.css';
+import '@/components/site/reading.css';
 
 const TITLE = 'How to build an agent — AgentFootprint';
 const DESCRIPTION =

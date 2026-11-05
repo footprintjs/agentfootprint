@@ -11,12 +11,15 @@ import { buildRouteSet } from '../../lib/doc-ids.mjs';
 const dir = new URL('../../site-samples/', import.meta.url);
 const files = readdirSync(dir).filter((name) => /\.tsx?$/.test(name));
 
-const doorOf = async (door: string): Promise<Set<string>> => new Set(Object.keys(await import(door)));
+const doorOf = async (door: string): Promise<Set<string>> =>
+  new Set(Object.keys(await import(door)));
 
 test('every name a sample imports exists on that door', async () => {
   for (const file of files) {
     const source = readFileSync(new URL(file, dir), 'utf8');
-    for (const match of source.matchAll(/import\s+\{([^}]*)\}\s+from\s+'((?:agentfootprint|footprintjs)[^']*)'/g)) {
+    for (const match of source.matchAll(
+      /import\s+\{([^}]*)\}\s+from\s+'((?:agentfootprint|footprintjs)[^']*)'/g,
+    )) {
       const door = match[2]!;
       if (door === 'agentfootprint-lens') continue; // a React package, checked by tsc
       const exported = await doorOf(door);
@@ -31,7 +34,10 @@ test('every name a sample imports exists on that door', async () => {
 
 test('every sample has a block for its page to show', () => {
   for (const file of files.filter((name) => name !== 'shared.ts')) {
-    assert.ok(readFileSync(new URL(file, dir), 'utf8').includes('#region code'), `${file} has no region`);
+    assert.ok(
+      readFileSync(new URL(file, dir), 'utf8').includes('#region code'),
+      `${file} has no region`,
+    );
   }
 });
 
@@ -69,7 +75,10 @@ test('MONITOR: your own recorder and your own events', async () => {
   const { exported, flagged, written } = await import('../../site-samples/monitor-custom');
   assert.ok(written.includes('userMessage'));
   assert.deepEqual(flagged[0], { order: 'A-1042' });
-  assert.ok(exported.includes('myapp.refund.flagged'), 'an exporter should see your own events too');
+  assert.ok(
+    exported.includes('myapp.refund.flagged'),
+    'an exporter should see your own events too',
+  );
 });
 
 test('PROMPT: an instruction applies only when its rule holds', async () => {
@@ -81,8 +90,14 @@ test('PROMPT: an instruction applies only when its rule holds', async () => {
 test('CONTEXT: every piece that lands says where it landed', async () => {
   const { landed } = await import('../../site-samples/eng-context');
   assert.ok(landed.length > 0);
-  assert.ok(landed.some((row) => /steering/.test(row)), landed.join(', '));
-  assert.ok(landed.some((row) => /fact/.test(row)), landed.join(', '));
+  assert.ok(
+    landed.some((row) => /steering/.test(row)),
+    landed.join(', '),
+  );
+  assert.ok(
+    landed.some((row) => /fact/.test(row)),
+    landed.join(', '),
+  );
 });
 
 test('LOOP: each of the five moments does what the sample says', async () => {
@@ -112,7 +127,9 @@ test('SECURITY: a hidden tool is not shown, and refused if called anyway', async
 });
 
 test('SECURITY: the record drops what the policy names, and the model still receives it', async () => {
-  const { SSN, narrative, recording, sent, snapshot } = await import('../../site-samples/security-record');
+  const { SSN, narrative, recording, sent, snapshot } = await import(
+    '../../site-samples/security-record'
+  );
   assert.ok(sent.join('').includes(SSN), 'the model still reads the real tool result');
   for (const [name, value] of Object.entries({ snapshot, narrative, recording })) {
     assert.ok(!JSON.stringify(value).includes(SSN), `${name} holds the SSN`);
@@ -150,7 +167,11 @@ test('SECURITY: the run pauses before the tool, and the tool runs once approved'
 test('SECURITY: an audit bundle verifies, and one changed byte breaks it', async () => {
   const { bundle, check, verifyAuditBundle } = await import('../../site-samples/security-audit');
   assert.equal(check.valid, true);
-  const tampered = JSON.parse(JSON.stringify(bundle).replace('Refund', 'Refunc').replace('"agent":"refunds"', '"agent":"refundz"'));
+  const tampered = JSON.parse(
+    JSON.stringify(bundle)
+      .replace('Refund', 'Refunc')
+      .replace('"agent":"refunds"', '"agent":"refundz"'),
+  );
   assert.equal(verifyAuditBundle(tampered).valid, false);
 });
 
@@ -163,22 +184,85 @@ test('SECURITY: your guard removes injected text before the model reads it', asy
 
 test('every internal link on the reading pages goes to a real page', () => {
   const routes = buildRouteSet();
-  const pages = ['app/(home)/engineering/page.tsx', 'app/(home)/security/page.tsx', 'app/(home)/how-to-build/page.tsx', 'components/build/HowToBuild.tsx'];
+  const pages = [
+    'app/(home)/engineering/page.tsx',
+    'app/(home)/security/page.tsx',
+    'app/(home)/how-to-build/page.tsx',
+    'components/build/HowToBuild.tsx',
+  ];
   for (const page of pages) {
     const source = readFileSync(new URL(`../../${page}`, import.meta.url), 'utf8');
     for (const match of source.matchAll(/href(?:=|: )["'](\/[^"'#]*)/g)) {
       const href = match[1]!;
-      if (href.startsWith('/docs')) assert.ok(routes.has(href), `${page}: ${href} is not a page in content/docs`);
-      else assert.ok(existsSync(new URL(`../../app/(home)${href}/page.tsx`, import.meta.url)), `${page}: ${href} is not a page on the site`);
+      if (href.startsWith('/docs'))
+        assert.ok(routes.has(href), `${page}: ${href} is not a page in content/docs`);
+      else
+        assert.ok(
+          existsSync(new URL(`../../app/(home)${href}/page.tsx`, import.meta.url)),
+          `${page}: ${href} is not a page on the site`,
+        );
     }
   }
 });
 
 test('the anchors other pages link to are on the page', () => {
-  const build = readFileSync(new URL('../../components/build/HowToBuild.tsx', import.meta.url), 'utf8');
-  for (const id of ['build', 'debug', 'deploy', 'monitor', 'front-end', 'write-your-own', 'recorders']) assert.ok(build.includes(`id="${id}"`), `How to build has no #${id}`);
-  const engineering = readFileSync(new URL('../../app/(home)/engineering/page.tsx', import.meta.url), 'utf8');
-  for (const id of ['prompt', 'context', 'loop', 'harness']) assert.ok(engineering.includes(`id="${id}"`), `Engineering has no #${id}`);
-  const security = readFileSync(new URL('../../app/(home)/security/page.tsx', import.meta.url), 'utf8');
-  for (const id of ['permissions', 'privacy', 'tenants', 'audit']) assert.ok(security.includes(`id="${id}"`), `Security has no #${id}`);
+  const build = readFileSync(
+    new URL('../../components/build/HowToBuild.tsx', import.meta.url),
+    'utf8',
+  );
+  for (const id of [
+    'build',
+    'know',
+    'debug',
+    'deploy',
+    'monitor',
+    'front-end',
+    'write-your-own',
+    'recorders',
+  ])
+    assert.ok(build.includes(`id="${id}"`), `How to build has no #${id}`);
+  const engineering = readFileSync(
+    new URL('../../app/(home)/engineering/page.tsx', import.meta.url),
+    'utf8',
+  );
+  for (const id of ['prompt', 'context', 'loop', 'harness'])
+    assert.ok(engineering.includes(`id="${id}"`), `Engineering has no #${id}`);
+  const security = readFileSync(
+    new URL('../../app/(home)/security/page.tsx', import.meta.url),
+    'utf8',
+  );
+  for (const id of ['permissions', 'privacy', 'tenants', 'audit'])
+    assert.ok(security.includes(`id="${id}"`), `Security has no #${id}`);
+});
+
+test('KNOW: the map reaches the model, and is on the record', async () => {
+  const { record, sent } = await import('../../site-samples/know-ontology');
+  assert.ok(sent[0]!.includes('port_error_rate'), 'the model should read the map');
+  assert.equal(record?.id, 'fleet');
+  assert.ok(record?.hash, 'the record should hold its hash');
+});
+
+test('KNOW: the model passes a ticket, and the tool receives the data', async () => {
+  const { received, sent } = await import('../../site-samples/know-refs');
+  assert.deepEqual(received, [48_000], 'the tool should get every row');
+  const all = sent.join('');
+  assert.match(all, /art_/, 'the model should read a ticket');
+  assert.ok(
+    all.length < 50_000,
+    `the rows should stay out of the prompt, and it was ${all.length} chars`,
+  );
+});
+
+test('KNOW: the clock goes on the record, with where it came from', async () => {
+  const { clock, undeclaredClock } = await import('../../site-samples/know-time');
+  assert.deepEqual(
+    {
+      zone: (clock as { zone?: string }).zone,
+      zoneSource: (clock as { zoneSource?: string }).zoneSource,
+      nowSource: (clock as { nowSource?: string }).nowSource,
+    },
+    { zone: 'America/New_York', zoneSource: 'run', nowSource: 'app' },
+  );
+  /* The docs say a run with no zone is refused. It runs, and the record says unknown, so the page says that. */
+  assert.equal((undeclaredClock as { zoneSource?: string }).zoneSource, 'unknown');
 });

@@ -6,15 +6,16 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { FEATURES_ALSO, FEATURES_TAGLINE, FEATURE_BEATS } from '@/lib/features/beats';
 import { SITE } from '@/lib/site';
 import '@/components/home/stand/stand.css';
+import '@/components/site/reading.css';
 
 /**
- * /features: eleven verbs, each with the names people already know it by and a small scene. The page
+ * /features: twelve verbs, each with the names people already know it by and a small scene. The page
  * is prerendered, so the static export ships it complete and readable with JS off. The scenes are
  * the only client part, and each one loads as it nears the screen.
  */
 
 const TITLE = 'Features — agentfootprint';
-const DESC = `${FEATURES_TAGLINE} Build an agent from pieces, teach it skills, give it memory, swap the model, adapt it to your infrastructure, stream it to your front end, watch it think, have it check in before anything big, protect what it records, ask why when it's wrong, and keep running when a provider goes down.`;
+const DESC = `${FEATURES_TAGLINE} Build an agent from pieces, teach it skills, tell it what exists and what time it is, give it memory, swap the model, adapt it to your infrastructure, stream it to your front end, watch it think, have it check in before anything big, protect what it records, ask why when it's wrong, and keep running when a provider goes down.`;
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -49,7 +50,7 @@ export default function FeaturesPage() {
       <header className="hs-hero">
         <p className="v2-kicker">What you get</p>
         <h1>{FEATURES_TAGLINE}</h1>
-        <p>Eleven things it does, in eleven words.</p>
+        <p>Twelve things it does, in twelve words.</p>
         <p className="hs-def">
           People now call this an agent harness: the loop, tools, context and controls around the
           model.{' '}

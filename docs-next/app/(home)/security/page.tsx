@@ -5,6 +5,7 @@ import { SampleCode } from '@/components/site/SampleCode';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '@/components/home/stand/stand.css';
+import '@/components/site/reading.css';
 
 const TITLE = 'AI agent security, with code — AgentFootprint';
 const DESCRIPTION =

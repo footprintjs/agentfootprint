@@ -59,8 +59,8 @@ const RECORD = [
 
 /* How far each scene sits down from the top, so it reads as centred in its frame. */
 const NUDGE: Readonly<Record<'wide' | 'tall', Readonly<Record<FeatureId, number>>>> = {
-  wide: { build: 19, teach: 46, remember: 54, swap: 8, adapt: 20, show: 40, watch: 18, ask: 39, protect: 20, why: 46, survive: 9 },
-  tall: { build: 30, teach: 46, remember: 40, swap: 20, adapt: 30, show: 26, watch: 32, ask: 32, protect: 20, why: 35, survive: 29 },
+  wide: { build: 19, teach: 46, know: 30, remember: 54, swap: 8, adapt: 20, show: 40, watch: 18, ask: 39, protect: 20, why: 46, survive: 9 },
+  tall: { build: 30, teach: 46, know: 26, remember: 40, swap: 20, adapt: 30, show: 26, watch: 32, ask: 32, protect: 20, why: 35, survive: 29 },
 };
 
 export class FeatureScenes extends Stage<null> {
@@ -160,6 +160,59 @@ export class FeatureScenes extends Stage<null> {
       this.text(k!, x + 20, yy, { size: P ? 10 : 12, weight: 700, mono: true, color: th.muted, base: 'top', alpha: a });
       this.text(v!, x + 20, yy + (P ? 16 : 20), { size: P ? 13.5 : 18, weight: 660, base: 'top', alpha: a });
     });
+  }
+
+  /* ── KNOW: what exists, where it lives, and what time it is ───────────── */
+  private know(u: number) {
+    const { P, dw, th } = this;
+    const x = P ? 2 : 30;
+    const w = dw - x * 2;
+    const rowH = P ? 128 : 150;
+    const gap = P ? 12 : 18;
+    const size = P ? 9.5 : 13.5;
+    const cardW = P ? 104 : 176;
+    const cardH = P ? 34 : 46;
+    const cols = P ? [x + 54, x + 178, x + 302] : [x + 100, x + 350, x + 600];
+    const row = (i: number, title: string, start: number) => {
+      const y = i * (rowH + gap);
+      const a = E.out(win(start, start + 0.16, u));
+      this.box(x, y, w, rowH, { r: 14, fill: th.cardAlt, stroke: th.line, alpha: a });
+      this.text(title, x + 14, y + (P ? 11 : 14), { size: P ? 9.5 : 11.5, weight: 700, mono: true, color: th.muted, base: 'top', alpha: a });
+      return { y: y + rowH / 2 + (P ? 2 : 4), a };
+    };
+    const link = (from: number, to: number, y: number, label: string, start: number) => {
+      const f = E.inOut(win(start, start + 0.26, u));
+      const left = cols[from]! + cardW / 2;
+      const right = cols[to]! - cardW / 2;
+      this.stroke(this.pts([left, y], [left + 8, y], [right - 8, y], [right, y], 6), 0, f, { color: th.yellowDeep, lw: P ? 1.6 : 2.2 });
+      if (label) this.text(label, (left + right) / 2, y - cardH / 2 - (P ? 7 : 9), { size: P ? 9 : 11.5, weight: 650, mono: true, color: th.muted, align: 'center', alpha: win(start + 0.16, start + 0.3, u) });
+    };
+    /* what exists, and which source holds it */
+    const map = row(0, 'ontology: a map, not a way to fetch', 0.04);
+    this.card(cols[0]!, map.y, cardW, cardH, 'port_error_rate', map.a, { size });
+    this.card(cols[1]!, map.y, cardW, cardH, 'port', E.out(win(0.18, 0.34, u)), { size });
+    this.card(cols[2]!, map.y, cardW, cardH, 'inventory', E.out(win(0.34, 0.5, u)), { size, stroke: th.yellowDeep });
+    link(0, 1, map.y, 'measured-on', 0.14);
+    link(1, 2, map.y, 'lookup_port', 0.3);
+    /* large data travels as a ticket */
+    const refs = row(1, 'data references: a ticket, not the rows', 0.62);
+    this.card(cols[0]!, refs.y, cardW, cardH, 'get_sales', refs.a, { size });
+    const ticket = E.back(win(0.78, 0.98, u));
+    if (ticket > 0) this.chip(cols[1]!, refs.y, 'art_h7Kq…', { size: P ? 10.5 : 14, fg: th.yellowInk, border: th.yellow, scale: clamp(ticket), alpha: clamp(ticket) });
+    this.card(cols[2]!, refs.y, cardW, cardH, 'summarize', E.out(win(0.94, 1.1, u)), { size });
+    link(0, 1, refs.y, '', 0.72);
+    link(1, 2, refs.y, '', 0.92);
+    this.text('48,000 rows stay out of the prompt', dw / 2, refs.y + (P ? 32 : 40), { size: P ? 10 : 13, weight: 620, color: th.muted, align: 'center', base: 'middle', alpha: win(1.04, 1.18, u) });
+    /* what "since 8" means, declared */
+    const clock = row(2, 'time: a clock on the record', 1.22);
+    this.card(cols[0]!, clock.y, cardW, cardH, 'since 8?', clock.a, { size: P ? 11 : 15, mono: false });
+    const on = win(1.42, 1.6, u);
+    if (on > 0) {
+      link(0, 1, clock.y, '', 1.36);
+      this.text('now: 2026-11-05T17:30:00Z', cols[1]! - cardW / 2 + (P ? 8 : 26), clock.y - (P ? 12 : 16), { size: P ? 10 : 13.5, weight: 650, mono: true, base: 'middle', alpha: on });
+      this.text('zone: America/New_York', cols[1]! - cardW / 2 + (P ? 8 : 26), clock.y + (P ? 6 : 8), { size: P ? 10 : 13.5, weight: 650, mono: true, base: 'middle', alpha: on });
+      this.text('zoneSource: run', cols[1]! - cardW / 2 + (P ? 8 : 26), clock.y + (P ? 24 : 32), { size: P ? 10 : 13.5, weight: 650, mono: true, color: th.green, base: 'middle', alpha: win(1.56, 1.72, u) });
+    }
   }
 
   /* ── REMEMBER: it keeps what matters between conversations ─────────────── */

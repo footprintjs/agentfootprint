@@ -5,6 +5,7 @@ import { SampleCode } from '@/components/site/SampleCode';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '@/components/home/stand/stand.css';
+import '@/components/site/reading.css';
 
 const TITLE = 'Prompt, context, loop and harness engineering, with code — AgentFootprint';
 const DESCRIPTION =

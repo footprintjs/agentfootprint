@@ -113,6 +113,54 @@ export function HowToBuild() {
           <ReferenceFlow />
         </section>
 
+        <ReadingRow
+          id="know"
+          kicker="What it knows"
+          title="Give it a map of your data"
+          more={{ href: '/docs/build/agent', label: 'The ontology' }}
+          aside={
+            <SampleCode
+              file="site-samples/know-ontology.ts"
+              marks={['defineOntology({', '.ontology(map)', 'via:']}
+            />
+          }
+        >
+          <p>
+            When a result doesn’t hold what a question needs, the map tells the model what each term
+            means, which source holds it and which tool reads it. So it can say where the answer
+            would be, instead of guessing.
+          </p>
+          <p className="pf-limit">It’s a map, not a way to fetch. A tool still reads the data.</p>
+        </ReadingRow>
+
+        <ReadingRow
+          title="Pass a ticket, not the rows"
+          more={{ href: '/docs/build/artifacts', label: 'Artifacts' }}
+          aside={<SampleCode file="site-samples/know-refs.ts" marks={['wants:', 'artifacts:']} />}
+        >
+          <p>
+            Past a size you set, the store keeps a tool’s result and the model gets a short ticket.
+            A tool that declares <code>wants</code> receives the data behind the ticket, so 48,000
+            rows never enter the prompt.
+          </p>
+        </ReadingRow>
+
+        <ReadingRow
+          title="Give it a clock"
+          more={{ href: '/docs/build/time', label: 'Time' }}
+          aside={
+            <SampleCode
+              file="site-samples/know-time.ts"
+              marks={['.time({', 'time: {', 'zoneSource']}
+            />
+          }
+        >
+          <p>
+            “Errors since 8” means nothing without a clock: which day, which zone, which eight.
+            Declare it for each run, and it goes on the record along with where it came from.
+          </p>
+        </ReadingRow>
+
         <header className="v21-phase-head" id="debug">
           <p className="v2-kicker">02 · Debug</p>
           <h2>Turn on the tools that read the run.</h2>

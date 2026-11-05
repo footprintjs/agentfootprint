@@ -445,6 +445,7 @@ const exportedNames = async () => {
     import('agentfootprint/memory'),
     import('agentfootprint/context'),
     import('agentfootprint/ag-ui'),
+    import('agentfootprint/ontology'),
   ]);
   return new Set(doors.flatMap((door) => Object.keys(door)));
 };
@@ -478,6 +479,11 @@ const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; rea
   'long-term memory': { code: ['defineMemory'], doc: ['infrastructure/memory-and-stores', /long-term memory/i] },
   'episodic and semantic memory': { doc: ['build/memory', /episodic[\s\S]*semantic/i] },
   RAG: { code: ['defineRAG'] },
+  ontology: { code: ['defineOntology'] },
+  SKOS: { code: ['fromSkos', 'toSkos'] },
+  'data references': { code: ['inMemoryArtifacts'], doc: ['build/artifacts', /refs as tool arguments/] },
+  'claim check': { doc: ['build/artifacts', /claim-check/] },
+  'time awareness': { doc: ['build/time', /run clock/] },
   'model-agnostic': { doc: ['build/custom-provider', /LLMProvider/] },
   Anthropic: { code: ['anthropic'] },
   OpenAI: { code: ['openai'] },

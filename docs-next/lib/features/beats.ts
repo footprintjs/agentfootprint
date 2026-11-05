@@ -1,5 +1,5 @@
 /**
- * The /features page, as data — eleven verbs, one line each.
+ * The /features page, as data — twelve verbs, one line each.
  *
  * ONE source of truth for the page's sections and the jump list above them.
  *
@@ -55,6 +55,21 @@ export const FEATURE_BEATS = [
     ],
     href: '/docs/build/skills',
     hrefLabel: 'Read more about teaching an agent — Skills',
+  },
+  {
+    id: 'know',
+    verb: 'KNOW',
+    line: 'Tell it what exists, where it lives, and what time it is.',
+    knownAs: [
+      { name: 'ontology', href: '/how-to-build#know' },
+      { name: 'SKOS', href: '/docs/build/agent' },
+      { name: 'data references', href: '/docs/build/artifacts' },
+      { name: 'claim check', href: '/docs/build/artifacts' },
+      { name: 'time awareness', href: '/docs/build/time' },
+    ],
+    limit: 'An ontology is a map, not a way to fetch. A tool still reads the data.',
+    href: '/how-to-build#know',
+    hrefLabel: 'Read more about the map, data references and the clock — How to build',
   },
   {
     id: 'remember',
@@ -185,7 +200,7 @@ export type FeatureId = (typeof FEATURE_BEATS)[number]['id'];
 /** The page's one-line promise — the hero's closing statement. */
 export const FEATURES_TAGLINE = 'Agents that show their work.';
 
-/** Real, and not one of the eleven. The list at the end of the page. */
+/** Real, and not one of the twelve. The list at the end of the page. */
 export const FEATURES_ALSO = [
   { label: 'Prompt caching', href: '/docs/build/caching' },
   { label: 'Compaction', href: '/docs/build/compaction' },
