@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ShareWithAgent } from '@/components/site/ShareWithAgent';
 import { CODE_SECTION, type CodeSample } from './copy';
 
 /** Every line as the test runs it, with the lines that are the point marked. */
@@ -51,6 +52,7 @@ export function StandCode() {
         <Link className="v2-button v2-button-quiet" href="/docs/getting-started/vs#migration" prefetch={false}>
           Coming from another framework <span aria-hidden="true">→</span>
         </Link>
+        <ShareWithAgent />
       </div>
     </section>
   );
