@@ -11,7 +11,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // the marketing story page — ranks just under the homepage, above any single doc
     { url: `${SITE.url}/features/`, changeFrequency: 'monthly', priority: 0.9 },
     // the indexable product walkthrough is a first-class marketing route too
-    { url: `${SITE.url}/how-it-works/`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${SITE.url}/how-we-debug/`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${SITE.url}/how-we-debug/walkthrough/`, changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${SITE.url}/how-it-stands/`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${SITE.url}/how-to-build/`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${SITE.url}/engineering/`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${SITE.url}/security/`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${SITE.url}/context-engineering/`, changeFrequency: 'monthly', priority: 0.8 },
   ];
 

@@ -11,10 +11,10 @@ import { ECOSYSTEM_PROJECTS } from './ecosystem';
 export const SITE = {
   url: 'https://agentfootprint.dev',
   name: 'agentfootprint',
-  title: 'agentfootprint — Build agents whose answers can be checked',
-  tagline: 'Evidence. Limits. Checked answers.',
+  title: 'agentfootprint — Build agents you can hold to the record',
+  tagline: 'The model can say anything. The record shows what it rests on.',
   description:
-    'Build TypeScript agents with recorded evidence, explicit uncertainty and app-configured checks before answer delivery. Built on FootprintJS execution provenance.',
+    'Build TypeScript agents you can hold to the record, with the STAND pattern: state the rules, trace the run, assess the claims, name the answer’s standing and decide what happens. Built on FootprintJS execution provenance.',
   author: 'Sanjay', // display byline ("Created by Sanjay")
   authorName: 'Sanjay Krishna Anbalagan', // full legal name — copyright line + schema (matches LICENSE + npm author)
   authorUrl: 'https://github.com/sanjay1909', // primary profile — footer rel=author link + JSON-LD Person.url

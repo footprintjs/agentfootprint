@@ -1,144 +1,213 @@
 /**
- * The /features storyboard, as data — eight verbs, one line each.
+ * The /features page, as data — twelve verbs, one line each.
  *
- * ONE source of truth shared by the hero (server-rendered in-page nav) and the beats
- * (client-rendered scroll story), so a verb can never appear in the nav without its beat.
+ * ONE source of truth for the page's sections and the jump list above them.
  *
- * `line` is approved marketing copy — do not reword. `inside` names REAL exported surfaces
- * (checked against src/ when written); `href` is a REAL docs route (every one is in
- * lib/doc-ids.mjs `buildRouteSet()` and returns 200 on the deployed site).
- *
- * `steps` = how many additive reveal layers the beat's stage has. The scroll engine hands the
- * stage a monotonically increasing step index; every layer that arrives STAYS (the canvas never
- * wipes), so the stage is a legible composition at any frame. `dwell` is the beat's scroll
- * height — the flagship WHY beat gets more so it reads slower.
+ * `line` is approved marketing copy — do not reword. `knownAs` is what people already call this.
+ * A name is a claim, so scripts/test/stand-film.test.mts fails if one has nothing real behind it.
+ * `href` is a REAL docs route (every one is in lib/doc-ids.mjs `buildRouteSet()` and returns 200
+ * on the deployed site).
  */
 export type FeatureBeat = {
-  /** anchor id — the hero verb links to `#${id}` */
+  /** the section's anchor, and the scene beside it */
   readonly id: string;
-  /** two-digit index, shown in the rail and the hero */
-  readonly ix: string;
   readonly verb: string;
   /** approved copy — byte-identical to the design */
   readonly line: string;
-  /** "what's inside" chips: real API/feature names */
-  readonly inside: readonly string[];
+  /** the names people already use for this, each linked to what explains it */
+  readonly knownAs: readonly { readonly name: string; readonly href: string }[];
+  /** what this does not do, stated beside the claim */
+  readonly limit?: string;
   /** Read more → target (a real /docs route) */
   readonly href: string;
   /** accessible name for the Read-more link (the visible text is just "Read more →") */
   readonly hrefLabel: string;
-  readonly steps: number;
-  /**
-   * Scroll height of the beat — the stage is pinned for its whole duration while the rail scrolls
-   * past it.
-   *
-   * This is the ONLY pacing dial: how fast the layers arrive, and how long the finished stage holds
-   * at the end, are both derived from it by `useAdditiveSteps.measureDrive`. Raising a `dwell` makes
-   * that beat slower and more deliberate WITHOUT breaking the choreography — which is why the
-   * flagship WHY is longer than the rest.
-   */
-  readonly dwell: string;
 };
 
-/**
- * `as const satisfies` (not a `: readonly FeatureBeat[]` annotation) so the eight ids survive as
- * literal types. `FeatureBeatId` below is derived from them, which is what makes a beat without a
- * stage a COMPILE error instead of a blank panel in production.
- */
 export const FEATURE_BEATS = [
   {
     id: 'build',
-    ix: '01',
     verb: 'BUILD',
     line: 'Snap an agent together from pieces.',
-    inside: ['LLMCall', 'Agent', 'Sequence', 'Parallel', 'Conditional', 'Loop', 'Swarm', 'patterns'],
+    knownAs: [
+      { name: 'ReAct loop', href: '/docs/getting-started/key-concepts' },
+      { name: 'chains', href: '/docs/build/workflow' },
+      { name: 'routers and supervisors', href: '/docs/build/llm-router' },
+      { name: 'multi-agent', href: '/docs/build/swarm' },
+      { name: 'structured output', href: '/docs/build/output-schema' },
+      { name: 'runbookAsTool', href: '/docs/build/runbook-as-tool' },
+      { name: 'flowchartAsTool', href: '/docs/build/flowchart-as-tool' },
+      { name: 'loop engineering', href: '/engineering#loop' },
+    ],
     href: '/docs/getting-started/quick-start',
     hrefLabel: 'Read more about building an agent — Quick Start',
-    steps: 7,
-    dwell: '160vh',
   },
   {
     id: 'teach',
-    ix: '02',
     verb: 'TEACH',
     line: 'Give it skills — it opens only the one it needs.',
-    inside: ['skills', 'steering', 'facts', 'injections', 'skill graph', 'triggers'],
+    knownAs: [
+      { name: 'prompt engineering', href: '/engineering#prompt' },
+      { name: 'context engineering', href: '/engineering#context' },
+      { name: 'skills', href: '/docs/build/skills' },
+      { name: 'SKILL.md files', href: '/docs/build/skills' },
+      { name: 'progressive disclosure', href: '/docs/build/skills-explained' },
+    ],
     href: '/docs/build/skills',
     hrefLabel: 'Read more about teaching an agent — Skills',
-    steps: 4,
-    dwell: '160vh',
+  },
+  {
+    id: 'know',
+    verb: 'KNOW',
+    line: 'Tell it what exists, where it lives, and what time it is.',
+    knownAs: [
+      { name: 'ontology', href: '/how-to-build#know' },
+      { name: 'SKOS', href: '/docs/build/agent' },
+      { name: 'data references', href: '/docs/build/artifacts' },
+      { name: 'claim check', href: '/docs/build/artifacts' },
+      { name: 'time awareness', href: '/docs/build/time' },
+    ],
+    limit: 'An ontology is a map, not a way to fetch. A tool still reads the data.',
+    href: '/how-to-build#know',
+    hrefLabel: 'Read more about the map, data references and the clock — How to build',
   },
   {
     id: 'remember',
-    ix: '03',
     verb: 'REMEMBER',
     line: 'It keeps what matters between conversations.',
-    inside: ['episodic', 'semantic', 'narrative', 'RAG', 'Redis', 'in-memory'],
+    knownAs: [
+      { name: 'long-term memory', href: '/docs/build/memory' },
+      { name: 'episodic and semantic memory', href: '/docs/build/fact-extraction' },
+      { name: 'RAG', href: '/docs/build/rag' },
+    ],
     href: '/docs/build/memory',
     hrefLabel: 'Read more about memory',
-    steps: 6,
-    dwell: '160vh',
   },
   {
     id: 'swap',
-    ix: '04',
     verb: 'SWAP',
     line: 'Same agent. Claude, GPT, or your laptop.',
-    inside: ['anthropic', 'openai', 'azure', 'bedrock', 'ollama', 'browser', 'mock', 'bring-your-own'],
+    knownAs: [
+      { name: 'model-agnostic', href: '/docs/build/custom-provider' },
+      { name: 'Anthropic', href: '/docs/build/anthropic' },
+      { name: 'OpenAI', href: '/docs/build/openai' },
+      { name: 'Azure', href: '/docs/infrastructure/microsoft-foundry' },
+      { name: 'Bedrock', href: '/docs/build/aws-bedrock' },
+      { name: 'Gemini', href: '/docs/build/gemini' },
+      { name: 'Ollama', href: '/docs/build/ollama' },
+    ],
     href: '/docs/build/openai',
     hrefLabel: 'Read more about providers — OpenAI and OpenAI-compatible endpoints',
-    steps: 3,
-    dwell: '164vh',
+  },
+  {
+    id: 'adapt',
+    verb: 'ADAPT',
+    line: 'Your cloud, your machines. No adapter yet? Write one.',
+    knownAs: [
+      { name: 'ports and adapters', href: '/docs/infrastructure' },
+      { name: 'hexagonal architecture', href: '/docs/reference/strategy-everywhere' },
+      { name: 'plugins', href: '/docs/build/loop-moments' },
+      { name: 'bring your own adapter', href: '/how-to-build#write-your-own' },
+      { name: 'MCP', href: '/docs/build/mcp-client' },
+      { name: 'A2A', href: '/docs/infrastructure/hosting-and-runtime' },
+      { name: 'behind your LLM gateway', href: '/docs/build/invoke-model-gateway' },
+    ],
+    href: '/how-to-build#deploy',
+    hrefLabel: 'Read more about infrastructure — How to build, Deploy',
+  },
+  {
+    id: 'show',
+    verb: 'SHOW',
+    line: 'Stream every step to your own front end.',
+    knownAs: [
+      { name: 'AG-UI', href: '/docs/infrastructure/ag-ui' },
+      { name: 'CopilotKit', href: '/docs/infrastructure/ag-ui' },
+      { name: 'frontend tools', href: '/docs/infrastructure/ag-ui' },
+      { name: 'streaming', href: '/docs/monitor/streaming' },
+    ],
+    href: '/how-to-build#front-end',
+    hrefLabel: 'Read more about connecting your front end — How to build',
   },
   {
     id: 'watch',
-    ix: '05',
     verb: 'WATCH',
     line: 'See it think, in real time.',
-    inside: ['67 events', 'flowchart', 'timeline', 'cost', 'live status', 'narrative'],
+    knownAs: [
+      { name: 'observability', href: '/docs/monitor/observability' },
+      { name: 'tracing', href: '/docs/monitor/exporters' },
+      { name: 'OpenTelemetry', href: '/docs/monitor/exporters' },
+      { name: 'custom recorders', href: '/how-to-build#recorders' },
+    ],
     href: '/docs/monitor/observability',
     hrefLabel: 'Read more about observability',
-    steps: 7,
-    dwell: '168vh',
   },
   {
     id: 'ask',
-    ix: '06',
     verb: 'ASK',
     line: 'It checks in before doing anything big — with evidence.',
-    inside: ['checkIn', 'pause/resume', 'permissions', 'audit trail'],
+    knownAs: [
+      { name: 'human-in-the-loop', href: '/docs/monitor/pausable' },
+      { name: 'tool approval', href: '/docs/monitor/checkin' },
+    ],
     href: '/docs/monitor/checkin',
     hrefLabel: 'Read more about check-ins',
-    steps: 5,
-    dwell: '162vh',
+  },
+  {
+    id: 'protect',
+    verb: 'PROTECT',
+    line: 'Name what stays out of the record. Decide who can call what.',
+    knownAs: [
+      { name: 'PII redaction', href: '/security#privacy' },
+      { name: 'role-based access', href: '/security#permissions' },
+      { name: 'tenant isolation', href: '/security#tenants' },
+      { name: 'audit trail', href: '/security#audit' },
+    ],
+    limit:
+      'Redaction is opt-in, and you add your own check for injected instructions. The Security page shows how.',
+    href: '/security',
+    hrefLabel: 'Read more about security',
   },
   {
     id: 'why',
-    ix: '07',
     verb: 'WHY',
     line: "When something's wrong, ask why. It answers with receipts.",
-    inside: ['localize', 'ablation proof', 'walk to root', 'influence', 'self-explain'],
+    knownAs: [
+      { name: 'root-cause analysis', href: '/how-we-debug' },
+      { name: 'self-explain', href: '/docs/debug/self-explain' },
+      { name: 'replay', href: '/docs/debug/offline-replay' },
+      { name: 'time-travel debugging', href: '/docs/debug/time-travel' },
+    ],
     href: '/docs/debug/localize-context-bug',
     hrefLabel: 'Read more about localizing a context bug',
-    steps: 8,
-    // flagship beat — the longest, slowest scroll of the page (storyboard note)
-    dwell: '184vh',
   },
   {
     id: 'survive',
-    ix: '08',
     verb: 'SURVIVE',
     line: 'Outages happen. Runs continue.',
-    inside: ['retry', 'fallback', 'circuit breaker', 'reliability rules', 'checkpoints'],
+    knownAs: [
+      { name: 'retry', href: '/docs/monitor/resilience' },
+      { name: 'fallback', href: '/docs/monitor/resilience' },
+      { name: 'circuit breaker', href: '/docs/monitor/resilience' },
+      { name: 'checkpointing', href: '/docs/monitor/reliability' },
+    ],
     href: '/docs/monitor/resilience',
     hrefLabel: 'Read more about resilience',
-    steps: 5,
-    dwell: '160vh',
   },
 ] as const satisfies readonly FeatureBeat[];
 
-/** The eight anchor ids, as a union — every stage map must cover exactly these. */
-export type FeatureBeatId = (typeof FEATURE_BEATS)[number]['id'];
+export type FeatureId = (typeof FEATURE_BEATS)[number]['id'];
 
 /** The page's one-line promise — the hero's closing statement. */
-export const FEATURES_TAGLINE = 'Agents that explain themselves.';
+export const FEATURES_TAGLINE = 'Agents that show their work.';
+
+/** Real, and not one of the twelve. The list at the end of the page. */
+export const FEATURES_ALSO = [
+  { label: 'Prompt caching', href: '/docs/build/caching' },
+  { label: 'Compaction', href: '/docs/build/compaction' },
+  { label: 'Streaming', href: '/docs/monitor/streaming' },
+  { label: 'Testing with mock()', href: '/docs/debug/testing' },
+  { label: 'Tool discovery', href: '/docs/build/tool-discovery' },
+  { label: 'Workflows and graphs', href: '/docs/build/graph' },
+  { label: 'Artifacts', href: '/docs/build/artifacts' },
+  { label: 'Locales', href: '/docs/monitor/locales' },
+] as const;

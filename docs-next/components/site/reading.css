@@ -1,0 +1,684 @@
+/* The reading pages: How we debug, Features, How to build, Engineering and Security. The home page loads none of this. stand.css comes first. */
+.sfr {
+  --s-bg: var(--bg);
+  --s-ink: var(--fg);
+  --s-muted: var(--fg-muted);
+  --s-faint: var(--fg-faint);
+  --s-line: var(--border);
+  --s-line-strong: var(--border-strong);
+  --s-card: var(--bg-elev);
+  --s-card-alt: var(--bg-alt);
+  --s-yellow: var(--yellow);
+  --s-yellow-deep: var(--yellow-dark);
+  --s-yellow-ink: #8a6a00;
+  --s-green: #15803d;
+  --s-red: #dc2626;
+  --s-amber: #c2670a;
+  --s-blue: #2563eb;
+  --s-shadow: rgba(24, 24, 27, 0.13);
+}
+.dark .sfr {
+  --s-yellow-ink: #ffd333;
+  --s-green: #4ade80;
+  --s-red: #f87171;
+  --s-amber: #fbbf24;
+  --s-blue: #60a5fa;
+  --s-shadow: rgba(0, 0, 0, 0.55);
+}
+
+/* ── the page shell, for pages without v2.css ─────────────────────────────── */
+.pf {
+  --v2-max: 1240px;
+  --v2-wide: 1380px;
+  --v2-pad: clamp(20px, 5vw, 64px);
+  --v2-mono: var(--fd-font-mono, ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace);
+  --v2-label: #5f6064;
+  min-height: 100vh;
+  overflow: clip;
+  color: var(--fg);
+  background: var(--bg);
+}
+.dark .pf {
+  --v2-label: #b8b8bc;
+}
+.pf-close {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-block: 8px 56px;
+  text-align: center;
+}
+.pf-close .sc-links {
+  justify-content: center;
+}
+
+/* ── a scene playing in place beside its text ─────────────────────────────── */
+.sfr {
+  position: relative;
+  display: none;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 760 / 560;
+  margin-inline: auto;
+}
+.sf-js .sfr {
+  display: block;
+}
+.sfr canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sfr-replay {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  visibility: hidden;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+}
+.sfr-replay:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.sfr.is-done .sfr-replay {
+  visibility: visible;
+}
+/* scenePlayer.ts switches the scene to its tall layout at this same width */
+@media (max-width: 620px) {
+  .sfr {
+    max-width: 420px;
+    aspect-ratio: 360 / 470;
+  }
+}
+
+/* ── Features ─────────────────────────────────────────────────────────────── */
+.pf-words {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px clamp(14px, 2.2vw, 34px);
+  width: min(var(--v2-wide), 100%);
+  margin: 18px auto 0;
+  padding: 0 var(--v2-pad);
+  list-style: none;
+}
+.pf-words a {
+  color: var(--fg);
+  font-size: clamp(22px, 3.1vw, 44px);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 1.12;
+  text-decoration: none;
+}
+.pf-words a:hover,
+.pf-words a:focus-visible {
+  color: var(--yellow-dark);
+}
+.pf-list {
+  width: min(var(--v2-wide), 100%);
+  margin: clamp(24px, 4vw, 44px) auto 0;
+  padding-inline: var(--v2-pad);
+}
+.pf-beat {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+  gap: clamp(16px, 3vw, 44px);
+  align-items: center;
+  padding-block: clamp(24px, 3.4vw, 44px);
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 64px;
+}
+.pf-beat h2 {
+  margin: 0;
+  font-size: clamp(46px, 5vw, 76px);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+.pf-line {
+  margin: 10px 0 0;
+  font-size: clamp(19px, 1.65vw, 24px);
+  font-weight: 640;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  text-wrap: pretty;
+}
+.pf-known {
+  margin: 14px 0 0;
+}
+.pf-known > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--v2-label);
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.pf-known ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-known a {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 13px;
+  font-weight: 580;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.pf-known a:hover {
+  border-color: var(--yellow-dark);
+}
+.hs-def a {
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pf-limit {
+  margin: 12px 0 0;
+  padding-left: 11px;
+  border-left: 3px solid var(--yellow-dark);
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.pf-more {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pf-adapters {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 6px;
+}
+/* names never break mid-word, so a narrow screen scrolls the table instead of the page */
+.pf-adapters-scroll {
+  overflow-x: auto;
+}
+.pf-adapters .hs-table tbody th {
+  width: 12%;
+}
+.pf-adapter {
+  display: block;
+}
+.pf-adapter + .pf-adapter {
+  margin-top: 2px;
+}
+.pf-adapter code {
+  color: var(--fg);
+  white-space: nowrap;
+}
+.pf-adapter small {
+  margin-left: 6px;
+  color: var(--fg-faint);
+  font-size: 11px;
+}
+.pf-none {
+  color: var(--fg-muted);
+}
+.pf-anywhere {
+  color: var(--fg-muted);
+}
+td > .pf-adapter:has(+ .pf-anywhere) {
+  display: inline;
+}
+.pf-adapters .hs-note a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pf-adapters .hs-note code {
+  font-family: var(--v2-mono);
+  font-size: 12.5px;
+}
+.pf-also {
+  width: min(var(--v2-wide), 100%);
+  margin: 0 auto;
+  padding: 26px var(--v2-pad) 6px;
+}
+.pf-also h2 {
+  margin: 0 0 10px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border);
+  font-size: clamp(21px, 2.2vw, 28px);
+  font-weight: 760;
+  letter-spacing: -0.024em;
+}
+.pf-also ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-also a {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.pf-also a:hover {
+  border-color: var(--border-strong);
+}
+@media (max-width: 1040px) {
+  .pf-beat {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .pf-words {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pf-words a {
+    font-size: min(7.2vw, 42px);
+  }
+  /* on a phone each place reads as one line, so the table stays short */
+  .pf-adapter {
+    display: inline;
+  }
+  .pf-adapter + .pf-adapter::before {
+    content: ' · ';
+    color: var(--fg-faint);
+  }
+  .pf-adapters .hs-table {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .pf-adapters .hs-table tr {
+    padding: 7px 0;
+  }
+  .pf-adapters .hs-table td::before {
+    color: var(--fg-muted);
+    font-weight: 560;
+  }
+}
+
+/* ── Reading pages: How to build, Engineering, Security ───────────────────── */
+/* the older scenes, without the pinned-film height they were built for */
+.ls-flow .v21-scene {
+  min-height: 0;
+  padding-block: clamp(24px, 4vw, 56px);
+}
+.rp-page {
+  margin-top: clamp(18px, 3vw, 30px);
+}
+.rp-row,
+.rp-wide {
+  width: min(var(--v2-max), 100%);
+  margin-inline: auto;
+  padding-inline: var(--v2-pad);
+  scroll-margin-top: 72px;
+}
+.rp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  gap: clamp(16px, 3vw, 44px);
+  align-items: start;
+  padding-block: clamp(22px, 3vw, 38px);
+}
+.rp-words h3,
+.rp-wide h3 {
+  margin: 0;
+  font-size: clamp(21px, 2vw, 27px);
+  font-weight: 760;
+  letter-spacing: -0.024em;
+  line-height: 1.15;
+}
+.rp-words .v2-kicker + h3 {
+  margin-top: 6px;
+}
+.rp-words p:not(.v2-kicker),
+.rp-wide > p {
+  margin: 8px 0 0;
+  color: var(--fg-muted);
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.rp-words code,
+.rp-wide p code,
+.rp-lede code,
+.rp-facts code,
+.rp-kept code {
+  font-family: var(--v2-mono);
+  font-size: 0.88em;
+}
+.rp-words .pf-limit {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.rp-aside {
+  min-width: 0;
+}
+.rp-code {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+}
+.rp-code + .rp-code {
+  margin-top: 14px;
+}
+.rp-pair .rp-code + .rp-code {
+  margin-top: 0;
+}
+.rp-code .sc-code {
+  padding-bottom: 34px;
+}
+.rp-copy {
+  position: absolute;
+  z-index: 1;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+}
+.rp-copy:hover {
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+.rp-code figcaption {
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  font-weight: 720;
+}
+.rp-lede {
+  max-width: 760px;
+  margin: 10px 0 0;
+  color: var(--fg-muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.rp-lede a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rp-wide {
+  padding-block: clamp(18px, 2.4vw, 30px);
+}
+.rp-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.rp-lenses,
+.rp-facts {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--fg-muted);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.rp-lenses strong,
+.rp-facts strong {
+  color: var(--fg);
+}
+.rp-aside > .rp-facts {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg-alt);
+}
+.rp-jump a {
+  padding-left: 13px;
+}
+.rp-kept td {
+  width: 50%;
+}
+.rp-kept a,
+.rp-wide > p a,
+a.pf-none {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rp-catches {
+  margin-top: 10px;
+}
+.rp-catches td:nth-child(1) {
+  color: var(--fg);
+  font-weight: 640;
+  white-space: nowrap;
+}
+.rp-catches code {
+  color: var(--fg);
+  font-family: var(--v2-mono);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.rp-limits {
+  margin-top: 8px;
+}
+.rp-limits ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 14px 16px 14px 32px;
+  border-left: 3px solid var(--yellow-dark);
+  border-radius: 0 10px 10px 0;
+  background: var(--bg-alt);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.rp-family {
+  margin-top: 36px;
+}
+.rp-family h2 {
+  margin: 8px 0 0;
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 780;
+  letter-spacing: -0.03em;
+}
+.rp-family ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.rp-family li {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elev);
+}
+.rp-family small {
+  color: var(--v2-label);
+  font-family: var(--v2-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.rp-family code {
+  font-family: var(--v2-mono);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rp-family span {
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.eng-layers {
+  border: 1px solid color-mix(in oklab, var(--yellow-dark) 45%, var(--border));
+  border-radius: 16px;
+}
+.eng-layers > a {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+.eng-layers > a strong {
+  display: block;
+  color: var(--fg);
+  font-size: clamp(16px, 1.5vw, 20px);
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+.eng-layers > a:hover strong {
+  color: var(--yellow-dark);
+}
+.eng-harness {
+  width: min(860px, calc(100% - 2 * var(--v2-pad)));
+  margin: 20px auto 0;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 6%, var(--bg));
+}
+.eng-loop {
+  margin-top: 10px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 14%, var(--bg));
+}
+.eng-context {
+  margin-top: 10px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 24%, var(--bg));
+}
+.eng-prompt {
+  margin-top: 10px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 40%, var(--bg));
+}
+@media (max-width: 1040px) {
+  .rp-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rp-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── How it works ─────────────────────────────────────────────────────────── */
+.hs-hero h1 em {
+  font-style: normal;
+  background: linear-gradient(transparent 62%, color-mix(in oklab, var(--yellow) 70%, transparent) 62%);
+}
+.hs-hero > p.hw-lede {
+  margin-top: 6px;
+  font-size: 15.5px;
+}
+.hw-views {
+  justify-content: center;
+  margin-top: 14px;
+}
+.hw-jump {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 8px;
+  margin: 18px auto 0;
+  padding: 0 var(--v2-pad);
+  list-style: none;
+}
+.hw-jump a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 13px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 14px;
+  font-weight: 620;
+  text-decoration: none;
+}
+.hw-jump a:hover {
+  border-color: var(--border-strong);
+}
+.hw-jump span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: #18181b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.sg.hw-steps {
+  margin-top: 30px;
+}
+.hw-chapter {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+  gap: clamp(14px, 2.4vw, 36px);
+  align-items: start;
+}
+.hw-chapter + .hw-chapter {
+  margin-top: clamp(20px, 3vw, 38px);
+}
+.hw-chapter h2 {
+  margin: 0;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 780;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.hw-chapter p {
+  margin: 8px 0 0;
+  color: var(--fg-muted);
+  font-size: 16px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.hw-end {
+  padding-block: 30px 8px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 1240px) {
+  .hw-chapter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .hw-steps .sg-letter {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .hw-steps .sg-big {
+    position: static;
+    font-size: 56px;
+  }
+}

@@ -51,8 +51,8 @@ export const CHAPTERS_META: ChapterMeta[] = [
     id: 'af-ch-payoff',
     ix: '05',
     cat: 'The payoff',
-    ti: 'Proven, not guessed',
-    sub: 'Record the run, rewind to the cause, prove the fix by replaying it.',
+    ti: 'Tested, not guessed',
+    sub: 'Record the run, rewind to the cause, test the fix by replaying it.',
   },
 ];
 

@@ -92,7 +92,7 @@ const CAPS = [
   <><b>← messageAPI.</b> The step that assembled that request from the context slots.</>,
   <><b>← System Prompt.</b> messageAPI pulled from this slot — the suspect. But <i>when</i> did the wrong doc get there?</>,
   <><b>Step 4:</b> a search pulled in the wrong document and put it in the <b>System Prompt.</b> Nothing removed it — so it was still there at <b>step 14.</b></>,
-  <>Remove it, re-run from step 4 → <b>denied.</b> <span className="stamp">● CAUSAL</span> — proven by replay, not guessed.</>,
+  <>Remove it, re-run from step 4 → <b>denied.</b> <span className="stamp">● CAUSAL</span> — tested by replay, not guessed.</>,
   <><b>The fix:</b> put the right document in and replay <b>forward</b> — every step, same path, now it lands on <b>denied ✓.</b></>,
 ];
 const LAST = 7;

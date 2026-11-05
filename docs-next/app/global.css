@@ -394,6 +394,16 @@ html {
   transform: translateY(-6px) rotate(-45deg);
 }
 
+/* Eight links need this much room. Below it, the drawer holds them all. */
+@media (max-width: 1080px) {
+  .af-sh-nav {
+    display: none;
+  }
+  .af-sh-burger {
+    display: inline-flex;
+  }
+}
+
 .af-sh-drawer {
   border-top: 1px solid var(--border, rgba(0, 0, 0, 0.1));
   background: var(--bg-elev, #fff);
@@ -425,7 +435,7 @@ html {
 
 /* If a phone-sized viewport opens the drawer and is then widened, the toggle
    disappears. Keep its panel from being stranded open on the desktop layout. */
-@media (min-width: 641px) {
+@media (min-width: 1081px) {
   .af-sh-drawer {
     display: none;
   }
