@@ -396,7 +396,7 @@
     "@modelcontextprotocol/sdk": "*",
     "@opentelemetry/api": "*",
     "@yarflam/potion-base-8m": "*",
-    "footprintjs": "^11.0.0-rc.1",
+    "footprintjs": "^11.0.0",
     "google-auth-library": "*",
     "ioredis": "*",
     "jose": "*",
@@ -512,7 +512,7 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^6.15.0",
     "eslint-plugin-import": "^2.32.0",
-    "footprintjs": "^11.0.0-rc.1",
+    "footprintjs": "^11.0.0",
     "github-slugger": "^2.0.0",
     "google-auth-library": "^11.0.1",
     "jose": "^6.2.7",
@@ -532,6 +532,6 @@
   },
   "dependencies": {
     "contextfootprint": "0.1.1",
-    "foottrace": "^1.11.0"
+    "foottrace": "^1.11.1"
   }
 }
