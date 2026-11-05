@@ -403,7 +403,7 @@ test('search engines get a title and description that fit, a share image with a 
     const description = /const (?:DESCRIPTION|DESC|description) =\s*'([^']*)'/.exec(text)?.[1] ?? '';
     assert.ok(title.length > 0 && title.length <= 65, `${page} title: ${title.length}`);
     assert.ok(description.length > 0 && description.length <= 160, `${page} description: ${description.length}`);
-    assert.match(text, /<PageJsonLd /, page);
+    assert.match(text, /<PageJsonLd\s/, page);
     assert.doesNotMatch(text, /opengraph-image/, page);
   }
   const data = pageJsonLd({ name: 'Security', description: 'x', path: '/security/' });
