@@ -985,7 +985,7 @@ export function buildCallLLMStage(
           danglingFindings.length > 0 ? 'checked-fail' : 'checked-pass',
           danglingFindings.length > 0 ? Date.now() : undefined,
         );
-        fileIntegrityFindings(scope, danglingFindings, iteration);
+        fileIntegrityFindings(scope, danglingFindings, iteration, deps.integrityLedger);
       } else {
         // No grounded tool served, or nothing has dropped: nothing this call
         // could violate — stated, never silence.
@@ -1390,7 +1390,7 @@ export function buildCallLLMStage(
         : 'checked-pass',
       wireFindings.length > 0 ? Date.now() : undefined,
     );
-    fileIntegrityFindings(scope, wireFindings, iteration);
+    fileIntegrityFindings(scope, wireFindings, iteration, deps.integrityLedger);
 
     // THE CHOICE SEAM (9.63.0, unsupported-argument). The wire check above
     // asks what the library put in front of the model; this asks what the
@@ -1488,7 +1488,7 @@ export function buildCallLLMStage(
           argumentFindings.length > 0 ? 'checked-fail' : 'checked-pass',
           argumentFindings.length > 0 ? Date.now() : undefined,
         );
-        fileIntegrityFindings(scope, argumentFindings, iteration);
+        fileIntegrityFindings(scope, argumentFindings, iteration, deps.integrityLedger);
         // Each excusal is a per-attempt fact and rides the emit channel —
         // deliberately NOT deduplicated the way findings are: a repeated call
         // is a fresh choice, and each excusal names the assertion that stood

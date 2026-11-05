@@ -6,6 +6,7 @@
  * AuditBoundingDepth and audit-bounded-sweep pin type depth and runtime damage.
  */
 
+import { ASSESSMENT_REASON_WORDS } from './assessmentReasonWords.js';
 import type {
   ScriptBlockVerdict,
   ScriptsVerdict,
@@ -372,37 +373,7 @@ const eventShape = <T extends EventType>(rules: {
 const FIXED_PAUSE_REASON = 'stage requested pause';
 
 /** Why a turn's answer stands where it does — the assessment's own words. */
-const boundAssessmentReasons = listOf(
-  oneOf(
-    'answer-check-failed',
-    'argument-asked',
-    'argument-assumed',
-    'argument-read',
-    'argument-unverified',
-    'asked',
-    'check-unreachable',
-    'claim-exceeds-search',
-    'coverage-gap',
-    'declaration-overclaimed',
-    'declared-absent',
-    'derived-from-reading',
-    'empty-undeclared',
-    'negative-prose-unverified',
-    'period-beyond-retention',
-    'period-differs-from-asked',
-    'period-not-held',
-    'period-partly-held',
-    'period-undeclared',
-    'period-unknown',
-    'script-unmatched',
-    'sources-conflict',
-    'steps-unfinished',
-    'stopped-early',
-    'value-contingent',
-    'value-survived-revision',
-    'value-unsupported',
-  ),
-);
+const boundAssessmentReasons = listOf(oneOf(...ASSESSMENT_REASON_WORDS));
 
 /** Which honesty checks ran, and over how much. */
 const boundAssessmentChecks = listOf(

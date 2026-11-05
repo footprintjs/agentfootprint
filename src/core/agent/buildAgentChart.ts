@@ -57,6 +57,7 @@ import type { ActiveInjection, Injection } from '../../injection-engine/types.js
 import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import { readerWindowsOf } from '../../time/windows.js';
 import { clockOf } from '../../time/rows.js';
@@ -528,9 +529,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         // Integrity findings already filed this run (9.60.0) — the dedup
         // seen-list, in under the alias (inputMapper keys are frozen inside
         // the subflow; the slot writes the fresh list under the base key).
-        ...(parent.integrityFindingIds !== undefined && {
-          priorIntegrityFindingIds: parent.integrityFindingIds,
-        }),
+        ...integrityRailInto(parent),
         // The reader's settled windows (step T6b) and the app's control window,
         // under `.time()` only and value-conditional: a turn with none crosses no
         // key. See `AgentChartDeps.timeWindows`.
@@ -592,9 +591,7 @@ export function buildAgentChart(deps: AgentChartDeps): FlowChart {
         dynamicToolSchemas: sf.toolSchemas,
         // The integrity dedup seen-list, back onto the parent key —
         // value-conditional, so agents with no findings are byte-identical.
-        ...(sf.integrityFindingIds !== undefined && {
-          integrityFindingIds: sf.integrityFindingIds,
-        }),
+        ...integrityRail(sf),
         // The classifier's pick (9.105.0), back onto the parent key the
         // call-llm stage appends the outcome row to. Value-conditional.
         ...(sf.toolChoices !== undefined && { toolChoices: sf.toolChoices }),

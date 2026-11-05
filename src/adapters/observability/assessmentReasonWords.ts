@@ -1,0 +1,40 @@
+import type { AssessmentReason } from '../../core/agent/assessment/types.js';
+
+/** Every reason of the answer's standing, as the audit chain's bounded mode keeps them. */
+const WORDS: { readonly [R in AssessmentReason]: true } = {
+  'answer-check-failed': true,
+  'argument-asked': true,
+  'argument-assumed': true,
+  'argument-read': true,
+  'argument-unverified': true,
+  asked: true,
+  'check-unreachable': true,
+  'claim-exceeds-search': true,
+  'claim-unsettled': true,
+  'column-type-mismatch': true,
+  'coverage-gap': true,
+  'declaration-overclaimed': true,
+  'declared-absent': true,
+  'derived-from-reading': true,
+  'empty-undeclared': true,
+  'invariant-violation': true,
+  'missing-column': true,
+  'negative-prose-unverified': true,
+  'period-beyond-retention': true,
+  'period-differs-from-asked': true,
+  'period-not-held': true,
+  'period-partly-held': true,
+  'period-undeclared': true,
+  'period-unknown': true,
+  'script-unmatched': true,
+  'sources-conflict': true,
+  'steps-unfinished': true,
+  'stopped-early': true,
+  'unsupported-argument': true,
+  'unsupported-claim': true,
+  'value-contingent': true,
+  'value-survived-revision': true,
+  'value-unsupported': true,
+};
+
+export const ASSESSMENT_REASON_WORDS: readonly string[] = Object.keys(WORDS);

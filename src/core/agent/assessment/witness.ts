@@ -3,9 +3,10 @@
  * the Route decider computes that were EVENTS only until the answer layer
  * (honesty layer 4) needed them on the record.
  *
- * Pattern: Map. Three row types, their builders and their well-formedness
- *          check — the one owner of the `grounded`, `steps-unfinished` and
- *          `script-shown` row kinds.
+ * Pattern: Map. The answer layer's row types, their builders and their
+ *          well-formedness check — the one owner of the `grounded`,
+ *          `steps-unfinished`, `script-shown` and `claim-unsettled` row kinds
+ *          (`integrity/finding/row.ts` owns `integrity-finding`'s shape).
  *          `findings/types.ts` · `FindingsRow` imports the types; the rows
  *          are filed through the one writer (`findings/ledger.ts` ·
  *          `recordFindings`) by the Route decider, and ONLY while the answer
@@ -15,7 +16,8 @@
  *          checkpoint door (`core/runCheckpoint.ts` · `validateCheckpoint`,
  *          a synchronous door) asks `witnessRowIsWellFormed`, so this module
  *          imports nothing but the script labels (`../scripts/label.ts`, a
- *          leaf) and stays small.
+ *          leaf) and the finding table (`integrityReasons.ts`, data) and stays
+ *          small.
  * Emits:   N/A. A witness row emits nothing of its own — the verdict's event
  *          (`agentfootprint.agent.evidence_checked`,
  *          `agentfootprint.skill.steps_unfinished`) already fired, beside the
@@ -39,6 +41,8 @@
  * (`AgentState.turnNumber`): the fold reads this turn's witness rows only.
  */
 
+import type { IntegrityFindingRow } from '../../../integrity/finding/row.js';
+import { isIntegrityFindingKind } from './integrityReasons.js';
 import { blockVerdictOf } from '../scripts/match.js';
 import type { ScriptBlockVerdict, ScriptLabel, UnmatchedReason } from '../scripts/types.js';
 
@@ -138,8 +142,26 @@ export interface ScriptShownRow {
   readonly exitCode?: number;
 }
 
+/**
+ * The answer stated a `.claims()` field whose fact no tool settled: no reading
+ * on the record, or a reading that says the value is unknown. Filed by the
+ * Route decider on the answer that stands, while the answer layer is armed.
+ * `field` is the app's declared field path, never a value.
+ */
+export interface ClaimUnsettledRow {
+  readonly kind: 'claim-unsettled';
+  readonly turn: number;
+  readonly iteration: number;
+  readonly field: string;
+}
+
 /** Either witness row. */
-export type AnswerWitnessRow = GroundedRow | StepsUnfinishedRow | ScriptShownRow;
+export type AnswerWitnessRow =
+  | GroundedRow
+  | StepsUnfinishedRow
+  | ScriptShownRow
+  | IntegrityFindingRow
+  | ClaimUnsettledRow;
 
 const POSTURES: readonly WitnessPosture[] = Object.freeze(['assist', 'guard', 'rails']);
 
@@ -224,6 +246,16 @@ const isCount = (value: unknown): boolean =>
  */
 export function witnessRowIsWellFormed(r: Readonly<Record<string, unknown>>): boolean {
   if (typeof r.turn !== 'number' || typeof r.iteration !== 'number') return false;
+  if (r.kind === 'claim-unsettled') return typeof r.field === 'string';
+  if (r.kind === 'integrity-finding') {
+    return (
+      isIntegrityFindingKind(r.finding) &&
+      typeof r.seam === 'string' &&
+      (r.advisory === undefined || r.advisory === true) &&
+      (r.tools === undefined ||
+        (Array.isArray(r.tools) && r.tools.every((t: unknown) => typeof t === 'string')))
+    );
+  }
   if (r.kind === 'grounded') {
     return (
       typeof r.posture === 'string' &&

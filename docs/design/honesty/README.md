@@ -794,9 +794,9 @@ merge adds no conflict. One writer, one fold, one committed copy per layer run.
 `coverageDeclared`, `toolChoices`, `claimFacts`, `middlewareDecisions`, `unsupportedValues`,
 `answerValidation`, `stoppedEarly`, `outputAttempts`. Each has one writer, its own readers and
 pinned bytes. New rows reference them by `toolCallId` and never copy them. Where a verdict exists
-only as an event today — the gate's "grounded" (`agentfootprint.agent.evidence_checked`),
-`integrity.context_error`, the disposition event at the end of the run — the step that needs it adds
-one committed row. **The fold never reads events**, so the running agent and a later reader always
+only as an event — the disposition event at the end of the run — the step that needs it adds one
+committed row, as the gate's "grounded" and `integrity.context_error` did (`grounded`,
+`integrity-finding`, filed while the answer layer is armed). **The fold never reads events**, so the running agent and a later reader always
 fold the same bytes.
 
 ### 4.2 The standing fold — four values, no "known" from silence
@@ -822,7 +822,7 @@ value for "nothing was checked"; both are gone (research review, a MUST-FIX).
 
 | Value | When (this turn's committed rows) |
 |---|---|
-| `known` | a **supporting** row exists for these bytes — every declared `.claims()` field `checked-pass`, or a passed enforce `AnswerValidationReport` — and no reason fired |
+| `known` | a **supporting** row exists for these bytes — a passed enforce `.answerValidation()` report, the only row that supports it (a `.claims()` `checked-pass` never does: it is a comparison that found no conflict, not a tie to these bytes) — and no reason fired |
 | `unrefuted` | at least one check ran, none fired, nothing supports. A check ran when this turn's record holds its verdict: a recognized coverage declaration, a readable result shape (the emptiness reading below), an argument or period verdict, the gate's witness, a claim disposition |
 | `unknown` | at least one reason fired |
 | `not-applicable` | no check ran on this answer — for example, a turn whose tools declared nothing and returned nothing readable |
@@ -883,7 +883,9 @@ each other; support decides.
 | 3 | `fact-not-in-result`, `expectation-missed` | the reading-check row | 8 |
 | 3 | `sources-conflict` | `ConflictRow` | 1 |
 | 4 | `value-unsupported`, `value-survived-revision` | `unsupportedValues`; the gate's committed witness row | 1, 6 |
-| 4 | `claim-contradicted` | a `.claims()` `checked-fail` | 1 |
+| 4 | `unsupported-claim` | an `integrity-finding` row: a `.claims()` field disagrees with a settled fact, or declines to state it | 1 |
+| 4 | `claim-unsettled` | a `claim-unsettled` row: the answer states a `.claims()` field whose fact no tool settled | 1 |
+| 1, 2, 3 | `invariant-violation`, `unsupported-argument`, `column-type-mismatch`, `missing-column` | an `integrity-finding` row; `assessment/integrityReasons.ts` is the one table, and its other kinds are notes that move nothing | 1 |
 | 4 | `stopped-early` | `stoppedEarly` | 1 |
 | 1 | `source-not-consulted` | a typed `tryInsteadTool` never called; a declared ontology holder never called | 9 |
 | all | `check-unreachable` | a disposition `unreachable` on an armed check | 1 |
@@ -1154,7 +1156,7 @@ the paper uses it:
 | # | Step | Ships | Arm (off ⇒ byte-identical) | Needs |
 |---|---|---|---|---|
 | 0 | **Docs skeleton** | `docs/design/honesty/` (the index + four layer pages seeded from § 3); a pointer in agentfootprint's CLAUDE.md capability section | — (no code) | — |
-| 1 | **The standing, as a pure reader ($0)** | `assessment/assess.ts` · `assessAnswer` over recordings, from EXISTING rows only (coverage, ledger, `unsupportedValues`, claims, dispositions): the four values, the rendering, the reasons marked "1" in § 4.2; the one emptiness reader `agent/emptiness.ts` · `readEmptiness`, shared with the `/observe` answer account and its described template ([results.md](results.md) § 5.2); `howSure.ts` reads it; the lens chip. **First**, before anything else in the step: the confusion table of the fold against the oracle over the retained recorded runs ([decisions memo](../2026-09-honest-answer-ledger-decisions.md) § 2.2), and the parity test with the study's frozen RQ3 on its records | none — nothing runs inside a run | — |
+| 1 | **The standing, as a pure reader ($0)** | `assessment/assess.ts` · `assessAnswer` over recordings, from EXISTING rows only (coverage, ledger, `unsupportedValues`): the four values, the rendering, the reasons marked "1" in § 4.2; the one emptiness reader `agent/emptiness.ts` · `readEmptiness`, shared with the `/observe` answer account and its described template ([results.md](results.md) § 5.2); `howSure.ts` reads it; the lens chip. **First**, before anything else in the step: the confusion table of the fold against the oracle over the retained recorded runs ([decisions memo](../2026-09-honest-answer-ledger-decisions.md) § 2.2), and the parity test with the study's frozen RQ3 on its records | none — nothing runs inside a run | — |
 | 2 | **Inputs bench and baseline** | provoking cases and controls, the unarmed baseline, the registered rule (§ 6) | bench only; owner budget | — |
 | 3 | **Inputs layer: assume** | `arguments/` (declare, resolve, rows, serve); `askOrAssume` with `assume` only — an `ask` rule is refused at definition until step 4, so no declaration promises what the library cannot yet do; `Tool.period` (`ToolPeriod`, owned by `arguments/`, arguments note R8); MCP carriage of both in `McpToolExtras`; the schema decoration at the one site (`core/slots/buildToolsSlot.ts` · `commitWire`, and `stages/seed.ts`'s `dynamicToolSchemas` twin) — `mergeWire` must also return the winning TOOL per served name (it returns only `winners`, name → party, today), and a name with no known tool is not decorated (the dispatch re-read is the guard); the inputs subflow and its mount; `appendRows`; the fills in ToolCalls; the `argument` row kind, its checkpoint arm, the widened restore and the `turn` stamp; the result note and the tool-bytes boundary the evidence index reads through (§ 3.2 (c)); the declared defaults in the gate's exempt corpus; the argument event (names and enums only); the "Assumed" line under an existing `.limitsTravelWithTheAnswer()`; the two doc-comment updates (`core/checkin.ts` · `CheckInRequest.args` now carries filled values; `agent.findings()` returns rows without `.findings()`) | a tool declares `askOrAssume` (and `.inputsLayer()` for ruled tools only a ToolProvider serves — arguments note R11, adopted 2026-09-27) | 2 |
 | 4 | **Inputs layer: ask for missing values** | the batch ask, the pause and resume inside the layer, `answered` rows, the stamp change for a batch origin, the `argumentAskContext` hook (or the statement), `build/input-requests.mdx`; the needless-ask measurement on the step-2 cases; answered values join the gate's exempt corpus (arguments note R9) | an `ask` rule | 3 |

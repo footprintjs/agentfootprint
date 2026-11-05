@@ -1485,7 +1485,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       runnerId: this.id,
       compositionPath: [`Agent:${this.id}`],
       initialize: () => {
-        const values = createAgentRunValues({ window: this.windowStrategy !== undefined });
+        const values = createAgentRunValues({
+          window: this.windowStrategy !== undefined,
+          answerLayer: this.answerLayerOption !== undefined,
+        });
         this.beginIntegrityLedger(values);
         return values;
       },
@@ -3876,18 +3879,15 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         composeInvariant: this.mapsPlan !== undefined,
         dangling: this.integrityDanglingPresent,
         claim: this.claimContract !== undefined,
-        // TWO HALVES (9.77.0): the operator's dial AND a declaration to arm
-        // on. Either alone leaves a registered `not-applicable` row.
+        // TWO HALVES (9.77.0): the operator's dial AND a declaration to arm on.
         emptyLookup: this.noticeEmptyLookups && this.integrityDanglingPresent,
         // TWO HALVES (9.78.0), the same law: the operator's dial off `'off'`
-        // AND a tool declaring `resultColumns`. Either alone leaves two
-        // registered `not-applicable` rows.
+        // AND a tool declaring `resultColumns`.
         columnTypes: this.checkColumnTypes !== 'off' && this.integrityColumnsPresent,
         // TWO HALVES (9.83.0), and here the second is structural rather than
         // a policy choice: the evidence gate owns the extractor that decides
         // which tokens in an answer are values, so a dial with no gate has
-        // nothing whose provenance it could read. Either alone leaves a
-        // registered `not-applicable` row.
+        // nothing whose provenance it could read.
         priorTurnEvidence: this.noticePriorTurnEvidence && this.evidenceGate !== undefined,
       },
       this.integrityPosture,

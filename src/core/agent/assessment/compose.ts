@@ -50,9 +50,10 @@ import type {
  * (`NAMED_REASON_WORDS`) and the assumed clause's named form — said only for a
  * call whose tool declares a `displayName`; every version-1 line is unchanged.
  * 3: the `script-unmatched` clause and the `script-match` check's word; every
- * version-2 line is unchanged.
+ * version-2 line is unchanged. 4: the integrity findings' and the unsettled
+ * claim's clauses; every version-3 line is unchanged.
  */
-export const STANDING_LINE_VERSION = 3;
+export const STANDING_LINE_VERSION = 4;
 
 /**
  * WHEN the line is said — `.answerLayer({ standingLine: { when } })`:
@@ -308,6 +309,12 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'stopped-early': 'the run stopped before the model finished',
   'steps-unfinished': "the answer came before the skill's declared steps finished",
   'negative-prose-unverified': 'model prose was not verified for negative claims',
+  'invariant-violation': "the tools offered to the model contradict the run's own record of them",
+  'unsupported-argument': 'a value a call ran with appears nowhere the run served the model',
+  'column-type-mismatch': "a tool's rows hold a different type than the tool declares",
+  'missing-column': 'a column a tool declares is in none of its rows',
+  'unsupported-claim': "a field of the answer does not agree with a fact the run's tools settled",
+  'claim-unsettled': 'the answer states a fact no tool settled',
   'claim-exceeds-search': 'a negative claim exceeds the recorded search',
   'declaration-overclaimed': 'a tool declaration overstates what was checked',
   'answer-check-failed': "the app's answer checks failed this answer",
@@ -349,6 +356,9 @@ const NAMED_REASON_WORDS: Readonly<
     `${who} asked about time older than the source is declared to keep`,
   'sources-conflict': (who) => `results from ${who} disagree`,
   'declaration-overclaimed': (who) => `${who} declared more than was checked`,
+  'unsupported-argument': (who) => `${who} ran with a value the run never served the model`,
+  'column-type-mismatch': (who) => `${who} returned rows with a different type than declared`,
+  'missing-column': (who) => `${who} returned rows without a declared column`,
 };
 
 /**

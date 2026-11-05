@@ -704,6 +704,13 @@ describe('UNIT — the reason table', () => {
       'negative-prose-unverified',
       'claim-exceeds-search',
       'declaration-overclaimed',
+      // Integrity findings on the record, and a `.claims()` field no tool settled.
+      'invariant-violation',
+      'unsupported-argument',
+      'column-type-mismatch',
+      'missing-column',
+      'unsupported-claim',
+      'claim-unsettled',
     ];
     expect([...REASONS.map((r) => r.reason)].sort()).toEqual([...union].sort());
     expect(REASONS.filter((r) => r.class === 'ask').map((r) => r.reason)).toEqual([

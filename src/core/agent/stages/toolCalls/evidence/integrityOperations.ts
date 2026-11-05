@@ -88,7 +88,7 @@ export function buildToolIntegrityOperations(
     // (`sizeChars`, `maxChars`), and reusing it here would put a fabricated
     // ceiling on the record to describe a refusal that had nothing to do
     // with size.
-    fileIntegrityFindings(scope, findings, call.iteration);
+    fileIntegrityFindings(scope, findings, call.iteration, deps.integrityLedger);
     return refusal;
   };
 
@@ -161,7 +161,7 @@ export function buildToolIntegrityOperations(
       disposition,
       disposition === 'checked-fail' ? Date.now() : undefined,
     );
-    fileIntegrityFindings(scope, findings, call.iteration);
+    fileIntegrityFindings(scope, findings, call.iteration, deps.integrityLedger);
   };
 
   return { judgeColumns, noticeEmptyLookup };
