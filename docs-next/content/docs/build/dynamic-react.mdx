@@ -25,7 +25,7 @@ This is the **on-tool-return** trigger from the [4-trigger taxonomy](doc:key-con
 
 The agent's flowchart loops through a sequence of stages: **InjectionEngine → System Prompt → Messages → Tools → CallLLM → Route**. Each iteration starts at InjectionEngine — every trigger re-evaluates against the freshest context (the just-appended tool result, the new iteration count, any newly-activated skill). Then the slot subflows recompose the system prompt, the messages, and the tools list from the active injection set. The LLM sees a freshly-composed prompt + tool list every iteration.
 
-This means tool results reshape the next iteration's prompt + tool list + active skills. **That's the differentiator** vs frameworks that compose context once and reuse it across iterations.
+This means tool results reshape the next iteration's prompt + tool list + active skills.
 
 Here is that same agent drawn as **raw footprintjs subflows** — no agent vocabulary, just the plain stages the executor traverses. The three context slots (`sf-system-prompt` ∥ `sf-messages` ∥ `sf-tools`) are a real parallel fan-out; `sf-injection-engine` decides what each one composes. Drill into a box to see its internals. This is the "library of libraries" layer underneath the agent — the agent abstraction is *built on* these footprintjs subflows.
 

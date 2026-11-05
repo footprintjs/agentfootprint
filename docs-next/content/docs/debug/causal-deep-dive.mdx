@@ -13,7 +13,7 @@ Causal memory adds the fourth: **the agent itself reads the trace.** Six months 
 
 <Diagram name="causal-memory" alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out (audit replay, cheap-model triage, training data export). The fourth, novel: the agent reads its own trace via causal memory." />
 
-This is the differentiator no other framework on the market has today. Other frameworks' memory remembers what was *said* — ours remembers what was *decided*.
+Causal memory remembers what was *decided*, not only what was *said*.
 
 ## What gets persisted
 
@@ -172,7 +172,7 @@ The same JSON snapshot shape feeds SFT / DPO / process-RL training pipelines. Pr
 
 The export API (`causalMemory.exportForTraining({ format: 'sft' | 'dpo' | 'process-rl' })`) is roadmap work — tracked in [GitHub issues](https://github.com/footprintjs/agentfootprint/issues). The snapshot shape that makes it possible is shipping today; the export wrapper is the missing 200 lines.
 
-**One recording, three economics.** No other framework on the market has this shape.
+**One recording, three economics.**
 
 ## Anti-patterns
 
