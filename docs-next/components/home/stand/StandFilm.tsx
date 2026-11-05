@@ -1,9 +1,10 @@
 'use client';
 
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { CHAPTER_IDS, CHAPTER_LETTER, CHAPTER_NEXT, COPY } from './copy';
 import { FilmStage } from './FilmStage';
-import { RAIL, T } from './timeline';
+import { LINE, RAIL, T } from './timeline';
 import { useStandView, ViewSwitch } from './StandView';
 
 const load = () => import('./homeFilm').then(({ bootHomeFilm }) => bootHomeFilm);
@@ -31,22 +32,39 @@ export function StandFilm() {
           <h1>
             Build agents you can <em>hold to the record.</em>
           </h1>
-          <p className="sf-tag">The model can say anything. The record shows what it rests on.</p>
           <p className="sf-lede" key={view}>
             {copy.hero.lede}
           </p>
           <div className="sf-actions">
-            <button type="button" className="v2-button v2-button-primary" data-film-play data-play-idle="Play the film">
-              <span data-play-label>Play the film</span>
+            <button
+              type="button"
+              className="v2-button v2-button-primary"
+              data-film-play
+              data-play-idle="Play to know more"
+            >
+              <span data-play-label>Play to know more</span>
             </button>
             <Link className="v2-button v2-button-quiet" href="#stand-code" prefetch={false}>
               See the code <span aria-hidden="true">↓</span>
             </Link>
           </div>
           <p className="sf-hint" aria-hidden="true">
-            <span className="sf-mouse" /> Scroll to play it
+            <span className="sf-steps">
+              <i />
+              <i />
+            </span>
+            Scroll to see how
           </p>
         </>
+      }
+      line={
+        <p className="sf-line" aria-hidden="true">
+          {LINE.map(({ text, on }) => (
+            <Fragment key={text}>
+              <span data-lit={on.join(' ')}>{text}</span>{' '}
+            </Fragment>
+          ))}
+        </p>
       }
       caps={CHAPTER_IDS.map((id) => {
         const next = CHAPTER_NEXT[id];

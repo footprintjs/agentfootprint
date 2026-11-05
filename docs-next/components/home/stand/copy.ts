@@ -219,7 +219,7 @@ const BUSINESS_CHAIN: FilmLabels['chain'] = [
 export const COPY: Readonly<Record<ViewKey, ViewCopy>> = {
   product: {
     hero: {
-      lede: 'An agent framework that compares the model’s claims with a record of what actually ran. You choose the checks and decide what happens next.',
+      lede: 'An agent framework that compares the model’s claims with what actually ran, during the run. You choose the checks and what happens next.',
     },
     chain: PRODUCT_CHAIN,
     caps: {

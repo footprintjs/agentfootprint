@@ -12,13 +12,23 @@ import { test } from 'node:test';
 import { Agent, LLMCall, absent, defineTool, describedResult, llmSwarm } from 'agentfootprint';
 import { accountForAnswer, assessAnswer, recordRun } from 'agentfootprint/observe';
 import { mock } from 'agentfootprint/providers';
-import { PermissionPolicy, REDACTED_PLACEHOLDER, conversationRedaction } from 'agentfootprint/security';
+import {
+  PermissionPolicy,
+  REDACTED_PLACEHOLDER,
+  conversationRedaction,
+} from 'agentfootprint/security';
 import { CASES, CODE_SECTION, REAL, UNIVERSE } from '../../components/home/stand/copy';
+import { LINE } from '../../components/home/stand/timeline';
 import { runAnswerCheckDemo } from '../../components/demos/answerCheckDemo';
 import { ANSWER_CHECK_FIXTURES } from '../../components/demos/answerCheckFixtures';
 import { SCENE_QUOTES } from '../../components/features/sceneQuotes';
 import { buildRouteSet } from '../../lib/doc-ids.mjs';
-import { ADAPTER_PAGES, ADAPTER_ROWS, SESSION_STORES_PAGE, adapterName } from '../../lib/features/adapters';
+import {
+  ADAPTER_PAGES,
+  ADAPTER_ROWS,
+  SESSION_STORES_PAGE,
+  adapterName,
+} from '../../lib/features/adapters';
 import { FEATURES_ALSO, FEATURE_BEATS } from '../../lib/features/beats';
 
 const refundRows = () =>
@@ -147,7 +157,9 @@ test('contradiction: the finding, then withheld, with no re-ask and nothing stre
     .build();
   const findings: string[] = [];
   let tokens = 0;
-  agent.on('agentfootprint.integrity.context_error', (e) => findings.push(String(e.payload.message)));
+  agent.on('agentfootprint.integrity.context_error', (e) =>
+    findings.push(String(e.payload.message)),
+  );
   agent.on('agentfootprint.stream.token', () => {
     tokens += 1;
   });
@@ -197,7 +209,9 @@ test('known: an agreeing typed answer and a check you wrote that passed', async 
 
 test('an action that never ran: your check reads the run and fails the answer', async () => {
   const agent = Agent.create({
-    provider: mock({ replies: [callRefund, { content: JSON.stringify({ order: 'A-1042', action: 'issued' }) }] }),
+    provider: mock({
+      replies: [callRefund, { content: JSON.stringify({ order: 'A-1042', action: 'issued' }) }],
+    }),
     model: 'mock',
   })
     .tool(refundRows())
@@ -235,14 +249,20 @@ test('an action that never ran: your check reads the run and fails the answer', 
 
 test('ask: a value only the person can give pauses before the tool runs', async () => {
   const agent = Agent.create({
-    provider: mock({ replies: [{ toolCalls: [{ id: 'c1', name: 'get_refund', args: {} }] }, { content: 'x' }] }),
+    provider: mock({
+      replies: [{ toolCalls: [{ id: 'c1', name: 'get_refund', args: {} }] }, { content: 'x' }],
+    }),
     model: 'mock',
   })
     .tool(
       defineTool({
         name: 'get_refund',
         description: 'Refund status for an order',
-        inputSchema: { type: 'object', required: ['order'], properties: { order: { type: 'string', enum: ['A-1042', 'A-1077'] } } },
+        inputSchema: {
+          type: 'object',
+          required: ['order'],
+          properties: { order: { type: 'string', enum: ['A-1042', 'A-1077'] } },
+        },
         askOrAssume: { order: { ask: REAL.ask, choices: ['A-1042', 'A-1077'] } },
         execute: () => [],
       }),
@@ -269,7 +289,9 @@ test('explain this answer: the lines shown, its two reasons, and who vouches', a
   await agent.run({ message: REAL.question });
   const account = accountForAnswer(JSON.parse(JSON.stringify(rec.toRecording())));
   rec.stop();
-  const lines = account.rows.flatMap((row) => row.lines.map((line) => `${line.source}|${line.text}`));
+  const lines = account.rows.flatMap((row) =>
+    row.lines.map((line) => `${line.source}|${line.text}`),
+  );
   for (const want of [
     `tool:search_bank|${REAL.accountChecked}`,
     `tool:search_bank|${REAL.accountCheckedItem}`,
@@ -285,9 +307,9 @@ test('explain this answer: the lines shown, its two reasons, and who vouches', a
 });
 
 /** Runs a sample exactly as the page shows it, with only its imports supplied. */
-const AsyncFunction = (async () => {}).constructor as new (
-  ...args: string[]
-) => (...args: unknown[]) => Promise<ReturnType<ReturnType<typeof Agent.create>['build']>>;
+const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (
+  ...args: unknown[]
+) => Promise<ReturnType<ReturnType<typeof Agent.create>['build']>>;
 const runSample = (code: string, scope: Record<string, unknown>) =>
   new AsyncFunction(...Object.keys(scope), `${code.replace(/^import .*$/gm, '')}\nreturn agent;`)(
     ...Object.values(scope),
@@ -336,7 +358,9 @@ test('the answer layer adds nothing to what the model is sent', async () => {
         return seen.length === 1 ? callRefund : { content: CASES.consistent };
       },
     });
-    const builder = Agent.create({ provider, model: 'mock' }).system('Answer from the tools.').tool(refundRows());
+    const builder = Agent.create({ provider, model: 'mock' })
+      .system('Answer from the tools.')
+      .tool(refundRows());
     const agent = layer ? builder.answerLayer({ standingLine: true }).build() : builder.build();
     await agent.run({ message: REAL.question });
     return seen;
@@ -348,7 +372,8 @@ test('one draft, three outcomes: the check reads the record, so the same words c
   const drafts = new Set(ANSWER_CHECK_FIXTURES.map((fixture) => JSON.stringify(fixture.draft)));
   assert.equal(drafts.size, 1, 'the demo must keep one draft for this claim to hold');
   const statuses = [];
-  for (const fixture of ANSWER_CHECK_FIXTURES) statuses.push((await runAnswerCheckDemo(fixture)).report.status);
+  for (const fixture of ANSWER_CHECK_FIXTURES)
+    statuses.push((await runAnswerCheckDemo(fixture)).report.status);
   assert.deepEqual(statuses, ['passed', 'unverified', 'failed']);
 });
 
@@ -450,19 +475,27 @@ const exportedNames = async () => {
   return new Set(doors.flatMap((door) => Object.keys(door)));
 };
 
-const docPage = (page: string) => readFileSync(new URL(`../../content/docs/${page}.mdx`, import.meta.url), 'utf8');
+const docPage = (page: string) =>
+  readFileSync(new URL(`../../content/docs/${page}.mdx`, import.meta.url), 'utf8');
 
 test('the Features scenes name real APIs', async () => {
   const exported = await exportedNames();
-  for (const name of SCENE_QUOTES.exports) assert.ok(exported.has(name), `${name} is not exported by any door`);
+  for (const name of SCENE_QUOTES.exports)
+    assert.ok(exported.has(name), `${name} is not exported by any door`);
   const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' }).build();
   for (const name of SCENE_QUOTES.methods) {
-    assert.equal(typeof (agent as unknown as Record<string, unknown>)[name], 'function', `${name} is not on an agent`);
+    assert.equal(
+      typeof (agent as unknown as Record<string, unknown>)[name],
+      'function',
+      `${name} is not on an agent`,
+    );
   }
 });
 
 /* A name on a Features section is a claim, so each one says what it rests on: real exports, or the docs page that uses the word. */
-const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; readonly doc?: readonly [string, RegExp] }>> = {
+const KNOWN_AS: Readonly<
+  Record<string, { readonly code?: readonly string[]; readonly doc?: readonly [string, RegExp] }>
+> = {
   'ReAct loop': { doc: ['getting-started/key-concepts', /ReAct/] },
   'loop engineering': { doc: ['build/loop-moments', /moments of the loop/i] },
   chains: { code: ['Sequence'], doc: ['build/workflow', /chains/i] },
@@ -476,12 +509,18 @@ const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; rea
   'prompt engineering': { code: ['defineInstruction'] },
   'progressive disclosure': { doc: ['build/skills', /progressive disclosure/i] },
   'context engineering': { doc: ['getting-started/key-concepts', /context engineering/i] },
-  'long-term memory': { code: ['defineMemory'], doc: ['infrastructure/memory-and-stores', /long-term memory/i] },
+  'long-term memory': {
+    code: ['defineMemory'],
+    doc: ['infrastructure/memory-and-stores', /long-term memory/i],
+  },
   'episodic and semantic memory': { doc: ['build/memory', /episodic[\s\S]*semantic/i] },
   RAG: { code: ['defineRAG'] },
   ontology: { code: ['defineOntology'] },
   SKOS: { code: ['fromSkos', 'toSkos'] },
-  'data references': { code: ['inMemoryArtifacts'], doc: ['build/artifacts', /refs as tool arguments/] },
+  'data references': {
+    code: ['inMemoryArtifacts'],
+    doc: ['build/artifacts', /refs as tool arguments/],
+  },
   'claim check': { doc: ['build/artifacts', /claim-check/] },
   'time awareness': { doc: ['build/time', /run clock/] },
   'model-agnostic': { doc: ['build/custom-provider', /LLMProvider/] },
@@ -494,7 +533,9 @@ const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; rea
   'ports and adapters': { doc: ['infrastructure/index', /ports-&-adapters/] },
   'hexagonal architecture': { doc: ['reference/strategy-everywhere', /Hexagonal/] },
   plugins: { doc: ['build/loop-moments', /a plugin, a policy pack/] },
-  'bring your own adapter': { doc: ['infrastructure/memory-and-stores', /Writing your own adapter/] },
+  'bring your own adapter': {
+    doc: ['infrastructure/memory-and-stores', /Writing your own adapter/],
+  },
   MCP: { code: ['mcpClient', 'mcpServe'] },
   A2A: { code: ['a2aWire'] },
   'behind your LLM gateway': { code: ['invokeModelGateway'] },
@@ -528,8 +569,10 @@ test('every name a Features section goes by has something real behind it', async
     for (const { name } of beat.knownAs) {
       const backing = KNOWN_AS[name];
       assert.ok(backing, `"${name}" on ${beat.verb} says nothing about what it rests on`);
-      for (const code of backing.code ?? []) assert.ok(exported.has(code), `${name}: ${code} is not exported by any door`);
-      if (backing.doc) assert.match(docPage(backing.doc[0]), backing.doc[1], `${name}: not in ${backing.doc[0]}`);
+      for (const code of backing.code ?? [])
+        assert.ok(exported.has(code), `${name}: ${code} is not exported by any door`);
+      if (backing.doc)
+        assert.match(docPage(backing.doc[0]), backing.doc[1], `${name}: not in ${backing.doc[0]}`);
     }
   }
 });
@@ -538,11 +581,28 @@ test('the ADAPT table names real adapters and real ports', async () => {
   const exported = await exportedNames();
   const ports = docPage('infrastructure/index');
   for (const row of ADAPTER_ROWS) {
-    const cells = [...(row.aws ?? []), ...(row.google ?? []), ...(row.azure ?? []), ...(row.local ?? []), ...(row.everywhere ? [row.everywhere] : [])];
-    for (const cell of cells) assert.ok(exported.has(adapterName(cell)), `${row.port}: ${adapterName(cell)} is not exported by any door`);
-    for (const port of row.yours) assert.ok(ports.includes(`\`${port}\``), `${row.port}: ${port} is not in the docs' list of ports`);
+    const cells = [
+      ...(row.aws ?? []),
+      ...(row.google ?? []),
+      ...(row.azure ?? []),
+      ...(row.local ?? []),
+      ...(row.everywhere ? [row.everywhere] : []),
+    ];
+    for (const cell of cells)
+      assert.ok(
+        exported.has(adapterName(cell)),
+        `${row.port}: ${adapterName(cell)} is not exported by any door`,
+      );
+    for (const port of row.yours)
+      assert.ok(
+        ports.includes(`\`${port}\``),
+        `${row.port}: ${port} is not in the docs' list of ports`,
+      );
   }
-  assert.ok(exported.has('runSessionLifecycleConformance'), 'the table points a session store you write at this');
+  assert.ok(
+    exported.has('runSessionLifecycleConformance'),
+    'the table points a session store you write at this',
+  );
 });
 
 test('PROTECT: the record drops the message, the model still receives it, and a recording keeps the answer', async () => {
@@ -562,14 +622,21 @@ test('PROTECT: the record drops the message, the model still receives it, and a 
     sent.some((request) => request.includes(secret)),
     'the page says the model still receives it',
   );
-  const snapshot = agent.getLastSnapshot() as unknown as { sharedState: Record<string, unknown>; executionTree: unknown };
+  const snapshot = agent.getLastSnapshot() as unknown as {
+    sharedState: Record<string, unknown>;
+    executionTree: unknown;
+  };
   const recording = JSON.stringify(recorder.toRecording());
   assert.ok(!JSON.stringify(snapshot).includes(secret), 'the page says the record does not');
   assert.ok(!recording.includes(secret), 'nor does a saved recording');
-  assert.ok(recording.includes(answer), 'the page says a saved recording still carries the final answer');
+  assert.ok(
+    recording.includes(answer),
+    'the page says a saved recording still carries the final answer',
+  );
   /* Two forms, both by design: the state reads REDACTED, and the steps of the run read [REDACTED], which the scene shows. */
   const [hidden1, hidden2, hidden3, kept] = SCENE_QUOTES.recordKeys;
-  for (const key of [hidden1, hidden2, hidden3]) assert.equal(snapshot.sharedState[key], 'REDACTED', `${key} should read as redacted`);
+  for (const key of [hidden1, hidden2, hidden3])
+    assert.equal(snapshot.sharedState[key], 'REDACTED', `${key} should read as redacted`);
   assert.ok(JSON.stringify(snapshot.executionTree).includes(REDACTED_PLACEHOLDER));
   assert.equal(typeof snapshot.sharedState[kept], 'number', `${kept} should stay readable`);
 });
@@ -589,11 +656,18 @@ test('PROTECT: a role without the tool is refused, and the tool does not run', a
   const provider = mock({
     respond() {
       calls += 1;
-      return calls === 1 ? { content: '', toolCalls: [{ id: 'c1', name: 'process_refund', args: {} }] } : { content: 'I cannot do that.' };
+      return calls === 1
+        ? { content: '', toolCalls: [{ id: 'c1', name: 'process_refund', args: {} }] }
+        : { content: 'I cannot do that.' };
     },
   });
-  const policy = PermissionPolicy.fromRoles({ readonly: ['lookup_order'], support: ['lookup_order', 'process_refund'] }, 'readonly');
-  const agent = Agent.create({ provider, model: 'mock', permissionChecker: policy }).tool(refund).build();
+  const policy = PermissionPolicy.fromRoles(
+    { readonly: ['lookup_order'], support: ['lookup_order', 'process_refund'] },
+    'readonly',
+  );
+  const agent = Agent.create({ provider, model: 'mock', permissionChecker: policy })
+    .tool(refund)
+    .build();
   const results: unknown[] = [];
   agent.on('agentfootprint.permission.check', (event) => results.push(event.payload.result));
   await agent.run({ message: 'refund it' });
@@ -618,10 +692,18 @@ test('BUILD: a router picks a specialist, is asked again, and finishes', async (
   const router = mock({
     respond() {
       routerCalls += 1;
-      return { content: JSON.stringify(routerCalls === 1 ? { agentId: 'billing', message: 'handle this' } : { message: 'All done.' }) };
+      return {
+        content: JSON.stringify(
+          routerCalls === 1
+            ? { agentId: 'billing', message: 'handle this' }
+            : { message: 'All done.' },
+        ),
+      };
     },
   });
-  const tech = LLMCall.create({ provider: mock({ reply: '[tech] ok' }), model: 'mock' }).system('tech').build();
+  const tech = LLMCall.create({ provider: mock({ reply: '[tech] ok' }), model: 'mock' })
+    .system('tech')
+    .build();
   const desk = llmSwarm({
     provider: router,
     model: 'mock',
@@ -657,7 +739,10 @@ test('WATCH logs the events a run really fires, in that order', async () => {
       return calls === 1 ? twoTools : { content: 'The answer.' };
     },
   });
-  const agent = Agent.create({ provider, model: 'mock' }).tool(tool('search')).tool(tool('read')).build();
+  const agent = Agent.create({ provider, model: 'mock' })
+    .tool(tool('search'))
+    .tool(tool('read'))
+    .build();
   const fired: string[] = [];
   for (const type of new Set(SCENE_QUOTES.events)) agent.on(type, () => fired.push(type));
   await agent.run({ message: 'go' });
@@ -667,14 +752,26 @@ test('WATCH logs the events a run really fires, in that order', async () => {
 /* A site page or a docs page, whichever the link says. */
 const assertRealLink = (routes: Set<string>, href: string) => {
   const path = href.split('#')[0]!;
-  if (path.startsWith('/docs')) assert.ok(routes.has(path), `${href} is not a page in content/docs`);
-  else assert.ok(existsSync(new URL(`../../app/(home)${path}/page.tsx`, import.meta.url)), `${href} is not a page on the site`);
+  if (path.startsWith('/docs'))
+    assert.ok(routes.has(path), `${href} is not a page in content/docs`);
+  else
+    assert.ok(
+      existsSync(new URL(`../../app/(home)${path}/page.tsx`, import.meta.url)),
+      `${href} is not a page on the site`,
+    );
 };
 
 test('every link on Features goes to a real page', () => {
   const routes = buildRouteSet();
   const tags = FEATURE_BEATS.flatMap((beat) => beat.knownAs);
-  for (const { href } of [...FEATURE_BEATS, ...tags, ...FEATURES_ALSO, ...ADAPTER_PAGES, { href: SESSION_STORES_PAGE }]) assertRealLink(routes, href);
+  for (const { href } of [
+    ...FEATURE_BEATS,
+    ...tags,
+    ...FEATURES_ALSO,
+    ...ADAPTER_PAGES,
+    { href: SESSION_STORES_PAGE },
+  ])
+    assertRealLink(routes, href);
 });
 
 test('SHOW names AG-UI events a run really produces, in that order', async () => {
@@ -683,10 +780,17 @@ test('SHOW names AG-UI events a run really produces, in that order', async () =>
   const provider = mock({
     respond() {
       calls += 1;
-      return calls === 1 ? { content: '', toolCalls: [{ id: 'c1', name: 'get_refund', args: {} }] } : { content: 'Still pending.' };
+      return calls === 1
+        ? { content: '', toolCalls: [{ id: 'c1', name: 'get_refund', args: {} }] }
+        : { content: 'Still pending.' };
     },
   });
-  const tool = defineTool({ name: 'get_refund', description: 'look up', inputSchema: { type: 'object', properties: {} }, execute: () => 'pending' });
+  const tool = defineTool({
+    name: 'get_refund',
+    description: 'look up',
+    inputSchema: { type: 'object', properties: {} },
+    execute: () => 'pending',
+  });
   const agent = Agent.create({ provider, model: 'mock' }).tool(tool).build();
   const serializer = agUiSerializer({ threadId: 't1', runId: 'r1' });
   const types: string[] = [];
@@ -696,6 +800,23 @@ test('SHOW names AG-UI events a run really produces, in that order', async () =>
   await agent.run({ message: 'go' });
   for (const out of serializer.settle({ kind: 'finished' })) types.push(String(out.type));
   const positions = SCENE_QUOTES.agUi.map((name) => types.indexOf(name));
-  assert.ok(positions.every((at) => at >= 0), `missing from ${types.join(' ')}`);
-  assert.deepEqual(positions, [...positions].sort((a, b) => a - b), `out of order in ${types.join(' ')}`);
+  assert.ok(
+    positions.every((at) => at >= 0),
+    `missing from ${types.join(' ')}`,
+  );
+  assert.deepEqual(
+    positions,
+    [...positions].sort((a, b) => a - b),
+    `out of order in ${types.join(' ')}`,
+  );
+});
+
+test('the line that heads the film is the page title, and every word has a part to light for', () => {
+  assert.equal(LINE.map(({ text }) => text).join(' '), 'Build agents you can hold to the record.');
+  const film = readFileSync(
+    new URL('../../components/home/stand/StandFilm.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(film, /Build agents you can <em>hold to the record\.<\/em>/);
+  for (const { text, on } of LINE) assert.ok(on.length > 0, text);
 });
