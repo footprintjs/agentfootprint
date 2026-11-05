@@ -52,10 +52,10 @@ export default function OpengraphImage() {
               maxWidth: 980,
             }}
           >
-            Build agents whose answers can be checked.
+            Build agents you can hold to the record.
           </div>
           <div style={{ display: 'flex', fontSize: 32, color: '#b8b3a8', maxWidth: 900 }}>
-            Recorded evidence. Explicit uncertainty. Your checks before delivery.
+            FootprintJS keeps the notes. AgentFootprint holds the model to them.
           </div>
         </div>
 

@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { asset } from '@/lib/site';
 import { useHomeView } from '../HomeView';
+import { StandUniverse } from '../stand/StandUniverse';
 
 // Inline GitHub mark (lucide dropped brand icons) — kept local so the summary chapter
 // is self-contained.
@@ -39,18 +39,7 @@ export function SummaryChapter() {
             run, and recorded as a traceable footprint you can reverse.</>
           )}
         </p>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={asset('/system-overview-1000.webp')}
-          srcSet={`${asset('/system-overview-640.webp')} 640w, ${asset('/system-overview-1000.webp')} 1000w, ${asset('/system-overview-1600.webp')} 1600w`}
-          sizes="(max-width: 1048px) calc(100vw - 48px), 1000px"
-          width={1000}
-          height={667}
-          alt="agentfootprint system overview: context sources compose through the agent into the system, messages, and tools slots, then the LLM produces a structured answer"
-          className="af-overview-img"
-          loading="lazy"
-          decoding="async"
-        />
+        <StandUniverse />
       </section>
 
       {/* the payoff — record → reverse → prove → plug, then the call to action */}
@@ -64,14 +53,14 @@ export function SummaryChapter() {
         <p className="af-closer-lede">
           {technical
             ? 'Record inline. Slice backward. Ablate the suspect. Replay the counterfactual.'
-            : 'Record every run. Reverse it to the exact cause. Prove the fix by replaying it.'}
+            : 'Record every run. Reverse it to the exact cause. Test the fix by replaying it.'}
         </p>
         <div className="af-closer-flow" aria-hidden="true">
           <span>record</span>
           <i>→</i>
           <span>reverse</span>
           <i>→</i>
-          <span>prove</span>
+          <span>test</span>
           <i>→</i>
           <span>plug your own</span>
         </div>

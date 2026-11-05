@@ -124,7 +124,7 @@ export function WhyThisTool() {
         {technical ? (
           <>The same footprint supports forward analysis: score candidate tools, surface an ambiguous boundary, revise the description, and rerun the scorer over the unchanged graph.</>
         ) : (
-          <>Backtracking proved <i>why a past run broke.</i> The same recorded panel works <b>forward</b>{' '}
+          <>Backtracking showed <i>why a past run broke.</i> The same recorded panel works <b>forward</b>{' '}
           too — a travel agent picks one of <b>4 tools</b> by their <b>descriptions.</b>{' '}
           <b>Scroll to reveal the scores, sharpen the tie, then swap scorers.</b></>
         )}

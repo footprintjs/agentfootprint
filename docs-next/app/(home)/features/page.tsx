@@ -62,6 +62,7 @@ export default function FeaturesPage() {
           <span className="aff-caret" aria-hidden="true" />
         </div>
         <div className="aff-closelinks">
+          <Link href="/framework">The whole framework, stage by stage →</Link>
           <Link href="/docs">Read the docs →</Link>
           <a href={SITE.repo} target="_blank" rel="noreferrer">
             Star on GitHub →

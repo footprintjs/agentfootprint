@@ -6,6 +6,7 @@ import { HomeViewProvider, HomeViewSwitcher } from '@/components/home/HomeView';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '../home.css';
+import '@/components/home/stand/stand.css';
 import './how-it-works.css';
 
 const TITLE = 'How AgentFootprint works — trace a wrong answer to its cause';
@@ -47,7 +48,7 @@ export default function HowItWorksPage() {
           <h1>Follow a wrong answer all the way back to its cause.</h1>
           <p>
             The homepage gives you the map. This is the full traversal: inspect the answer, rewind
-            through its context, isolate the suspect source, and prove the correction by rerunning
+            through its context, isolate the suspect source, and test the correction by rerunning
             without it.
           </p>
           <div className="af-how-actions">
@@ -59,6 +60,9 @@ export default function HowItWorksPage() {
             </Link>
             <Link className="af-cta-ghost" href="/context-engineering">
               See context take shape →
+            </Link>
+            <Link className="af-cta-ghost" href="/how-it-stands">
+              Before it answers: how it stands →
             </Link>
           </div>
         </section>

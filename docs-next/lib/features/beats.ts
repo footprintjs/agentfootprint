@@ -141,4 +141,4 @@ export const FEATURE_BEATS = [
 export type FeatureBeatId = (typeof FEATURE_BEATS)[number]['id'];
 
 /** The page's one-line promise — the hero's closing statement. */
-export const FEATURES_TAGLINE = 'Agents that explain themselves.';
+export const FEATURES_TAGLINE = 'Agents that show their work.';

@@ -56,6 +56,7 @@ export function SiteHeader() {
   const onDocs = pathname?.startsWith('/docs') ?? false;
   const onFeatures = pathname?.startsWith('/features') ?? false;
   const onHowItWorks = pathname?.startsWith('/how-it-works') ?? false;
+  const onHowItStands = pathname?.startsWith('/how-it-stands') ?? false;
   const [menuOpen, setMenuOpen] = useState(false);
 
   // A drawer that survives navigation is a drawer covering the page you just
@@ -135,6 +136,14 @@ export function SiteHeader() {
             Home
           </Link>
           <Link
+            href="/how-it-stands"
+            prefetch={false}
+            className={`af-sh-link${onHowItStands ? ' on' : ''}`}
+            aria-current={onHowItStands ? 'page' : undefined}
+          >
+            How it stands
+          </Link>
+          <Link
             href="/how-it-works"
             prefetch={false}
             className={`af-sh-link${onHowItWorks ? ' on' : ''}`}
@@ -191,6 +200,9 @@ export function SiteHeader() {
         <nav aria-label="Primary, mobile">
           <Link href="/" prefetch={false} aria-current={onHome ? 'page' : undefined}>
             Home
+          </Link>
+          <Link href="/how-it-stands" prefetch={false} aria-current={onHowItStands ? 'page' : undefined}>
+            How it stands
           </Link>
           <Link href="/how-it-works" prefetch={false} aria-current={onHowItWorks ? 'page' : undefined}>
             How it works

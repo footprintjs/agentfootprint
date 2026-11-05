@@ -1316,88 +1316,6 @@
   }
 }
 
-/* ── The developer's four-stage API map ────────────────────────────────────
-   The rail is both navigation and a compact operating model: each stage names
-   the developer action sequence and the real public APIs that implement it. */
-.v21-phases {
-  position: sticky;
-  /* Sits directly under the docs nav; the spy reads this element's own bottom
-     edge, so the two stay aligned if the nav height ever changes. */
-  top: var(--fd-nav-height, 56px);
-  z-index: 20;
-  backdrop-filter: saturate(140%) blur(8px);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  width: min(var(--v2-max), 100%);
-  margin: 0 auto;
-  padding: 0 var(--v2-pad);
-}
-.v21-phases a {
-  display: grid;
-  grid-template-rows: auto auto auto 1fr;
-  gap: 6px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--bg-elev);
-  color: var(--fg);
-  text-decoration: none;
-  transition: transform 0.18s ease, border-color 0.18s ease;
-}
-.v21-phases a:hover {
-  transform: translateY(-2px);
-  border-color: var(--border-strong);
-}
-.v21-phases a:focus-visible {
-  outline: 3px solid var(--yellow-ink, var(--yellow));
-  outline-offset: 3px;
-}
-.v21-phases span {
-  font-family: var(--v2-mono);
-  font-size: 12px;
-  color: var(--v2-label);
-}
-.v21-phases strong {
-  font-size: clamp(17px, 1.5vw, 20px);
-  font-weight: 760;
-}
-.v21-phases small {
-  color: var(--fg-muted);
-  font-family: var(--v2-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.035em;
-  line-height: 1.4;
-  text-wrap: pretty;
-}
-.v21-phase-apis {
-  align-self: end;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 5px;
-}
-.v21-phase-apis code {
-  max-width: 100%;
-  padding: 4px 7px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--bg) 74%, transparent);
-  color: var(--fg);
-  font-family: var(--v2-mono);
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
-.v21-phase-apis sup {
-  margin-left: 3px;
-  color: var(--yellow-ink);
-  font-size: 8px;
-  font-weight: 900;
-}
-
 /* The phase heading that opens each group, so the strip above has somewhere
    to land and the group reads as one thing rather than loose scenes. */
 .v21-phase-head {
@@ -1413,82 +1331,17 @@
   text-wrap: balance;
 }
 
-@media (max-width: 1100px) {
-  .v21-phases {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
 @media (max-width: 700px) {
-  .v21-phases {
-    grid-template-columns: 1fr;
-  }
   .v21-phase-head {
     padding-top: 44px;
   }
 }
 
 
-/* The phase you are standing in. The marker is a highlighter behind the WORD,
-   not a filled card — a filled card competes with the scenes below it, and the
-   point of the rail is to stay quiet until you look at it. Inactive phases sit
-   back rather than disappearing, so the shape is always readable. */
-/* Inactive phases give up the CARD, not just some opacity — the filled panel is
-   what made all four shout at once. They keep their name legible (the shape of
-   the page must stay readable from anywhere) and let the description recede
-   furthest, since that is detail you only want for where you actually are. */
-.v21-phases a:not(.is-active) {
-  background: transparent;
-  border-color: transparent;
-  opacity: 0.55;
-}
-.v21-phases a:not(.is-active) small {
-  opacity: 0.6;
-}
-.v21-phases a:not(.is-active):hover {
-  opacity: 1;
-  background: var(--bg-elev);
-  border-color: var(--border);
-}
-.v21-phases a:not(.is-active):hover small {
-  opacity: 1;
-}
-.v21-phases a.is-active {
-  border-color: var(--border-strong);
-}
-.v21-phases a.is-active strong {
-  background-image: linear-gradient(var(--yellow), var(--yellow));
-  background-size: 100% 0.5em;
-  background-position: 0 88%;
-  background-repeat: no-repeat;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  padding: 0 3px;
-  margin: 0 -3px;
-}
-.v21-phases a,
-.v21-phases a small,
-.v21-phases a strong {
-  transition: opacity 0.22s ease, background 0.22s ease, background-size 0.22s ease, transform 0.18s ease,
-    border-color 0.18s ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .v21-phases a,
-  .v21-phases a small,
-  .v21-phases a strong {
-    transition: none;
-  }
-}
-
-/* An anchor jump must clear the docs nav AND the sticky rail, or the heading
+/* An anchor jump must clear the docs nav AND the thin stage bar, or the heading
    lands underneath both. */
 html {
-  scroll-padding-top: calc(var(--fd-nav-height, 56px) + 178px);
-}
-@media (max-width: 1100px) {
-  html {
-    scroll-padding-top: calc(var(--fd-nav-height, 56px) + 24px);
-  }
+  scroll-padding-top: calc(var(--fd-nav-height, 56px) + 60px);
 }
 
 
@@ -1528,7 +1381,7 @@ html {
 }
 .lensband-pin {
   position: sticky;
-  top: calc(var(--fd-nav-height, 56px) + 132px);
+  top: calc(var(--fd-nav-height, 56px) + 64px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 28px;
@@ -1688,68 +1541,6 @@ html {
   .lensband-copy li small {
     margin-top: 3px;
   }
-}
-
-
-/* ── The closing invitation ────────────────────────────────────────────────
-   Centred, warm, and the only place on the page where the mascot gets to be
-   the point. The marker lands on "they open DevTools" — the phrase we want a
-   reader to repeat, and the whole reason the analogy is here. */
-.v21-try {
-  width: min(var(--v2-max), 100%);
-  margin: 0 auto;
-  padding: 88px var(--v2-pad) 96px;
-  display: grid;
-  justify-items: center;
-  text-align: center;
-  gap: 14px;
-}
-.v21-try-mascot {
-  width: 140px;
-  height: auto;
-}
-.v21-try h2 {
-  margin: 0;
-  font-size: clamp(30px, 3.4vw, 44px);
-  font-weight: 800;
-  letter-spacing: -0.025em;
-}
-.v21-try p {
-  margin: 0;
-  max-width: 52ch;
-  font-size: clamp(17px, 1.6vw, 20px);
-  line-height: 1.55;
-  color: var(--fg-muted);
-  text-wrap: pretty;
-}
-.v21-try p em {
-  font-style: normal;
-  color: var(--fg);
-  font-weight: 700;
-  background-image: linear-gradient(var(--yellow), var(--yellow));
-  background-size: 100% 0.5em;
-  background-position: 0 88%;
-  background-repeat: no-repeat;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  padding: 0 3px;
-  margin: 0 -3px;
-}
-.v21-try-actions {
-  margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 11px;
-}
-.v21-try-actions code {
-  padding: 12px 18px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 999px;
-  background: var(--bg-elev);
-  font-family: var(--v2-mono);
-  font-size: 14px;
 }
 
 
@@ -2147,35 +1938,6 @@ html {
   }
 }
 
-
-/* ── The phase rail on small screens ───────────────────────────────────────
-   The full API cards remain visible, but stop sticking so they never consume
-   the reading viewport. Two columns become one on a phone. */
-@media (max-width: 1100px) {
-  .v21-phases {
-    position: static;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    padding-block: 4px;
-    backdrop-filter: none;
-  }
-  .v21-phases a {
-    padding: 14px;
-  }
-  .v21-phases a:not(.is-active) {
-    opacity: 0.72;
-    background: transparent;
-  }
-  .v21-phases strong {
-    font-size: 16px;
-  }
-}
-
-@media (max-width: 700px) {
-  .v21-phases {
-    grid-template-columns: 1fr;
-  }
-}
 
 @media (max-height: 760px) and (min-width: 821px) {
   .v2-evolution {

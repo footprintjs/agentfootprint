@@ -40,11 +40,11 @@ export function AnswerCheckDemo() {
           <p className="v2-kicker">Try an answer check</p>
           <h2 id="answer-check-title">Same draft. Different evidence.</h2>
           <p>
-            Run a real agent with a scripted reply. Your app declares the checks; the runtime
-            decides whether that reply can be delivered.
+            This runs the real library, with a scripted reply in place of a live model. Your app
+            sets the rules, and the library applies them to that reply.
           </p>
         </div>
-        <span className={styles.fixtureBadge}>Scripted fixture · no live model</span>
+        <span className={styles.fixtureBadge}>Scripted reply · no live model</span>
       </header>
 
       <fieldset className={styles.scenarios} disabled={running}>
@@ -106,7 +106,7 @@ export function AnswerCheckDemo() {
             <li>Lookup no older than five minutes</li>
             <li>Status and time match the lookup</li>
           </ul>
-          <p className={styles.gap}>Enforce mode · evidence read in the caller’s scope</p>
+          <p className={styles.gap}>Enforce mode · evidence read only for this caller</p>
         </article>
       </div>
 
@@ -115,7 +115,7 @@ export function AnswerCheckDemo() {
           {running ? 'Running the check…' : 'Run answer check'}
           <span aria-hidden="true">→</span>
         </button>
-        <p>Fixed fixture clock: 15 Jan 2026, 12:02 UTC. Nothing is refunded.</p>
+        <p>Fixed clock: 15 Jan 2026, 12:02 UTC. Nothing is refunded.</p>
       </div>
 
       <div className={styles.output} aria-live="polite" aria-atomic="true" aria-busy={running}>
