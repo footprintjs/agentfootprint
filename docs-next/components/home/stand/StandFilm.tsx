@@ -36,6 +36,14 @@ export function StandFilm() {
             {copy.hero.lede}
           </p>
           <div className="sf-actions">
+            <button
+              type="button"
+              className="v2-button v2-button-primary"
+              data-film-play
+              data-play-idle="Play to know more"
+            >
+              <span data-play-label>Play to know more</span>
+            </button>
             <Link className="v2-button v2-button-quiet" href="#stand-code" prefetch={false}>
               See the code <span aria-hidden="true">↓</span>
             </Link>
