@@ -1,7 +1,7 @@
 import { source } from '@/lib/source';
 import { createSearchAPI } from 'fumadocs-core/search/server';
 import type { AdvancedIndex } from 'fumadocs-core/search/server';
-import { CHAPTERS_META } from '@/lib/chapters';
+import { SITE_NAV, isNavGroup } from '@/lib/site-nav';
 import { orderSearchIndexes } from '@/lib/search-index-order.mjs';
 
 // Static search index for the exported (GitHub Pages) site. Prerendered to a single
@@ -57,20 +57,22 @@ const docsIndexes: AdvancedIndex[] = source.getPages().map((page) => {
   };
 });
 
-// The 5 homepage chapters, derived from the SAME array that drives the sticky bars and the
-// jump-rail (lib/chapters.ts) — so they can never drift. Each remains one page-level result.
-const chapterIndexes: AdvancedIndex[] = CHAPTERS_META.map((c) => ({
-  id: c.id,
-  title: c.ti,
-  description: c.sub,
-  url: `/#${c.id}`,
-  structuredData: {
-    headings: [],
-    contents: [{ heading: undefined, content: `${c.cat}. ${c.sub}` }],
-  },
-}));
+// The site's own pages, from the same list that drives the menu, so search and the menu can never drift.
+// Each is one page-level result, found by its name or the question it answers.
+const pageIndexes: AdvancedIndex[] = SITE_NAV.flatMap((item) => (isNavGroup(item) ? item.children : [item]))
+  .filter((page) => page.href !== '/docs')
+  .map((page) => ({
+    id: `page:${page.href}`,
+    title: page.label,
+    description: page.question,
+    url: page.href,
+    structuredData: {
+      headings: [],
+      contents: [{ heading: undefined, content: page.question }],
+    },
+  }));
 
 export const { staticGET: GET } = createSearchAPI('advanced', {
   language: 'english',
-  indexes: orderSearchIndexes([...docsIndexes, ...chapterIndexes]),
+  indexes: orderSearchIndexes([...docsIndexes, ...pageIndexes]),
 });

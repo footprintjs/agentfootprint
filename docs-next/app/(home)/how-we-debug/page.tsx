@@ -92,13 +92,6 @@ export default function HowWeDebugPage() {
           >
             Read the debugging guide <span aria-hidden="true">→</span>
           </Link>
-          <Link
-            className="v2-button v2-button-quiet"
-            href="/how-we-debug/walkthrough"
-            prefetch={false}
-          >
-            The full walkthrough <span aria-hidden="true">→</span>
-          </Link>
           <Link className="v2-button v2-button-quiet" href="/how-it-stands" prefetch={false}>
             Before it answers: how it stands <span aria-hidden="true">→</span>
           </Link>
