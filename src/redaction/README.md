@@ -562,6 +562,9 @@ registers these names on the actual native rule before raw writes. It retains se
 metadata only; there is no second redaction engine. `privateCheckpoint.ts` carries
 those names at the raw checkpoint root for direct and mounted resumes. Its reader
 refuses unknown versions, extra fields and selectors outside the fixed grammar.
+`privateCaller.ts` admits the closed caller-policy-or-explicit-none declaration.
+The raw store and returned-checkpoint projection must write that declaration;
+the seed writer also declares it before execution continues.
 
 Caller policy coverage remains independent. A library-private field does not claim
 that a caller supplied a policy, relax an author's mark, or make an unknown mark

@@ -90,6 +90,26 @@ it('plain questions omit the field, while protected runs explicitly declare none
   );
 });
 
+it('an unavailable ordinary member does not invent a private-question refusal', () => {
+  expect(() => declarePendingPrivateAsk(state, () => undefined, false)).not.toThrow();
+  expect(declarePendingPrivateAsk(state, () => undefined, false)).toBeUndefined();
+  expect(declarePendingPrivateAsk(state, () => undefined, true)).toEqual({
+    version: 1,
+    fields: [],
+  });
+});
+
+it('a missing ordinary sibling does not remove the required private member', () => {
+  const current = (name: string) => (name === 'guarded' ? guarded : undefined);
+  expect(() => declarePendingPrivateAsk(state, current, true)).not.toThrow();
+  const declaration = declarePendingPrivateAsk(state, current, true);
+  expect(declaration).toEqual(proof);
+  expect(() => requirePendingPrivateViews(state, declaration, current)).not.toThrow();
+  expect(() => requirePendingPrivateViews(state, declaration, () => undefined)).toThrowError(
+    expect.objectContaining({ code: 'ERR_PRIVATE_ARGUMENT_RECORD' }),
+  );
+});
+
 describe('closed pending declaration', () => {
   it.each([
     null,

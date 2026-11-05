@@ -8,3 +8,5 @@ Migration: dynamically discovered tools with private argument views require a na
 Hypothetical schema-default and time-window prose for a tool with an argument mapper omits values conservatively because it has no actual call context. Real-call notes and rows use the complete filled arguments. Conservative native copy marks retain their privacy effects on resume without becoming caller-policy claims.
 
 A private-only checkpoint explicitly declares that it had no caller policy. Removing a saved caller policy is refused even when internal private selectors remain. A pending private question retains its original field and member names; resuming it after the required tool view disappears is refused before the answer is bound. This checks retained capability, not semantic equality of a replacement view function.
+
+Protect checkpoints at the host boundary: replacing a saved policy with another valid policy or an explicit caller-none declaration cannot be detected by these consistency checks. They do not authenticate the checkpoint.

@@ -116,8 +116,8 @@ export function declarePendingPrivateAsk(
     const members: number[] = [];
     state.fields[index].members.forEach((member, memberIndex) => {
       const tool = toolOf(member.toolName);
-      // A new question with no readable implementation cannot establish a safe declaration.
-      if (tool === undefined) return refuse();
+      // Missing ordinary implementations gain no private declaration. Saved private
+      // members are checked separately before a resumed answer can be bound.
       if (carriesArgumentView(tool)) members.push(memberIndex);
     });
     if (members.length > 0) fields.push({ index, members });

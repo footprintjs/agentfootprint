@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { RedactionRule } from 'footprintjs/advanced';
+import { EventDispatcher } from '../../../events/dispatcher.js';
+import { createRunRedaction, privateFieldsInForce } from '../../../redaction/runRedaction.js';
 import { Agent, Sequence, defineTool, isInputPause } from '../../../index.js';
 import { recordRun } from '../../../observe.js';
 import { SHOWN_ARGS } from '../../toolShownArgs.js';
@@ -6,6 +9,7 @@ import { addPrivateRecordFields } from '../../../redaction/privateFields.js';
 import type { ArgumentAskState } from './ask.js';
 import type { ArgumentResolution } from './resolve.js';
 import {
+  markPrivateAsk,
   privateAskSelections,
   privateKeptSelections,
   privateResolutionSelections,
@@ -109,6 +113,39 @@ it('a missing current declaration cannot declassify a bound answer', () => {
       { root: 'argumentAsk', path: 'progress.1.answer' },
     ],
   );
+});
+
+it('does not invent private storage when an ordinary original party is unavailable', () => {
+  const writes: unknown[] = [];
+  const scope = { $setValue: (key: string, value: unknown) => writes.push({ key, value }) };
+  expect(() =>
+    markPrivateAsk(scope, state, [call], () => undefined, new Map([['one', rows[0]]])),
+  ).not.toThrow();
+  expect(writes).toEqual([]);
+  expect(privateFieldsInForce(scope)).toBeUndefined();
+});
+
+it('retains conservative missing-holder privacy when private capability was already admitted', () => {
+  const run = createRunRedaction({
+    policy: undefined,
+    privateFields: addPrivateRecordFields(undefined, []),
+    dispatcher: new EventDispatcher(),
+    getRunContext: () => ({ runId: 'private-missing-holder' } as never),
+  });
+  const rule = new RedactionRule(run.recordPolicy);
+  const writes: unknown[] = [];
+  const scope = { $setValue: (key: string, value: unknown) => writes.push({ key, value }) };
+  run.bindScope(scope, { runtimeStageId: 'stage#1', getRedactionRule: () => rule } as never);
+  markPrivateAsk(scope, state, [call], () => undefined, new Map([['one', rows[0]]]));
+  expect(privateFieldsInForce(scope)?.fields.argumentAsk).toEqual([
+    'progress.0.answer',
+    'progress.1.answer',
+  ]);
+  expect(rule.verdict(['argumentAsk'])).toMatchObject({
+    kind: 'fields',
+    paths: ['progress.0.answer', 'progress.1.answer'],
+  });
+  expect(writes.length).toBeGreaterThan(0);
 });
 
 it('kept privacy follows tool/argument/turn across reorder, never matching secret content', () => {

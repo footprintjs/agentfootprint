@@ -1914,7 +1914,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     drivenBy: ['test/time/english-run.test.ts', 'test/time/gaps-run.test.ts'],
     reaches: [
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The person's time words, as the library holds them: “yesterday” is 2026-10-08 00:00–23:59 America\/Los_Angeles \(UTC-07:00\), the window the person confirmed when asked what their words meant — search_logs window "1960m" \(a wider read than the words named\); client_activity start_time 1791442800000, end_time 1791529200000\. A call may pass these values as written; an answer built on them states that window\.$/m,
-      /client_activity start_time \(hidden by the tool's view\), end_time 1791529200000/,
+      /client_activity start_time \(hidden by the tool's view\), end_time \(hidden by the tool's view\)/,
       /, the window the person gave when asked what their words meant — /,
       /, a reading of the person's words they have not confirmed, not their words — /,
       /^\[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone\.\] The window for “yesterday” is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when search_logs is called with window left out, or client_activity is called with start_time, end_time left out \(or the call is refused with the reason\)\. So the next step is that call — not a question about the time in the reply, and not a window written into the call, which would run unconfirmed\.$/m,
@@ -2676,6 +2676,24 @@ function servedPeriodNotes(): string[] {
 }
 
 describe('the model-facing inventory', () => {
+  it('keeps hypothetical bounds private together while the no-view arm stays public', () => {
+    const lines = timeWindowLines();
+    const hiddenStart = "client_activity start_time (hidden by the tool's view)";
+    const hiddenBounds = `${hiddenStart}, end_time (hidden by the tool's view)`;
+    const hiddenLines = lines.filter((line) => line.includes(hiddenStart));
+    expect(hiddenLines.length).toBeGreaterThan(0);
+    for (const line of hiddenLines) {
+      expect(line).toContain(hiddenBounds);
+      expect(line).not.toContain('1791442800000');
+      expect(line).not.toContain('1791529200000');
+    }
+    expect(
+      lines.some((line) =>
+        line.includes('client_activity start_time 1791442800000, end_time 1791529200000'),
+      ),
+    ).toBe(true);
+  });
+
   it('every registered producer composes real output, and the checker reads all of it', async () => {
     for (const producer of PRODUCERS) {
       const texts = await producer.compose();

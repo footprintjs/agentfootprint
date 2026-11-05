@@ -192,6 +192,15 @@ export function markPrivateAsk(
   settled: SettledFills,
   base?: SettledFills,
 ): void {
+  // Missing implementations keep the dispatcher's ordinary unavailable-call path.
+  // Only an actual view or admitted private carrier can create private writes.
+  if (
+    !privateAnswersInPlay(
+      scope,
+      calls.map((call) => toolOf(call.name)),
+    )
+  )
+    return;
   mark(scope, privateAskSelections(state, calls, toolOf, settled, base));
 }
 
