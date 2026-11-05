@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSearchContext } from 'fumadocs-ui/contexts/search';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
 import { SidebarTrigger } from 'fumadocs-ui/components/sidebar/base';
+import { FootprintTrail } from './FootprintTrail';
 import { asset } from '@/lib/site';
+import { SITE_NAV, isCurrent, isNavGroup, type NavGroup, type NavPage } from '@/lib/site-nav';
 
 /**
  * SiteHeader — ONE header for the whole site.
@@ -28,8 +30,17 @@ import { asset } from '@/lib/site';
 
 function SearchIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" strokeLinecap="round" />
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" strokeLinecap="round" />
     </svg>
   );
 }
@@ -44,9 +55,87 @@ function GitHubIcon() {
 
 function MenuIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+    >
       <path d="M3 12h18M3 6h18M3 18h18" strokeLinecap="round" />
     </svg>
+  );
+}
+
+/** A page in the menu. Hovering walks the footprints here and shows the question the page answers. */
+function NavLink({ page, pathname }: { page: NavPage; pathname: string | null }) {
+  const on = isCurrent(page.href, pathname);
+  return (
+    <Link
+      href={page.href}
+      prefetch={false}
+      className={`af-sh-link${on ? ' on' : ''}${page.href === '/' ? ' af-sh-home' : ''}`}
+      aria-current={on ? 'page' : undefined}
+    >
+      {page.label}
+      <span className="af-sh-q">{page.question}</span>
+    </Link>
+  );
+}
+
+/** A group opens on hover, and on click for touch and keyboard. Escape or a click elsewhere closes it. */
+function NavMenu({ group, pathname }: { group: NavGroup; pathname: string | null }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    const onPointer = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onPointer);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onPointer);
+    };
+  }, [open]);
+  const on = group.children.some((page) => isCurrent(page.href, pathname));
+  return (
+    <div className={`af-sh-menu${open ? ' is-open' : ''}`} ref={root}>
+      <button
+        type="button"
+        className={`af-sh-link${on ? ' on' : ''}`}
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {group.label}
+        <span className="af-sh-chevron" aria-hidden="true" />
+      </button>
+      <div className="af-sh-panel">
+        <ul>
+          {group.children.map((page) => (
+            <li key={page.href}>
+              <Link
+                href={page.href}
+                prefetch={false}
+                aria-current={isCurrent(page.href, pathname) ? 'page' : undefined}
+              >
+                <strong>{page.label}</strong>
+                <small>{page.question}</small>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
 
@@ -54,13 +143,8 @@ export function SiteHeader() {
   const { setOpenSearch } = useSearchContext();
   const pathname = usePathname();
   const onDocs = pathname?.startsWith('/docs') ?? false;
-  const onFeatures = pathname?.startsWith('/features') ?? false;
-  const onHowToBuild = pathname?.startsWith('/how-to-build') ?? false;
-  const onEngineering = pathname?.startsWith('/engineering') ?? false;
-  const onSecurity = pathname?.startsWith('/security') ?? false;
-  const onHowWeDebug = pathname?.startsWith('/how-we-debug') ?? false;
-  const onHowItStands = pathname?.startsWith('/how-it-stands') ?? false;
   const [menuOpen, setMenuOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
 
   // A drawer that survives navigation is a drawer covering the page you just
   // asked for, so it closes on every route change. Escape closes it too — a
@@ -78,13 +162,16 @@ export function SiteHeader() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen]);
-  // Only the root is Home; new marketing routes must not light up its link.
-  const onHome = pathname === '/';
 
   return (
     <header id="af-header" className={`af-sh${onDocs ? ' af-sh--docs' : ' af-sh--home'}`}>
       <div className="af-sh-inner">
-        <Link href="/" prefetch={false} className="af-wordmark af-sh-brand" aria-label="agentfootprint — home">
+        <Link
+          href="/"
+          prefetch={false}
+          className="af-wordmark af-sh-brand"
+          aria-label="agentfootprint — home"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={asset('/footprint-logo-66.webp')}
@@ -103,7 +190,12 @@ export function SiteHeader() {
 
         <div className="af-sh-gap" />
 
-        <button type="button" className="af-sh-search" onClick={() => setOpenSearch(true)} aria-label="Search">
+        <button
+          type="button"
+          className="af-sh-search"
+          onClick={() => setOpenSearch(true)}
+          aria-label="Search"
+        >
           <SearchIcon />
           <span className="af-sh-search-text">Search</span>
           <span className="af-sh-kbd" aria-hidden="true">
@@ -127,74 +219,17 @@ export function SiteHeader() {
           </span>
         </button>
 
-        <nav className="af-sh-nav" aria-label="Primary">
-          {/* af-sh-home marks the one link the phone header can afford to drop: the wordmark to
-              its left is already the home link, so nothing becomes unreachable. */}
-          <Link
-            href="/"
-            prefetch={false}
-            className={`af-sh-link af-sh-home${onHome ? ' on' : ''}`}
-            aria-current={onHome ? 'page' : undefined}
-          >
-            Home
-          </Link>
-          <Link
-            href="/how-it-stands"
-            prefetch={false}
-            className={`af-sh-link${onHowItStands ? ' on' : ''}`}
-            aria-current={onHowItStands ? 'page' : undefined}
-          >
-            How it stands
-          </Link>
-          <Link
-            href="/how-we-debug"
-            prefetch={false}
-            className={`af-sh-link${onHowWeDebug ? ' on' : ''}`}
-            aria-current={onHowWeDebug ? 'page' : undefined}
-          >
-            How we debug
-          </Link>
-          <Link
-            href="/features"
-            prefetch={false}
-            className={`af-sh-link af-sh-features${onFeatures ? ' on' : ''}`}
-            aria-current={onFeatures ? 'page' : undefined}
-          >
-            Features
-          </Link>
-          <Link
-            href="/how-to-build"
-            prefetch={false}
-            className={`af-sh-link${onHowToBuild ? ' on' : ''}`}
-            aria-current={onHowToBuild ? 'page' : undefined}
-          >
-            How to build
-          </Link>
-          <Link
-            href="/engineering"
-            prefetch={false}
-            className={`af-sh-link${onEngineering ? ' on' : ''}`}
-            aria-current={onEngineering ? 'page' : undefined}
-          >
-            Engineering
-          </Link>
-          <Link
-            href="/security"
-            prefetch={false}
-            className={`af-sh-link${onSecurity ? ' on' : ''}`}
-            aria-current={onSecurity ? 'page' : undefined}
-          >
-            Security
-          </Link>
-          <Link
-            href="/docs"
-            prefetch={false}
-            className={`af-sh-link${onDocs ? ' on' : ''}`}
-            aria-current={onDocs ? 'page' : undefined}
-          >
-            Docs
-          </Link>
+        <nav className="af-sh-nav" aria-label="Primary" ref={navRef}>
+          {SITE_NAV.map((item) =>
+            isNavGroup(item) ? (
+              <NavMenu group={item} pathname={pathname} key={item.label} />
+            ) : (
+              <NavLink page={item} pathname={pathname} key={item.href} />
+            ),
+          )}
         </nav>
+
+        <FootprintTrail nav={navRef} />
 
         <a
           className="af-sh-icon af-sh-gh"
@@ -225,30 +260,29 @@ export function SiteHeader() {
         hidden={!menuOpen}
       >
         <nav aria-label="Primary, mobile">
-          <Link href="/" prefetch={false} aria-current={onHome ? 'page' : undefined}>
-            Home
-          </Link>
-          <Link href="/how-it-stands" prefetch={false} aria-current={onHowItStands ? 'page' : undefined}>
-            How it stands
-          </Link>
-          <Link href="/how-we-debug" prefetch={false} aria-current={onHowWeDebug ? 'page' : undefined}>
-            How we debug
-          </Link>
-          <Link href="/features" prefetch={false} aria-current={onFeatures ? 'page' : undefined}>
-            Features
-          </Link>
-          <Link href="/how-to-build" prefetch={false} aria-current={onHowToBuild ? 'page' : undefined}>
-            How to build
-          </Link>
-          <Link href="/engineering" prefetch={false} aria-current={onEngineering ? 'page' : undefined}>
-            Engineering
-          </Link>
-          <Link href="/security" prefetch={false} aria-current={onSecurity ? 'page' : undefined}>
-            Security
-          </Link>
-          <Link href="/docs" prefetch={false} aria-current={onDocs ? 'page' : undefined}>
-            Docs
-          </Link>
+          {SITE_NAV.flatMap((item) => {
+            const pages = isNavGroup(item) ? item.children : [item];
+            return [
+              ...(isNavGroup(item)
+                ? [
+                    <span className="af-sh-drawer-group" key={item.label}>
+                      {item.label}
+                    </span>,
+                  ]
+                : []),
+              ...pages.map((page) => (
+                <Link
+                  href={page.href}
+                  prefetch={false}
+                  aria-current={isCurrent(page.href, pathname) ? 'page' : undefined}
+                  key={page.href}
+                >
+                  {page.label}
+                  <small>{page.question}</small>
+                </Link>
+              )),
+            ];
+          })}
           <a href="https://github.com/footprintjs/agentfootprint" target="_blank" rel="noreferrer">
             GitHub ↗
           </a>

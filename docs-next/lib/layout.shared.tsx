@@ -66,19 +66,19 @@ export function baseOptions(): BaseLayoutProps {
         secondary: true,
       },
       {
-        text: 'How to build',
+        text: 'Demo to App',
         url: '/how-to-build',
         active: 'nested-url',
         secondary: true,
       },
       {
-        text: 'Engineering',
+        text: 'Prompt to Harness',
         url: '/engineering',
         active: 'nested-url',
         secondary: true,
       },
       {
-        text: 'Security',
+        text: 'Security & Trustworthy AI',
         url: '/security',
         active: 'nested-url',
         secondary: true,

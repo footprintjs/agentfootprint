@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { buildRouteSet } from '../../lib/doc-ids.mjs';
+import { SITE_NAV, isCurrent, isNavGroup } from '../../lib/site-nav';
 
 const dir = new URL('../../site-samples/', import.meta.url);
 const files = readdirSync(dir).filter((name) => /\.tsx?$/.test(name));
@@ -361,4 +362,18 @@ test('LOOP: it re-runs until your check passes', async () => {
 test('DEPLOY: a telemetry sink of your own is one object', async () => {
   const { shipped } = await import('../../site-samples/deploy-own-telemetry');
   assert.ok(shipped.includes('agentfootprint.stream.llm_end'));
+});
+
+test('every page in the menu exists, and only the root lights up Home', () => {
+  const pages = SITE_NAV.flatMap((item) => (isNavGroup(item) ? item.children : [item]));
+  for (const { href, question } of pages) {
+    assert.ok(question.endsWith('?'), `${href} should say the question it answers`);
+    if (href === '/' || href === '/docs') continue;
+    assert.ok(
+      existsSync(new URL(`../../app/(home)${href}/page.tsx`, import.meta.url)),
+      `${href} is not a page on the site`,
+    );
+  }
+  assert.equal(isCurrent('/', '/features'), false);
+  assert.equal(isCurrent('/how-to-build', '/how-to-build/'), true);
 });

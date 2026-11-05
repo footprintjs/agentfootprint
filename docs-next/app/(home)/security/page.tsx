@@ -5,6 +5,7 @@ import { SampleCode } from '@/components/site/SampleCode';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '@/components/home/stand/stand.css';
+import '@/components/site/page-shell.css';
 import '@/components/site/reading.css';
 
 const TITLE = 'AI agent security, with code — AgentFootprint';
@@ -114,7 +115,7 @@ export default function SecurityPage() {
   return (
     <div className="pf">
       <header className="hs-hero">
-        <p className="v2-kicker">AI security</p>
+        <p className="v2-kicker">Security &amp; Trustworthy AI</p>
         <h1>What it protects, what it catches, and how to add the rest.</h1>
         <p>
           An agent reads untrusted text and can act on it. So the questions are what it can do, what
@@ -499,7 +500,7 @@ export default function SecurityPage() {
             How an answer is held to the record <span aria-hidden="true">→</span>
           </Link>
           <Link className="v2-button v2-button-quiet" href="/how-to-build" prefetch={false}>
-            How to build <span aria-hidden="true">→</span>
+            Demo to App <span aria-hidden="true">→</span>
           </Link>
         </div>
       </nav>

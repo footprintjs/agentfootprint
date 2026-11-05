@@ -5,9 +5,10 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '../v2.css';
 import '@/components/home/stand/stand.css';
+import '@/components/site/page-shell.css';
 import '@/components/site/reading.css';
 
-const TITLE = 'How to build an agent — AgentFootprint';
+const TITLE = 'Demo to App: how to build an agent — AgentFootprint';
 const DESCRIPTION =
   'Build an agent against a scripted model, debug it from its own record, deploy it on AWS, Google Cloud, Azure or your own machines through adapters, and monitor it with OpenTelemetry or your own recorder.';
 
@@ -47,7 +48,7 @@ export default function HowToBuildPage() {
             Build your first agent <span aria-hidden="true">→</span>
           </Link>
           <Link className="v2-button v2-button-quiet" href="/engineering" prefetch={false}>
-            The code by discipline <span aria-hidden="true">→</span>
+            Prompt to Harness <span aria-hidden="true">→</span>
           </Link>
         </div>
       </nav>

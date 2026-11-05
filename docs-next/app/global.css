@@ -175,6 +175,169 @@ html {
 .af-sh-link.on {
   color: var(--yellow-dark);
 }
+/* Real footprints, traced from the logo. They walk to the label you point at, then stand there, as they do under the page you're on. */
+.af-sh {
+  --af-foot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 56'%3E%3Cg transform='translate(-5 -4)'%3E%3Ccircle cx='8.5' cy='17' r='2.6'/%3E%3Ccircle cx='13.5' cy='13' r='3'/%3E%3Ccircle cx='19.5' cy='10.5' r='3.2'/%3E%3Ccircle cx='26.5' cy='9' r='3.5'/%3E%3Ccircle cx='35' cy='9' r='4.6'/%3E%3Cpath d='M22 15.5C30 15 36 18 35.5 25 35 30 29 31 28 36 27.5 40 33 43 32.5 50 32 56 27 59 22 58.5 17 58 14 54 13 48 12 41 9 33 9 27 9 20 15 16 22 15.5Z'/%3E%3C/g%3E%3C/svg%3E");
+  --af-feet: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:x='http://www.w3.org/1999/xlink' viewBox='0 0 82 56'%3E%3Cg id='f'%3E%3Cg transform='translate(-5 -4)'%3E%3Ccircle cx='8.5' cy='17' r='2.6'/%3E%3Ccircle cx='13.5' cy='13' r='3'/%3E%3Ccircle cx='19.5' cy='10.5' r='3.2'/%3E%3Ccircle cx='26.5' cy='9' r='3.5'/%3E%3Ccircle cx='35' cy='9' r='4.6'/%3E%3Cpath d='M22 15.5C30 15 36 18 35.5 25 35 30 29 31 28 36 27.5 40 33 43 32.5 50 32 56 27 59 22 58.5 17 58 14 54 13 48 12 41 9 33 9 27 9 20 15 16 22 15.5Z'/%3E%3C/g%3E%3C/g%3E%3Cuse x:href='%23f' transform='matrix(-1 0 0 1 82 0)'/%3E%3C/svg%3E");
+}
+.af-sh-inner {
+  position: relative;
+}
+.af-sh-link {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.af-sh-link::after {
+  content: '';
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  width: 18px;
+  height: 12px;
+  margin-left: -9px;
+  background: var(--yellow-dark);
+  mask: var(--af-feet) center / contain no-repeat;
+  opacity: 0;
+  transition: opacity 0.14s;
+}
+.af-sh-link:hover::after,
+.af-sh-link:focus-visible::after,
+.af-sh-menu.is-open > .af-sh-link::after,
+.af-sh-link.on::after {
+  opacity: 1;
+}
+.af-sh-nav[data-walking] .af-sh-link:not(.on)::after {
+  opacity: 0;
+}
+.af-sh-trail {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.af-sh-trail span {
+  position: absolute;
+  width: 8px;
+  height: 12px;
+  margin: -6px 0 0 -4px;
+  background: var(--yellow-dark);
+  mask: var(--af-foot) center / contain no-repeat;
+  opacity: 0;
+  transform: translate(var(--x), var(--y)) rotate(var(--r)) scaleX(var(--f));
+  animation: af-step 0.62s ease-out both;
+}
+@keyframes af-step {
+  12%,
+  55% {
+    opacity: 1;
+  }
+}
+.af-sh-q,
+.af-sh-panel {
+  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.16s;
+}
+.af-sh-q {
+  top: calc(100% + 19px);
+  left: 50%;
+  translate: -50% 0;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 12px;
+  pointer-events: none;
+}
+.af-sh-link:hover > .af-sh-q,
+.af-sh-link:focus-visible > .af-sh-q,
+.af-sh-menu:hover > .af-sh-panel,
+.af-sh-menu.is-open > .af-sh-panel {
+  opacity: 1;
+  visibility: visible;
+}
+.af-sh-menu {
+  position: relative;
+}
+.af-sh-chevron {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 1px 3px 6px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  rotate: 45deg;
+}
+.af-sh-panel {
+  top: 100%;
+  left: -14px;
+  padding-top: 16px;
+}
+.af-sh-panel ul {
+  display: grid;
+  gap: 2px;
+  width: 250px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elev);
+  list-style: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+.af-sh-panel a {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 9px;
+  text-decoration: none;
+}
+.af-sh-panel a:hover,
+.af-sh-panel a:focus-visible {
+  background: color-mix(in oklab, var(--yellow) 22%, transparent);
+}
+.af-sh-panel strong,
+.af-sh-panel small,
+.af-sh-drawer small {
+  display: block;
+}
+.af-sh-panel strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.af-sh-panel small,
+.af-sh-drawer small {
+  color: color-mix(in oklab, var(--fg) 62%, transparent);
+  font-size: 12.5px;
+  font-weight: 450;
+}
+.af-sh-drawer-group {
+  padding: 13px 4px 0;
+  color: color-mix(in oklab, var(--fg) 55%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-sh-link::after,
+  .af-sh-q,
+  .af-sh-panel {
+    transition: none;
+  }
+}
+.af-sh-drawer a[aria-current='page']::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 13px;
+  margin-right: 7px;
+  background: var(--yellow-dark);
+  mask: var(--af-foot) center / contain no-repeat;
+}
 .af-sh-icon {
   display: inline-flex;
   align-items: center;

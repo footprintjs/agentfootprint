@@ -6,7 +6,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { FEATURES_ALSO, FEATURES_TAGLINE, FEATURE_BEATS } from '@/lib/features/beats';
 import { SITE } from '@/lib/site';
 import '@/components/home/stand/stand.css';
-import '@/components/site/reading.css';
+import '@/components/site/page-shell.css';
 
 /**
  * /features: twelve verbs, each with the names people already know it by and a small scene. The page
@@ -125,10 +125,10 @@ export default function FeaturesPage() {
         <code className="sf-install">npm install agentfootprint</code>
         <div className="sc-links">
           <Link className="v2-button v2-button-primary" href="/how-to-build" prefetch={false}>
-            How to build <span aria-hidden="true">→</span>
+            Demo to App <span aria-hidden="true">→</span>
           </Link>
           <Link className="v2-button v2-button-quiet" href="/engineering" prefetch={false}>
-            The code by discipline <span aria-hidden="true">→</span>
+            Prompt to Harness <span aria-hidden="true">→</span>
           </Link>
           <Link className="v2-button v2-button-quiet" href="/docs" prefetch={false}>
             Read the docs <span aria-hidden="true">→</span>

@@ -69,7 +69,7 @@ export const FEATURE_BEATS = [
     ],
     limit: 'An ontology is a map, not a way to fetch. A tool still reads the data.',
     href: '/how-to-build#know',
-    hrefLabel: 'Read more about the map, data references and the clock — How to build',
+    hrefLabel: 'Read more about the map, data references and the clock — Demo to App',
   },
   {
     id: 'remember',
@@ -113,7 +113,7 @@ export const FEATURE_BEATS = [
       { name: 'behind your LLM gateway', href: '/docs/build/invoke-model-gateway' },
     ],
     href: '/how-to-build#deploy',
-    hrefLabel: 'Read more about infrastructure — How to build, Deploy',
+    hrefLabel: 'Read more about infrastructure — Demo to App, Deploy',
   },
   {
     id: 'show',
@@ -126,7 +126,7 @@ export const FEATURE_BEATS = [
       { name: 'streaming', href: '/docs/monitor/streaming' },
     ],
     href: '/how-to-build#front-end',
-    hrefLabel: 'Read more about connecting your front end — How to build',
+    hrefLabel: 'Read more about connecting your front end — Demo to App',
   },
   {
     id: 'watch',

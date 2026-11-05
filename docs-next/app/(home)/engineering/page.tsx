@@ -5,6 +5,7 @@ import { SampleCode } from '@/components/site/SampleCode';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '@/components/home/stand/stand.css';
+import '@/components/site/page-shell.css';
 import '@/components/site/reading.css';
 
 const TITLE = 'Prompt, context, loop and harness engineering, with code — AgentFootprint';
@@ -38,7 +39,7 @@ export default function EngineeringPage() {
   return (
     <div className="pf">
       <header className="hs-hero">
-        <p className="v2-kicker">For engineers</p>
+        <p className="v2-kicker">Prompt to Harness</p>
         <h1>Prompt, context, loop, harness. The code for each.</h1>
         <p>Four names for four layers of the same work. Each one sits inside the next.</p>
       </header>
@@ -146,7 +147,7 @@ export default function EngineeringPage() {
           id="harness"
           kicker="Layer 4"
           title="Harness engineering"
-          more={{ href: '/how-to-build', label: 'How to build' }}
+          more={{ href: '/how-to-build', label: 'Demo to App' }}
           aside={
             <SampleCode
               file="site-samples/eng-harness.ts"
@@ -175,10 +176,10 @@ export default function EngineeringPage() {
       <nav className="hs-next" aria-label="Where to go next">
         <div className="sc-links">
           <Link className="v2-button v2-button-primary" href="/how-to-build" prefetch={false}>
-            Build, debug, deploy, monitor <span aria-hidden="true">→</span>
+            Demo to App <span aria-hidden="true">→</span>
           </Link>
           <Link className="v2-button v2-button-quiet" href="/security" prefetch={false}>
-            Security <span aria-hidden="true">→</span>
+            Security &amp; Trustworthy AI <span aria-hidden="true">→</span>
           </Link>
         </div>
       </nav>

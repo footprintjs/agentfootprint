@@ -43,7 +43,7 @@ export function HowToBuild() {
   return (
     <>
       <header className="v21-lifecycle-bridge" id="stages">
-        <p className="v2-kicker">How to build</p>
+        <p className="v2-kicker">Demo to App</p>
         <h1>The same agent, from your laptop to production.</h1>
         <p>
           Write it against a scripted model, debug it from its own record, deploy it on your

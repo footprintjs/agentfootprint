@@ -6,6 +6,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '../v2.css';
 import '@/components/home/stand/stand.css';
+import '@/components/site/page-shell.css';
 import '@/components/site/reading.css';
 
 const TITLE = 'How we debug — trace a wrong answer to its cause — AgentFootprint';
