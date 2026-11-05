@@ -1,6 +1,6 @@
 ---
 title: Why agentfootprint?
-description: AI agents fail in a way classic debuggers can't see — the code is right, but the answer is wrong because of the context the model saw. agentfootprint records that context so you can trace any wrong answer back to its cause.
+description: AI agents fail in a way classic debuggers can't see — the code is right, but the answer is wrong because of the context the model saw. agentfootprint records that context so you can trace a wrong answer back to its cause, and hold the next answer to that record.
 ---
 
 > Your support agent told a customer their refund was processed. Six weeks later they come back and ask *"why did you tell me my refund was processed when it wasn't?"* You go to look. The agent is gone. Logs are scattered across three services. The decision evidence is not there. **This is the gap agentfootprint exists to close.**
@@ -42,6 +42,24 @@ Every agentfootprint LLM call backtracks to four typed answers — and they're t
 
 These aren't logged alongside the call. They're the **structural output** of the call — produced by the framework owning the runtime loop.
 
+## Hold the answer to the record
+
+Tracing tells you why an answer went wrong, after it has gone. The same record can also be used before the answer goes out. That pattern is called **STAND**:
+
+| Step | What happens |
+|---|---|
+| **S**tate the rules | Tools mark their facts and say what they searched. You say which answer field reports which fact. |
+| **T**race the run | FootprintJS writes a note at every step and links it to the notes behind it. The model's words go in as claims, never as evidence. |
+| **A**ssess the claims | Code compares what the model said with what the record holds. No model judges it. |
+| **N**ame the standing | The answer gets one of five words, with its reason. Not a percentage. |
+| **D**ecide what happens | Flag it, give the model one more turn, ask the person, or withhold it. |
+
+You choose which checks run, and most are off until you turn them on.
+
+<Callout type="warn" title="It holds claims to the record, not to the world">
+A false sentence built from real values can pass. Honest, here, means a claim stays within its evidence, not that it is true. [How it stands](https://agentfootprint.dev/how-it-stands/) shows each step and its limits.
+</Callout>
+
 ## Connected evidence — built declaratively
 
 agentfootprint gives you **connected evidence** — grounded, auditable, LLM-readable. Every iteration of the ReAct loop, every tool call with its args + result, every context injection, every decision branch is captured as a typed event in a single pass over the run — no instrumentation, no post-processing.
@@ -64,15 +82,15 @@ The same trace serves three workflows:
 |---|---|---|
 | **Live** | Debug as you build | Exactly which injection produced which token; which predicate fired this iteration; which prefix actually got cached |
 | **Offline** | Monitor what shipped | Replay any past run from its trace. Alert on drift. Attribute cost per injection. |
-| **Detailed** | Improve via export | Every successful trajectory is labeled training data for fine-tuning or reinforcement learning — no separate data-collection phase |
+| **Detailed** | Improve via export | The record is JSON you can keep, so good runs can become training examples. Labelling them is your job. |
 
-And a fourth, novel: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
+And a fourth: **the agent can read its own trace.** Six months after the agent rejected loan #42, *"why did you reject it?"* answers from the recorded evidence (`creditScore=580`, `threshold=600`), not a rerun. Causal memory turns the trace into the agent's working memory.
 
 <Diagram name="causal-memory" alt="One agent run produces a JSON-portable causal trace. Three downstream consumers fan out: audit replay, cheap-model triage, training data export." />
 
 ## Dynamic ReAct — context recomposes every iteration
 
-The corollary that makes "context engineering" worth the name. Other frameworks assemble the prompt once per turn; agentfootprint re-runs every Injection trigger every iteration. Tool schemas, system prompts, skill bodies, memory recall — all recompute against the freshest state.
+The corollary that makes "context engineering" worth the name. agentfootprint re-runs every Injection trigger every iteration. Tool schemas, system prompts, skill bodies, memory recall — all recompute against the freshest state.
 
 <Diagram name="dynamic-vs-classic" alt="Classic ReAct loops back to CallLLM (slots frozen). Dynamic ReAct loops back to SystemPrompt (slots recompose every iteration)." />
 
@@ -102,16 +120,17 @@ Composition is just chained `.create()` builders, not a separate graph language.
 
 <CodeFile path="examples/patterns/02-reflection.ts" region="reflexion-recipe" title="examples/patterns/02-reflection.ts (region: reflexion-recipe — Reflexion as a 30-line recipe)" />
 
-That's Reflexion (Shinn 2023), expressed as `Sequence(Agent, critique-LLM, Agent)`. Tree-of-Thoughts is `Parallel(Agent × N) + LLM-rank`. Debate is `Loop(Agent × 2 + judge)`. Every named pattern in the agent literature is a composition of the same 2 primitives + 4 compositions. **You learn the substrate; the field's growth lands as recipes on top.**
+That's Reflexion (Shinn 2023), expressed as `Sequence(Agent, critique-LLM, Agent)`. Tree-of-Thoughts is `Parallel(Agent × N) + LLM-rank`. Debate is `Loop(Agent × 2 + judge)`. Each of those is a composition of the same 2 primitives + 4 compositions. **You learn the substrate; the field's growth lands as recipes on top.**
 
 ## Built on footprintjs
 
-agentfootprint is the agent layer. [footprintjs](https://footprintjs.github.io/footPrint/) is the substrate — the flowchart-pattern execution engine that makes our typed-event stream + replayable traces automatic. footprintjs gives us composition primitives, state-machine semantics, durable workflow checkpoints, and 57+ typed events out of the box; we used the budget those abstractions would have cost us to invest deeply in **the injection loop** — the layer every other framework leaves to the developer.
+agentfootprint is the agent layer. [footprintjs](https://footprintjs.github.io/footPrint/) is the substrate — the flowchart-pattern execution engine that makes our typed-event stream + replayable traces automatic. footprintjs gives us composition primitives, state-machine semantics, durable workflow checkpoints and typed events out of the box, which let us put the work into **the injection loop** and the checks built on its record.
 
 You don't need to learn footprintjs to use agentfootprint — but if you want to build your own primitives at this depth, [start there](https://footprintjs.github.io/footPrint/).
 
 ## Next steps
 
+- [How it stands](https://agentfootprint.dev/how-it-stands/) — the checks, and what they can't tell you
 - [Quick Start](doc:quick-start) — build your first agent
 - [Key Concepts](doc:key-concepts) — the 5-layer taxonomy
 - [Reliability gate](doc:reliability-gate) — rules-based retry / fallback / fail-fast around every LLM call
