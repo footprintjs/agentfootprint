@@ -1,6 +1,8 @@
 /**
- * coverage — what a run's records are served under, as a typed value with
- * THREE states. `undefined` is never "no policy".
+ * coverage — the caller policy declaration, as a typed value with
+ * THREE states. `undefined` is never "no policy". Finite library-private
+ * selectors are separate: recordPolicy can arm a native mirror while caller
+ * coverage remains declared-none; snapshot serving asks recordPolicy too.
  *
  * Pattern: a closed discriminated union, decided where the library positively
  *          knows the answer and switched on wherever a record is served.

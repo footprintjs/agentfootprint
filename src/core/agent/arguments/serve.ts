@@ -28,7 +28,7 @@
  */
 
 import type { LLMToolSchema } from '../../../provider-contract/types.js';
-import { shownArgsOf } from '../../toolShownArgs.js';
+import { carriesArgumentView } from '../../toolShownArgs.js';
 import type { InputValue } from '../../../tools/inputRequest.js';
 import { ASSUMED_BLOCK_HEADING, type TimeLimitLines } from '../../../semantics/coverage/answer.js';
 import type { TimeLimitFacts } from '../../../semantics/coverage/timeLimitFacts.js';
@@ -65,16 +65,6 @@ const isPlainObject = (value: unknown): value is PlainObject =>
 /** A declared value as a sentence prints it: a string quoted, a number or boolean bare. */
 export function printedValue(value: InputValue): string {
   return typeof value === 'string' ? JSON.stringify(value) : String(value);
-}
-
-/**
- * Whether the tool's own argument view hides `argument` — asked with a probe
- * of the declared value, so the answer is the view's, never a guess.
- */
-export function hidesArgument(tool: unknown, argument: string, value: InputValue): boolean {
-  const probe = { [argument]: value };
-  const shown = shownArgsOf(tool, probe);
-  return shown !== probe && shown[argument] !== value;
 }
 
 /**
@@ -195,7 +185,7 @@ export function withArgumentRules(
     const value = r.assume as InputValue;
     properties[r.argument] = withSentence(
       property,
-      assumeSentence(value, hidesArgument(tool, r.argument, value)),
+      assumeSentence(value, carriesArgumentView(tool)),
     );
   }
   const ruledNames = new Set(served.map((r) => r.argument));
@@ -327,7 +317,7 @@ function toolValues(
   if ('refused' in read) return undefined;
   const conversion = read.conversion;
   const values = Object.entries(conversion.values).map(([argument, value]) =>
-    hidesArgument(pt.tool, argument, value as InputValue)
+    carriesArgumentView(pt.tool)
       ? `${argument} (hidden by the tool's view)`
       : `${argument} ${printedArgument(value)}`,
   );

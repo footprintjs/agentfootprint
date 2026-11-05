@@ -414,3 +414,5 @@ Before adding one, verify the behavior can't be expressed as a composition of LL
 advisory reads and finite local close receipts. Optional positive reads are
 not proof that a call ran or that a host closed it. Local close evidence is
 scoped to the exact ledger identity and request; eviction or restart loses it.
+
+`pauseRecord.ts` holds the complete native-pause position/reason utilities. `runnerCoreValues.ts` names per-invocation domain values; RunnerBase remains the shared native wiring facade.

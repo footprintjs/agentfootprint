@@ -356,3 +356,23 @@ For compliance scenarios where you need to prove WHY the agent made a decision s
 - [Observability guide](doc:observability) — `permission.*` events for SOC tooling
 - [Governance & policy](doc:governance-and-policy) — `halt` vs `deny`, capabilities, upstream policy
 - [Resilience](doc:resilience) — provider fallback and circuit breakers
+
+## Hidden argument answers across pauses
+
+A tool's private argument view now covers human answers through repeated questions,
+kept answers and check-ins. Execution and raw pause checkpoints retain the real
+values; served snapshots, recordings and recorder hooks mask the selected working
+fields. Check-in approvers see the tool's explicitly chosen masked argument view,
+while consent remains bound to the real call. Keep checkpoints on the trusted host.
+
+Caller redaction policies keep their existing precedence. Private field protection
+alone does not claim that a caller policy covered the conversation: public question,
+answer and operation facts can remain visible. Private-only snapshots omit the raw
+initial state, so served views report `no-fold-base` rather than claiming an exact
+reconstruction.
+
+A statically declared tool view arms the existing native mirror before execution.
+A dynamically discovered private view requires an already armed native policy or
+private capability; otherwise discovery refuses with `ERR_PRIVATE_ARGUMENT_RECORD`
+before the tool is offered or a question is asked. Agents without either a private
+view or caller policy keep their existing record shape.

@@ -45,7 +45,7 @@ import type { RunTime, TimeOptions } from '../../time/clock.js';
 import type { ToolChoiceLedger } from './toolChoice/types.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk, OntologyRecord } from '../../ontology/types.js';
-import type { CarriedRedactionPolicy } from '../../redaction/policy.js';
+import type { CarriedCallerPolicy } from '../../redaction/privateCaller.js';
 
 // ─── PUBLIC types (consumer-facing) ────────────────────────────────
 
@@ -1521,7 +1521,7 @@ export interface AgentState {
    * checkpoint whose run kept names out, refuses the resume —
    * `ResumeRedactionError`.
    */
-  runRedaction?: CarriedRedactionPolicy;
+  runRedaction?: CarriedCallerPolicy;
   // Set during the final branch — the (user, assistant) pair the
   // memory write subflows persist for cross-run recall.
   newMessages: readonly LLMMessage[];

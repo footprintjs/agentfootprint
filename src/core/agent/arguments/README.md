@@ -1,7 +1,9 @@
 **Mixed** — the inputs layer (honesty layer 2): what a tool author declares about each argument, where the model says each value came from, and what the library checks, does, files and says.
 Map: `sources.ts` (the model's `_findings.from` and its one reader), `rows.ts` (the `argument` row and its door check), `kept.ts` (an answer a call could not use, kept for its next proposal), `askMarker.ts` (the library's own ask, recognised without loading it). The declaration and its one assert live below the agent and the injection engine, in `../../../tools/declare.ts`, because every reader of a `Tool` needs them.
-Walker: `resolve.ts` (the one table), `checks.ts` (the declared-sources checks, V1–V6), `subflow.ts` (the four stages of `sf-inputs`), `dispatch.ts` (ToolCalls' half: the fills, the note, the rewrites' `changedKeys`, the fail-closed refusal, the kept answers), `ask.ts` (the one ask per batch: its fields, its declaration, the answer's binding, the re-ask).
+Walker: `resolve.ts` (the one table), `checks.ts` (the declared-sources checks, V1–V6), `subflow.ts` (the four stages of `sf-inputs`), `dispatch.ts` (ToolCalls' half: the fills, the note, the rewrites' `changedKeys`, the fail-closed refusal, the kept answers), `ask.ts` (the one ask per batch: its fields, its declaration, the answer's binding, the re-ask). `answerRows.ts` composes answer rows only after the batch's accepted fills settle, preserving row order and judging privacy with the complete call context; `privateAnswers.ts` carries admitted private working-field provenance across answers and kept/resolved lists.
 Lens: `serve.ts` (the served schema sentence, the notes on a result, the refusals, the "Assumed" block).
+
+Private argument records and migration: [private-records.md](private-records.md).
 
 **The law.** No argument runs unaccounted for.
 
@@ -653,18 +655,18 @@ the PERFORMANCE block), and the resume adds no model call.
   while a re-ask (or a second round of 32 fields) is out; `AgentState.argumentAnswersKept` a
   kept answer until it is used; `argumentResolutions` a kept answer's fill for its batch; and a
   call that then pauses on its own carries its completed arguments in the pause carriers
-  (`pausedCheckInArgs`, …). A full recording of such a run carries that state, as it carries
-  those carriers; a single-round ask whose calls run holds no answer in committed state. A tool
-  that must keep a value out of recordings too needs a redaction policy on the run: the
-  agent's `redact` (`src/redaction/`) — `conversationRedaction()` names these keys
-  (`argumentAsk`, `argumentAnswersKept`, `argumentResolutions`, the pause carriers) among the
-  conversation.
+  (`pausedCheckInArgs`, …). `privateAnswers.ts` registers actual hidden fills before raw
+  writes; native private-field metadata masks record-facing projections while checkpoints
+  and execution stay raw. Kept privacy follows `(toolName, argument, turn)` across list
+  changes, not value matching; unreadable provenance masks the fixed carrier conservatively.
+  A late mapper without native private-field support refuses before a question is created.
+  Caller redaction remains independent; `conversationRedaction()` can cover the whole run.
 - **A kept answer that reaches a check-in rides the check-in's own evidence pack.** The
   check-in shows the person the arguments the call will run with (`core/checkin.ts` ·
-  `CheckInRequest`, on its `checkin.request` event and its pause), and it does not read the
-  tool's argument view — for a kept answer as for any other value. So when an argument the
-  tool's view hides is answered, kept, and then reaches that tool's check-in, the evidence pack
-  carries the raw value. Reading the view there is a change to the check-in, not to this layer.
+  `CheckInRequest`, on its `checkin.request` event and its pause) in the tool's shown argument
+  view. Its evidence assembler receives that same masked view. Approval still names the
+  operation and public context; the consent binding, raw checkpoint and actual execution
+  retain the original arguments.
 - **A raised miss behind a refused second pause.** A tool whose own `requestInput` carries an
   `absence` in the batch that asked settles as the refusal; that miss is not filed.
 - **Numeric bounds** (`minimum`, `maximum`) are not judged on the person's answer: the one
@@ -717,37 +719,6 @@ the PERFORMANCE block), and the resume adds no model call.
   value that text spells checks out as `app`. Whether the library's default sentence counts as
   the app's text is the owner's call; the corpus is unchanged until then.
 
-## What it lets you measure
+## Measurements
 
-From the record alone, per model and per prompt or skill version: the **assumed-value rate**
-(calls that ran on a default nobody chose — `default` rows over ruled-argument rows), the
-**echoed-default rate** (the model sent the default itself — `default` rows that carry
-`proposed`), the **model-chosen rate** (`model` rows), the **ask rate** (batches that asked —
-`asked: 'missing'` rows, grouped by call and iteration), the **answered rate** (`answered`
-over `asked` rows), the **kept-answer uses** (an `answered` row with no `asked` row for its
-call and iteration: a call proposed again after the one-question law refused it, filled from
-the kept answer — nobody was asked in that batch) and the **free-text share** (`free`), the **invalid-answer rate** and the
-calls refused after three (`asked: 'invalid-answer'`), the share of answers whose standing
-names an assumption (`argument-assumed`) or ended waiting on the library (`argument-asked`),
-and — from the performance tests — what the layer costs per iteration in commit-log bytes and
-what a 32-field ask costs to build. The **needless-ask rate** (the library asked for a value
-the person had already given) is read from the same `asked` rows beside a case label: the
-record says what was asked, the bench says whether the person had said it. These rows are
-what a bench over the layer scores and what a lens draws — no second record is kept for
-either. The limit: it measures whose value a call ran on, not whether that value was right.
-
-Under declared sources, from the same rows: the **declared-source rate** (rows whose
-`claimed` is not `none`), the **verified rate** — how often the model's quotes, ids and
-earlier answers checked out, a COPYING measure, not an honesty measure (traced sources over
-declared ones), the **failed-claim mix** (the `failed` values — `quote-not-found`,
-`not-in-result`, `composed-message`, …), the **reading rate** (`said` + `reading`: values
-read into the person's words), the **hint rate** (`coincides`; split it at
-`integrity/argumentLeaves.ts` · `MIN_CHECKED_LENGTH`, four characters — a short value
-coincides by chance), the **contingent uses** (`setAside`: values taken from a result the
-model had set aside), the **composed-run exposure** (`failed: 'composed-message'`), the
-**unverified-ask rate** (`asked: 'unverified'`) and — from the request receipts — the
-**tokens per call** the `from` property costs
-(`test/core/agent/arguments/sources-layer.test.ts` and `sources-served.test.ts` print the served
-characters: on 2026-09-28, beside the ledger, the ruled tool's schema +744 characters, the system
-prompt +0, an unruled tool +0 — the first cut was +617 and +447; without the ledger, the ruled
-tool +863 over a plain agent's, where the ledger alone costs every tool about +2,400).
+See [measurements.md](measurements.md) for rates and the limits of what the record can establish.

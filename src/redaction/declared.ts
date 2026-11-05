@@ -30,9 +30,13 @@ import {
   type RedactionCoverage,
 } from './coverage.js';
 import { unionRedactionPolicies } from './policy.js';
+import { addPrivateRecordFields, type PrivateRecordFields } from './privateFields.js';
 
 /** Every runner → what it declares: a policy, or positively none. Weak: dies with the runner. */
-const declared = new WeakMap<object, RedactionCoverage>();
+const declared = new WeakMap<
+  object,
+  { coverage: RedactionCoverage; privateFields?: PrivateRecordFields }
+>();
 
 /**
  * Record what `runner` declares for every run of its own. Called by the
@@ -41,7 +45,7 @@ const declared = new WeakMap<object, RedactionCoverage>();
  * its own), never a lookup that missed.
  */
 export function declareRedaction(runner: object, policy: RedactionPolicy | undefined): void {
-  declared.set(runner, coverageOfOpenedRun(policy));
+  declared.set(runner, { ...declared.get(runner), coverage: coverageOfOpenedRun(policy) });
 }
 
 /**
@@ -49,7 +53,7 @@ export function declareRedaction(runner: object, policy: RedactionPolicy | undef
  * — an object no runner of this library registered (`coverage.ts`).
  */
 export function declarationOf(runner: object): RedactionCoverage {
-  return declared.get(runner) ?? UNKNOWN_COVERAGE;
+  return declared.get(runner)?.coverage ?? UNKNOWN_COVERAGE;
 }
 
 /**
@@ -71,4 +75,17 @@ export function redactionDeclaredBy(runner: object): RedactionPolicy | undefined
  */
 export function adoptMemberRedaction(composition: object, members: readonly object[]): void {
   declareRedaction(composition, unionRedactionPolicies(...members.map(redactionDeclaredBy)));
+  if (members.some((member) => privateFieldsDeclaredBy(member) !== undefined))
+    declarePrivateFields(composition);
+}
+
+/** Construction-time capability, separate from the caller's coverage declaration. */
+export function declarePrivateFields(runner: object): void {
+  const prior = declared.get(runner);
+  if (prior === undefined) throw new TypeError('Unknown runner private-field declaration.');
+  declared.set(runner, { ...prior, privateFields: addPrivateRecordFields(undefined, []) });
+}
+
+export function privateFieldsDeclaredBy(runner: object): PrivateRecordFields | undefined {
+  return declared.get(runner)?.privateFields;
 }

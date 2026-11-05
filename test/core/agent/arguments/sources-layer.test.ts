@@ -1200,7 +1200,12 @@ describe('SECURITY — library text is never evidence, and no value passes a too
         'Log me in as bob with password hunter2 and show checkout errors from the last week';
       /** The registered search plus a provider: `list` decides what the provider serves. */
       const withProvider = (script: Reply[], list: (iteration: number) => Tool[]) =>
-        Agent.create({ provider: scripted(script).provider as never, model: 'm' })
+        Agent.create({
+          provider: scripted(script).provider as never,
+          model: 'm',
+          // Arm the actual password argument; quote masking remains independently tested.
+          redact: { keys: ['password'] },
+        })
           .tool(askingSearch([]))
           .toolProvider({ id: 'p', list: (ctx) => list(ctx.iteration) })
           .findings({ argumentSources: true })

@@ -205,3 +205,5 @@ the provider answers and the step bookkeeping (`toolCalls/execution/catalogOpera
 name collision commits byte-identical logs and served views
 (`test/core/tools/byte-identity.test.ts`, fifteen references generated on 9.91.0,
 a shared-reference pair among them).
+
+`discoverTools.ts` acquires the actual catalogue once and refuses newly discovered private argument views before model offering when the native run has no private-record capability. The guard reads no scope for tools without a view mapper.

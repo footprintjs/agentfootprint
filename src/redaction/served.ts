@@ -17,7 +17,7 @@
  *   2. THE PAYLOAD, BY NAME — `retainBoundary`: a typed event's payload is a
  *      record handed out whole — a selected key at ANY depth, a declared field
  *      under a key of its name.
- *   3. THE VALUE-KIND RULE — under ANY policy (one that selects at least one
+ *   3. THE VALUE-KIND RULE — under ANY caller policy (one that selects at least one
  *      name), events are DEFAULT-DENY by value kind: every value is checked by
  *      its kind, wherever it sits (`knownStrings.ts` · `keepKnownValues`).
  *      Numbers, booleans and null pass; a string passes only when it is one
@@ -29,10 +29,15 @@
  *      leave raw — no field is trusted by its position, and there is no list
  *      of fields, or of derived copies, to keep complete. A policy makes
  *      EVENTS conservative; state, the snapshot and the commit log keep
- *      footprintjs's rule, by name. For full observability, run with no policy.
+ *      footprintjs's rule, by name. Positively admitted library-private FIELDS
+ *      alone keep that by-name rule without restricting unrelated public words.
+ *      Unknown native field marks and every whole-key mark except the admitted
+ *      private carrier anchor retain default-deny. Whole-carrier fallback is
+ *      conservative too; private provenance never overrides a caller policy.
  *   4. THE META'S IDENTITY — `principal` and `tenant` (who asked) are served
  *      by their names, then by the value-kind rule, each in its own slot: the
- *      placeholder under any policy. Every other meta field is the record's
+ *      placeholder under the same value-kind restriction. A private-fields-only
+ *      leg retains the original identity. Every other meta field is the record's
  *      ADDRESS (run, stage, session, trace ids) and is never served
  *      differently.
  *
@@ -45,6 +50,8 @@ import type { RedactionRule } from 'footprintjs/advanced';
 import type { EventMeta } from '../events/types.js';
 import { keepKnownValues, servedString } from './knownStrings.js';
 import { SERVED_PLACEHOLDER } from './placeholder.js';
+import type { PrivateRecordFields } from './privateFields.js';
+import { privateMarksNeedDefaultDeny } from './privateRun.js';
 
 export { SERVED_PLACEHOLDER };
 
@@ -69,10 +76,27 @@ export interface EventServing {
  *                    names or diagnostic selectors only keeps footprintjs's
  *                    rule inert, and inertness alone would serve its events raw
  */
-export function eventServing(ruleOf: () => RedactionRule, underPolicy: boolean): EventServing {
+export function eventServing(
+  ruleOf: () => RedactionRule,
+  underPolicy: boolean,
+  privateFieldsOf?: () => PrivateRecordFields | undefined,
+  recordMarksActive?: () => boolean,
+): EventServing {
   // A run with no policy is active only once it marks a key (a per-call
   // `$setValue(key, value, true)`): its rule is then no longer inert.
-  const active = (): boolean => underPolicy || !ruleOf().isInert();
+  const restricted = (): boolean => {
+    try {
+      if (underPolicy || recordMarksActive?.()) return true;
+      if (privateFieldsOf === undefined) return !ruleOf().isInert();
+      return privateMarksNeedDefaultDeny(ruleOf(), privateFieldsOf());
+    } catch {
+      return true;
+    }
+  };
+  const active = (): boolean =>
+    underPolicy ||
+    !ruleOf().isInert() ||
+    ((privateFieldsOf !== undefined || recordMarksActive !== undefined) && restricted());
   return {
     active,
     payload(type, payload) {
@@ -81,14 +105,15 @@ export function eventServing(ruleOf: () => RedactionRule, underPolicy: boolean):
       try {
         const byEvent = rule.retainEmit(type, payload);
         if (byEvent !== payload) return byEvent;
-        return keepKnownValues(rule.retainBoundary(payload));
+        const named = rule.retainBoundary(payload);
+        return restricted() ? keepKnownValues(named) : named;
       } catch {
         return SERVED_PLACEHOLDER;
       }
     },
     meta(meta) {
       if (meta.principal === undefined && meta.tenant === undefined) return meta;
-      if (!active()) return meta;
+      if (!active() || !restricted()) return meta;
       return servedMeta(ruleOf(), meta);
     },
   };

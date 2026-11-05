@@ -68,6 +68,14 @@ import {
   type ToolOf,
 } from '../arguments/resolve.js';
 import { withFills } from '../arguments/dispatch.js';
+import { markPrivateAsk, requirePrivateQuestionSupport } from '../arguments/privateAnswers.js';
+import { privateFieldsInForce, markPrivateFields } from '../../../redaction/runRedaction.js';
+import {
+  declarePendingPrivateAsk,
+  pendingPrivateAskOf,
+  pendingPrivateSelections,
+  requirePendingPrivateViews,
+} from '../arguments/pendingPrivateAsk.js';
 import {
   hasOneMaterializedWindow,
   partialOriginOf,
@@ -389,6 +397,10 @@ export function askBeforeDispatch(
     return { resolutions: entries, answered: false };
   if (deps.refuseMalformedBatch?.() === true)
     return { resolutions: entries, answered: false, refused: true };
+  requirePrivateQuestionSupport(
+    scope,
+    calls.map((call) => deps.toolOf(call.name)),
+  );
   // The admitted resource owner keeps its native birth across SAME and FRESH restore.
   const owner = readToolOwner(scope.$getValue('toolResourceOwner')).birth;
   const mention = open[0]?.mention ?? answers[0]?.mention ?? 0;
@@ -434,6 +446,10 @@ export function askBeforeDispatch(
   }
   let answered = false;
   if (state.waiting !== undefined) {
+    const declaration = pendingPrivateAskOf(state, privateFieldsInForce(scope) !== undefined);
+    requirePendingPrivateViews(state, declaration, deps.toolOf);
+    const selected = pendingPrivateSelections(declaration);
+    if (selected.length > 0) markPrivateFields(scope, selected);
     const input = interrupt(scope, pauseDataOf(state.waiting));
     const bound = bindAnswer(
       state,
@@ -442,7 +458,9 @@ export function askBeforeDispatch(
       deps.toolOf,
       { turn, iteration },
       time,
+      entries,
     );
+    markPrivateAsk(scope, bound.state, calls, deps.toolOf, settledCalls(bound.state), entries);
     deps.admitAnswer?.();
     recordFindings(scope, bound.rows, { turn });
     state = bound.state;
@@ -474,8 +492,21 @@ export function askBeforeDispatch(
     }
   }
   if (round !== undefined) {
-    const waiting = stampRound(scope, state, round, deps);
-    scope.argumentAsk = snapshotPartialState(withWaiting(state, waiting));
+    const stamped = stampRound(scope, state, round, deps);
+    const declaration = declarePendingPrivateAsk(
+      withWaiting(state, stamped),
+      deps.toolOf,
+      privateFieldsInForce(scope) !== undefined,
+    );
+    const waiting = {
+      ...stamped,
+      ...(declaration !== undefined && { privateFields: declaration }),
+    };
+    const next = snapshotPartialState(withWaiting(state, waiting));
+    const selected = pendingPrivateSelections(declaration);
+    if (selected.length > 0) markPrivateFields(scope, selected);
+    markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
+    scope.argumentAsk = next;
     deps.saveParties?.();
     interrupt(scope, pauseDataOf(waiting));
     throw new TypeError('argumentAsk: replay is missing its original batch state');

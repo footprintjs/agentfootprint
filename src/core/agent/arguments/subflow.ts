@@ -57,6 +57,7 @@ import {
   type ToolOf,
 } from './resolve.js';
 import type { CallSources } from './sources.js';
+import { markPrivateResolutions, privateAnswersInPlay } from './privateAnswers.js';
 
 /**
  * The raw pieces the declared-sources corpora are built from — what the mount
@@ -386,7 +387,7 @@ export function resolveArgumentsStage(
   const time = timeArmOf(scope, deps);
   const calls = deps.sources !== undefined || time !== undefined ? callsOf(scope) : undefined;
   const sources = calls !== undefined ? armOf(declaredOf(deps, calls)) : undefined;
-  scope.argumentResolutions = resolutionsOf(
+  const resolved = resolutionsOf(
     plan,
     checked,
     deps.toolOf,
@@ -397,4 +398,21 @@ export function resolveArgumentsStage(
       ? timeDecisionsOf(plan, calls, deps.toolOf, time, sources)
       : undefined,
   );
+  if (
+    resolved.some((row) => (row.fills?.length ?? 0) > 0) &&
+    privateAnswersInPlay(
+      scope,
+      plan.map((call) => deps.toolOf(call.toolName)),
+    )
+  ) {
+    markPrivateResolutions(
+      scope,
+      resolved,
+      calls ?? callsOf(scope),
+      deps.toolOf,
+      scope.turnNumber as number,
+      keptOf(scope),
+    );
+  }
+  scope.argumentResolutions = resolved;
 }

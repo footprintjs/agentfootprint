@@ -3,6 +3,7 @@ import type { ActiveInjection } from '../../injection-engine/types.js';
 import type { ToolProvider, ToolDispatchContext } from '../../tools/toolProvider.js';
 import type { Tool } from '../../tools/tools.js';
 import { emitListUses } from '../../tools/mcpClientUse.js';
+import { requirePrivateQuestionSupport } from '../agent/arguments/privateAnswers.js';
 import { typedEmit } from '../../recorders/core/typedEmit.js';
 
 type DiscoveryScope = Pick<
@@ -92,6 +93,7 @@ export async function discoverTools(
     throw err;
   }
 
+  requirePrivateQuestionSupport(scope, visibleTools);
   emitListUses(scope, ctx);
   typedEmit(scope, 'agentfootprint.tools.discovery_completed', {
     providerId: toolProvider.id,

@@ -76,7 +76,7 @@ import type { InstantText } from '../../../time/instant.js';
 import type { CallWindowRow } from '../../../time/rows.js';
 import { callWindowRow } from '../../../time/rowsBuild.js';
 import type { ZoneName } from '../../../time/zone.js';
-import { shownArgsOf } from '../../toolShownArgs.js';
+import { composeResolutionRows } from './resolutionRows.js';
 import { validatePropertyValue } from '../../../tools/toolArgsValidation.js';
 import { checkSource, isTraced, type SourceCheck, type SourceCorpus } from './checks.js';
 import {
@@ -95,15 +95,7 @@ import {
   type ToolRules,
 } from '../../../tools/declare.js';
 import { keptAnswerFor, type KeptAnswer } from './kept.js';
-import {
-  HIDDEN_VALUE,
-  answeredRowOf,
-  argumentRowOf,
-  askedRowOf,
-  sourcedRowOf,
-  windowRowOf,
-  type ArgumentRow,
-} from './rows.js';
+import type { ArgumentRow } from './rows.js';
 import { timeRefusal, unreadableRulesRefusal } from './serve.js';
 import type { CallSources, DeclaredSource } from './sources.js';
 
@@ -808,153 +800,7 @@ export function verifyPlan(
 
 // ─── RECORD ─────────────────────────────────────────────────────────────
 
-/** The rule a checked argument carries — defined on every path but a free argument's. */
-function ruleOf(c: CheckedArgument): 'ask' | 'assume' {
-  return c.rule ?? 'assume';
-}
-
-/**
- * The row for a value the declared-sources check judged: the verdict, the
- * value (or, on an ask, the model's proposal) — each in the tool's OWN
- * argument view — and the quote, which reads `'REDACTED'` unless no tool in
- * reach can hide arguments (`quoteShown`, `quotesMayShow`).
- */
-function sourcedRow(
-  c: CheckedArgument & { readonly check: SourceCheck },
-  call: BatchCall,
-  toolOf: ToolOf,
-  sources: SourcesArm | undefined,
-  stamp: { readonly turn: number; readonly iteration: number },
-): ArgumentRow {
-  const tool = toolOf(c.toolName);
-  // A name nothing answers has no view to ask — shown as hidden, never raw.
-  const shown = tool === undefined ? HIDDEN_VALUE : shownArgsOf(tool, call.args)[c.argument];
-  const quoteShown = c.quoteShown === true;
-  const quote = claimFor(sources, c.toolCallId, c.argument)?.quote;
-  const { check } = c;
-  const asked = c.asked === 'unverified';
-  return sourcedRowOf(
-    {
-      toolCallId: c.toolCallId,
-      toolName: c.toolName,
-      argument: c.argument,
-      ...(c.rule !== undefined && { rule: c.rule }),
-      ...(c.period === true && { period: true as const }),
-      ...(asked ? { asked: 'unverified' as const } : { source: check.source }),
-      ...(!asked && { shownValue: shown }),
-      // The model's own value: on an ask (it will not run) and on a default it sent (V1).
-      ...((asked || check.source === 'default') && { shownProposed: shown }),
-      claimed: check.claimed,
-      ...(check.matched !== undefined && { matched: check.matched }),
-      ...(quote !== undefined && { shownQuoteText: quoteShown ? quote : HIDDEN_VALUE }),
-      ...(check.reading === true && { reading: true as const }),
-      ...(check.earlier === true && { earlier: true as const }),
-      ...(check.result !== undefined && { result: check.result }),
-      ...(check.setAside !== undefined && { setAside: check.setAside }),
-      ...(check.argumentsFrom !== undefined && { argumentsFrom: check.argumentsFrom }),
-      ...(check.appSource !== undefined && { appSource: check.appSource }),
-      ...(check.coincides !== undefined && { coincides: check.coincides }),
-      ...(check.failed !== undefined && { failed: check.failed }),
-    },
-    stamp,
-  );
-}
-
-/** One checked argument's row, on the unarmed paths (and a missing value's under the arm). */
-function plainRow(
-  c: CheckedArgument,
-  call: BatchCall,
-  toolOf: ToolOf,
-  stamp: { readonly turn: number; readonly iteration: number },
-  kept: readonly KeptAnswer[] | undefined,
-  decision: CallWindow | undefined,
-): ArgumentRow | undefined {
-  const tool = toolOf(c.toolName);
-  const who = { ...c, rule: ruleOf(c) };
-  if (c.asked !== undefined) return askedRowOf(who, stamp);
-  if (c.filled === true && c.window !== undefined) {
-    const value = windowValue(decision, c.argument);
-    if (value === undefined) return undefined;
-    const shown = shownArgsOf(tool, { ...call.args, [c.argument]: value });
-    return windowRowOf(
-      {
-        toolCallId: c.toolCallId,
-        toolName: c.toolName,
-        argument: c.argument,
-        rule: ruleOf(c),
-        ...(c.period === true && { period: true as const }),
-        // A name nothing answers has no view to ask — shown as hidden, never raw.
-        shownValue: tool === undefined ? HIDDEN_VALUE : shown[c.argument],
-        window: c.window,
-      },
-      stamp,
-    );
-  }
-  if (c.filled === true && c.source === 'answered') {
-    const answer = keptValue(toolOf, kept, c.toolName, c.argument);
-    if (answer === undefined) return undefined;
-    const shown = shownArgsOf(tool, { ...call.args, [c.argument]: answer });
-    return answeredRowOf(
-      {
-        toolCallId: c.toolCallId,
-        toolName: c.toolName,
-        argument: c.argument,
-        rule: 'ask',
-        ...(c.period === true && { period: true as const }),
-        // A name nothing answers has no view to ask — shown as hidden, never raw.
-        shownValue: tool === undefined ? HIDDEN_VALUE : shown[c.argument],
-        ...(isFreeAsk(toolOf, c.toolName, c.argument) && { free: true as const }),
-      },
-      stamp,
-    );
-  }
-  if (c.filled === true) {
-    const assumed = declaredDefault(toolOf, c.toolName, c.argument);
-    if (assumed === undefined) return undefined;
-    const shown = shownArgsOf(tool, { ...call.args, [c.argument]: assumed });
-    return argumentRowOf({ ...who, source: 'default', shownValue: shown[c.argument] }, stamp);
-  }
-  const shown = shownArgsOf(tool, call.args)[c.argument];
-  return argumentRowOf(
-    {
-      ...who,
-      // A present value: the declared default the model sent itself, or the model's own
-      // (`answered` is only ever a FILL, handled above).
-      source: c.source === 'default' ? 'default' : 'model',
-      shownValue: shown,
-      ...(c.source === 'default' && { shownProposed: shown }),
-    },
-    stamp,
-  );
-}
-
-/** The value a window fill writes into `argument`, raw — `undefined` when the decision fills none. */
-function windowValue(decision: CallWindow | undefined, argument: string): unknown {
-  return decision?.how === 'filled' ? decision.conversion.values[argument] : undefined;
-}
-
-/**
- * `row` with the call's dropped `from` entries counted — the call's FIRST row
- * carries the count when no basis row does (`sources.ts` · `CallSources`),
- * written before `failed`, in `ArgumentRow`'s own field order.
- */
-function withMalformed(row: ArgumentRow, malformed: number): ArgumentRow {
-  const { failed, ...rest } = row;
-  return { ...rest, malformed, ...(failed !== undefined && { failed }) };
-}
-
-/**
- * One row per checked argument, its value in the tool's OWN argument view
- * (`shownArgsOf`) — a fill is shown as the call will run with it, a model's
- * value as the model sent it; an argument to ASK has no value yet, so its row
- * carries none (under declared sources, the model's proposal rides as
- * `proposed`); a kept answer files `answered` (`free` for a free-text field),
- * exactly as the answer did when the person gave it. Under declared sources a
- * present value's row carries the check's verdict (`claimed`, `matched`,
- * `quote`, `failed`, …), and the call's first row carries the count of its
- * dropped `from` entries when no basis row does. The raw value never reaches
- * a row.
- */
+/** Served rows use the complete call context when its private view depends on sibling fills. */
 export function rowsOf(
   checked: readonly CheckedArgument[],
   calls: readonly BatchCall[],
@@ -964,26 +810,12 @@ export function rowsOf(
   sources?: SourcesArm,
   decisions?: ReadonlyMap<string, CallWindow>,
 ): ArgumentRow[] {
-  const byId = callById(calls);
-  const rows: ArgumentRow[] = [];
-  const counted = new Set<string>();
-  for (const c of checked) {
-    const call = byId.get(c.toolCallId);
-    if (call === undefined) continue;
-    const row =
-      c.check !== undefined
-        ? sourcedRow({ ...c, check: c.check }, call, toolOf, sources, stamp)
-        : plainRow(c, call, toolOf, stamp, kept, decisions?.get(c.toolCallId));
-    if (row === undefined) continue;
-    const malformed = sources?.declared.get(c.toolCallId)?.malformed;
-    if (malformed !== undefined && malformed > 0 && !counted.has(c.toolCallId)) {
-      counted.add(c.toolCallId);
-      rows.push(withMalformed(row, malformed));
-      continue;
-    }
-    rows.push(row);
-  }
-  return rows;
+  return composeResolutionRows(checked, calls, toolOf, stamp, kept, sources, decisions, {
+    declaredDefault,
+    keptValue,
+    isFreeAsk,
+    claimFor,
+  });
 }
 
 // ─── RESOLVE ────────────────────────────────────────────────────────────

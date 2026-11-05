@@ -64,11 +64,25 @@ import {
 } from './coverage.js';
 import { eventServing, SERVED_PLACEHOLDER, type EventServing } from './served.js';
 import { redactionMarker } from './marker.js';
+import {
+  carryPrivateRuleNames,
+  createPrivateRun,
+  PrivateFieldsUnavailableError,
+  type PrivateRun,
+  type PrivateSelection,
+} from './privateRun.js';
+import type { PrivateRecordFields } from './privateFields.js';
+export { PRIVATE_FIELDS_KEY } from './privateFields.js';
+export { PrivateFieldsUnavailableError } from './privateRun.js';
 
 /** One run's redaction, as the runner that owns the executor holds it. */
 export interface RunRedaction {
   /** The policy in force for this run — declared ∪ handed down — or `undefined`. */
   readonly policy: RedactionPolicy | undefined;
+  /** Caller policy plus private selectors for the one native rule; never caller coverage. */
+  readonly recordPolicy: RedactionPolicy | undefined;
+  /** Aggregate admitted private names on this exact native rule, for raw checkpoints. */
+  privateFields(): PrivateRecordFields | undefined;
   /** What this run's events are served as. */
   readonly serving: EventServing;
   /** The positive coverage declaration for this exact run, without an executor handle. */
@@ -116,6 +130,35 @@ export interface ScopeRun {
 interface ScopeServing {
   readonly run: ScopeRun;
   readonly stageId: string;
+  readonly privateBinding?: ScopePrivateBinding;
+}
+
+interface NativePrivateRule {
+  rule: RedactionRule;
+  active: boolean;
+}
+interface ScopePrivateBinding {
+  canStore(): boolean;
+  fields(): PrivateRecordFields | undefined;
+  store(scope: SetValueScope, selections: readonly PrivateSelection[]): void;
+}
+
+/** Fresh activation: scope ports retain only a retirable rule cell and selector data. */
+function scopePrivateBinding(
+  privateRun: PrivateRun,
+  bound: NativePrivateRule,
+): ScopePrivateBinding {
+  return {
+    canStore: () => privateRun.canStore(bound.rule, bound.active),
+    fields: () => privateRun.fields(bound.rule),
+    store: (scope, selections) => privateRun.store(scope, bound.rule, bound.active, selections),
+  };
+}
+
+function retirePrivateBinding(privateRun: PrivateRun, bound: NativePrivateRule): void {
+  if (!bound.active) return;
+  bound.rule = retiredRule(bound.rule, privateRun.recordPolicy(bound.rule));
+  bound.active = false;
 }
 
 /** Private working input, never a recorder/export or an instance-wide subscription. */
@@ -153,16 +196,23 @@ export function bindScopeComputation(scope: unknown, computation: ScopeComputati
  */
 export function createRunRedaction(args: {
   readonly policy: RedactionPolicy | undefined;
+  readonly privateFields?: PrivateRecordFields;
+  /** Unknown native marks affect records and conservative events, never caller coverage. */
+  readonly recordMarks?: RedactionPolicy;
   readonly dispatcher: EventDispatcher;
   readonly getRunContext: () => RunContext;
 }): RunRedaction {
   const { policy, dispatcher, getRunContext } = args;
+  const privateRun = createPrivateRun(policy, args.privateFields, args.recordMarks);
   // The rule the run decides with — one built from the policy stands in until
   // a stage context offers the executor's own. The serving reads it through
   // this box and holds nothing else of the run (`servingOf`): the dispatcher
   // keeps a run's serving for its late facts, never the run's values.
-  const decided = { rule: new RedactionRule(policy) };
-  const serving = servingOf(decided, policy);
+  const decided = { rule: new RedactionRule(privateRun.recordPolicy()) };
+  let nativeBinding:
+    | { readonly rule: NativePrivateRule; readonly port: ScopePrivateBinding }
+    | undefined;
+  const serving = servingOf(decided, policy, privateRun);
   // Relayed writes waiting for their recorder, oldest first, per stage and key.
   // Keyed by the stage's runtimeStageId (unique per execution), so an entry no
   // recorder claims (a deferred tier that dropped the write) can never be
@@ -189,11 +239,11 @@ export function createRunRedaction(args: {
       return lateEmitter(dispatcher, serving, Object.freeze({ ...getRunContext() }), stageId);
     },
     keepsOut(name) {
-      return policy !== undefined && decided.rule.isKeyRedacted(name);
+      return privateRun.hasRecordPolicy(decided.rule) && decided.rule.isKeyRedacted(name);
     },
     noteWrite(runtimeStageId, key, value) {
       // No policy: the scope channel serves the write as written — nothing to relay.
-      if (policy === undefined) return;
+      if (!privateRun.hasRecordPolicy(decided.rule)) return;
       const at = slot(runtimeStageId, key);
       const written = { value, keptOut: decided.rule.isKeyRedacted(key) };
       const queue = waiting.get(at);
@@ -202,25 +252,45 @@ export function createRunRedaction(args: {
     },
   };
   const bindScope = (scope: unknown, context: Parameters<ScopeFactory>[0]): void => {
+    const own = context?.getRedactionRule?.();
+    if (own !== undefined) {
+      if (nativeBinding?.rule.rule !== own) {
+        if (nativeBinding !== undefined) retirePrivateBinding(privateRun, nativeBinding.rule);
+        const rule = { rule: own, active: true };
+        nativeBinding = { rule, port: scopePrivateBinding(privateRun, rule) };
+      }
+      privateRun.bind(own);
+      decided.rule = own;
+    }
     if (scope !== null && typeof scope === 'object') {
       scopeRuns.set(scope, {
         ...scopeRuns.get(scope),
-        serving: { run, stageId: context?.runtimeStageId ?? '' },
+        serving: {
+          run,
+          stageId: context?.runtimeStageId ?? '',
+          ...(own !== undefined &&
+            nativeBinding !== undefined && { privateBinding: nativeBinding.port }),
+        },
       });
     }
-    const own = context?.getRedactionRule?.();
-    if (own !== undefined) decided.rule = own;
   };
   const recorders =
-    policy === undefined
+    privateRun.recordPolicy() === undefined
       ? []
       : [
           redactionMarker(() => {
-            decided.rule = retiredRule(decided.rule, policy);
+            if (nativeBinding !== undefined) {
+              retirePrivateBinding(privateRun, nativeBinding.rule);
+              decided.rule = nativeBinding.rule.rule;
+            } else decided.rule = retiredRule(decided.rule, privateRun.recordPolicy(decided.rule));
           }),
         ];
   return {
     policy,
+    get recordPolicy() {
+      return privateRun.recordPolicy(decided.rule);
+    },
+    privateFields: () => privateRun.fields(decided.rule),
     serving,
     coverage,
     recorders,
@@ -271,6 +341,7 @@ export function retiredRule(
   const names = new RedactionRule(policy);
   const marks = rule.marksForCheckpoint();
   if (marks !== undefined) names.restoreMarks(marks);
+  carryPrivateRuleNames(rule, names);
   return names;
 }
 
@@ -283,8 +354,14 @@ export function retiredRule(
 function servingOf(
   decided: { readonly rule: RedactionRule },
   policy: RedactionPolicy | undefined,
+  privateRun: PrivateRun,
 ): EventServing {
-  return eventServing(() => decided.rule, namesAnything(policy));
+  return eventServing(
+    () => decided.rule,
+    namesAnything(policy),
+    () => privateRun.fields(decided.rule),
+    () => privateRun.hasRecordMarks(decided.rule),
+  );
 }
 
 /**
@@ -389,6 +466,23 @@ export function captureLateEmitter(
   stageId: string,
 ): ((type: string, payload: unknown) => void) | undefined {
   return scopeRuns.get(scope)?.serving?.run.captureLate?.(stageId);
+}
+
+/** Whether this exact scope has a native rule already able to keep private fields. */
+export function canStorePrivateFields(scope: object): boolean {
+  return scopeRuns.get(scope)?.serving?.privateBinding?.canStore() ?? false;
+}
+
+/** Immutable admitted selector data only, never the raw working values it protects. */
+export function privateFieldsInForce(scope: object): PrivateRecordFields | undefined {
+  return scopeRuns.get(scope)?.serving?.privateBinding?.fields();
+}
+
+/** Register native selectors and checkpoint provenance before the protected writes. */
+export function markPrivateFields(scope: object, selections: readonly PrivateSelection[]): void {
+  const binding = scopeRuns.get(scope)?.serving?.privateBinding;
+  if (binding === undefined) throw new PrivateFieldsUnavailableError();
+  binding.store(scope as SetValueScope, selections);
 }
 
 /** A scope that can emit — structurally footprintjs's `TypedScope` `$emit`. */
