@@ -156,14 +156,13 @@ describe('ci.yml · the coverage gate judges the merge of every shard', () => {
     expect(shard).toContain('overwrite: true');
   });
 
-  it('downloads the blobs, names every one, merges them, then uploads', () => {
+  it('downloads the blobs, names every one, then merges them', () => {
     const order = [
       stepAt(uses('actions/download-artifact@')),
       named,
       stepAt(
         (step) => stepKey(step, 'run') === 'npm run test:coverage -- --merge-reports=vitest-blobs',
       ),
-      stepAt(uses('codecov/codecov-action@')),
     ];
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(runScript(steps[named])).toBe(
