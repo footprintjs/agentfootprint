@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { AGENT_BRIEF } from '../../lib/agent-brief';
+import { gitDatesFor, parseGitDates } from '../../lib/git-dates';
 import { pageJsonLd } from '../../lib/jsonld';
 import { SITE } from '../../lib/site';
 import { buildRouteSet } from '../../lib/doc-ids.mjs';
@@ -408,5 +409,15 @@ test('search engines get a title and description that fit, a share image with a 
   }
   const data = pageJsonLd({ name: 'Security', description: 'x', path: '/security/' });
   assert.equal(data['@graph'][1]?.['@type'], 'BreadcrumbList');
+});
+
+test('the sitemap dates a doc by its last commit, and gives no date without history', () => {
+  const log = '\0' + '2026-11-05\n\ncontent/docs/a.mdx\n' + '\0' + '2026-10-01\n\ncontent/docs/a.mdx\ncontent/docs/b.mdx\n';
+  const dates = parseGitDates(log);
+  assert.equal(dates.get('content/docs/a.mdx'), '2026-11-05');
+  assert.equal(dates.get('content/docs/b.mdx'), '2026-10-01');
+  assert.equal(parseGitDates('').size, 0);
+  const live = gitDatesFor('content/docs/getting-started');
+  for (const date of live.values()) assert.match(date, /^\d{4}-\d{2}-\d{2}$/);
 });
 

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { gitDatesFor } from '@/lib/git-dates';
 import { source } from '@/lib/source';
 import { SITE } from '@/lib/site';
 
@@ -18,11 +19,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE.url}/context-engineering/`, changeFrequency: 'monthly', priority: 0.8 },
   ];
 
+  const dates = gitDatesFor('content/docs');
   const docs: MetadataRoute.Sitemap = source.getPages().map((page) => {
     const isApi = page.url.startsWith('/docs/api');
     const canonicalPath = page.url.endsWith('/') ? page.url : `${page.url}/`;
     return {
       url: `${SITE.url}${canonicalPath}`,
+      lastModified: dates.get(`content/docs/${page.path}`),
       changeFrequency: isApi ? 'monthly' : 'weekly',
       // hand-written guides rank above the auto-generated API reference
       priority: page.url === '/docs' ? 0.9 : isApi ? 0.3 : 0.6,
