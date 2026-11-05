@@ -112,8 +112,8 @@
 
 /* ── Features ─────────────────────────────────────────────────────────────── */
 .pf-words {
-  display: grid;
-  grid-template-columns: repeat(5, auto);
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 2px clamp(14px, 2.2vw, 34px);
   width: min(var(--v2-wide), 100%);
@@ -164,19 +164,43 @@
 }
 .pf-known {
   margin: 14px 0 0;
-  font-size: 14.5px;
-  font-weight: 560;
-  line-height: 1.5;
 }
-.pf-known span {
+.pf-known > span {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 6px;
   color: var(--v2-label);
   font-family: var(--v2-mono);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+.pf-known ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-known a {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 13px;
+  font-weight: 580;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.pf-known a:hover {
+  border-color: var(--yellow-dark);
+}
+.hs-def a {
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .pf-limit {
   margin: 12px 0 0;
@@ -279,6 +303,7 @@ td > .pf-adapter:has(+ .pf-anywhere) {
 }
 @media (max-width: 760px) {
   .pf-words {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .pf-words a {
@@ -302,6 +327,228 @@ td > .pf-adapter:has(+ .pf-anywhere) {
   .pf-adapters .hs-table td::before {
     color: var(--fg-muted);
     font-weight: 560;
+  }
+}
+
+/* ── Reading pages: How to build, Engineering, Security ───────────────────── */
+/* the older scenes, without the pinned-film height they were built for */
+.ls-flow .v21-scene {
+  min-height: 0;
+  padding-block: clamp(24px, 4vw, 56px);
+}
+.rp-page {
+  margin-top: clamp(18px, 3vw, 30px);
+}
+.rp-row,
+.rp-wide {
+  width: min(var(--v2-max), 100%);
+  margin-inline: auto;
+  padding-inline: var(--v2-pad);
+  scroll-margin-top: 72px;
+}
+.rp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  gap: clamp(16px, 3vw, 44px);
+  align-items: start;
+  padding-block: clamp(22px, 3vw, 38px);
+}
+.rp-words h3,
+.rp-wide h3 {
+  margin: 0;
+  font-size: clamp(21px, 2vw, 27px);
+  font-weight: 760;
+  letter-spacing: -0.024em;
+  line-height: 1.15;
+}
+.rp-words .v2-kicker + h3 {
+  margin-top: 6px;
+}
+.rp-words p:not(.v2-kicker),
+.rp-wide > p {
+  margin: 8px 0 0;
+  color: var(--fg-muted);
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.rp-words code,
+.rp-wide p code,
+.rp-lede code,
+.rp-facts code,
+.rp-kept code {
+  font-family: var(--v2-mono);
+  font-size: 0.88em;
+}
+.rp-words .pf-limit {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.rp-aside {
+  min-width: 0;
+}
+.rp-code {
+  min-width: 0;
+  margin: 0;
+}
+.rp-code figcaption {
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  font-weight: 720;
+}
+.rp-lede {
+  max-width: 760px;
+  margin: 10px 0 0;
+  color: var(--fg-muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.rp-lede a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rp-wide {
+  padding-block: clamp(18px, 2.4vw, 30px);
+}
+.rp-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.rp-lenses,
+.rp-facts {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--fg-muted);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.rp-lenses strong,
+.rp-facts strong {
+  color: var(--fg);
+}
+.rp-aside > .rp-facts {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg-alt);
+}
+.rp-jump a {
+  padding-left: 13px;
+}
+.rp-kept td {
+  width: 50%;
+}
+.rp-limits {
+  margin-top: 8px;
+}
+.rp-limits ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 14px 16px 14px 32px;
+  border-left: 3px solid var(--yellow-dark);
+  border-radius: 0 10px 10px 0;
+  background: var(--bg-alt);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.rp-family {
+  margin-top: 36px;
+}
+.rp-family h2 {
+  margin: 8px 0 0;
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 780;
+  letter-spacing: -0.03em;
+}
+.rp-family ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.rp-family li {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elev);
+}
+.rp-family small {
+  color: var(--v2-label);
+  font-family: var(--v2-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.rp-family code {
+  font-family: var(--v2-mono);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rp-family span {
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.eng-layers {
+  border: 1px solid color-mix(in oklab, var(--yellow-dark) 45%, var(--border));
+  border-radius: 16px;
+}
+.eng-layers > a {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+.eng-layers > a strong {
+  display: block;
+  color: var(--fg);
+  font-size: clamp(16px, 1.5vw, 20px);
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+.eng-layers > a:hover strong {
+  color: var(--yellow-dark);
+}
+.eng-harness {
+  width: min(860px, calc(100% - 2 * var(--v2-pad)));
+  margin: 20px auto 0;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 6%, var(--bg));
+}
+.eng-loop {
+  margin-top: 10px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 14%, var(--bg));
+}
+.eng-context {
+  margin-top: 10px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 24%, var(--bg));
+}
+.eng-prompt {
+  margin-top: 10px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--yellow) 40%, var(--bg));
+}
+@media (max-width: 1040px) {
+  .rp-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rp-pair {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

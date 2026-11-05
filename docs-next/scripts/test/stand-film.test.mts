@@ -7,7 +7,7 @@
  * how a live model behaves.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { Agent, LLMCall, absent, defineTool, describedResult, llmSwarm } from 'agentfootprint';
 import { accountForAnswer, assessAnswer, recordRun } from 'agentfootprint/observe';
@@ -463,27 +463,43 @@ test('the Features scenes name real APIs', async () => {
 /* A name on a Features section is a claim, so each one says what it rests on: real exports, or the docs page that uses the word. */
 const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; readonly doc?: readonly [string, RegExp] }>> = {
   'ReAct loop': { doc: ['getting-started/key-concepts', /ReAct/] },
-  chains: { code: ['Sequence'] },
+  'loop engineering': { doc: ['build/loop-moments', /moments of the loop/i] },
+  chains: { code: ['Sequence'], doc: ['build/workflow', /chains/i] },
   'routers and supervisors': { code: ['llmRouter', 'llmSwarm'] },
   'multi-agent': { code: ['swarm'], doc: ['getting-started/vs', /multi-agent/i] },
   'structured output': { doc: ['build/tools', /structured output/i] },
+  runbookAsTool: { code: ['runbookAsTool'] },
+  flowchartAsTool: { code: ['flowchartAsTool'] },
   skills: { code: ['defineSkill'] },
   'SKILL.md files': { code: ['skillsFromDir'] },
+  'prompt engineering': { code: ['defineInstruction'] },
   'progressive disclosure': { doc: ['build/skills', /progressive disclosure/i] },
   'context engineering': { doc: ['getting-started/key-concepts', /context engineering/i] },
   'long-term memory': { code: ['defineMemory'], doc: ['infrastructure/memory-and-stores', /long-term memory/i] },
   'episodic and semantic memory': { doc: ['build/memory', /episodic[\s\S]*semantic/i] },
   RAG: { code: ['defineRAG'] },
-  'model-agnostic: Anthropic, OpenAI, Azure, Bedrock, Gemini, Ollama': { code: ['anthropic', 'openai', 'azureOpenai', 'bedrock', 'gemini', 'ollama'] },
+  'model-agnostic': { doc: ['build/custom-provider', /LLMProvider/] },
+  Anthropic: { code: ['anthropic'] },
+  OpenAI: { code: ['openai'] },
+  Azure: { code: ['azureOpenai', 'foundry'] },
+  Bedrock: { code: ['bedrock'] },
+  Gemini: { code: ['gemini'] },
+  Ollama: { code: ['ollama'] },
   'ports and adapters': { doc: ['infrastructure/index', /ports-&-adapters/] },
+  'hexagonal architecture': { doc: ['reference/strategy-everywhere', /Hexagonal/] },
+  plugins: { doc: ['build/loop-moments', /a plugin, a policy pack/] },
   'bring your own adapter': { doc: ['infrastructure/memory-and-stores', /Writing your own adapter/] },
   MCP: { code: ['mcpClient', 'mcpServe'] },
   A2A: { code: ['a2aWire'] },
-  'AG-UI': { code: ['agUi'] },
   'behind your LLM gateway': { code: ['invokeModelGateway'] },
+  'AG-UI': { code: ['agUi', 'agUiSerializer'] },
+  CopilotKit: { doc: ['infrastructure/ag-ui', /CopilotKit/] },
+  'frontend tools': { doc: ['infrastructure/ag-ui', /Frontend tools/] },
+  streaming: { doc: ['monitor/streaming', /stream/i] },
   observability: { doc: ['monitor/observability', /observability/i] },
   tracing: { code: ['otelObservability', 'xrayObservability'] },
   OpenTelemetry: { code: ['otelObservability'] },
+  'custom recorders': { doc: ['monitor/observability', /agent\.attach\(audit\)/] },
   'human-in-the-loop': { code: ['askHuman'], doc: ['monitor/pausable', /human-in-the-loop/i] },
   'tool approval': { code: ['checkInApproved'] },
   'PII redaction': { code: ['conversationRedaction'], doc: ['monitor/security', /personal data/i] },
@@ -491,6 +507,7 @@ const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; rea
   'tenant isolation': { doc: ['monitor/security', /multi-tenant identity isolation/i] },
   'audit trail': { code: ['auditExport', 'verifyAuditBundle'] },
   'root-cause analysis': { code: ['localizeContextBug', 'rerunWithoutSources'] },
+  'self-explain': { code: ['traceDebugAgent'], doc: ['debug/self-explain', /selfExplain/] },
   replay: { doc: ['debug/offline-replay', /replay/i] },
   'time-travel debugging': { doc: ['debug/time-travel', /time.travel/i] },
   retry: { code: ['withRetry'] },
@@ -502,7 +519,7 @@ const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; rea
 test('every name a Features section goes by has something real behind it', async () => {
   const exported = await exportedNames();
   for (const beat of FEATURE_BEATS) {
-    for (const name of beat.knownAs) {
+    for (const { name } of beat.knownAs) {
       const backing = KNOWN_AS[name];
       assert.ok(backing, `"${name}" on ${beat.verb} says nothing about what it rests on`);
       for (const code of backing.code ?? []) assert.ok(exported.has(code), `${name}: ${code} is not exported by any door`);
@@ -641,8 +658,38 @@ test('WATCH logs the events a run really fires, in that order', async () => {
   assert.deepEqual(fired.slice(0, SCENE_QUOTES.events.length), [...SCENE_QUOTES.events]);
 });
 
-test('every link on Features goes to a real docs page', () => {
+/* A site page or a docs page, whichever the link says. */
+const assertRealLink = (routes: Set<string>, href: string) => {
+  const path = href.split('#')[0]!;
+  if (path.startsWith('/docs')) assert.ok(routes.has(path), `${href} is not a page in content/docs`);
+  else assert.ok(existsSync(new URL(`../../app/(home)${path}/page.tsx`, import.meta.url)), `${href} is not a page on the site`);
+};
+
+test('every link on Features goes to a real page', () => {
   const routes = buildRouteSet();
-  const links = [...FEATURE_BEATS, ...FEATURES_ALSO, ...ADAPTER_PAGES, { href: SESSION_STORES_PAGE }];
-  for (const { href } of links) assert.ok(routes.has(href), `${href} is not a page in content/docs`);
+  const tags = FEATURE_BEATS.flatMap((beat) => beat.knownAs);
+  for (const { href } of [...FEATURE_BEATS, ...tags, ...FEATURES_ALSO, ...ADAPTER_PAGES, { href: SESSION_STORES_PAGE }]) assertRealLink(routes, href);
+});
+
+test('SHOW names AG-UI events a run really produces, in that order', async () => {
+  const { agUiSerializer } = await import('agentfootprint/ag-ui');
+  let calls = 0;
+  const provider = mock({
+    respond() {
+      calls += 1;
+      return calls === 1 ? { content: '', toolCalls: [{ id: 'c1', name: 'get_refund', args: {} }] } : { content: 'Still pending.' };
+    },
+  });
+  const tool = defineTool({ name: 'get_refund', description: 'look up', inputSchema: { type: 'object', properties: {} }, execute: () => 'pending' });
+  const agent = Agent.create({ provider, model: 'mock' }).tool(tool).build();
+  const serializer = agUiSerializer({ threadId: 't1', runId: 'r1' });
+  const types: string[] = [];
+  agent.on('*', (event) => {
+    for (const out of serializer.event(event)) types.push(String(out.type));
+  });
+  await agent.run({ message: 'go' });
+  for (const out of serializer.settle({ kind: 'finished' })) types.push(String(out.type));
+  const positions = SCENE_QUOTES.agUi.map((name) => types.indexOf(name));
+  assert.ok(positions.every((at) => at >= 0), `missing from ${types.join(' ')}`);
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b), `out of order in ${types.join(' ')}`);
 });

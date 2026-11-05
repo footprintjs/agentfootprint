@@ -7,7 +7,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '../../home.css';
 import '@/components/home/stand/stand.css';
-import '../how-it-works.css';
+import '../how-we-debug.css';
 
 const TITLE = 'The full walkthrough — trace a wrong answer to its cause';
 const DESCRIPTION =
@@ -16,10 +16,10 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
-  alternates: { canonical: `${SITE.url}/how-it-works/walkthrough/` },
+  alternates: { canonical: `${SITE.url}/how-we-debug/walkthrough/` },
   openGraph: {
     type: 'website',
-    url: `${SITE.url}/how-it-works/walkthrough/`,
+    url: `${SITE.url}/how-we-debug/walkthrough/`,
     siteName: SITE.name,
     title: TITLE,
     description: DESCRIPTION,

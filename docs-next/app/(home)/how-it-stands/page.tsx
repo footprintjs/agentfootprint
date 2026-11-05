@@ -53,8 +53,8 @@ export default function HowItStandsPage() {
       <StandHonesty />
       <nav className="hs-next" aria-label="Where to go next">
         <div className="sc-links">
-          <Link className="v2-button v2-button-primary" href="/how-it-works" prefetch={false}>
-            When an answer is wrong: how it works <span aria-hidden="true">→</span>
+          <Link className="v2-button v2-button-primary" href="/how-we-debug" prefetch={false}>
+            When an answer is wrong: how we debug <span aria-hidden="true">→</span>
           </Link>
           <Link className="v2-button v2-button-quiet" href="/docs/getting-started/quick-start" prefetch={false}>
             Build your first agent <span aria-hidden="true">→</span>

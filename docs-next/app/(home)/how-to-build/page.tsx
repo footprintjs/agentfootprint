@@ -1,22 +1,22 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { StandDetails } from '@/components/home/stand/StandDetails';
+import { HowToBuild } from '@/components/build/HowToBuild';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
 import '../v2.css';
 import '@/components/home/stand/stand.css';
 
-const TITLE = 'The whole framework — AgentFootprint';
+const TITLE = 'How to build an agent — AgentFootprint';
 const DESCRIPTION =
-  'Build, debug, run and monitor an agent in AgentFootprint: skills and scoped tools, recorded runs and lenses, your own stack through typed ports, and typed events you can export.';
+  'Build an agent against a scripted model, debug it from its own record, deploy it on AWS, Google Cloud, Azure or your own machines through adapters, and monitor it with OpenTelemetry or your own recorder.';
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
-  alternates: { canonical: `${SITE.url}/framework/` },
+  alternates: { canonical: `${SITE.url}/how-to-build/` },
   openGraph: {
     type: 'website',
-    url: `${SITE.url}/framework/`,
+    url: `${SITE.url}/how-to-build/`,
     siteName: SITE.name,
     title: TITLE,
     description: DESCRIPTION,
@@ -32,17 +32,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default function FrameworkPage() {
+export default function HowToBuildPage() {
   return (
     <div className="v2-home">
-      <StandDetails />
+      <HowToBuild />
       <nav className="hs-next" aria-label="Where to go next">
         <div className="sc-links">
-          <Link className="v2-button v2-button-primary" href="/docs/getting-started/quick-start" prefetch={false}>
+          <Link
+            className="v2-button v2-button-primary"
+            href="/docs/getting-started/quick-start"
+            prefetch={false}
+          >
             Build your first agent <span aria-hidden="true">→</span>
           </Link>
-          <Link className="v2-button v2-button-quiet" href="/features" prefetch={false}>
-            Back to features <span aria-hidden="true">→</span>
+          <Link className="v2-button v2-button-quiet" href="/engineering" prefetch={false}>
+            The code by discipline <span aria-hidden="true">→</span>
           </Link>
         </div>
       </nav>

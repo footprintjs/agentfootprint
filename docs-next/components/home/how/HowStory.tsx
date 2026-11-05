@@ -16,13 +16,14 @@ const STEPS: readonly { readonly mark: string; readonly chapters: readonly HowCh
   { mark: '+', chapters: ['forward', 'loop'] },
 ];
 
-const JUMPS: readonly { readonly mark: string; readonly to: HowChapter; readonly label: string }[] = [
-  { mark: '1', to: 'wrong', label: 'The wrong answer' },
-  { mark: '2', to: 'record', label: 'The record' },
-  { mark: '3', to: 'walk', label: 'The walk back' },
-  { mark: '4', to: 'address', label: 'The suspect' },
-  { mark: '5', to: 'rerun', label: 'The test' },
-];
+const JUMPS: readonly { readonly mark: string; readonly to: HowChapter; readonly label: string }[] =
+  [
+    { mark: '1', to: 'wrong', label: 'The wrong answer' },
+    { mark: '2', to: 'record', label: 'The record' },
+    { mark: '3', to: 'walk', label: 'The walk back' },
+    { mark: '4', to: 'address', label: 'The suspect' },
+    { mark: '5', to: 'rerun', label: 'The test' },
+  ];
 
 function ChapterScene({ chapter, labels }: { chapter: HowChapter; labels: HowLabels }) {
   const { scene, from, to } = HOW_SCENES[chapter];

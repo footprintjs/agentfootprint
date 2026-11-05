@@ -63,7 +63,7 @@ function StageArt({ id }: { id: string }) {
       </svg>
     );
   }
-  if (id === 'production') {
+  if (id === 'deploy') {
     return (
       <svg viewBox="0 0 200 72" aria-hidden="true">
         <path className="la-wire" pathLength={1} d="M80 28C66 28 64 16 50 16" style={at(0)} />

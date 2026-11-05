@@ -55,7 +55,10 @@ export function SiteHeader() {
   const pathname = usePathname();
   const onDocs = pathname?.startsWith('/docs') ?? false;
   const onFeatures = pathname?.startsWith('/features') ?? false;
-  const onHowItWorks = pathname?.startsWith('/how-it-works') ?? false;
+  const onHowToBuild = pathname?.startsWith('/how-to-build') ?? false;
+  const onEngineering = pathname?.startsWith('/engineering') ?? false;
+  const onSecurity = pathname?.startsWith('/security') ?? false;
+  const onHowWeDebug = pathname?.startsWith('/how-we-debug') ?? false;
   const onHowItStands = pathname?.startsWith('/how-it-stands') ?? false;
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -144,12 +147,12 @@ export function SiteHeader() {
             How it stands
           </Link>
           <Link
-            href="/how-it-works"
+            href="/how-we-debug"
             prefetch={false}
-            className={`af-sh-link${onHowItWorks ? ' on' : ''}`}
-            aria-current={onHowItWorks ? 'page' : undefined}
+            className={`af-sh-link${onHowWeDebug ? ' on' : ''}`}
+            aria-current={onHowWeDebug ? 'page' : undefined}
           >
-            How it works
+            How we debug
           </Link>
           <Link
             href="/features"
@@ -158,6 +161,30 @@ export function SiteHeader() {
             aria-current={onFeatures ? 'page' : undefined}
           >
             Features
+          </Link>
+          <Link
+            href="/how-to-build"
+            prefetch={false}
+            className={`af-sh-link${onHowToBuild ? ' on' : ''}`}
+            aria-current={onHowToBuild ? 'page' : undefined}
+          >
+            How to build
+          </Link>
+          <Link
+            href="/engineering"
+            prefetch={false}
+            className={`af-sh-link${onEngineering ? ' on' : ''}`}
+            aria-current={onEngineering ? 'page' : undefined}
+          >
+            Engineering
+          </Link>
+          <Link
+            href="/security"
+            prefetch={false}
+            className={`af-sh-link${onSecurity ? ' on' : ''}`}
+            aria-current={onSecurity ? 'page' : undefined}
+          >
+            Security
           </Link>
           <Link
             href="/docs"
@@ -204,11 +231,20 @@ export function SiteHeader() {
           <Link href="/how-it-stands" prefetch={false} aria-current={onHowItStands ? 'page' : undefined}>
             How it stands
           </Link>
-          <Link href="/how-it-works" prefetch={false} aria-current={onHowItWorks ? 'page' : undefined}>
-            How it works
+          <Link href="/how-we-debug" prefetch={false} aria-current={onHowWeDebug ? 'page' : undefined}>
+            How we debug
           </Link>
           <Link href="/features" prefetch={false} aria-current={onFeatures ? 'page' : undefined}>
             Features
+          </Link>
+          <Link href="/how-to-build" prefetch={false} aria-current={onHowToBuild ? 'page' : undefined}>
+            How to build
+          </Link>
+          <Link href="/engineering" prefetch={false} aria-current={onEngineering ? 'page' : undefined}>
+            Engineering
+          </Link>
+          <Link href="/security" prefetch={false} aria-current={onSecurity ? 'page' : undefined}>
+            Security
           </Link>
           <Link href="/docs" prefetch={false} aria-current={onDocs ? 'page' : undefined}>
             Docs

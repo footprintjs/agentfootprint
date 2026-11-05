@@ -30,8 +30,8 @@ export function StandQuestions() {
         <Link className="v2-button v2-button-primary" href="/how-it-stands" prefetch={false}>
           How it stands <span aria-hidden="true">→</span>
         </Link>
-        <Link className="v2-button v2-button-quiet" href="/how-it-works" prefetch={false}>
-          How it works <span aria-hidden="true">→</span>
+        <Link className="v2-button v2-button-quiet" href="/how-we-debug" prefetch={false}>
+          How we debug <span aria-hidden="true">→</span>
         </Link>
         <Link className="v2-button v2-button-quiet" href="/docs/getting-started/quick-start" prefetch={false}>
           Build your first agent <span aria-hidden="true">→</span>

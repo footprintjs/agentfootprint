@@ -123,7 +123,7 @@ export default function ContextEngineeringPage() {
       </section>
       <div className="cx-end">
         <p>Follow the context. Inspect the decision.</p>
-        <Link href="/how-it-works">Explore a debugging walkthrough →</Link>
+        <Link href="/how-we-debug">Explore a debugging walkthrough →</Link>
       </div>
       <SiteFooter />
     </main>

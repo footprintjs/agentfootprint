@@ -59,8 +59,8 @@ const RECORD = [
 
 /* How far each scene sits down from the top, so it reads as centred in its frame. */
 const NUDGE: Readonly<Record<'wide' | 'tall', Readonly<Record<FeatureId, number>>>> = {
-  wide: { build: 19, teach: 46, remember: 54, swap: 8, adapt: 20, watch: 18, ask: 39, protect: 20, why: 46, survive: 9 },
-  tall: { build: 30, teach: 46, remember: 40, swap: 20, adapt: 30, watch: 32, ask: 32, protect: 20, why: 35, survive: 29 },
+  wide: { build: 19, teach: 46, remember: 54, swap: 8, adapt: 20, show: 40, watch: 18, ask: 39, protect: 20, why: 46, survive: 9 },
+  tall: { build: 30, teach: 46, remember: 40, swap: 20, adapt: 30, show: 26, watch: 32, ask: 32, protect: 20, why: 35, survive: 29 },
 };
 
 export class FeatureScenes extends Stage<null> {
@@ -225,6 +225,63 @@ export class FeatureScenes extends Stage<null> {
       this.card(x, y, P ? 116 : 210, P ? 50 : 72, model.n, a, { stroke: on ? model.c : undefined, mono: false, size: P ? 13.5 : 19 });
     });
     this.codeStrip(P ? 352 : 468, [`provider: ${MODELS[active]!.code},`]);
+  }
+
+  /* ── SHOW: every step, on your own screen ─────────────────────────────── */
+  private show(u: number, clock: number) {
+    const { P, dw, th } = this;
+    const [toolStart, toolResult, textContent, finished] = SCENE_QUOTES.agUi;
+    /* the agent, the wire, and the page it feeds */
+    const cx = P ? 44 : 96;
+    const top = P ? 40 : 110;
+    const base = P ? 130 : 300;
+    const hw = P ? 36 : 74;
+    this.triangle(cx, top, base, hw, clock);
+    const winX = P ? 2 : 290;
+    const winY = P ? 186 : 70;
+    const winW = dw - winX - (P ? 2 : 14);
+    const winH = P ? 212 : 316;
+    const a = E.out(win(0.02, 0.18, u));
+    const fromX = cx + hw * 0.7;
+    const fromY = base - (P ? 22 : 44);
+    const wire = P ? this.pts([fromX, fromY], [fromX + 70, fromY], [dw / 2 + 40, winY - 60], [dw / 2 + 40, winY], 20) : this.pts([fromX, fromY], [fromX + 40, fromY], [winX - 40, winY + 130], [winX, winY + 130], 20);
+    this.stroke(wire, 0, 1, { color: th.yellowDeep, lw: P ? 1.8 : 2.4, alpha: a });
+    if (u > 0.2 && u < 1.9) this.comet(wire, (clock * 1.1) % 1, { lw: P ? 2.6 : 3.2 });
+    /* whichever event is on the wire now */
+    const steps = [
+      { name: toolStart, at: 0.25 },
+      { name: toolResult, at: 0.72 },
+      { name: textContent, at: 1.05 },
+      { name: finished, at: 1.72 },
+    ];
+    const current = [...steps].reverse().find((step) => u >= step.at);
+    if (current) this.chip(P ? 232 : 200, P ? 96 : 40, current.name, { size: P ? 10.5 : 13, fg: th.yellowInk, border: th.yellow, alpha: win(current.at, current.at + 0.08, u) });
+    /* the page */
+    this.box(winX, winY, winW, winH, { r: 14, fill: th.card, stroke: th.lineStrong, alpha: a, shadow: true });
+    [0, 1, 2].forEach((i) => this.dot(winX + (P ? 14 : 20) + i * (P ? 12 : 16), winY + (P ? 14 : 20), P ? 3.5 : 4.5, th.line, a));
+    this.text('your app', winX + winW / 2, winY + (P ? 14 : 20), { size: P ? 10 : 12, weight: 650, mono: true, color: th.muted, align: 'center', base: 'middle', alpha: a });
+    const inner = winX + (P ? 12 : 22);
+    const innerW = winW - (P ? 24 : 44);
+    const you = win(0.1, 0.22, u);
+    const youY = winY + (P ? 34 : 50);
+    const youH = P ? 34 : 46;
+    const youW = innerW * 0.72;
+    this.box(inner + innerW - youW, youY, youW, youH, { r: 11, fill: th.yellow, alpha: you });
+    this.text('Where is my refund?', inner + innerW - youW / 2, youY + youH / 2, { size: P ? 11.5 : 14.5, weight: 640, color: CODE_BG, align: 'center', base: 'middle', alpha: you });
+    /* the tool call, as a card that finishes */
+    const card = win(0.28, 0.4, u);
+    const done = win(0.75, 0.85, u);
+    const cardY = youY + youH + (P ? 12 : 18);
+    const cardH = P ? 36 : 50;
+    this.box(inner, cardY, innerW, cardH, { r: 10, fill: th.cardAlt, stroke: done > 0.5 ? th.green : th.lineStrong, alpha: card });
+    this.text('get_refund', inner + (P ? 10 : 14), cardY + cardH / 2, { size: P ? 11 : 14, weight: 650, mono: true, base: 'middle', alpha: card });
+    this.text(done > 0.5 ? 'done ✓' : 'running…', inner + innerW - (P ? 10 : 14), cardY + cardH / 2, { size: P ? 10.5 : 13, weight: 680, color: done > 0.5 ? th.green : th.muted, align: 'right', base: 'middle', alpha: card });
+    /* the answer, as it streams */
+    const words = 'Your refund for A-1042 is still pending. It should clear in about three days.';
+    const shown = Math.round(words.length * win(1.08, 1.68, u));
+    const textY = cardY + cardH + (P ? 14 : 22);
+    this.para(words.slice(0, shown), inner, textY, innerW, { size: P ? 13 : 17, weight: 560, lh: P ? 19 : 25, base: 'top' });
+    if (u > 1.05 && u < 1.72 && Math.floor(clock * 4) % 2 === 0) this.box(inner + innerW * (shown / words.length) * 0.2, textY + (P ? 42 : 56), 2, P ? 14 : 18, { fill: th.ink, alpha: 0.5 });
   }
 
   /* ── WATCH: see it think, in real time ────────────────────────────────── */
