@@ -45,6 +45,8 @@ export function FilmStage<L>(props: {
   /** Loads the engine late, and hands back what starts it. */
   readonly load: () => Promise<(root: HTMLElement, labels: L) => FilmController<L> | null>;
   readonly hero: ReactNode;
+  /** A line that heads the film once the hero has gone. Any `data-lit` inside lights for those chapters. */
+  readonly line?: ReactNode;
   readonly caps: readonly StageCap[];
   readonly stops: readonly StageStop[];
   readonly end: number;
@@ -79,10 +81,16 @@ export function FilmStage<L>(props: {
   }, [labels]);
 
   return (
-    <section className={`sf${props.className ? ` ${props.className}` : ''}`} id={props.id} ref={root} aria-label={props.label}>
+    <section
+      className={`sf${props.className ? ` ${props.className}` : ''}`}
+      id={props.id}
+      ref={root}
+      aria-label={props.label}
+    >
       <div className="sf-stage">
         <canvas className="sf-canvas" aria-hidden="true" />
         {props.switcher}
+        {props.line}
         <div className="sf-hero on">{props.hero}</div>
         <ol className="sf-caps">
           {props.caps.map((cap) => (
@@ -107,7 +115,13 @@ export function FilmStage<L>(props: {
           ))}
         </ol>
         <div className="sf-rail">
-          <button type="button" className="sf-play" data-film-play data-play-idle="Play" aria-pressed="false">
+          <button
+            type="button"
+            className="sf-play"
+            data-film-play
+            data-play-idle="Play"
+            aria-pressed="false"
+          >
             <span className="sf-play-icon" aria-hidden="true" />
             <span data-play-label>Play</span>
           </button>
@@ -130,7 +144,8 @@ export function FilmStage<L>(props: {
           </div>
           <a className="sf-skip" href={props.skip.href}>
             {props.skip.label}
-            <span className="sf-skip-more"> {props.skip.more}</span> <span aria-hidden="true">↓</span>
+            <span className="sf-skip-more"> {props.skip.more}</span>{' '}
+            <span aria-hidden="true">↓</span>
           </a>
         </div>
       </div>

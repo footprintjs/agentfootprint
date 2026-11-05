@@ -46,6 +46,21 @@ export const CHAPTERS: readonly (readonly [ChapterId | 'hero', number, number])[
   ['finale', T.endA, 1e9],
 ];
 
+/* The film's last three parts stand on the whole line. */
+const WHOLE: readonly ChapterId[] = ['limit', 'chain', 'finale'];
+
+/**
+ * The home page's one line. It opens alone on the first screen, then rises to head the film, and the
+ * film expands it: each word lights while the part it stands for is on screen.
+ */
+export const LINE: readonly { readonly text: string; readonly on: readonly ChapterId[] }[] = [
+  { text: 'Build agents', on: ['s', ...WHOLE] },
+  { text: 'you can', on: ['d', 'gate', ...WHOLE] },
+  { text: 'hold', on: ['word', 'a', 'montage', 'n', 'named', ...WHOLE] },
+  { text: 'to the', on: WHOLE },
+  { text: 'record.', on: ['ledger', 'llm', 'logs', 't', 'explain', ...WHOLE] },
+];
+
 /** The scrubber's stops. */
 export const RAIL: readonly {
   readonly label: string;

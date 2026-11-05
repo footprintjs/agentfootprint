@@ -39,6 +39,7 @@ export class LiveFilm<L> implements FilmController<L> {
   private canvas: HTMLCanvasElement;
   private caps: HTMLElement[];
   private hero: HTMLElement | null;
+  private lit: HTMLElement[];
   private stops: { el: HTMLElement; at: number }[];
   private target = 0;
   private startAt = performance.now();
@@ -49,17 +50,14 @@ export class LiveFilm<L> implements FilmController<L> {
   private cleanups: (() => void)[] = [];
   private clockNow = 0;
 
-  constructor(
-    private root: HTMLElement,
-    labels: L,
-    private spec: FilmSpec<L>,
-  ) {
+  constructor(private root: HTMLElement, labels: L, private spec: FilmSpec<L>) {
     root.classList.add('is-live');
     root.style.setProperty('--sf-beats', String(spec.end));
     this.stage = root.querySelector<HTMLElement>('.sf-stage')!;
     this.canvas = root.querySelector<HTMLCanvasElement>('.sf-canvas')!;
     this.caps = Array.from(root.querySelectorAll<HTMLElement>('.sf-cap'));
     this.hero = root.querySelector<HTMLElement>('.sf-hero');
+    this.lit = Array.from(root.querySelectorAll<HTMLElement>('[data-lit]'));
     this.stops = Array.from(root.querySelectorAll<HTMLElement>('.sf-stop')).map((el) => ({
       el,
       at: Number(el.dataset.at),
@@ -96,10 +94,10 @@ export class LiveFilm<L> implements FilmController<L> {
   measure() {
     const W = this.stage.clientWidth;
     const H = this.stage.clientHeight;
-    /* the stage pins below the site header, so nothing sits under it */
-    const head = 0;
     const pinnedAt = parseFloat(getComputedStyle(this.stage).top) || 0;
     const portrait = W < 860 || W / H < 1.1;
+    /* the stage pins below the site header, so only the film's own line, if it has one, sits above it */
+    const head = this.lit.length ? (portrait ? 30 : 46) : 0;
     const capZone = portrait ? clamp(H * 0.3, 172, 262) : 0;
     const gutter = clamp(W * 0.035, 14, 56);
     const capW = portrait ? 0 : clamp(W * 0.3, 290, 440);
@@ -143,7 +141,7 @@ export class LiveFilm<L> implements FilmController<L> {
     this.root.querySelectorAll<HTMLElement>('[data-film-play]').forEach((b) => {
       b.setAttribute('aria-pressed', this.playing ? 'true' : 'false');
       const label = b.querySelector('[data-play-label]');
-      if (label) label.textContent = this.playing ? 'Pause' : (b.dataset.playIdle ?? 'Play');
+      if (label) label.textContent = this.playing ? 'Pause' : b.dataset.playIdle ?? 'Play';
     });
   }
 
@@ -175,7 +173,11 @@ export class LiveFilm<L> implements FilmController<L> {
     listen('wheel', stop, { passive: true });
     listen('touchstart', stop, { passive: true });
     listen('keydown', (e) => {
-      if (this.playing && [' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) this.pause();
+      if (
+        this.playing &&
+        [' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)
+      )
+        this.pause();
     });
 
     const onClick = (e: Event) => {
@@ -272,10 +274,16 @@ export class LiveFilm<L> implements FilmController<L> {
       this.caps.forEach((cap) => cap.classList.toggle('on', cap.dataset.chapter === chapter));
       this.hero?.classList.toggle('on', chapter === 'hero');
       this.root.dataset.chapter = chapter ?? '';
+      this.lit.forEach((el) =>
+        el.classList.toggle('lit', (el.dataset.lit ?? '').split(' ').includes(chapter ?? '')),
+      );
     }
     const end = this.spec.chapters.find(([id]) => id === chapter)?.[2] ?? 1e9;
-    this.caps.find((cap) => cap.dataset.chapter === chapter)?.classList.toggle('handoff', t > end - 0.78);
+    this.caps
+      .find((cap) => cap.dataset.chapter === chapter)
+      ?.classList.toggle('handoff', t > end - 0.78);
     this.root.style.setProperty('--sf-p', (t / this.spec.end).toFixed(4));
+    this.root.style.setProperty('--sf-t', t.toFixed(3));
     let current = -1;
     this.stops.forEach((s, i) => {
       if (t >= s.at - 0.14) current = i;
@@ -293,11 +301,7 @@ export class StillFilm<L> implements FilmController<L> {
   private frames: { canvas: HTMLCanvasElement; chapter: string }[] = [];
   private cleanups: (() => void)[] = [];
 
-  constructor(
-    private root: HTMLElement,
-    labels: L,
-    private spec: FilmSpec<L>,
-  ) {
+  constructor(private root: HTMLElement, labels: L, private spec: FilmSpec<L>) {
     root.classList.add('is-still');
     this.film = spec.make(this.buffer, labels);
     this.film.readPalette(root);
@@ -352,7 +356,11 @@ export class StillFilm<L> implements FilmController<L> {
   }
 }
 
-export function bootFilm<L>(root: HTMLElement, labels: L, spec: FilmSpec<L>): FilmController<L> | null {
+export function bootFilm<L>(
+  root: HTMLElement,
+  labels: L,
+  spec: FilmSpec<L>,
+): FilmController<L> | null {
   if (!document.createElement('canvas').getContext) return null;
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const inst = reduced ? new StillFilm(root, labels, spec) : new LiveFilm(root, labels, spec);

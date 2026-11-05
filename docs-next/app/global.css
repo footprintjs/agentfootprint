@@ -176,7 +176,7 @@ html {
   color: var(--yellow-dark);
 }
 /* Real footprints, traced from the logo. They walk to the label you point at, then stand there, as they do under the page you're on. */
-.af-sh {
+:root {
   --af-foot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 56'%3E%3Cg transform='translate(-5 -4)'%3E%3Ccircle cx='8.5' cy='17' r='2.6'/%3E%3Ccircle cx='13.5' cy='13' r='3'/%3E%3Ccircle cx='19.5' cy='10.5' r='3.2'/%3E%3Ccircle cx='26.5' cy='9' r='3.5'/%3E%3Ccircle cx='35' cy='9' r='4.6'/%3E%3Cpath d='M22 15.5C30 15 36 18 35.5 25 35 30 29 31 28 36 27.5 40 33 43 32.5 50 32 56 27 59 22 58.5 17 58 14 54 13 48 12 41 9 33 9 27 9 20 15 16 22 15.5Z'/%3E%3C/g%3E%3C/svg%3E");
   --af-feet: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:x='http://www.w3.org/1999/xlink' viewBox='0 0 82 56'%3E%3Cg id='f'%3E%3Cg transform='translate(-5 -4)'%3E%3Ccircle cx='8.5' cy='17' r='2.6'/%3E%3Ccircle cx='13.5' cy='13' r='3'/%3E%3Ccircle cx='19.5' cy='10.5' r='3.2'/%3E%3Ccircle cx='26.5' cy='9' r='3.5'/%3E%3Ccircle cx='35' cy='9' r='4.6'/%3E%3Cpath d='M22 15.5C30 15 36 18 35.5 25 35 30 29 31 28 36 27.5 40 33 43 32.5 50 32 56 27 59 22 58.5 17 58 14 54 13 48 12 41 9 33 9 27 9 20 15 16 22 15.5Z'/%3E%3C/g%3E%3C/g%3E%3Cuse x:href='%23f' transform='matrix(-1 0 0 1 82 0)'/%3E%3C/svg%3E");
 }

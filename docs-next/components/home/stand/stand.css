@@ -103,7 +103,8 @@
 }
 .sf-canvas,
 .sf-rail,
-.sf-hint {
+.sf-hint,
+.sf-line {
   display: none;
 }
 .sf-hero,
@@ -112,9 +113,14 @@
   margin-inline: auto;
   padding-inline: var(--v2-pad);
 }
+.sf-hero {
+  max-width: none;
+  text-align: center;
+}
 .sf-kicker {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   margin: 0 0 14px;
   color: var(--fg-muted);
@@ -134,26 +140,22 @@
 }
 .sf-hero h1 {
   margin: 0;
-  font-size: clamp(38px, 5vw, 70px);
+  font-size: min(8.4vw, 13svh, 92px);
   font-weight: 800;
   letter-spacing: -0.042em;
   line-height: 1.02;
   text-wrap: balance;
 }
 .sf-hero h1 em {
+  display: block;
+  width: fit-content;
+  margin-inline: auto;
   font-style: normal;
   background: linear-gradient(transparent 62%, color-mix(in oklab, var(--yellow) 70%, transparent) 62%);
 }
-.sf-tag {
-  margin: 14px 0 0;
-  font-size: clamp(18px, 1.55vw, 22px);
-  font-weight: 640;
-  letter-spacing: -0.012em;
-  line-height: 1.3;
-  text-wrap: balance;
-}
 .sf-lede {
-  margin: 10px 0 0;
+  max-width: 56ch;
+  margin: 18px auto 0;
   color: var(--fg-muted);
   font-size: clamp(16px, 1.35vw, 19px);
   line-height: 1.45;
@@ -165,6 +167,9 @@
   align-items: center;
   gap: 10px;
   margin-top: 22px;
+}
+.sf-hero .sf-actions {
+  justify-content: center;
 }
 .sf:not(.is-live) [data-film-play] {
   display: none;
@@ -281,12 +286,30 @@
 .sf-js .sf:not(.is-live):not(.is-still) .sf-caps {
   display: none;
 }
+.sf-js .sf:not(.is-live):not(.is-still) {
+  padding-top: 0;
+}
+.sf-js .sf:not(.is-live):not(.is-still) .sf-stage {
+  position: relative;
+  height: calc(100svh - var(--fd-nav-height, 56px));
+}
 .sf-js .sf:not(.is-live):not(.is-still) .sf-hero {
-  padding-top: 22vh;
+  position: absolute;
+  inset: 46% clamp(14px, 3.5vw, 56px) auto;
+  padding: 0;
+  transform: translateY(-50%);
+}
+.sf-js .sf:not(.is-still) .sf-hint {
+  display: flex;
 }
 
 /* ── the film, live: pinned, scrubbed by scroll ───────────────────────────── */
 .sf.is-live {
+  /* The opening, in film time. The sentence and links leave first (rest), the title rises and fades (open, gone), and only then do the film and its header arrive (in), so the two lines never overlap. */
+  --sf-rest: clamp(0, 1 - var(--sf-t, 0) / 0.22, 1);
+  --sf-open: clamp(0, (var(--sf-t, 0) - 0.04) / 0.6, 1);
+  --sf-gone: clamp(0, (var(--sf-t, 0) - 0.3) / 0.22, 1);
+  --sf-in: clamp(0, (var(--sf-t, 0) - 0.5) / 0.2, 1);
   height: calc(var(--sf-beats, 27.6) * var(--sf-beat));
   min-height: 300vh;
   padding-top: 0;
@@ -306,6 +329,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  opacity: clamp(0, (var(--sf-t, 0) - 0.44) / 0.32, 1);
 }
 .sf.is-live .sf-hero,
 .sf.is-live .sf-caps {
@@ -313,7 +337,53 @@
   margin: 0;
   padding: 0;
 }
-.sf.is-live .sf-hero,
+.sf.is-live .sf-hero {
+  position: absolute;
+  inset: 46% var(--gutter) auto;
+  opacity: calc(1 - var(--sf-gone));
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(calc(-50% - var(--sf-open) * 36svh)) scale(calc(1 - var(--sf-open) * 0.74));
+  transition: visibility 0.24s;
+  z-index: 3;
+}
+.sf.is-live .sf-hero.on {
+  visibility: visible;
+  pointer-events: auto;
+}
+.sf.is-live .sf-hero > :not(h1) {
+  opacity: var(--sf-rest);
+}
+.sf.is-live .sf-line {
+  display: block;
+  position: absolute;
+  inset: 0 var(--gutter) auto;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: clamp(14px, 1.5vw, 21px);
+  font-weight: 720;
+  letter-spacing: -0.015em;
+  line-height: var(--head);
+  text-align: center;
+  white-space: nowrap;
+  opacity: var(--sf-in);
+  pointer-events: none;
+  transition: scale 0.4s ease-out;
+  z-index: 3;
+}
+.sf-line span {
+  background: linear-gradient(transparent 60%, color-mix(in oklab, var(--yellow) 70%, transparent) 60%) no-repeat 0 0 / 0 100%;
+  transition:
+    color 0.24s,
+    background-size 0.36s ease-out;
+}
+.sf-line span.lit {
+  color: var(--fg);
+  background-size: 100% 100%;
+}
+.sf.is-live[data-chapter='finale'] .sf-line {
+  scale: 1.14;
+}
 .sf.is-live .sf-cap {
   position: absolute;
   left: var(--gutter);
@@ -329,14 +399,10 @@
     visibility 0.24s;
   z-index: 3;
 }
-.sf.is-live .sf-hero.on,
 .sf.is-live .sf-cap.on {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-}
-.sf.is-live .sf-hero h1 {
-  font-size: clamp(38px, 4.3vw, 66px);
 }
 .sf.is-live .sf-cap h2 {
   font-size: clamp(26px, 2.9vw, 44px);
@@ -383,44 +449,46 @@
   transform: none;
   transition: transform 0.46s cubic-bezier(0.2, 1.5, 0.4, 1);
 }
-.sf.is-live .sf-hint {
-  display: flex;
+.sf-hint {
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  margin: 20px 0 0;
+  margin: 26px 0 0;
   color: var(--fg-faint);
   font-family: var(--v2-mono);
   font-size: 11.5px;
 }
-.sf-mouse {
+.sf-steps {
   position: relative;
   flex: none;
-  width: 16px;
-  height: 25px;
-  border: 1.5px solid var(--fg-faint);
-  border-radius: 9px;
+  width: 26px;
+  height: 36px;
 }
-.sf-mouse::after {
-  content: '';
+.sf-steps i {
   position: absolute;
-  left: 50%;
-  top: 4px;
-  width: 2px;
-  height: 5px;
-  margin-left: -1px;
-  border-radius: 2px;
-  background: var(--fg-faint);
-  animation: sf-wheel 1.7s ease-in-out infinite;
+  top: 0;
+  left: 0;
+  width: 11px;
+  height: 17px;
+  background: var(--yellow-dark);
+  mask: var(--af-foot) center / contain no-repeat;
+  transform: rotate(180deg) scaleX(-1);
+  animation: sf-step 1.7s ease-in-out infinite;
 }
-@keyframes sf-wheel {
-  0% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-  70%,
+.sf-steps i + i {
+  top: 18px;
+  left: 14px;
+  transform: rotate(180deg);
+  animation-delay: 0.42s;
+}
+@keyframes sf-step {
+  0%,
   100% {
-    transform: translateY(9px);
-    opacity: 0;
+    opacity: 0.14;
+  }
+  28%,
+  58% {
+    opacity: 1;
   }
 }
 
@@ -468,9 +536,18 @@
 .sf.is-live .sf-views.sf-views-stage {
   display: inline-flex;
   position: absolute;
-  top: calc(var(--head) + 10px);
+  top: 6px;
   right: var(--gutter);
+  opacity: var(--sf-in);
   z-index: 4;
+}
+.sf.is-live[data-chapter='hero'] .sf-views.sf-views-stage,
+.sf.is-live[data-chapter='hero'] .sf-rail {
+  pointer-events: none;
+}
+.sf.is-live .sf-views.sf-views-stage:focus-within,
+.sf.is-live .sf-rail:focus-within {
+  opacity: 1;
 }
 
 /* the rail: the word STAND is the scrubber */
@@ -483,6 +560,7 @@
   height: 54px;
   align-items: center;
   gap: 14px;
+  opacity: var(--sf-in);
   z-index: 4;
 }
 .sf-play {
@@ -602,7 +680,6 @@
 }
 
 /* ── phones: captions on top, the scene below ─────────────────────────────── */
-.sf.is-live .sf-stage.is-portrait .sf-hero,
 .sf.is-live .sf-stage.is-portrait .sf-cap {
   left: var(--gutter);
   right: var(--gutter);
@@ -610,31 +687,9 @@
   top: calc(var(--head) + 44px);
   transform: none;
 }
-.sf.is-live .sf-stage.is-portrait .sf-hero {
-  top: calc(var(--head) + 40px);
-}
-.sf.is-live .sf-stage.is-portrait .sf-hero h1 {
-  font-size: clamp(31px, 8.6vw, 44px);
-}
-.sf.is-live .sf-stage.is-portrait .sf-kicker {
-  margin-bottom: 8px;
-  font-size: 9.5px;
-}
-.sf.is-live .sf-stage.is-portrait .sf-tag {
-  margin-top: 8px;
-  font-size: 15.5px;
-}
-.sf.is-live .sf-stage.is-portrait .sf-lede {
-  margin-top: 6px;
-  font-size: 13.5px;
-}
-.sf.is-live .sf-stage.is-portrait .sf-actions {
+.sf.is-live .sf-stage.is-portrait .sf-cap .sf-actions {
   margin-top: 10px;
 }
-.sf.is-live .sf-stage.is-portrait .sf-actions {
-  flex-wrap: nowrap;
-}
-.sf.is-live .sf-stage.is-portrait .sf-hero .v2-button,
 .sf.is-live .sf-stage.is-portrait .sf-cap .v2-button {
   flex: 0 1 auto;
   width: auto;
@@ -642,12 +697,6 @@
   padding: 7px 12px;
   font-size: 12.5px;
   white-space: nowrap;
-}
-.sf.is-live .sf-stage.is-portrait .sf-cap .sf-actions {
-  flex-wrap: wrap;
-}
-.sf.is-live .sf-stage.is-portrait .sf-hint {
-  display: none;
 }
 .sf.is-live .sf-stage.is-portrait .sf-cap h2 {
   font-size: clamp(21px, 6vw, 30px);
