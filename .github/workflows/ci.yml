@@ -341,9 +341,8 @@ jobs:
       - run: npm run build
       - run: npm run docs:truth
 
-  # Coverage gate — runs vitest with v8 coverage; uploads lcov to Codecov.
-  # No threshold enforcement (per design memo); badge surfaces the number
-  # so it stays visible without becoming a hostage to chasing the metric.
+  # Coverage gate — runs vitest with v8 coverage, reported in the merged job.
+  # No threshold enforcement (per design memo).
   #
   # Split like the test run: each shard records its results and coverage in a
   # blob, and `coverage` below merges them. A shard's own log prints only its
@@ -418,15 +417,6 @@ jobs:
       - name: Every shard's blob arrived
         run: ls -l vitest-blobs/shard-{1,2,3,4}.json
       - run: npm run test:coverage -- --merge-reports=vitest-blobs
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        with:
-          files: ./coverage/lcov.info
-          flags: unittests
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # The tree this run tested, recorded where the Release workflow can read it
   # back. Every job here that reads the code checks out the same commit — for a
