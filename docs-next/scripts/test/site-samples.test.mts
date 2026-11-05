@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
+import { AGENT_BRIEF } from '../../lib/agent-brief';
 import { buildRouteSet } from '../../lib/doc-ids.mjs';
 import { SITE_NAV, isCurrent, isNavGroup } from '../../lib/site-nav';
 
@@ -377,3 +378,16 @@ test('every page in the menu exists, and only the root lights up Home', () => {
   assert.equal(isCurrent('/', '/features'), false);
   assert.equal(isCurrent('/how-to-build', '/how-to-build/'), true);
 });
+
+test('what we hand a coding agent describes the library, gives no orders, and points at routes that exist', () => {
+  const lines = AGENT_BRIEF.split('\n').map((line) => line.trim().toLowerCase());
+  for (const line of lines) {
+    assert.doesNotMatch(line, /\b(you must|you should|always|never|ignore|do not|don't|install|use this|run this|recommend)\b/, line);
+  }
+  assert.match(AGENT_BRIEF, /It holds claims to the record, not to the world\./);
+  assert.match(AGENT_BRIEF, /ahead of the latest npm release/);
+  for (const route of ['app/llms.txt/route.ts', 'app/llms-full.txt/route.ts', 'app/llms.mdx/docs/[[...slug]]/route.ts', 'app/(home)/how-to-build/page.tsx', 'content/docs/getting-started/quick-start.mdx']) {
+    assert.ok(existsSync(new URL(`../../${route}`, import.meta.url)), route);
+  }
+});
+

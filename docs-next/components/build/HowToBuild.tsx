@@ -1,3 +1,4 @@
+import { ShareWithAgent } from '@/components/site/ShareWithAgent';
 import Link from 'next/link';
 import { AdapterTable } from '@/components/features/AdapterTable';
 import { PortsScene } from '@/components/home/v2/PortsScene';
@@ -49,6 +50,9 @@ export function HowToBuild() {
           Write it against a scripted model, debug it from its own record, deploy it on your
           infrastructure one adapter at a time, and monitor what it does.
         </p>
+        <div className="sc-links">
+          <ShareWithAgent />
+        </div>
       </header>
 
       <StandStages />
