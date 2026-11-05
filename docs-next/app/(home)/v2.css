@@ -38,25 +38,6 @@
   }
 }
 
-.v2-kicker {
-  margin: 0;
-  color: var(--fg-muted);
-  font-family: var(--v2-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
-.v2-kicker > span {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 9px;
-  border-radius: 50%;
-  background: var(--yellow);
-  box-shadow: 0 0 0 5px color-mix(in oklab, var(--yellow) 14%, transparent);
-}
 
 .v21-hero {
   display: grid;
@@ -116,45 +97,6 @@
   flex-wrap: wrap;
   gap: 11px;
   margin-top: 31px;
-}
-.v2-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  min-height: 46px;
-  padding: 0 20px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  color: var(--fg);
-  font-size: 14px;
-  font-weight: 740;
-  text-decoration: none;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
-}
-.v2-button:hover {
-  transform: translateY(-2px);
-}
-.v2-button:focus-visible,
-.v21-scene-copy a:focus-visible,
-.v21-field-result a:focus-visible,
-.v21-paths a:focus-visible {
-  outline: 3px solid var(--yellow-ink);
-  outline-offset: 3px;
-}
-.v2-button-primary {
-  background: var(--yellow);
-  color: #18181b;
-}
-.v2-button-primary:hover {
-  background: var(--yellow-light);
-}
-.v2-button-quiet {
-  border-color: var(--border-strong);
-  background: color-mix(in oklab, var(--bg-elev) 76%, transparent);
-}
-.v2-button-quiet:hover {
-  border-color: var(--yellow-dark);
 }
 /* The context handoff becomes an executable, recorded progression. */
 .v2-evolution {

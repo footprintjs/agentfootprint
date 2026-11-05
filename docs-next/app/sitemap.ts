@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE.url}/features/`, changeFrequency: 'monthly', priority: 0.9 },
     // the indexable product walkthrough is a first-class marketing route too
     { url: `${SITE.url}/how-it-works/`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${SITE.url}/how-it-works/walkthrough/`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${SITE.url}/how-it-stands/`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${SITE.url}/framework/`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${SITE.url}/context-engineering/`, changeFrequency: 'monthly', priority: 0.8 },

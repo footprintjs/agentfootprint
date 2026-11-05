@@ -5,19 +5,33 @@
  * StillFilm, for reduced motion, holds one frame under each caption, in reading order.
  * With no JavaScript at all the page is the hero and the captions, as plain text.
  */
-import { Film } from './film';
-import { CHAPTERS, STILLS, T } from './timeline';
-import type { ChapterId, FilmLabels } from './copy';
+import type { ResizeOpts } from './stage';
 
 const clamp = (x: number, a: number, b: number) => (x < a ? a : x > b ? b : x);
 
-export interface FilmController {
-  setLabels(labels: FilmLabels): void;
+export interface FilmController<L> {
+  setLabels(labels: L): void;
   destroy(): void;
 }
 
-export class LiveFilm implements FilmController {
-  readonly film: Film;
+/** What a film has to be able to do for this to run it. */
+export interface FilmEngine<L> {
+  draw(t: number, clock: number): void;
+  resize(W: number, H: number, dpr: number, o?: ResizeOpts): void;
+  readPalette(el: Element): void;
+  setLabels(labels: L): void;
+}
+
+/** One film: how to make its engine, how long it runs, and when each caption shows. */
+export interface FilmSpec<L> {
+  make(canvas: HTMLCanvasElement, labels: L): FilmEngine<L>;
+  readonly end: number;
+  readonly chapters: readonly (readonly [string, number, number])[];
+  readonly stills: Readonly<Record<string, number>>;
+}
+
+export class LiveFilm<L> implements FilmController<L> {
+  readonly film: FilmEngine<L>;
   readonly stage: HTMLElement;
   running = false;
   t = 0;
@@ -37,10 +51,11 @@ export class LiveFilm implements FilmController {
 
   constructor(
     private root: HTMLElement,
-    labels: FilmLabels,
+    labels: L,
+    private spec: FilmSpec<L>,
   ) {
     root.classList.add('is-live');
-    root.style.setProperty('--sf-beats', String(T.end));
+    root.style.setProperty('--sf-beats', String(spec.end));
     this.stage = root.querySelector<HTMLElement>('.sf-stage')!;
     this.canvas = root.querySelector<HTMLCanvasElement>('.sf-canvas')!;
     this.caps = Array.from(root.querySelectorAll<HTMLElement>('.sf-cap'));
@@ -49,7 +64,7 @@ export class LiveFilm implements FilmController {
       el,
       at: Number(el.dataset.at),
     }));
-    this.film = new Film(this.canvas, labels);
+    this.film = spec.make(this.canvas, labels);
     this.film.readPalette(root);
     this.measure();
     this.t = this.target = this.readScroll();
@@ -68,7 +83,7 @@ export class LiveFilm implements FilmController {
     this.syncDom(this.t);
   }
 
-  setLabels(labels: FilmLabels) {
+  setLabels(labels: L) {
     this.film.setLabels(labels);
   }
 
@@ -101,18 +116,18 @@ export class LiveFilm implements FilmController {
   }
 
   readScroll() {
-    return clamp((window.scrollY - this.rootTop) / this.scrollable, 0, 1) * T.end;
+    return clamp((window.scrollY - this.rootTop) / this.scrollable, 0, 1) * this.spec.end;
   }
 
   seek(t: number) {
     window.scrollTo({
-      top: this.rootTop + (clamp(t, 0, T.end) / T.end) * this.scrollable,
+      top: this.rootTop + (clamp(t, 0, this.spec.end) / this.spec.end) * this.scrollable,
       behavior: 'instant' as ScrollBehavior,
     });
   }
 
   play() {
-    if (this.readScroll() > T.end - 0.05) this.seek(0);
+    if (this.readScroll() > this.spec.end - 0.05) this.seek(0);
     this.playing = true;
     this.root.classList.add('is-playing');
     this.syncPlay();
@@ -185,7 +200,7 @@ export class LiveFilm implements FilmController {
     if (track) {
       const toT = (e: PointerEvent) => {
         const r = track.getBoundingClientRect();
-        return (clamp(e.clientX - r.left, 0, r.width) / r.width) * T.end;
+        return (clamp(e.clientX - r.left, 0, r.width) / r.width) * this.spec.end;
       };
       let down = false;
       const onDown = (e: PointerEvent) => {
@@ -225,7 +240,7 @@ export class LiveFilm implements FilmController {
     this.last = now;
     const clock = (this.clockNow = (now - this.startAt) / 1000);
     if (this.playing) {
-      const speed = this.scrollable / (T.end * 1.9);
+      const speed = this.scrollable / (this.spec.end * 1.9);
       const next = window.scrollY + speed * dt;
       window.scrollTo({ top: next, behavior: 'instant' as ScrollBehavior });
       if (next >= this.rootTop + this.scrollable - 1) this.pause();
@@ -251,16 +266,16 @@ export class LiveFilm implements FilmController {
 
   syncDom(t: number) {
     let chapter: string | null = null;
-    for (const [id, a, b] of CHAPTERS) if (t >= a && t < b) chapter = id;
+    for (const [id, a, b] of this.spec.chapters) if (t >= a && t < b) chapter = id;
     if (chapter !== this.lastChapter) {
       this.lastChapter = chapter;
       this.caps.forEach((cap) => cap.classList.toggle('on', cap.dataset.chapter === chapter));
       this.hero?.classList.toggle('on', chapter === 'hero');
       this.root.dataset.chapter = chapter ?? '';
     }
-    const end = CHAPTERS.find(([id]) => id === chapter)?.[2] ?? 1e9;
+    const end = this.spec.chapters.find(([id]) => id === chapter)?.[2] ?? 1e9;
     this.caps.find((cap) => cap.dataset.chapter === chapter)?.classList.toggle('handoff', t > end - 0.78);
-    this.root.style.setProperty('--sf-p', (t / T.end).toFixed(4));
+    this.root.style.setProperty('--sf-p', (t / this.spec.end).toFixed(4));
     let current = -1;
     this.stops.forEach((s, i) => {
       if (t >= s.at - 0.14) current = i;
@@ -272,25 +287,26 @@ export class LiveFilm implements FilmController {
   }
 }
 
-export class StillFilm implements FilmController {
+export class StillFilm<L> implements FilmController<L> {
   private buffer = document.createElement('canvas');
-  private film: Film;
-  private frames: { canvas: HTMLCanvasElement; chapter: ChapterId }[] = [];
+  private film: FilmEngine<L>;
+  private frames: { canvas: HTMLCanvasElement; chapter: string }[] = [];
   private cleanups: (() => void)[] = [];
 
   constructor(
     private root: HTMLElement,
-    labels: FilmLabels,
+    labels: L,
+    private spec: FilmSpec<L>,
   ) {
     root.classList.add('is-still');
-    this.film = new Film(this.buffer, labels);
+    this.film = spec.make(this.buffer, labels);
     this.film.readPalette(root);
     root.querySelectorAll<HTMLElement>('.sf-cap').forEach((cap) => {
       const canvas = document.createElement('canvas');
       canvas.className = 'sf-cap-still';
       canvas.setAttribute('aria-hidden', 'true');
       cap.appendChild(canvas);
-      this.frames.push({ canvas, chapter: cap.dataset.chapter as ChapterId });
+      this.frames.push({ canvas, chapter: cap.dataset.chapter ?? '' });
     });
     this.render();
     let timer = 0;
@@ -308,7 +324,7 @@ export class StillFilm implements FilmController {
     this.cleanups.push(() => mo.disconnect());
   }
 
-  setLabels(labels: FilmLabels) {
+  setLabels(labels: L) {
     this.film.setLabels(labels);
     this.render();
   }
@@ -330,17 +346,17 @@ export class StillFilm implements FilmController {
       canvas.width = this.buffer.width;
       canvas.height = this.buffer.height;
       canvas.style.aspectRatio = `${W} / ${H}`;
-      this.film.draw(STILLS[chapter], 50);
+      this.film.draw(this.spec.stills[chapter] ?? this.spec.end, 50);
       canvas.getContext('2d')?.drawImage(this.buffer, 0, 0);
     });
   }
 }
 
-export function bootFilm(root: HTMLElement, labels: FilmLabels): FilmController | null {
+export function bootFilm<L>(root: HTMLElement, labels: L, spec: FilmSpec<L>): FilmController<L> | null {
   if (!document.createElement('canvas').getContext) return null;
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const inst = reduced ? new StillFilm(root, labels) : new LiveFilm(root, labels);
+  const inst = reduced ? new StillFilm(root, labels, spec) : new LiveFilm(root, labels, spec);
   /* The video renderer and the browser console can reach the running film here. */
-  (window as unknown as { __standFilm?: FilmController }).__standFilm = inst;
+  (window as unknown as { __standFilm?: FilmController<L> }).__standFilm = inst;
   return inst;
 }

@@ -1,25 +1,14 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { FeaturesHero } from '@/components/features/FeaturesHero';
-import { FeatureBeats } from '@/components/features/FeatureBeats';
+import { PosterFilm } from '@/components/features/PosterFilm';
 import { SiteFooter } from '@/components/SiteFooter';
-import { FEATURE_BEATS, FEATURES_TAGLINE } from '@/lib/features/beats';
+import { FEATURES_TAGLINE } from '@/lib/features/beats';
 import { SITE } from '@/lib/site';
-import { source } from '@/lib/source';
-import './features.css';
+import '@/components/home/stand/stand.css';
 
 /**
- * /features — the eight-verb scroll story: BUILD · TEACH · REMEMBER · SWAP · WATCH · ASK · WHY ·
- * SURVIVE. One verb per beat, each beat a sticky stage that composes itself as you scroll past.
- *
- * Layout comes from the route group `(home)`, so this page wears the SAME real header/footer as the
- * homepage (app/(home)/layout.tsx → HomeLayout + SiteHeader). Page-scoped styling lives in
- * ./features.css — plain CSS with custom properties, the convention in app/global.css; the page
- * adds no dependency and no Tailwind utilities.
- *
- * Server component: the hero, the close and every beat's copy are prerendered HTML (the static
- * export ships /features/index.html complete, indexable, and readable with JS off). Only the scroll
- * choreography and the two tab groups are client components.
+ * /features: eight verbs, eight posters. The hero and every caption are prerendered, so the
+ * static export ships the page complete and readable with JS off. The film is the only client part.
  */
 
 const TITLE = 'Features — agentfootprint';
@@ -49,46 +38,26 @@ export const metadata: Metadata = {
 
 export default function FeaturesPage() {
   return (
-    <main className="aff">
-      <FeaturesHero />
-      <FeatureBeats />
-
-      <section className="aff-close">
-        <div className="aff-install">
-          <span className="pr" aria-hidden="true">
-            $
-          </span>
-          npm install agentfootprint
-          <span className="aff-caret" aria-hidden="true" />
-        </div>
-        <div className="aff-closelinks">
-          <Link href="/framework">The whole framework, stage by stage →</Link>
-          <Link href="/docs">Read the docs →</Link>
-          <a href={SITE.repo} target="_blank" rel="noreferrer">
-            Star on GitHub →
+    <div className="pf">
+      {/* Tells the CSS a script ran, so the hero holds its place until the film boots. */}
+      {/* eslint-disable-next-line react/no-danger */}
+      <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('sf-js')" }} />
+      <PosterFilm />
+      <section className="sc pf-close" id="features-next" aria-label="Where to go next">
+        <code className="sf-install">npm install agentfootprint</code>
+        <div className="sc-links">
+          <Link className="v2-button v2-button-primary" href="/framework" prefetch={false}>
+            The whole framework, stage by stage <span aria-hidden="true">→</span>
+          </Link>
+          <Link className="v2-button v2-button-quiet" href="/docs" prefetch={false}>
+            Read the docs <span aria-hidden="true">→</span>
+          </Link>
+          <a className="v2-button v2-button-quiet" href={SITE.repo} target="_blank" rel="noreferrer">
+            Star on GitHub <span aria-hidden="true">→</span>
           </a>
         </div>
       </section>
-
       <SiteFooter />
-    </main>
+    </div>
   );
-}
-
-/**
- * ANTI-STALE GUARD for the eight "Read more" links.
- *
- * scripts/check-doc-links.mjs only scans .mdx sources, so a hand-written route in a .tsx page is
- * exactly the kind of link that rots silently. This resolves each beat's href against the SAME
- * Fumadocs page tree the site renders from, at BUILD time — so renaming or moving a doc fails
- * `next build` instead of shipping a 404 behind "Read more".
- */
-const DOC_ROUTES = new Set(source.getPages().map((page) => page.url));
-for (const beat of FEATURE_BEATS) {
-  if (!DOC_ROUTES.has(beat.href)) {
-    throw new Error(
-      `features: beat "${beat.id}" links to ${beat.href}, which is not a page in content/docs. ` +
-        `Fix lib/features/beats.ts.`,
-    );
-  }
 }

@@ -1,17 +1,35 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ChapterRail } from '@/components/home/ChapterRail';
-import { Chapters } from '@/components/home/Chapters';
-import { HomeViewProvider, HomeViewSwitcher } from '@/components/home/HomeView';
+import { HowFilm } from '@/components/home/how/HowFilm';
+import { StandUniverse } from '@/components/home/stand/StandUniverse';
+import { StandViewProvider } from '@/components/home/stand/StandView';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SITE } from '@/lib/site';
-import '../home.css';
+import '../v2.css';
 import '@/components/home/stand/stand.css';
-import './how-it-works.css';
 
 const TITLE = 'How AgentFootprint works — trace a wrong answer to its cause';
 const DESCRIPTION =
   'Follow one agent run from a wrong answer through context provenance, backward slicing, and controlled replay.';
+
+const CODE = `import { localizeContextBug, rerunWithoutSources, embeddingCache } from 'agentfootprint/observe';
+
+// Point it at the step that went wrong. It ranks the suspects.
+const report = await localizeContextBug({
+  artifacts, // { snapshot, events } from the recorded run
+  embedder: embeddingCache(embedder),
+  atStep: answerStep,
+});
+
+// Remove one source and run the case again.
+const again = await rerunWithoutSources({
+  report,
+  ignore: ['refund-policy'],
+  runner,
+  originalAnswer,
+  embedder: embeddingCache(embedder),
+  answerChanged: (a, b) => a.includes('APPROVED') !== b.includes('APPROVED'),
+});`;
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -37,39 +55,54 @@ export const metadata: Metadata = {
 
 export default function HowItWorksPage() {
   return (
-    <HomeViewProvider>
-      <div className="af-home af-how-page">
-        <HomeViewSwitcher label="Choose walkthrough view" />
-        <section className="af-how-intro">
-          <span className="af-pill">
-            <span className="af-pill-dot" /> interactive walkthrough
-          </span>
-          <p className="af-how-overline">One failed run. Five layers of evidence.</p>
-          <h1>Follow a wrong answer all the way back to its cause.</h1>
+    <div className="v2-home">
+      {/* Tells the CSS a script ran, so the hero holds its place until the film boots. */}
+      {/* eslint-disable-next-line react/no-danger */}
+      <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('sf-js')" }} />
+      <StandViewProvider>
+        <HowFilm />
+      </StandViewProvider>
+
+      <section className="sc" id="how-next" aria-labelledby="how-code-title">
+        <header className="sc-head">
+          <p className="v2-kicker">What you run</p>
+          <h2 id="how-code-title">Rank the suspects. Then test one.</h2>
           <p>
-            The homepage gives you the map. This is the full traversal: inspect the answer, rewind
-            through its context, isolate the suspect source, and test the correction by rerunning
-            without it.
+            Both ship today and carry a beta marker. Scores from an embedding are proxies, so the rerun is what tests a
+            source, and only for this case.
           </p>
-          <div className="af-how-actions">
-            <a className="af-cta" href="#af-ch-problem">
-              Start the walkthrough ↓
-            </a>
-            <Link className="af-cta-ghost" href="/docs/debug/localize-context-bug">
-              Read the debugging guide →
-            </Link>
-            <Link className="af-cta-ghost" href="/context-engineering">
-              See context take shape →
-            </Link>
-            <Link className="af-cta-ghost" href="/how-it-stands">
-              Before it answers: how it stands →
-            </Link>
-          </div>
-        </section>
-        <ChapterRail />
-        <Chapters />
-        <SiteFooter />
-      </div>
-    </HomeViewProvider>
+        </header>
+        <pre className="sc-code" tabIndex={0}>
+          <code>
+            {CODE.split('\n').map((line, i) => (
+              <span className="sc-line" key={i}>
+                {line || ' '}
+              </span>
+            ))}
+          </code>
+        </pre>
+        <div className="sc-links">
+          <Link className="v2-button v2-button-primary" href="/docs/debug/localize-context-bug" prefetch={false}>
+            Read the debugging guide <span aria-hidden="true">→</span>
+          </Link>
+          <Link className="v2-button v2-button-quiet" href="/how-it-works/walkthrough" prefetch={false}>
+            The full walkthrough <span aria-hidden="true">→</span>
+          </Link>
+          <Link className="v2-button v2-button-quiet" href="/how-it-stands" prefetch={false}>
+            Before it answers: how it stands <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+      </section>
+
+      <section className="sc hw-all" aria-labelledby="how-all-title">
+        <header className="sc-head">
+          <p className="v2-kicker">How it all fits together</p>
+          <h2 id="how-all-title">Context goes in. An answer comes out. Every step leaves a note.</h2>
+        </header>
+        <StandUniverse />
+      </section>
+
+      <SiteFooter />
+    </div>
   );
 }

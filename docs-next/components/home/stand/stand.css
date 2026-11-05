@@ -37,6 +37,126 @@
   --s-shadow: rgba(0, 0, 0, 0.55);
 }
 
+/* ── what every page with a film needs ────────────────────────────────────── */
+.pf {
+  --v2-max: 1240px;
+  --v2-wide: 1380px;
+  --v2-pad: clamp(20px, 5vw, 64px);
+  --v2-mono: var(--fd-font-mono, ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace);
+  --v2-label: #5f6064;
+  min-height: 100vh;
+  overflow: clip;
+  color: var(--fg);
+  background: var(--bg);
+}
+.dark .pf {
+  --v2-label: #b8b8bc;
+}
+.pf-close {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-block: 8px 56px;
+  text-align: center;
+}
+.pf-close .sc-links {
+  justify-content: center;
+}
+.sf.is-live.sf-posters .sf-stage .sf-cap h2 {
+  font-size: clamp(46px, 5vw, 76px);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+.sf-inside ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 12px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.sf-inside li {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.sf-inside a {
+  pointer-events: auto;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sf.is-live.sf-posters .sf-stage.is-portrait .sf-cap h2 {
+  font-size: 40px;
+}
+.sf.sf-posters .sf-stage.is-portrait .sf-inside ul {
+  display: none;
+}
+.v2-kicker {
+  margin: 0;
+  color: var(--fg-muted);
+  font-family: var(--v2-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+.v2-kicker > span {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 9px;
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 0 5px color-mix(in oklab, var(--yellow) 14%, transparent);
+}
+.v2-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 740;
+  text-decoration: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.v2-button:hover {
+  transform: translateY(-2px);
+}
+.v2-button:focus-visible,
+.v21-scene-copy a:focus-visible,
+.v21-field-result a:focus-visible,
+.v21-paths a:focus-visible {
+  outline: 3px solid var(--yellow-ink);
+  outline-offset: 3px;
+}
+.v2-button-primary {
+  background: var(--yellow);
+  color: #18181b;
+}
+.v2-button-primary:hover {
+  background: var(--yellow-light);
+}
+.v2-button-quiet {
+  border-color: var(--border-strong);
+  background: color-mix(in oklab, var(--bg-elev) 76%, transparent);
+}
+.v2-button-quiet:hover {
+  border-color: var(--yellow-dark);
+}
+
 /* ── reading order, until the canvas takes over ───────────────────────────── */
 .sf {
   position: relative;
@@ -626,6 +746,9 @@
 }
 
 /* ── the whole agent, moving: the same last shot as the home film ──────────── */
+.hw-all {
+  padding-bottom: 56px;
+}
 .su {
   display: block;
   width: 100%;

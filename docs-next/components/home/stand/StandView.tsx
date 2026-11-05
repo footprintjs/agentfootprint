@@ -38,12 +38,12 @@ export function StandViewProvider({ children }: { children: ReactNode }) {
   return <ViewContext.Provider value={{ view, setView }}>{children}</ViewContext.Provider>;
 }
 
-export function ViewSwitch({ className }: { className?: string }) {
+export function ViewSwitch({ className, only }: { className?: string; only?: readonly ViewKey[] }) {
   const { view, setView } = useStandView();
   return (
     <div className={`sf-views${className ? ` ${className}` : ''}`} role="group" aria-label="View as">
       <span className="sf-views-label">View as</span>
-      {VIEWS.map((v) => (
+      {VIEWS.filter((v) => !only || only.includes(v.key)).map((v) => (
         <button
           key={v.key}
           type="button"

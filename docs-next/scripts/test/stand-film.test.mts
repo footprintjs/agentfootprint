@@ -14,6 +14,9 @@ import { mock } from 'agentfootprint/providers';
 import { CASES, CODE_SECTION, REAL, UNIVERSE } from '../../components/home/stand/copy';
 import { runAnswerCheckDemo } from '../../components/demos/answerCheckDemo';
 import { ANSWER_CHECK_FIXTURES } from '../../components/demos/answerCheckFixtures';
+import { POSTER_QUOTES } from '../../components/features/posterTimeline';
+import { buildRouteSet } from '../../lib/doc-ids.mjs';
+import { FEATURE_BEATS } from '../../lib/features/beats';
 
 const refundRows = () =>
   defineTool({
@@ -426,4 +429,54 @@ test('prose under rails: both drafts stream, then the run throws', async () => {
   await assert.rejects(agent.run({ message: REAL.question }));
   assert.equal(calls, 3, 'one call for the tool, and two drafts');
   assert.equal(streamed, CASES.invented + CASES.invented);
+});
+
+test('the Features posters name real APIs', async () => {
+  const doors = await Promise.all([
+    import('agentfootprint'),
+    import('agentfootprint/providers'),
+    import('agentfootprint/resilience'),
+  ]);
+  const exported = new Set(doors.flatMap((door) => Object.keys(door)));
+  for (const name of POSTER_QUOTES.exports) assert.ok(exported.has(name), `${name} is not exported by any door`);
+  const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' }).build();
+  for (const name of POSTER_QUOTES.methods) {
+    assert.equal(typeof (agent as unknown as Record<string, unknown>)[name], 'function', `${name} is not on an agent`);
+  }
+});
+
+test('WATCH logs the events a run really fires, in that order', async () => {
+  let calls = 0;
+  const twoTools = {
+    content: '',
+    toolCalls: [
+      { id: 'c1', name: 'search', args: {} },
+      { id: 'c2', name: 'read', args: {} },
+    ],
+  };
+  const tool = (name: string) =>
+    defineTool({
+      name,
+      description: name,
+      inputSchema: { type: 'object', properties: {} },
+      execute: () => 'done',
+    });
+  const provider = mock({
+    respond() {
+      calls += 1;
+      return calls === 1 ? twoTools : { content: 'The answer.' };
+    },
+  });
+  const agent = Agent.create({ provider, model: 'mock' }).tool(tool('search')).tool(tool('read')).build();
+  const fired: string[] = [];
+  for (const type of new Set(POSTER_QUOTES.events)) agent.on(type, () => fired.push(type));
+  await agent.run({ message: 'go' });
+  assert.deepEqual(fired.slice(0, POSTER_QUOTES.events.length), [...POSTER_QUOTES.events]);
+});
+
+test('every Read more on Features is a real docs page', () => {
+  const routes = buildRouteSet();
+  for (const beat of FEATURE_BEATS) {
+    assert.ok(routes.has(beat.href), `${beat.id} links to ${beat.href}, which is not a page in content/docs`);
+  }
 });
