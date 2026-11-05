@@ -1,14 +1,12 @@
 /**
- * The Features film: eight verbs, eight posters.
+ * The Features scenes: one small picture per verb, played in place beside its words.
  *
- * Same rule as the other films: a frame is a pure function of a cursor. A word arrives
- * small, you fly through it, and its poster is on the other side.
+ * Same rule as the films: a frame is a pure function of a cursor.
  */
-import { FEATURE_BEATS } from '@/lib/features/beats';
+import type { FeatureId } from '@/lib/features/beats';
 import { E, Stage, clamp, lerp, win } from '../home/stand/stage';
-import { POSTER_FLY, POSTER_LENGTH, POSTER_QUOTES, posterStart } from './posterTimeline';
+import { SCENE_QUOTES } from './sceneQuotes';
 
-const VERBS = FEATURE_BEATS.map((beat) => beat.verb);
 const CODE_BG = '#18181b';
 const CODE_INK = '#ffd84d';
 
@@ -28,7 +26,7 @@ const MODELS = [
   { n: 'your laptop', code: 'ollama({ defaultModel })', c: '#3b82f6' },
 ];
 const NODES = ['plan', 'search', 'read', 'answer'];
-const EVENTS = POSTER_QUOTES.events;
+const EVENTS = SCENE_QUOTES.events;
 /* The three fields of a real check-in: willDo, read and drivers. */
 const RECEIPT = [
   ['WILL DO', 'issue_refund · A-1042 · $129'],
@@ -42,102 +40,47 @@ const SUSPECTS = [
   { n: 'steering: tone rule', v: 0.17 },
   { n: 'system: persona', v: 0.09 },
 ];
+/* Three of the ports, and what fills them in each place. A dashed card is one you write, as lib/features/adapters.ts lists. */
+const PORTS = ['models', 'memory', 'credentials'];
+const PLACES = [
+  { n: 'AWS', cards: ['bedrock()', 'AgentCoreStore', 'agentCoreIdentity'] },
+  { n: 'Google Cloud', cards: ['gemini()', 'memoryBankStore()', 'googleIdentity()'] },
+  { n: 'Azure', cards: ['azureOpenai()', 'your MemoryStore', 'entraIdentity()'] },
+  { n: 'your machines', cards: ['ollama()', 'RedisStore', 'vaultCredentials()'] },
+  { n: 'something new', cards: ['your LLMProvider', 'your MemoryStore', 'your CredentialProvider'] },
+];
+/* Real keys from a run's record, under conversationRedaction(). The values are illustrative. */
+const RECORD = [
+  { k: SCENE_QUOTES.recordKeys[0], v: 'my card is 4242 4242', hide: true },
+  { k: SCENE_QUOTES.recordKeys[1], v: 'Noted, ending 4242.', hide: true },
+  { k: SCENE_QUOTES.recordKeys[2], v: '2 earlier messages', hide: true },
+  { k: SCENE_QUOTES.recordKeys[3], v: '10', hide: false },
+];
 
-/* How far each poster sits down from the top, so it reads as centred in its frame. */
-const NUDGE = {
-  wide: [19, 46, 54, 8, 18, 39, 46, 9],
-  tall: [30, 46, 40, 20, 32, 32, 35, 29],
+/* How far each scene sits down from the top, so it reads as centred in its frame. */
+const NUDGE: Readonly<Record<'wide' | 'tall', Readonly<Record<FeatureId, number>>>> = {
+  wide: { build: 19, teach: 46, remember: 54, swap: 8, adapt: 20, watch: 18, ask: 39, protect: 20, why: 46, survive: 9 },
+  tall: { build: 30, teach: 46, remember: 40, swap: 20, adapt: 30, watch: 32, ask: 32, protect: 20, why: 35, survive: 29 },
 };
 
-export class PosterFilm extends Stage<null> {
-  draw(t: number, clock: number) {
+export class FeatureScenes extends Stage<null> {
+  constructor(
+    canvas: HTMLCanvasElement,
+    private id: FeatureId,
+  ) {
+    super(canvas, null);
+  }
+
+  draw(u: number, clock: number) {
     const c = this.c;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     c.clearRect(0, 0, this.W, this.H);
     c.translate(this.ox, this.oy);
     c.scale(this.s, this.s);
+    c.translate(0, (this.P ? NUDGE.tall : NUDGE.wide)[this.id]);
     this.alpha = 1;
-    this.wall(t, clock);
-    const scenes = [this.build, this.teach, this.remember, this.swap, this.watch, this.ask, this.why, this.survive];
-    const nudge = this.P ? NUDGE.tall : NUDGE.wide;
-    scenes.forEach((scene, i) => {
-      const a = posterStart(i);
-      const end = a + POSTER_LENGTH;
-      if (t < a || (i < scenes.length - 1 && t >= end)) return;
-      /* The poster steps back as the next word arrives. */
-      this.alpha = 1 - 0.85 * win(end - POSTER_FLY, end - POSTER_FLY + 0.16, t);
-      c.save();
-      c.translate(0, nudge[i]!);
-      scene.call(this, t - a, clock);
-      c.restore();
-      this.alpha = 1;
-    });
-    this.flight(t);
+    this[this.id](u, clock);
     c.globalAlpha = 1;
-  }
-
-  /* ── the eight words as one block of type, each cut to the column's width ── */
-  private wall(t: number, clock: number) {
-    const leave = posterStart(0) - POSTER_FLY;
-    const a = 1 - win(leave - 0.3, leave, t);
-    if (a <= 0) return;
-    const { P, dw, dh, c, th } = this;
-    const gap = P ? 10 : 18;
-    const colW = (dw - gap) / 2;
-    const rowGap = P ? 7 : 14;
-    const fit = (word: string) => {
-      c.font = this.big(100);
-      const m = c.measureText(word);
-      const scale = colW / (m.actualBoundingBoxLeft + m.actualBoundingBoxRight);
-      return { word, size: 100 * scale, left: m.actualBoundingBoxLeft * scale, cap: m.actualBoundingBoxAscent * scale };
-    };
-    const lit = Math.floor(clock * 0.85) % VERBS.length;
-    c.textAlign = 'left';
-    c.textBaseline = 'alphabetic';
-    [VERBS.slice(0, 4), VERBS.slice(4)].forEach((words, col) => {
-      const rows = words.map(fit);
-      const height = rows.reduce((sum, r) => sum + r.cap, 0) + rowGap * (rows.length - 1);
-      /* On a phone the hero's words sit up top, so the block waits below them. */
-      let y = P ? dh - height - 16 : (dh - height) / 2;
-      rows.forEach((row, i) => {
-        const index = col * 4 + i;
-        const rise = E.out(win(0.1 + index * 0.07, 0.55 + index * 0.07, clock));
-        y += row.cap;
-        c.font = this.big(row.size);
-        this.ga(a * rise);
-        c.fillStyle = index === lit ? th.yellowDeep : th.ink;
-        c.fillText(row.word, col * (colW + gap) + row.left, y + (1 - rise) * 14);
-        y += rowGap;
-      });
-    });
-    this.ga(1);
-  }
-
-  /* ── the next word arrives small, and you fly through it ──────────────── */
-  private flight(t: number) {
-    const { W, H, c, th } = this;
-    VERBS.forEach((word, i) => {
-      const at = posterStart(i);
-      const f = win(at - POSTER_FLY, at, t);
-      const out = 1 - win(at, at + 0.2, t);
-      if (f <= 0 || out <= 0) return;
-      c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      const wash = clamp((f - 0.7) / 0.3) * out;
-      if (f < 1) {
-        const fit = Math.min(H * 0.5, (W * 0.8) / (word.length * 0.68));
-        c.font = this.big(lerp(fit * 0.45, Math.min(Math.max(W, H) * 5, 4200), f * f * f * f));
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.globalAlpha = clamp(f * 4);
-        c.fillStyle = th.yellow;
-        c.fillText(word, W / 2, H / 2);
-      }
-      if (wash > 0) {
-        c.globalAlpha = wash;
-        c.fillStyle = th.yellow;
-        c.fillRect(0, 0, W, H);
-      }
-    });
   }
 
   private card(x: number, y: number, w: number, h: number, label: string, a: number, o: { stroke?: string; size?: number; mono?: boolean } = {}) {
@@ -433,5 +376,106 @@ export class PosterFilm extends Stage<null> {
     const note = win(1.3, 1.5, u);
     this.text('A checkpoint at every iteration.', dw / 2, lineY + (P ? 30 : 42), { size: P ? 14 : 18, weight: 720, align: 'center', base: 'top', alpha: note });
     this.text('agent.resumeOnError(checkpoint, input)', dw / 2, lineY + (P ? 54 : 72), { size: P ? 11 : 14, weight: 620, mono: true, color: th.muted, align: 'center', base: 'top', alpha: note });
+  }
+
+  /* ── ADAPT: swap the adapter, keep the agent ──────────────────────────── */
+  private adapt(u: number, clock: number) {
+    const { P, dw, c, th } = this;
+    const first = 0.2;
+    const each = 0.36;
+    const start = (i: number) => first + i * each;
+    const now = clamp(Math.floor((u - first) / each), 0, PLACES.length - 1);
+    /* the places across the top, the current one lit */
+    const size = P ? 9 : 12.5;
+    const gap = P ? 3 : 9;
+    c.font = this.font(size, 600, true);
+    const widths = PLACES.map((place) => c.measureText(place.n).width + size * 1.5);
+    let tabX = dw / 2 - (widths.reduce((sum, w) => sum + w, 0) + gap * (PLACES.length - 1)) / 2;
+    const tabY = P ? 16 : 26;
+    PLACES.forEach((place, i) => {
+      const on = i === now && u >= first;
+      this.chip(tabX + widths[i]! / 2, tabY, place.n, { size, fg: on ? '#18181b' : th.muted, bg: on ? th.yellow : undefined, border: on ? th.yellow : undefined, alpha: E.out(win(0.02, 0.18, u)) });
+      tabX += widths[i]! + gap;
+    });
+    /* one agent on the left, and it never changes */
+    const cx = P ? 58 : 148;
+    const top = P ? 96 : 120;
+    const base = P ? 232 : 356;
+    const hw = P ? 48 : 90;
+    this.triangle(cx, top, base, hw, clock);
+    const cardW = P ? 196 : 310;
+    const cardH = P ? 42 : 62;
+    const cardX = dw - cardW / 2 - (P ? 2 : 14);
+    const left = cardX - cardW / 2;
+    const rowY = (row: number) => (P ? 88 : 122) + row * (P ? 84 : 118);
+    const midY = base - (P ? 34 : 60);
+    PORTS.forEach((port, row) => {
+      const y = rowY(row);
+      const path = this.pts([cx + hw * 0.62, midY], [cx + hw + (P ? 12 : 36), midY], [left - (P ? 20 : 70), y], [left, y], 20);
+      this.stroke(path, 0, 1, { color: u >= first ? th.yellowDeep : th.line, lw: P ? 1.6 : 2.2, alpha: E.out(win(0.02, 0.18, u)) });
+      if (u >= first) this.comet(path, (clock * 0.9 + row * 0.3) % 1, { lw: P ? 2.4 : 3 });
+      this.text(port, left + 2, y - cardH / 2 - (P ? 6 : 8), { size: P ? 9 : 11, weight: 700, mono: true, color: th.muted, alpha: E.out(win(0.02, 0.18, u)) });
+    });
+    /* the adapters change place by place */
+    PLACES.forEach((place, i) => {
+      const leave = i === PLACES.length - 1 ? 0 : win(start(i + 1), start(i + 1) + 0.05, u);
+      place.cards.forEach((name, row) => {
+        const a = E.out(win(start(i) + row * 0.03, start(i) + row * 0.03 + 0.09, u)) * (1 - leave);
+        if (a <= 0) return;
+        const y = rowY(row) + (1 - a) * 10;
+        const yours = name.startsWith('your ');
+        this.box(cardX - cardW / 2, y - cardH / 2, cardW, cardH, { r: 11, fill: th.card, stroke: yours ? th.yellowDeep : th.lineStrong, lw: yours ? 2 : 1, dash: yours ? [6, 5] : undefined, alpha: a, shadow: true });
+        this.text(name, cardX, y, { size: P ? 11 : 15, weight: 660, mono: true, color: yours ? th.yellowInk : th.ink, align: 'center', base: 'middle', alpha: a });
+      });
+    });
+    this.text('Swap the adapter, keep the agent.', dw / 2, rowY(2) + (P ? 62 : 86), { size: P ? 14 : 19, weight: 720, align: 'center', base: 'middle', alpha: win(0.3, 0.5, u) });
+  }
+
+  /* ── PROTECT: name what stays out, and decide who can call what ───────── */
+  private protect(u: number) {
+    const { P, dw, th } = this;
+    /* the record, before and after the policy */
+    const x = P ? 2 : 34;
+    const w = dw - x * 2;
+    const top = P ? 2 : 6;
+    const head = P ? 36 : 44;
+    const rowH = P ? 31 : 40;
+    const h = head + rowH * RECORD.length + (P ? 6 : 10);
+    const a = E.out(win(0.02, 0.18, u));
+    this.box(x, top, w, h, { r: 14, fill: th.card, stroke: th.lineStrong, alpha: a, shadow: true });
+    this.text('the record', x + (P ? 12 : 18), top + head / 2, { size: P ? 10 : 12, weight: 700, mono: true, color: th.muted, base: 'middle', alpha: a });
+    this.chip(x + w - (P ? 98 : 136), top + head / 2, 'conversationRedaction()', { size: P ? 9 : 12, fg: th.yellowInk, border: th.yellow, alpha: win(0.3, 0.42, u) });
+    const sweep = E.inOut(win(0.42, 0.98, u));
+    RECORD.forEach((row, i) => {
+      const y = top + head + i * rowH + rowH / 2;
+      const ra = win(0.08 + i * 0.05, 0.22 + i * 0.05, u);
+      const flip = row.hide ? win(i / RECORD.length, (i + 0.35) / RECORD.length, sweep) : 0;
+      const valueX = x + (P ? 124 : 204);
+      this.text(row.k, x + (P ? 12 : 18), y, { size: P ? 10 : 13, weight: 650, mono: true, color: th.muted, base: 'middle', alpha: ra });
+      this.text(row.v, valueX, y, { size: P ? 11 : 14.5, weight: 640, mono: true, base: 'middle', alpha: ra * (1 - flip) });
+      if (flip > 0) {
+        this.box(valueX - 6, y - (P ? 11 : 14), P ? 96 : 122, P ? 22 : 28, { r: 6, fill: th.yellow, alpha: flip });
+        this.text('[REDACTED]', valueX + 2, y, { size: P ? 11 : 14.5, weight: 760, mono: true, color: '#18181b', base: 'middle', alpha: flip });
+      }
+    });
+    if (sweep > 0 && sweep < 1) this.box(x + 2, top + head + (h - head - 8) * sweep, w - 4, 2.4, { r: 1, fill: th.yellowDeep });
+    const noteY = top + h + (P ? 20 : 28);
+    this.text('The model still receives it. The record does not.', dw / 2, noteY, { size: P ? 12 : 16, weight: 680, align: 'center', base: 'middle', alpha: win(0.98, 1.14, u) });
+    /* the same run, one tool call, the wrong role */
+    const y = noteY + (P ? 62 : 84);
+    const gateX = dw * 0.66;
+    const cardW = P ? 132 : 200;
+    const stopAt = gateX - cardW / 2 - 14;
+    const slide = E.out(win(1.02, 1.36, u));
+    this.box(0, y + (P ? 22 : 32), dw, 3, { r: 2, fill: th.line, alpha: win(1.0, 1.12, u) });
+    const drop = E.bounce(win(1.28, 1.52, u));
+    const gateH = P ? 52 : 76;
+    this.box(gateX - 4, y - gateH / 2 - (1 - drop) * 44, 8, gateH, { r: 3, fill: th.red, alpha: drop });
+    if (slide > 0) this.card(lerp(-cardW, stopAt, slide), y, cardW, P ? 38 : 54, 'process_refund', 1, { size: P ? 11 : 15, stroke: drop > 0.5 ? th.red : th.yellowDeep });
+    const denied = win(1.5, 1.66, u);
+    const restX = (gateX + dw) / 2;
+    this.text('tool not run', restX, y - (P ? 6 : 8), { size: P ? 11.5 : 15, weight: 700, color: th.red, align: 'center', base: 'middle', alpha: denied });
+    this.text('role: readonly', restX, y + (P ? 10 : 14), { size: P ? 10 : 12.5, weight: 650, mono: true, color: th.muted, align: 'center', base: 'middle', alpha: denied });
+    if (denied > 0) this.codeStrip(y + (P ? 62 : 84), ["PermissionPolicy.fromRoles(roles, 'readonly')"]);
   }
 }

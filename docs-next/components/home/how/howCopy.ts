@@ -1,4 +1,4 @@
-/** Everything the How it works film says. Two views change the words only. */
+/** Everything How it works says. Two views change the words only. */
 export type HowView = 'product' | 'technical';
 export type HowChapter = 'wrong' | 'ask' | 'record' | 'walk' | 'address' | 'suspect' | 'rerun' | 'forward' | 'loop' | 'end';
 
@@ -6,18 +6,6 @@ export interface HowLabels {
   readonly slots: readonly [string, string, string];
   readonly record: string;
 }
-
-export const HOW_IDS: readonly HowChapter[] = ['wrong', 'ask', 'record', 'walk', 'address', 'suspect', 'rerun', 'forward', 'loop', 'end'];
-
-export const HOW_BADGE: Partial<Record<HowChapter, string>> = {
-  wrong: '1',
-  ask: '1',
-  record: '2',
-  walk: '3',
-  address: '4',
-  suspect: '4',
-  rerun: '5',
-};
 
 export const HOW_COPY: Readonly<
   Record<HowView, { readonly lede: string; readonly labels: HowLabels; readonly caps: Readonly<Record<HowChapter, { readonly h: string; readonly s: string }>> }>

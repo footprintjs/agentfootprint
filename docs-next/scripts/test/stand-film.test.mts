@@ -7,16 +7,19 @@
  * how a live model behaves.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { Agent, absent, defineTool, describedResult } from 'agentfootprint';
+import { Agent, LLMCall, absent, defineTool, describedResult, llmSwarm } from 'agentfootprint';
 import { accountForAnswer, assessAnswer, recordRun } from 'agentfootprint/observe';
 import { mock } from 'agentfootprint/providers';
+import { PermissionPolicy, REDACTED_PLACEHOLDER, conversationRedaction } from 'agentfootprint/security';
 import { CASES, CODE_SECTION, REAL, UNIVERSE } from '../../components/home/stand/copy';
 import { runAnswerCheckDemo } from '../../components/demos/answerCheckDemo';
 import { ANSWER_CHECK_FIXTURES } from '../../components/demos/answerCheckFixtures';
-import { POSTER_QUOTES } from '../../components/features/posterTimeline';
+import { SCENE_QUOTES } from '../../components/features/sceneQuotes';
 import { buildRouteSet } from '../../lib/doc-ids.mjs';
-import { FEATURE_BEATS } from '../../lib/features/beats';
+import { ADAPTER_PAGES, ADAPTER_ROWS, SESSION_STORES_PAGE, adapterName } from '../../lib/features/adapters';
+import { FEATURES_ALSO, FEATURE_BEATS } from '../../lib/features/beats';
 
 const refundRows = () =>
   defineTool({
@@ -431,18 +434,182 @@ test('prose under rails: both drafts stream, then the run throws', async () => {
   assert.equal(streamed, CASES.invented + CASES.invented);
 });
 
-test('the Features posters name real APIs', async () => {
+const exportedNames = async () => {
   const doors = await Promise.all([
     import('agentfootprint'),
     import('agentfootprint/providers'),
     import('agentfootprint/resilience'),
+    import('agentfootprint/observe'),
+    import('agentfootprint/security'),
+    import('agentfootprint/hosting'),
+    import('agentfootprint/memory'),
+    import('agentfootprint/context'),
+    import('agentfootprint/ag-ui'),
   ]);
-  const exported = new Set(doors.flatMap((door) => Object.keys(door)));
-  for (const name of POSTER_QUOTES.exports) assert.ok(exported.has(name), `${name} is not exported by any door`);
+  return new Set(doors.flatMap((door) => Object.keys(door)));
+};
+
+const docPage = (page: string) => readFileSync(new URL(`../../content/docs/${page}.mdx`, import.meta.url), 'utf8');
+
+test('the Features scenes name real APIs', async () => {
+  const exported = await exportedNames();
+  for (const name of SCENE_QUOTES.exports) assert.ok(exported.has(name), `${name} is not exported by any door`);
   const agent = Agent.create({ provider: mock({ reply: 'ok' }), model: 'mock' }).build();
-  for (const name of POSTER_QUOTES.methods) {
+  for (const name of SCENE_QUOTES.methods) {
     assert.equal(typeof (agent as unknown as Record<string, unknown>)[name], 'function', `${name} is not on an agent`);
   }
+});
+
+/* A name on a Features section is a claim, so each one says what it rests on: real exports, or the docs page that uses the word. */
+const KNOWN_AS: Readonly<Record<string, { readonly code?: readonly string[]; readonly doc?: readonly [string, RegExp] }>> = {
+  'ReAct loop': { doc: ['getting-started/key-concepts', /ReAct/] },
+  chains: { code: ['Sequence'] },
+  'routers and supervisors': { code: ['llmRouter', 'llmSwarm'] },
+  'multi-agent': { code: ['swarm'], doc: ['getting-started/vs', /multi-agent/i] },
+  'structured output': { doc: ['build/tools', /structured output/i] },
+  skills: { code: ['defineSkill'] },
+  'SKILL.md files': { code: ['skillsFromDir'] },
+  'progressive disclosure': { doc: ['build/skills', /progressive disclosure/i] },
+  'context engineering': { doc: ['getting-started/key-concepts', /context engineering/i] },
+  'long-term memory': { code: ['defineMemory'], doc: ['infrastructure/memory-and-stores', /long-term memory/i] },
+  'episodic and semantic memory': { doc: ['build/memory', /episodic[\s\S]*semantic/i] },
+  RAG: { code: ['defineRAG'] },
+  'model-agnostic: Anthropic, OpenAI, Azure, Bedrock, Gemini, Ollama': { code: ['anthropic', 'openai', 'azureOpenai', 'bedrock', 'gemini', 'ollama'] },
+  'ports and adapters': { doc: ['infrastructure/index', /ports-&-adapters/] },
+  'bring your own adapter': { doc: ['infrastructure/memory-and-stores', /Writing your own adapter/] },
+  MCP: { code: ['mcpClient', 'mcpServe'] },
+  A2A: { code: ['a2aWire'] },
+  'AG-UI': { code: ['agUi'] },
+  'behind your LLM gateway': { code: ['invokeModelGateway'] },
+  observability: { doc: ['monitor/observability', /observability/i] },
+  tracing: { code: ['otelObservability', 'xrayObservability'] },
+  OpenTelemetry: { code: ['otelObservability'] },
+  'human-in-the-loop': { code: ['askHuman'], doc: ['monitor/pausable', /human-in-the-loop/i] },
+  'tool approval': { code: ['checkInApproved'] },
+  'PII redaction': { code: ['conversationRedaction'], doc: ['monitor/security', /personal data/i] },
+  'role-based access': { code: ['PermissionPolicy'] },
+  'tenant isolation': { doc: ['monitor/security', /multi-tenant identity isolation/i] },
+  'audit trail': { code: ['auditExport', 'verifyAuditBundle'] },
+  'root-cause analysis': { code: ['localizeContextBug', 'rerunWithoutSources'] },
+  replay: { doc: ['debug/offline-replay', /replay/i] },
+  'time-travel debugging': { doc: ['debug/time-travel', /time.travel/i] },
+  retry: { code: ['withRetry'] },
+  fallback: { code: ['withFallback'] },
+  'circuit breaker': { code: ['withCircuitBreaker'] },
+  checkpointing: { doc: ['monitor/resilience', /checkpoint/i] },
+};
+
+test('every name a Features section goes by has something real behind it', async () => {
+  const exported = await exportedNames();
+  for (const beat of FEATURE_BEATS) {
+    for (const name of beat.knownAs) {
+      const backing = KNOWN_AS[name];
+      assert.ok(backing, `"${name}" on ${beat.verb} says nothing about what it rests on`);
+      for (const code of backing.code ?? []) assert.ok(exported.has(code), `${name}: ${code} is not exported by any door`);
+      if (backing.doc) assert.match(docPage(backing.doc[0]), backing.doc[1], `${name}: not in ${backing.doc[0]}`);
+    }
+  }
+});
+
+test('the ADAPT table names real adapters and real ports', async () => {
+  const exported = await exportedNames();
+  const ports = docPage('infrastructure/index');
+  for (const row of ADAPTER_ROWS) {
+    const cells = [...(row.aws ?? []), ...(row.google ?? []), ...(row.azure ?? []), ...(row.local ?? []), ...(row.everywhere ? [row.everywhere] : [])];
+    for (const cell of cells) assert.ok(exported.has(adapterName(cell)), `${row.port}: ${adapterName(cell)} is not exported by any door`);
+    for (const port of row.yours) assert.ok(ports.includes(`\`${port}\``), `${row.port}: ${port} is not in the docs' list of ports`);
+  }
+  assert.ok(exported.has('runSessionLifecycleConformance'), 'the table points a session store you write at this');
+});
+
+test('PROTECT: the record drops the message, the model still receives it, and a recording keeps the answer', async () => {
+  const secret = 'card-4242-4242';
+  const answer = 'the-answer-7731';
+  const sent: string[] = [];
+  const provider = mock({
+    respond(request) {
+      sent.push(JSON.stringify(request));
+      return { content: answer };
+    },
+  });
+  const agent = Agent.create({ provider, model: 'mock', redact: conversationRedaction() }).build();
+  const recorder = recordRun(agent);
+  await agent.run({ message: `my number is ${secret}` });
+  assert.ok(
+    sent.some((request) => request.includes(secret)),
+    'the page says the model still receives it',
+  );
+  const snapshot = agent.getLastSnapshot() as unknown as { sharedState: Record<string, unknown>; executionTree: unknown };
+  const recording = JSON.stringify(recorder.toRecording());
+  assert.ok(!JSON.stringify(snapshot).includes(secret), 'the page says the record does not');
+  assert.ok(!recording.includes(secret), 'nor does a saved recording');
+  assert.ok(recording.includes(answer), 'the page says a saved recording still carries the final answer');
+  /* Two forms, both by design: the state reads REDACTED, and the steps of the run read [REDACTED], which the scene shows. */
+  const [hidden1, hidden2, hidden3, kept] = SCENE_QUOTES.recordKeys;
+  for (const key of [hidden1, hidden2, hidden3]) assert.equal(snapshot.sharedState[key], 'REDACTED', `${key} should read as redacted`);
+  assert.ok(JSON.stringify(snapshot.executionTree).includes(REDACTED_PLACEHOLDER));
+  assert.equal(typeof snapshot.sharedState[kept], 'number', `${kept} should stay readable`);
+});
+
+test('PROTECT: a role without the tool is refused, and the tool does not run', async () => {
+  let ran = 0;
+  let calls = 0;
+  const refund = defineTool({
+    name: 'process_refund',
+    description: 'refund',
+    inputSchema: { type: 'object', properties: {} },
+    execute: () => {
+      ran += 1;
+      return 'done';
+    },
+  });
+  const provider = mock({
+    respond() {
+      calls += 1;
+      return calls === 1 ? { content: '', toolCalls: [{ id: 'c1', name: 'process_refund', args: {} }] } : { content: 'I cannot do that.' };
+    },
+  });
+  const policy = PermissionPolicy.fromRoles({ readonly: ['lookup_order'], support: ['lookup_order', 'process_refund'] }, 'readonly');
+  const agent = Agent.create({ provider, model: 'mock', permissionChecker: policy }).tool(refund).build();
+  const results: unknown[] = [];
+  agent.on('agentfootprint.permission.check', (event) => results.push(event.payload.result));
+  await agent.run({ message: 'refund it' });
+  assert.equal(ran, 0);
+  assert.ok(results.includes('deny'), 'the scene shows this call refused');
+});
+
+test('BUILD: a router picks a specialist, is asked again, and finishes', async () => {
+  let routerCalls = 0;
+  let specialistCalls = 0;
+  const billing = LLMCall.create({
+    provider: mock({
+      respond() {
+        specialistCalls += 1;
+        return { content: '[billing] refund approved' };
+      },
+    }),
+    model: 'mock',
+  })
+    .system('billing')
+    .build();
+  const router = mock({
+    respond() {
+      routerCalls += 1;
+      return { content: JSON.stringify(routerCalls === 1 ? { agentId: 'billing', message: 'handle this' } : { message: 'All done.' }) };
+    },
+  });
+  const tech = LLMCall.create({ provider: mock({ reply: '[tech] ok' }), model: 'mock' }).system('tech').build();
+  const desk = llmSwarm({
+    provider: router,
+    model: 'mock',
+    agents: [
+      { id: 'billing', description: 'billing questions', runner: billing },
+      { id: 'tech', description: 'technical questions', runner: tech },
+    ],
+  });
+  assert.equal(await desk.run({ message: 'my invoice is wrong' }), 'All done.');
+  assert.equal(specialistCalls, 1);
+  assert.equal(routerCalls, 2, 'this is why the page can say supervisor');
 });
 
 test('WATCH logs the events a run really fires, in that order', async () => {
@@ -469,14 +636,13 @@ test('WATCH logs the events a run really fires, in that order', async () => {
   });
   const agent = Agent.create({ provider, model: 'mock' }).tool(tool('search')).tool(tool('read')).build();
   const fired: string[] = [];
-  for (const type of new Set(POSTER_QUOTES.events)) agent.on(type, () => fired.push(type));
+  for (const type of new Set(SCENE_QUOTES.events)) agent.on(type, () => fired.push(type));
   await agent.run({ message: 'go' });
-  assert.deepEqual(fired.slice(0, POSTER_QUOTES.events.length), [...POSTER_QUOTES.events]);
+  assert.deepEqual(fired.slice(0, SCENE_QUOTES.events.length), [...SCENE_QUOTES.events]);
 });
 
-test('every Read more on Features is a real docs page', () => {
+test('every link on Features goes to a real docs page', () => {
   const routes = buildRouteSet();
-  for (const beat of FEATURE_BEATS) {
-    assert.ok(routes.has(beat.href), `${beat.id} links to ${beat.href}, which is not a page in content/docs`);
-  }
+  const links = [...FEATURE_BEATS, ...FEATURES_ALSO, ...ADAPTER_PAGES, { href: SESSION_STORES_PAGE }];
+  for (const { href } of links) assert.ok(routes.has(href), `${href} is not a page in content/docs`);
 });

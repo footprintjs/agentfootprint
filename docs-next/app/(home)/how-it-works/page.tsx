@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { HowFilm } from '@/components/home/how/HowFilm';
+import { HowStory } from '@/components/home/how/HowStory';
 import { StandUniverse } from '@/components/home/stand/StandUniverse';
 import { StandViewProvider } from '@/components/home/stand/StandView';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -56,11 +56,11 @@ export const metadata: Metadata = {
 export default function HowItWorksPage() {
   return (
     <div className="v2-home">
-      {/* Tells the CSS a script ran, so the hero holds its place until the film boots. */}
+      {/* Tells the CSS a script ran, so a scene only takes up room when it can play. */}
       {/* eslint-disable-next-line react/no-danger */}
       <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('sf-js')" }} />
       <StandViewProvider>
-        <HowFilm />
+        <HowStory />
       </StandViewProvider>
 
       <section className="sc" id="how-next" aria-labelledby="how-code-title">

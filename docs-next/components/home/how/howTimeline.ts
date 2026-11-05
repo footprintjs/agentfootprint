@@ -1,4 +1,6 @@
-/** When things happen in the How it works film, in beats. Small on purpose: the page imports it up front, and the engine loads later. */
+/** When things happen in the How it works scenes, in beats. Small on purpose: the page imports it up front, and the engine loads later. */
+import type { HowChapter } from './howCopy';
+
 export const H = {
   wrongA: 0.9,
   askA: 2.5,
@@ -13,38 +15,18 @@ export const H = {
   end: 18.4,
 } as const;
 
-export const HOW_CHAPTERS: readonly (readonly [string, number, number])[] = [
-  ['hero', 0, 0.85],
-  ['wrong', H.wrongA, H.askA - 0.05],
-  ['ask', H.askA, H.recordA - 0.05],
-  ['record', H.recordA, H.walkA - 0.05],
-  ['walk', H.walkA, H.addressA - 0.05],
-  ['address', H.addressA, H.suspectA - 0.05],
-  ['suspect', H.suspectA, H.rerunA - 0.05],
-  ['rerun', H.rerunA, H.forwardA - 0.05],
-  ['forward', H.forwardA, H.loopA - 0.05],
-  ['loop', H.loopA, H.endA - 0.05],
-  ['end', H.endA, 1e9],
-];
+export type HowScene = 'wrong' | 'ask' | 'record' | 'address' | 'rerun' | 'forward' | 'loop' | 'end';
 
-/** The film's five layers, on the scrubber. */
-export const HOW_STOPS = [
-  { label: '1', at: H.wrongA + 0.1, letter: true },
-  { label: '2', at: H.recordA + 0.12, letter: true },
-  { label: '3', at: H.walkA + 0.12, letter: true },
-  { label: '4', at: H.addressA + 0.12, letter: true },
-  { label: '5', at: H.rerunA + 0.12, letter: true },
-] as const;
-
-export const HOW_STILLS: Readonly<Record<string, number>> = {
-  wrong: H.askA - 0.2,
-  ask: H.recordA - 0.2,
-  record: H.walkA - 0.2,
-  walk: H.addressA - 0.2,
-  address: H.suspectA - 0.2,
-  suspect: H.rerunA - 0.2,
-  rerun: H.forwardA - 0.2,
-  forward: H.loopA - 0.2,
-  loop: H.endA - 0.2,
-  end: H.end,
+/* The scene each chapter shows and the stretch of it to play, stopping before that scene starts to leave. */
+export const HOW_SCENES: Readonly<Record<HowChapter, { readonly scene: HowScene; readonly from: number; readonly to: number }>> = {
+  wrong: { scene: 'wrong', from: H.wrongA, to: H.askA - 0.04 },
+  ask: { scene: 'ask', from: H.askA, to: H.recordA - 0.2 },
+  record: { scene: 'record', from: H.recordA, to: H.walkA - 0.02 },
+  walk: { scene: 'record', from: H.walkA, to: H.addressA - 0.18 },
+  address: { scene: 'address', from: H.addressA, to: H.suspectA - 0.02 },
+  suspect: { scene: 'address', from: H.suspectA, to: H.rerunA - 0.18 },
+  rerun: { scene: 'rerun', from: H.rerunA, to: H.forwardA - 0.18 },
+  forward: { scene: 'forward', from: H.forwardA, to: H.loopA - 0.18 },
+  loop: { scene: 'loop', from: H.loopA, to: H.endA - 0.18 },
+  end: { scene: 'end', from: H.endA, to: H.end },
 };

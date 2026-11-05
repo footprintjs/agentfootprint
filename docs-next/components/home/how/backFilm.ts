@@ -1,12 +1,13 @@
 /**
- * The How it works film: one wrong answer, walked back to its cause.
+ * The How it works scenes: one wrong answer, walked back to its cause.
  *
  * Same rule as the home film: a frame is a pure function of a cursor. Home runs forward,
  * from the rules to the answer. This one runs the other way, from the answer to the source
- * that flipped it, and ends with the test that shows it.
+ * that flipped it, and ends with the test that shows it. Each instance draws one scene, and
+ * howTimeline.ts says which stretch of it each chapter plays.
  */
 import { E, Stage, TAU, clamp, fade, lerp, win } from '../stand/stage';
-import { H } from './howTimeline';
+import { H, type HowScene } from './howTimeline';
 import type { HowLabels } from './howCopy';
 
 const NOTES = [
@@ -46,6 +47,14 @@ const TOOLS = [
 ] as const;
 
 export class BackFilm extends Stage<HowLabels> {
+  constructor(
+    canvas: HTMLCanvasElement,
+    labels: HowLabels,
+    private scene: HowScene,
+  ) {
+    super(canvas, labels);
+  }
+
   draw(t: number, clock: number) {
     const c = this.c;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -53,14 +62,14 @@ export class BackFilm extends Stage<HowLabels> {
     c.translate(this.ox, this.oy);
     c.scale(this.s, this.s);
     this.alpha = 1;
-    this.sceneWrong(t, clock);
-    this.sceneAsk(t);
-    this.sceneRecord(t);
-    this.sceneAddress(t, clock);
-    this.sceneRerun(t);
-    this.sceneForward(t);
-    this.sceneLoop(t, clock);
-    this.sceneEnd(t, clock);
+    if (this.scene === 'wrong') this.sceneWrong(t, clock);
+    if (this.scene === 'ask') this.sceneAsk(t);
+    if (this.scene === 'record') this.sceneRecord(t);
+    if (this.scene === 'address') this.sceneAddress(t, clock);
+    if (this.scene === 'rerun') this.sceneRerun(t);
+    if (this.scene === 'forward') this.sceneForward(t);
+    if (this.scene === 'loop') this.sceneLoop(t, clock);
+    if (this.scene === 'end') this.sceneEnd(t, clock);
     c.globalAlpha = 1;
   }
 
@@ -73,9 +82,7 @@ export class BackFilm extends Stage<HowLabels> {
     const th = this.th;
     const cx = dw / 2;
     const y = P ? 70 : 96;
-    /* on a phone the hero's words sit where the answer will be, so it waits below them */
-    const heroDrop = P ? (1 - E.inOut(win(H.wrongA - 0.3, H.wrongA + 0.05, t))) * 170 : 0;
-    const bob = Math.sin(clock * 1.2) * 4 + heroDrop;
+    const bob = Math.sin(clock * 1.2) * 4;
     const leave = E.inOut(win(H.askA, H.askA + 0.5, t));
     this.plate(cx, lerp(y + bob, P ? 36 : 44, leave), lerp(P ? 300 : 430, P ? 220 : 280, leave), lerp(P ? 72 : 88, P ? 50 : 56, leave), {
       label: 'ANSWER',

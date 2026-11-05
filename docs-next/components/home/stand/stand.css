@@ -1,5 +1,6 @@
 /* The STAND film and the sections that hang off it. film.ts reads the --s-* tokens. */
 .sf,
+.sfr,
 .sc,
 .sg,
 .sn,
@@ -24,6 +25,7 @@
   --sf-beat: 52vh;
 }
 .dark .sf,
+.dark .sfr,
 .dark .sc,
 .dark .sg,
 .dark .sn,
@@ -62,41 +64,340 @@
 .pf-close .sc-links {
   justify-content: center;
 }
-.sf.is-live.sf-posters .sf-stage .sf-cap h2 {
+/* ── a scene playing in place beside its text ─────────────────────────────── */
+.sfr {
+  position: relative;
+  display: none;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 760 / 560;
+  margin-inline: auto;
+}
+.sf-js .sfr {
+  display: block;
+}
+.sfr canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sfr-replay {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  visibility: hidden;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+}
+.sfr-replay:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.sfr.is-done .sfr-replay {
+  visibility: visible;
+}
+/* scenePlayer.ts switches the scene to its tall layout at this same width */
+@media (max-width: 620px) {
+  .sfr {
+    max-width: 420px;
+    aspect-ratio: 360 / 470;
+  }
+}
+
+/* ── Features ─────────────────────────────────────────────────────────────── */
+.pf-words {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  justify-content: center;
+  gap: 2px clamp(14px, 2.2vw, 34px);
+  width: min(var(--v2-wide), 100%);
+  margin: 18px auto 0;
+  padding: 0 var(--v2-pad);
+  list-style: none;
+}
+.pf-words a {
+  color: var(--fg);
+  font-size: clamp(22px, 3.1vw, 44px);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 1.12;
+  text-decoration: none;
+}
+.pf-words a:hover,
+.pf-words a:focus-visible {
+  color: var(--yellow-dark);
+}
+.pf-list {
+  width: min(var(--v2-wide), 100%);
+  margin: clamp(24px, 4vw, 44px) auto 0;
+  padding-inline: var(--v2-pad);
+}
+.pf-beat {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+  gap: clamp(16px, 3vw, 44px);
+  align-items: center;
+  padding-block: clamp(24px, 3.4vw, 44px);
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 64px;
+}
+.pf-beat h2 {
+  margin: 0;
   font-size: clamp(46px, 5vw, 76px);
   font-weight: 900;
   letter-spacing: -0.05em;
   line-height: 0.95;
 }
-.sf-inside ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin: 12px 0 8px;
-  padding: 0;
-  list-style: none;
+.pf-line {
+  margin: 10px 0 0;
+  font-size: clamp(19px, 1.65vw, 24px);
+  font-weight: 640;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  text-wrap: pretty;
 }
-.sf-inside li {
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-elev);
+.pf-known {
+  margin: 14px 0 0;
+  font-size: 14.5px;
+  font-weight: 560;
+  line-height: 1.5;
+}
+.pf-known span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--v2-label);
   font-family: var(--v2-mono);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
-.sf-inside a {
-  pointer-events: auto;
+.pf-limit {
+  margin: 12px 0 0;
+  padding-left: 11px;
+  border-left: 3px solid var(--yellow-dark);
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.pf-more {
+  display: inline-block;
+  margin-top: 14px;
   font-size: 14px;
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.sf.is-live.sf-posters .sf-stage.is-portrait .sf-cap h2 {
-  font-size: 40px;
+.pf-adapters {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 6px;
 }
-.sf.sf-posters .sf-stage.is-portrait .sf-inside ul {
-  display: none;
+/* names never break mid-word, so a narrow screen scrolls the table instead of the page */
+.pf-adapters-scroll {
+  overflow-x: auto;
+}
+.pf-adapters .hs-table tbody th {
+  width: 12%;
+}
+.pf-adapter {
+  display: block;
+}
+.pf-adapter + .pf-adapter {
+  margin-top: 2px;
+}
+.pf-adapter code {
+  color: var(--fg);
+  white-space: nowrap;
+}
+.pf-adapter small {
+  margin-left: 6px;
+  color: var(--fg-faint);
+  font-size: 11px;
+}
+.pf-none {
+  color: var(--fg-faint);
+}
+.pf-anywhere {
+  color: var(--fg-muted);
+}
+td > .pf-adapter:has(+ .pf-anywhere) {
+  display: inline;
+}
+.pf-adapters .hs-note a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pf-adapters .hs-note code {
+  font-family: var(--v2-mono);
+  font-size: 12.5px;
+}
+.pf-also {
+  width: min(var(--v2-wide), 100%);
+  margin: 0 auto;
+  padding: 26px var(--v2-pad) 6px;
+}
+.pf-also h2 {
+  margin: 0 0 10px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border);
+  font-size: clamp(21px, 2.2vw, 28px);
+  font-weight: 760;
+  letter-spacing: -0.024em;
+}
+.pf-also ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-also a {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.pf-also a:hover {
+  border-color: var(--border-strong);
+}
+@media (max-width: 1040px) {
+  .pf-beat {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .pf-words {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pf-words a {
+    font-size: min(7.2vw, 42px);
+  }
+  /* on a phone each place reads as one line, so the table stays short */
+  .pf-adapter {
+    display: inline;
+  }
+  .pf-adapter + .pf-adapter::before {
+    content: ' · ';
+    color: var(--fg-faint);
+  }
+  .pf-adapters .hs-table {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .pf-adapters .hs-table tr {
+    padding: 7px 0;
+  }
+  .pf-adapters .hs-table td::before {
+    color: var(--fg-muted);
+    font-weight: 560;
+  }
+}
+
+/* ── How it works ─────────────────────────────────────────────────────────── */
+.hs-hero h1 em {
+  font-style: normal;
+  background: linear-gradient(transparent 62%, color-mix(in oklab, var(--yellow) 70%, transparent) 62%);
+}
+.hs-hero > p.hw-lede {
+  margin-top: 6px;
+  font-size: 15.5px;
+}
+.hw-views {
+  justify-content: center;
+  margin-top: 14px;
+}
+.hw-jump {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 8px;
+  margin: 18px auto 0;
+  padding: 0 var(--v2-pad);
+  list-style: none;
+}
+.hw-jump a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 13px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  font-size: 14px;
+  font-weight: 620;
+  text-decoration: none;
+}
+.hw-jump a:hover {
+  border-color: var(--border-strong);
+}
+.hw-jump span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: #18181b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.sg.hw-steps {
+  margin-top: 30px;
+}
+.hw-chapter {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+  gap: clamp(14px, 2.4vw, 36px);
+  align-items: start;
+}
+.hw-chapter + .hw-chapter {
+  margin-top: clamp(20px, 3vw, 38px);
+}
+.hw-chapter h2 {
+  margin: 0;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 780;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.hw-chapter p {
+  margin: 8px 0 0;
+  color: var(--fg-muted);
+  font-size: 16px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.hw-end {
+  padding-block: 30px 8px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 1240px) {
+  .hw-chapter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .hw-steps .sg-letter {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .hw-steps .sg-big {
+    position: static;
+    font-size: 56px;
+  }
 }
 .v2-kicker {
   margin: 0;
