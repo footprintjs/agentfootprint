@@ -13,8 +13,8 @@ stop();
 
 const bundle = audit.bundle(); // plain JSON, store it anywhere
 const check = verifyAuditBundle(bundle); // offline, with no agent
-// { valid: true, recordsChecked: 14 }
-// change one byte anywhere: { valid: false, brokenAt: 3, reason: 'hash mismatch …' }
+// check.valid is true, and check.recordsChecked says how many records it read.
+// Change one byte anywhere, and valid is false, with brokenAt naming the record.
 // #endregion code
 
 export { bundle, check, verifyAuditBundle };

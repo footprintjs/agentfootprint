@@ -101,7 +101,7 @@ const ADD = [
   ['Detect injected instructions', '#injection', 'A guard on what the model is about to read'],
   ['Stop a dangerous chain of tools', '#chains', 'A checker that sees the calls so far'],
   ['Keep data away from the model', '#scrub', 'Rewrite the message and each tool result'],
-  ['Keep data out of a memory store', '#memory', 'A small store subclass that filters writes'],
+  ['Keep data out of a memory store', '#memory', 'A small store subclass that filters every write'],
   [
     'Keep the final answer out of a saved recording',
     '#recording',
@@ -242,7 +242,13 @@ export default function SecurityPage() {
           aside={
             <SampleCode
               file="site-samples/security-memory.ts"
-              marks={['class ScrubbingStore', 'put:', 'putMany:']}
+              marks={[
+                'class ScrubbingStore',
+                'put:',
+                'putMany:',
+                'putIfVersion:',
+                'recordSignature:',
+              ]}
             />
           }
         >
@@ -259,7 +265,7 @@ export default function SecurityPage() {
           aside={
             <SampleCode
               file="site-samples/security-recording.ts"
-              marks={['replaceAll(', 'openRecording(recording)']}
+              marks={['const keepOut', 'keepOut(recorder', 'throw new Error']}
             />
           }
         >

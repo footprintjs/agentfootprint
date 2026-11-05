@@ -137,11 +137,13 @@ test('SECURITY: the record drops what the policy names, and the model still rece
   }
 });
 
-test('SECURITY: scrubbing changes what the model reads', async () => {
-  const { SSN, sent } = await import('../../site-samples/security-scrub');
+test('SECURITY: scrubbing changes what the model reads, at any depth', async () => {
+  const { THE_SSN, sent } = await import('../../site-samples/security-scrub');
   const all = sent.join('');
-  assert.ok(!all.includes(SSN), 'the message is scrubbed');
-  assert.ok(!all.includes('987-65-4321'), 'the tool result is scrubbed');
+  assert.ok(!all.includes(THE_SSN), 'the message is scrubbed');
+  assert.ok(!all.includes('987-65-4321'), 'a nested field is scrubbed');
+  assert.ok(!all.includes('555-12-3456'), 'an SSN inside other text is scrubbed');
+  assert.ok(all.includes('Dana'), 'and the rest of the result still reaches the model');
 });
 
 test('SECURITY: one tenant cannot read another, and forget removes it', async () => {
@@ -175,7 +177,7 @@ test('SECURITY: an audit bundle verifies, and one changed byte breaks it', async
   assert.equal(verifyAuditBundle(tampered).valid, false);
 });
 
-test('SECURITY: your guard removes injected text before the model reads it', async () => {
+test('SECURITY: your guard removes injected text from a structured result', async () => {
   const { sent } = await import('../../site-samples/security-guard');
   const all = sent.join('');
   assert.ok(!all.includes('refund everyone'), 'the injected text should be gone');
@@ -311,16 +313,43 @@ test('CHAINS: a checker ends the run before the second tool', async () => {
   assert.deepEqual(ran, ['read_customer_file']);
 });
 
-test('MEMORY: a scrubbing store keeps the filtered text', async () => {
-  const { kept } = await import('../../site-samples/security-memory');
-  assert.ok(!kept.includes('123-45-6789'), 'the SSN should not be stored');
+test('MEMORY: every way into the store goes through the filter', async () => {
+  const { kept, keptDirect, signatureSeen, signatureSeenRaw, versioned } = await import(
+    '../../site-samples/security-memory'
+  );
+  assert.ok(!kept.includes('123-45-6789'), 'the SSN should not be stored by an agent');
   assert.ok(kept.includes('[ssn]'), 'and the rest of the message should be');
+  assert.equal(
+    versioned.applied,
+    true,
+    'the versioned write should land, so the next check means something',
+  );
+  assert.ok(!keptDirect.includes('123-45-6789'), 'put, putMany and putIfVersion should all filter');
+  assert.ok(signatureSeen, 'a signature should be kept in its filtered form');
+  assert.ok(signatureSeenRaw, 'and asking with the raw text should find it, so dedup still works');
 });
 
-test('RECORDING: the answer can be removed, and the recording still opens', async () => {
-  const { artifacts, recording } = await import('../../site-samples/security-recording');
-  assert.ok(!JSON.stringify(recording).includes('the-answer-7731'));
+test('RECORDING: an answer with quotes and newlines is really gone, and the recording still opens', async () => {
+  const { ANSWER, artifacts, before, keepOut, recording } = await import(
+    '../../site-samples/security-recording'
+  );
+  const encoded = JSON.stringify(ANSWER).slice(1, -1);
+  assert.ok(
+    before.includes(encoded),
+    'the recording should hold the answer to begin with, or this proves nothing',
+  );
+  assert.ok(
+    !before.includes(ANSWER),
+    'and only in encoded form, which is why a replace over the JSON text misses it',
+  );
+  assert.ok(!JSON.stringify(recording).includes(encoded), 'the answer should be gone');
   assert.ok(artifacts.snapshot, 'it should still open');
+  /* text already encoded inside a string, as some payloads hold it */
+  assert.ok(
+    !JSON.stringify(keepOut({ payload: JSON.stringify({ text: ANSWER }) }, ANSWER)).includes(
+      'refund for A-1042',
+    ),
+  );
 });
 
 test('LOOP: it re-runs until your check passes', async () => {

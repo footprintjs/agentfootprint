@@ -28,7 +28,10 @@ import { Agent, allow, deny, slidingWindow, type MessageMiddleware, type ToolMid
 
 const scrubCards: MessageMiddleware = {
   name: 'scrub-cards',
-  onMessage: (message) => allow(message.content.replace(/\b\d{4}[ -]\d{4}\b/g, '[card]'), 'masked a card number'),
+  onMessage: (message) => {
+    const clean = message.content.replace(/\b\d{4}[ -]\d{4}\b/g, '[card]');
+    return clean === message.content ? allow() : allow(clean, 'masked a card number');
+  },
 };
 
 const knownOrdersOnly: ToolMiddleware = {
@@ -46,7 +49,10 @@ const dropInternalNotes: ToolMiddleware = {
 
 const noCodenames: MessageMiddleware = {
   name: 'no-codenames',
-  onMessage: (message) => allow(message.content.replace(/PROJECT-BLUEJAY/g, 'our review team'), 'internal codename'),
+  onMessage: (message) => {
+    const clean = message.content.replace(/PROJECT-BLUEJAY/g, 'our review team');
+    return clean === message.content ? allow() : allow(clean, 'internal codename');
+  },
 };
 
 const agent = Agent.create({ provider, model: 'mock' })
