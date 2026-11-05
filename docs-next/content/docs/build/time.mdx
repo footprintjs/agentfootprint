@@ -20,8 +20,9 @@ axis**. Runnable examples: `examples/features/81-run-clock.ts` through
 `.time()` on the builder arms the layer. The zone is per run —
 `run({ time: { now, zone, window } })`, typed `RunTime` — and the builder's
 `TimeOptions` supply a fallback `zone` (plus the `reader`, its `policy` and
-your `messages`, below). With no zone anywhere the run is refused before the
-turn starts; the server's zone is never used.
+your `messages`, below). With no zone anywhere the run still goes ahead, with
+its zone unknown (`zoneSource: 'unknown'`). The server's zone is never used, and
+the person is asked for theirs before any time they wrote is read.
 
 The clock is recorded, never read in secret. Each turn files one `ClockRow` —
 a `TimeClock` (`now`, `nowSource`, `zone`, `zoneSource`) plus, when a UI set

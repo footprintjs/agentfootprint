@@ -820,3 +820,13 @@ test('the line that heads the film is the page title, and every word has a part 
   assert.match(film, /Build agents you can <em>hold to the record\.<\/em>/);
   for (const { text, on } of LINE) assert.ok(on.length > 0, text);
 });
+
+test('a run with no zone anywhere goes ahead with its zone unknown, as the Time page says', async () => {
+  const agent = Agent.create({ provider: mock({ replies: [{ content: 'ok' }] }), model: 'mock' }).time().build();
+  assert.equal(await agent.run({ message: 'hi' }), 'ok');
+  const clock = agent.findings().find((row) => row.kind === 'clock');
+  assert.equal(clock?.zoneSource, 'unknown');
+  const page = readFileSync(new URL('../../content/docs/build/time.mdx', import.meta.url), 'utf8');
+  assert.match(page, /the run still goes ahead, with\s+its zone unknown/);
+});
+

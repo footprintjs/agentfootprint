@@ -33,7 +33,7 @@ const RECEIPT = [
   ['READ', 'get_refund · policy/refunds-v1'],
   ['WHAT DROVE THIS', 'the ledger row, then the policy'],
 ];
-/* The story from How it works. The scores are illustrative: a ranking is a lead, and the rerun is the test. */
+/* The story from How we debug. The scores are examples, and the scene says so: a ranking is a lead, and the rerun is the test. */
 const SUSPECTS = [
   { n: 'docs: policy/refunds-v1', v: 0.82 },
   { n: 'memory: customer history', v: 0.41 },
@@ -428,7 +428,7 @@ export class FeatureScenes extends Stage<null> {
     this.plate(dw / 2, y, w, P ? 62 : 80, { label: 'ANSWER', text: 'Your refund is approved.', size: P ? 15 : 21, alpha: a * (1 - flip) });
     this.plate(dw / 2, y, w, P ? 62 : 80, { label: 'WITHOUT IT', text: 'Your refund was denied.', size: P ? 15 : 21, alpha: flip });
     const listY = P ? 92 : 122;
-    this.text('suspects, ranked', x, listY, { size: P ? 10 : 12, weight: 700, mono: true, color: th.muted, alpha: win(0.3, 0.45, u) });
+    this.text(P ? 'example scores' : 'suspects · example scores', x, listY, { size: P ? 10 : 12, weight: 700, mono: true, color: th.muted, alpha: win(0.3, 0.45, u) });
     const grow = E.inOut(win(0.42, 0.95, u));
     const rowH = P ? 60 : 78;
     const top = listY + (P ? 14 : 18);
