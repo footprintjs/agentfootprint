@@ -1,3 +1,4 @@
+import { PageJsonLd } from '@/components/site/PageJsonLd';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ReadingRow } from '@/components/site/ReadingRow';
@@ -8,7 +9,7 @@ import '@/components/home/stand/stand.css';
 import '@/components/site/page-shell.css';
 import '@/components/site/reading.css';
 
-const TITLE = 'Prompt, context, loop and harness engineering, with code — AgentFootprint';
+const TITLE = 'Prompt, context, loop and harness engineering — AgentFootprint';
 const DESCRIPTION =
   'What prompt engineering, context engineering, loop engineering and harness engineering mean for an agent, with code for each in TypeScript.';
 
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: TITLE }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: TITLE,
     description: DESCRIPTION,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
 };
 
@@ -38,6 +39,7 @@ export const metadata: Metadata = {
 export default function EngineeringPage() {
   return (
     <div className="pf">
+      <PageJsonLd name="Prompt to Harness" path="/engineering/" description={DESCRIPTION} />
       <header className="hs-hero">
         <p className="v2-kicker">Prompt to Harness</p>
         <h1>Prompt, context, loop, harness. The code for each.</h1>

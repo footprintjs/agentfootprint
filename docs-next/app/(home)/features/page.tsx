@@ -1,3 +1,4 @@
+import { PageJsonLd } from '@/components/site/PageJsonLd';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { FeatureScene } from '@/components/features/FeatureScene';
@@ -14,8 +15,9 @@ import '@/components/site/page-shell.css';
  * the only client part, and each one loads as it nears the screen.
  */
 
-const TITLE = 'Features — agentfootprint';
-const DESC = `${FEATURES_TAGLINE} Build an agent from pieces, teach it skills, tell it what exists and what time it is, give it memory, swap the model, adapt it to your infrastructure, stream it to your front end, watch it think, have it check in before anything big, protect what it records, ask why when it's wrong, and keep running when a provider goes down.`;
+const TITLE = 'Agent framework features — AgentFootprint';
+const DESC =
+  'Build an agent from pieces, teach it skills, give it memory, swap the model, stream it to your front end, ask why it answered, and keep it running.';
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -27,7 +29,7 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: TITLE,
     description: DESC,
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: TITLE }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -35,13 +37,14 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: TITLE,
     description: DESC,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
 };
 
 export default function FeaturesPage() {
   return (
     <div className="pf">
+      <PageJsonLd name="Features" path="/features/" description={DESC} />
       {/* Tells the CSS a script ran, so a scene only takes up room when it can play. */}
       {/* eslint-disable-next-line react/no-danger */}
       <script

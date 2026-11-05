@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: HOME_TITLE,
     description: HOME_DESC,
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: HOME_TITLE }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: HOME_TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: HOME_TITLE,
     description: HOME_DESC,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
 };
 

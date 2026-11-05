@@ -1,3 +1,4 @@
+import { PageJsonLd } from '@/components/site/PageJsonLd';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { StandGrid } from '@/components/home/stand/StandGrid';
@@ -10,7 +11,7 @@ import '@/components/home/stand/stand.css';
 
 const TITLE = 'How an answer stands — AgentFootprint';
 const DESCRIPTION =
-  'How AgentFootprint holds an agent’s claims to a record it did not write: what is checked when the model calls a tool, reads a result and gives its answer, who decides, and what cannot be shown.';
+  'How AgentFootprint holds an agent’s claims to a record it did not write: what gets checked, who decides, and what the record cannot show.';
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: TITLE }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -30,13 +31,14 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: TITLE,
     description: DESCRIPTION,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
 };
 
 export default function HowItStandsPage() {
   return (
     <div className="v2-home hs">
+      <PageJsonLd name="How it stands" path="/how-it-stands/" description={DESCRIPTION} />
       <header className="hs-hero">
         <p className="v2-kicker">How it stands</p>
         <h1>How an answer is held to the record.</h1>

@@ -1,3 +1,4 @@
+import { PageJsonLd } from '@/components/site/PageJsonLd';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ReadingRow } from '@/components/site/ReadingRow';
@@ -10,7 +11,7 @@ import '@/components/site/reading.css';
 
 const TITLE = 'AI agent security, with code — AgentFootprint';
 const DESCRIPTION =
-  'Permissions, data privacy, tenant isolation, secrets, human approval and tamper-evident audit for AI agents, what the library catches from the model and from tools, and code to add the rest.';
+  'Permissions, privacy, tenant isolation, secrets, approval and audit for AI agents: what the library catches, and code to add the rest.';
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: TITLE }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: TITLE,
     description: DESCRIPTION,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
 };
 
@@ -114,6 +115,7 @@ const ADD = [
 export default function SecurityPage() {
   return (
     <div className="pf">
+      <PageJsonLd name="Security & Trustworthy AI" path="/security/" description={DESCRIPTION} />
       <header className="hs-hero">
         <p className="v2-kicker">Security &amp; Trustworthy AI</p>
         <h1>What it protects, what it catches, and how to add the rest.</h1>

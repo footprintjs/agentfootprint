@@ -1,13 +1,11 @@
 import { ImageResponse } from 'next/og';
 import { SITE } from '@/lib/site';
 
-// Branded 1200×630 social card, prerendered to a static PNG at build time.
+// Branded 1200×630 social card, prerendered to a static PNG at build time. It has a file extension
+// because GitHub Pages serves a file without one as application/octet-stream, which previews can refuse.
 export const dynamic = 'force-static';
-export const alt = SITE.title;
-export const size = { width: 1200, height: 630 };
-export const contentType = 'image/png';
 
-export default function OpengraphImage() {
+export function GET() {
   return new ImageResponse(
     (
       <div
@@ -70,6 +68,6 @@ export default function OpengraphImage() {
         </div>
       </div>
     ),
-    size,
+    { width: 1200, height: 630 },
   );
 }

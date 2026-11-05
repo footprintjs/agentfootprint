@@ -1,3 +1,4 @@
+import { PageJsonLd } from '@/components/site/PageJsonLd';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { HowStory } from '@/components/home/how/HowStory';
@@ -9,7 +10,7 @@ import '@/components/home/stand/stand.css';
 import '@/components/site/page-shell.css';
 import '@/components/site/reading.css';
 
-const TITLE = 'How we debug — trace a wrong answer to its cause — AgentFootprint';
+const TITLE = 'How we debug a wrong answer — AgentFootprint';
 const DESCRIPTION =
   'Follow one agent run from a wrong answer through context provenance, backward slicing, and controlled replay.';
 
@@ -42,7 +43,7 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: `${SITE.url}/opengraph-image`, width: 1200, height: 630, alt: TITLE }],
+    images: [{ url: SITE.ogImage, width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -50,13 +51,14 @@ export const metadata: Metadata = {
     creator: SITE.twitter,
     title: TITLE,
     description: DESCRIPTION,
-    images: [`${SITE.url}/opengraph-image`],
+    images: [SITE.ogImage],
   },
 };
 
 export default function HowWeDebugPage() {
   return (
     <div className="v2-home">
+      <PageJsonLd name="How we debug" path="/how-we-debug/" description={DESCRIPTION} />
       {/* Tells the CSS a script ran, so a scene only takes up room when it can play. */}
       {/* eslint-disable-next-line react/no-danger */}
       <script
