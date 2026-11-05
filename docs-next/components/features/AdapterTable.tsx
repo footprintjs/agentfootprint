@@ -55,7 +55,9 @@ export function AdapterTable() {
                       {row[key]?.length ? (
                         row[key].map((cell) => <Name cell={cell} key={adapterName(cell)} />)
                       ) : (
-                        <span className="pf-none">none yet</span>
+                        <a className="pf-none" href="#write-your-own">
+                          write one
+                        </a>
                       )}
                     </td>
                   ))
@@ -71,7 +73,9 @@ export function AdapterTable() {
         </table>
       </div>
       <p className="hs-note">
-        A recipe is a documented setup, not a dedicated adapter. The full map for each place:{' '}
+        A recipe is a documented setup, not a dedicated adapter. Stores that speak a protocol, like{' '}
+        <code>RedisStore</code> and <code>pgVectorStore</code>, can point at a managed Redis or
+        Postgres on any cloud. The full map for each place:{' '}
         {ADAPTER_PAGES.map((page, i) => (
           <span key={page.href}>
             <Link href={page.href} prefetch={false}>

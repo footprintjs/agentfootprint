@@ -234,7 +234,7 @@
   font-size: 11px;
 }
 .pf-none {
-  color: var(--fg-faint);
+  color: var(--fg-muted);
 }
 .pf-anywhere {
   color: var(--fg-muted);
@@ -375,8 +375,36 @@ td > .pf-adapter:has(+ .pf-anywhere) {
   min-width: 0;
 }
 .rp-code {
+  position: relative;
   min-width: 0;
   margin: 0;
+}
+.rp-code + .rp-code {
+  margin-top: 14px;
+}
+.rp-pair .rp-code + .rp-code {
+  margin-top: 0;
+}
+.rp-code .sc-code {
+  padding-bottom: 34px;
+}
+.rp-copy {
+  position: absolute;
+  z-index: 1;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+}
+.rp-copy:hover {
+  border-color: var(--border-strong);
+  color: var(--fg);
 }
 .rp-code figcaption {
   margin-bottom: 6px;
@@ -429,6 +457,26 @@ td > .pf-adapter:has(+ .pf-anywhere) {
 }
 .rp-kept td {
   width: 50%;
+}
+.rp-kept a,
+.rp-wide > p a,
+a.pf-none {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rp-catches {
+  margin-top: 10px;
+}
+.rp-catches td:nth-child(1) {
+  color: var(--fg);
+  font-weight: 640;
+  white-space: nowrap;
+}
+.rp-catches code {
+  color: var(--fg);
+  font-family: var(--v2-mono);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
 }
 .rp-limits {
   margin-top: 8px;

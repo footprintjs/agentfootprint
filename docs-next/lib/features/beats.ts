@@ -163,7 +163,7 @@ export const FEATURE_BEATS = [
       { name: 'audit trail', href: '/security#audit' },
     ],
     limit:
-      'Redaction is opt-in, and prompt-injection detection is not included. The Security page says exactly what it covers.',
+      'Redaction is opt-in, and you add your own check for injected instructions. The Security page shows how.',
     href: '/security',
     hrefLabel: 'Read more about security',
   },

@@ -231,7 +231,21 @@ test('the anchors other pages link to are on the page', () => {
     new URL('../../app/(home)/security/page.tsx', import.meta.url),
     'utf8',
   );
-  for (const id of ['permissions', 'privacy', 'tenants', 'audit'])
+  for (const id of [
+    'permissions',
+    'privacy',
+    'scrub',
+    'memory',
+    'recording',
+    'tenants',
+    'secrets',
+    'approval',
+    'catches',
+    'injection',
+    'chains',
+    'audit',
+    'add',
+  ])
     assert.ok(security.includes(`id="${id}"`), `Security has no #${id}`);
 });
 
@@ -265,4 +279,57 @@ test('KNOW: the clock goes on the record, with where it came from', async () => 
   );
   /* The docs say a run with no zone is refused. It runs, and the record says unknown, so the page says that. */
   assert.equal((undeclaredClock as { zoneSource?: string }).zoneSource, 'unknown');
+});
+
+test('CATCHES: what the Security page says it catches, from the model and from tools', async () => {
+  const { advisories, answer, checked, flagged, invalid, ranWithBadArgs, stops } = await import(
+    '../../site-samples/security-catches'
+  );
+  assert.ok(
+    flagged.includes('unsupported-argument'),
+    `a tool input no result gave: ${flagged.join(', ')}`,
+  );
+  assert.ok(
+    flagged.includes('column-type-mismatch'),
+    `rows that break their columns: ${flagged.join(', ')}`,
+  );
+  assert.ok(stops.includes('content_filter'), 'a provider stop should be on the record');
+  assert.match(
+    JSON.stringify(checked),
+    /c-2291[\s\S]*"action":"flagged"/i,
+    'an invented identifier should be flagged',
+  );
+  assert.match(String(answer), /C-2291/, 'and the default only flags it, as the page says');
+  assert.deepEqual(invalid, ['get_refund'], 'arguments of the wrong shape should be reported');
+  assert.equal(ranWithBadArgs.count, 0, 'and the tool should not run');
+  assert.ok(advisories.includes('empty-lookup'), `an empty lookup: ${advisories.join(', ')}`);
+});
+
+test('CHAINS: a checker ends the run before the second tool', async () => {
+  const { halted, ran } = await import('../../site-samples/security-sequence');
+  assert.equal(halted, 'PolicyHaltError');
+  assert.deepEqual(ran, ['read_customer_file']);
+});
+
+test('MEMORY: a scrubbing store keeps the filtered text', async () => {
+  const { kept } = await import('../../site-samples/security-memory');
+  assert.ok(!kept.includes('123-45-6789'), 'the SSN should not be stored');
+  assert.ok(kept.includes('[ssn]'), 'and the rest of the message should be');
+});
+
+test('RECORDING: the answer can be removed, and the recording still opens', async () => {
+  const { artifacts, recording } = await import('../../site-samples/security-recording');
+  assert.ok(!JSON.stringify(recording).includes('the-answer-7731'));
+  assert.ok(artifacts.snapshot, 'it should still open');
+});
+
+test('LOOP: it re-runs until your check passes', async () => {
+  const { calls, onSchedule } = await import('../../site-samples/eng-loop-timer');
+  assert.equal(await onSchedule(), 'all clear');
+  assert.equal(calls.count, 3);
+});
+
+test('DEPLOY: a telemetry sink of your own is one object', async () => {
+  const { shipped } = await import('../../site-samples/deploy-own-telemetry');
+  assert.ok(shipped.includes('agentfootprint.stream.llm_end'));
 });

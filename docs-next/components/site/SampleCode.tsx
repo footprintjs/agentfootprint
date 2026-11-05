@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { extractRegion } from '@/lib/regionExtractor';
+import { CopyCode } from './CopyCode';
 
 /**
  * A code block read from a file the tests run, so the page cannot drift from what ran. A missing
@@ -25,6 +26,7 @@ export function SampleCode({
   return (
     <figure className="rp-code">
       {title ? <figcaption>{title}</figcaption> : null}
+      <CopyCode code={lines.join('\n')} />
       <pre className="sc-code" tabIndex={0}>
         <code>
           {lines.map((line, i) => (

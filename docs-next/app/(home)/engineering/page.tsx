@@ -122,9 +122,23 @@ export default function EngineeringPage() {
             or refuse a call, and it can’t invent a tool’s result, so what the model reads is the
             real output or a refusal.
           </p>
-          <p className="pf-limit">
-            Some people use this name for a system that re-runs agents on a timer. The library
-            doesn’t schedule runs, so bring your own cron.
+        </ReadingRow>
+
+        <ReadingRow
+          title="Re-run it on a timer"
+          more={{ href: '/docs/build/patterns', label: 'Compositions and patterns' }}
+          aside={
+            <SampleCode
+              file="site-samples/eng-loop-timer.ts"
+              marks={['Loop.create(', '.until(', 'onSchedule']}
+            />
+          }
+        >
+          <p>
+            Some people use loop engineering for a system that prompts, checks, remembers and
+            re-runs an agent on a timer.
+            <code>Loop</code> does the re-running. The timer is yours, because the library doesn’t
+            run a scheduler.
           </p>
         </ReadingRow>
 
