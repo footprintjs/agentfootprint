@@ -16,6 +16,8 @@ import {
   privateFieldsDeclaredBy,
 } from './declared.js';
 
+import { DECLARED_NONE } from './coverage.js';
+
 const cp = (extra: object = {}) => ({ sharedState: {}, ...extra } as FlowchartCheckpoint);
 describe('private checkpoint names do not become caller coverage', () => {
   it('keeps absent-private checkpoint identity and legacy marks unchanged', () => {
@@ -30,7 +32,7 @@ describe('private checkpoint names do not become caller coverage', () => {
     ]);
     const state = { argumentAsk: { progress: [{ answer: 'PRIVATE-fixture' }] } };
     const checkpoint = cp({ sharedState: state });
-    const carried = checkpointWithPrivateFields(checkpoint, fields);
+    const carried = checkpointWithPrivateFields(checkpoint, fields, DECLARED_NONE);
     expect(carried.sharedState.argumentAsk).toBe(state.argumentAsk);
     expect(privateFieldsOfCheckpoint(carried)).toEqual(fields);
     expect(checkpoint.sharedState).not.toHaveProperty(PRIVATE_FIELDS_KEY);
@@ -47,6 +49,7 @@ describe('private checkpoint names do not become caller coverage', () => {
         },
       }),
       fields,
+      DECLARED_NONE,
     );
     expect(nonPrivateMarksOf(checkpoint)).toEqual({
       keys: ['author-secret'],
@@ -90,7 +93,11 @@ describe('private checkpoint names do not become caller coverage', () => {
 
 it('private resume keeps unknown marks record-only while legacy caller policy unions stay unchanged', () => {
   const raw = cp({ redactionMarks: { keys: ['author-mark'] } });
-  const privateCheckpoint = checkpointWithPrivateFields(raw, addPrivateRecordFields(undefined, []));
+  const privateCheckpoint = checkpointWithPrivateFields(
+    raw,
+    addPrivateRecordFields(undefined, []),
+    DECLARED_NONE,
+  );
   expect(privateResumeOf(raw)).toEqual({});
   expect(privateResumeOf(privateCheckpoint).recordMarks).toEqual({ keys: ['author-mark'] });
   expect(resumePoliciesOf(privateCheckpoint, undefined, undefined)).toEqual({

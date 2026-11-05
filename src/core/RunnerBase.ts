@@ -19,11 +19,8 @@ import {
   privateFieldsDeclaredBy,
 } from '../redaction/declared.js';
 import { policyOfCoverage, type RedactionCoverage } from '../redaction/coverage.js';
-import {
-  checkpointWithPrivateFields,
-  privateResumeOf,
-  resumePoliciesOf,
-} from '../redaction/privateCheckpoint.js';
+import { checkpointWithPrivateRun, privateResumeOf } from '../redaction/privateCheckpoint.js';
+import { resumePoliciesForRunner } from './agent/run/resumeRedaction.js';
 import type { RunnerCoreValues } from './runnerCoreValues.js';
 export type { RunnerCoreValues } from './runnerCoreValues.js';
 import { unionRedactionPolicies } from '../redaction/policy.js';
@@ -560,10 +557,7 @@ export abstract class RunnerBase<
     const rawCheckpoint = result.checkpoint;
     if (rawCheckpoint === undefined)
       throw new TypeError('The native paused result has no checkpoint');
-    const checkpoint = checkpointWithPrivateFields(
-      rawCheckpoint,
-      invocation.value.redaction?.privateFields(),
-    );
+    const checkpoint = checkpointWithPrivateRun(rawCheckpoint, invocation.value.redaction);
 
     const pauseData =
       checkpoint.pauseData !== undefined
@@ -675,7 +669,7 @@ export abstract class RunnerBase<
     // caller hands it, joined with the names the paused leg kept out (the
     // checkpoint's marks) — returned for the runner to hand THIS leg's
     // native executor setup, so nothing per-run is kept on the instance.
-    const policies = resumePoliciesOf(checkpoint, handedDown, redactionDeclaredBy(this));
+    const policies = resumePoliciesForRunner(checkpoint, handedDown, redactionDeclaredBy(this));
     const resumeLeg = policies.caller;
     this.dispatcher.useServing(servingAhead(policies.serving));
     const meta = this.minimalMeta();

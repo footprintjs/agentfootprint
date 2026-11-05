@@ -69,6 +69,13 @@ import {
 } from '../arguments/resolve.js';
 import { withFills } from '../arguments/dispatch.js';
 import { markPrivateAsk, requirePrivateQuestionSupport } from '../arguments/privateAnswers.js';
+import { privateFieldsInForce, markPrivateFields } from '../../../redaction/runRedaction.js';
+import {
+  declarePendingPrivateAsk,
+  pendingPrivateAskOf,
+  pendingPrivateSelections,
+  requirePendingPrivateViews,
+} from '../arguments/pendingPrivateAsk.js';
 import {
   hasOneMaterializedWindow,
   partialOriginOf,
@@ -439,6 +446,10 @@ export function askBeforeDispatch(
   }
   let answered = false;
   if (state.waiting !== undefined) {
+    const declaration = pendingPrivateAskOf(state, privateFieldsInForce(scope) !== undefined);
+    requirePendingPrivateViews(state, declaration, deps.toolOf);
+    const selected = pendingPrivateSelections(declaration);
+    if (selected.length > 0) markPrivateFields(scope, selected);
     const input = interrupt(scope, pauseDataOf(state.waiting));
     const bound = bindAnswer(
       state,
@@ -481,8 +492,19 @@ export function askBeforeDispatch(
     }
   }
   if (round !== undefined) {
-    const waiting = stampRound(scope, state, round, deps);
+    const stamped = stampRound(scope, state, round, deps);
+    const declaration = declarePendingPrivateAsk(
+      withWaiting(state, stamped),
+      deps.toolOf,
+      privateFieldsInForce(scope) !== undefined,
+    );
+    const waiting = {
+      ...stamped,
+      ...(declaration !== undefined && { privateFields: declaration }),
+    };
     const next = snapshotPartialState(withWaiting(state, waiting));
+    const selected = pendingPrivateSelections(declaration);
+    if (selected.length > 0) markPrivateFields(scope, selected);
     markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
     scope.argumentAsk = next;
     deps.saveParties?.();

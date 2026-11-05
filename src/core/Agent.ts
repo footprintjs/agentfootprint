@@ -2569,7 +2569,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
     // without reaching it, refused or aborted, used nothing.
     resumeStateOf(checkpoint);
-    Object.assign(invocation.value, privateResumeOf(checkpoint));
     // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
     // Refused HERE, before the engine is handed the checkpoint, so nothing
     // executes and the checkpoint is unchanged — the caller can answer the same
@@ -2604,6 +2603,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       options?.redact,
       conversationRedaction(),
     ]);
+    Object.assign(invocation.value, privateResumeOf(checkpoint));
     // A resume's `time` (the time layer) is read or refused before anything
     // moves; it is never applied — the paused turn's clock is kept, and a
     // differing value is recorded by the ToolCalls resume door.

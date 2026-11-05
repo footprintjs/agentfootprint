@@ -8,10 +8,16 @@ import {
 import { addPrivateRecordFields } from '../../../redaction/privateFields.js';
 import { resumeRedactionOf } from './resumeRedaction.js';
 
+import { DECLARED_NONE, coverageOfOpenedRun } from '../../../redaction/coverage.js';
+
 const checkpoint = () =>
   ({ sharedState: {}, redactionMarks: { keys: ['author-mark'] } } as FlowchartCheckpoint);
 it('unknown marks on a private-only checkpoint are not misreported as caller policy', () => {
-  const value = checkpointWithPrivateFields(checkpoint(), addPrivateRecordFields(undefined, []));
+  const value = checkpointWithPrivateFields(
+    checkpoint(),
+    addPrivateRecordFields(undefined, []),
+    DECLARED_NONE,
+  );
   expect(resumeRedactionOf(value, [])).toBeUndefined();
   expect(nonPrivateMarksOf(value)).toEqual({ keys: ['author-mark'] });
 });
@@ -25,6 +31,7 @@ it('preserves a real caller policy independently of private and unknown marks', 
   const value = checkpointWithPrivateFields(
     { ...checkpoint(), sharedState: { runRedaction: carriedRunPolicy(policy) } },
     addPrivateRecordFields(undefined, []),
+    coverageOfOpenedRun(policy),
   );
   expect(resumeRedactionOf(value, [policy])).toEqual(policy);
   expect(nonPrivateMarksOf(value)).toEqual({ keys: ['author-mark'] });

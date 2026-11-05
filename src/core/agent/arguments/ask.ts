@@ -52,6 +52,8 @@
  * that needed it are refused.
  */
 
+import type { AskWaiting } from './pendingPrivateAsk.js';
+export type { AskWaiting } from './pendingPrivateAsk.js';
 import {
   applyInputResponse,
   InputRequestError,
@@ -227,13 +229,6 @@ export interface AskProgress {
 }
 
 /** The ask now out, waiting for the person's answer. */
-export interface AskWaiting {
-  readonly requestId: string;
-  /** The positions (into `fields`) of this declaration's fields, in `f1…fn` order. */
-  readonly fieldIndexes: readonly number[];
-  /** The stamped ask, exactly as the pause carries it — the answer is validated against it. */
-  readonly awaiting: AwaitingInput;
-}
 
 /**
  * The batch ask's working state (`AgentState.argumentAsk`), written by the

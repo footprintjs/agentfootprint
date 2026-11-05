@@ -43,6 +43,10 @@ it('private-only native coverage keeps public facts readable and reports its mis
   const recorder = recordRun(agent);
   try {
     await agent.run({ message: 'Public question' });
+    expect(runnerLive(agent)?.liveSnapshot()?.sharedState.runRedaction).toEqual({
+      version: 1,
+      caller: 'none',
+    });
     const recording = recorder.toRecording();
     expect(declarationOf(agent)).toEqual({ state: 'declared-none' });
     expect(servedUnderPolicy(recording.snapshot)).toBe(true);

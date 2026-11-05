@@ -1,6 +1,8 @@
 import type { RedactionPolicy } from 'footprintjs';
 import type { RedactionRule } from 'footprintjs/advanced';
 import { unionRedactionPolicies } from './policy.js';
+import { carriedRunPolicy } from './conversation.js';
+import { PRIVATE_CALLER_NONE } from './privateCaller.js';
 import {
   addPrivateRecordFields,
   mergePrivateRecordFields,
@@ -123,10 +125,15 @@ export function createPrivateRun(
       // Native selectors must be registered before either the anchor or secret writes.
       register(rule, next);
       ruleNames.set(rule, {
-        caller: ruleNames.get(rule)?.caller ?? caller,
+        caller: unionRedactionPolicies(ruleNames.get(rule)?.caller, caller),
         recordMarks: unionRedactionPolicies(ruleNames.get(rule)?.recordMarks, recordMarks),
         fields: next,
       });
+      const actualCaller = ruleNames.get(rule)?.caller;
+      scope.$setValue(
+        'runRedaction',
+        actualCaller === undefined ? PRIVATE_CALLER_NONE : carriedRunPolicy(actualCaller),
+      );
       scope.$setValue(PRIVATE_FIELDS_KEY, next);
     },
   };

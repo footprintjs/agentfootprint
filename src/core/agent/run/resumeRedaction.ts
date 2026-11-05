@@ -4,35 +4,34 @@ import {
   carriedVocabularyOf,
   policyFromCarried,
   policyOfMarks,
+  unionRedactionPolicies,
 } from '../../../redaction/policy.js';
 import {
+  callerOfCheckpoint,
   nonPrivateMarksOf,
   privateFieldsOfCheckpoint,
+  resumePoliciesOf,
 } from '../../../redaction/privateCheckpoint.js';
 import { ResumeRedactionError } from '../../conversation.js';
 import { withCurrentVocabulary } from '../../../redaction/conversation.js';
 
-/**
- * The policy a paused agent run was covered by, read off its own checkpoint
- * (`AgentState.runRedaction`, committed by seed and by every resumed leg) —
- * FAIL CLOSED: a value this library did not write, or a checkpoint whose run
- * kept names out of its records (`redactionMarks`) but carries no policy,
- * refuses the resume (`ResumeRedactionError`) before anything moves. A leg its
- * policy could not keep covered must never start.
- */
+/** Admit the saved caller policy or the explicit closed private-only declaration. */
 export function resumeRedactionOf(
   checkpoint: FlowchartCheckpoint,
   trusted: readonly (RedactionPolicy | undefined)[],
 ): RedactionPolicy | undefined {
-  const state = checkpoint.sharedState as { runRedaction?: unknown } | undefined;
   let carried: RedactionPolicy | undefined;
+  let callerNone = false;
+  let marked = false;
   try {
-    // A carried pattern is a reference to one the resuming side holds — never
-    // compiled from the checkpoint (`redaction/policy.ts` · `policyFromCarried`).
-    carried = policyFromCarried(state?.runRedaction, 'Agent.resume', trusted);
-    // A policy built under ANOTHER vocabulary version is joined with the
-    // current list — the leg is never covered by an older list alone.
-    carried = withCurrentVocabulary(carried, carriedVocabularyOf(state?.runRedaction));
+    const declaration = callerOfCheckpoint(checkpoint);
+    callerNone = declaration.state === 'none';
+    const value = declaration.state === 'policy' ? declaration.value : undefined;
+    carried = policyFromCarried(value, 'Agent.resume', trusted);
+    carried = withCurrentVocabulary(carried, carriedVocabularyOf(value));
+    marked =
+      privateFieldsOfCheckpoint(checkpoint) !== undefined ||
+      policyOfMarks(nonPrivateMarksOf(checkpoint)) !== undefined;
   } catch (refusal) {
     throw new ResumeRedactionError(
       refusal instanceof CarriedPolicyError && refusal.refusal === 'unknown-pattern'
@@ -40,19 +39,18 @@ export function resumeRedactionOf(
         : 'unreadable',
     );
   }
-  // A private-only native rule can acquire conservative marks through copying;
-  // its resume preserves those separately from caller coverage. A legacy
-  // caller-covered leg still requires its saved caller policy.
-  // Every leg of a covered run writes its policy into its checkpoint's state
-  // (seed, and `resume` for a resumed leg), so a checkpoint whose run kept
-  // names out but carries none was altered — refused even when the resume
-  // names a policy, which cannot stand in for the one the run was covered by.
-  if (
-    carried === undefined &&
-    privateFieldsOfCheckpoint(checkpoint) === undefined &&
-    policyOfMarks(nonPrivateMarksOf(checkpoint)) !== undefined
-  ) {
-    throw new ResumeRedactionError('missing');
-  }
+  // Carrier presence describes private selectors. It never proves caller:none.
+  // A policy supplied now cannot stand in for the policy the earlier leg carried.
+  if (carried === undefined && !callerNone && marked) throw new ResumeRedactionError('missing');
   return carried;
+}
+
+/** Every runner admits the saved caller declaration before serving or executing a resumed leg. */
+export function resumePoliciesForRunner(
+  checkpoint: FlowchartCheckpoint,
+  handedDown: RedactionPolicy | undefined,
+  declared: RedactionPolicy | undefined,
+): ReturnType<typeof resumePoliciesOf> {
+  const carried = resumeRedactionOf(checkpoint, [declared, handedDown]);
+  return resumePoliciesOf(checkpoint, unionRedactionPolicies(carried, handedDown), declared);
 }

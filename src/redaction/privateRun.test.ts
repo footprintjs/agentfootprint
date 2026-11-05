@@ -4,6 +4,7 @@ import type { RedactionPolicy } from 'footprintjs';
 import { EventDispatcher } from '../events/dispatcher.js';
 import type { EventMeta } from '../events/types.js';
 import { DECLARED_NONE } from './coverage.js';
+import { carriedRunPolicy } from './conversation.js';
 import {
   addPrivateRecordFields,
   PRIVATE_FIELDS_KEY,
@@ -89,7 +90,10 @@ it('private-only fields mask by name while public strings, identity and caller c
   expect(policyInForce(scope)).toBeUndefined();
   expect(canStorePrivateFields(scope)).toBe(true);
   markPrivateFields(scope, selection);
-  expect(writes).toEqual([{ key: PRIVATE_FIELDS_KEY, value: run.privateFields() }]);
+  expect(writes).toEqual([
+    { key: 'runRedaction', value: { version: 1, caller: 'none' } },
+    { key: PRIVATE_FIELDS_KEY, value: run.privateFields() },
+  ]);
   expect(privateFieldsInForce(scope)).toEqual(run.privateFields());
   expect(rule.verdict(['argumentAsk'])).toMatchObject({
     kind: 'fields',
@@ -120,7 +124,7 @@ it('native registration precedes the anchor write and the protected value write'
   run.bindScope(scope, { runtimeStageId: 'stage#1', getRedactionRule: () => rule } as never);
   markPrivateFields(scope, selection);
   scope.$setValue('argumentAsk');
-  expect(order).toEqual([PRIVATE_FIELDS_KEY, 'argumentAsk']);
+  expect(order).toEqual(['runRedaction', PRIVATE_FIELDS_KEY, 'argumentAsk']);
 });
 
 it.each([
@@ -137,7 +141,8 @@ it.each([
     expect(run.privateFields()).toBeUndefined();
     markPrivateFields(scope, []);
     expect(run.privateFields()).toEqual(empty());
-    expect(writes).toHaveLength(1);
+    expect(writes).toHaveLength(2);
+    expect(writes[0]).toEqual({ key: 'runRedaction', value: carriedRunPolicy(policy) });
     markPrivateFields(scope, selection);
     expect(rule.isKeyRedacted(PRIVATE_FIELDS_KEY)).toBe(true);
     expect(run.policy).toBe(policy);
@@ -337,7 +342,8 @@ it('binding a later native rule cannot redirect an earlier scope private write o
   unavailable(() =>
     markPrivateFields(first.scope, [{ root: 'pausedCheckInArgs', path: 'account' }]),
   );
-  expect(first.writes).toHaveLength(1);
+  expect(first.writes).toHaveLength(2);
+  expect(first.writes[0]).toEqual({ key: 'runRedaction', value: { version: 1, caller: 'none' } });
   expect(second.writes).toEqual([]);
   expect(secondRule.marksForCheckpoint()).toEqual(before);
   expect(firstRule.marksForCheckpoint()?.fields).toEqual({ argumentAsk: ['progress.0.answer'] });
