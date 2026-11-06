@@ -73,6 +73,30 @@ export function ablationForSuspect(suspect: Suspect): AblationSpec | undefined {
   }
 }
 
+/** Whether a re-run can remove this suspect. `'stage'` and `'arg'` suspects can't be. */
+export function isRemovable(suspect: Suspect): boolean {
+  return suspect.ablation !== undefined && suspect.ablation.kind !== 'arg';
+}
+
+/** A suspect's short name in a report. */
+export function suspectLabel(suspect: Suspect): string {
+  const id = suspect.detail?.toolName ?? suspect.detail?.injectionId ?? suspect.source;
+  return `${suspect.kind} '${id}'`;
+}
+
+/** Every pair of `items`, keeping their order. */
+export function pairsOf<T>(items: readonly T[]): readonly (readonly [T, T])[] {
+  return items.flatMap((first, i) => items.slice(i + 1).map((second) => [first, second] as const));
+}
+
+/** How many top-ranked items the pair search uses: a whole number, 0 or more. */
+export function resolvePairSearchTop(rerun: AblationRerun): number {
+  const raw = rerun.pairSearchTop ?? CONTEXT_BISECT_DEFAULTS.pairSearchTop;
+  return Number.isFinite(raw)
+    ? Math.max(0, Math.floor(raw))
+    : CONTEXT_BISECT_DEFAULTS.pairSearchTop;
+}
+
 // ─── The seam: apply specs to agent-construction inputs ──────────────
 
 /** Anything with a stable id — `Injection` and `MemoryEntry` both fit. */
@@ -287,9 +311,10 @@ export function verdictFor(
     return {
       verdict: 'confirmed',
       claim:
-        `CAUSAL: ${action} ${label} flipped the outcome in ${stats.flips}/${stats.samples} ` +
-        `seeded reruns (mean similarity to original ${stats.similarity.mean.toFixed(3)} ` +
-        `± ${stats.similarity.stdev.toFixed(3)}).`,
+        `NEEDED IN THIS CONTEXT: ${action} ${label} flipped the outcome in ` +
+        `${stats.flips}/${stats.samples} seeded reruns (mean similarity to original ` +
+        `${stats.similarity.mean.toFixed(3)} ± ${stats.similarity.stdev.toFixed(3)}). ` +
+        `This doesn't by itself show it's the root cause.`,
     };
   }
   if (stats.flips > 0) {

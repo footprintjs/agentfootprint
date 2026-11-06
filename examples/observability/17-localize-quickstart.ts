@@ -13,10 +13,10 @@
  *   log → influence-weighted ranking → counterfactual ABLATION (rebuild the
  *   agent without each suspect, 3 seeded reruns).
  *
- * Headline: the planted fact is the top suspect AND the only CAUSAL verdict
+ * Headline: the planted fact is the top suspect AND the only one confirmed
  * — ablating it flips APPROVED → DECLINED — while the benign decoy comes
- * back NOT CONFIRMED. Scores are proxies; only the ablation verdict is a
- * causal claim, and the report says so.
+ * back NOT CONFIRMED, so the report concludes 'one-cause'. Scores are proxies;
+ * only the ablation verdict is a causal claim, and the report says so.
  *
  * Offline + deterministic: scripted mock provider + mock embedder, no keys,
  * $0. The big sibling (05-context-bisect) adds a tool suspect + a decide()
@@ -137,15 +137,12 @@ export async function run(_input?: string | null): Promise<ContextBugReport> {
 
   console.log(formatContextBugReport(report));
 
-  // 3. The headline: the planted fact is the confirmed, causal root cause.
-  const confirmed = report.suspects.find((s) => s.verdict?.verdict === 'confirmed');
-  if (confirmed?.detail?.injectionId !== 'vip-override') {
-    throw new Error('expected the planted fact to be the confirmed root cause');
+  // 3. The headline: the report's conclusion names the planted fact.
+  const conclusion = report.conclusion;
+  if (conclusion?.kind !== 'one-cause' || conclusion.named[0]?.detail?.injectionId !== 'vip-override') {
+    throw new Error('expected the conclusion to name the planted fact');
   }
-  console.log(
-    `\nROOT CAUSE: '${confirmed.detail?.injectionId}' — ablating it flipped the answer in ` +
-      `${confirmed.runs?.flips}/${confirmed.runs?.samples} reruns (the only CAUSAL verdict).`,
-  );
+  console.log(`\nCONCLUSION: ${conclusion.statement}`);
 
   return report;
 }

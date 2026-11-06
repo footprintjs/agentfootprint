@@ -39,6 +39,15 @@ import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 import type { CommitBundle, ControlDepLookup, ValueBasis } from 'foottrace';
 import type { CapturedEventLike } from '../recorders/observability/recordedManifest.js';
 import type { Embedder, InfluenceWeights } from '../influence-core/index.js';
+import type { ContextBugConclusion } from './conclusionTypes.js';
+
+export type {
+  BisectionProbe,
+  ContextBugConclusion,
+  ContextBugConclusionKind,
+  ContextBugLink,
+  ContextBugPairSearch,
+} from './conclusionTypes.js';
 
 // ─── Artifacts (input contract) ──────────────────────────────────────
 
@@ -189,6 +198,10 @@ export type AblationVerdictKind = 'confirmed' | 'not-confirmed' | 'inconclusive'
  * unstable baseline (the scenario itself doesn't reproduce — no ablation
  * verdict is trustworthy then). `'not-confirmed'` = no flip observed; the
  * suspect's score remains a correlational proxy only.
+ *
+ * `'confirmed'` means the answer needed this item in this context. A true,
+ * correct item can be needed too, so it doesn't by itself show that the item is
+ * wrong or the root cause. `ContextBugReport.conclusion` reads the verdicts together.
  */
 export interface AblationVerdict {
   readonly verdict: AblationVerdictKind;
@@ -230,9 +243,9 @@ export interface Suspect {
    *
    * Comparison caveat: a suspect WITHOUT content text (kind 'stage'/'arg',
    * or a path through control edges only) keeps its bare structural score
-   * — an UPPER BOUND with no content evidence behind it. Plumbing can
-   * legitimately rank above ablatable sources; the ablation verdicts (and
-   * `semanticScore`'s presence) are what disambiguate.
+   * — an UPPER BOUND with no content evidence behind it, so these scores
+   * aren't comparable with the scores of items that have content. The report
+   * lists items that can't be removed last, whatever their score.
    */
   readonly score: number;
   /**
@@ -384,6 +397,19 @@ export interface AblationRerun {
   readonly flipThreshold?: number;
   /** Ablate only the top-K ranked suspects that carry a spec. Default 5. */
   readonly maxSuspects?: number;
+  /**
+   * When removing any one item changes nothing, try every pair among this many
+   * top-ranked items. Default 5, which is up to 10 more probes, each costing
+   * `samples` runs. 0 turns the search off.
+   */
+  readonly pairSearchTop?: number;
+  /**
+   * The most items the record doesn't link that may each flip the answer and
+   * still be named in the report's `conclusion`. Above it, the conclusion is
+   * `'no-single-cause'`. It's a count and not a share, so adding harmless items
+   * to a context can't change the reading. A whole number from 1. Default 2.
+   */
+  readonly maxNamedFlips?: number;
 }
 
 // ─── The report ──────────────────────────────────────────────────────
@@ -440,8 +466,14 @@ export interface ContextBugReport {
    * proxies whatever ranked them; ablation alone convicts).
    */
   readonly rankedBy?: string;
-  /** Ranked suspects, best (most aligned + upstream) first. */
+  /**
+   * Ranked suspects, best (most aligned + upstream) first. Items that can't be
+   * removed (kinds `'stage'` and `'arg'`) can't be tested, so they follow the
+   * items that can.
+   */
   readonly suspects: readonly Suspect[];
+  /** The overall reading. Present only when a re-runner was supplied. */
+  readonly conclusion?: ContextBugConclusion;
   /**
    * Missing-context candidates (interface #3): units that were available for
    * the turn but never reached the model. Each carries a RESTORATION verdict
@@ -479,6 +511,10 @@ export const CONTEXT_BISECT_DEFAULTS = {
   maxProbes: 24,
   /** Independent-culprit search rounds for `bisectCulprits`. */
   maxCulprits: 4,
+  /** Top-ranked items tried in pairs when no single removal flips the answer. */
+  pairSearchTop: 5,
+  /** Most unlinked items that may each flip the answer and still be named. */
+  maxNamedFlips: 2,
 } as const;
 
 // Re-exported so consumers of the localizer can type their own helpers

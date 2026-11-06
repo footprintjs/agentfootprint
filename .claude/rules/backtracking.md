@@ -126,7 +126,7 @@ Files: `context-bisect/trajectory.ts:411` `assembleTrajectory` (slices commitLog
 | per probe | probe stats (flips, similarity, cost) | NOTHING — agent rebuilt from scratch minus ablated pieces | the probe run entirely |
 | verdict | confirmed/not-confirmed/inconclusive | — | sub-majority flips (→ inconclusive) |
 
-Invariant: causal claims come ONLY from majority-flip over ≥2 seeded reruns on a STABLE baseline (`resolveSamples` clamps ≥2, ablation.ts:150-153; unstable baseline ⇒ inconclusive :278-284). Rankings elsewhere are correlational proxies.
+Invariant: causal claims come ONLY from majority-flip over ≥2 seeded reruns on a STABLE baseline (`resolveSamples` clamps ≥2, ablation.ts:150-153; unstable baseline ⇒ inconclusive :278-284). Rankings elsewhere are correlational proxies. `confirmed` means needed in this context, not wrong: `conclusion.ts · concludeReport` reads the verdicts together, and `bisect.ts` can't treat "removing everything didn't flip it" as absence, because an empty context can give the same wrong answer.
 Breaks when: a nondeterministic agent whose un-ablated baseline itself flips across seeds → every verdict inconclusive; suspects of kind 'stage'/'arg' have no library-removable input — 'stage' → undefined (ablation.ts:72-73); 'arg' → a defined `{kind:'arg', note}` spec that applyAblations ignores (the runner must override the input itself, ablation.ts:63-71).
 
 ```

@@ -18,7 +18,9 @@
  *                    refinement. CORRELATIONAL tier — and marked so.
  *   5. ABLATE      — optional: the consumer's `AblationRunner` re-runs the
  *                    scenario without each top suspect, N seeded times.
- *                    Verdicts (the ONLY causal claims, §B2) + variance.
+ *                    Verdicts (the ONLY causal claims, §B2) + variance. The
+ *                    report's `conclusion` then reads the verdicts together,
+ *                    trying pairs when no single removal flipped the answer.
  *
  * Without a runner the report stops at stage 4 with
  * `mode: 'correlational'` — explicitly a ranking of proxies, no causal
@@ -40,8 +42,15 @@ import {
   type InfluenceScorer,
   type InfluenceStrategy,
 } from '../influence-core/index.js';
-import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
-import { assignCostVerdicts, classifySuspect } from './cost.js';
+import {
+  ablationForSuspect,
+  isRemovable,
+  runAblationProbe,
+  suspectLabel,
+  verdictFor,
+} from './ablation.js';
+import { concludeReport, relationFromSlice } from './conclusion.js';
+import { assignCostVerdicts } from './cost.js';
 import { llmEdgeWeigher, stepOutputText } from './llmEdgeWeigher.js';
 import type { LoopRecallShortlist } from './loop-recall.js';
 import { findDroppedContext, type ContextUnit } from './missingContext.js';
@@ -60,6 +69,8 @@ import type {
   SuspectKind,
 } from './types.js';
 import { CONTEXT_BISECT_DEFAULTS } from './types.js';
+
+export { formatContextBugReport } from './format.js';
 
 // ─── LLM-call id extraction ──────────────────────────────────────────
 
@@ -344,7 +355,7 @@ export interface LocalizeContextBugOptions {
   readonly maxDepth?: number;
   /** Slice node budget. Default 80. */
   readonly maxNodes?: number;
-  /** Ranked suspects kept on the report. Default 12. */
+  /** Ranked suspects kept on the report. Default 12. A larger `rerun.maxSuspects` keeps as many removable items as it needs. */
   readonly maxSuspects?: number;
   /** Override / extend the suspect classifier. */
   readonly classify?: SuspectClassifier;
@@ -601,7 +612,13 @@ export async function localizeContextBug(
   // true suspect L3 missed — the absence/crowding blind spot). Non-shortlisted suspects keep their
   // proxy-score order (stable). narrow (recall), then convict (causal).
   const reordered = reorderByShortlist(scored, options.shortlist);
-  const ranked: Suspect[] = reordered.slice(0, maxSuspects);
+  // An item that can't be removed can't be tested, so it follows the ones that can.
+  const removable = reordered.filter(isRemovable);
+  // The report keeps enough removable items to spend the removal budget, so raising it always works.
+  const ranked: Suspect[] = [
+    ...removable,
+    ...reordered.filter((suspect) => !isRemovable(suspect)),
+  ].slice(0, Math.max(maxSuspects, Math.min(options.rerun?.maxSuspects ?? 0, removable.length)));
 
   // ── Slice stats + honesty flags ─────────────────────────────────────
   const sliceStats = buildSliceStats(root, nodes, maxDepth, maxNodes);
@@ -687,6 +704,14 @@ export async function localizeContextBug(
   // the SECOND score (loops/tokens saved on removal) from the same reruns, with
   // a leave-one-out placebo control. No-op when no cost was reported.
   const withCost = assignCostVerdicts(withVerdicts, baseline);
+  const conclusion = await concludeReport({
+    suspects: withCost,
+    removable,
+    dropped,
+    baselineStable,
+    config: probeConfig,
+    relation: relationFromSlice(nodes, llmCallIds),
+  });
 
   return {
     step,
@@ -696,6 +721,7 @@ export async function localizeContextBug(
     mode: 'causal',
     rankedBy,
     suspects: withCost,
+    conclusion,
     ...(dropped ? { dropped } : {}),
     sliceStats,
     honestyFlags: [...flags, ...restorationFlags],
@@ -857,139 +883,4 @@ function buildHonestyFlags(
   return flags;
 }
 
-export function suspectLabel(suspect: Suspect): string {
-  const id = suspect.detail?.toolName ?? suspect.detail?.injectionId ?? suspect.source;
-  return `${suspect.kind} '${id}'`;
-}
-
-// ─── Formatting ──────────────────────────────────────────────────────
-
-/**
- * Human-readable report. The claim tiers are spelled out in the output
- * itself (§B2): scores are proxies; verdict lines are the only causal
- * claims; every ⚠ honesty flag prints.
- */
-export function formatContextBugReport(report: ContextBugReport): string {
-  const lines: string[] = [];
-  lines.push(
-    `CONTEXT BUG LOCALIZATION — trigger ${report.step} "${report.stepName}" ` +
-      `(${report.triggerSource}${
-        report.triggerScore !== undefined ? `, score ${report.triggerScore.toFixed(2)}` : ''
-      })`,
-  );
-  const modeLine =
-    report.mode === 'causal'
-      ? 'mode: CAUSAL — ranked proxies + counterfactual ablation verdicts (verdicts are the only causal claims)'
-      : 'mode: CORRELATIONAL — ranking only; every score is an embedding-geometry proxy, no causal claim is made';
-  lines.push(
-    report.rankedBy !== undefined ? `${modeLine} — ranked by ${report.rankedBy}` : modeLine,
-  );
-  const s = report.sliceStats;
-  lines.push(
-    `slice: ${s.nodes} nodes · ${s.dataEdges} data edges · ${s.controlEdges} control edges · ` +
-      `${s.weightedEdges} influence-weighted`,
-  );
-
-  lines.push('', `SUSPECTS (${report.suspects.length}, ranked by correlational proxy score):`);
-  report.suspects.forEach((suspect, i) => {
-    const scoreParts =
-      suspect.semanticScore !== undefined
-        ? `${suspect.score.toFixed(3)} (path ${suspect.structuralScore.toFixed(
-            3,
-          )} × content ${suspect.semanticScore.toFixed(3)})`
-        : `${suspect.score.toFixed(3)} (path only — no content signal; an upper bound)`;
-    lines.push(
-      `${String(i + 1).padStart(2)}. [${suspectLabel(suspect)}] at ${suspect.source} ` +
-        `"${suspect.stageName}" — score ${scoreParts}`,
-    );
-    if (suspect.edgePath.length > 0) {
-      const hops = suspect.edgePath
-        .map((hop) => {
-          const link =
-            hop.kind === 'control'
-              ? `[control${hop.key ? `: ${hop.key}` : ''}]`
-              : hop.key ?? 'data';
-          const weight = hop.weight !== 1 ? ` ${hop.weight.toFixed(3)}` : '';
-          return `←(${link}${weight})— ${hop.to}`;
-        })
-        .join(' ');
-      lines.push(`    path: ${suspect.edgePath[0].from} ${hops}`);
-    }
-    if (suspect.verdict !== undefined && suspect.runs !== undefined) {
-      lines.push(`    verdict: ${suspect.verdict.claim}`);
-      lines.push(
-        `    runs: ${suspect.runs.flips}/${suspect.runs.samples} flipped · similarity to original ` +
-          `${suspect.runs.similarity.mean.toFixed(3)} ± ${suspect.runs.similarity.stdev.toFixed(
-            3,
-          )} ` +
-          `[${suspect.runs.similarity.min.toFixed(3)}, ${suspect.runs.similarity.max.toFixed(3)}]`,
-      );
-      if (suspect.cost !== undefined) {
-        const c = suspect.cost;
-        const detail = c.reducedCostOnRemoval
-          ? `REDUCED on removal — −${c.loopsSaved} loop(s), −${c.tokensSaved} tok (beats placebo, stable)`
-          : `no cost effect (loops ${c.loopsSaved >= 0 ? '−' : '+'}${Math.abs(c.loopsSaved)}${
-              c.stable ? '' : '; no placebo band / unstable'
-            })`;
-        lines.push(`    cost: ${detail} → class: ${classifySuspect(suspect)}`);
-      }
-    } else if (report.mode === 'correlational') {
-      lines.push(
-        '    verdict: (none — correlational ranking only; supply an AblationRunner to test causally)',
-      );
-    }
-  });
-
-  // Missing-context tier (interface #3) — symmetric with the SUSPECTS block.
-  if (report.dropped !== undefined && report.dropped.length > 0) {
-    lines.push(
-      '',
-      `MISSING CONTEXT (${report.dropped.length} dropped — available but never sent to the model):`,
-    );
-    report.dropped.forEach((c, i) => {
-      lines.push(`${String(i + 1).padStart(2)}. [dropped '${c.id}']`);
-      if (c.verdict !== undefined && c.runs !== undefined) {
-        lines.push(`    verdict: ${c.verdict.claim}`);
-        lines.push(
-          `    runs: ${c.runs.flips}/${c.runs.samples} flipped on restore · similarity to original ` +
-            `${c.runs.similarity.mean.toFixed(3)} ± ${c.runs.similarity.stdev.toFixed(3)}`,
-        );
-      } else {
-        lines.push(
-          '    verdict: (none — candidate only; supply missingContext.rerun to confirm by restoration)',
-        );
-      }
-    });
-  }
-
-  if (report.baseline !== undefined) {
-    lines.push(
-      '',
-      `baseline (no ablation): ${report.baseline.flips}/${report.baseline.samples} flipped · ` +
-        `similarity ${report.baseline.similarity.mean.toFixed(
-          3,
-        )} ± ${report.baseline.similarity.stdev.toFixed(3)}`,
-    );
-  }
-
-  if (report.restorationBaseline !== undefined) {
-    lines.push(
-      `baseline (no restoration): ${report.restorationBaseline.flips}/${report.restorationBaseline.samples} flipped · ` +
-        `similarity ${report.restorationBaseline.similarity.mean.toFixed(
-          3,
-        )} ± ${report.restorationBaseline.similarity.stdev.toFixed(3)}`,
-    );
-  }
-
-  if (report.honestyFlags.length > 0) {
-    lines.push('', 'HONESTY:');
-    for (const flag of report.honestyFlags) lines.push(`⚠ [${flag.flag}] ${flag.note}`);
-  }
-  lines.push(
-    '',
-    'claims: scores/weights are deterministic embedding-geometry PROXIES (semantic alignment, ' +
-      'not model internals); slice completeness is bounded by tracking (see HONESTY); only ' +
-      'ablation verdicts make causal claims.',
-  );
-  return lines.join('\n');
-}
+export { suspectLabel };

@@ -109,6 +109,64 @@ describe('bisectCulprits — multi-culprit', () => {
   });
 });
 
+describe('bisectCulprits — when removing everything leaves the same wrong answer', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const suspects = ids.map((id, i) => injectionSuspect(id, 1 - i * 0.1));
+  const search = (flips: (excluded: ReadonlySet<string>) => boolean, pairSearchTop?: number) =>
+    bisectCulprits({
+      suspects,
+      // A model with no facts at all gives the wrong answer again.
+      rerun: {
+        ...rerunWith(
+          makeRunner((excluded) => excluded.size < ids.length && flips(excluded)).runner,
+        ),
+        ...(pairSearchTop !== undefined ? { pairSearchTop } : {}),
+      },
+      embedder: toyEmbedder,
+    });
+  const named = (set: readonly Suspect[]) => set.map((suspect) => suspect.detail?.injectionId);
+
+  it('finds two causes that are each enough alone, instead of saying not-reproducible', async () => {
+    const result = await search((excluded) => excluded.has('a') && excluded.has('c'));
+    expect(result.verdict).toBe('confirmed');
+    expect(result.culprits.map(named)).toEqual([['a', 'c']]);
+  });
+
+  it('finds one cause among the top-ranked suspects', async () => {
+    const result = await search((excluded) => excluded.has('b'));
+    expect(result.verdict).toBe('confirmed');
+    expect(result.culprits.map(named)).toEqual([['b']]);
+  });
+
+  it('says not-specific when several suspects flip it alone', async () => {
+    const result = await search((excluded) => excluded.has('a') || excluded.has('b'));
+    expect(result.verdict).toBe('not-specific');
+    expect(result.culprits).toEqual([]);
+  });
+
+  it('says not-specific when several pairs flip it', async () => {
+    const result = await search(
+      (excluded) =>
+        (excluded.has('a') && excluded.has('b')) || (excluded.has('c') && excluded.has('d')),
+    );
+    expect(result.verdict).toBe('not-specific');
+    expect(result.culprits).toEqual([]);
+  });
+
+  it('pairs only the top-ranked suspects, and says not-reproducible when nothing there flips it', async () => {
+    const result = await search((excluded) => excluded.has('a') && excluded.has('f'));
+    expect(result.verdict).toBe('not-reproducible');
+    // baseline + everything + 5 alone + 10 pairs
+    expect(result.probes).toHaveLength(17);
+  });
+
+  it('stops after removing everything when the search is turned off', async () => {
+    const result = await search((excluded) => excluded.has('a') && excluded.has('c'), 0);
+    expect(result.verdict).toBe('not-reproducible');
+    expect(result.probes).toHaveLength(2);
+  });
+});
+
 describe('bisectCulprits — honest exits', () => {
   it('not-reproducible: ablating every ranked suspect never flips', async () => {
     const suspects = ['a', 'b'].map((id, i) => injectionSuspect(id, 1 - i * 0.1));

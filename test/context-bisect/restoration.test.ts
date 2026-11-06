@@ -105,7 +105,7 @@ describe('restoration tier — via localizeContextBug', () => {
     expect(report.dropped?.map((d) => d.id)).toEqual(['override', 'filler']);
     const overrideCandidate = report.dropped?.find((d) => d.id === 'override');
     expect(overrideCandidate?.verdict?.verdict).toBe('confirmed');
-    expect(overrideCandidate?.verdict?.claim).toContain('CAUSAL');
+    expect(overrideCandidate?.verdict?.claim).toContain('NEEDED IN THIS CONTEXT');
     expect(overrideCandidate?.verdict?.claim).toContain('restoring');
     const fillerCandidate = report.dropped?.find((d) => d.id === 'filler');
     expect(fillerCandidate?.verdict?.verdict).toBe('not-confirmed');
@@ -267,7 +267,7 @@ describe('restoration tier — via localizeContextBug', () => {
     const text = formatContextBugReport(report);
     expect(text).toContain('MISSING CONTEXT');
     expect(text).toContain("dropped 'override'");
-    expect(text).toMatch(/CAUSAL: restoring/);
+    expect(text).toMatch(/NEEDED IN THIS CONTEXT: restoring/);
   });
 
   it('a throwing runner rejects the probe (fail-loud, no partial state)', async () => {

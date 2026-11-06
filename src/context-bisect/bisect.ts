@@ -20,38 +20,45 @@
  *    out of budget yields `'inconclusive'`, never a partial claim
  *    dressed up as a finding.
  *
+ * Removing every suspect at once leaves the model's default answer, and that
+ * can be the wrong answer itself: a model may decline whenever it has no facts.
+ * So when that probe doesn't flip the outcome, the search doesn't stop there.
+ * It tries the top-ranked suspects alone, then in pairs.
+ *
  * §B2: the returned `verdict`/`culprits` are CAUSAL claims — they rest
  * exclusively on counterfactual reruns. The input ranking only chooses
  * the SEARCH ORDER (better ranking = fewer probes), it never decides the
  * outcome.
  */
 
-import { probeFlipped, runAblationProbe, type ProbeConfig } from './ablation.js';
-import type { AblationRerun, AblationRunStats, Embedder, Suspect } from './types.js';
+import {
+  isRemovable,
+  pairsOf,
+  probeFlipped,
+  resolvePairSearchTop,
+  runAblationProbe,
+  suspectLabel,
+  type ProbeConfig,
+} from './ablation.js';
+import type { AblationRerun, BisectionProbe, Embedder, Suspect } from './types.js';
 import { CONTEXT_BISECT_DEFAULTS } from './types.js';
-import { suspectLabel } from './localize.js';
+
+export type { BisectionProbe };
 
 // ─── Types ───────────────────────────────────────────────────────────
-
-/** One executed probe — full variance evidence, kept for the report. */
-export interface BisectionProbe {
-  /** Labels of the suspects ablated together ([] = the baseline probe). */
-  readonly ablated: readonly string[];
-  readonly stats: AblationRunStats;
-  /** Majority-of-N outcome flip. */
-  readonly flipped: boolean;
-}
 
 export interface BisectionResult {
   /**
    * `'confirmed'` — a minimal culprit set was found and verified by
-   * counterfactual reruns. `'not-reproducible'` — ablating EVERY ranked
-   * suspect together does not flip the outcome: the bug's cause is not
-   * in the ranked set (look at the report's honesty flags — the slice
-   * may be incomplete). `'inconclusive'` — unstable baseline or probe
-   * budget exhausted.
+   * counterfactual reruns. `'not-reproducible'` — nothing tried flipped the
+   * outcome: not every suspect together, and not the top-ranked ones alone or
+   * in pairs. A cause may still be in a larger group, or outside the slice
+   * (look at the report's honesty flags). `'not-specific'` — every suspect
+   * together didn't flip it, and several top-ranked suspects or pairs did, so
+   * removal can't single out a cause (see `probes`). `'inconclusive'` —
+   * unstable baseline or probe budget exhausted.
    */
-  readonly verdict: 'confirmed' | 'not-reproducible' | 'inconclusive';
+  readonly verdict: 'confirmed' | 'not-reproducible' | 'not-specific' | 'inconclusive';
   /**
    * Minimal culprit set(s): each inner array is one minimal set whose
    * JOINT ablation flips the outcome. Independent culprits appear as
@@ -91,9 +98,7 @@ class ProbeBudgetExceeded extends Error {
  * module docs for semantics and the §B2 claim tier.
  */
 export async function bisectCulprits(options: BisectCulpritsOptions): Promise<BisectionResult> {
-  const candidates = options.suspects.filter(
-    (suspect) => suspect.ablation !== undefined && suspect.ablation.kind !== 'arg',
-  );
+  const candidates = options.suspects.filter(isRemovable);
   const maxProbes = options.maxProbes ?? CONTEXT_BISECT_DEFAULTS.maxProbes;
   const maxCulprits = options.maxCulprits ?? CONTEXT_BISECT_DEFAULTS.maxCulprits;
   const config: ProbeConfig = { rerun: options.rerun, embedder: options.embedder };
@@ -162,9 +167,23 @@ export async function bisectCulprits(options: BisectCulpritsOptions): Promise<Bi
         return { verdict: 'inconclusive', culprits: [], probes, runsUsed };
       }
     }
-    // Reproduction gate: the full ranked set must flip at all.
-    if (candidates.length === 0 || !(await probe(candidates))) {
+    if (candidates.length === 0) {
       return { verdict: 'not-reproducible', culprits: [], probes, runsUsed };
+    }
+    if (!(await probe(candidates))) {
+      // Removing everything can leave the same wrong answer, so look closer.
+      const top = candidates.slice(0, resolvePairSearchTop(options.rerun));
+      const groups: (readonly Suspect[])[] = [];
+      for (const suspect of top) if (await probe([suspect])) groups.push([suspect]);
+      if (groups.length === 0) {
+        for (const pair of pairsOf(top)) if (await probe(pair)) groups.push(pair);
+      }
+      if (groups.length === 0) {
+        return { verdict: 'not-reproducible', culprits: [], probes, runsUsed };
+      }
+      return groups.length === 1
+        ? { verdict: 'confirmed', culprits: groups, probes, runsUsed }
+        : { verdict: 'not-specific', culprits: [], probes, runsUsed };
     }
 
     // Find minimal sets; then keep searching the remainder for
