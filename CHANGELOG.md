@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.1.1] - 2026-11-06
+
+### Fixed
+
+- **The bounded audit chain keeps footprintjs's masked-threshold marker.** Under a redaction policy, footprintjs can mask a decision's threshold and mark it with `thresholdRedacted: true`. The audit chain now keeps that marker, so a reader can tell a masked threshold from a real one. Nothing changes without a policy.
+
 ## [14.1.0] - 2026-11-06
 
 ### Changed
