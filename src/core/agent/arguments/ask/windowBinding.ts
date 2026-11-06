@@ -189,7 +189,7 @@ function windowFills(
   const fills: Record<string, WindowFill> = {};
   const filled: Record<string, WindowFilled> = {};
   // The offered look-back, picked as offered, stays a look-back from now — the same window the
-  // served line and a later call's fill convert (`windows.ts` · `windowToConvert`), so the value
+  // served line and a later call's fill convert (`time/windows.ts` · `windowToConvert`), so the value
   // this call is handed and the value the model is told are one spelling.
   const lookback = keepLookback
     ? offeredLookback(field.window?.reading ?? time.reading?.row, range)

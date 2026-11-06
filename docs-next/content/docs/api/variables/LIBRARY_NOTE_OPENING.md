@@ -10,7 +10,7 @@ Defined in: [src/lib/saidByPerson.ts:132](https://github.com/footprintjs/agentfo
 
 Opening of the LIBRARY NOTE — the late line this library serves LAST on a
 request and never writes to `history`: the time layer's ONE served time line
-(`arguments/serve.ts` · `timeLine`, which opens with it as `TIME_LINE_SOURCE`)
+(`arguments/serve/clock.ts` · `timeLine`, which opens with it as `TIME_LINE_SOURCE`)
 and the figures dial's conclusion (`evidence/figures.ts` ·
 `figuresConclusionLine`). It says WHO speaks because an unmarked request-only
 `user` line reads as the person talking — measured: 37 of 37 answers opened

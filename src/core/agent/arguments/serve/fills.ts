@@ -39,7 +39,7 @@ export interface FilledArgument {
 
 // LENS · tool-result · persistent-history
 // reads: the call's own fill (`argumentResolutions`, the layer's entry for this toolCallId), kept only
-//        where the call RAN with it (`dispatch.ts` · `fillsThatRan` — a middleware may rewrite one)
+//        where the call RAN with it (`core/agent/arguments/dispatch.ts` · `fillsThatRan` — a middleware may rewrite one)
 // law: may omit, never deny; every clause anchored to the call it was composed on — past tense,
 // naming the call this result answers, so a later call of the turn re-reading it reads a true sentence.
 /**
@@ -140,7 +140,7 @@ export const ANSWERED_SOURCE_CLAUSE =
 
 // LENS · tool-result · persistent-history
 // reads: the call's answered fill (the batch ask's answer bound to this toolCallId), kept only where the
-//        call RAN with it (`dispatch.ts` · `fillsThatRan`), the value the call had carried, if any, and
+//        call RAN with it (`core/agent/arguments/dispatch.ts` · `fillsThatRan`), the value the call had carried, if any, and
 //        whether declared sources are armed (the `turn` clause)
 // law: may omit, never deny; past tense, naming the call this result answers; the `turn` clause is a
 // permission ("may cite"), never an outcome — the claim is checked like any other.

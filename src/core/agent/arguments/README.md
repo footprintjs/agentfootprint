@@ -337,7 +337,7 @@ a reader — on every request of the turn, whether or not a served tool declares
 window is a fact about the person's turn; with no tool that can take values it is named alone,
 "… is 2026-10-09 08:00–08:39 America/Los_Angeles (UTC-07:00). An answer built on it states that
 window.") — and every value the line names is the one answer (`convertForTool` over
-`windows.ts` · `windowToConvert`) the call is handed.
+`time/windows.ts` · `windowToConvert`) the call is handed.
 
 ```ts
 // 'who talked to cluster 006 since 8 AM?' — `since 8 AM` is unreadable; the tool ASSUMES `1h`:

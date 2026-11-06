@@ -18,7 +18,8 @@ const PAUSE = join(FIXTURES, 'time-reply-published-14.1.1-pause.json');
 const MANIFEST = join(FIXTURES, 'time-reply-published-14.1.1-manifest.json');
 const WRITER = join(FIXTURES, 'writer-14.1.1');
 const PAUSE_SHA = '1b4b58013360e85edef9e34a8da1c19b80cc9b0e47677c1037bb3d043ae7f592';
-const MANIFEST_SHA = '6b5c14c04f9818b6c1caabb561e4b6bd617243c92828b58f78149e345b3008cc';
+const MANIFEST_SHA = '069a56dfd758dc0d723e4b2d098d8e71019c16d4ac0620d1ec73c0a2cacb789a';
+const RAW_MANIFEST_SHA = '6b5c14c04f9818b6c1caabb561e4b6bd617243c92828b58f78149e345b3008cc';
 const LOCK_SHA = '9266b53f817e323eed949138e1b64b04aa0bbf53939b81b84ff37b6ac5748efe';
 const WRITER_SHA = '4d1fe995ea499ac1f26e0521ed3b402adaabba408bd038ad944d9f373954a15f';
 const MESSAGE = 'Show activity in the last 2 hours';
@@ -52,6 +53,13 @@ interface PublishedManifest {
   readonly clock: typeof CLOCK;
   readonly rangeField: InputField;
   readonly toolEffects: number;
+  readonly projection: {
+    readonly sourceManifestSHA256: string;
+    readonly sourceArtifact: number;
+    readonly sourceRun: number;
+    readonly sourceAttempt: number;
+    readonly packageRootBase: 'repository';
+  };
 }
 const manifest = read(MANIFEST) as PublishedManifest;
 
@@ -160,13 +168,13 @@ function run(phase: 'fresh' | 'resume'): WorkerResult {
 }
 
 describe('actual published 14.1.1 time request -> current native resume', () => {
-  it('binds the immutable checkpoint to its actual writer, normal registry lock and exact source', () => {
+  it('binds the immutable checkpoint and portable manifest to the actual writer and normal registry lock', () => {
     expect(hash(readFileSync(PAUSE))).toBe(PAUSE_SHA);
     expect(hash(readFileSync(MANIFEST))).toBe(MANIFEST_SHA);
     expect(hash(readFileSync(join(WRITER, 'package-lock.json')))).toBe(LOCK_SHA);
     expect(hash(readFileSync(join(WRITER, 'write.mjs')))).toBe(WRITER_SHA);
     expect(manifest).toMatchObject({
-      kind: 'ACTUAL_PUBLISHED_NATIVE_WRITER',
+      kind: 'PORTABLE_PUBLISHED_NATIVE_WRITER_FIXTURE',
       node: 'v24.22.2',
       checkpointSHA256: PAUSE_SHA,
       lockSHA256: LOCK_SHA,
@@ -174,6 +182,13 @@ describe('actual published 14.1.1 time request -> current native resume', () => 
       message: MESSAGE,
       clock: CLOCK,
       toolEffects: 0,
+      projection: {
+        sourceManifestSHA256: RAW_MANIFEST_SHA,
+        sourceArtifact: 13538959063,
+        sourceRun: 42290829176,
+        sourceAttempt: 1,
+        packageRootBase: 'repository',
+      },
     });
     const lock = read(join(WRITER, 'package-lock.json'));
     const writer = read(join(WRITER, 'package.json'));
@@ -188,6 +203,7 @@ describe('actual published 14.1.1 time request -> current native resume', () => 
       expect(actual).toMatchObject({
         version,
         resolved: `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`,
+        packageRoot: `test/time/fixtures/writer-14.1.1/node_modules/${name}`,
       });
       expect(actual.entrySHA256).toMatch(/^[a-f0-9]{64}$/);
       expect(actual.integrity).toMatch(/^sha512-[A-Za-z0-9+/]+={0,2}$/);

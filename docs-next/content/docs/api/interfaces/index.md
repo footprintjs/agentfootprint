@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-387 exported from `agentfootprint`.
+388 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -341,6 +341,7 @@ title: Interfaces
 - [`TimeReaderStamp`](/docs/api/interfaces/TimeReaderStamp)
 - [`TimeReading`](/docs/api/interfaces/TimeReading)
 - [`TimeReadingRow`](/docs/api/interfaces/TimeReadingRow)
+- [`TimeReplyRow`](/docs/api/interfaces/TimeReplyRow)
 - [`TimeWall`](/docs/api/interfaces/TimeWall)
 - [`TokenBudgetOptions`](/docs/api/interfaces/TokenBudgetOptions)
 - [`TokenBudgetRecord`](/docs/api/interfaces/TokenBudgetRecord)

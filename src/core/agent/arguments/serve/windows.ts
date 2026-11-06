@@ -300,7 +300,7 @@ function unreadSentence(
 }
 
 // LENS · late-line · request-ephemeral
-// reads: the person's windows a SERVED period tool refused this turn before dispatch (`windows.ts` ·
+// reads: the person's windows a SERVED period tool refused this turn before dispatch (`time/windows.ts` ·
 //        `readerWindowsOf`, `refused`: the quote, the tool and the reason code) and that tool's
 //        declared facts
 // law: the library's CONCLUSION about a call that did not run: past tense for the refusal, the

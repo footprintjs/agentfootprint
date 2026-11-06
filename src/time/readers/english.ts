@@ -466,6 +466,11 @@ export interface EnglishTimeReaderOptions {
   readonly locale?: string;
 }
 
+/** The synchronous English-owned reading, reused by the strategy and time replies. */
+export function readEnglishTime(text: string): TimeReading {
+  return { mentions: mentionsOf(text) };
+}
+
 /**
  * The library's careful English reader: a `kind: 'rule'` tokenizer over the
  * v1 phrases of the time design's § 5.3, "unreadable" for every other time
@@ -478,11 +483,6 @@ export interface EnglishTimeReaderOptions {
  *   .build();
  * ```
  */
-/** The synchronous English-owned reading, reused by the strategy and time replies. */
-export function readEnglishTime(text: string): TimeReading {
-  return { mentions: mentionsOf(text) };
-}
-
 export function englishTimeReader(options: EnglishTimeReaderOptions = {}): TimeReader {
   return Object.freeze({
     id: ENGLISH_TIME_READER_ID,

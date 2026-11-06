@@ -4,7 +4,7 @@ title: FindingsDeclaration
 
 # Interface: FindingsDeclaration
 
-Defined in: [src/core/agent/findings/types.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L117)
+Defined in: [src/core/agent/findings/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L118)
 
 The wire shape under `_findings` — on a tool call's args, or as the top-level
 key of a JSON answer. Every field optional: the model declares what it
@@ -16,7 +16,7 @@ declares, and `reserved.ts · splitFindings` drops what it cannot read.
 
 > `readonly` `optional` **basis?**: [`Basis`](/docs/api/type-aliases/Basis)
 
-Defined in: [src/core/agent/findings/types.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L118)
+Defined in: [src/core/agent/findings/types.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L119)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [src/core/agent/findings/types.ts:118](https://github.com/footprintj
 
 > `readonly` `optional` **expect?**: [`Expect`](/docs/api/type-aliases/Expect)
 
-Defined in: [src/core/agent/findings/types.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L119)
+Defined in: [src/core/agent/findings/types.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L120)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/core/agent/findings/types.ts:119](https://github.com/footprintj
 
 > `readonly` `optional` **from?**: readonly `DeclaredSource`[]
 
-Defined in: [src/core/agent/findings/types.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L137)
+Defined in: [src/core/agent/findings/types.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L138)
 
 Where each argument value of THIS call came from — read only under the
 inputs layer's declared sources (`.inputsLayer({ argumentSources: true })`
@@ -46,7 +46,7 @@ the library checks, never evidence.
 
 > `readonly` `optional` **predicts?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L128)
+Defined in: [src/core/agent/findings/types.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L129)
 
 What the result should show if the proposition holds — one line, optional.
 
@@ -56,7 +56,7 @@ What the result should show if the proposition holds — one line, optional.
 
 > `readonly` `optional` **previous?**: readonly `PreviousStanding`[]
 
-Defined in: [src/core/agent/findings/types.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L129)
+Defined in: [src/core/agent/findings/types.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L130)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/core/agent/findings/types.ts:129](https://github.com/footprintj
 
 > `readonly` `optional` **proposition?**: `string`
 
-Defined in: [src/core/agent/findings/types.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L126)
+Defined in: [src/core/agent/findings/types.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/findings/types.ts#L127)
 
 What the call tests — one line, declared BEFORE the result exists, so a
 later `ruled-out` or `open` standing on that result can be read against

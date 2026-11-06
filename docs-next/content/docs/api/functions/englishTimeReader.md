@@ -6,11 +6,7 @@ title: englishTimeReader
 
 > **englishTimeReader**(`options?`): [`TimeReader`](/docs/api/interfaces/TimeReader)
 
-Defined in: [src/time/readers/english.ts:855](https://github.com/footprintjs/agentfootprint/blob/main/src/time/readers/english.ts#L855)
-
-The library's careful English reader: a `kind: 'rule'` tokenizer over the
-v1 phrases of the time design's § 5.3, "unreadable" for every other time
-phrase it recognises. No dependency; deterministic over the text.
+Defined in: [src/time/readers/english.ts:486](https://github.com/footprintjs/agentfootprint/blob/main/src/time/readers/english.ts#L486)
 
 ## Parameters
 
@@ -21,11 +17,3 @@ phrase it recognises. No dependency; deterministic over the text.
 ## Returns
 
 [`TimeReader`](/docs/api/interfaces/TimeReader)
-
-## Example
-
-```ts
-Agent.create({ provider, model })
-  .time({ zone: 'America/Los_Angeles', reader: englishTimeReader() })
-  .build();
-```

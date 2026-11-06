@@ -104,7 +104,7 @@ import type { AskTime } from '../arguments/ask.js';
 /**
  * Under `.time({ reader })`: this turn's ONE open mention — the row the lazy
  * ask is about: a reading to confirm, a zone to name, or words the library
- * could not read (`windows.ts` · `isOpenForPerson`, the one owner). A mention
+ * could not read (`time/windows.ts` · `isOpenForPerson`, the one owner). A mention
  * the person already settled in the time ask (its `time-answer` row) is not
  * open: it is asked once per turn.
  */
