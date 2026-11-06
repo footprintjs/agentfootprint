@@ -690,11 +690,18 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the run clock input’s refusals (`now`, `time` shape), thrown to the caller of run() / resume() before the turn starts',
     },
   ],
-  'src/time/readers/english.ts': [
+  'src/time/readers/english/grammar.ts': [
     {
       kind: 'not-model-facing',
       count: 1,
       why: 'a regular-expression source of the English time reader — the words it RECOGNISES in a person’s message (`… to now`); matched against text, never sent to a model or shown to anyone',
+    },
+  ],
+  'src/time/resolve/lookback.test.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'a test title describing relative-zone admission; never sent to a model or shown as a time reading',
     },
   ],
   'src/core/runbook/recording.ts': [
@@ -1256,7 +1263,7 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // the time rows (runCheckpoint.ts 1 → 2). Thrown to the caller before
         // the turn starts, or at the door; no model reads them.
         // Unreleased (time layer, step T6b): one regular-expression SOURCE in
-        // the English time reader (time/readers/english.ts, one new file)
+        // the English time grammar (time/readers/english/grammar.ts, moved whole)
         // holds the word `now` — words it recognises in a person's message, never
         // text anyone reads. not-model-facing (1) — the leftover rule's word
         // list went with the owner's decision "Always confirm".
@@ -1335,12 +1342,14 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // The independent owner moves produce115 classified files and21 unrepaired entries.
         // Follow-up identity admission adds one host-only teaching refusal:
         // conversation.ts, files115→116, total206→207, notModelFacing137→138.
-        files: 116,
-        total: 207,
+        // Relative-zone regression: one source-adjacent test title, never delivered.
+        // Measured scan: files116→117, total207→208, notModelFacing138→139.
+        files: 117,
+        total: 208,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 138,
+        notModelFacing: 139,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

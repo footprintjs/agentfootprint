@@ -697,14 +697,28 @@ describe('property — over seeded texts', () => {
 describe('security', () => {
   it('the leaf law: `readers/` imports only the port', () => {
     const dir = join(__dirname, '..', '..', 'src', 'time', 'readers');
-    const helpers = ['english/types.ts', 'english/zones.ts'];
+    const helpers = [
+      'english/atoms.ts',
+      'english/grammar.ts',
+      'english/reader.test.ts',
+      'english/types.ts',
+      'english/zones.ts',
+    ];
     expect(
       readdirSync(join(dir, 'english'))
         .filter((f) => f.endsWith('.ts'))
         .sort(),
-    ).toEqual(['types.ts', 'zones.ts']);
+    ).toEqual(['atoms.ts', 'grammar.ts', 'reader.test.ts', 'types.ts', 'zones.ts']);
     const allowed: Readonly<Record<string, readonly string[]>> = {
-      'english.ts': ['../reader.js', './english/types.js', './english/zones.js'],
+      'english.ts': [
+        '../reader.js',
+        './english/types.js',
+        './english/atoms.js',
+        './english/grammar.js',
+      ],
+      'english/atoms.ts': ['../../reader.js', './types.js', './zones.js', './grammar.js'],
+      'english/grammar.ts': [],
+      'english/reader.test.ts': ['vitest', '../english.js'],
       'english/types.ts': ['../../reader.js'],
       'english/zones.ts': ['./types.js'],
     };
