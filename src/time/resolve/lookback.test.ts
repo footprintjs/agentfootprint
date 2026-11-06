@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveMention, withZoneAnswered } from '../resolve.js';
+import { chooseReading, resolveMention, withZoneAnswered } from '../resolve.js';
 import type { TimeParts } from '../reader.js';
 import { DEFAULT_TIME_POLICY } from '../resolveRecord.js';
 
@@ -142,5 +142,57 @@ describe('explicit zones on elapsed and calendar time', () => {
       from: '2026-03-07T12:00:00Z',
       to: '2026-03-08T12:00:00.001Z',
     });
+  });
+});
+
+describe('fixed and regional zones at the autumn clock change', () => {
+  const policy = {
+    ...DEFAULT_TIME_POLICY,
+    abbreviations: { EST: { zone: 'America/New_York', offset: '-05:00' } },
+  };
+  const dayBefore = { relative: { unit: 'day', offset: -1 }, zoneToken: 'EST' } as const;
+  const read = (parts: TimeParts, anchor: string) =>
+    resolveMention([parts], { ...CLOCK, now: anchor }, READER, false, policy);
+  const bounds = (range: { from: string; to: string }) => [
+    new Date(range.from).toISOString(),
+    new Date(range.to).toISOString(),
+  ];
+
+  it('compares both boundaries of the previous civil day, including the repeated hour', () => {
+    const result = read(dayBefore, '2026-11-02T17:00:00Z');
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates.map((candidate) => bounds(candidate.range))).toEqual([
+      ['2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z'],
+      ['2026-11-01T05:00:00.000Z', '2026-11-02T05:00:00.000Z'],
+    ]);
+    expect(
+      result.candidates.map(
+        (candidate) =>
+          (Date.parse(candidate.range.to) - Date.parse(candidate.range.from)) / 3_600_000,
+      ),
+    ).toEqual([25, 24]);
+    expect(chooseReading(result, policy, 'rule')).toMatchObject({
+      by: 'open',
+      remaining: [0, 1],
+      open: ['abbreviation'],
+    });
+  });
+
+  it('keeps the ordinary following-day control as equal complete intervals', () => {
+    const result = read(dayBefore, '2026-11-03T17:00:00Z');
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates.map((candidate) => bounds(candidate.range))).toEqual([
+      ['2026-11-02T05:00:00.000Z', '2026-11-03T05:00:00.000Z'],
+      ['2026-11-02T05:00:00.000Z', '2026-11-03T05:00:00.000Z'],
+    ]);
+  });
+
+  it('keeps elapsed endpoints independent of the two display readings', () => {
+    const result = read({ relative, zoneToken: 'EST' }, '2026-11-02T17:00:00Z');
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates.map((candidate) => bounds(candidate.range))).toEqual([
+      ['2026-11-02T16:00:00.000Z', '2026-11-02T17:00:00.001Z'],
+      ['2026-11-02T16:00:00.000Z', '2026-11-02T17:00:00.001Z'],
+    ]);
   });
 });
