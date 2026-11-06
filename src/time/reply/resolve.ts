@@ -27,6 +27,27 @@ function replaceZone(parts: TimeParts, token: string): TimeParts {
   };
 }
 
+/** A new word changes the time; an unstated zone retains this pending question's context. */
+function contextualParses(row: TimeReadingRow, parses: readonly TimeParts[]): readonly TimeParts[] {
+  const tokens = [
+    ...new Set(
+      (row.parses ?? []).flatMap((parts) =>
+        [parts.zoneToken, parts.rangeOf?.[0].zoneToken, parts.rangeOf?.[1].zoneToken].filter(
+          (token): token is string => token !== undefined,
+        ),
+      ),
+    ),
+  ];
+  return parses.flatMap((parts) => {
+    const hasZone =
+      parts.zoneToken !== undefined ||
+      parts.rangeOf?.some((side) => side.zoneToken !== undefined) === true;
+    return hasZone || tokens.length === 0
+      ? [parts]
+      : tokens.map((token) => replaceZone(parts, token));
+  });
+}
+
 export function resolveReply(
   input: TimeReplyInput,
   correction: Extract<ClassifiedText, { kind: 'zone' | 'words' }>,
@@ -34,7 +55,7 @@ export function resolveReply(
   const zoneOnly = correction.kind === 'zone';
   const parses = zoneOnly
     ? (input.row.parses ?? []).map((parts) => replaceZone(parts, correction.token))
-    : correction.mention.parses;
+    : contextualParses(input.row, correction.mention.parses);
   if (parses.length === 0) return holdReply('unresolved-correction');
   const reader = zoneOnly
     ? input.row.reader

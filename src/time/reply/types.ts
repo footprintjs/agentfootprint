@@ -30,7 +30,8 @@ export type TimeReplyDecision =
   | { readonly kind: 'hold'; readonly reason: string; readonly rule: TimeReplyRule };
 
 export type DecodedReply =
-  | { readonly kind: 'range' | 'text'; readonly value: string }
+  | { readonly kind: 'range'; readonly value: string }
+  | { readonly kind: 'text'; readonly value: string }
   | Extract<TimeReplyDecision, { readonly kind: 'hold' }>;
 
 export type ClassifiedText =
@@ -55,7 +56,7 @@ export const REPLY_REASONS = Object.freeze({
   'ambiguous-correction':
     'Give one time correction at a time, such as one time zone or one interval.',
   'unresolved-correction':
-    'That correction did not resolve the time. Give a time zone or a full ISO interval.',
+    'Which time should change? Give time words, such as yesterday, or a full ISO interval.',
 } as const);
 
 export function holdReply(rule: keyof typeof REPLY_REASONS): TimeReplyDecision & { kind: 'hold' } {

@@ -38,3 +38,15 @@ it('never invokes a getter while validating the correction projection', () => {
   expect(isCorrectedMeaning(value, range)).toBe(false);
   expect(reads).toBe(0);
 });
+
+it('keeps equal nanosecond remainders without rounding either endpoint', () => {
+  expect(
+    isCorrectedMeaning(
+      { lookback: '2h' },
+      {
+        from: '2026-11-06T16:01:00.123456789Z',
+        to: '2026-11-06T18:01:00.124456789Z',
+      },
+    ),
+  ).toBe(true);
+});

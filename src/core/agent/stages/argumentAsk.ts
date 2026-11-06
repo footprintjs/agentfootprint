@@ -170,7 +170,11 @@ function windowPlanOf(
   );
   return {
     question: ask.question,
-    reply: { version: 1, description: catalogOf(reader)['reply.correction'] },
+    reply: {
+      version: 1,
+      description:
+        catalogOf(reader)['reply.correction'] ?? defaultTimeAskMessages['reply.correction'],
+    },
     format,
     ...(ask.field.enum !== undefined && { choices: ask.field.enum }),
     ...(ask.field.enum !== undefined &&

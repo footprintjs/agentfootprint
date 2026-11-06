@@ -21,8 +21,7 @@ export function isCorrectedMeaning(value: unknown, range: TimeRange): boolean {
     Number.isFinite(length) &&
     from !== undefined &&
     to !== undefined &&
-    from.nanos === 0 &&
-    to.nanos === 0 &&
+    from.nanos === to.nanos &&
     to.ms - from.ms === length + 1
   );
 }

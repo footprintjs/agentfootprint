@@ -40,6 +40,7 @@ function make(
   options: {
     mode?: Mode;
     privateAccount?: boolean;
+    privatePeriod?: boolean;
     seen?: Record<string, unknown>[];
     script?: readonly Reply[];
   } = {},
@@ -78,13 +79,19 @@ function make(
       return 'Activity read.';
     },
   });
-  const actualTool = options.privateAccount
-    ? {
-        ...tool,
-        [SHOWN_ARGS]: (args: Record<string, unknown>) =>
-          Object.hasOwn(args, 'account') ? { ...args, account: 'REDACTED' } : args,
-      }
-    : tool;
+  const actualTool =
+    options.privateAccount || options.privatePeriod
+      ? {
+          ...tool,
+          [SHOWN_ARGS]: (args: Record<string, unknown>) => ({
+            ...args,
+            ...(options.privateAccount &&
+              Object.hasOwn(args, 'account') && { account: 'REDACTED' }),
+            ...(options.privatePeriod && Object.hasOwn(args, 'from') && { from: 'REDACTED' }),
+            ...(options.privatePeriod && Object.hasOwn(args, 'to') && { to: 'REDACTED' }),
+          }),
+        }
+      : tool;
   const agent = Agent.create({
     provider: provider.provider as never,
     model: 'mock',
@@ -461,6 +468,42 @@ it('keeps a private sibling raw only in the returned checkpoint across time corr
     }))
       expect(JSON.stringify(surface), name).not.toContain(SECRET);
     expect(JSON.stringify(seen)).toContain('activity');
+  } finally {
+    recording.stop();
+  }
+});
+
+it('a hidden period keeps correction words out of pause.request and every served surface', async () => {
+  const made = make({ privatePeriod: true });
+  const seen = events(made.agent),
+    recording = recordRun(made.agent);
+  const correction = 'last 2 hours in Europe/London';
+  try {
+    const first = await start(made);
+    const second = paused(
+      await reply(made.agent, first, {
+        [pair(first).correction.id]: correction,
+      }),
+    );
+    expect(JSON.stringify(second.checkpoint)).toContain(correction);
+    expect(pair(second).range.labels?.join(' ')).toContain(correction);
+    expect(made.seen).toEqual([]);
+    const requests = seen.filter((event) => event.type === 'agentfootprint.pause.request');
+    expect(requests).toHaveLength(2);
+    for (const [name, surface] of Object.entries({
+      pauseRequests: requests,
+      events: seen,
+      snapshot: made.agent.getSnapshot(),
+      recording: recording.toRecording(),
+      narrative: made.agent.getLastNarrativeEntries(),
+      rows: made.agent.findings(),
+      served: made.requests,
+    }))
+      expect(JSON.stringify(surface), name).not.toContain(correction);
+    await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
+    expect(made.seen).toEqual([{ from: FROM - 60 * 60 * 1000, to: TOOL_TO }]);
+    for (const surface of [seen, recording.toRecording(), made.agent.getSnapshot(), made.requests])
+      expect(JSON.stringify(surface)).not.toContain(correction);
   } finally {
     recording.stop();
   }

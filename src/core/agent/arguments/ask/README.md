@@ -12,7 +12,7 @@ at runtime; existing external type readers continue through the facade.
 | `context.ts`       | JSON context checks and fitted native declarations             | constants, replyFields        |
 | `validation.ts`    | Existing property and combined-period answer validation        | constants                     |
 | `fields.ts`        | Existing ordinary/shared/window field planning and readability | constants, validation         |
-| `windowBinding.ts` | Existing zone/window answer binding and per-call fills         | constants, fields, validation |
+| `windowBinding.ts` | Facade over sealed answer, zone, fills and question modules    | windowBinding/                |
 
 All units are pure functions over their supplied batch, tool resolver, clock and
 state. They read no scope, wall clock or model and create no executor or pause.
@@ -21,7 +21,7 @@ The old range field keeps its id, enum and labels, becoming optional beside one
 optional correction field; old saved fields without that association keep the
 legacy path. The #266 partial-window admission and conversion remain separate.
 
-`windowBinding.ts` owns existing range/zone binding and the projected re-ask.
+`windowBinding.ts` is the facade for `windowBinding/`; its map names the four jobs. The earlier `windowQuestion` behavior change is explicit: it projects either a zone or range follow-up, clears stale offers and carries the corrected reading only for a declared reply binding. The helper extraction preserves that behavior.
 `windowReply.ts` adapts one saved request-bound pair to `time/reply.ts` once, then
 returns the existing binding result plus bounded decision/rule evidence.
 `replyFields.ts` composes the two wire fields without renumbering tool arguments

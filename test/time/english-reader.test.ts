@@ -695,7 +695,7 @@ describe('property — over seeded texts', () => {
 // ─── security ────────────────────────────────────────────────────────
 
 describe('security', () => {
-  it('the leaf law: `readers/` imports only the port', () => {
+  it('the leaf law: readers import the port, and whole-zone qualification uses the one zone owner', () => {
     const dir = join(__dirname, '..', '..', 'src', 'time', 'readers');
     const helpers = [
       'english/atoms.ts',
@@ -730,7 +730,7 @@ describe('security', () => {
       'english/reader.test.ts': ['vitest', '../english.js'],
       'english/zones.test.ts': ['vitest', '../english.js', './zones.js', './types.js'],
       'english/types.ts': ['../../reader.js'],
-      'english/zones.ts': ['./types.js'],
+      'english/zones.ts': ['./types.js', '../../zone.js'],
     };
     const files = [...readdirSync(dir).filter((f) => f.endsWith('.ts')), ...helpers];
     for (const file of files) {

@@ -1,33 +1,52 @@
 # Map — English time grammar
 
 This sealed library tokenizes the closed English grammar into parts and verbatim
-quotes. It never resolves instants, maps zones, chooses policy or calls a model.
-The only external dependency is the TimeReader port (`time/reader.ts`).
+quotes. It never resolves instants, maps zone words, chooses policy or calls a
+model. The TimeReader port owns its data shapes. One narrow existing leaf,
+`time/zone.ts` · `zoneOfPlace`, qualifies generic place names in whole corrections;
+its returned zone is never substituted for the written token.
 
-| Unit | One job | Dependencies |
-|---|---|---|
-| `../english.ts` | Reader identity/options, shared synchronous reading, mention composition and the internal whole-zone correction port | port, Atom, grammar, atoms, zones |
-| `grammar.ts` | Existing closed word/regex grammar and its match iterator | none |
-| `atoms.ts` | Existing primitive recognizers and overlap/zone attachment order | port types, Atom, grammar, zones |
-| `zones.ts` | Shared zone token grammar: attachment and fully consumed affirmative zone-only corrections | Atom |
-| `types.ts` | Existing Atom shape | port types |
+| Unit            | One job                                                                                                       | Dependencies                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `../english.ts` | Reader identity/options, synchronous reading, mention composition and the internal whole-zone correction port | port, Atom, grammar, atoms, zones                                   |
+| `grammar.ts`    | Closed word/regex grammar and its match iterator                                                              | none                                                                |
+| `atoms.ts`      | Primitive recognizers and overlap/zone attachment order                                                       | port types, Atom, grammar, zones                                    |
+| `zones.ts`      | One zone lexer shared by attachment and fully consumed affirmative corrections                                | Atom; existing zoneOfPlace only for generic whole-correction places |
+| `types.ts`      | Atom shape                                                                                                    | port types                                                          |
 
-The grammar, iterator and atom-recognition units moved whole from the facade.
-Public reader/options/identity exports and the exported modifier regex objects
-retain their existing names and behavior. The 1.3 reader behavior identity is
-unchanged by this split. Group/parts logic remains in the facade; it is below the
-600-line limit. There is no parser or flowchart replacement in this structural
-step. The later reply fix adds an internal whole-zone correction port over the
-same token grammar, without changing `englishTimeReader.read` or mapping zones.
-It accepts bare zone tokens or bounded affirmative display wrappers; unsupported,
-negated or conflicting text produces no correction. `zones.test.ts` covers that
-port and the unchanged attached token/span. It introduces no public package door.
-`readEnglishTime` is the same synchronous mention composition used by the reader
-strategy and the reply module; it adds no parser, model call or async boundary.
+The initial extraction moved complete grammar, iterator and atom-recognition units
+from the facade. The current lexical correction changes are separate behavior
+work; they add no parser, model, executor, async boundary or public package door.
+`readEnglishTime` remains the reader strategy's synchronous mention composer.
 
-`reader.test.ts` owns the duration-zone quotation tests beside the reader.
-The concrete import fence and existing unit/property/security/performance cases
-remain in `test/time/english-reader.test.ts`; the same existing reader is tested
-through agents in `test/time/english-run.test.ts`. Duration-zone behavior also
-lives at `src/time/resolve/lookback.test.ts`. No test result is claimed here;
-Root executes the new-head checks and exact-head review.
+`ZONE_WORDS` is recognition data, not an abbreviation map. Only EST, EDT, CST, CDT,
+MST, MDT, PST, PDT, UTC and GMT accept any letter case. The other existing
+abbreviations still require capitals: lowercase west, wet, ist and mt are not
+zones. Eastern, Central, Mountain and Pacific are recognized when capitalized or
+qualified by “time”; a bare lowercase “central” remains ordinary text. The token
+keeps its written spelling. Elapsed/civil interpretation and the caller's mapping
+remain the resolver's work; these words never silently become an IANA zone here.
+Other ordinary words after “in”, such as “storage”, remain outside the time phrase.
+
+A whole zone correction consumes all its text. The affirmative grammar accepts
+bare tokens, a leading “in” or “no,”, and the existing display wrappers. Negation,
+conflicts and leftovers remain unreadable. A generic capitalized phrase followed
+by “time” is accepted only when the shared tz database lookup identifies a place;
+“No time”, “Wrong time” and similar phrases do not become corrections. Explicit
+ruled regional words need no place lookup. In an attached phrase, an unknown place
+still remains a token for the existing ask path, rather than disappearing.
+
+`ONE_SPAN` adds the selected explicit singular one/a/an minute, hour, day and week
+forms, including their attached zone. Its first capture remains the existing atom
+reader's unit. The old bare “the last hour/day/week” branch and digit forms stay
+intact; other number words, calendar “last week” and unsupported multi-quantity
+phrases gain no parser or guessed duration.
+
+`zones.test.ts` covers token case, regional qualifiers, complete affirmative
+wrappers, real versus unknown places and rejection controls. `reader.test.ts`
+covers complete quotation and one-unit parts for the selected singular forms,
+plus unchanged unrelated text. The concrete import fence and existing
+unit/property/security/performance cases remain in `test/time/english-reader.test.ts`;
+agent behavior remains in `test/time/english-run.test.ts`, and resolver behavior
+in `src/time/resolve/lookback.test.ts`. Root executes the exact-head gates and
+review; this file claims no test result or approval.

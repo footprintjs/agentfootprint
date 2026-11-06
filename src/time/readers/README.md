@@ -5,10 +5,12 @@
 A reader turns a person's words into time PARTS and a verbatim quote, behind the
 `TimeReader` port (`../reader.ts`). It never resolves an instant, applies a date
 order or maps a zone — that is `resolve.ts`'s, the policy's or the ask's. The
-folder imports only the port (pinned by `test/time/english-reader.test.ts`).
+folder imports the port; whole-zone corrections also qualify a named place through
+the existing zone owner, without mapping the token (pinned by
+`test/time/english-reader.test.ts`).
 
-| File | Reader |
-|------|--------|
+| File         | Reader                                                                                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `english.ts` | `englishTimeReader()` — a `kind: 'rule'` tokenizer over the v1 phrases of the time design's § 5.3; ONE `unreadable` mention for every other time phrase it recognises |
 
 ## It only PROPOSES — the person confirms (the owner's decision "Always confirm")
@@ -18,8 +20,8 @@ reading of a chat message is a PROPOSAL: the time ask offers it pre-filled and
 editable, naming the window AND its zone, and only what the person picks or
 types in that form is theirs.
 
-> *Is this the time you meant by “yesterday”?* — *I read “yesterday” as Thu,
-> Oct 8, 2026, PDT in America/Los_Angeles — is that right?* (one click), or free
+> _Is this the time you meant by “yesterday”?_ — _I read “yesterday” as Thu,
+> Oct 8, 2026, PDT in America/Los_Angeles — is that right?_ (one click), or free
 > entry to write another window.
 
 **Why.** Seven review rounds each found the next English spelling that a word
@@ -61,15 +63,15 @@ day the person put in London. A form the text itself fixes is marked: an ISO
 time is a 24-hour clock (`clock: '24h'`), so `T08:00` is never also 8 PM.
 
 ```ts
-reader.read('yesterday London time', ctx);      // { quote: 'yesterday London time', parses: [{ …, zoneToken: 'London time' }] }
-reader.read('8 to 9:30', ctx);                  // unreadable — `8` is no time here, and 9:30 alone would drop the start
+reader.read('yesterday London time', ctx); // { quote: 'yesterday London time', parses: [{ …, zoneToken: 'London time' }] }
+reader.read('8 to 9:30', ctx); // unreadable — `8` is no time here, and 9:30 alone would drop the start
 reader.read('errors in the last 2 hours', ctx); // { quote: 'last 2 hours', parses: [...] } — a proposal
-reader.read('8:40 AM til 9.30', ctx);           // { quote: '8:40 AM', parses: [...] } — a proposal; the person corrects it
-reader.read('yesterday morning', ctx);          // unreadable — asked which time, nothing pre-filled
-reader.read('Good morning, any errors?', ctx);  // no mention — a greeting names no time, so nothing is asked
+reader.read('8:40 AM til 9.30', ctx); // { quote: '8:40 AM', parses: [...] } — a proposal; the person corrects it
+reader.read('yesterday morning', ctx); // unreadable — asked which time, nothing pre-filled
+reader.read('Good morning, any errors?', ctx); // no mention — a greeting names no time, so nothing is asked
 reader.read('today between 1 pm and 2 pm', ctx); // ONE mention — a day word may come before `between`
 reader.read('between 14:15 and 14:40 on 11 September', ctx); // a named month: date fixed, the year the policy's
-reader.read('in the last 24h', ctx);            // { quote: 'last 24h', … } — a compact look-back
+reader.read('in the last 24h', ctx); // { quote: 'last 24h', … } — a compact look-back
 ```
 
 **The trade-off.** Every time phrase costs one click before the first call that

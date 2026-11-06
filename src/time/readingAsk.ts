@@ -21,7 +21,13 @@
  * ```
  */
 
-import { fillMessage, quoted, type TimeAskMessages, type TimeFormat } from './ask.js';
+import {
+  fillMessage,
+  quoted,
+  TIME_REPLY_MESSAGES,
+  type TimeAskMessages,
+  type TimeFormat,
+} from './ask.js';
 import { spellRange } from './range.js';
 import { presentRange } from './present.js';
 import type { TimeReadingRow } from './rows.js';
@@ -44,12 +50,6 @@ export interface TimeAskField {
 export interface TimeAsk {
   readonly question: string;
   readonly field: TimeAskField;
-  readonly correction?: {
-    readonly id: string;
-    readonly type: 'string';
-    readonly required: false;
-    readonly description: string;
-  };
 }
 
 /** The zone token the person wrote in the mention's first parse that has one. */
@@ -82,12 +82,6 @@ export function timeAskOf(
     return {
       question: fillMessage(messages['ask.which'], { quote: quoted(row.quote) }),
       field: { id, type: 'string', required: false, format: 'time-range' },
-      correction: {
-        id: `${id}-correction`,
-        type: 'string',
-        required: false,
-        description: messages['reply.correction'],
-      },
     };
   }
   if (choice?.by !== 'open') return undefined;
@@ -128,11 +122,14 @@ export function timeAskOf(
     );
     const unconverted = candidate.notes.find((note) => note.kind === 'zone-unconverted');
     if (unconverted?.kind === 'zone-unconverted') {
-      return fillMessage(messages['choice.unconverted'], {
-        quote,
-        window,
-        token: quoted(unconverted.token),
-      });
+      return fillMessage(
+        messages['choice.unconverted'] ?? TIME_REPLY_MESSAGES['choice.unconverted'],
+        {
+          quote,
+          window,
+          token: quoted(unconverted.token),
+        },
+      );
     }
     if (!confirm) return window;
     // The zone is named: the reading leaned on it, and the person may have meant another.
@@ -141,12 +138,6 @@ export function timeAskOf(
   const question = fillMessage(messages[confirm ? 'ask.confirm' : 'ask.which'], { quote });
   return {
     question,
-    correction: {
-      id: `${id}-correction`,
-      type: 'string',
-      required: false,
-      description: messages['reply.correction'],
-    },
     field: {
       id,
       type: 'string',

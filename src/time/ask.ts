@@ -238,8 +238,19 @@ export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
 
 export type TimeAskMessageKey = (typeof TIME_ASK_MESSAGE_KEYS)[number];
 
-/** A whole catalog: one sentence per key. */
-export type TimeAskMessages = Readonly<Record<TimeAskMessageKey, string>>;
+/** The original whole catalog; additive sentences may be omitted and use their defaults. */
+export type TimeAskMessages = Readonly<
+  Record<Exclude<TimeAskMessageKey, 'choice.unconverted' | 'reply.correction'>, string> &
+    Partial<Record<'choice.unconverted' | 'reply.correction', string>>
+>;
+
+/** Internal additive defaults shared with the higher-layer locale catalog. */
+export const TIME_REPLY_MESSAGES = Object.freeze({
+  'choice.unconverted':
+    'I read “{{quote}}” as {{window}} in UTC. “{{token}}” was not converted — is that right?',
+  'reply.correction':
+    'Or say what should change, such as a time zone, yesterday, or a full interval.',
+});
 
 const MAX_SENTENCE = 4096;
 
