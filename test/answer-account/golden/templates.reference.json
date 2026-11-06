@@ -1946,10 +1946,10 @@
   "source": "library"
  },
  "howSure.reason.claimUnsettled@1": {
-  "text": "The answer states a fact no tool settled.",
+  "text": "A claim in the answer could not be compared with what the tools settled.",
   "parts": [
    {
-    "text": "The answer states a fact no tool settled."
+    "text": "A claim in the answer could not be compared with what the tools settled."
    }
   ],
   "source": "library"

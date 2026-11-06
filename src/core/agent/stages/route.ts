@@ -66,7 +66,7 @@ import { timeDerivedRow } from '../../../time/rows.js';
 import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
-import { fileHeldIntegrityRows, judgeClaims, noteClaims } from './routeIntegrity.js';
+import { fileHeldRows, judgeClaims, noteClaims, noteUncompared } from './routeIntegrity.js';
 import type { DeclaredClaim } from '../../../integrity/unsupported-claim/check.js';
 import {
   groundedRowFrom,
@@ -1717,7 +1717,7 @@ function buildEnforcingDecider(
     // The claim seam cannot read an answer the schema rejected: there is no
     // typed stratum to compare. Unreachable, stated per claim — never
     // silence, and never a pass.
-    noteClaims(claims, integrityLedger, 'unreachable');
+    noteUncompared(scope, claims, integrityLedger);
     // A schema-exhausted answer is still a would-be-final one, and the step
     // table is unconditional on schema state: steps remaining + nudge
     // unspent → one teaching re-ask (its turn may well fix both). Not after
@@ -1862,7 +1862,7 @@ export function buildRouteDeciderStage(
   if (args[10] !== true) return admitted;
   return async (scope) => {
     const branch = await admitted(scope);
-    fileHeldIntegrityRows(scope);
+    fileHeldRows(scope);
     return branch;
   };
 }

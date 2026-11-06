@@ -314,7 +314,7 @@ const REASON_WORDS: Readonly<Record<Exclude<AssessmentReason, 'argument-assumed'
   'column-type-mismatch': "a tool's rows hold a different type than the tool declares",
   'missing-column': 'a column a tool declares is in none of its rows',
   'unsupported-claim': "a field of the answer does not agree with a fact the run's tools settled",
-  'claim-unsettled': 'the answer states a fact no tool settled',
+  'claim-unsettled': 'a claim in the answer could not be compared with what the tools settled',
   'claim-exceeds-search': 'a negative claim exceeds the recorded search',
   'declaration-overclaimed': 'a tool declaration overstates what was checked',
   'answer-check-failed': "the app's answer checks failed this answer",

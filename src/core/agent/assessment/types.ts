@@ -139,9 +139,10 @@ export type AssessmentPointer =
  *   that finding this turn (an `integrity-finding` row, filed while the answer
  *   layer is armed; `integrityReasons.ts` is the table, and the kinds it marks
  *   as notes reach `notes` instead);
- * - `claim-unsettled` — the answer states a `.claims()` field whose fact no
- *   tool settled, so the comparison never happened (a `claim-unsettled` row).
- *   An agreeing field fires nothing and supports nothing.
+ * - `claim-unsettled` — a `.claims()` comparison never happened: the answer
+ *   states a field whose fact no tool settled, or no value could be read from
+ *   the answer at all (a `claim-unsettled` row). An agreeing field fires nothing
+ *   and supports nothing.
  */
 export type AssessmentReason =
   | 'asked'

@@ -37,4 +37,4 @@ in [README.md](./README.md).
 | `column-type-mismatch` | 3 | `findingsLedger`: an `integrity-finding` row of this turn — a column holds something other than the type its tool declares |
 | `missing-column` | 3 | `findingsLedger`: an `integrity-finding` row of this turn — a column its tool declares is in none of the rows |
 | `unsupported-claim` | 4 | `findingsLedger`: an `integrity-finding` row of this turn — a `.claims()` field disagrees with the fact the run's tools settled, or declines to state it (the row's `advisory`) |
-| `claim-unsettled` | 4 | `findingsLedger`: a `claim-unsettled` row of this turn — the answer states a `.claims()` field whose fact no tool settled, so nothing could compare it |
+| `claim-unsettled` | 4 | `findingsLedger`: a `claim-unsettled` row of this turn — the answer states a `.claims()` field whose fact no tool settled, or no value could be read from the answer at all, so nothing could compare it |

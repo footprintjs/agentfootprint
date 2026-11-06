@@ -32,8 +32,8 @@
  * it is armed): the evidence gate's clean pass (read as the names-and-numbers
  * check having run, never as a reason or as support), an answer given before
  * its declared steps finished, an integrity finding (which kinds fire a reason
- * is decided once, in `integrityReasons.ts`) and a `.claims()` field no tool
- * settled.
+ * is decided once, in `integrityReasons.ts`) and a `.claims()` comparison that
+ * never happened.
  */
 
 import type { AssessmentReason, AssessmentReasonSource, HonestyLayer } from './types.js';
@@ -275,7 +275,7 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     class: 'not-sure',
     source: 'answer',
     reads:
-      'findingsLedger: a claim-unsettled row of this turn — the answer states a .claims() field whose fact no tool settled, so nothing could compare it',
+      'findingsLedger: a claim-unsettled row of this turn — the answer states a .claims() field whose fact no tool settled, or no value could be read from the answer at all, so nothing could compare it',
   },
   {
     reason: 'claim-exceeds-search',

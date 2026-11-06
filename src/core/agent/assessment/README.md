@@ -152,7 +152,10 @@ grows as later honesty steps commit new rows.
 The rows, with what each reason reads: [REASONS.md](./REASONS.md). What each integrity
 finding does is one more table, `integrityReasons.ts`: a kind fires a reason, or it leaves a
 `notes` entry that never moves the standing and never counts as a check that ran. A
-`.claims()` field no tool settled fires `claim-unsettled`; an agreeing one fires nothing.
+`.claims()` comparison that never happened (no tool settled the field, or no value could be
+read from the answer) fires `claim-unsettled`; an agreeing field fires nothing.
+`claim-unsettled` rows are not de-duplicated by identity, so after a re-ask in one turn a row
+filed against the superseded answer stays and may over-report; it never hides.
 
 The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
 read for THIS turn only — the ledger crosses turns, and every `argument` row

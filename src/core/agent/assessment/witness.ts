@@ -143,10 +143,11 @@ export interface ScriptShownRow {
 }
 
 /**
- * The answer stated a `.claims()` field whose fact no tool settled: no reading
- * on the record, or a reading that says the value is unknown. Filed by the
- * Route decider on the answer that stands, while the answer layer is armed.
- * `field` is the app's declared field path, never a value.
+ * A `.claims()` comparison that never happened: the answer stated a field whose
+ * fact no tool settled (no reading, or a reading that says the value is unknown),
+ * or no value could be read from the answer at all. Filed by the Route decider
+ * while the answer layer is armed. `field` is the app's declared field path, never
+ * a value.
  */
 export interface ClaimUnsettledRow {
   readonly kind: 'claim-unsettled';

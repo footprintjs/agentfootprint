@@ -4,7 +4,7 @@
  *
  * Pattern: impure helpers over tracked scope, one call each from `route.ts`.
  * Role:    every Route shape funnels through `buildRouteDeciderStage`, so
- *          `fileHeldIntegrityRows` runs once per decision under the answer
+ *          `fileHeldRows` runs once per decision under the answer
  *          layer's arm, on the outer scope, after every judge filed its finding
  *          and before the final branch folds. The compose, wire and choice seams
  *          run inside subflows that cannot write the ledger; they hold a row on
@@ -27,7 +27,7 @@ import { fileIntegrityFindings, type IntegrityRun } from '../integrityFindings.j
 import type { AgentState } from '../types.js';
 
 /** File the rows this turn's seams held, through the one writer, then clear them. */
-export function fileHeldIntegrityRows(scope: TypedScope<AgentState>): void {
+export function fileHeldRows(scope: TypedScope<AgentState>): void {
   const held = scope.$getValue('integrityFindingRows') as
     | readonly IntegrityFindingRow[]
     | undefined;
@@ -68,7 +68,7 @@ export function judgeClaims(
     // The answer is not readable as the typed stratum (a parser that
     // returns a non-object, an answer that is bare prose). Incomparable —
     // stated per declared claim, never guessed at.
-    noteClaims(claims, ledgerHolder, 'unreachable');
+    noteUncompared(scope, claims, ledgerHolder);
     return;
   }
   const { findings, dispositions } = unsupportedClaimsOf(
@@ -86,21 +86,52 @@ export function judgeClaims(
     );
   }
   fileIntegrityFindings(scope, findings, iteration, ledgerHolder);
-  // A field the answer states and no tool settled: nothing could compare it, so
-  // the fold says "not sure" with its own reason. An agreeing field files nothing.
-  if (ledgerHolder?.answerLayer !== true) return;
+  // A field the answer states and no tool settled: nothing could compare it. An
+  // agreeing field files nothing.
+  fileUnsettledClaims(
+    scope,
+    dispositions.filter((d) => d.disposition === 'unreachable').map((d) => d.claim),
+    ledgerHolder,
+  );
+}
+
+/**
+ * Every declared claim, when no value could be read from the answer at all: the
+ * answer is not an object, or never satisfied the schema. Same disposition, and
+ * the same row as a field no tool settled, so the answer cannot read "consistent"
+ * over a comparison that did not happen.
+ */
+export function noteUncompared(
+  scope: TypedScope<AgentState>,
+  claims: readonly DeclaredClaim[] | undefined,
+  ledgerHolder: (IntegrityRun & { current: DispositionLedger | undefined }) | undefined,
+): void {
+  noteClaims(claims, ledgerHolder, 'unreachable');
+  fileUnsettledClaims(
+    scope,
+    (claims ?? []).map((claim) => claim.answerField),
+    ledgerHolder,
+  );
+}
+
+/** One row per field, while the answer layer is armed. `field` is the app's declared path. */
+function fileUnsettledClaims(
+  scope: TypedScope<AgentState>,
+  fields: readonly string[],
+  run: IntegrityRun | undefined,
+): void {
+  if (run?.answerLayer !== true) return;
+  const iteration = (scope.iteration as number | undefined) ?? 0;
   recordFindings(
     scope,
-    dispositions
-      .filter((d) => d.disposition === 'unreachable')
-      .map(
-        (d): ClaimUnsettledRow => ({
-          kind: 'claim-unsettled',
-          turn: scope.turnNumber as number,
-          iteration,
-          field: d.claim,
-        }),
-      ),
+    fields.map(
+      (field): ClaimUnsettledRow => ({
+        kind: 'claim-unsettled',
+        turn: scope.turnNumber as number,
+        iteration,
+        field,
+      }),
+    ),
   );
 }
 

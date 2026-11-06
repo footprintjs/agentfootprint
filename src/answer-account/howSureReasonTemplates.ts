@@ -88,7 +88,9 @@ export const HOW_SURE_REASON_TEMPLATES = {
   'howSure.reason.unsupportedClaim': t(
     "A field of the answer does not agree with a fact the run's tools settled.",
   ),
-  'howSure.reason.claimUnsettled': t('The answer states a fact no tool settled.'),
+  'howSure.reason.claimUnsettled': t(
+    'A claim in the answer could not be compared with what the tools settled.',
+  ),
   'howSure.reason.claimExceedsSearch': t('A negative claim exceeds the recorded search.'),
   'howSure.reason.declarationOverclaimed': t('A tool declaration overstates what was checked.'),
   'howSure.reason.answerCheckFailed': t("The app's answer checks failed this answer."),
