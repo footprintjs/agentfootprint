@@ -98,7 +98,7 @@ import {
 import { lookbackBuilt } from './resolve/lookback.js';
 import { pointsOf, type Point } from './resolve/points.js';
 import { offsetFor } from './resolve/wallClock.js';
-import { timeChoiceIdentity } from './choiceIdentity.js';
+import { windowKey, withoutAgreeingLiterals } from './resolve/agreement.js';
 import type { Built, Unresolved } from './resolve/types.js';
 import {
   lookbackZoneReadsOf,
@@ -472,7 +472,7 @@ export function resolveMention(
       } else unsupported.push(built.unsupported);
       return;
     }
-    for (const b of built) {
+    for (const b of withoutAgreeingLiterals(built)) {
       if (!isTimeRange(b.candidate.range)) continue;
       candidates.push({
         ...b.candidate,
@@ -486,8 +486,6 @@ export function resolveMention(
 }
 
 // ─── Choosing ────────────────────────────────────────────────────────────
-
-const windowKey = timeChoiceIdentity;
 
 function openQuestions(candidates: readonly TimeCandidate[], confirm: boolean): OpenQuestion[] {
   const differs = (read: (c: TimeCandidate) => unknown): boolean =>

@@ -18,7 +18,7 @@
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { defineTool } from '../../src/index.js';
@@ -163,13 +163,31 @@ describe('every iso-range accepted before is accepted after, except rows a–b �
 describe('the leaf law — security', () => {
   it('src/time/ imports nothing outside itself', () => {
     const dir = join(__dirname, '..', '..', 'src', 'time');
-    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
-      const text = readFileSync(join(dir, file), 'utf8');
+    const walk = (folder: string): string[] =>
+      readdirSync(folder, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? walk(join(folder, entry.name))
+          : entry.name.endsWith('.ts')
+          ? [join(folder, entry.name)]
+          : [],
+      );
+    for (const file of walk(dir)) {
+      const text = readFileSync(file, 'utf8');
       const specifiers = [
         ...text.matchAll(/^\s*(?:import|export)[^'"]*from\s+['"]([^'"]+)['"]/gm),
-      ].map((m) => m[1] as string);
-      for (const spec of specifiers)
-        expect(spec, `${file} imports ${spec}`).toMatch(/^\.\/[a-z]+\.js$/i);
+      ].map((match) => match[1] as string);
+      for (const spec of specifiers) {
+        if (file.endsWith('.test.ts')) continue;
+        expect(spec.startsWith('.'), `${file} imports ${spec}`).toBe(true);
+        const target = resolve(dirname(file), spec.replace(/\.js$/, '.ts'));
+        const within = relative(dir, target);
+        expect(
+          !isAbsolute(within) && within !== '..' && !within.startsWith('..' + sep),
+          `${file} imports ${spec}`,
+        ).toBe(true);
+        expect(target.endsWith('.ts')).toBe(true);
+        if (!file.endsWith('.test.ts')) expect(target.endsWith('.test.ts')).toBe(false);
+      }
     }
   });
 });

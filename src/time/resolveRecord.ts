@@ -51,6 +51,8 @@ export type TimeWindow =
 
 /** A library-written note on how a window was read. */
 export type TimeNote =
+  /** Elapsed endpoints are known; the requested display zone was not converted. */
+  | { readonly kind: 'zone-unconverted'; readonly token: string }
   /**
    * The window's END was widened to the end of its last said grain: "to 8:40"
    * → `08:41`, a day → the next midnight, a lone "9 AM" → `[09:00, 10:00)`.
@@ -379,6 +381,8 @@ function isNote(value: unknown): boolean {
         (value.which === 'earlier' || value.which === 'later') &&
         (value.end === undefined || value.end === 'from' || value.end === 'to')
       );
+    case 'zone-unconverted':
+      return typeof value.token === 'string' && value.token.length > 0;
     case 'offset-said':
       return typeof value.offset === 'string';
     case 'century-implied':

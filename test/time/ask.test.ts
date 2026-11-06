@@ -227,8 +227,14 @@ describe('timeAskOf — unit', () => {
     expect(ask?.field).toMatchObject({
       id: 'time',
       type: 'string',
-      required: true,
+      required: false,
       format: 'time-range',
+    });
+    expect(ask?.correction).toEqual({
+      id: 'time-correction',
+      type: 'string',
+      required: false,
+      description: defaultTimeAskMessages['reply.correction'],
     });
     expect(ask?.field.enum).toEqual([
       '2026-10-09T08:00:00-07:00/2026-10-09T08:41:00-07:00', // MDY

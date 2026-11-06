@@ -98,6 +98,7 @@ import {
   RANGE_CONNECTOR,
 } from './english/grammar.js';
 export { BARE_SIDE_BEFORE, FROM_BEFORE, MODIFIER_BEFORE } from './english/grammar.js';
+export { readEnglishZoneCorrection } from './english/zones.js';
 
 // ─── The words (data) ────────────────────────────────────────────────────
 
@@ -477,12 +478,17 @@ export interface EnglishTimeReaderOptions {
  *   .build();
  * ```
  */
+/** The synchronous English-owned reading, reused by the strategy and time replies. */
+export function readEnglishTime(text: string): TimeReading {
+  return { mentions: mentionsOf(text) };
+}
+
 export function englishTimeReader(options: EnglishTimeReaderOptions = {}): TimeReader {
   return Object.freeze({
     id: ENGLISH_TIME_READER_ID,
     version: ENGLISH_TIME_READER_VERSION,
     locale: options.locale ?? 'en-US',
     kind: 'rule' as const,
-    read: (text: string): TimeReading => ({ mentions: mentionsOf(text) }),
+    read: readEnglishTime,
   });
 }

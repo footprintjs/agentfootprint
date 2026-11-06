@@ -104,7 +104,7 @@ export interface ToolAccessPort {
    * The host's own context for the inputs layer's batch ask
    * (`AgentOptions.argumentAskContext`) — called when an ask is built, its
    * object spread into the ask's `context` beside the library's reserved key
-   * (`arguments/ask.ts` · `judgeAskContextHook`). Present only when the agent
+   * (`arguments/ask/context.ts` · `judgeAskContextHook`). Present only when the agent
    * configured one; read only when an ask is raised.
    */
   readonly argumentAskContext?: () => unknown;

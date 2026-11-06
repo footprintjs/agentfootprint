@@ -172,18 +172,21 @@ export function lookbackZoneReadsOf(
   clockZone: ZoneName,
   policy: ZonePolicy | undefined,
 ):
-  | { readonly read: ZoneRead; readonly zone: ZoneName }[]
+  | { readonly read: ZoneRead; readonly zone: ZoneName; readonly unconverted?: string }[]
   | { readonly needsZone: true; readonly reason?: string } {
   const reads = zoneReadsOf(token, clockZone, policy);
-  if (reads === undefined) return { needsZone: true };
-  const out: { read: ZoneRead; zone: ZoneName }[] = [];
+  if (reads === undefined)
+    return [{ read: { kind: 'iana', zone: 'UTC', said: false }, zone: 'UTC', unconverted: token }];
+  const out: { read: ZoneRead; zone: ZoneName; unconverted?: string }[] = [];
   for (const read of reads) {
     const zone = read.kind === 'iana' ? read.zone : fixedOffsetZone(read.minutes);
     if (zone === undefined) {
-      return {
-        needsZone: true,
-        reason: 'a fixed-offset look-back cannot be displayed in an IANA zone; name an IANA zone',
-      };
+      out.push({
+        read,
+        zone: 'UTC',
+        unconverted: token ?? (read.kind === 'offset' ? read.spelled : read.zone),
+      });
+      continue;
     }
     out.push({ read, zone });
   }

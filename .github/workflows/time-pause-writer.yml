@@ -1,0 +1,53 @@
+name: Historical time pause fixture
+on:
+  push:
+    branches: [codex/time-zone-intent-20261106]
+permissions:
+  contents: read
+jobs:
+  generated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:regen
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: time-reply-generated-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: |
+            docs-next/content/docs/api/
+            docs-next/lib/generated-api-aliases.json
+            docs/DOCS_TRUTH_REPORT.md
+            examples/README.md
+            AGENTS.md
+            ai-instructions/
+          if-no-files-found: error
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24
+      - name: Generate a normal strict registry lock
+        working-directory: test/time/fixtures/writer-14.1.1
+        run: npm install --package-lock-only --ignore-scripts --strict-peer-deps --registry=https://registry.npmjs.org
+      - name: Replay that generated lock and capture the public writer
+        working-directory: test/time/fixtures/writer-14.1.1
+        run: |
+          npm ci --ignore-scripts --strict-peer-deps --registry=https://registry.npmjs.org
+          npm ls foottrace --all
+          node write.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: time-pause-writer-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: |
+            test/time/fixtures/writer-14.1.1/package-lock.json
+            test/time/fixtures/writer-14.1.1/out/
+          if-no-files-found: error

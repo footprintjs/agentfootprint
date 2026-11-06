@@ -701,6 +701,7 @@ describe('security', () => {
       'english/atoms.ts',
       'english/grammar.ts',
       'english/reader.test.ts',
+      'english/zones.test.ts',
       'english/types.ts',
       'english/zones.ts',
     ];
@@ -708,17 +709,19 @@ describe('security', () => {
       readdirSync(join(dir, 'english'))
         .filter((f) => f.endsWith('.ts'))
         .sort(),
-    ).toEqual(['atoms.ts', 'grammar.ts', 'reader.test.ts', 'types.ts', 'zones.ts']);
+    ).toEqual(['atoms.ts', 'grammar.ts', 'reader.test.ts', 'types.ts', 'zones.test.ts', 'zones.ts']);
     const allowed: Readonly<Record<string, readonly string[]>> = {
       'english.ts': [
         '../reader.js',
         './english/types.js',
         './english/atoms.js',
         './english/grammar.js',
+        './english/zones.js',
       ],
       'english/atoms.ts': ['../../reader.js', './types.js', './zones.js', './grammar.js'],
       'english/grammar.ts': [],
       'english/reader.test.ts': ['vitest', '../english.js'],
+      'english/zones.test.ts': ['vitest', '../english.js', './zones.js', './types.js'],
       'english/types.ts': ['../../reader.js'],
       'english/zones.ts': ['./types.js'],
     };

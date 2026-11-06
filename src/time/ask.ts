@@ -232,6 +232,8 @@ export const TIME_ASK_MESSAGE_KEYS = Object.freeze([
   'ask.zone',
   'ask.zone-unknown',
   'choice.confirm',
+  'choice.unconverted',
+  'reply.correction',
 ] as const);
 
 export type TimeAskMessageKey = (typeof TIME_ASK_MESSAGE_KEYS)[number];

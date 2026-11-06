@@ -1,5 +1,11 @@
 # Time as one library layer
 
+**Unreleased amendment, 2026-11-06:** the current time-reply direction is in
+§ 6.4. The earlier design and implementation record below is historical where
+it differs: one meaning confirmation remains; an extra zone question is needed
+only when the zone can change the interval. This amendment is not a release or
+a claim that its required compatibility and hosted gates have passed.
+
 **Design and implementation plan, 2026-09-29, revised twice the same day to apply one review in
 full (§ 15). Nothing in it is built. Every question in § 14 is open and carries a recommended answer; the owner
 decides.**
@@ -399,7 +405,7 @@ the others wait until a bench shows people need them:
 | a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40` | `rangeOf` | one per combination of the sides' candidates | v1 |
 | a zone | IANA (`America/Los_Angeles`), a numeric offset — after a time, a date or a day word | `zoneToken`, as written | directly | v1 |
 | a place named with `time` | `yesterday London time`, `8 AM New York time` | `zoneToken: 'London time'`, as written | the ONE zone the tz database names for the place (`zone.ts` · `zoneOfPlace`, noted `zone-read`); none or several (`India time`, `Pacific time`) → the zone is asked | v1 (reader follow-up) |
-| a zone abbreviation | `PST` | `zoneToken: 'PST'` | **only through the app's map** (`policy.abbreviations`, none ships): its zone's reading, and — when its DST state disagrees with the date — its letters' literal offset too, both offered in ONE confirmation (`open: ['abbreviation', 'confirm']`); with no map, or one missing it, the zone is asked (`format: 'zone'`) | tokenized; mapped only by the app's policy |
+| a zone abbreviation | `PST` | `zoneToken: 'PST'` | **only through the app's map** (`policy.abbreviations`, none ships): compare both complete interval boundaries for the regional and literal readings, offering distinct intervals in ONE confirmation; an unknown civil zone is asked. For an elapsed span, the endpoints are already known: keep the mapped display zone, or quote an unmapped label beside UTC as not converted (§ 6.4) | tokenized; mapped only by the app's policy |
 | day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
 | relative spans | last 40 minutes, past 2 hours, the last hour, `last 24h`, `past 6h` | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — proposed and confirmed like every reading (TQ29); the compact units (`m`, `h`, `d`, `w`) since packet "gaps" |
 | a named-month date | `11 September`, `Sept 29`, `September 29, 2026` | `date: fixed` — `year` only when written | the year from the policy (`year`), as for `10/9` | v1 since packet "gaps" (the host's field phrasings use them); a month named alone stays unreadable |
@@ -520,8 +526,9 @@ app may override every key, and only checks the app armed can produce one.
 | some readings the tool can read, some not (`10/08/26` to a look-back tool with `maxRange: '7d'`: 8 Oct in reach, 10 Aug and 2010 not) | the readable ones as choices |
 | a start and an end asked separately (`From when?`, `Until when?`) that together break the tool's `direction`, `retention` or `maxRange` | asked again naming the fact, bounded, then the call is refused — with the reader or without |
 | a wall time in a DST gap or overlap (a fixed v1 law: Temporal's `reject`) | the two instants as choices (Temporal's `earlier` and `later`) |
-| a zone abbreviation (v1 has no map), or one not in the map | the zone, `format: 'zone'` |
-| an abbreviation in the map whose DST state disagrees with the date (`PST` on 9 Oct) | both readings as choices — literal `−08:00`, or the zone's `−07:00` (`abbreviationMismatch: 'ask'`) |
+| an unknown zone whose interpretation can change the interval, including a civil date with an unmapped abbreviation | the zone, `format: 'zone'` |
+| a mapped abbreviation whose regional and literal readings give different complete intervals | both intervals as choices in the existing confirmation; compare both ends, not the current offset alone |
+| an elapsed span with a said zone, including one absent from the caller's map or not representable by the display carrier | no extra zone question: retain the elapsed endpoints; show the mapped zone or UTC with the exact said label and an explicit not-converted notice; the existing meaning confirmation remains |
 | a tool needs a period and the person wrote a time the library holds no reading of (words the reader could not read; a zone still to name) | the window, asked — the zone first, else "Which time did you mean by …?" with nothing pre-filled (`format: 'time-range'`), whatever the tool's own rule says: its default never stands in for words the person wrote (packet "gaps") |
 | a tool needs a period and the person said none | the carried window first (§ 5.6); else the tool's own `askOrAssume` rule, unchanged; its choices may now be ranges |
 | the only reading came from a `kind: 'model'` reader and a tool needs it | the reading as one choice to confirm (§ 5.5) |
@@ -531,6 +538,47 @@ One ask per batch, before anything dispatches — the inputs layer's rule
 evidence gate counts it as the person's words (§ 9.5).
 
 ---
+
+### 6.4 Unreleased reply correction and stated zones
+
+The existing `time-range` field retains its ID, strict format, ISO interval enum
+and labels. A new optional free-text sibling carries a correction; the range
+field becomes optional only when that sibling is present. Fill exactly one.
+There is no action field or opaque choice ID. A range answer is judged by the
+same strict validator. Correction text may name one zone, replacement time words
+or a full strict interval. Both/neither, unreadable text (including “no”),
+negation and conflicting readings stay pending with a fixed reason and examples;
+they are not treated as malformed ISO ranges or passed to a model classifier.
+
+`time/reply.ts` is one facade over plain decode, classify, resolve and project
+units. The existing resumed ask calls it and owns the native interrupt, request
+binding and tool gates. This fix does not mount a chart, move a pause or run a
+disconnected executor. Decisions carry a bounded rule label into the existing
+time record. A correction row is ephemeral working data under the existing ask
+privacy carrier: replacement words keep their actual checked quote, never a
+fabricated old quote. No new durable raw-correction mirror or raw text in rule
+metadata is added. Meaning acceptance still cannot overwrite already supplied
+partial call endpoints (#266).
+
+**Always confirm remains.** `timeReadingRows` continues to use `confirm: true`.
+Corrected time words and zones are proposals until the person confirms them.
+Only a redundant *zone* question goes away when it cannot change instants.
+An elapsed interval keeps the saved “now” and its endpoints, regardless of how
+long the answer took. An unknown label such as unmapped `EST` is not Eastern by
+guess: display UTC, quote the label and say it was not converted. Calendar
+windows still resolve under the stated zone; at the autumn transition, one
+reading of “yesterday” can span 25 hours and the literal-offset reading 24, so
+both interval boundaries must be compared before collapsing readings.
+
+The additive minor intent is an ordinary changes fragment, not a package-version
+edit. Acceptance requires the old range-field bytes to match except `required`,
+and a real native pause written by published 14.1.1 to resume with its old
+meaning. The existing 12.3.0 fixture is preserved and is not relabelled as that
+proof. The new optional data stays bound to its saved request; strict generic
+range validation, native cancellation and existing source/privacy gates remain.
+Hosts may ignore the sibling and keep their old range UI. Rendering a correction
+box is a follow-up after the library ships, subject to each host's own dependency
+and review gates.
 
 ## 7. Tool time capabilities and conversion
 
@@ -926,7 +974,7 @@ await agent.run({
 | `reader` | **none** | reading the person's words is armed separately; no reader means no `time-reading` rows and no word-driven asks (T-words, § 5.4) |
 | `policy.dateOrder` | `'ask'` | no silent MDY (dateparser's documented trap) |
 | `policy.year` | `'ask'` | a year the person did not say is a guess, and near New Year the current and previous years are both plausible (dateparser's `PREFER_DATES_FROM` exists for exactly this) |
-| `policy.abbreviations` | absent — no map ships | added by the reader follow-ups after the T6b bench (the field sentence's `PST` opened a bare zone ask with no pre-fill on every run, then a second round for the date order): a map the APP declares, `{ PST: { zone: 'America/Los_Angeles', offset: '-08:00' } }`; a mapped abbreviation is read as its zone and, when they disagree, as its letters — both offered in one confirmation, never corrected. Without it every byte is v1's |
+| `policy.abbreviations` | absent — no map ships | a map the APP declares, `{ PST: { zone: 'America/Los_Angeles', offset: '-08:00' } }`; regional and literal readings are offered together only when their complete intervals differ. An unmapped civil zone remains a question; an unmapped elapsed label is quoted beside UTC as not converted, with the one meaning confirmation retained (§ 6.4) |
 | tool `period` facts | absent: nothing checked | `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked` are facts about the tool (§ 7.1); a tool never sets policy |
 
 **Fixed laws in v1**, each a switch later only if a bench shows the need:
@@ -1251,7 +1299,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   — a seam with no production caller yet: no `InputField` carries a tool's facts in T5a, so those
   four sentences are not served until a field does; the batch ask's answer for a period argument is read back through its single-argument form
   and asked again (`invalid-answer`) outside the facts — the refusal of an exhausted ask names the
-  fact (`arguments/ask.ts` · `factExpectation`, registered as served). Refusing a CALL on its facts
+  fact (`arguments/ask/validation.ts` · `factExpectation`, registered as served). Refusing a CALL on its facts
   is T5b's. (10) The design's "this morning vs yesterday morning" test is "today vs yesterday": v1
   resolves no part of the day (T6a note (6)).
 
@@ -1656,7 +1704,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   read that time, and claims nothing about it from …"; that quote is no longer pending for that
   tool. The T6b paid record's `future` case asked the same refused call until the budget ran out
   on 5/15 runs while the pending half kept naming it the next step. (4) **A start and end asked
-  separately are one window** (`arguments/ask.ts` · `pairsBroken`): the single-argument fact check
+  separately are one window** (`arguments/ask/validation.ts` · `pairsBroken`): the single-argument fact check
   could not judge one bound of two, so the unarmed arm's mock ran a future `start_time`/`end_time`
   pair to a `direction: 'past'` tool; the pair is now read back and judged together, asked again
   naming the fact, then refused. (5) **The checkpoint door** takes the open-reading refusal row (no

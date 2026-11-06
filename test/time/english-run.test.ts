@@ -232,7 +232,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     });
     expect(ofKind(agent, 'time-reading')[0]).toMatchObject({
       quote: '10/09/26 8 AM to 8:40 AM PST',
-      reader: { id: 'agentfootprint/english', version: '1.2.0', kind: 'rule', locale: 'en-US' },
+      reader: { id: 'agentfootprint/english', version: '1.3.0', kind: 'rule', locale: 'en-US' },
       choice: { by: 'open', remaining: [], open: ['zone'] },
     });
     expect(ofKind(agent, 'call-window')[0]).toMatchObject({

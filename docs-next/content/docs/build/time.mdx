@@ -69,14 +69,13 @@ the policy's pick, or `open` with an `OpenQuestion` for each thing only the
 person can settle — a date order, a missing am/pm, a DST overlap, a zone
 abbreviation.
 
-A zone abbreviation is asked unless your policy maps it. `abbreviations` holds
+A zone abbreviation on a civil window is asked unless your policy maps it. `abbreviations` holds
 one `ZoneAbbreviation` per spelling your people write: the zone it stands for
 and the offset its letters spell, as in
 `policy: { abbreviations: { PST: { zone: 'America/Los_Angeles', offset: '-08:00' } } }`.
-When the two disagree at the instant (`PST` in October is −07:00 by the zone,
-−08:00 by the letters), both readings are offered in the one confirmation —
-neither is corrected into the other. An abbreviation missing from the map is
-still asked, and no map ships.
+When the complete interval boundaries disagree (`PST` in October is −07:00 by the zone,
+−08:00 by the letters), both readings are offered in the one confirmation.
+Equal complete intervals need no extra choice. No abbreviation map ships.
 
 Each message read files one `TimeReadingRow` per mention (or one row with
 `mentions: 0`), stamped with a `TimeReaderStamp` — the reader's id, version,
@@ -106,9 +105,11 @@ labels of the ask; it never decides a date order.
 A duration can name its display zone: `last 1 hour in America/New_York`
 keeps the same elapsed instants as `last 1 hour`, shown in the requested zone.
 Calendar words such as `yesterday` use that zone to determine the instants too.
-A stated abbreviation is resolved by the declared policy or asked. A fixed
-offset the IANA-only display contract cannot represent is asked as well;
-the library does not silently substitute the run's fallback zone.
+A stated abbreviation is resolved by the declared policy. For elapsed spans,
+an unreadable or unrepresentable display zone leaves the known instants in UTC,
+quotes the requested label and says it was not converted. Civil windows still
+ask when the zone can change an endpoint. The run's fallback never silently
+replaces a stated zone.
 
 A reading only PROPOSES. Nothing typed in chat is filed as the person's words:
 when a tool that declares a period is about to be called, the reading is
@@ -126,6 +127,22 @@ Agent.create({ provider, model })
   .time({ zone: 'America/Los_Angeles', reader: englishTimeReader() })
   .build();
 ```
+
+### Correcting the proposed time
+
+The existing `time-range` field keeps its ID, choices and labels. It becomes
+optional beside one optional text field for a correction: fill exactly one.
+The text can name a zone, replacement time words or a complete ISO interval.
+Zone and time-word corrections produce a new proposal at the original message
+clock, which still needs confirmation. A full interval is an explicit edit.
+Unreadable text, both fields or neither stay pending with a reason and examples;
+ordinary language in the range field still meets its strict ISO validator.
+
+The time record keeps the bounded reply decision and rule. Correction-box
+rendering is a separate host follow-up; a host ignoring the new text field
+keeps its current range UI.
+
+<CodeFile path="examples/features/86-english-time-reader.ts" region="time-correction" />
 
 ### A call with only a start or stop
 

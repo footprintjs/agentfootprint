@@ -170,6 +170,7 @@ function windowPlanOf(
   );
   return {
     question: ask.question,
+    reply: { version: 1, description: catalogOf(reader)['reply.correction'] },
     format,
     ...(ask.field.enum !== undefined && { choices: ask.field.enum }),
     ...(ask.field.enum !== undefined &&
@@ -201,7 +202,7 @@ export interface ArgumentAskDeps {
   /**
    * Present exactly under `.time()`: an answer for a period argument is also
    * judged against the tool's declared facts at the turn's clock
-   * (`arguments/ask.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
+   * (`arguments/ask/validation.ts` · `checkAnswer`) — `appZone` is the app's `.time({ zone })`.
    * `reader` is present exactly under `.time({ reader })`: a call that left
    * its period out while the turn's one mention was open is asked THAT
    * mention's window (the lazy word-driven ask) — `policy` re-reads the
@@ -448,7 +449,7 @@ export function askBeforeDispatch(
   if (state.waiting !== undefined) {
     const declaration = pendingPrivateAskOf(state, privateFieldsInForce(scope) !== undefined);
     requirePendingPrivateViews(state, declaration, deps.toolOf);
-    const selected = pendingPrivateSelections(declaration);
+    const selected = pendingPrivateSelections(declaration, state);
     if (selected.length > 0) markPrivateFields(scope, selected);
     const input = interrupt(scope, pauseDataOf(state.waiting));
     const bound = bindAnswer(
@@ -503,7 +504,7 @@ export function askBeforeDispatch(
       ...(declaration !== undefined && { privateFields: declaration }),
     };
     const next = snapshotPartialState(withWaiting(state, waiting));
-    const selected = pendingPrivateSelections(declaration);
+    const selected = pendingPrivateSelections(declaration, state);
     if (selected.length > 0) markPrivateFields(scope, selected);
     markPrivateAsk(scope, next, calls, deps.toolOf, settledCalls(next), entries);
     scope.argumentAsk = next;

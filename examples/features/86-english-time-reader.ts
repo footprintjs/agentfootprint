@@ -196,8 +196,42 @@ async function partialBoundsExample(): Promise<void> {
 }
 // #endregion partial-bounds
 
+// #region time-correction
+/** Correct the display zone, then confirm the proposed interval before execution. */
+async function correctionExample(): Promise<void> {
+  handed.length = 0;
+  const agent = desk([]);
+  try {
+    const first = await agent.run({ message: 'Show activity in the last 1 hour in EST', time });
+    if (!isInputPause(first)) throw new Error('Expected the time confirmation');
+    const range = first.awaitingInput.fields.find((field) => field.format === 'time-range');
+    const correction = first.awaitingInput.fields.find(
+      (field) => field.id === `${range?.id}-correction`,
+    );
+    if (correction === undefined) throw new Error('Expected the optional correction field');
+    check(range?.labels?.[0]?.includes('not converted') === true, 'the unmapped zone is explicit');
+    const changed = await agent.resume(first.checkpoint, {
+      requestId: first.awaitingInput.requestId,
+      values: { [correction.id]: 'America/New_York' },
+    });
+    check(handed.length === 0, 'a correction alone permits no execution');
+    if (!isInputPause(changed)) throw new Error('Expected the corrected proposal');
+    const offer = changed.awaitingInput.fields.find((field) => field.format === 'time-range');
+    if (offer?.enum?.[0] === undefined) throw new Error('Expected the corrected interval');
+    await agent.resume(changed.checkpoint, {
+      requestId: changed.awaitingInput.requestId,
+      values: { [offer.id]: offer.enum[0] },
+    });
+    check(handed.length === 1, 'one execution follows confirmation');
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion time-correction
+
 export async function run(input: string): Promise<string> {
   await partialBoundsExample();
+  await correctionExample();
   // 1. "yesterday" is only PROPOSED: nothing is served, the call pauses on a one-click
   //    confirmation naming the window and its zone.
   const served: string[] = [];

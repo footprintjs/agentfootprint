@@ -776,7 +776,7 @@ armed (step 5), and step 4 measures the needless-ask rate before anything else i
 **When.** A missing value on an `ask` argument; and, under the sources arm, a present unverified
 value on one (a reading included).
 
-**The declaration** (`arguments/ask.ts` · `argumentAskDeclaration`), accepted by
+**The declaration** (`arguments/ask/context.ts` · `argumentAskDeclaration`), accepted by
 `tools/inputRequest.ts` · `validateInputDeclaration`:
 
 - **A fixed library question**, not the authors' questions joined: "Before the next step can run, a

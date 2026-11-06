@@ -52,5 +52,9 @@ export const defaultTimeAskMessages: TimeAskMessages = Object.freeze({
   'ask.confirm': 'Is this the time you meant by “{{quote}}”?',
   'ask.zone': 'Which time zone did you mean by “{{token}}” in “{{quote}}”?',
   'ask.zone-unknown': 'Which time zone are you in? It decides which time “{{quote}}” is.',
+  'choice.unconverted':
+    'I read “{{quote}}” as {{window}} in UTC. “{{token}}” was not converted — is that right?',
+  'reply.correction':
+    'Or say what should change, such as a time zone, yesterday, or a full interval.',
   'choice.confirm': 'I read “{{quote}}” as {{window}} in {{zone}} — is that right?',
 });

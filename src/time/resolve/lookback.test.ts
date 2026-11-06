@@ -36,10 +36,30 @@ describe('explicit zones on elapsed and calendar time', () => {
   });
 
   for (const token of ['EST', 'America/Not_A_Zone', 'India time']) {
-    it(`asks for an unresolved explicit zone instead of dropping it: ${token}`, () => {
-      expect(resolve({ relative, zoneToken: token })).toMatchObject({
-        candidates: [],
-        needsZone: true,
+    it(`keeps known elapsed instants in UTC with the unconverted label: ${token}`, () => {
+      const result = resolve({ relative, zoneToken: token });
+      expect(result.needsZone).toBe(false);
+      expect(result.unsupported).toEqual([]);
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]).toMatchObject({
+        range: RANGE,
+        zone: 'UTC',
+        said: ['zone', 'duration'],
+        notes: [{ kind: 'zone-unconverted', token }],
+      });
+      expect(result.candidates[0]!.zone).not.toBe(CLOCK.zone);
+      expect(chooseReading(result, DEFAULT_TIME_POLICY, 'rule', undefined, true)).toMatchObject({
+        by: 'open',
+        open: ['confirm'],
+      });
+    });
+
+    it(`still asks for an unresolved civil zone that can change the interval: ${token}`, () => {
+      const result = resolve({ relative: { unit: 'day', offset: -1 }, zoneToken: token });
+      expect(result).toMatchObject({ candidates: [], needsZone: true });
+      expect(chooseReading(result, DEFAULT_TIME_POLICY, 'rule', undefined, true)).toMatchObject({
+        by: 'open',
+        open: ['zone'],
       });
     });
   }
@@ -60,21 +80,35 @@ describe('explicit zones on elapsed and calendar time', () => {
     });
   });
 
-  it('a fractional fixed offset asks for a representable zone and can then settle it', () => {
+  it('a fractional fixed display offset keeps the elapsed range and states it was not converted', () => {
     const parts = { relative, zoneToken: '+05:30' };
-    const pending = resolve(parts);
-    expect(pending).toMatchObject({ candidates: [], needsZone: true });
-    expect(pending.unsupported.join(' ')).toMatch(/IANA/);
+    const result = resolve(parts);
+    expect(result.needsZone).toBe(false);
+    expect(result.unsupported).toEqual([]);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      range: RANGE,
+      zone: 'UTC',
+      notes: [
+        { kind: 'offset-said', offset: '+05:30' },
+        { kind: 'zone-unconverted', token: '+05:30' },
+      ],
+    });
+    expect(chooseReading(result, DEFAULT_TIME_POLICY, 'rule', undefined, true)).toMatchObject({
+      by: 'open',
+      open: ['confirm'],
+    });
     expect(parts.zoneToken).toBe('+05:30');
+    // The ordinary repair helper does not invent a needless elapsed zone answer.
     const answered = withZoneAnswered([parts], 'Asia/Kolkata');
-    expect(answered[0]!.zoneToken).toBe('Asia/Kolkata');
+    expect(answered[0]!.zoneToken).toBe('+05:30');
     expect(resolve(answered[0]!).candidates[0]).toMatchObject({
       range: RANGE,
-      zone: 'Asia/Kolkata',
+      zone: 'UTC',
     });
   });
 
-  it('keeps mapped regional and literal meanings even when elapsed endpoints coincide', () => {
+  it('keeps the mapped region when its literal changes no elapsed endpoint', () => {
     const result = resolveMention(
       [{ relative, zoneToken: 'EST' }],
       { ...CLOCK, now: '2026-07-06T18:01:00Z' },
@@ -85,24 +119,38 @@ describe('explicit zones on elapsed and calendar time', () => {
         abbreviations: { EST: { zone: 'America/New_York', offset: '-05:00' } },
       },
     );
-    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates).toHaveLength(1);
     expect(result.candidates.map((c) => [c.zone, c.reading.abbreviation])).toEqual([
       ['America/New_York', 'zone'],
-      ['Etc/GMT+5', 'literal'],
     ]);
-    expect(result.candidates[0]!.range).toEqual(result.candidates[1]!.range);
+    expect(result.candidates[0]!.range).toEqual({
+      from: '2026-07-06T17:01:00Z',
+      to: '2026-07-06T18:01:00.001Z',
+    });
   });
 
-  it('a fractional mapped literal is asked rather than silently discarding one meaning', () => {
+  it('a fractional mapped literal needs no extra elapsed question when the region preserves all endpoints', () => {
     const policy = {
       ...DEFAULT_TIME_POLICY,
       abbreviations: { NST: { zone: 'America/St_Johns', offset: '-03:30' } },
     };
     const parts = { relative, zoneToken: 'NST' };
     const result = resolveMention([parts], CLOCK, READER, false, policy);
-    expect(result).toMatchObject({ candidates: [], needsZone: true });
+    expect(result.needsZone).toBe(false);
+    expect(result.unsupported).toEqual([]);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      range: RANGE,
+      zone: 'America/St_Johns',
+      reading: { abbreviation: 'zone' },
+      notes: [{ kind: 'zone-read', token: 'NST', as: 'abbreviation' }],
+    });
+    expect(chooseReading(result, policy, 'rule', undefined, true)).toMatchObject({
+      by: 'open',
+      open: ['confirm'],
+    });
     const answered = withZoneAnswered([parts], 'America/St_Johns', policy);
-    expect(answered[0]!.zoneToken).toBe('America/St_Johns');
+    expect(answered[0]!.zoneToken).toBe('NST');
   });
 
   it('does not admit other parts merely because a relative span now accepts a zone', () => {
@@ -180,18 +228,16 @@ describe('fixed and regional zones at the autumn clock change', () => {
 
   it('keeps the ordinary following-day control as equal complete intervals', () => {
     const result = read(dayBefore, '2026-11-03T17:00:00Z');
-    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates).toHaveLength(1);
     expect(result.candidates.map((candidate) => bounds(candidate.range))).toEqual([
-      ['2026-11-02T05:00:00.000Z', '2026-11-03T05:00:00.000Z'],
       ['2026-11-02T05:00:00.000Z', '2026-11-03T05:00:00.000Z'],
     ]);
   });
 
   it('keeps elapsed endpoints independent of the two display readings', () => {
     const result = read({ relative, zoneToken: 'EST' }, '2026-11-02T17:00:00Z');
-    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates).toHaveLength(1);
     expect(result.candidates.map((candidate) => bounds(candidate.range))).toEqual([
-      ['2026-11-02T16:00:00.000Z', '2026-11-02T17:00:00.001Z'],
       ['2026-11-02T16:00:00.000Z', '2026-11-02T17:00:00.001Z'],
     ]);
   });

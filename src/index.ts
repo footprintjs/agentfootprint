@@ -1129,9 +1129,8 @@ export {
   type TimeAxisReading,
   type TimeAxisUnit,
 } from './artifacts/index.js';
-// The time layer's run clock (time design § 4, step T3) — `.time()` and the
-// run's `time` input, and the rows the clock files on the ledger. Types only:
-// the doors are `AgentBuilder.time` and `run({ time })`.
+// Time clock and ledger types (time design § 4, step T3).
+// The doors are `AgentBuilder.time` and `run({ time })`.
 export type { RunTime, TimeClock, TimeOptions } from './time/clock.js';
 export type { TimeRange } from './time/range.js';
 export type {
@@ -1143,6 +1142,7 @@ export type {
   PersonWindow,
   SourceClockRow,
   TimeAnswerRow,
+  TimeReplyRow,
   TimeDerivedRow,
   TimeReaderStamp,
   TimeReadingRow,

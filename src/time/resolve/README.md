@@ -1,4 +1,4 @@
-# Relative-zone resolution
+# Fold — relative-zone resolution
 
 `resolve.ts` is the internal public facade: it composes point/range candidates,
 applies the existing selection policy, and re-exports the existing record API.

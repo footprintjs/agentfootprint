@@ -32,7 +32,7 @@ export function lookbackBuilt(
   }
   const zones = lookbackZoneReadsOf(parts.zoneToken, clock.zone, policy);
   if (!Array.isArray(zones)) return zones;
-  return zones.map(({ read, zone }) => {
+  return zones.map(({ read, zone, unconverted }) => {
     const via = viaOf(read);
     return {
       said:
@@ -44,7 +44,12 @@ export function lookbackBuilt(
         grain: rel.unit,
         implied: [],
         anchor: 'message' as const,
-        notes: via.notes,
+        notes: [
+          ...via.notes,
+          ...(unconverted !== undefined
+            ? [{ kind: 'zone-unconverted' as const, token: unconverted }]
+            : []),
+        ],
         reading: via.tags,
       },
     };

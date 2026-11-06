@@ -133,7 +133,10 @@ export function declarePendingPrivateAsk(
 /** Fields are selected before answers exist; a sibling-dependent mapper cannot prove publicness. */
 export function pendingPrivateSelections(
   declaration: PendingPrivateAsk | undefined,
+  state?: ArgumentAskState,
 ): { readonly root: PrivateFieldRoot; readonly path: string }[] {
+  if (declaration?.fields.some(({ index }) => state?.fields[index]?.window?.reply !== undefined))
+    return [{ root: 'argumentAsk', path: '' }];
   return (declaration?.fields ?? []).flatMap(({ index }) => [
     { root: 'argumentAsk' as const, path: `progress.${index}.answer` },
     { root: 'argumentAsk' as const, path: `progress.${index}.fills` },

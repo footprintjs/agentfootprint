@@ -34,7 +34,7 @@ import { shownGrain } from './resolveRecord.js';
 export interface TimeAskField {
   readonly id: string;
   readonly type: 'string';
-  readonly required: true;
+  readonly required: boolean;
   readonly format: TimeFormat;
   readonly enum?: readonly string[];
   readonly labels?: readonly string[];
@@ -44,6 +44,12 @@ export interface TimeAskField {
 export interface TimeAsk {
   readonly question: string;
   readonly field: TimeAskField;
+  readonly correction?: {
+    readonly id: string;
+    readonly type: 'string';
+    readonly required: false;
+    readonly description: string;
+  };
 }
 
 /** The zone token the person wrote in the mention's first parse that has one. */
@@ -75,7 +81,13 @@ export function timeAskOf(
   if (choice?.by === 'none') {
     return {
       question: fillMessage(messages['ask.which'], { quote: quoted(row.quote) }),
-      field: { id, type: 'string', required: true, format: 'time-range' },
+      field: { id, type: 'string', required: false, format: 'time-range' },
+      correction: {
+        id: `${id}-correction`,
+        type: 'string',
+        required: false,
+        description: messages['reply.correction'],
+      },
     };
   }
   if (choice?.by !== 'open') return undefined;
@@ -114,6 +126,14 @@ export function timeAskOf(
       { zone: candidate.zone, locale: row.reader.locale },
       shownGrain(candidate),
     );
+    const unconverted = candidate.notes.find((note) => note.kind === 'zone-unconverted');
+    if (unconverted?.kind === 'zone-unconverted') {
+      return fillMessage(messages['choice.unconverted'], {
+        quote,
+        window,
+        token: quoted(unconverted.token),
+      });
+    }
     if (!confirm) return window;
     // The zone is named: the reading leaned on it, and the person may have meant another.
     return fillMessage(messages['choice.confirm'], { quote, window, zone: candidate.zone });
@@ -121,10 +141,16 @@ export function timeAskOf(
   const question = fillMessage(messages[confirm ? 'ask.confirm' : 'ask.which'], { quote });
   return {
     question,
+    correction: {
+      id: `${id}-correction`,
+      type: 'string',
+      required: false,
+      description: messages['reply.correction'],
+    },
     field: {
       id,
       type: 'string',
-      required: true,
+      required: false,
       format: 'time-range',
       enum: offered.map((o) => o.value),
       labels,

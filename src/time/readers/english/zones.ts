@@ -27,6 +27,42 @@ const ZONE_AFTER = new RegExp(
     `|(?<abbreviation>${ZONE_ABBREVIATIONS.join('|')}))(?![A-Za-z0-9_/])(?<close>\\s*\\))?`,
 );
 
+/** The ONE lexical zone match, shared by attached zones and whole corrections. */
+function zoneAtStart(
+  text: string,
+): { readonly token: string; readonly consumed: number } | undefined {
+  const m = ZONE_AFTER.exec(text);
+  if (m === null || m.groups === undefined) return undefined;
+  const { lead, iana, offset, place, abbreviation, close } = m.groups;
+  if ((lead as string).includes('(') !== (close !== undefined)) return undefined;
+  return {
+    token: iana ?? offset ?? place ?? (abbreviation as string),
+    consumed: m[0].length,
+  };
+}
+
+// Affirmative wrapper grammar, not a rejection-phrase list. Every character
+// after it must be the same lexical zone plus the optional “time zone” suffix.
+const CORRECTION_PREFIX =
+  /^(?:please\s+)?(?:(?:show|present|display)\s+(?:it|(?:the\s+)?(?:range|time|window|results))\s+in\s+)?/i;
+const CORRECTION_SUFFIX = /^(?:\s+time\s+zone)?\s*\.?\s*$/i;
+
+/**
+ * A complete affirmative zone-only reply, without interpreting the token.
+ * Unsupported wrappers, negation, multiple zones or leftover words return
+ * no reading. Internal English facade port, not a new public package export.
+ */
+export function readEnglishZoneCorrection(text: string): string | undefined {
+  if (text.length === 0 || text.length > 4096) return undefined;
+  const clean = text.trim();
+  const prefix = CORRECTION_PREFIX.exec(clean)?.[0] ?? '';
+  const remaining = clean.slice(prefix.length);
+  const zone = zoneAtStart(remaining);
+  return zone !== undefined && CORRECTION_SUFFIX.test(remaining.slice(zone.consumed))
+    ? zone.token
+    : undefined;
+}
+
 /**
  * A zone written right after a date, a time or a day word joins that
  * phrase, as written. The resolver decides whether it interprets a civil
@@ -35,12 +71,9 @@ const ZONE_AFTER = new RegExp(
 export function attachZone(text: string, atom: Atom): void {
   if (atom.kind === 'bare') return;
   if (atom.zoneToken !== undefined) return;
-  const m = ZONE_AFTER.exec(text.slice(atom.end));
-  if (m === null || m.groups === undefined) return;
-  const { lead, iana, offset, place, abbreviation, close } = m.groups;
-  if ((lead as string).includes('(') !== (close !== undefined)) return;
+  const zone = zoneAtStart(text.slice(atom.end));
+  if (zone === undefined) return;
   // The IANA name, else the offset after `UTC` / `GMT`, else the place, else the abbreviation — each verbatim.
-  const token = iana ?? offset ?? place ?? (abbreviation as string);
-  atom.zoneToken = token;
-  atom.end += m[0].length;
+  atom.zoneToken = zone.token;
+  atom.end += zone.consumed;
 }
