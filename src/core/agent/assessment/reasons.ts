@@ -24,17 +24,16 @@
  * empty list of calls in disguise.
  *
  * WHAT IS NOT HERE, AND WHY. A reason is read from a COMMITTED row, never from
- * an event, so the running agent and a later reader fold the same bytes. Two
- * verdicts the honesty design names are events only in this version and so
- * cannot be read yet: the `.claims()` dispositions (`claim-contradicted`, and
- * the `checked-pass` rows that would SUPPORT "known"), and the integrity
- * dispositions (`integrity.disposition`). The step that needs each one adds
- * one committed row, and the reason joins this table in the same change — as
- * the answer layer (honesty layer 4) did for two: the evidence gate's clean
- * pass (a `grounded` witness row, read as the names-and-numbers check having
- * run — never as a reason, never as support) and an answer given before its
- * declared steps finished (`steps-unfinished`, below). Both rows are filed only
- * while the answer layer is armed (`assessment/witness.ts`).
+ * an event, so the running agent and a later reader fold the same bytes. A
+ * verdict that is an event only cannot be read: the `checked-pass` rows that
+ * would SUPPORT "known" stay that way. The step that needs a verdict adds one
+ * committed row, and the reason joins this table in the same change. The answer
+ * layer did that for its witness rows (`assessment/witness.ts`, filed only while
+ * it is armed): the evidence gate's clean pass (read as the names-and-numbers
+ * check having run, never as a reason or as support), an answer given before
+ * its declared steps finished, an integrity finding (which kinds fire a reason
+ * is decided once, in `integrityReasons.ts`) and a `.claims()` comparison that
+ * never happened.
  */
 
 import type { AssessmentReason, AssessmentReasonSource, HonestyLayer } from './types.js';
@@ -73,6 +72,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       "argumentAsk: the inputs layer's batch ask with a question still out (`waiting`) — nothing in that batch has run; the findingsLedger's current `asked` rows of this turn name the values",
   },
   {
+    reason: 'invariant-violation',
+    layer: 1,
+    class: 'not-sure',
+    source: 'run',
+    reads:
+      'findingsLedger: an integrity-finding row of this turn — the tools the model was offered contradict what the run composed or parked (at the write that served them, or on the wire)',
+  },
+  {
     reason: 'argument-assumed',
     layer: 2,
     class: 'not-sure',
@@ -103,6 +110,14 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     source: 'calls',
     reads:
       "findingsLedger: an argument row of this turn with source 'result' and setAside (the model named a result it had set aside); or a contingent row of this turn",
+  },
+  {
+    reason: 'unsupported-argument',
+    layer: 2,
+    class: 'not-sure',
+    source: 'calls',
+    reads:
+      "findingsLedger: an integrity-finding row of this turn — a call chose an argument value that nothing served it; the row's tools name the tool",
   },
   {
     reason: 'coverage-gap',
@@ -184,6 +199,22 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
       'findingsLedger: a conflict row of this turn — its witnesses name a call of this turn, or it is stamped with this turn and the record does not place every witness in an earlier turn (assess.ts · conflictOfThisTurn)',
   },
   {
+    reason: 'column-type-mismatch',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads:
+      "findingsLedger: an integrity-finding row of this turn — a column holds something other than the type its tool declares; the row's tools name the tool",
+  },
+  {
+    reason: 'missing-column',
+    layer: 3,
+    class: 'not-sure',
+    source: 'calls',
+    reads:
+      "findingsLedger: an integrity-finding row of this turn — a column its tool declares is in none of the rows; the row's tools name the tool",
+  },
+  {
     reason: 'value-unsupported',
     layer: 4,
     class: 'not-sure',
@@ -229,6 +260,22 @@ export const REASONS: readonly ReasonEntry[] = Object.freeze([
     source: 'answer',
     reads:
       'findingsLedger: a negative-claim or negative-claim-note row of this turn; model prose never establishes a negative claim',
+  },
+  {
+    reason: 'unsupported-claim',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads:
+      "findingsLedger: an integrity-finding row of this turn — a .claims() field disagrees with the fact the run's tools settled, or declines to state it (the row's advisory)",
+  },
+  {
+    reason: 'claim-unsettled',
+    layer: 4,
+    class: 'not-sure',
+    source: 'answer',
+    reads:
+      'findingsLedger: a claim-unsettled row of this turn — the answer states a .claims() field whose fact no tool settled, or no value could be read from the answer at all, so nothing could compare it',
   },
   {
     reason: 'claim-exceeds-search',

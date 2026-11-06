@@ -61,6 +61,8 @@ import {
   type ValueDeclaration,
 } from '../emptiness.js';
 import { argumentRewritesOf } from '../middleware/rewrites.js';
+import { readIntegrityRows } from './integrityReasons.js';
+import { statePointer } from './pointer.js';
 import { REASONS, reasonEntry } from './reasons.js';
 import { reasonSourceOf, rowList, type SourceRead } from './sources.js';
 import type {
@@ -243,12 +245,6 @@ function coverageRows(state: Readonly<Record<string, unknown>>): readonly Covera
   });
   return out;
 }
-
-const statePointer = (key: string, ...path: readonly (string | number)[]): AssessmentPointer => ({
-  kind: 'state',
-  key,
-  path: path.map((p) => `/${String(p).replace(/~/g, '~0').replace(/\//g, '~1')}`).join(''),
-});
 
 const historyPointer = (result: TurnResult): AssessmentPointer => ({
   kind: 'history',
@@ -1124,6 +1120,8 @@ export function foldState(
   readPeriodVerdicts(periodRows(state), argumentVerdicts, g);
   readConflicts(state, { current: calls, earlier: earlierCalls(history, begins) }, g);
   readAnswerRows(state, g);
+  const integrity = readIntegrityRows(state);
+  for (const { reason, at } of integrity.fired) fire(g, reason, at);
 
   if (asked.size > 0) {
     return {
@@ -1143,6 +1141,7 @@ export function foldState(
     ...(assessment === 'known' && g.support !== undefined && { support: g.support }),
     checked: g.checked,
     turnFrom: from,
+    ...(integrity.notes.length > 0 && { notes: integrity.notes }),
   };
 }
 

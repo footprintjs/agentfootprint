@@ -19,7 +19,8 @@ import { setEventSource } from '../../redaction/runRedaction.js';
 import type { ActiveInjection } from '../../injection-engine/types.js';
 import { menuOutstanding, type TurnRoute } from '../../injection-engine/routingPolicy.js';
 import { invariantViolationsOf } from '../../integrity/invariant-violation/check.js';
-import { contextErrorIdentity } from '../../integrity/finding/types.js';
+import { contextErrorIdentity, type ContextError } from '../../integrity/finding/types.js';
+import { holdIntegrityRows } from '../agent/integrityFindings.js';
 import { buildSkipStepTool } from '../../injection-engine/skillTools.js';
 import {
   currentStepOf,
@@ -947,20 +948,17 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         for (const [name, party] of wireWinners) servedTools.lastServed.set(name, party);
       }
       // ── Compose-seam integrity backstop (9.60.0) ──────────────────────
-      // Every list the merge reads is park-filtered — the registry and skill
-      // lists from 9.59.0, the provider list since the 9.60.0 fix pass (the
-      // comment at the provider loop above says why it has to be this layer).
+      // Every list the merge reads is park-filtered (see the provider loop above).
       // The backstop stays as the check that the MERGED wire agrees with the
-      // park, whatever route a name took: the final list is compared against
-      // every parked map's owned names. One finding per defect (identity
-      // dedup via a scope-held seen list, written only when something fires),
-      // filed as a typed event; the composition itself is never altered —
-      // detection converts a silent inconsistency into an attributed one.
+      // park: the final list is compared against every parked map's owned names.
+      // One finding per defect (identity dedup via a scope-held seen list), filed
+      // as a typed event; the composition itself is never altered.
       if (config.mountedMaps !== undefined && parkHoldOut !== undefined) {
         const servedNames = served.map((t) => t.name);
         const seenIds =
           (scope.$getValue('priorIntegrityFindingIds') as readonly string[] | undefined) ?? [];
         const newIds: string[] = [...seenIds];
+        const filed: ContextError[] = [];
         let comparedAnyMap = false;
         let firedThisPass = false;
         for (const map of config.mountedMaps) {
@@ -981,6 +979,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
             const id = contextErrorIdentity({ ...f, epoch: undefined });
             if (newIds.includes(id)) continue;
             newIds.push(id);
+            filed.push({ ...f, seam: 'compose' });
             typedEmit(scope, 'agentfootprint.integrity.context_error', {
               ...f,
               seam: 'compose',
@@ -989,6 +988,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
           }
         }
         if (newIds.length > seenIds.length) scope.$setValue('integrityFindingIds', newIds);
+        holdIntegrityRows(scope, filed, iteration, runtime?.integrityLedger);
         // The disposition (9.60.0): a pass with no parked map had nothing this
         // check could violate — stated as not-applicable, never as silence.
         runtime?.integrityLedger?.current?.note(

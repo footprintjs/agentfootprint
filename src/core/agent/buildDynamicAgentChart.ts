@@ -62,6 +62,7 @@ import type { ActiveInjection, Injection } from '../../injection-engine/types.js
 import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.types.js';
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
+import { integrityRail, integrityRailInto } from './integrityFindings.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import {
   breakFinalStage,
@@ -460,9 +461,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
         // Integrity findings already filed this run (9.60.0) — the dedup
         // seen-list, in under the alias (inputMapper keys are frozen inside
         // the subflow; the slot writes the fresh list under the base key).
-        ...(parent.integrityFindingIds !== undefined && {
-          priorIntegrityFindingIds: parent.integrityFindingIds,
-        }),
+        ...integrityRailInto(parent),
         // The reader's settled windows (step T6b) — the flat chart's line, read INSIDE
         // sf-llm-call off the boundary's `findingsLedger`. See `AgentChartDeps.timeWindows`.
         ...(deps.timeWindows === true && timeWindowsArg(parent.findingsLedger)),
@@ -514,9 +513,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
       outputMapper: (sf) => ({
         toolsInjections: sf.toolsInjections,
         dynamicToolSchemas: sf.toolSchemas,
-        ...(sf.integrityFindingIds !== undefined && {
-          integrityFindingIds: sf.integrityFindingIds,
-        }),
+        ...integrityRail(sf),
         // The classifier's pick (9.105.0) — first hop, onto the sf-llm-call
         // working key the call-llm stage appends to; the boundary's own
         // outputMapper carries it the rest of the way. Value-conditional.
@@ -742,9 +739,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // The integrity dedup seen-list (9.60.0) — crosses into
           // sf-llm-call so the tools slot's compose backstop files one
           // finding per defect per RUN, not per pass. Value-conditional.
-          ...(p.integrityFindingIds !== undefined && {
-            integrityFindingIds: p.integrityFindingIds,
-          }),
+          ...integrityRailInto(p),
           // The window ledger (9.60.0) — CallLLM's dangling-reference check
           // reads which grounds left the window, and CallLLM lives INSIDE
           // this boundary in the grouped chart. Without this line the check
@@ -941,9 +936,7 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
             mapEngagement: s.nextMapEngagement,
           }),
           // The integrity seen-list's second hop (9.60.0). Value-conditional.
-          ...(s.integrityFindingIds !== undefined && {
-            integrityFindingIds: s.integrityFindingIds,
-          }),
+          ...integrityRail(s),
           // Second hop, onto the outer key the next iteration reads.
           ...(s.nextServedInjectionIds !== undefined && {
             servedInjectionIds: s.nextServedInjectionIds,

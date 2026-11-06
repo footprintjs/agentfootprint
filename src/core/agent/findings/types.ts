@@ -34,7 +34,13 @@ import type { Assertion } from '../../../integrity/assertion/types.js';
 import type { ArgumentRow } from '../arguments/rows.js';
 import type { DeclaredSource } from '../arguments/sources.js';
 import type { PeriodRow } from '../../../semantics/coverage/period.js';
-import type { GroundedRow, ScriptShownRow, StepsUnfinishedRow } from '../assessment/witness.js';
+import type {
+  ClaimUnsettledRow,
+  GroundedRow,
+  ScriptShownRow,
+  StepsUnfinishedRow,
+} from '../assessment/witness.js';
+import type { IntegrityFindingRow } from '../../../integrity/finding/row.js';
 import type { ScriptRow } from '../scripts/types.js';
 import type {
   CallRow,
@@ -482,6 +488,10 @@ export type FindingsRow =
   // Filed only while the answer layer is armed (`assessment/witness.ts`).
   | GroundedRow
   | StepsUnfinishedRow
+  // One filed integrity finding, and a `.claims()` field no tool settled — filed
+  // only while the answer layer is armed, so the answer's standing can read them.
+  | IntegrityFindingRow
+  | ClaimUnsettledRow
   // The script record (`core/agent/scripts/`): one row per call of a declared
   // code-running tool (`Tool.script`), filed by ToolCalls while
   // `code: 'match'` or `.scriptTravelsWithTheAnswer()` is on — the program

@@ -106,8 +106,7 @@ export type LibraryWord =
 export type FieldName = FieldNamesOf<Payloads> | FieldNamesOf<Envelopes>;
 
 // The two literals below are WRITTEN BY `scripts/gen-known-strings.mjs` from the
-// types above; the compiler checks them EXACTLY against those types (a member
-// missing, or one too many, does not compile).
+// types above; the compiler checks them EXACTLY against those types.
 
 /** (a) Every library word, as a frozen record — see {@link LibraryWord}. */
 const WORDS: { readonly [W in LibraryWord]: true } = {
@@ -316,6 +315,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   chroma: true,
   claim: true,
   'claim-exceeds-search': true,
+  'claim-unsettled': true,
   classic: true,
   closed: true,
   code: true,

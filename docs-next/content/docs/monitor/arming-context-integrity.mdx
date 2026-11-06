@@ -145,7 +145,37 @@ const agent = Agent.create({ provider, model })
 
 There is no typed stratum to compare a claim against until the answer is a parsed object, so a contract with no schema would silently check nothing — and a check that silently checks nothing is exactly the decay this whole family exists to prevent. That is also why `.claims()` needs a tool returning a `describedResult()` envelope (including saved envelopes authored by earlier versions): the envelope is what settles the fact in the first place (`ledger.ts` flattens every recognized one into `(entity, field, value)` rows the checker can join against).
 
-**What you'll see.** Nothing is blocked — the answer returns exactly as the model wrote it — unless an enforcing `.answerValidation({ agentChecks: ['claims'] })` lists the check, which then withholds a contradicted answer by its own delivery rules — every reading counts, not only the latest, and an uncollected fact is not checked ([output schema](doc:output-schema)); the dispositions below are the detector's. If the claimed value disagrees with the settled fact, one `agentfootprint.integrity.context_error` fires with `kind: 'unsupported-claim'`, `seam: 'claim'`, naming both the claim and the fact it contradicts. The disposition row `unsupported-claim @ claim` shows `checked-fail`; agreement shows `checked-pass`; a field the answer omitted (schema allowed the absence) shows `not-applicable`; a fact the run never collected shows `unreachable` — the check refuses to accuse what it cannot compare.
+**What you'll see.** Nothing is blocked — the answer returns exactly as the model wrote it, and with `.answerLayer()` armed its [standing reads `not-sure`](#what-a-finding-does-to-the-answers-standing) — unless an enforcing `.answerValidation({ agentChecks: ['claims'] })` lists the check, which then withholds a contradicted answer by its own delivery rules — every reading counts, not only the latest, and an uncollected fact is not checked ([output schema](doc:output-schema)); the dispositions below are the detector's. If the claimed value disagrees with the settled fact, one `agentfootprint.integrity.context_error` fires with `kind: 'unsupported-claim'`, `seam: 'claim'`, naming both the claim and the fact it contradicts. The disposition row `unsupported-claim @ claim` shows `checked-fail`; agreement shows `checked-pass`; a field the answer omitted (schema allowed the absence) shows `not-applicable`; a fact the run never collected shows `unreachable` — the check refuses to accuse what it cannot compare.
+
+## What a finding does to the answer's standing
+
+A finding is a problem found, so it has to reach the word the person reads. Arm `.answerLayer()` and the finding is committed as a row, which `agent.assessment()` and `assessAnswer(recording)` read back, each reason with a witness pointing at the row. Without `.answerLayer()` no row is filed, so the finding stays in its event and cannot lower the standing.
+
+```ts
+const agent = Agent.create({ provider, model })
+  .tool(getRefund)
+  .outputSchema(refundAnswer)
+  .claims({ status: { entity: 'A-1042', field: 'status' } })
+  .answerLayer()
+  .build();
+
+await agent.run({ message: 'Did the refund for A-1042 complete?' }); // the answer is delivered
+const { standing, reasons } = await agent.assessment();
+// standing === 'not-sure', reasons[0].reason === 'unsupported-claim'
+```
+
+| Finding | With `.answerLayer()` | Why |
+| --- | --- | --- |
+| `unsupported-claim` | `not-sure`, with that reason | the answer disagrees with a fact a tool marked |
+| `unsupported-argument` | `not-sure`, with that reason | a tool was called with a value nothing served |
+| `invariant-violation` (`compose`, `wire`) | `not-sure`, with that reason | two channels disagree about the same fact |
+| `column-type-mismatch`, `missing-column` | `not-sure`, with that reason | the rows are not what the tool declared |
+| a `.claims()` comparison that never happened | `not-sure`, reason `claim-unsettled` | the answer states a field no tool settled, or no value could be read from the answer |
+| `dangling-reference` | a note | it fires when a tool is offered, and the model may never call that tool |
+| `empty-lookup` | a note | an empty result can be true |
+| `prior-turn-evidence` | a note | referring back is ordinary conversation |
+
+A note marks a place to look. It appears on `AnswerAssessment.notes`, never changes the standing and never counts as a check that ran. No finding can lift a standing: only a passed enforcing check does that.
 
 ## Reading the disposition report
 

@@ -701,8 +701,7 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
   if (r.turn !== undefined && typeof r.turn !== 'number') return false;
   // The time layer's rows (`.time()`): the turn's clock stamp, a resume's
   // differing `time`, each call's dispatch moment, and each time mention the
-  // armed reader found (`time-reading`). The arm ships in the
-  // SAME change as the kinds; one owner of their kinds and shape
+  // armed reader found (`time-reading`). One owner of their kinds and shape
   // (`time/rows.ts`). An older runtime refuses a checkpoint carrying one.
   if (isTimeRowKind(r.kind)) return timeRowIsWellFormed(r);
   switch (r.kind) {
@@ -794,11 +793,11 @@ function ledgerRowIsWellFormed(row: unknown): boolean {
     case 'grounded':
     case 'steps-unfinished':
     case 'script-shown':
+    case 'integrity-finding':
+    case 'claim-unsettled':
       return witnessRowIsWellFormed(r);
-    // The script record (`core/agent/scripts/`): one row per call of a
-    // declared code-running tool. The arm ships in the SAME change as the
-    // kind; one owner of its shape (`scripts/rows.ts`). An older runtime
-    // refuses a checkpoint that carries it.
+    // The script record (`core/agent/scripts/`): one owner of its shape
+    // (`scripts/rows.ts`). An older runtime refuses a checkpoint that carries it.
     case 'script':
       return scriptRowIsWellFormed(r);
     default:
@@ -930,7 +929,8 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
           "'steps-unfinished' (with turn, iteration, skillId, remaining[] of { index, tool }, " +
           'total, action: accepted | cut-short) or ' +
           "'script-shown' (with turn, iteration, block, a script label or 'unmatched' with a " +
-          'reason) or ' +
+          "reason) or 'integrity-finding' (with turn, iteration, a finding kind, seam) or " +
+          "'claim-unsettled' (with turn, iteration, field) or " +
           "'script' (with toolCallId, tool, argument, bytes, lines, a script outcome, turn, " +
           'iteration, and text only as long as bytes says, within the bound) or ' +
           "'clock' (with turn, iteration, now, nowSource, zone, zoneSource) or " +

@@ -182,15 +182,24 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         .sort();
     expect(REASONS.every((r) => ['calls', 'answer', 'run'].includes(r.source))).toBe(true);
     expect(byKind('run')).toEqual(
-      ['argument-asked', 'asked', 'check-unreachable', 'steps-unfinished', 'stopped-early'].sort(),
+      [
+        'argument-asked',
+        'asked',
+        'check-unreachable',
+        'invariant-violation',
+        'steps-unfinished',
+        'stopped-early',
+      ].sort(),
     );
     expect(byKind('answer')).toEqual(
       [
         'answer-check-failed',
         'claim-exceeds-search',
+        'claim-unsettled',
         'derived-from-reading',
         'negative-prose-unverified',
         'script-unmatched',
+        'unsupported-claim',
         'value-survived-revision',
         'value-unsupported',
       ].sort(),
@@ -200,10 +209,12 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'argument-assumed',
         'argument-read',
         'argument-unverified',
+        'column-type-mismatch',
         'coverage-gap',
         'declaration-overclaimed',
         'declared-absent',
         'empty-undeclared',
+        'missing-column',
         'period-beyond-retention',
         'period-differs-from-asked',
         'period-not-held',
@@ -211,6 +222,7 @@ describe('UNIT — every reason DECLARES what it rests on', () => {
         'period-undeclared',
         'period-unknown',
         'sources-conflict',
+        'unsupported-argument',
         'value-contingent',
       ].sort(),
     );

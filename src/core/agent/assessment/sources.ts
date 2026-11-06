@@ -36,7 +36,8 @@
  *   (`declaration-overclaimed`, the report row's `tools` — kept by the one
  *   projection onto the report, `negativeClaims/delivery.ts` ·
  *   `reportWithNegatives`) — every call of that tool this turn: it may
- *   over-report, it never hides (the fold's rule for "rests on").
+ *   over-report, it never hides (the fold's rule for "rests on"). An
+ *   integrity-finding row names its tools the same way.
  *
  * A row that names no call, a call whose tool's name the record does not
  * hold, and every entry of a list (a conflict's readings, a contingent value's
@@ -126,8 +127,9 @@ function refsIn(value: unknown): CallRef[] {
 }
 
 /** The calls one committed row names, read for `reason`. */
-function callsOfRow(reason: AssessmentReason, row: unknown): CallRef[] {
+function callsOfRow(reason: AssessmentReason, row: unknown, read: SourceRead): CallRef[] {
   if (!isRecord(row)) return [];
+  if (row.kind === 'integrity-finding') return callsOfCheck(row, read);
   if (row.kind === 'conflict') return refsIn(row.witnesses);
   if (row.kind === 'contingent') return refsIn(row.carriers);
   if (reason === 'value-contingent' && row.kind === 'argument') {
@@ -188,7 +190,7 @@ function callsOfWitness(
     const checks = isRecord(report) && list === 'checks' ? report.checks : undefined;
     return Array.isArray(checks) ? callsOfCheck(checks[Number(at)], read) : [];
   }
-  return callsOfRow(reason, rowAt(read.state, w.key, w.path));
+  return callsOfRow(reason, rowAt(read.state, w.key, w.path), read);
 }
 
 /**

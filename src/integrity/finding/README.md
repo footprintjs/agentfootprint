@@ -12,3 +12,6 @@ not be spelled the same way as one with a proof.
 
 ## Files
 - `types.ts` — `ContextError` and its vocabulary.
+- `row.ts` — the committed row one filed finding leaves on the findings ledger: names
+  only, no message, witness or predicate. What it does to the answer's standing is one
+  table, `core/agent/assessment/integrityReasons.ts`.

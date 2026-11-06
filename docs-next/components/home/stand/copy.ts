@@ -653,7 +653,7 @@ export const QUESTIONS: {
     },
     {
       q: 'What happens by default on a contradiction?',
-      a: 'With `.claims()` alone, the answer is delivered, the contradiction is recorded and the standing stays not assessed. List it in an enforcing check and the answer is withheld.',
+      a: 'The answer is delivered and the contradiction is recorded. With `.answerLayer()` the standing reads not sure, and the reason points at the row. List it in an enforcing check and the answer is withheld.',
     },
     {
       q: 'Does it stop a wrong answer in streamed chat?',

@@ -149,35 +149,13 @@ Precedence: ask > not sure > known > consistent > not assessed.
 the row it is read from. A reader skips a reason it does not know — the union
 grows as later honesty steps commit new rows.
 
-| Reason | Layer | Read from |
-|---|---|---|
-| `asked` | every | `pausedToolCallId`: the call a pause is still waiting on — a typed input (`requestInput`), a question (`askHuman` / `pauseHere`), a consent gate (a tool's `checkIn`, a middleware's `ask`) or a credential consent; never the pause event |
-| `argument-asked` | 2 | `argumentAsk`: the inputs layer's batch ask with a question still out (`waiting`) — nothing in that batch has run; this turn's current `asked` rows on `findingsLedger` name the values; never the pause event |
-| `argument-assumed` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'default'` — a tool's `askOrAssume` rule filled the value, or the model sent that same default; or `middlewareDecisions`: a before-tool rewrite of a ruled argument (`changedKeys`) with no declared origin (`allow(args, why, { from })`) |
-| `argument-unverified` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'model'` on a ruled argument, or with a failed declared-source check (`failed`) on ANY argument — the model misstated the record |
-| `argument-read` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'said'` and `reading` — the quoted words are the person's, the value is the model's reading of them (declared sources) |
-| `value-contingent` | 2 | `findingsLedger`: an `argument` row of this turn with `source: 'result'` and `setAside` (the model named a result it had set aside); or a `contingent` row of this turn (stamped with it; unstamped on a call of this turn; unstamped on the answer on a first turn, or on a later turn when it follows — or is — a row the ledger shows to be this turn's: `assess.ts` · `firstRowOfTurn`) |
-| `coverage-gap` | 3 | `coverageDeclared`: a `notChecked` or `cannotCover` item on a call of this turn; or `history`: the result's own envelope lists one, when its call has no coverage row |
-| `declared-absent` | 3 | `coverageDeclared`: an absence; or `history`: an empty rowset inside a declared `coverage()` boundary, or an absence in the result's own envelope when its call has no coverage row |
-| `empty-undeclared` | 3 | `history`: an empty rowset (a top-level array, the app's `rowsAt` key, or the dataset ticket left where those rows were, counting 0) whose call has no coverage row |
-| `period-not-held` | 3 | `findingsLedger`: a `period` row of this turn with verdict `not-held` — the store holds none of what the read asked for (honesty step 7b) |
-| `period-partly-held` | 3 | `findingsLedger`: a `period` row of this turn with verdict `partly-held` |
-| `period-unknown` | 3 | `findingsLedger`: a `period` row of this turn with verdict `unknown` — the tool declared `held: 'unknown'`, on a non-empty result too (adopted Q33) |
-| `period-undeclared` | 3 | `findingsLedger`: a `period` row of this turn with verdict `undeclared` — the tool declares a `ToolPeriod` and its result declared no period |
-| `period-differs-from-asked` | 3 | `findingsLedger`: a `period` row of this turn with `differs` (the time layer, step T8 — `time/check.ts` · `periodTimeCheck`): what the call read is not the range it asked for — `missing` (asked, not read) or `extra` (read, not asked; TQ8: "not sure" too) — or, for a window the model chose, not the person's window. Witnesses: the row and the call's `argument` row |
-| `period-beyond-retention` | 3 | `findingsLedger`: a `period` row of this turn with `beyondRetention` (step T8): the window was wholly older than the tool declares its source keeps — refused before dispatch, or read that way |
-| `sources-conflict` | 3 | `findingsLedger`: a conflict row of this turn — one whose witnesses name a call of this turn, or one stamped with this turn whose witnesses the record does not all place in earlier turns (the incomplete-record policy, below) |
-| `value-unsupported` | 4 | `unsupportedValues` (`revised: false`) |
-| `value-survived-revision` | 4 | `unsupportedValues` (`revised: true`) |
-| `derived-from-reading` | 4 | `findingsLedger`: a `time-derived` row of this turn — the answer states a time value no tool result carried that the library itself spelled from a reading of the person's words (an implied year, an offset, the end-of-grain minute, the served time line; the time layer, step T7 — `time/forms.ts` · `timeFormsOf`). Folded like `argument-assumed`: "not sure", never "known" |
-| `script-unmatched` | 4 | `findingsLedger`: a `script-shown` witness row of this turn with `label: 'unmatched'` — a fenced block the answer showed equals no program this turn's calls submitted to a declared code-running tool (`.namesAndNumbersFromEvidence({ code: 'match' })`, filed while the answer layer is armed — `../scripts/README.md`). Its own reason: a script can miss while every number is in a result. A matched block fires nothing and supports nothing; every block files the `script-match` check |
-| `stopped-early` | 4 | `stoppedEarly` |
-| `steps-unfinished` | 4 | `findingsLedger`: a `steps-unfinished` witness row of this turn — the answer came before the active skill's declared steps finished (filed while the answer layer is armed) |
-| `negative-prose-unverified` | 4 | `findingsLedger`: a `negative-claim` or `negative-claim-note` row of this turn. Model prose is observe-only; detected negatives and skipped scans remain not-sure, never verified or blocking. |
-| `claim-exceeds-search` | 4 | `answerValidation.checks`: an `agent:negative-claims:` row with `disposition: 'checked-fail'` — a typed negative claimed more than the admitted search |
-| `declaration-overclaimed` | 3 | `answerValidation.checks`: an `agent:negative-claims:` row with `reason: 'declaration-overclaimed'` — a tool's refusal said more than it read (`.negativeClaims()`); the row's `tools` name the tool |
-| `answer-check-failed` | 4 | `answerValidation`: `status: 'failed'` |
-| `check-unreachable` | every | `answerValidation`: `status: 'unverified'` — an armed check that could not reach a verdict — or a `failed` report that also counts `unreachable` checks or names a `reason` (a contradiction found beside them, or beside a validator that did not finish; both reasons fire) |
+The rows, with what each reason reads: [REASONS.md](./REASONS.md). What each integrity
+finding does is one more table, `integrityReasons.ts`: a kind fires a reason, or it leaves a
+`notes` entry that never moves the standing and never counts as a check that ran. A
+`.claims()` comparison that never happened (no tool settled the field, or no value could be
+read from the answer) fires `claim-unsettled`; an agreeing field fires nothing.
+`claim-unsettled` rows are not de-duplicated by identity, so after a re-ask in one turn a row
+filed against the superseded answer stays and may over-report; it never hides.
 
 The inputs layer's rows (honesty layer 2, `core/agent/arguments/README.md`) are
 read for THIS turn only — the ledger crosses turns, and every `argument` row
@@ -299,9 +277,9 @@ or a value.
 
 | Rests on | Reasons |
 |---|---|
-| `calls` | `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
-| `answer` | `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
-| `run` | `asked`, `argument-asked`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
+| `calls` | `unsupported-argument`, `column-type-mismatch`, `missing-column`, `argument-assumed`, `argument-unverified`, `argument-read`, `value-contingent`, `coverage-gap`, `declared-absent`, `empty-undeclared`, the six `period-*`, `sources-conflict`, `declaration-overclaimed` |
+| `answer` | `unsupported-claim`, `claim-unsettled`, `value-unsupported`, `value-survived-revision`, `derived-from-reading`, `script-unmatched`, `negative-prose-unverified`, `claim-exceeds-search`, `answer-check-failed` |
+| `run` | `asked`, `argument-asked`, `invariant-violation`, `stopped-early`, `steps-unfinished`, `check-unreachable` |
 
 **Why.** "Not sure — a tool said nothing matched" did not say which tool: when an
 answer rested on one call's rows and another call reported no matching results, a reader could not
@@ -517,13 +495,12 @@ it at the study's freeze (adopted Q12).
   entry is handed on as it is, so a getter on an entry object runs when the
   fold reads that property. A record the library committed, or a saved
   recording read with `JSON.parse`, holds neither.
-- **Verdicts that exist only as events.** The `.claims()` dispositions — so
-  `claim-contradicted` and a claims-supported "known" — and the integrity
-  dispositions are not on the committed record in this version. The fold never
-  reads events; the step that needs each verdict commits one row, and its reason
-  joins `REASONS` then. The evidence gate's clean pass and unfinished steps are
-  committed only while the answer layer is armed; on an agent without it they
-  stay events, and the fold reads them as it always did (not at all).
+- **Verdicts that exist only as events.** A `.claims()` `checked-pass` (so a
+  claims-supported "known") is not on the committed record. The fold never reads
+  events; the step that needs a verdict commits one row, and its reason joins
+  `REASONS` then. The gate's clean pass, unfinished steps, integrity findings and
+  unsettled claims are committed only while the answer layer is armed; on an agent
+  without it they stay events, and the fold does not read them.
 - **A run that threw, read by `assessAnswer` directly.** No committed row says a
   turn ended in an error in this version, so the fold folds what the crashed run
   left, as if it had answered. `agent.assessment()` (which knows) resolves to

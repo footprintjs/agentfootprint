@@ -18,6 +18,8 @@
  * value set: it is derived from `assessment` and the reasons' class alone.
  */
 
+import type { ContextErrorKind } from '../../../integrity/finding/types.js';
+
 /**
  * A leaf of the committed record a reason or a check rests on — an RFC 6901
  * pointer, the answer account's pointer shape (`answer-account/types.ts` ·
@@ -132,6 +134,15 @@ export type AssessmentPointer =
  *   under `.namesAndNumbersFromEvidence({ code: 'match' })` while the answer
  *   layer is armed). Its own reason, apart from an unsupported value: a
  *   script can fail to match while every number in the answer is in a result.
+ * - `invariant-violation`, `unsupported-argument`, `column-type-mismatch`,
+ *   `missing-column`, `unsupported-claim` — a Context Integrity check filed
+ *   that finding this turn (an `integrity-finding` row, filed while the answer
+ *   layer is armed; `integrityReasons.ts` is the table, and the kinds it marks
+ *   as notes reach `notes` instead);
+ * - `claim-unsettled` — a `.claims()` comparison never happened: the answer
+ *   states a field whose fact no tool settled, or no value could be read from
+ *   the answer at all (a `claim-unsettled` row). An agreeing field fires nothing
+ *   and supports nothing.
  */
 export type AssessmentReason =
   | 'asked'
@@ -157,6 +168,12 @@ export type AssessmentReason =
   | 'stopped-early'
   | 'steps-unfinished'
   | 'negative-prose-unverified'
+  | 'invariant-violation'
+  | 'unsupported-argument'
+  | 'column-type-mismatch'
+  | 'missing-column'
+  | 'unsupported-claim'
+  | 'claim-unsettled'
   | 'claim-exceeds-search'
   | 'declaration-overclaimed'
   | 'answer-check-failed'
@@ -296,6 +313,16 @@ export interface AnswerAssessment {
    * hold (`assess.ts` · `assessAnswer`).
    */
   readonly keptOut?: readonly string[];
+  /**
+   * Advisory findings on this turn's record, by kind: a place to look, not a
+   * problem found about this answer. They never change the standing and never
+   * count as a check that ran (`integrityReasons.ts`). Present only when one
+   * was filed.
+   */
+  readonly notes?: readonly {
+    readonly finding: ContextErrorKind;
+    readonly witness: readonly AssessmentPointer[];
+  }[];
 }
 
 /**

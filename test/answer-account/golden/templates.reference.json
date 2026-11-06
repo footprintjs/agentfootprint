@@ -1900,6 +1900,60 @@
   ],
   "source": "library"
  },
+ "howSure.reason.invariantViolation@1": {
+  "text": "The tools offered to the model contradict the run's own record of them.",
+  "parts": [
+   {
+    "text": "The tools offered to the model contradict the run's own record of them."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.unsupportedArgument@1": {
+  "text": "A value a call ran with appears nowhere the run served the model.",
+  "parts": [
+   {
+    "text": "A value a call ran with appears nowhere the run served the model."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.columnTypeMismatch@1": {
+  "text": "A tool's rows hold a different type than the tool declares.",
+  "parts": [
+   {
+    "text": "A tool's rows hold a different type than the tool declares."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.missingColumn@1": {
+  "text": "A column a tool declares is in none of its rows.",
+  "parts": [
+   {
+    "text": "A column a tool declares is in none of its rows."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.unsupportedClaim@1": {
+  "text": "A field of the answer does not agree with a fact the run's tools settled.",
+  "parts": [
+   {
+    "text": "A field of the answer does not agree with a fact the run's tools settled."
+   }
+  ],
+  "source": "library"
+ },
+ "howSure.reason.claimUnsettled@1": {
+  "text": "A claim in the answer could not be compared with what the tools settled.",
+  "parts": [
+   {
+    "text": "A claim in the answer could not be compared with what the tools settled."
+   }
+  ],
+  "source": "library"
+ },
  "howSure.reason.claimExceedsSearch@1": {
   "text": "A negative claim exceeds the recorded search.",
   "parts": [

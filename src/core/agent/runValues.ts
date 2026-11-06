@@ -39,7 +39,7 @@ export interface AgentRunValues extends RunnerCoreValues {
     readonly toolCallId?: string;
     readonly question?: string;
   };
-  readonly integrityLedger: { current: DispositionLedger | undefined };
+  readonly integrityLedger: { current: DispositionLedger | undefined; readonly answerLayer?: true };
   clockDraft?: ClockDraft;
   resumePassedTime?: ReadRunTime;
   answeredAsk?: AnsweredAsk;
@@ -69,10 +69,13 @@ export interface AgentRunValues extends RunnerCoreValues {
   route?: ReturnType<typeof buildRouteDeciderStage>;
 }
 
-export function createAgentRunValues(options: { readonly window: boolean }): AgentRunValues {
+export function createAgentRunValues(options: {
+  readonly window: boolean;
+  readonly answerLayer: boolean;
+}): AgentRunValues {
   return {
     hadAdmitted: false,
-    integrityLedger: { current: undefined },
+    integrityLedger: { current: undefined, ...(options.answerLayer && { answerLayer: true }) },
     consentOutstanding: new Map(),
     providerToolCache: { current: [] },
     servedTools: { current: new Map(), lastServed: new Map() },
