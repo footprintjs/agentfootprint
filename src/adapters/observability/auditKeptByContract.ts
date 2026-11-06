@@ -119,10 +119,12 @@ const boundRuleEvidence = shapeOf<RuleEvidence>({
   label: str,
   inputs: listOf(shapeOf<ReadInput>({ key: str, valueSummary: decisionSummary, redacted: bool })),
   conditions: listOf(
-    shapeOf<FilterCondition>({
+    // `thresholdRedacted` is on the type from footprintjs 11.0.1; the intersection also compiles on 11.0.0.
+    shapeOf<FilterCondition & { readonly thresholdRedacted?: true }>({
       key: str,
       op: str,
       threshold: orList(declaredValue),
+      thresholdRedacted: oneOf(true),
       actualSummary: decisionSummary,
       result: bool,
       redacted: bool,
