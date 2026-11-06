@@ -1,6 +1,6 @@
 ---
 title: Localize a context bug
-description: Git bisect for context — point the debugging harness at a wrong answer and it walks the run back to the input that caused it, then proves it by removing it.
+description: Git bisect for context — point the debugging harness at a wrong answer and it walks the run back to the inputs behind it, then tests each one by removing it.
 ---
 
 <Callout type="warn" title="Beta">
@@ -21,7 +21,7 @@ That's a debugging problem, not a logging problem. So we built a debugging harne
 
 ## Git bisect for context
 
-`localizeContextBug` is **git bisect for context**. Point it at the step that went wrong; it walks the run backward to the inputs that fed that step, ranks them, and — if you give it a way to re-run — **proves** the culprit by removing it and watching the answer flip.
+`localizeContextBug` is **git bisect for context**. Point it at the step that went wrong; it walks the run backward to the inputs that fed that step, ranks them, and — if you give it a way to re-run — **tests** each one by removing it and watching whether the answer flips.
 
 Five stages, all over the run you already recorded:
 
@@ -35,7 +35,7 @@ Five stages, all over the run you already recorded:
 
 This is the line we hold that most tools blur. **The ranking is a proxy** — embedding geometry, not a causal claim. **Only the ablation verdict is causal**, because it's the only step that actually removed the thing and saw what changed. Every report says which mode it's in (`correlational` vs `causal`) and never dresses a guess up as proof.
 
-So a report **without** a re-runner stops at a ranked list of suspects, honestly labeled `correlational`. Hand it a re-runner and the top suspects get **verdicts** — `confirmed` or `not confirmed`, with the flip count.
+So a report **without** a re-runner stops at a ranked list of suspects, honestly labeled `correlational`. Hand it a re-runner and the top suspects get **verdicts** — `confirmed` or `not confirmed`, with the flip count — and the report gets a **conclusion** that reads them together.
 
 ## Quickstart
 
@@ -69,23 +69,57 @@ const report = await localizeContextBug({
 console.log(formatContextBugReport(report));
 ```
 
-The report names the planted cause as the **confirmed, causal** root — and clears the decoys:
+The report's conclusion names the planted fact, and the decoy isn't confirmed:
 
 ```text
 CONTEXT BUG LOCALIZATION — trigger call-llm#18 "CallLLM" (explicit)
 mode: CAUSAL — ranked proxies + counterfactual ablation verdicts (verdicts are the only causal claims)
 ...
- 3. [injection 'vip-override'] — score 0.787
-    verdict: CAUSAL: ablating injection 'vip-override' flipped the outcome in 3/3 seeded reruns.
- 4. [injection 'style-rule']  — score 0.746
-    verdict: NOT CONFIRMED: ablating 'style-rule' did not change the outcome in 3 reruns.
+CONCLUSION (one-cause): Removing injection 'vip-override' flipped the answer, and removing the other tested items did not. The answer needed it here, which doesn't by itself show that it's wrong.
 
-ROOT CAUSE: 'vip-override' — ablating it flipped the answer in 3/3 reruns (the only CAUSAL verdict).
+SUSPECTS (4, ranked by correlational proxy score):
+ 1. [injection 'vip-override'] — score 0.787
+    verdict: NEEDED IN THIS CONTEXT: ablating injection 'vip-override' flipped the outcome in 3/3 seeded reruns. This doesn't by itself show it's the root cause.
+ 2. [injection 'style-rule']  — score 0.746
+    verdict: NOT CONFIRMED: ablating injection 'style-rule' did not change the outcome in 3 seeded reruns.
 ```
 
-Notice the proxy ranking even floats some plumbing *above* the real culprit — and the harness doesn't care, because it doesn't trust the ranking. It trusts the **verdict**: the planted fact is the only thing that, when removed, changed the answer.
+Items that can't be removed, like a plain stage, are listed after the items that can, because they can't be tested. The harness doesn't trust the ranking anyway. It trusts the **verdict**: here, the planted fact is the one thing that changed the answer when removed.
 
 The full runnable, tested example is [`17-localize-quickstart.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/17-localize-quickstart.ts) (and the fuller [`05-context-bisect.ts`](https://github.com/footprintjs/agentfootprint/blob/main/examples/observability/05-context-bisect.ts), with a tool suspect and a `decide()` control-edge walk).
+
+## Read the conclusion
+
+A `confirmed` verdict means the answer needed that item in this context. It doesn't by itself show the item is wrong. Reading verdicts one at a time can mislead in two ways:
+
+- **A model's own mistake can look like several causes.** Removing a true fact the model needs can flip the answer, so correct facts get confirmed.
+- **Two causes can look like none.** When two items are each enough alone, removing either one changes nothing.
+- **One path can look like two causes.** A planted instruction can make the agent call the wrong tool. Removing either the instruction or the tool flips the answer, but the tool's result only came about because of a model call that read the instruction.
+
+`report.conclusion` reads the verdicts together:
+
+| `kind` | What happened | `named` |
+|---|---|---|
+| `one-cause` | One item flipped the answer when removed | That item |
+| `one-path` | Several items flipped it, and the record shows they lie on one path | Those items, earliest first |
+| `needed-together` | A few separate items each flipped it | Those items, highest ranked first |
+| `redundant-pair` | No item flipped it alone, and exactly one pair did together | That pair |
+| `missing-context` | No removal flipped it, and restoring a dropped unit did | Nothing. See `restored` |
+| `no-single-cause` | More than a third of the items flipped it, or several pairs did | Nothing |
+| `none-found` | Nothing tested flipped it | Nothing |
+| `inconclusive` | The reruns disagree, or nothing was tested | Nothing |
+
+<CodeFile path="examples/observability/26-localize-conclusion.ts" region="conclusion" title="examples/observability/26-localize-conclusion.ts" />
+
+Things to watch for:
+
+- **`none-found` doesn't mean there's no cause.** A cause may be in a larger group or outside the items tested. `statement` says what was tried, including how many ranked items weren't tested.
+- **The pair search costs model runs.** When no single removal flips the answer, it tries every pair among the top 5 items. That's up to 10 more probes, each costing `samples` runs, so 30 runs with the default of 3 samples. Set `rerun.pairSearchTop` to change how many items it pairs, or to `0` to turn it off.
+- **The cut-off is a default, not a law.** Set `rerun.maxFlipShare` to change the one-third limit. A larger model may need a different value than a small, fragile one.
+- **`needed-together` can include an innocent item.** Removal alone can't tell a true fact the answer leaned on from a second real cause, so check them in order.
+- **`one-path` doesn't say which link is wrong.** The earliest item isn't always the fault. A correct instruction can lead to a tool that returns bad data. `conclusion.links` shows each link: `code` means only fixed steps lie between the two items, and `model-or-tool` means the later one came after a call that read the earlier one, which shows it could have depended on it, not that it did.
+
+For a search over larger groups, pass the ranked suspects to `bisectCulprits`.
 
 ## Correlational vs causal — pick your cost
 
@@ -152,6 +186,7 @@ The standalone *quality stack trace* — `qualityTrace` / `formatQualityTrace`, 
 Same engine, different entry points (all beta):
 
 - **finders** — `traceSteps` (dependency-guided backward search), `removeAndRetry` (leave-one-out ablation), `shrinkToCause`.
+- **`bisectCulprits`** — search for the smallest set of suspects whose removal together flips the answer.
 - **`walkToRoot`** — walk a symptom backward across loop iterations to the true root cause (see [Read the run loop-by-loop](#read-the-run-loop-by-loop) below).
 - **missing context** — supply what was *available* vs what was *sent*; restoring a dropped unit that flips the answer is the mirror of ablation (also causal).
 
@@ -163,7 +198,7 @@ This is the **same substrate** the localizer already walks — a structured view
 
 ## API
 
-Everything is exported from `agentfootprint/observe`: `localizeContextBug`, `LocalizeContextBugOptions`, `ContextBugReport`, `formatContextBugReport`.
+Everything is exported from `agentfootprint/observe`: `localizeContextBug`, `LocalizeContextBugOptions`, `ContextBugReport`, `ContextBugConclusion`, `ContextBugConclusionKind`, `ContextBugLink`, `ContextBugPairSearch` (the evidence behind `conclusion.pairSearch`), `bisectCulprits`, `formatContextBugReport`.
 
 ## Next steps
 

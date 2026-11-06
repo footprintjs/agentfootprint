@@ -18,7 +18,9 @@
  *                    refinement. CORRELATIONAL tier — and marked so.
  *   5. ABLATE      — optional: the consumer's `AblationRunner` re-runs the
  *                    scenario without each top suspect, N seeded times.
- *                    Verdicts (the ONLY causal claims, §B2) + variance.
+ *                    Verdicts (the ONLY causal claims, §B2) + variance. The
+ *                    report's `conclusion` then reads the verdicts together,
+ *                    trying pairs when no single removal flipped the answer.
  *
  * Without a runner the report stops at stage 4 with
  * `mode: 'correlational'` — explicitly a ranking of proxies, no causal
@@ -40,7 +42,14 @@ import {
   type InfluenceScorer,
   type InfluenceStrategy,
 } from '../influence-core/index.js';
-import { ablationForSuspect, runAblationProbe, verdictFor } from './ablation.js';
+import {
+  ablationForSuspect,
+  isRemovable,
+  runAblationProbe,
+  suspectLabel,
+  verdictFor,
+} from './ablation.js';
+import { concludeReport, relationFromSlice } from './conclusion.js';
 import { assignCostVerdicts, classifySuspect } from './cost.js';
 import { llmEdgeWeigher, stepOutputText } from './llmEdgeWeigher.js';
 import type { LoopRecallShortlist } from './loop-recall.js';
@@ -601,7 +610,12 @@ export async function localizeContextBug(
   // true suspect L3 missed — the absence/crowding blind spot). Non-shortlisted suspects keep their
   // proxy-score order (stable). narrow (recall), then convict (causal).
   const reordered = reorderByShortlist(scored, options.shortlist);
-  const ranked: Suspect[] = reordered.slice(0, maxSuspects);
+  // An item that can't be removed can't be tested, so it follows the ones that can.
+  const removable = reordered.filter(isRemovable);
+  const ranked: Suspect[] = [
+    ...removable,
+    ...reordered.filter((suspect) => !isRemovable(suspect)),
+  ].slice(0, maxSuspects);
 
   // ── Slice stats + honesty flags ─────────────────────────────────────
   const sliceStats = buildSliceStats(root, nodes, maxDepth, maxNodes);
@@ -687,6 +701,14 @@ export async function localizeContextBug(
   // the SECOND score (loops/tokens saved on removal) from the same reruns, with
   // a leave-one-out placebo control. No-op when no cost was reported.
   const withCost = assignCostVerdicts(withVerdicts, baseline);
+  const conclusion = await concludeReport({
+    suspects: withCost,
+    removable,
+    dropped,
+    baselineStable,
+    config: probeConfig,
+    relation: relationFromSlice(nodes, llmCallIds),
+  });
 
   return {
     step,
@@ -696,6 +718,7 @@ export async function localizeContextBug(
     mode: 'causal',
     rankedBy,
     suspects: withCost,
+    conclusion,
     ...(dropped ? { dropped } : {}),
     sliceStats,
     honestyFlags: [...flags, ...restorationFlags],
@@ -857,10 +880,7 @@ function buildHonestyFlags(
   return flags;
 }
 
-export function suspectLabel(suspect: Suspect): string {
-  const id = suspect.detail?.toolName ?? suspect.detail?.injectionId ?? suspect.source;
-  return `${suspect.kind} '${id}'`;
-}
+export { suspectLabel };
 
 // ─── Formatting ──────────────────────────────────────────────────────
 
@@ -889,6 +909,10 @@ export function formatContextBugReport(report: ContextBugReport): string {
     `slice: ${s.nodes} nodes · ${s.dataEdges} data edges · ${s.controlEdges} control edges · ` +
       `${s.weightedEdges} influence-weighted`,
   );
+
+  if (report.conclusion !== undefined) {
+    lines.push('', `CONCLUSION (${report.conclusion.kind}): ${report.conclusion.statement}`);
+  }
 
   lines.push('', `SUSPECTS (${report.suspects.length}, ranked by correlational proxy score):`);
   report.suspects.forEach((suspect, i) => {

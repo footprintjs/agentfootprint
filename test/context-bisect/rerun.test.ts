@@ -174,7 +174,7 @@ describe('rerunWithoutSources — causal tier (checkBaseline)', () => {
     });
     expect(result.baseline).toBeDefined();
     expect(result.verdict?.verdict).toBe('confirmed');
-    expect(result.verdict?.claim.startsWith('CAUSAL')).toBe(true);
+    expect(result.verdict?.claim.startsWith('NEEDED IN THIS CONTEXT')).toBe(true);
     expect(result.whatChanged.baselineChecked).toBe(true);
   });
 

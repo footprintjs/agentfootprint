@@ -128,8 +128,8 @@ describe('verdictFor — the removal tier keeps its exact sentences', () => {
     expect(verdictFor('X', stats(3), true)).toEqual({
       verdict: 'confirmed',
       claim:
-        'CAUSAL: ablating X flipped the outcome in 3/3 seeded reruns ' +
-        '(mean similarity to original 0.500 ± 0.100).',
+        'NEEDED IN THIS CONTEXT: ablating X flipped the outcome in 3/3 seeded reruns ' +
+        "(mean similarity to original 0.500 ± 0.100). This doesn't by itself show it's the root cause.",
     });
     expect(verdictFor('X', stats(1), true)).toEqual({
       verdict: 'inconclusive',
@@ -153,8 +153,8 @@ describe('verdictFor — the removal tier keeps its exact sentences', () => {
 
   it('restoring: the mirror words are untouched too', () => {
     expect(verdictFor('dropped "d1"', stats(3), true, 'restoring').claim).toBe(
-      'CAUSAL: restoring dropped "d1" flipped the outcome in 3/3 seeded reruns ' +
-        '(mean similarity to original 0.500 ± 0.100).',
+      'NEEDED IN THIS CONTEXT: restoring dropped "d1" flipped the outcome in 3/3 seeded reruns ' +
+        "(mean similarity to original 0.500 ± 0.100). This doesn't by itself show it's the root cause.",
     );
     expect(verdictFor('dropped "d1"', stats(3), false, 'restoring').claim).toBe(
       'INCONCLUSIVE: the un-restored baseline itself changed outcome across seeded reruns — ' +

@@ -17,7 +17,7 @@
  *       (the `applyAblations` construction seam), 3 seeded reruns each
  *
  *   THE HEADLINE: the planted fact is the top-ranked ablatable suspect
- *   AND the only one with a CAUSAL verdict — ablating it flips
+ *   AND the only one confirmed — ablating it flips
  *   APPROVED → DECLINED in 3/3 seeded reruns, while the benign style fact
  *   and the lookup tool come back NOT CONFIRMED. Scores are proxies;
  *   verdicts are the causal tier (§B2) — the report says so itself.
@@ -308,7 +308,7 @@ export async function run(_input?: string | null): Promise<ContextBisectResult> 
   out.push(
     '',
     `FOUND + CONFIRMED: the planted '${confirmed.detail?.injectionId}' is the top ablatable ` +
-      `suspect and the only CAUSAL verdict — ablating it flips APPROVED → DECLINED in ` +
+      `suspect and the only one confirmed — ablating it flips APPROVED → DECLINED in ` +
       `${confirmed.runs?.flips}/${confirmed.runs?.samples} seeded reruns.`,
   );
 

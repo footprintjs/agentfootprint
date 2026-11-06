@@ -316,6 +316,33 @@ describe('toBacktrackTrace — functional: selection + folding', () => {
     expect(toBacktrackTrace(seven(), { answer: ANSWER, scoreNote: 'mine' }).scoreNote).toBe('mine');
   });
 
+  it('no false tie when items that cannot be removed follow lower-scoring ones', () => {
+    const removable = (id: string, score: number) =>
+      suspect({
+        kind: 'injection',
+        score,
+        ablation: { kind: 'injection', excludeInjectionIds: [id] },
+      });
+    // One removable item, then a higher-scoring stage: the scores are far apart.
+    const one = report({ suspects: [removable('a', 0.3), suspect({ kind: 'stage', score: 0.8 })] });
+    expect(toBacktrackTrace(one, { answer: ANSWER }).scoreNote).toBeUndefined();
+    // Two removable items far apart, whatever the stages behind them score.
+    const apart = report({
+      suspects: [
+        removable('a', 0.6),
+        removable('b', 0.3),
+        suspect({ kind: 'stage', score: 0.8 }),
+        suspect({ kind: 'stage', score: 0.8 }),
+      ],
+    });
+    expect(toBacktrackTrace(apart, { answer: ANSWER }).scoreNote).toBeUndefined();
+    // Two removable items that really do crowd each other.
+    const close = report({
+      suspects: [removable('a', 0.31), removable('b', 0.3), suspect({ kind: 'stage', score: 0.8 })],
+    });
+    expect(toBacktrackTrace(close, { answer: ANSWER }).scoreNote).toContain('top-2 margin 0.01');
+  });
+
   it('custody callback enriches by suspect with its true rank; trail passes through', () => {
     const trail = { title: 'the trail', custody: [{ step: 'wrote', detail: 'dti = 0.035' }] };
     const t = toBacktrackTrace(seven(), {

@@ -78,7 +78,7 @@ describe('localizeContextBug — planted-fact e2e (causal mode)', () => {
       expect(planted?.verdict?.verdict).toBe('confirmed');
       expect(planted?.runs?.flips).toBe(3);
       expect(planted?.runs?.samples).toBe(3);
-      expect(planted?.verdict?.claim).toContain('CAUSAL');
+      expect(planted?.verdict?.claim).toContain('NEEDED IN THIS CONTEXT');
 
       // The benign fact and the tool are NOT confirmed.
       expect(findSuspect(report, 'style-fact')?.verdict?.verdict).toBe('not-confirmed');

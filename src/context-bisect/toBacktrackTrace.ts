@@ -24,6 +24,7 @@
  * ablation produced one ('inconclusive' maps to NO stamp, not a verdict).
  */
 
+import { isRemovable } from './ablation.js';
 import type { ContextBugReport, Suspect } from './types.js';
 
 /* ── the agentthinkingui contract (mirrored, dependency-free) ─────────── */
@@ -240,7 +241,13 @@ export function toBacktrackTrace(
   // auto tie-warning: only when the report's top two genuinely crowd each other
   let scoreNote = opts.scoreNote;
   if (scoreNote === undefined && report.suspects.length >= 2) {
-    const margin = report.suspects[0].score - report.suspects[1].score;
+    // Report order lists items that can't be removed last, so it isn't score order.
+    // Compare the items a test could separate, when there are enough of them.
+    const removable = report.suspects.filter(isRemovable);
+    const [first, second] = [...(removable.length >= 2 ? removable : report.suspects)].sort(
+      (a, b) => b.score - a.score,
+    );
+    const margin = first.score - second.score;
     if (margin < 0.05) {
       scoreNote = `top-2 margin ${margin.toFixed(2)} — proxy scores alone cannot separate them${
         report.mode === 'causal' ? '; the ablation test can' : ''

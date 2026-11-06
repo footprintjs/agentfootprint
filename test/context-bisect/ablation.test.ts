@@ -223,10 +223,11 @@ describe('verdictFor — claim discipline (§B2)', () => {
     similarity: { mean: 0.5, min: 0.4, max: 0.6, stdev: 0.1 },
   });
 
-  it('majority flips on a stable baseline → confirmed, phrased CAUSAL with variance', () => {
+  it('majority flips on a stable baseline → confirmed, says it was needed here, with variance', () => {
     const verdict = verdictFor("injection 'vip'", stats(3), true);
     expect(verdict.verdict).toBe('confirmed');
-    expect(verdict.claim).toContain('CAUSAL');
+    expect(verdict.claim).toContain('NEEDED IN THIS CONTEXT');
+    expect(verdict.claim).toContain('root cause');
     expect(verdict.claim).toContain('3/3');
     expect(verdict.claim).toContain('±');
   });

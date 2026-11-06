@@ -189,6 +189,10 @@ export type AblationVerdictKind = 'confirmed' | 'not-confirmed' | 'inconclusive'
  * unstable baseline (the scenario itself doesn't reproduce — no ablation
  * verdict is trustworthy then). `'not-confirmed'` = no flip observed; the
  * suspect's score remains a correlational proxy only.
+ *
+ * `'confirmed'` means the answer needed this item in this context. A true,
+ * correct item can be needed too, so it doesn't by itself show that the item is
+ * wrong or the root cause. `ContextBugReport.conclusion` reads the verdicts together.
  */
 export interface AblationVerdict {
   readonly verdict: AblationVerdictKind;
@@ -230,9 +234,9 @@ export interface Suspect {
    *
    * Comparison caveat: a suspect WITHOUT content text (kind 'stage'/'arg',
    * or a path through control edges only) keeps its bare structural score
-   * — an UPPER BOUND with no content evidence behind it. Plumbing can
-   * legitimately rank above ablatable sources; the ablation verdicts (and
-   * `semanticScore`'s presence) are what disambiguate.
+   * — an UPPER BOUND with no content evidence behind it, so these scores
+   * aren't comparable with the scores of items that have content. The report
+   * lists items that can't be removed last, whatever their score.
    */
   readonly score: number;
   /**
@@ -384,6 +388,18 @@ export interface AblationRerun {
   readonly flipThreshold?: number;
   /** Ablate only the top-K ranked suspects that carry a spec. Default 5. */
   readonly maxSuspects?: number;
+  /**
+   * When removing any one item changes nothing, try every pair among this many
+   * top-ranked items. Default 5, which is up to 10 more probes, each costing
+   * `samples` runs. 0 turns the search off.
+   */
+  readonly pairSearchTop?: number;
+  /**
+   * The largest share of removable items that may flip the answer alone and
+   * still be named in the report's `conclusion`. Above it, the conclusion is
+   * `'no-single-cause'`. A number from 0 to 1. Default 1/3.
+   */
+  readonly maxFlipShare?: number;
 }
 
 // ─── The report ──────────────────────────────────────────────────────
@@ -416,6 +432,90 @@ export interface HonestyFlag {
   readonly note: string;
 }
 
+/** One executed probe: what was removed together, and what happened. */
+export interface BisectionProbe {
+  /** Labels of the suspects ablated together ([] = the baseline probe). */
+  readonly ablated: readonly string[];
+  readonly stats: AblationRunStats;
+  /** Majority-of-N outcome flip. */
+  readonly flipped: boolean;
+}
+
+/**
+ * What the removals add up to:
+ *
+ * - `'one-cause'`: removing one item flipped the answer, and no other tested item
+ *   flipped a majority of its reruns.
+ * - `'one-path'`: several items flipped it, and the record shows they lie on one path.
+ * - `'needed-together'`: removing any one of a few separate items flipped the answer.
+ * - `'redundant-pair'`: no item flipped it alone, and exactly one pair did together.
+ * - `'missing-context'`: no removal flipped it, and restoring a dropped unit did.
+ * - `'no-single-cause'`: too many items or pairs flip it to single one out.
+ * - `'none-found'`: nothing tested flipped it. This isn't proof that no cause exists.
+ * - `'inconclusive'`: the reruns can't support a reading, or nothing was tested.
+ */
+export type ContextBugConclusionKind =
+  | 'one-cause'
+  | 'one-path'
+  | 'needed-together'
+  | 'redundant-pair'
+  | 'missing-context'
+  | 'no-single-cause'
+  | 'none-found'
+  | 'inconclusive';
+
+/**
+ * Two items that both flipped the answer, where the record shows one comes after the
+ * other, so they may be one path rather than two causes.
+ */
+export interface ContextBugLink {
+  readonly earlier: Suspect;
+  readonly later: Suspect;
+  /**
+   * `'code'`: only steps whose output is fixed by their inputs lie between them, so
+   * the record shows `later` came from `earlier`. `'model-or-tool'`: a model or tool
+   * call lies between them, so `later` came after a step that read `earlier`, which
+   * shows it could have depended on it, not that it did.
+   */
+  readonly via: 'code' | 'model-or-tool';
+}
+
+/** The evidence behind a conclusion that needed the pair search. */
+export interface ContextBugPairSearch {
+  /** How many top-ranked items were paired. */
+  readonly top: number;
+  /** Every pair tried, in rank order. */
+  readonly probes: readonly BisectionProbe[];
+  /** Runner calls the search spent. */
+  readonly runsUsed: number;
+}
+
+/**
+ * The report's overall reading of its verdicts. A named item was needed in this
+ * context, which doesn't by itself show that it's wrong or that it's the root
+ * cause. The rule was chosen on development cases and can be tuned with
+ * `rerun.maxFlipShare` and `rerun.pairSearchTop`.
+ */
+export interface ContextBugConclusion {
+  readonly kind: ContextBugConclusionKind;
+  /** The items this conclusion names, earliest on a path first, then highest ranked. */
+  readonly named: readonly Suspect[];
+  /** Flipped items the record links. Present when any are linked. */
+  readonly links?: readonly ContextBugLink[];
+  /** Dropped units whose restoration flipped the answer. */
+  readonly restored: readonly RestoredCandidate[];
+  /** Tested items whose removal flipped the answer alone. An item found twice counts once. */
+  readonly flippedAlone: number;
+  /** Items that were removed and re-run. An item found twice counts once. */
+  readonly tested: number;
+  /** Items that could be removed, tested or not. An item found twice counts once. */
+  readonly removable: number;
+  /** Present when the pair search ran. */
+  readonly pairSearch?: ContextBugPairSearch;
+  /** The conclusion in a plain sentence or two, including what wasn't tested. */
+  readonly statement: string;
+}
+
 /** The localizer's full output (D8). */
 export interface ContextBugReport {
   /** The trigger step the slice was rooted at. */
@@ -440,8 +540,14 @@ export interface ContextBugReport {
    * proxies whatever ranked them; ablation alone convicts).
    */
   readonly rankedBy?: string;
-  /** Ranked suspects, best (most aligned + upstream) first. */
+  /**
+   * Ranked suspects, best (most aligned + upstream) first. Items that can't be
+   * removed (kinds `'stage'` and `'arg'`) can't be tested, so they follow the
+   * items that can.
+   */
   readonly suspects: readonly Suspect[];
+  /** The overall reading. Present only when a re-runner was supplied. */
+  readonly conclusion?: ContextBugConclusion;
   /**
    * Missing-context candidates (interface #3): units that were available for
    * the turn but never reached the model. Each carries a RESTORATION verdict
@@ -479,6 +585,10 @@ export const CONTEXT_BISECT_DEFAULTS = {
   maxProbes: 24,
   /** Independent-culprit search rounds for `bisectCulprits`. */
   maxCulprits: 4,
+  /** Top-ranked items tried in pairs when no single removal flips the answer. */
+  pairSearchTop: 5,
+  /** Largest share of removable items that may flip the answer and still be named. */
+  maxFlipShare: 1 / 3,
 } as const;
 
 // Re-exported so consumers of the localizer can type their own helpers
