@@ -160,6 +160,12 @@ describe('UNIT — each kind through the fold', () => {
     expect(a.notes?.map((n) => n.finding)).toEqual(['empty-lookup']);
   });
 
+  it('a damaged claim row still lowers the standing, and its witness names only the row', () => {
+    const a = fold(consistent([{ kind: 'claim-unsettled', turn: 1 }]));
+    expect(a.standing).toBe('not-sure');
+    expect(a.reasons[0]!.witness[0]).toMatchObject({ key: 'findingsLedger', path: '/0' });
+  });
+
   it('a claim no tool settled lowers the standing with its own reason', () => {
     const a = fold(
       consistent([{ kind: 'claim-unsettled', turn: 1, iteration: 1, field: 'nav_count' }]),
