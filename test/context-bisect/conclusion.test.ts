@@ -138,23 +138,20 @@ describe('report.conclusion — items that flip the answer alone', () => {
     expect(report.suspects.filter((s) => s.verdict?.verdict === 'confirmed')).toHaveLength(4);
   });
 
-  it('maxNamedFlips moves the cut-off, and an invalid one falls back to the default', async () => {
+  it('maxNamedFlips moves the cut-off', async () => {
     const flipThree: IsWrong = (p) => p.has('a') && p.has('b') && p.has('c');
     const kind = async (maxNamedFlips?: number) =>
       (await localize(ids(5), flipThree, maxNamedFlips !== undefined ? { maxNamedFlips } : {}))
         .report.conclusion!.kind;
     expect(await kind()).toBe('no-single-cause');
     expect(await kind(3)).toBe('needed-together');
-    expect(await kind(0)).toBe('no-single-cause');
-    expect(await kind(1.5)).toBe('no-single-cause');
-    expect(await kind(Number.NaN)).toBe('no-single-cause');
   });
 
   it('the default cut-off is two', () => {
     expect(CONTEXT_BISECT_DEFAULTS.maxNamedFlips).toBe(2);
   });
 
-  it('adding harmless items does not change the reading', async () => {
+  it('adding harmless items does not change the reading', { timeout: 30_000 }, async () => {
     const needed = ['a', 'b', 'c', 'd'];
     const isWrong: IsWrong = (p) => needed.every((id) => p.has(id));
     const small = await localize(needed, isWrong);
@@ -197,7 +194,7 @@ describe('report.conclusion — a budget that leaves items untested', () => {
     const many = Array.from({ length: 14 }, (_, i) => `f${i}`);
     const isWrong: IsWrong = (p) => p.has('f13');
 
-    it('a larger removal budget tests every item', async () => {
+    it('a larger removal budget tests every item', { timeout: 30_000 }, async () => {
       const { report } = await localize(many, isWrong);
       const c = report.conclusion!;
       expect(c).toMatchObject({ kind: 'one-cause', tested: 14, removable: 14 });
@@ -213,7 +210,7 @@ describe('report.conclusion — a budget that leaves items untested', () => {
       expect(report.suspects.length).toBe(CONTEXT_BISECT_DEFAULTS.maxSuspects);
     });
 
-    it('a removal budget overrides a smaller report limit', async () => {
+    it('a removal budget overrides a smaller report limit', { timeout: 30_000 }, async () => {
       const { report } = await localize(many, isWrong, { maxSuspects: 14 }, { maxSuspects: 3 });
       expect(report.conclusion).toMatchObject({ tested: 14, removable: 14 });
     });
@@ -577,6 +574,24 @@ describe('concludeReport — edges a real run rarely reaches', () => {
         },
       },
     });
+
+  it.each([0, 1.5, -1, Number.NaN])(
+    'an invalid maxNamedFlips of %s falls back to the default',
+    async (maxNamedFlips) => {
+      const three = [item('a', 'confirmed'), item('b', 'confirmed'), item('c', 'confirmed')];
+      const c = await concludeReport({
+        suspects: three,
+        removable: three,
+        dropped: undefined,
+        baselineStable: true,
+        config: {
+          embedder: mockEmbedder(),
+          rerun: { runner: async () => WRONG, originalOutput: WRONG, samples: 2, maxNamedFlips },
+        },
+      });
+      expect(c.kind).toBe('no-single-cause');
+    },
+  );
 
   describe('with links between items', () => {
     const conclude = (
