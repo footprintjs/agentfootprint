@@ -31,7 +31,7 @@
     "src/artifacts/conformance/cases.ts": 1221,
     "src/artifacts/s3Artifacts.ts": 714,
     "src/bug-report/build.ts": 943,
-    "src/context-bisect/localize.ts": 995,
+    "src/context-bisect/localize.ts": 886,
     "src/core-flow/Graph.ts": 808,
     "src/core-flow/Parallel.ts": 959,
     "src/core/Agent.ts": 6057,
