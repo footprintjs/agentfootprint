@@ -7,7 +7,7 @@
  * Law: the zone is never guessed. With no run zone and no builder fallback
  * the clock records `zoneSource: 'unknown'` and spells instants in UTC; every
  * reading of the person's words that names no zone of its own waits on their
- * zone, which the time ask asks FIRST ("Which time zone are you in?"); the
+ * zone, which the time ask asks FIRST (with a question for the zone); the
  * zone the person answers holds for the turns after it (`zoneSource:
  * 'answered'`). Every line that shows a time while the zone is unknown says
  * it is in UTC because the person's zone is not known.
@@ -205,7 +205,7 @@ describe('G15 — the resolver under an unknown zone', () => {
       choice: { by: 'open', remaining: [], open: ['zone'] },
     } as unknown as TimeReadingRow;
     expect(timeAskOf(row, defaultTimeAskMessages)).toEqual({
-      question: 'Which time zone are you in? It decides which time “yesterday” is.',
+      question: 'Which time zone should be shown for “yesterday”?',
       field: { id: 'time', type: 'string', required: true, format: 'zone' },
     });
   });
@@ -284,7 +284,7 @@ describe('G15 — an agent with no zone anywhere asks the person’s zone first,
     expect(zone.awaitingInput.fields).toMatchObject([
       {
         format: 'zone',
-        description: 'Which time zone are you in? It decides which time “yesterday” is.',
+        description: 'Which time zone should be shown for “yesterday”?',
       },
     ]);
     const readings = paused(

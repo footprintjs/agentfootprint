@@ -143,8 +143,8 @@ records `zoneSource: 'unknown'` and spells instants in UTC (`clock.ts` · `UNKNO
 Before, such a run was refused, so the app could not arm the layer at all and "Always confirm"
 silently became "never confirm" — tools ran on their defaults. Now every reading of the person's
 words that names no zone of its own waits on their zone (`resolve.ts` · `builtOf` → `needsZone`, a
-look-back too): the time ask asks it FIRST ("Which time zone are you in? It decides which time
-“yesterday” is.", catalog key `ask.zone-unknown`), the words are then read in the zone they
+look-back too): the time ask asks it FIRST ("Which time zone should be shown for
+“yesterday”?", catalog key `ask.zone-unknown`), the words are then read in the zone they
 answer (`arguments/ask/windowBinding/answer.ts` · `bindWindowAnswer`), and that zone holds for the turns after it — seed
 stamps it with `zoneSource: 'answered'` (`rows.ts` · `answeredZoneOf`: a `time-answer` filed under
 an unknown clock for a mention that named no zone). The turn the answer was given in keeps its
@@ -158,7 +158,7 @@ byte-identical.
 ```ts
 const agent = Agent.create({ provider, model }).tools([clientActivity]).time({ reader: englishTimeReader() }).build();
 await agent.run({ message: 'any client activity yesterday?' });
-// paused: one field, format 'zone' — 'Which time zone are you in? It decides which time “yesterday” is.'
+// paused: one field, format 'zone' — 'Which time zone should be shown for “yesterday”?'
 // resume { f1: 'America/Los_Angeles' } → paused: yesterday offered as 2026-10-08 in Los Angeles → confirm → runs
 await agent.followUp('and the day before?'); // clock row: zone America/Los_Angeles, zoneSource 'answered'
 ```
