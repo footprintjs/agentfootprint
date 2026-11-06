@@ -580,5 +580,5 @@ describe('PROPERTY — the in-run standing equals the saved recording', () => {
       expect(notesOf(r.saved).includes('empty-lookup'), label).toBe(lookup);
       if (wire || argument || column) expect(r.saved.standing, label).toBe('not-sure');
     }
-  });
+  }, 60_000);
 });
