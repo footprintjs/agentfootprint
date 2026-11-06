@@ -138,19 +138,38 @@ describe('report.conclusion — items that flip the answer alone', () => {
     expect(report.suspects.filter((s) => s.verdict?.verdict === 'confirmed')).toHaveLength(4);
   });
 
-  it('maxFlipShare moves the cut-off, and an invalid one falls back to the default', async () => {
-    const flipTwo: IsWrong = (p) => p.has('a') && p.has('b');
-    const kind = async (maxFlipShare?: number) =>
-      (await localize(ids(5), flipTwo, maxFlipShare !== undefined ? { maxFlipShare } : {})).report
-        .conclusion!.kind;
+  it('maxNamedFlips moves the cut-off, and an invalid one falls back to the default', async () => {
+    const flipThree: IsWrong = (p) => p.has('a') && p.has('b') && p.has('c');
+    const kind = async (maxNamedFlips?: number) =>
+      (await localize(ids(5), flipThree, maxNamedFlips !== undefined ? { maxNamedFlips } : {}))
+        .report.conclusion!.kind;
     expect(await kind()).toBe('no-single-cause');
-    expect(await kind(0.5)).toBe('needed-together');
-    expect(await kind(2)).toBe('no-single-cause');
+    expect(await kind(3)).toBe('needed-together');
+    expect(await kind(0)).toBe('no-single-cause');
+    expect(await kind(1.5)).toBe('no-single-cause');
     expect(await kind(Number.NaN)).toBe('no-single-cause');
   });
 
-  it('the default cut-off is one third', () => {
-    expect(CONTEXT_BISECT_DEFAULTS.maxFlipShare).toBeCloseTo(1 / 3);
+  it('the default cut-off is two', () => {
+    expect(CONTEXT_BISECT_DEFAULTS.maxNamedFlips).toBe(2);
+  });
+
+  it('adding harmless items does not change the reading', async () => {
+    const needed = ['a', 'b', 'c', 'd'];
+    const isWrong: IsWrong = (p) => needed.every((id) => p.has(id));
+    const small = await localize(needed, isWrong);
+    const padded = await localize(
+      [...needed, ...Array.from({ length: 16 }, (_, i) => `note${i}`)],
+      isWrong,
+    );
+    expect(small.report.conclusion!.kind).toBe('no-single-cause');
+    expect(padded.report.conclusion!.kind).toBe('no-single-cause');
+    expect(padded.report.conclusion).toMatchObject({ flippedAlone: 4, tested: 20, removable: 20 });
+  });
+
+  it('says that a flip does not show an item is wrong', async () => {
+    const { report } = await localize(ids(5), (p) => ['a', 'b', 'c', 'd'].every((id) => p.has(id)));
+    expect(report.conclusion!.statement).toContain('a false item looks the same as a true one');
   });
 });
 
@@ -160,7 +179,7 @@ describe('report.conclusion — a budget that leaves items untested', () => {
     (p) =>
       p.size === count;
 
-  it('measures the share against every removable item, and says what was not tested', async () => {
+  it('counts every removable item, and says what was not tested', async () => {
     const { report } = await localize(ids(8), allNeeded(8), { maxSuspects: 2 });
     const c = report.conclusion!;
     expect(c.kind).toBe('needed-together');
@@ -168,7 +187,7 @@ describe('report.conclusion — a budget that leaves items untested', () => {
     expect(c.statement).toContain('Not tested: 6 ranked items.');
   });
 
-  it('says no single cause once even that lower bound passes the cut-off', async () => {
+  it('says no single cause once the items tested so far pass the cut-off', async () => {
     const { report } = await localize(ids(8), allNeeded(8), { maxSuspects: 3 });
     expect(report.conclusion!.kind).toBe('no-single-cause');
     expect(report.conclusion!.statement).toContain('Not tested: 5 ranked items.');
@@ -607,8 +626,8 @@ describe('concludeReport — edges a real run rarely reaches', () => {
       expect(c.statement).toContain("came from injection 'a' through code alone");
     });
 
-    it('items on one path count once toward the share', async () => {
-      // Three of six flip, which is over a third, but two of them are one path.
+    it('items on one path count once toward the cut-off', async () => {
+      // Three flip, which is over two, but two of them are one path.
       const c = await conclude(
         [
           item('a', 'confirmed'),
@@ -632,19 +651,20 @@ describe('concludeReport — edges a real run rarely reaches', () => {
           item('a', 'confirmed'),
           item('b', 'confirmed'),
           item('c', 'confirmed'),
-          item('d', 'not-confirmed'),
+          item('d', 'confirmed'),
+          item('e', 'not-confirmed'),
         ],
         (later, earlier) => (idOf(later) === 'c' && idOf(earlier) === 'a' ? 'code' : undefined),
       );
       expect(c.kind).toBe('no-single-cause');
       expect(c.links).toHaveLength(1);
-      expect(c.statement).toContain('2 of the 4 items');
+      expect(c.statement).toContain("3 items the record doesn't link");
     });
 
     it('with no relation, nothing is linked', async () => {
       const c = await conclude([item('a', 'confirmed'), item('b', 'confirmed')], undefined);
       expect(c.links).toBeUndefined();
-      expect(c.kind).toBe('no-single-cause');
+      expect(c.kind).toBe('needed-together');
     });
   });
 

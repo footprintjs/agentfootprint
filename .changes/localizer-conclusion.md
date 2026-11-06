@@ -5,7 +5,7 @@ type: added
 
 `conclusion.links` shows what the record says about two flipped items, with no model call. `code` means only fixed steps lie between them. `model-or-tool` means the later one came after a call that read the earlier one, which shows it could have depended on it, not that it did.
 
-When no single removal flips the answer, the report now tries every pair among the top 5 items. That's up to 10 more probes, each costing `samples` runs, and only in that case. Set `rerun.pairSearchTop` to change it, or to `0` to turn it off. `rerun.maxFlipShare` sets how large a share of the items may flip the answer separately and still be named (default one third).
+When no single removal flips the answer, the report now tries every pair among the top 5 items. That's up to 10 more probes, each costing `samples` runs, and only in that case. Set `rerun.pairSearchTop` to change it, or to `0` to turn it off. `rerun.maxNamedFlips` sets how many items the record doesn't link may each flip the answer and still be named (default 2). It's a count rather than a share, so adding harmless items to a context can't change the reading.
 
 `bisectCulprits` no longer says `not-reproducible` just because removing every suspect at once didn't flip the answer. That leaves the model's default answer, which can be the wrong answer itself, so it now tries the top-ranked suspects alone and in pairs. It can also return a new verdict, `not-specific`, when several of them flip it.
 

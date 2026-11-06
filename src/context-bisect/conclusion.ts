@@ -10,13 +10,18 @@
  * - Several flip it, and the record shows they lie on one path: name them, earliest
  *   first. A tool's result that came after a model call that read a planted
  *   instruction isn't a second cause.
- * - Several separate items flip it: name them, highest ranked first, unless they're
- *   too large a share of the items to single any out.
+ * - A few items the record doesn't link flip it: name them, highest ranked first.
+ *   More than that: name none, since removal can't single one out. This is a count
+ *   and not a share, so adding harmless items can't change the reading.
  * - None flip it: try pairs from the top of the ranking. Exactly one flipping pair
  *   is named, several mean no single cause, and none means none found.
  *
- * The share cut-off and the pair budget were chosen on development cases, so both
- * can be set on `rerun`. Every statement says what wasn't tested.
+ * Removal shows what an answer needed, not which item is wrong. When a policy needs
+ * every fact, a false fact flips the answer just as a true one does, so these
+ * readings can't tell them apart.
+ *
+ * The count and the pair budget were chosen on development cases, so both can be set
+ * on `rerun`. Every statement says what wasn't tested.
  */
 
 import {
@@ -115,10 +120,10 @@ function distinct(suspects: readonly Suspect[]): readonly Suspect[] {
   });
 }
 
-/** A share cut-off from 0 to 1, or the default for anything else. */
-function resolveMaxFlipShare(config: ProbeConfig): number {
-  const raw = config.rerun.maxFlipShare ?? CONTEXT_BISECT_DEFAULTS.maxFlipShare;
-  return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : CONTEXT_BISECT_DEFAULTS.maxFlipShare;
+/** A whole number from 1, or the default for anything else. */
+function resolveMaxNamedFlips(config: ProbeConfig): number {
+  const raw = config.rerun.maxNamedFlips ?? CONTEXT_BISECT_DEFAULTS.maxNamedFlips;
+  return Number.isInteger(raw) && raw >= 1 ? raw : CONTEXT_BISECT_DEFAULTS.maxNamedFlips;
 }
 
 /** Remove every pair among the top items, and record what happened. */
@@ -244,15 +249,16 @@ export async function concludeReport(input: ConcludeReportInput): Promise<Contex
           `Removal can't say which link is wrong. Start with ${first}, the earliest.`,
       );
     }
-    // Items on one path count once. With untested items this share is a lower bound,
+    // Items on one path count once. With untested items this count is a lower bound,
     // so going over the cut-off is still sound.
-    if (separate.length / removable > resolveMaxFlipShare(config)) {
+    if (separate.length > resolveMaxNamedFlips(config)) {
       return conclude(
         'no-single-cause',
         [],
-        `Removing them one at a time, ${separate.length} of the ${removable} items each ` +
-          `flipped the answer separately, so removal can't single one out. The model's own ` +
-          `reasoning may be at fault.`,
+        `Removing any one of ${separate.length} items the record doesn't link flipped the ` +
+          `answer, so removal can't single one out. Each was needed here, which doesn't show ` +
+          `it's wrong: a false item looks the same as a true one the answer needed, and the ` +
+          `model's own reasoning may be at fault.`,
       );
     }
     const note = pathNote();

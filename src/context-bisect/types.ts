@@ -395,11 +395,12 @@ export interface AblationRerun {
    */
   readonly pairSearchTop?: number;
   /**
-   * The largest share of removable items that may flip the answer alone and
+   * The most items the record doesn't link that may each flip the answer and
    * still be named in the report's `conclusion`. Above it, the conclusion is
-   * `'no-single-cause'`. A number from 0 to 1. Default 1/3.
+   * `'no-single-cause'`. It's a count and not a share, so adding harmless items
+   * to a context can't change the reading. A whole number from 1. Default 2.
    */
-  readonly maxFlipShare?: number;
+  readonly maxNamedFlips?: number;
 }
 
 // ─── The report ──────────────────────────────────────────────────────
@@ -494,7 +495,7 @@ export interface ContextBugPairSearch {
  * The report's overall reading of its verdicts. A named item was needed in this
  * context, which doesn't by itself show that it's wrong or that it's the root
  * cause. The rule was chosen on development cases and can be tuned with
- * `rerun.maxFlipShare` and `rerun.pairSearchTop`.
+ * `rerun.maxNamedFlips` and `rerun.pairSearchTop`.
  */
 export interface ContextBugConclusion {
   readonly kind: ContextBugConclusionKind;
@@ -587,8 +588,8 @@ export const CONTEXT_BISECT_DEFAULTS = {
   maxCulprits: 4,
   /** Top-ranked items tried in pairs when no single removal flips the answer. */
   pairSearchTop: 5,
-  /** Largest share of removable items that may flip the answer and still be named. */
-  maxFlipShare: 1 / 3,
+  /** Most unlinked items that may each flip the answer and still be named. */
+  maxNamedFlips: 2,
 } as const;
 
 // Re-exported so consumers of the localizer can type their own helpers

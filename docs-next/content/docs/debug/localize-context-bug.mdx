@@ -90,7 +90,7 @@ The full runnable, tested example is [`17-localize-quickstart.ts`](https://githu
 
 ## Read the conclusion
 
-A `confirmed` verdict means the answer needed that item in this context. It doesn't by itself show the item is wrong. Reading verdicts one at a time can mislead in two ways:
+A `confirmed` verdict means the answer needed that item in this context. It doesn't by itself show the item is wrong. Reading verdicts one at a time can mislead in three ways:
 
 - **A model's own mistake can look like several causes.** Removing a true fact the model needs can flip the answer, so correct facts get confirmed.
 - **Two causes can look like none.** When two items are each enough alone, removing either one changes nothing.
@@ -102,10 +102,10 @@ A `confirmed` verdict means the answer needed that item in this context. It does
 |---|---|---|
 | `one-cause` | One item flipped the answer when removed | That item |
 | `one-path` | Several items flipped it, and the record shows they lie on one path | Those items, earliest first |
-| `needed-together` | A few separate items each flipped it | Those items, highest ranked first |
+| `needed-together` | Two items the record doesn't link each flipped it | Those items, highest ranked first |
 | `redundant-pair` | No item flipped it alone, and exactly one pair did together | That pair |
 | `missing-context` | No removal flipped it, and restoring a dropped unit did | Nothing. See `restored` |
-| `no-single-cause` | More than a third of the items flipped it, or several pairs did | Nothing |
+| `no-single-cause` | More than two items the record doesn't link each flipped it, or several pairs did | Nothing |
 | `none-found` | Nothing tested flipped it | Nothing |
 | `inconclusive` | The reruns disagree, or nothing was tested | Nothing |
 
@@ -115,7 +115,8 @@ Things to watch for:
 
 - **`none-found` doesn't mean there's no cause.** A cause may be in a larger group or outside the items tested. `statement` says what was tried, including how many ranked items weren't tested.
 - **The pair search costs model runs.** When no single removal flips the answer, it tries every pair among the top 5 items. That's up to 10 more probes, each costing `samples` runs, so 30 runs with the default of 3 samples. Set `rerun.pairSearchTop` to change how many items it pairs, or to `0` to turn it off.
-- **The cut-off is a default, not a law.** Set `rerun.maxFlipShare` to change the one-third limit. A larger model may need a different value than a small, fragile one.
+- **A false item can look like a true one.** When a policy needs every fact, removing a false fact flips the answer just as removing a true one does. `no-single-cause` means removal can't single one out, not that nothing is wrong, so check those items against their sources.
+- **The cut-off is a default, not a law.** Set `rerun.maxNamedFlips` to change the limit of two. It's a count rather than a share, so adding harmless items can't change the reading. A larger model may need a different value than a small, fragile one.
 - **`needed-together` can include an innocent item.** Removal alone can't tell a true fact the answer leaned on from a second real cause, so check them in order.
 - **`one-path` doesn't say which link is wrong.** The earliest item isn't always the fault. A correct instruction can lead to a tool that returns bad data. `conclusion.links` shows each link: `code` means only fixed steps lie between the two items, and `model-or-tool` means the later one came after a call that read the earlier one, which shows it could have depended on it, not that it did.
 
