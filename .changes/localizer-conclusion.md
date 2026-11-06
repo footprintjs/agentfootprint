@@ -9,4 +9,6 @@ When no single removal flips the answer, the report now tries every pair among t
 
 `bisectCulprits` no longer says `not-reproducible` just because removing every suspect at once didn't flip the answer. That leaves the model's default answer, which can be the wrong answer itself, so it now tries the top-ranked suspects alone and in pairs. It can also return a new verdict, `not-specific`, when several of them flip it.
 
+`rerun.maxSuspects` above 12 now works. The report kept only 12 ranked suspects by default, so a larger budget was silently cut to 12, and the advice to raise it did nothing on a large context.
+
 Confirmed claims now start `NEEDED IN THIS CONTEXT:` instead of `CAUSAL:`, because a true fact can be needed too. If you matched on that text, read `verdict.verdict` instead. Items that can't be removed, kinds `stage` and `arg`, are now listed after the items that can.

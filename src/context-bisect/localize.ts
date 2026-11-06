@@ -353,7 +353,7 @@ export interface LocalizeContextBugOptions {
   readonly maxDepth?: number;
   /** Slice node budget. Default 80. */
   readonly maxNodes?: number;
-  /** Ranked suspects kept on the report. Default 12. */
+  /** Ranked suspects kept on the report. Default 12. A larger `rerun.maxSuspects` keeps as many removable items as it needs. */
   readonly maxSuspects?: number;
   /** Override / extend the suspect classifier. */
   readonly classify?: SuspectClassifier;
@@ -612,10 +612,11 @@ export async function localizeContextBug(
   const reordered = reorderByShortlist(scored, options.shortlist);
   // An item that can't be removed can't be tested, so it follows the ones that can.
   const removable = reordered.filter(isRemovable);
+  // The report keeps enough removable items to spend the removal budget, so raising it always works.
   const ranked: Suspect[] = [
     ...removable,
     ...reordered.filter((suspect) => !isRemovable(suspect)),
-  ].slice(0, maxSuspects);
+  ].slice(0, Math.max(maxSuspects, Math.min(options.rerun?.maxSuspects ?? 0, removable.length)));
 
   // ── Slice stats + honesty flags ─────────────────────────────────────
   const sliceStats = buildSliceStats(root, nodes, maxDepth, maxNodes);

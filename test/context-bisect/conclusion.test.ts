@@ -173,6 +173,32 @@ describe('report.conclusion — a budget that leaves items untested', () => {
     expect(report.conclusion!.kind).toBe('no-single-cause');
     expect(report.conclusion!.statement).toContain('Not tested: 5 ranked items.');
   });
+
+  describe('in a case larger than the report keeps by default', () => {
+    const many = Array.from({ length: 14 }, (_, i) => `f${i}`);
+    const isWrong: IsWrong = (p) => p.has('f13');
+
+    it('a larger removal budget tests every item', async () => {
+      const { report } = await localize(many, isWrong);
+      const c = report.conclusion!;
+      expect(c).toMatchObject({ kind: 'one-cause', tested: 14, removable: 14 });
+      expect(named(c.named)).toEqual(['f13']);
+      expect(c.statement).not.toContain('Not tested');
+    });
+
+    it('the default budget says what it left out, and following that advice tests it', async () => {
+      const { report } = await localize(many, isWrong, { maxSuspects: 5 });
+      expect(report.conclusion).toMatchObject({ tested: 5, removable: 14 });
+      expect(report.conclusion!.statement).toContain('Not tested: 9 ranked items.');
+      expect(report.conclusion!.statement).toContain('Raise rerun.maxSuspects');
+      expect(report.suspects.length).toBe(CONTEXT_BISECT_DEFAULTS.maxSuspects);
+    });
+
+    it('a removal budget overrides a smaller report limit', async () => {
+      const { report } = await localize(many, isWrong, { maxSuspects: 14 }, { maxSuspects: 3 });
+      expect(report.conclusion).toMatchObject({ tested: 14, removable: 14 });
+    });
+  });
 });
 
 describe('report.conclusion — no item flips the answer alone', () => {
