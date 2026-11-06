@@ -108,7 +108,12 @@ export function readIntegrityRows(state: Readonly<Record<string, unknown>>): Int
   ledger.forEach((row, index) => {
     if (!isRecord(row) || (turn !== undefined && row.turn !== turn)) return;
     if (row.kind === 'claim-unsettled') {
-      fired.push({ reason: 'claim-unsettled', at: statePointer('findingsLedger', index, 'field') });
+      // A damaged row still lowers the standing; its witness names only what exists.
+      const at =
+        typeof row.field === 'string'
+          ? statePointer('findingsLedger', index, 'field')
+          : statePointer('findingsLedger', index);
+      fired.push({ reason: 'claim-unsettled', at });
       return;
     }
     if (row.kind !== 'integrity-finding' || !isIntegrityFindingKind(row.finding)) return;
