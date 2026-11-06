@@ -93,7 +93,6 @@ import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
-import type { TimeAskMessages } from '../../../time/ask.js';
 import { timeAskOf } from '../../../time/readingAsk.js';
 import { isOpenForPerson, turnWindowsOf } from '../../../time/windows.js';
 import { spellRange } from '../../../time/range.js';
@@ -119,7 +118,7 @@ function openReadingOf(scope: TypedScope<AgentState>): TimeReadingRow | undefine
 }
 
 /** The whole catalog: the app's overrides (`.time({ messages })`) over the defaults. */
-const catalogOf = (reader: NonNullable<ArgumentAskDeps['time']>['reader']): TimeAskMessages => ({
+const catalogOf = (reader: NonNullable<ArgumentAskDeps['time']>['reader']) => ({
   ...defaultTimeAskMessages,
   ...(reader?.messages ?? {}),
 });
@@ -170,11 +169,7 @@ function windowPlanOf(
   );
   return {
     question: ask.question,
-    reply: {
-      version: 1,
-      description:
-        catalogOf(reader)['reply.correction'] ?? defaultTimeAskMessages['reply.correction'],
-    },
+    reply: { version: 1, description: catalogOf(reader)['reply.correction'] },
     format,
     ...(ask.field.enum !== undefined && { choices: ask.field.enum }),
     ...(ask.field.enum !== undefined &&
