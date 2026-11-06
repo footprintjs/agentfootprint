@@ -93,6 +93,7 @@ import type { FindingsLedger } from '../findings/types.js';
 import type { AgentState } from '../types.js';
 import { answersOf, clockOf, readingsOf, type TimeReadingRow } from '../../../time/rows.js';
 import type { ZoneName } from '../../../time/zone.js';
+import type { TimeAskMessages } from '../../../time/ask.js';
 import { timeAskOf } from '../../../time/readingAsk.js';
 import { isOpenForPerson, turnWindowsOf } from '../../../time/windows.js';
 import { spellRange } from '../../../time/range.js';
