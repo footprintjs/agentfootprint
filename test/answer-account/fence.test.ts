@@ -116,7 +116,7 @@ describe('IMPORT-GRAPH FENCE', () => {
     }
     expect([...outside].sort()).toEqual([
       'bridge/eventMeta.ts', // eventBelongsToRun — the ONE owner of "which run is this event for"
-      'core/agent/arguments/serve.ts', // assumedLinesFor — the ONE reading of this turn's assumed values
+      'core/agent/arguments/serve.ts', // facade for serve/assumed.ts · assumedLinesFor — the ONE reading of this turn's assumed values
       'core/agent/assessment/assess.ts', // assessAnswer — the ONE fold of the answer's standing
       'core/agent/assessment/compose.ts', // standingLineOf + its inputs — the ONE composer of the standing line
       'core/agent/emptiness.ts', // readEmptiness / rowsAtProblem — the ONE emptiness reader

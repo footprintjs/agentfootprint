@@ -15,7 +15,7 @@ Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
 a prose answer so the model cannot drop it, and `timeLimits.ts` ·
 `timeLimitLinesOf` — the time layer's limits lines of one turn (step T8), the
 ONE composition both the block (for the person) and the served time line (for
-the model, `../../core/agent/arguments/serve.ts` · `timeLimitsLine`) read. It renders through
+the model, `../../core/agent/arguments/serve/clock.ts` · `timeLimitsLine`) read. It renders through
 the time layer's renderer, so it loads through `import()` only; what the lines
 SAY is read by `timeLimitFacts.ts` · `timeLimitFactsOf` (unrendered, safe on the
 synchronous graph — the Tools mount's `inputMapper` hands it across). For the
@@ -984,7 +984,7 @@ generated declarations (`test/core/agent/coverage-answer-one-fold.test.ts`).
 **The assumed values travel too.** On an agent whose inputs layer is armed (a tool
 declares `askOrAssume`), a prose answer's section carries the "Assumed" block; a
 typed answer's limits carry the same values as data — `assumed`, read from the same
-rows by the same function the block prints from (`../../core/agent/arguments/serve.ts` ·
+rows by the same function the block prints from (`../../core/agent/arguments/serve/assumed.ts` ·
 `assumedLinesFor`), each value in the tool's own view (`'REDACTED'` with `hidden`
 when that view hides it), and present only when a value was assumed:
 

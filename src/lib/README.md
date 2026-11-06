@@ -46,7 +46,7 @@ prefixes the recogniser matches on (`saidByPerson.ts`).
 this `role: 'user'` message?", and every line this library writes in that
 role carries an opening from `LIBRARY_AUTHORED_PREFIXES` — the frames it puts
 in `history` AND the lines it serves on a request only: `LIBRARY_NOTE_OPENING`
-(the time layer's late line, `arguments/serve.ts` · `TIME_LINE_SOURCE`, and
+(the time layer's late line, `arguments/serve/clock.ts` · `TIME_LINE_SOURCE`, and
 the figures dial's conclusion) and the staged-refs nudge. A writer imports its
 opening from here; it never types its own copy. A message marked `ephemeral`
 (a retry's feedback, on one attempt's request) or `injectedBy` is never a

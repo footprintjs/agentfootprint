@@ -909,7 +909,7 @@ function timeWindowLines(): string[] {
   return [...sets, ...pendingSets].flatMap((windows) =>
     wires.flatMap((winning) => {
       const served = [...winning.values()].map((t) => (t as { schema: unknown }).schema);
-      // The served bytes: the ONE line's composer opens the halves (`serve.ts` · `timeLine`).
+      // The served bytes: the ONE line's composer opens the halves (`serve/clock.ts` · `timeLine`).
       const line = timeLine([timeWindowsLine(served as never, winning as never, windows)]);
       return line === undefined ? [] : [line];
     }),
@@ -1022,7 +1022,7 @@ function timeLimitLines(): string[] {
     // The person's zone is unknown (time G15): the ranges are spelled in UTC, and the line says why.
     { period: [clamp], clocks: [UNKNOWN_ZONE_LINE] },
   ].flatMap((l) => {
-    // The served bytes: the ONE line's composer opens it (`serve.ts` · `timeLine`).
+    // The served bytes: the ONE line's composer opens it (`serve/clock.ts` · `timeLine`).
     const line = timeLine([undefined, timeLimitsSentence(l)]);
     return line === undefined ? [] : [line];
   });
@@ -1884,7 +1884,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'inputs layer — the rule sentence on a ruled property (honesty layer 2)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/schema.ts',
     surface: RULED_PROPERTY_DESCRIPTION,
     lifetimeBecause:
       'it is a property description on the served copy of the schema, rebuilt per request by ' +
@@ -1903,7 +1903,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'time layer — the person’s windows, served late at the decision point (TQ13, step T6b)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/windows.ts',
     surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
     lifetimeBecause:
       'composed at the tools slot’s one decoration site from the turn’s recorded readings, the ' +
@@ -1938,7 +1938,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'time layer — the time limits an answer states, served late at the decision point (step T8)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/clock.ts',
     surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
     lifetimeBecause:
       'composed at the tools slot’s one decoration site from the turn’s `period` rows whose result ' +
@@ -1962,7 +1962,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'time layer — the run clock, the first sentence of the served time line on every request (G16)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/clock.ts',
     surface: { channel: 'injected-turn', lifetime: 'request-ephemeral' },
     lifetimeBecause:
       'composed at the tools slot’s one decoration site from the turn’s `clock` row (mount arg ' +
@@ -2001,7 +2001,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'inputs layer — the note on a result whose call ran on a filled value (honesty layer 2)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/fills.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'ToolCalls appends it to the `role: "tool"` result of the call it names, so it is written ' +
@@ -2167,7 +2167,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'inputs layer — the refusals of a ruled call (honesty layer 2)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/refusals.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'each lands as the `role: "tool"` result of the call it refused, in the argument-refusal ' +
@@ -2181,7 +2181,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'time layer — a call refused before dispatch on its window (step T5b)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/refusals.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'each lands as the `role: "tool"` result of the call it refused, in the argument-refusal ' +
@@ -2215,7 +2215,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
   },
   {
     id: 'inputs layer — the batch ask’s refusals (honesty layer 2, step 4)',
-    module: 'src/core/agent/arguments/serve.ts',
+    module: 'src/core/agent/arguments/serve/refusals.ts',
     surface: TOOL_RESULT,
     lifetimeBecause:
       'each lands as the `role: "tool"` result of the call it refused — a call whose person’s ' +

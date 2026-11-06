@@ -513,7 +513,7 @@ not affected.
 | a range or a day, to a lookback-only tool | the covering lookback as one labelled choice ("the last 34 hours, which includes all of yesterday"), and free entry. Never filled without that choice. |
 | a sampling instruction, to a tool with no `sampling` | the window without the sampling as one labelled choice ("the last 2 hours, every reading — the tool cannot sample every 5 minutes"), and free entry |
 | the current state, to a tool with no `current` | a short lookback as one labelled choice ("the last 15 minutes"), and free entry |
-| words no reader read | free entry, as today (`arguments/serve.ts · unreadSentence`) |
+| words no reader read | free entry, as today (`arguments/serve/windows.ts · unreadSentence`) |
 
 The sentences are new keys in the ask catalog (`src/locales/timeAsk.ts`), which the app may override,
 as every ask sentence may (TQ7). The answer is judged by `checkTimeAnswer`, as today.
@@ -793,7 +793,7 @@ and says what the tool declared, or that it declared nothing:
   only knows that the default was applied.
 - A tool's declaration stays attributed to that tool. Missing, differing, partial or unknown coverage
   stays visible; nothing is presented as a completed read unless the tool declared it.
-- The model is served the same lines as a conclusion (`arguments/serve.ts · timeLimitsSentence`). The
+- The model is served the same lines as a conclusion (`arguments/serve/clock.ts · timeLimitsSentence`). The
   window is never taken from the model's prose.
 
 ## 10. Determinism

@@ -2408,7 +2408,7 @@ export interface AgentState {
 
   /**
    * The time layer's late line (step T6b, `.time({ reader })` only): the one
-   * served time line the tools slot composed (`agent/arguments/serve.ts` ·
+   * served time line the tools slot composed (`agent/arguments/serve/windows.ts` ·
    * `timeWindowsLine`) and the iteration that composed it; `text` is `''` when
    * there was nothing to say. `callLLM` appends a non-empty line LAST to the
    * request of that same iteration — request-only, never history — and

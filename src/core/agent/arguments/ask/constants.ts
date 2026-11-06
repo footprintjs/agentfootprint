@@ -23,7 +23,7 @@ export const ARGUMENT_ASK_QUESTION =
 export const ARGUMENT_REASK_QUESTION =
   'One answer did not fit what the tool accepts. Please answer that field again.';
 
-// LENS · tool-result · persistent-history (through `core/agent/arguments/serve.ts` · `unansweredRefusal`)
+// LENS · tool-result · persistent-history (through `core/agent/arguments/serve/refusals.ts` · `unansweredRefusal`)
 // reads: nothing — fixed expectations for a window answer a tool's period forms cannot take
 // law: names the rule, never the answer.
 /** What a window answer must be when no period form of a tool holds it. */

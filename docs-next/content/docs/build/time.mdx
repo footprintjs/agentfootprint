@@ -138,9 +138,24 @@ clock, which still needs confirmation. A full interval is an explicit edit.
 Unreadable text, both fields or neither stay pending with a reason and examples;
 ordinary language in the range field still meets its strict ISO validator.
 
-The time record keeps the bounded reply decision and rule. Correction-box
-rendering is a separate host follow-up; a host ignoring the new text field
-keeps its current range UI.
+The public `TimeReplyRow` is the ledger's bounded record of that reply decision.
+It has `kind: 'time-reply'`, the `turn`, `iteration` and `mention` it belongs to,
+and a `decision` of `'range'`, `'reask'` or `'hold'` with a closed `rule` label
+such as `'range-confirmed'`, `'zone-corrected'` or `'both-filled'`. It carries no
+raw reply, quote or parser output. A `hold` or `reask` records that the meaning
+still needs an answer; it does not prove confirmation or tool execution. The
+accepted window and its zone are recorded separately in `TimeAnswerRow` once
+the person settles them. Raw working proposals stay on the existing protected
+ask path.
+
+An accepted `TimeAnswerRow.corrected` keeps the corrected canonical lookback
+duration, when applicable, without copying raw correction text. An empty object
+marks a corrected absolute interval. Later calls use this accepted meaning and
+do not attribute it to the original words. Older rows without the optional object
+keep their original meaning.
+
+Correction-box rendering is a separate host follow-up; a host ignoring the new
+text field keeps its current range UI.
 
 <CodeFile path="examples/features/86-english-time-reader.ts" region="time-correction" />
 

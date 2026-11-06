@@ -1,4 +1,5 @@
 import type { TimeReplyEvidence } from '../replyRecord.js';
+import type { DurationText } from '../duration.js';
 import type { InstantText } from '../instant.js';
 import type { TimeRange } from '../range.js';
 import type { ZoneName } from '../zone.js';
@@ -120,6 +121,8 @@ export interface TimeAnswerRow extends TimeRange {
    * own. Both are the person's answer.
    */
   readonly how: 'confirmed' | 'edited';
+  /** Canonical corrected meaning; absent preserves the original reading. Never raw words. */
+  readonly corrected?: { readonly lookback?: DurationText };
 }
 
 /** One request-bound correction decision, without the raw reply. */

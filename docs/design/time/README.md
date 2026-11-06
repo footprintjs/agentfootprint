@@ -1313,7 +1313,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `period-shifted { by }`). Both arms of `rows.ts` · `timeRowIsWellFormed` grew with them. (2)
   **The refusal door** is the one the unreadable-rules refusal already uses
   (`ArgumentResolution.refused`, the argument-refusal shape), with the registered sentence
-  `arguments/serve.ts` · `timeRefusal` — past tense, naming only the declared fact and an argument
+  `arguments/serve/refusals.ts` · `timeRefusal` — past tense, naming only the declared fact and an argument
   name, never the window's value (it may be the person's). A refused call files no argument row:
   its `call-window` row is the record, as a call whose rules cannot be read files none. The facts
   are checked on the person's window before a fill and on the read-back window of a sent one (the
@@ -1368,8 +1368,8 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   its word table is data inside the file, because `time/` is a leaf — a second language moves
   it beside `src/locales/`; `readers/` imports only the port, pinned); `resolve.ts` ·
   `withZoneAnswered`; `windows.ts` · `readerWindowsOf` and `TurnWindows.open`; the sentence in
-  `arguments/serve.ts` · `timeWindowsSentence` / `withTimeWindows` (through `rulesOnWire`'s
-  `windows`); the window field in `arguments/ask.ts` (`AskField.window`, `planAskFields`'s plan,
+  `arguments/serve/windows.ts` · `timeWindowsLine` (served through the `arguments/serve.ts`
+  facade); the window field in `arguments/ask.ts` (`AskField.window`, `planAskFields`'s plan,
   `bindAnswer`); the plan in `stages/argumentAsk.ts` · `windowPlanOf`. Exported: `englishTimeReader`
   and `EnglishTimeReaderOptions` (TQ12). (2) **What "unreadable" covers.** Every phrase of the
   "later" rows, and more it recognises as time — week days, named months, "ago", spans in words
@@ -1385,7 +1385,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   so; a value the tool's view hides is named hidden. **Placement (the T6b bench's pre-run check,
   the step-7b serving strategy):** it is ONE request-only `user` line appended LAST to the request
   — the conclusion at the decision point, never a tool description — composed at the slot's one
-  decoration site from the tools really served (`arguments/serve.ts` · `timeWindowsLine`), carried
+  decoration site from the tools really served (`arguments/serve/windows.ts` · `timeWindowsLine`), carried
   on `timeLine` (`{ iteration, text }`, served only on the iteration that composed it, so classic
   mode's cached slot never serves a stale line) and appended by `callLLM`; `servedView` rebuilds it
   (reason `time-window-line`). A settled window is named in the person's zone with its source and
@@ -1662,7 +1662,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   composed by ONE owner for both readers (`coverage/timeLimits.ts` · `timeLimitLinesOf`; the
   limits block asks it for the person, the served line for the model with "the person's window"
   for "your window" and, of the clocks, only the label that two differ), join the ONE served time
-  line (TQ13) after the windows' halves: `arguments/serve.ts` · `timeLimitsSentence`, composed at
+  line (TQ13) after the windows' halves: `arguments/serve/clock.ts` · `timeLimitsSentence`, composed at
   the tools slot's decoration site from the mount arg `timeLimits` and appended LAST to every
   later request of the turn by `callLLM` — never to history, so `servedView` rebuilds it from the
   same `timeLine` key. The gate widens from `.time({ reader })` to `.time()`: without a reader the
@@ -1670,7 +1670,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   opens by naming its source (`TIME_LIMITS_SOURCE`: a note from the library, not from the person —
   answer the person directly): the channel is a `user` message, and the bench's first paid rounds
   showed an unmarked line answered as the person's correction ("You're right"). (Since the time
-  follow-ups' packet "serving" that opening belongs to the whole line, said once: `serve.ts` ·
+  follow-ups' packet "serving" that opening belongs to the whole line, said once: `serve/clock.ts` ·
   `TIME_LINE_SOURCE`, applied by `timeLine`.) Pinned by
   `test/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`. (8) **The bench** (`bench/time-checks/`, rule `time-rule-t8`,
   Haiku 4.5, arm off = the build before T8): round 2 (`bench/time/runs/t8`, 360 runs, $1.19) is
@@ -1699,7 +1699,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   it can read in SOME offers only those (§ 6.3). (3) **The served line concludes a refusal.** A
   refused window of the person's (its `call-window` row names the mention, or — an open reading
   refused in every reading — the row carries no range and the turn's one pending quote is it)
-  becomes the refused part of the line: the refusal's own reason (`serve.ts` · `refusalReason`,
+  becomes the refused part of the line: the refusal's own reason (`serve/refusals.ts` · `refusalReason`,
   the one text `timeRefusal` also serves), then "So the answer tells the person that … could not
   read that time, and claims nothing about it from …"; that quote is no longer pending for that
   tool. The T6b paid record's `future` case asked the same refused call until the budget ran out
@@ -1716,7 +1716,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   pending sentence's "or the call is refused with the reason" keeps it true). Pinned by
   `test/time/lookback-only.test.ts` and `test/time/lookback-only-run.test.ts`.
 - **Time follow-ups, packet "serving" (2026-09-30).** The late line's voice. (1) **One line, one
-  opening.** The served time line is composed by ONE function, `arguments/serve.ts` · `timeLine`
+  opening.** The served time line is composed by ONE function, `arguments/serve/clock.ts` · `timeLine`
   (the windows' halves, then the limits), and opened ONCE with `TIME_LINE_SOURCE` — a note from the
   library that runs the tools, not from the person and not a correction from them — whichever halves
   it holds; no half carries its own (it replaces `TIME_LIMITS_SOURCE`, which opened the limits half
@@ -1731,7 +1731,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   of 10 answers after it. The sentence is now a conclusion about the results in hand — "The results
   for “…” cover the window written into the call — the assistant's own reading of those words. So
   the answer gives those results and names that window as the assistant's reading of “…”." — no
-  account of the call that ran and no negation of a confirmation (`serve.ts` · `pendingSentence`);
+  account of the call that ran and no negation of a confirmation (`serve/windows.ts` · `pendingSentence`);
   a 32-run probe drew 1 misread in 8 answers after it. (3) **A quote the library holds no reading of** (`windows.ts` ·
   `ReaderWindows.pendingZones`: no candidate, the choice open on `zone` — an abbreviation outside the
   app's map) no longer promises a form "which shows its reading": the pending half says the form
@@ -1835,7 +1835,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   half; an edited answer's zone is the one its typed offsets match (the offered zone first).
   (G16) **The run clock is served.** Apps used to send their own "application clock" block; with
   the layer armed the model had no date on any turn. Decision: the turn's clock is the FIRST
-  sentence of the one served time line on every request under `.time()` (`serve.ts` ·
+  sentence of the one served time line on every request under `.time()` (`serve/clock.ts` ·
   `clockSentence`, mount arg `timeClock`), to the minute, with the weekday in the person's zone and
   the zone named — "This turn's time: …", not "It is now": the model-facing checker refuses a
   deictic present, and a resumed request is read after the frozen clock. One opening for the whole
@@ -1853,7 +1853,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   that call — not a question about the time in the reply". Following the playbook (record →
   served → late → phrasing): the record held `pendingUnread`, the line was served late, so the
   broken link was the phrasing — "could not read" came first and read as permission to ask, the
-  next step came last. Now (`serve.ts` · `unreadSentence`, replacing `unreadClause`) the line leads
+  next step came last. Now (`serve/windows.ts` · `unreadSentence`, replacing `unreadClause`) the line leads
   with the conclusion and the ONE next step, then the move not to make: "The library could not read
   “yesterday morning”, so the next step is to call client_activity with start_time, end_time left
   out: that call opens the library's own form, which asks the person which time they meant, with

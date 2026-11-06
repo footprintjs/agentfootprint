@@ -85,7 +85,7 @@ export interface AnswerInProgress {
  * `turn_end.answerCoverage` and `agent.answerCoverage()`.
  *
  * `assumed` is the SAME reading of the SAME rows the block prints
- * (`arguments/serve.ts` · `assumedLinesFor`): one entry per distinct (tool,
+ * (`arguments/serve/assumed.ts` · `assumedLinesFor`): one entry per distinct (tool,
  * argument, value), in the order the rows were filed, a row a before-tool
  * rewrite superseded left out. `value` is the tool's own argument view —
  * `'REDACTED'`, with `hidden: true`, when that view hides the argument.
@@ -130,7 +130,7 @@ function foldSections(declared: readonly DeclaredCoverage[]): Coverage {
 export const COVERAGE_BLOCK_HEADING = 'Coverage of this answer';
 
 /**
- * The inputs layer's "Assumed" block's opening line (`arguments/serve.ts` ·
+ * The inputs layer's "Assumed" block's opening line (`arguments/serve/assumed.ts` ·
  * `assumedBlock` composes the block). Owned here, beside the limits block's
  * heading: this module's `composeAnswerWithCoverage` is the one composer of
  * the section the framework appends after an answer, and a reader of the
@@ -414,7 +414,7 @@ function copyItem(item: CoverageItem): CoverageItem {
  *
  * `assumed` (the inputs layer, honesty layer 2) is a second, already-composed
  * block — the values a tool's `assume` rule filled this turn
- * (`arguments/serve.ts` · `assumedBlock`) — appended after the coverage block
+ * (`arguments/serve/assumed.ts` · `assumedBlock`) — appended after the coverage block
  * under the same separator. With neither declarations nor an assumed block the
  * answer is unchanged, byte for byte.
  *

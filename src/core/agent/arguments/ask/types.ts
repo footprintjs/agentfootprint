@@ -72,6 +72,8 @@ export interface WindowAskField {
   readonly reply?: { readonly version: 1; readonly description: string };
   /** Updated proposals stay in the existing governed ask carrier. */
   readonly reading?: TimeReadingRow;
+  /** The pending proposal supersedes the original reading; raw data stays in this carrier. */
+  readonly corrected?: true;
   readonly format: 'time-range' | 'zone';
   /** One label per choice (`time-range` with choices only), in the reader's locale. */
   readonly labels?: readonly string[];

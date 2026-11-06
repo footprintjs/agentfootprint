@@ -51,7 +51,7 @@
  *
  * G17 found the same bug a third time, on a channel the walk had filed as
  * safe. Three more `role: 'user'` lines are served on a REQUEST and never
- * written to `history`: the time layer's late line (`arguments/serve.ts` ·
+ * written to `history`: the time layer's late line (`arguments/serve/clock.ts` ·
  * `timeLine`, on EVERY request under `.time()` since 9.134.1), the figures
  * dial's conclusion (`evidence/figures.ts` · `figuresConclusionLine`) and the
  * staged-refs nudge (`stagedRefs.ts` · `stagedRefsNudgeLine`). "Never in
@@ -122,7 +122,7 @@ export const STEP_NUDGE_FRAME_PREFIX = '[steps unrun';
 /**
  * Opening of the LIBRARY NOTE — the late line this library serves LAST on a
  * request and never writes to `history`: the time layer's ONE served time line
- * (`arguments/serve.ts` · `timeLine`, which opens with it as `TIME_LINE_SOURCE`)
+ * (`arguments/serve/clock.ts` · `timeLine`, which opens with it as `TIME_LINE_SOURCE`)
  * and the figures dial's conclusion (`evidence/figures.ts` ·
  * `figuresConclusionLine`). It says WHO speaks because an unmarked request-only
  * `user` line reads as the person talking — measured: 37 of 37 answers opened

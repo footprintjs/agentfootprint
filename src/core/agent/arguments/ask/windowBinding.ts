@@ -30,6 +30,7 @@ export type WindowBinding =
         readonly range: TimeRange;
         readonly zone: ZoneName;
         readonly how: TimeAnswerRow['how'];
+        readonly corrected?: TimeAnswerRow['corrected'];
       };
     }
   | { readonly followUp: AskField }
@@ -53,6 +54,7 @@ export function bindWindowAnswer(
   byId: ReadonlyMap<string, BatchCall>,
   toolOf: ToolOf,
   time: AskTime | undefined,
+  answerKind?: TimeAnswerRow['how'],
 ): WindowBinding {
   const window = field.window as WindowAskField;
   if (window.role !== undefined && window.role !== 'confirm-meaning')
@@ -86,7 +88,7 @@ export function bindWindowAnswer(
   }
   const range = typeof answer === 'string' ? parseRange(answer) : undefined;
   if (range === undefined) return { expected: WINDOW_FORM_EXPECTATION };
-  const at = field.choices?.indexOf(answer) ?? -1;
+  const at = answerKind === 'edited' ? -1 : field.choices?.indexOf(answer) ?? -1;
   const zone =
     at >= 0 ? window.zones?.[at] ?? time.zone : editedZone(range, window.zones, time.zone);
   if (zone === undefined) return { expected: WINDOW_FORM_EXPECTATION };
@@ -100,7 +102,15 @@ export function bindWindowAnswer(
       const members = field.members
         .filter((m) => m.toolCallIds.includes(id))
         .map((m) => ({ ...m, toolCallIds: [id] }));
-      const one = windowFills({ ...field, members }, range, zone, byId, toolOf, time);
+      const one = windowFills(
+        { ...field, members },
+        range,
+        zone,
+        byId,
+        toolOf,
+        time,
+        answerKind !== 'edited',
+      );
       if ('expected' in one) refused[id] = one.expected;
       else {
         Object.assign(fills, one.fills);
@@ -114,7 +124,7 @@ export function bindWindowAnswer(
       answered: { range, zone, how: at >= 0 ? 'confirmed' : 'edited' },
     };
   }
-  const bound = windowFills(field, range, zone, byId, toolOf, time);
+  const bound = windowFills(field, range, zone, byId, toolOf, time, answerKind !== 'edited');
   if (!('fills' in bound)) return bound;
   return {
     fills: bound.fills,
@@ -169,6 +179,7 @@ function windowFills(
   byId: ReadonlyMap<string, BatchCall>,
   toolOf: ToolOf,
   time: AskTime,
+  keepLookback = true,
 ):
   | {
       readonly fills: Readonly<Record<string, WindowFill>>;
@@ -180,7 +191,9 @@ function windowFills(
   // The offered look-back, picked as offered, stays a look-back from now — the same window the
   // served line and a later call's fill convert (`windows.ts` · `windowToConvert`), so the value
   // this call is handed and the value the model is told are one spelling.
-  const lookback = offeredLookback(time.reading?.row, range);
+  const lookback = keepLookback
+    ? offeredLookback(field.window?.reading ?? time.reading?.row, range)
+    : undefined;
   const answered: TurnWindow = {
     source: 'answered',
     mention: (field.window as WindowAskField).mention,

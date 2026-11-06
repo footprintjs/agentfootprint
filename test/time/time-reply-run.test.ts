@@ -27,6 +27,8 @@ import {
 const NOW = '2026-11-06T18:01:00Z';
 const FROM = Date.parse('2026-11-06T17:01:00Z');
 const TO = Date.parse('2026-11-06T18:01:00.001Z');
+// An offered lookback converted to exclusive bounds ends at now (convert.ts §7.2).
+const TOOL_TO = Date.parse(NOW);
 const LA = 'America/Los_Angeles';
 const NY = 'America/New_York';
 const MESSAGE = 'Show activity for last 1 hour in America/Los_Angeles';
@@ -184,8 +186,13 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)('%s native time reply', (
       expect(corrected.id).toBe(original.id);
       expect(corrected.format).toBe(original.format);
       expect(corrected.enum).toEqual(original.enum);
-      expect(corrected.labels?.join(' ')).toContain(NY);
-      expect(corrected.labels?.join(' ')).not.toContain(LA);
+      const label = corrected.labels?.[0];
+      const quoted = 'I read “last 1 hour in America/Los_Angeles” as ';
+      expect(label?.startsWith(quoted)).toBe(true);
+      // The original quote stays truthful; only the rendered window changes zone.
+      const displayed = label?.slice(quoted.length);
+      expect(displayed).toMatch(/ in America\/New_York — is that right\?$/);
+      expect(displayed).not.toContain(LA);
       expect(bounds(choice(second))).toEqual([FROM, TO]);
       expect(firstRun.seen).toEqual([]);
       expect(resumed.requests).toHaveLength(shape === 'same' ? 1 : 0);
@@ -195,7 +202,7 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)('%s native time reply', (
       });
       const done = await reply(resumed.agent, second, { [corrected.id]: choice(second) });
       expect(done).toBe('Done.');
-      expect(firstRun.seen).toEqual([{ from: FROM, to: TO }]);
+      expect(firstRun.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
       expect(replies(resumed.agent).at(-1)).toMatchObject({
         decision: 'range',
         rule: 'range-confirmed',
@@ -211,6 +218,65 @@ describe.each(['dynamic', 'dynamic-grouped'] as const)('%s native time reply', (
 });
 
 describe('native correction meanings', () => {
+  it('keeps a full interval correction absolute even when its bytes match an offered lookback', async () => {
+    const made = make();
+    const first = await start(made);
+    const done = await reply(made.agent, first, { [pair(first).correction.id]: choice(first) });
+    expect(done).toBe('Done.');
+    expect(made.seen).toEqual([{ from: FROM, to: TO }]);
+    expect((made.agent.findings() ?? []).find((row) => row.kind === 'time-answer')).toMatchObject({
+      how: 'edited',
+      corrected: {},
+    });
+    expect(replies(made.agent).at(-1)).toMatchObject({
+      decision: 'range',
+      rule: 'interval-corrected',
+    });
+  });
+
+  it.each(['dynamic', 'dynamic-grouped'] as const)(
+    '%s: later calls use the accepted corrected duration',
+    async (mode) => {
+      const made = make({
+        mode,
+        script: [
+          batch({ id: 'query-one', name: 'activity', args: {} }),
+          batch({ id: 'query-two', name: 'activity', args: {} }),
+          answer('Done.'),
+        ],
+      });
+      const first = await start(made);
+      const second = paused(
+        await reply(made.agent, first, {
+          [pair(first).correction.id]: 'last 2 hours in America/New_York',
+        }),
+      );
+      expect(made.seen).toEqual([]);
+      const done = await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
+      expect(done).toBe('Done.');
+      expect(made.seen).toEqual([
+        { from: FROM - 60 * 60 * 1000, to: TOOL_TO },
+        { from: FROM - 60 * 60 * 1000, to: TOOL_TO },
+      ]);
+      expect(made.requests).toHaveLength(3);
+      const line =
+        made.requests
+          .at(-1)
+          ?.messages.filter(
+            (message) =>
+              message.role === 'user' &&
+              typeof message.content === 'string' &&
+              message.content.startsWith('[A note from the library'),
+          )
+          .map((message) => message.content)
+          .join('\n') ?? '';
+      expect(line).not.toContain('last 1 hour in America/Los_Angeles');
+      expect(line).toContain('The corrected window');
+      expect(line).toContain(NY);
+      expect(line).toContain(`from ${FROM - 60 * 60 * 1000}, to ${TOOL_TO}`);
+    },
+  );
+
   it('reads the caller-mapped EST correction as a new proposal, never a strict-range error', async () => {
     const made = make();
     const first = await start(made);
@@ -225,7 +291,7 @@ describe('native correction meanings', () => {
     expect(made.seen).toEqual([]);
     expect(made.requests).toHaveLength(1);
     await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
-    expect(made.seen).toEqual([{ from: FROM, to: TO }]);
+    expect(made.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
   });
 
   it('re-resolves time words at the saved clock, then asks to confirm the changed interval', async () => {
@@ -246,7 +312,22 @@ describe('native correction meanings', () => {
       rule: 'time-words-corrected',
     });
     await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
-    expect(made.seen).toEqual([{ from: FROM - 60 * 60 * 1000, to: TO }]);
+    expect(made.seen).toEqual([{ from: FROM - 60 * 60 * 1000, to: TOOL_TO }]);
+    expect((made.agent.findings() ?? []).find((row) => row.kind === 'time-answer')).toMatchObject({
+      corrected: { lookback: '2h' },
+    });
+    const timeLine =
+      made.requests
+        .at(-1)
+        ?.messages.filter(
+          (message) =>
+            message.role === 'user' &&
+            typeof message.content === 'string' &&
+            message.content.startsWith('[A note from the library'),
+        )
+        .map((message) => message.content)
+        .join('\n') ?? '';
+    expect(timeLine).not.toContain('last 1 hour in America/Los_Angeles');
   });
 });
 
@@ -275,7 +356,7 @@ describe('pending and strict native reply boundaries', () => {
       expect(wording).toMatch(/range|change|correction/i);
       expect(wording).not.toMatch(/not a start and an end|offset on both ends/i);
       await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
-      expect(made.seen).toEqual([{ from: FROM, to: TO }]);
+      expect(made.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
     },
   );
 
@@ -292,7 +373,7 @@ describe('pending and strict native reply boundaries', () => {
     expect(made.seen).toEqual([]);
     expect(made.requests).toHaveLength(1);
     await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
-    expect(made.seen).toEqual([{ from: FROM, to: TO }]);
+    expect(made.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
   });
 
   it('rejects a foreign request, undeclared field and non-string correction before binding', async () => {
@@ -314,7 +395,7 @@ describe('pending and strict native reply boundaries', () => {
       expect(made.requests).toHaveLength(1);
     }
     await reply(made.agent, first, { [pair(first).range.id]: choice(first) });
-    expect(made.seen).toEqual([{ from: FROM, to: TO }]);
+    expect(made.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
   });
 
   it('retains direct cancellation refusal and rejects cancellation carrying values', async () => {
@@ -336,7 +417,7 @@ describe('pending and strict native reply boundaries', () => {
     expect(made.seen).toEqual([]);
     expect(made.requests).toHaveLength(1);
     await reply(made.agent, first, { [pair(first).range.id]: choice(first) });
-    expect(made.seen).toEqual([{ from: FROM, to: TO }]);
+    expect(made.seen).toEqual([{ from: FROM, to: TOOL_TO }]);
   });
 });
 
@@ -369,7 +450,7 @@ it('keeps a private sibling raw only in the returned checkpoint across time corr
     expect(JSON.stringify(made.agent.getSnapshot())).toContain('activity');
     expect(pair(second).range.labels?.join(' ')).toContain(NY);
     await reply(made.agent, second, { [pair(second).range.id]: choice(second) });
-    expect(made.seen).toEqual([{ from: FROM, to: TO, account: SECRET }]);
+    expect(made.seen).toEqual([{ from: FROM, to: TOOL_TO, account: SECRET }]);
     for (const [name, surface] of Object.entries({
       snapshot: made.agent.getSnapshot(),
       events: seen,

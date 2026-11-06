@@ -56,7 +56,7 @@ overturn. Nothing here is built yet.**
 > argument's sentence differs when sources are armed**, because the armed layer changes what a
 > present value needs (an unsourced value is asked), and served text must say what the layer will
 > do. Under the sources arm an `ask` property's sentence names the declaration where the model
-> decides (`arguments/serve.ts` · `ASK_SOURCES_SENTENCE` — this page's "whatever the arms"
+> decides (`arguments/serve/schema.ts` · `ASK_SOURCES_SENTENCE` — this page's "whatever the arms"
 > sentence is kept for the unarmed layer only); `from` is explained ONCE, in its own property,
 > with no "Optional:" and no "Leave an argument out rather than guess", the sources' meanings on
 > `source`, and what the record keeps ("a value with no entry has no declared source on the

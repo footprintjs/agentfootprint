@@ -126,7 +126,7 @@ const libraryAsks = (seen: readonly Event[]): Event[] =>
 const toolMessage = (req: LLMRequest | undefined, toolCallId: string) =>
   req?.messages.find((msg) => msg.role === 'tool' && msg.toolCallId === toolCallId);
 
-/** The clause a refusal gains when the call carried the person's answer (`serve.ts` · `keptAnswersNote`). */
+/** The clause a refusal gains when the call carried the person's answer (`serve/refusals.ts` · `keptAnswersNote`). */
 const keptWindow = (tool: string): string =>
   `The person's answer for window was kept for the next ${tool} call that leaves it out, ` +
   'so the call may be proposed again without window.';

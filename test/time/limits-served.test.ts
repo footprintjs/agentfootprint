@@ -1,6 +1,6 @@
 /**
  * The time limits, served to the MODEL late at the decision point (time step
- * T8's serving placement; `agent/arguments/serve.ts` · `timeLimitsSentence`).
+ * T8's serving placement; `agent/arguments/serve/clock.ts` · `timeLimitsSentence`).
  *
  * Law: once a call's read differs from what it asked (or the asked time is
  * older than the source keeps, or two sources' clocks differ), every later
@@ -317,7 +317,7 @@ describe('timeLine — ONE line, opened once with who says it', () => {
 describe('the limits facts cross the Tools mount unrendered — `timeLimitFactsOf` ↔ `timeLimitLinesOf`', () => {
   // The mount's `inputMapper` is synchronous and on every agent's graph, so it
   // hands FACTS (`coverage/timeLimitFacts.ts`) and the slot renders them under
-  // the arm (`serve.ts` · `timeLimitsLine`). The facts must be absent exactly
+  // the arm (`serve/clock.ts` · `timeLimitsLine`). The facts must be absent exactly
   // when the rendered lines are, or the mount arg stops being value-conditional.
   const clock = {
     kind: 'clock',

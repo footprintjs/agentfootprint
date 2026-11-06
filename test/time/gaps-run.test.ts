@@ -69,6 +69,12 @@ const answer = (content: string): Reply => ({ content });
 const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T16:00:00Z'; // 09:00 PDT
 const NOW_MS = Date.parse(NOW);
+const CORRECTION_FIELD = {
+  id: 'f1-correction',
+  type: 'string',
+  required: false,
+  description: 'Or say what should change, such as a time zone, yesterday, or a full interval.',
+} as const;
 /** The run clock that opens the served line on every request under `.time()` (G16) — `NOW` in Los Angeles. */
 const CLOCK = "This turn's time: Friday 2026-10-09 09:00 America/Los_Angeles (UTC-07:00).";
 
@@ -199,10 +205,14 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
     );
     expect(seen).toEqual([]);
     expect(first.awaitingInput.fields).toEqual([
-      expect.objectContaining({
+      {
+        id: 'f1',
+        type: 'string',
+        required: false,
         format: 'time-range',
         description: 'Which time did you mean by “yesterday morning”?',
-      }),
+      },
+      CORRECTION_FIELD,
     ]);
     expect(first.awaitingInput.fields[0]!.enum).toBeUndefined();
     // The model was told, late, the library's conclusion and the ONE next step: the call with the
@@ -270,8 +280,16 @@ describe('G2 — words the reader could not read are asked, free entry, and conv
     const first = paused(
       await agent.run({ message: 'any SMB on 10.0.0.1 yesterday morning?', time: { now: NOW } }),
     );
-    expect(first.awaitingInput.fields).toHaveLength(1);
-    expect(first.awaitingInput.fields[0]).toMatchObject({ format: 'time-range' });
+    expect(first.awaitingInput.fields).toEqual([
+      {
+        id: 'f1',
+        type: 'string',
+        required: false,
+        format: 'time-range',
+        description: 'Which time did you mean by “yesterday morning”?',
+      },
+      CORRECTION_FIELD,
+    ]);
     // Not a time range → refused at the door, asked again; nothing ran.
     const again = paused(
       await agent.resume(first.checkpoint as never, {
@@ -369,7 +387,7 @@ describe('G9 — the window set in the app’s time control is served by the lib
 
 describe('G14 — the control window is a fact about the person’s turn: served on every request, period tool or not', () => {
   const WINDOW = { from: '2026-10-09T08:00:00-07:00', to: '2026-10-09T08:40:00-07:00' };
-  /** The control half with no tool values — the window alone (`serve.ts` · `controlSentence`). */
+  /** The control half with no tool values — the window alone (`serve/windows.ts` · `controlSentence`). */
   const BARE_LINE =
     `${TIME_LINE_SOURCE} ${CLOCK} The window the person set in the app's time control is 2026-10-09 ` +
     '08:00–08:39 America/Los_Angeles (UTC-07:00). An answer built on it states that window.';

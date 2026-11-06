@@ -1,0 +1,557 @@
+{
+  "checkpointVersion": 2,
+  "sharedState": {
+    "toolResourceOwner": {
+      "version": 1,
+      "birth": {
+        "runId": "1793997862297-0000000001",
+        "componentOrdinal": 0
+      },
+      "nextDispatch": 0
+    },
+    "userMessage": "Show activity in the last 2 hours",
+    "history": [
+      {
+        "role": "user",
+        "content": "Show activity in the last 2 hours"
+      }
+    ],
+    "runIdentity": {
+      "conversationId": "1793997862297-0000000001"
+    },
+    "runIdentitySource": "run",
+    "runSessionId": null,
+    "newMessages": [],
+    "turnNumber": 1,
+    "contextTokensRemaining": 32000,
+    "iteration": 1,
+    "maxIterations": 3,
+    "finalContent": "",
+    "totalInputTokens": 0,
+    "totalOutputTokens": 0,
+    "turnStartMs": 1793997862307,
+    "systemPromptInjections": [],
+    "messagesInjections": [
+      {
+        "contentSummary": "Show activity in the last 2 hours",
+        "contentHash": "70198c75",
+        "slot": "messages",
+        "source": "user",
+        "reason": "conversation history [0]",
+        "rawContent": "Show activity in the last 2 hours",
+        "asRole": "user",
+        "asRecency": "latest",
+        "position": 0
+      }
+    ],
+    "toolsInjections": [
+      {
+        "contentSummary": "read_window: Read one synthetic interval.",
+        "contentHash": "147260ec",
+        "slot": "tools",
+        "source": "registry",
+        "sourceId": "read_window",
+        "reason": "tool registry",
+        "rawContent": "read_window: Read one synthetic interval.",
+        "position": 0
+      }
+    ],
+    "llmLatestContent": "",
+    "llmLatestToolCalls": [
+      {
+        "id": "read-1",
+        "name": "read_window",
+        "args": {}
+      }
+    ],
+    "thinkingBlocks": [],
+    "pausedToolCallId": "",
+    "pausedToolName": "",
+    "pausedToolStartMs": 0,
+    "cumTokensInput": 0,
+    "cumTokensOutput": 0,
+    "cumEstimatedUsd": 0,
+    "costBudgetHit": false,
+    "activeInjections": [],
+    "activatedInjectionIds": [],
+    "dynamicToolSchemas": [
+      {
+        "name": "read_window",
+        "description": "Read one synthetic interval.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "start_time": {
+              "type": "integer",
+              "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+            },
+            "end_time": {
+              "type": "integer",
+              "description": "The tool's rule asks the person for this value; leave it out unless the person gave it."
+            }
+          }
+        }
+      }
+    ],
+    "honestyLayers": {
+      "inputs": true,
+      "results": true
+    },
+    "deliveredMessageKeys": [],
+    "cacheMarkers": [
+      {
+        "field": "system",
+        "boundaryIndex": 0,
+        "ttl": "short",
+        "reason": "system stable prefix (1 entries, ending at base system prompt)"
+      },
+      {
+        "field": "messages",
+        "boundaryIndex": 0,
+        "ttl": "short",
+        "reason": "conversation tail through wire index 0 — the moving breakpoint: the next call repeats this prefix and appends after it"
+      }
+    ],
+    "cachingDisabled": false,
+    "skillHistory": [],
+    "findingsLedger": [
+      {
+        "kind": "clock",
+        "turn": 1,
+        "iteration": 1,
+        "now": "2026-11-06T18:01:00Z",
+        "nowSource": "app",
+        "zone": "UTC",
+        "zoneSource": "run"
+      },
+      {
+        "kind": "time-reading",
+        "turn": 1,
+        "iteration": 1,
+        "reader": {
+          "id": "agentfootprint/english",
+          "version": "1.2.0",
+          "kind": "rule",
+          "locale": "en-US"
+        },
+        "tzdata": "2026e",
+        "mentions": 1,
+        "mention": 0,
+        "quote": "last 2 hours",
+        "parses": [
+          {
+            "relative": {
+              "unit": "hour",
+              "count": 2
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "window": {
+              "kind": "lookback",
+              "duration": "2h"
+            },
+            "range": {
+              "from": "2026-11-06T16:01:00Z",
+              "to": "2026-11-06T18:01:00.001Z"
+            },
+            "zone": "UTC",
+            "grain": "hour",
+            "implied": [],
+            "anchor": "message",
+            "notes": [],
+            "reading": {},
+            "said": [],
+            "reader": {
+              "id": "agentfootprint/english",
+              "kind": "rule"
+            },
+            "parse": 0
+          }
+        ],
+        "choice": {
+          "by": "open",
+          "remaining": [
+            0
+          ],
+          "open": [
+            "confirm"
+          ]
+        }
+      },
+      {
+        "kind": "argument",
+        "turn": 1,
+        "toolCallId": "read-1",
+        "toolName": "read_window",
+        "iteration": 1,
+        "argument": "start_time",
+        "rule": "ask",
+        "period": true,
+        "asked": "missing"
+      },
+      {
+        "kind": "argument",
+        "turn": 1,
+        "toolCallId": "read-1",
+        "toolName": "read_window",
+        "iteration": 1,
+        "argument": "end_time",
+        "rule": "ask",
+        "period": true,
+        "asked": "missing"
+      },
+      {
+        "kind": "call-window",
+        "turn": 1,
+        "iteration": 1,
+        "toolCallId": "read-1",
+        "toolName": "read_window",
+        "how": "not-filled",
+        "why": "open-reading"
+      }
+    ],
+    "activeByslot": {
+      "systemPrompt": [],
+      "messages": [],
+      "tools": []
+    },
+    "timeLine": {
+      "iteration": 1,
+      "text": "[A note from the library that runs the tools — not from the person, and not a correction from them: when you answer, answer the person directly, as you would from the tool results alone.] This turn's time: Friday 2026-11-06 18:01 UTC. The window for “last 2 hours” is not settled yet: the person confirms it in the library's own form, which shows its reading of those words with the zone and opens when read_window is called with start_time, end_time left out (or the call is refused with the reason). So the next step is that call — not a question about the time in the reply, and not a window written into the call, which would run unconfirmed."
+    },
+    "receipt": {
+      "requestMeasurement": {
+        "boundary": "initial-prepared-request",
+        "format": "json-utf8-v1",
+        "status": "measured",
+        "total": {
+          "jsonChars": 1161,
+          "jsonBytes": 1169
+        },
+        "slots": {
+          "messages": {
+            "jsonChars": 738,
+            "jsonBytes": 746
+          },
+          "tools": {
+            "jsonChars": 386,
+            "jsonBytes": 386
+          }
+        }
+      },
+      "system": {
+        "hash": "90dd25b5e44f3810",
+        "chars": 0,
+        "pieces": []
+      },
+      "messages": {
+        "count": 2,
+        "entries": [
+          {
+            "role": "user",
+            "hash": "9197251a7ec8d314"
+          }
+        ],
+        "requestOnly": [
+          {
+            "role": "user",
+            "hash": "2a8bcb06529a0bbc",
+            "reason": "time-window-line"
+          }
+        ]
+      },
+      "tools": {
+        "names": [
+          "read_window"
+        ],
+        "schemaHashes": {
+          "read_window": "4db7638d35fa3712"
+        },
+        "forced": null,
+        "withheld": null
+      },
+      "cache": {
+        "transform": "unchanged",
+        "transformHash": null,
+        "markersApplied": [],
+        "strategy": "none"
+      },
+      "params": {},
+      "basis": {
+        "epoch": 1,
+        "runId": "1793997862297-0000000001",
+        "model": "mock",
+        "provider": "fixed-native-time-reply"
+      }
+    },
+    "argumentResolutions": [
+      {
+        "toolCallId": "read-1",
+        "iteration": 1,
+        "ask": [
+          "start_time",
+          "end_time"
+        ],
+        "window": true
+      }
+    ],
+    "argumentAsk": {
+      "iteration": 1,
+      "fields": [
+        {
+          "type": "string",
+          "question": "Is this the time you meant by “last 2 hours”?",
+          "choices": [
+            "2026-11-06T16:01:00Z/2026-11-06T18:01:00.001Z"
+          ],
+          "members": [
+            {
+              "toolName": "read_window",
+              "argument": "start_time",
+              "period": true,
+              "toolCallIds": [
+                "read-1"
+              ]
+            },
+            {
+              "toolName": "read_window",
+              "argument": "end_time",
+              "period": true,
+              "toolCallIds": [
+                "read-1"
+              ]
+            }
+          ],
+          "window": {
+            "format": "time-range",
+            "labels": [
+              "I read “last 2 hours” as Fri, Nov 6, 2026, 4:01 – 6:01 PM UTC in UTC — is that right?"
+            ],
+            "zones": [
+              "UTC"
+            ],
+            "mention": 0
+          }
+        }
+      ],
+      "progress": [
+        {
+          "rounds": 1
+        }
+      ],
+      "waiting": {
+        "requestId": "1793997862297-0000000001:arguments:1:1",
+        "fieldIndexes": [
+          0
+        ],
+        "awaiting": {
+          "id": "agentfootprint.arguments",
+          "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+          "fields": [
+            {
+              "id": "f1",
+              "type": "string",
+              "required": true,
+              "description": "Is this the time you meant by “last 2 hours”?",
+              "enum": [
+                "2026-11-06T16:01:00Z/2026-11-06T18:01:00.001Z"
+              ],
+              "format": "time-range",
+              "labels": [
+                "I read “last 2 hours” as Fri, Nov 6, 2026, 4:01 – 6:01 PM UTC in UTC — is that right?"
+              ]
+            }
+          ],
+          "context": {
+            "agentfootprint": {
+              "ask": "arguments",
+              "fields": [
+                {
+                  "id": "f1",
+                  "tool": "read_window",
+                  "argument": "start_time",
+                  "calls": [
+                    "read-1"
+                  ],
+                  "sharedWith": [
+                    {
+                      "tool": "read_window",
+                      "argument": "end_time",
+                      "calls": [
+                        "read-1"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "status": "awaiting_input",
+          "requestId": "1793997862297-0000000001:arguments:1:1",
+          "supplied": {},
+          "origins": {},
+          "missing": [
+            "f1"
+          ],
+          "origin": {
+            "originalRequest": "Show activity in the last 2 hours",
+            "toolCallId": "read-1"
+          }
+        }
+      }
+    },
+    "servedToolParties": {
+      "version": 2,
+      "owner": {
+        "runId": "1793997862297-0000000001",
+        "componentOrdinal": 0
+      },
+      "turn": 1,
+      "iteration": 1,
+      "argumentAsk": true,
+      "truncated": false,
+      "bound": [
+        {
+          "index": 0,
+          "id": {
+            "kind": "plain",
+            "value": "[\"string\",\"read-1\"]"
+          },
+          "name": {
+            "kind": "plain",
+            "value": "read_window"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        }
+      ],
+      "current": [
+        {
+          "name": {
+            "kind": "plain",
+            "value": "read_window"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        }
+      ],
+      "last": [
+        {
+          "name": {
+            "kind": "plain",
+            "value": "read_window"
+          },
+          "party": {
+            "channel": "registry"
+          }
+        }
+      ]
+    }
+  },
+  "pausedStageId": "tool-calls",
+  "pausedExecution": {
+    "runId": "1793997862297-0000000001",
+    "runtimeStageId": "tool-calls#30"
+  },
+  "subflowPath": [],
+  "pauseData": {
+    "reason": "Before the next step can run, a few values are needed. Each field says what it is for.",
+    "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+    "awaitingInput": {
+      "id": "agentfootprint.arguments",
+      "question": "Before the next step can run, a few values are needed. Each field says what it is for.",
+      "fields": [
+        {
+          "id": "f1",
+          "type": "string",
+          "required": true,
+          "description": "Is this the time you meant by “last 2 hours”?",
+          "enum": [
+            "2026-11-06T16:01:00Z/2026-11-06T18:01:00.001Z"
+          ],
+          "format": "time-range",
+          "labels": [
+            "I read “last 2 hours” as Fri, Nov 6, 2026, 4:01 – 6:01 PM UTC in UTC — is that right?"
+          ]
+        }
+      ],
+      "context": {
+        "agentfootprint": {
+          "ask": "arguments",
+          "fields": [
+            {
+              "id": "f1",
+              "tool": "read_window",
+              "argument": "start_time",
+              "calls": [
+                "read-1"
+              ],
+              "sharedWith": [
+                {
+                  "tool": "read_window",
+                  "argument": "end_time",
+                  "calls": [
+                    "read-1"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "status": "awaiting_input",
+      "requestId": "1793997862297-0000000001:arguments:1:1",
+      "supplied": {},
+      "origins": {},
+      "missing": [
+        "f1"
+      ],
+      "origin": {
+        "originalRequest": "Show activity in the last 2 hours",
+        "toolCallId": "read-1"
+      }
+    }
+  },
+  "subflowStates": {},
+  "executionCount": 31,
+  "visitCounts": {
+    "seed": 1,
+    "sf-results": 1,
+    "sf-results/declare-results": 1,
+    "sf-results/verify-results": 1,
+    "sf-results/record-results": 1,
+    "sf-results/resolve-results": 1,
+    "sf-injection-engine": 1,
+    "sf-injection-engine/gather": 1,
+    "sf-injection-engine/evaluate": 1,
+    "sf-injection-engine/route": 1,
+    "sf-injection-engine/delta": 1,
+    "context": 1,
+    "sf-system-prompt": 1,
+    "sf-system-prompt/compose": 1,
+    "sf-messages": 1,
+    "sf-messages/compose": 1,
+    "sf-tools": 1,
+    "sf-tools/discover": 1,
+    "sf-tools/compose": 1,
+    "sf-cache": 1,
+    "sf-cache/decide-cache-markers": 1,
+    "sf-cache/cache-gate": 1,
+    "sf-cache/apply-markers": 1,
+    "call-llm": 1,
+    "sf-inputs": 1,
+    "sf-inputs/declare-arguments": 1,
+    "sf-inputs/verify-arguments": 1,
+    "sf-inputs/record-arguments": 1,
+    "sf-inputs/resolve-arguments": 1,
+    "sf-route": 1,
+    "tool-calls": 1
+  },
+  "invokerStageId": "sf-route",
+  "pausedBy": "interrupt",
+  "pausedAt": 1793997862367
+}

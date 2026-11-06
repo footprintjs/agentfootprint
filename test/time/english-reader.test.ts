@@ -709,7 +709,14 @@ describe('security', () => {
       readdirSync(join(dir, 'english'))
         .filter((f) => f.endsWith('.ts'))
         .sort(),
-    ).toEqual(['atoms.ts', 'grammar.ts', 'reader.test.ts', 'types.ts', 'zones.test.ts', 'zones.ts']);
+    ).toEqual([
+      'atoms.ts',
+      'grammar.ts',
+      'reader.test.ts',
+      'types.ts',
+      'zones.test.ts',
+      'zones.ts',
+    ]);
     const allowed: Readonly<Record<string, readonly string[]>> = {
       'english.ts': [
         '../reader.js',

@@ -155,7 +155,7 @@ function heldForms(held: FormsHeld): TimeForms {
 
 /**
  * The turn's clock, spelled at the grain the library SERVES it (G16,
- * `arguments/serve.ts` · `clockSentence`: the minute of `now`, its date, in
+ * `arguments/serve/clock.ts` · `clockSentence`: the minute of `now`, its date, in
  * the clock's zone — `'UTC'` under an unknown zone, G15) — all `derived`: the
  * library produced it, the person never wrote it. The minute is FLOORED, as
  * served; the clock's seconds, and any other minute, are not its spellings.
@@ -236,7 +236,8 @@ function withReading(
     ...(window.lookback !== undefined && { lookback: window.lookback }),
     ...(window.answer !== undefined && { answer: window.answer }),
   };
-  if (window.mention === undefined || window.answer === 'edited') return base;
+  if (window.mention === undefined || window.answer === 'edited' || window.quote === undefined)
+    return base;
   const row = readings.find((r) => r.mention === window.mention);
   const reading = row === undefined ? undefined : writtenReadingOf(row, window, clock);
   return reading === undefined ? base : { ...base, reading };

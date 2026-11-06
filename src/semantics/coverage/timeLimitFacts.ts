@@ -9,7 +9,7 @@
  *          synchronous door that needs it — the Tools mount's `inputMapper`
  *          (`agent/buildAgentChart.ts` · `timeLimitsArg`), which runs before
  *          any `import()` can: it hands these facts across, and the slot's
- *          served line renders them (`arguments/serve.ts` · `timeLimitsLine`,
+ *          served line renders them (`arguments/serve/clock.ts` · `timeLimitsLine`,
  *          loaded under the arm). The renderer (`time/present.ts`) never
  *          reaches the graph `import { Agent }` loads (the optional-family
  *          law, `test/trace-toolpack/browserGraph.test.ts`).

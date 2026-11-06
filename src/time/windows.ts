@@ -59,6 +59,8 @@ export interface TurnWindow {
   readonly mention?: number;
   /** The person's words it was read from — absent on the `control` window. */
   readonly quote?: string;
+  /** The accepted correction supersedes the original words, which are not quoted as its source. */
+  readonly corrected?: true;
   readonly range: TimeRange;
   /** The look-back it was said as, when it was one. */
   readonly lookback?: DurationText;
@@ -176,11 +178,13 @@ export function turnWindowsOf(
     if (answer !== undefined) {
       const range = { from: answer.from, to: answer.to };
       // The person picked a look-back the library offered: it stays a look-back from now.
-      const lookback = offeredLookback(row, range);
+      const lookback =
+        answer.corrected === undefined ? offeredLookback(row, range) : answer.corrected.lookback;
       windows.push({
         source: 'answered',
         mention: answer.mention,
-        quote: row.quote,
+        ...(answer.corrected === undefined && { quote: row.quote }),
+        ...(answer.corrected !== undefined && { corrected: true }),
         range,
         ...(lookback !== undefined && { lookback }),
         zone: answer.zone,

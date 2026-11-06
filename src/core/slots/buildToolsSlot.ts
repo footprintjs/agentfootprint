@@ -195,7 +195,7 @@ export function mergeWire(candidates: readonly WireCandidate[]): {
 }
 
 /**
- * The inputs layer's wire decoration (`agent/arguments/serve.ts` · `rulesOnWire`) and the time
+ * The inputs layer's wire decoration (`agent/arguments/serve/schema.ts` · `rulesOnWire`) and the time
  * layer's late line (`timeWindowsLine` + `timeLimitsLine`, composed by `timeLine`), from the one
  * module loaded under the arm.
  */
@@ -206,7 +206,7 @@ type RulesOnWire = Pick<
 
 /**
  * The rules' serve options for a schema that will CARRY `_findings.from`
- * under declared sources (`agent/arguments/serve.ts` · `ServeOptions`) — one
+ * under declared sources (`agent/arguments/serve/schema.ts` · `ServeOptions`) — one
  * frozen value, handed per schema.
  */
 const SOURCES_SERVED = Object.freeze({ sources: true as const });
@@ -353,7 +353,7 @@ export interface ToolsSlotConfig {
    * THE INPUTS LAYER IS ARMED (honesty layer 2) — present ONLY then, only
    * ever `true`. Every served schema whose WINNING implementation declares
    * `askOrAssume` is rebuilt at the ONE decoration site, one step before
-   * `withFindingsArgument` (`arguments/serve.ts` · `withArgumentRules`): each
+   * `withFindingsArgument` (`arguments/serve/schema.ts` · `withArgumentRules`): each
    * `assume`-ruled argument leaves `required` and its property says the rule.
    * Absent, nothing is decorated — a ruled tool on an agent without the layer
    * is refused at dispatch, and a sentence promising a fill would be false.
@@ -368,7 +368,7 @@ export interface ToolsSlotConfig {
    * `findings`, the ledger's `_findings` variant with `from`
    * (`findings/reserved.ts` · `withFindingsArgument`'s `from`); without it,
    * the reserved argument with `from` alone (`withSourcesArgument`). An `ask`
-   * rule's sentence also names `_findings.from` (`arguments/serve.ts` ·
+   * rule's sentence also names `_findings.from` (`arguments/serve/schema.ts` ·
    * `ASK_SOURCES_SENTENCE`). Every other schema keeps its decoration — the
    * ledger's base by reference, or none. Absent → the decoration it always was.
    */
@@ -377,7 +377,7 @@ export interface ToolsSlotConfig {
    * THE TIME LAYER IS ARMED (`.time()`) — present ONLY then. At the same
    * decoration site the slot composes the ONE
    * served time line from the tools it really serves — first the run clock
-   * (`agent/arguments/serve.ts` · `clockSentence`, every request, G16; mount
+   * (`agent/arguments/serve/clock.ts` · `clockSentence`, every request, G16; mount
    * arg `timeClock`), then (`timeWindowsLine`) each window the reader SETTLED this turn in
    * each period tool's own form, each quote still pending, and the window the
    * person set in the app's time control (`time.window`; on every request,
@@ -398,7 +398,7 @@ export interface ToolsSlotConfig {
   /**
    * THE TIME LAYER IS ARMED (`.time()`, step T8) — present ONLY then, and only
    * beside `inputsLayer`. The same site appends the turn's time limits
-   * (`agent/arguments/serve.ts` · `timeLimitsLine`, which renders them) to the
+   * (`agent/arguments/serve/clock.ts` · `timeLimitsLine`, which renders them) to the
    * ONE served time line, from one mount arg, `timeLimits` — unrendered facts
    * (`coverage/timeLimitFacts.ts` · `timeLimitFactsOf` — absent on a turn
    * whose reads match what was asked).
@@ -906,7 +906,7 @@ export function buildToolsSlot(config: ToolsSlotConfig): FlowChart {
         // the current date and time from the library, never from its training date.
         const clock =
           config.timeWindows !== undefined ? rules.clockSentence(args.timeClock) : undefined;
-        // ONE line, opened ONCE with who says it (`agent/arguments/serve.ts` · `timeLine`), never per half.
+        // ONE line, opened ONCE with who says it (`agent/arguments/serve/clock.ts` · `timeLine`), never per half.
         const text = rules.timeLine([clock, windows, limits]) ?? '';
         if (config.timeWindows?.reader === true || text.length > 0) {
           scope.timeLine = { iteration, text };

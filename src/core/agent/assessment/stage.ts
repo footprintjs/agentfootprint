@@ -103,7 +103,7 @@ function committedRecordOf(
 
 /**
  * This turn's assumed values for the line — the "Assumed" block's own reading
- * (`arguments/serve.ts` · `assumedLinesFor`), over the same record the fold
+ * (`arguments/serve/assumed.ts` · `assumedLinesFor`), over the same record the fold
  * read, from the source `compose.ts` · `assumedValuesSourceOf` chooses (the
  * answer account rebuilds the line from the same choice). The reader loads
  * only when the fold says a value was assumed.

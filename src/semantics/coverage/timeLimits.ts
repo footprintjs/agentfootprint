@@ -6,7 +6,7 @@
  *
  * - the limits block (`stages/prepareFinal.ts`), which prints the lines under
  *   `Period` and `Clocks` for the PERSON after the answer;
- * - the served time line (`agent/arguments/serve.ts` · `timeLimitsSentence`),
+ * - the served time line (`agent/arguments/serve/clock.ts` · `timeLimitsSentence`),
  *   which hands the MODEL the same lines as the library's conclusion, late, at
  *   the decision point, before it writes the answer.
  *

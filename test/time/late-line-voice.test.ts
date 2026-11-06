@@ -1,6 +1,7 @@
 /**
  * The ONE served time line's voice (time follow-ups, packet "serving";
- * `agent/arguments/serve.ts` · `timeLine`, `pendingSentence`;
+ * `agent/arguments/serve/clock.ts` · `timeLine` and
+ * `agent/arguments/serve/windows.ts` · `pendingSentence`;
  * `coverage/period.ts` · `periodCheckLine`).
  *
  * Law: the late time line opens ONCE with who says it — the library, not the

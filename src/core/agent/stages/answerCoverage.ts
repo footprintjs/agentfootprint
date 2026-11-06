@@ -27,7 +27,7 @@
  * limits section also carries the "Assumed" block — the values a tool's
  * `assume` rule filled this turn. A typed answer carries the same values as
  * data, on the same key: `answerCoverage.assumed`, read from the SAME rows by
- * the SAME reading the block prints from (`arguments/serve.ts` ·
+ * the SAME reading the block prints from (`arguments/serve/assumed.ts` ·
  * `assumedLinesFor`), so the block and the data cannot disagree about which
  * values were assumed. Read only under that arm — a run that armed no inputs
  * layer never reads the ledger here — and `middlewareDecisions` only when the

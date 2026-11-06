@@ -19,7 +19,7 @@
  *          precedent: no event field ships without a reader in the same
  *          release). The lens reads the rows.
  *
- * Eight kinds, each filed only while `.time()` is armed:
+ * Nine kinds, each filed only while `.time()` is armed:
  *
  * | Kind | Filed | Carries |
  * |------|-------|---------|
@@ -29,6 +29,7 @@
  * | `call-window` | by the inputs layer, once per call to a tool that declares period forms, before it dispatches | which window the call carries: filled from the turn's one window (exactly, or wider — with what the read adds), bound to one (by quote or value), the model's own (beside the person's when it differs), unread, not filled and why, or refused before dispatch and why |
  * | `time-reading` | by seed, once per MENTION the armed reader (`.time({ reader })`) found in the person's message — or ONE row with `mentions: 0` when it found none, so a retry knows the message was read | the quote, the parts, every candidate `resolve.ts` made of them, how the reading settled (`choice` — never settled by the library: every reading is a PROPOSAL, `open` with `confirm`, its candidates `said: []`), the reader's id, version, kind and locale, and the tz database version; a refused mention keeps only why |
  * | `time-answer` | by the batch ask, once per mention the person settled in the time ask — the only door by which a window of words becomes the person's | the mention, the window and its zone, and `how`: `confirmed` (they picked a reading the library offered — the click) or `edited` (they wrote their own) |
+ * | `time-reply` | by the resumed batch ask, once per correction decision | the time-row coordinates, bounded decision and fixed rule label; no raw reply |
  * | `time-derived` | by the Route decider, once per judged answer that stands, when the evidence gate found values no tool result carried that the library itself spelled from this turn's time readings (§ 9.5, step T7 — `forms.ts` · `timeFormsOf`'s `derived` list) | the values, normalized and clipped as the gate reports them — the lineage `derived-from-reading`: never invented, never the person's |
  * | `source-clock` | by ToolCalls, once per call and zone, when the call minted a dataset whose declared time axis names a `zone` (§ 9.6, step T8) | the tool, the call and the zone its rows' wall times are in — read by the limits block's `Clocks` lines and `check.ts` · `clocksDiffer` |
  *
@@ -36,6 +37,7 @@
  */
 
 import { isTimeReplyEvidence, type TimeReplyEvidence } from './replyRecord.js';
+import { isCorrectedMeaning } from './rows/meaning.js';
 import { instantOf } from './instant.js';
 import { isTimeRange, type TimeRange } from './range.js';
 import { isZoneName, type ZoneName } from './zone.js';
@@ -127,6 +129,7 @@ export function timeAnswerRow(
     readonly range: TimeRange;
     readonly zone: ZoneName;
     readonly how: 'confirmed' | 'edited';
+    readonly corrected?: TimeAnswerRow['corrected'];
   },
   at: { readonly turn: number; readonly iteration: number },
 ): TimeAnswerRow {
@@ -139,6 +142,7 @@ export function timeAnswerRow(
     to: answer.range.to,
     zone: answer.zone,
     how: answer.how,
+    ...(answer.corrected !== undefined && { corrected: { ...answer.corrected } }),
   };
 }
 
@@ -484,9 +488,9 @@ function isCallDrift(value: unknown): boolean {
   return d.outcome === 'shifted' && Object.keys(d).length === 2;
 }
 
-/** A `time-answer` row: its mention, a range, a zone, `how` — and no other key. */
+/** A `time-answer` row: its mention, range, zone, how and optional canonical correction. */
 function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
-  const { kind: _k, turn: _t, iteration: _i, mention, zone, how, ...range } = row;
+  const { kind: _k, turn: _t, iteration: _i, mention, zone, how, corrected, ...range } = row;
   void _k;
   void _t;
   void _i;
@@ -494,7 +498,8 @@ function isAnswerRow(row: Readonly<Record<string, unknown>>): boolean {
     isCount(mention) &&
     isZoneName(zone) &&
     (how === 'confirmed' || how === 'edited') &&
-    isTimeRange(range)
+    isTimeRange(range) &&
+    (corrected === undefined || isCorrectedMeaning(corrected, range))
   );
 }
 

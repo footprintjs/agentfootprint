@@ -174,7 +174,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the default menu hint is a system-prompt injection, rebuilt for the current request and active only at iteration 1 with a turn menu; it is not appended to conversation history',
     },
   ],
-  'src/core/agent/arguments/serve.ts': [
+  'src/core/agent/arguments/serve/windows.ts': [
     {
       kind: 'ephemeral',
       count: 1,
@@ -1271,7 +1271,7 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // evidence/figures.ts (one new file) — one request only, served last on the revision
         // request and never in history. ephemeral 20 → 21.
         // Unreleased (time, the unread-words line): the measured next-step
-        // sentence in arguments/serve.ts (one new file) — the served time line
+        // sentence in arguments/serve/windows.ts (moved whole from the facade) — the served time line
         // is one request only, the LAST user line, never in history. ephemeral
         // 21 → 22.
         // footprintjs 9.41.0: sliceToBacktrackTrace's honesty banner now reads its

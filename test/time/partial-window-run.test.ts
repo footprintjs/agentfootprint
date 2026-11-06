@@ -542,8 +542,16 @@ for (const mode of ['dynamic', 'dynamic-grouped'] as const) {
               expect(timeAnswers(agent)).toHaveLength(0);
               expect(isInputPause(outcome)).toBe(true);
               if (!isInputPause(outcome)) throw new Error('expected native time confirmation');
-              expect(outcome.awaitingInput.fields).toHaveLength(1);
+              expect(outcome.awaitingInput.fields).toHaveLength(2);
               expect(outcome.awaitingInput.fields[0].format).toBe('time-range');
+              expect(outcome.awaitingInput.fields[0].required).toBe(false);
+              expect(outcome.awaitingInput.fields[1]).toEqual({
+                id: `${outcome.awaitingInput.fields[0].id}-correction`,
+                type: 'string',
+                required: false,
+                description:
+                  'Or say what should change, such as a time zone, yesterday, or a full interval.',
+              });
               const final = await agent.resume(outcome.checkpoint, {
                 requestId: outcome.awaitingInput.requestId,
                 values: { [outcome.awaitingInput.fields[0].id]: PERSON },

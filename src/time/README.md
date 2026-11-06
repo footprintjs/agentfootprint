@@ -50,7 +50,7 @@ Who asks it today: `coverage/period.ts` reads a declared period's instants throu
 ends) and, under `.time()`, renders `periodLine` through `present.ts` in the run's zone — and,
 since step T8, each result check's line (`periodCheckLine`) and the wall-clock sources
 (`clockLines`), composed per turn by `coverage/timeLimits.ts` · `timeLimitLinesOf` for the limits
-block AND for the model's served time line (`arguments/serve.ts` · `timeLimitsSentence`, late, at
+block AND for the model's served time line (`arguments/serve/clock.ts` · `timeLimitsSentence`, late, at
 the decision point — a SHIFTED read reaches the model as the library's conclusion, `period.ts` ·
 `shiftedConclusion`: "search_logs's look-back ran after the clock moved on, so its result does not
 cover <the missed part, in the person's zone> of the person's window (…) … So the answer says that
@@ -104,7 +104,7 @@ refusal — in `examples/features/85-time-widen-and-refuse.ts`).
 Since step T6b the windows the person CONFIRMED (and a `model` reader's readings) are also
 SERVED, with their source, and a mention still pending is served as NOT confirmed: the Tools mount
 reads them off the ledger (`windows.ts` · `readerWindowsOf`, `pendingQuotesOf`), the slot's one
-decoration site composes ONE late line (`arguments/serve.ts` · `timeWindowsLine`) and `callLLM`
+decoration site composes ONE late line (`arguments/serve/windows.ts` · `timeWindowsLine`) and `callLLM`
 appends it last to the request, request-only — the conclusion at the decision point, never a
 tool description; and a mention still open is ASKED through the batch
 ask (`arguments/ask/fields.ts` · `planAskFields`'s window field, `stages/argumentAsk.ts` · `windowPlanOf`),
@@ -165,7 +165,7 @@ await agent.followUp('and the day before?'); // clock row: zone America/Los_Ange
 
 **The clock-line law (G16): the model reads the date from the library.** Under `.time()` the turn's
 clock is the FIRST sentence of the one served time line, on every request
-(`arguments/serve.ts` · `clockSentence`): "This turn's time: Friday 2026-10-09 08:40
+(`arguments/serve/clock.ts` · `clockSentence`): "This turn's time: Friday 2026-10-09 08:40
 America/Los_Angeles (UTC-07:00)." — the frozen clock to the minute, the weekday in the person's
 zone (a model re-derives a weekday wrong), the zone named. Not "now": the clock is the turn's and
 a resumed request is read later (the deictic-present rule of the model-facing checker). Apps used
@@ -234,7 +234,7 @@ the tool cannot honestly read is refused before it runs, with the reason.** A wi
 tool's `direction`, wholly older than its `retention`, wider than its `maxRange`, spanning days
 for a `day`-only tool, or a sent wall time the zone skips — filled or sent — files `how:
 'refused'` and the model reads a past-tense sentence naming the declared fact
-(`arguments/serve.ts` · `timeRefusal`); splitting a window into several calls is the model's
+(`arguments/serve/refusals.ts` · `timeRefusal`); splitting a window into several calls is the model's
 choice. A window only PARTLY older than `retention` runs, marked `partlyBeyondRetention`.
 **A window of the person's that no form can read — not even wider — is refused, never left to
 the tool's rule** (`no-form-holds`): a look-back ends at now, so a window still running is out of
@@ -363,7 +363,7 @@ call's form like any answer, whatever the tool's own rule says (time follow-ups,
 ask handed a raw `a/b` to a tool that reads `a..b`). The served line leads with the library's conclusion and the one next step: "The library could
 not read “yesterday morning”, so the next step is to call smb_records with window left out: that
 call opens the library's own form … Do not ask about the time in the reply — the form asks it"
-(`arguments/serve.ts` · `unreadSentence`; measured by `bench/time/RULE-unread.md`). A turn with
+(`arguments/serve/windows.ts` · `unreadSentence`; measured by `bench/time/RULE-unread.md`). A turn with
 no reader asks as it always did.
 
 ```ts
@@ -601,7 +601,7 @@ so the rule is by FILE: a synchronous door imports the split-out record half (`r
 re-exports it, and `rows.ts` does not re-export its builders. The later steps keep it the same way:
 the Tools mount's `inputMapper` hands the served line the turn's windows (`windows.ts` ·
 `readerWindowsOf`) and the limits as unrendered FACTS (`agent/coverage/timeLimitFacts.ts`), which
-the slot renders under the arm (`agent/arguments/serve.ts` · `timeLimitsLine`); prepareFinal loads
+the slot renders under the arm (`agent/arguments/serve/clock.ts` · `timeLimitsLine`); prepareFinal loads
 the limits composer (`agent/coverage/timeLimits.ts`) and Route the lineage reader
 (`agent/stages/timeLineage.ts`, which brings `forms.ts`, `bind.ts` and the resolver) through
 `import()`. Pinned by `test/trace-toolpack/browserGraph.test.ts` (the time layer's law).

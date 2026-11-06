@@ -197,12 +197,12 @@ function pairExpectation(
   return problem === undefined ? undefined : factExpectation(problem, facts);
 }
 
-// LENS · tool-result · persistent-history (through `core/agent/arguments/serve.ts` · `unansweredRefusal`)
+// LENS · tool-result · persistent-history (through `core/agent/arguments/serve/refusals.ts` · `unansweredRefusal`)
 // reads: the tool's declared fact the person's answers kept breaking, and its declared value
 // law: names the rule, never the answer; a fact about the source, in the present tense of the source.
 /**
  * What an answer for a period argument must be, in the words the refusal of
- * an exhausted ask names it (`core/agent/arguments/serve.ts` · `unansweredRefusal`'s `expected`) —
+ * an exhausted ask names it (`core/agent/arguments/serve/refusals.ts` · `unansweredRefusal`'s `expected`) —
  * the tool's own fact, never the person's answer.
  */
 export function factExpectation(problem: PeriodFactProblem, facts: PeriodFacts): string {

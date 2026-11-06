@@ -4,6 +4,7 @@ import { timeReplyPairs } from '../../../../time/replyForm.js';
 import { timeReplyOf } from '../../../../time/reply.js';
 import type { TimeReplyEvidence } from '../../../../time/replyRecord.js';
 import { parseRange, spellRange } from '../../../../time/range.js';
+import { offeredLookback } from '../../../../time/windows.js';
 import type { BatchCall, ToolOf } from '../resolve.js';
 import type { AskField, AskTime } from './types.js';
 import { bindWindowAnswer, windowQuestion, type WindowBinding } from './windowBinding.js';
@@ -54,11 +55,30 @@ export function bindWindowReply(
   const reply: TimeReplyEvidence = { decision: decision.kind, rule: decision.rule };
   if (decision.kind === 'hold')
     return { expected: decision.reason, reply, retry: { ...field, question: decision.reason } };
-  if (decision.kind === 'reask')
-    return { ...windowQuestion(field, decision.row, toolOf, time), reply };
+  if (decision.kind === 'reask') {
+    const next = windowQuestion(field, decision.row, toolOf, time);
+    return 'followUp' in next
+      ? {
+          followUp: { ...next.followUp, window: { ...next.followUp.window!, corrected: true } },
+          reply,
+        }
+      : { ...next, reply };
+  }
   const value = spellRange(decision.range);
-  const bound = bindWindowAnswer(field, value, byId, toolOf, time);
+  const bound = bindWindowAnswer(field, value, byId, toolOf, time, decision.how);
+  const corrected = window.corrected === true || decision.rule === 'interval-corrected';
+  const lookback =
+    decision.how === 'confirmed' ? offeredLookback(reading, decision.range) : undefined;
   return 'fills' in bound
-    ? { ...bound, answered: { ...bound.answered, how: decision.how }, value, reply }
+    ? {
+        ...bound,
+        answered: {
+          ...bound.answered,
+          how: decision.how,
+          ...(corrected && { corrected: { ...(lookback !== undefined && { lookback }) } }),
+        },
+        value,
+        reply,
+      }
     : { ...bound, value, reply };
 }
