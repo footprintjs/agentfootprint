@@ -5,8 +5,7 @@
  */
 /* ── the section below the film: STAND, letter by letter ───────────────────── */
 
-/** `finding` means the check records what it found and does not move the standing today. */
-export type TileEffect = 'standing' | 'finding' | 'word' | 'act';
+export type TileEffect = 'standing' | 'word' | 'act';
 
 export interface Tile {
   readonly name: string;
@@ -256,7 +255,7 @@ export const PLACES: readonly Place[] = [
       { check: 'Check in', api: 'checkIn', compares: 'The call against your rule, then a person', decides: 'Code, then a person', then: 'Pauses for approval.' },
       { check: 'Ask or assume', api: 'askOrAssume', compares: 'A missing value against the tool’s rule', decides: 'Code', then: 'Asks once before anything runs, or fills it in and says so.' },
       { check: 'Where a value came from', api: 'argumentSources', compares: 'The source the model cites against the person’s words or a result', decides: 'Code, when the model declares', then: 'Runs, asks or flags.' },
-      { check: 'Made-up tool inputs', api: 'argumentsFrom', compares: 'An ID the model passes against what it was shown', decides: 'Code', then: 'Recorded only. The tool still runs.' },
+      { check: 'Made-up tool inputs', api: 'argumentsFrom', compares: 'An ID the model passes against what it was shown', decides: 'Code', then: 'The tool still runs. With the answer layer, the standing reads not sure.' },
     ],
     note: 'Which tool to call stays the model’s choice, and this is the thinnest part. An unknown tool is refused. The rest is recorded.',
   },
@@ -270,7 +269,7 @@ export const PLACES: readonly Place[] = [
       { check: 'Declared limits', api: 'absent(), coverage()', compares: 'What the tool says it checked and skipped', decides: 'The tool declares, and code reads it', then: 'A reason on the standing.' },
       { check: 'Empty result', api: '', compares: 'An empty result with nothing declared', decides: 'Code', then: 'A reason on the standing.' },
       { check: 'Time window', api: 'period', compares: 'The period asked against the period held', decides: 'Code', then: 'A reason on the standing.' },
-      { check: 'Column types', api: 'resultColumns', compares: 'Rows against the declared columns', decides: 'Code', then: 'Off by default. Warns, or refuses the rows.' },
+      { check: 'Column types', api: 'resultColumns', compares: 'Rows against the declared columns', decides: 'Code', then: 'Off by default. Warns, or refuses the rows. With the answer layer, the standing reads not sure.' },
       { check: 'Conflicting readings', api: '.findings()', compares: 'Two readings the model stood on for one fact', decides: 'Code, when the model declares', then: 'A reason on the standing.' },
       { check: 'A judge on tool results', api: '.findings({ judge })', compares: 'The result against the model’s proposition', decides: 'A classifier', then: 'Filed apart. It never sets the standing.' },
     ],
@@ -284,7 +283,7 @@ export const PLACES: readonly Place[] = [
     rows: [
       { check: 'Answer shape', api: '.outputSchema()', compares: 'The answer against your parser', decides: 'Code', then: 'No retry by default. { retries: N } gives N corrective turns.' },
       { check: 'Invented values', api: '.namesAndNumbersFromEvidence()', compares: 'Long numbers and IDs against tool results. Small numbers are skipped', decides: 'Code', then: 'Flags it, gives one more turn, or refuses, by posture.' },
-      { check: 'Contradiction', api: '.claims()', compares: 'A structured field against a fact the tool marked', decides: 'Code', then: 'Recorded on its own. Withheld when an enforcing check lists it.' },
+      { check: 'Contradiction', api: '.claims()', compares: 'A structured field against a fact the tool marked', decides: 'Code', then: 'Delivered, and with the answer layer the standing reads not sure. Withheld when an enforcing check lists it.' },
       { check: 'Did it run at all', api: 'context.toolCalls', compares: 'The answer against the tools that ran', decides: 'Your code', then: 'Through your check.' },
       { check: 'Code shown', api: 'Tool.script', compares: 'Code in the answer against the program submitted', decides: 'Code', then: 'Marked unmatched.' },
       { check: 'Steps left undone', api: 'skill steps', compares: 'The answer against a skill’s declared steps', decides: 'Code', then: 'A reason on the standing.' },
@@ -320,7 +319,7 @@ export const STOPS: readonly { readonly name: string; readonly text: string }[] 
   { name: 'Trusted tools', text: 'A tool’s declarations are trusted. A tool that misstates what it searched gets an honest-looking standing.' },
   { name: 'Your own check', text: 'It can call a model, and the library cannot see how it decided. A stub that always passes still reads known.' },
   { name: 'Rewrites', text: 'Under guard or a schema retry the new answer is the model’s. Only the re-check is code.' },
-  { name: 'Findings that do not move the word yet', text: 'A contradiction on its own, a made-up tool input and evidence from an earlier turn are recorded, and the word can still read consistent or not assessed.' },
+  { name: 'Findings that stay notes', text: 'An empty lookup, evidence from an earlier turn and a tool offered with nothing behind it mark a place to look. They never move the word, which can still read consistent or not assessed.' },
   { name: 'Opt-in', text: 'Almost every check is opt-in, and a tool that marks nothing gets compared with nothing.' },
   { name: 'The world', text: 'A false sentence built from real values can pass. The record is not the world.' },
 ];

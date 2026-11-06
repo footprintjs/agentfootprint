@@ -3,7 +3,6 @@ import { LETTERS, PLACES, type Place, type Tile } from './standsCopy';
 
 const TAG: Partial<Record<NonNullable<Tile['effect']>, string>> = {
   standing: 'moves the standing',
-  finding: 'recorded only',
 };
 
 /** Odd segments between backticks are code. */
@@ -102,10 +101,6 @@ export function StandGrid() {
           </div>
         </article>
       ))}
-      <p className="sg-key">
-        <strong>Recorded only</strong> means the check files what it found and does not move the answer&rsquo;s standing
-        today.
-      </p>
     </section>
   );
 }

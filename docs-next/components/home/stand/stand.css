@@ -812,16 +812,6 @@
   font-size: 12.5px;
   line-height: 1.4;
 }
-.sg-key {
-  margin: 0;
-  padding-block: 18px 4px;
-  border-top: 1px solid var(--border);
-  color: var(--fg-muted);
-  font-size: 14px;
-}
-.sg-key strong {
-  color: var(--fg);
-}
 .hs-place {
   margin-top: 22px;
   scroll-margin-top: 80px;

@@ -172,7 +172,7 @@ test('contradiction: the finding, then withheld, with no re-ask and nothing stre
   assert.equal(tokens, 0, 'a withheld typed answer streams nothing');
 });
 
-test('contradiction, on its own: the answer is delivered and the standing stays not assessed', async () => {
+test('contradiction, on its own: the answer is delivered and the standing reads not sure', async () => {
   const agent = Agent.create({
     provider: mock({ replies: [callRefund, { content: JSON.stringify(CASES.contradicted) }] }),
     model: 'mock',
@@ -183,7 +183,12 @@ test('contradiction, on its own: the answer is delivered and the standing stays 
     .answerLayer()
     .build();
   assert.equal(await agent.run({ message: REAL.question }), JSON.stringify(CASES.contradicted));
-  assert.equal((await agent.assessment()).standing, 'not-assessed');
+  const assessment = await agent.assessment();
+  assert.equal(assessment.standing, 'not-sure');
+  assert.deepEqual(
+    assessment.reasons.map((row: { reason: string }) => row.reason),
+    ['unsupported-claim'],
+  );
 });
 
 test('known: an agreeing typed answer and a check you wrote that passed', async () => {
