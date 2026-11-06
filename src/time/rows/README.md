@@ -1,24 +1,15 @@
 # Trace — time row contracts
 
-`../rows.ts` remains the synchronous row facade: its existing builders, ledger
-queries, closed-kind router and checkpoint checks remain there. `types.ts`
-owns the complete existing row interface/type union family, including the
-bounded TimeReplyRow contract already present in the current WIP.
+`../rows.ts` is the synchronous facade for builders, ledger queries, the closed
+row-kind router and checkpoint validation. This sealed folder owns the row
+interface and union types. Its imports are type-only; it loads no English
+reader, reply parser or resolver, and has no runtime edge back to the facade.
 
-This is a Stage A type-only whole-unit move. The new module has only erased
-type imports, never an English reader, reply parser, resolver or runtime import
-back to the facade. All existing types are re-exported through rows.ts without
-renaming, a wire change or a new public capability. The facade is below 600
-lines; no size baseline is changed here.
+The existing type names remain available through `rows.ts`. The additive
+`TimeReplyRow` carries only the reply decision, fixed rule label and time-row
+coordinates. It carries no correction text, parser output or new raw mirror.
+The facade validates that closed shape alongside the existing time rows.
 
-Runtime builders/readers/checks, including timeReplyRow and its existing
-replyRecord evidence test, are byte-identical. No clock, range, decision label,
-metadata, unknown-row behavior or checkpoint acceptance changes in this move.
-The heavier reading builders still belong to rowsBuild.ts and remain off the
-synchronous checkpoint graph.
-
-Existing behavior tests read the same facade at `test/time/resolve.test.ts`,
-`test/time/clock.test.ts`, `test/time/bind.test.ts`, `test/time/english-run.test.ts`
-and the checkpoint suites. Root's new reply-row tests remain their existing
-owner. Root executes current-head type/graph/runtime checks and exact review;
-this README does not carry earlier proof or claim a result.
+Reading builders that invoke the resolver stay in `../rowsBuild.ts`, outside
+the synchronous checkpoint graph. Adjacent pure reply-record tests cover the
+bounded metadata; native time and checkpoint suites cover its integration.
