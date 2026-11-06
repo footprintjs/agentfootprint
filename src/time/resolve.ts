@@ -79,23 +79,20 @@
  */
 
 import { daysInMonth, instantOf, spellInstant, utcWallMs, type InstantText } from './instant.js';
-import { isTimeRange, lookbackRange, type TimeRange } from './range.js';
+import { isTimeRange, type TimeRange } from './range.js';
 import {
-  fixedOffsetZone,
   isWallTime,
   isZoneName,
   offsetAt,
   readWall,
   wallAt,
   wallToInstant,
-  zoneOfPlace,
   type WallTime,
   type ZoneName,
 } from './zone.js';
 import type { Grain } from './present.js';
 import type { TimeParts, TimeWall } from './reader.js';
 import {
-  offsetOfToken,
   PART_ORDER,
   type MentionResolution,
   type OpenQuestion,
@@ -106,8 +103,18 @@ import {
   type TimeNote,
   type TimePart,
   type TimePolicy,
-  type ZoneAbbreviation,
 } from './resolveRecord.js';
+import { lookbackBuilt } from './resolve/lookback.js';
+import { timeChoiceIdentity } from './choiceIdentity.js';
+import type { Built, Unresolved } from './resolve/types.js';
+import {
+  lookbackZoneReadsOf,
+  zoneReadsOf,
+  viaOf,
+  type ZoneRead,
+  type ZonePolicy,
+} from './resolve/zones.js';
+export { placeBeforeTime } from './resolve/zones.js';
 
 export {
   candidateIsWellFormed,
@@ -132,150 +139,6 @@ export type {
   ZoneAbbreviation,
 } from './resolveRecord.js';
 
-// ─── Zones ───────────────────────────────────────────────────────────────
-
-/** How a zone read from words got there, when the words were no zone name (`London time`, `PST`). */
-interface ZoneVia {
-  readonly token: string;
-  readonly as: 'place' | 'abbreviation' | 'abbreviation-literal';
-}
-
-type ZoneRead =
-  | {
-      readonly kind: 'iana';
-      readonly zone: ZoneName;
-      readonly said: boolean;
-      readonly via?: ZoneVia;
-    }
-  | {
-      readonly kind: 'offset';
-      readonly minutes: number;
-      readonly spelled: string;
-      readonly via?: ZoneVia;
-      /** The zone a window read at this offset is presented in — absent: the clock's. */
-      readonly shownIn?: ZoneName;
-    };
-
-/**
- * `London time`, `New York time` — a place named with the word `time` (the
- * reader keeps it as written): `/^(.+?)\s+time$/i.exec(token)?.[1]`, in one
- * pass. That regex grew its lazy place one character at a time and, at each,
- * re-read the blank run after it looking for `time` — quadratic on a letter, a
- * long blank run and anything but `time`, and a token can come straight from
- * the message. The place is everything before the blank run that ends just
- * before `time` (at least one character), and holds no line break, which `.`
- * would not match.
- */
-export function placeBeforeTime(token: string): string | undefined {
-  const timeAt = token.length - 4;
-  if (timeAt < 2 || !spellsTimeAt(token, timeAt)) return undefined;
-  let blankStart = timeAt;
-  while (blankStart > 0 && isRegExpWhitespace(token.charCodeAt(blankStart - 1))) blankStart--;
-  const placeEnd = Math.max(blankStart, 1);
-  if (placeEnd >= timeAt) return undefined;
-  for (let at = 0; at < placeEnd; at++) {
-    if (isLineBreak(token.charCodeAt(at))) return undefined;
-  }
-  return token.slice(0, placeEnd);
-}
-
-/** `time`, in any ASCII case, at `at`. */
-function spellsTimeAt(token: string, at: number): boolean {
-  const word = 'time';
-  for (let i = 0; i < word.length; i++) {
-    if ((token.charCodeAt(at + i) | 0x20) !== word.charCodeAt(i)) return false;
-  }
-  return true;
-}
-
-// `lib/linearText.ts` · `isRegExpWhitespace` / `isLineBreak`, restated because
-// this folder imports nothing outside itself. Both are pinned on every UTF-16
-// code unit through `placeBeforeTime` in `test/security/linear-scanners.test.ts`.
-
-/** `\s`: WhiteSpace and LineTerminator. */
-function isRegExpWhitespace(code: number): boolean {
-  if (code <= 0x20) return code === 0x20 || (code >= 0x09 && code <= 0x0d);
-  if (code < 0xa0) return false;
-  return (
-    code === 0xa0 ||
-    code === 0x1680 ||
-    (code >= 0x2000 && code <= 0x200a) ||
-    code === 0x2028 ||
-    code === 0x2029 ||
-    code === 0x202f ||
-    code === 0x205f ||
-    code === 0x3000 ||
-    code === 0xfeff
-  );
-}
-
-/** What `.` does not match: LF, CR, U+2028, U+2029. */
-function isLineBreak(code: number): boolean {
-  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
-}
-
-/** The policy half the resolver reads: the app's abbreviation map. */
-type ZonePolicy = Pick<TimePolicy, 'abbreviations'>;
-
-/**
- * The app's entry for an abbreviation token — looked up by OWN key only. A
- * token is whatever a reader returned (a `model` or custom reader may pass
- * `constructor` or `__proto__` straight from the message), and the map is a
- * plain object, so an inherited member must read as "not in the map" — the
- * zone is then asked, never thrown on.
- */
-function abbreviationOf(
-  policy: ZonePolicy | undefined,
-  token: string,
-): ZoneAbbreviation | undefined {
-  const map = policy?.abbreviations;
-  return map !== undefined && Object.prototype.hasOwnProperty.call(map, token)
-    ? map[token]
-    : undefined;
-}
-
-/**
- * Every zone reading of a token — one, or TWO for an abbreviation in the
- * app's map (its zone, then its literal offset) — or `undefined` when the
- * token names no zone this layer can read, so the zone is ASKED. The one
- * owner of which words become a zone (§ 5.3): an IANA name and a numeric
- * offset as said; a place named with `time` only when the tz database has
- * exactly one zone for it (`zone.ts` · `zoneOfPlace`); an abbreviation only
- * through the app's map. Nothing else — never a hand word list.
- */
-function zoneReadsOf(
-  token: string | undefined,
-  clockZone: ZoneName,
-  policy: ZonePolicy | undefined,
-): ZoneRead[] | undefined {
-  if (token === undefined) return [{ kind: 'iana', zone: clockZone, said: false }];
-  if (isZoneName(token)) return [{ kind: 'iana', zone: token, said: true }];
-  if (token === 'Z') return [{ kind: 'offset', minutes: 0, spelled: 'Z' }];
-  const offset = offsetOfToken(token);
-  if (offset !== undefined) return [{ kind: 'offset', ...offset }];
-  const mapped = abbreviationOf(policy, token);
-  if (mapped !== undefined) {
-    const literal = offsetOfToken(mapped.offset);
-    const reads: ZoneRead[] = [
-      { kind: 'iana', zone: mapped.zone, said: true, via: { token, as: 'abbreviation' } },
-    ];
-    if (literal !== undefined) {
-      const via: ZoneVia = { token, as: 'abbreviation-literal' };
-      const fixed = fixedOffsetZone(literal.minutes);
-      reads.push(
-        fixed !== undefined
-          ? { kind: 'iana', zone: fixed, said: true, via }
-          : { kind: 'offset', ...literal, via, shownIn: mapped.zone },
-      );
-    }
-    return reads;
-  }
-  const place = placeBeforeTime(token);
-  const zone = place === undefined ? undefined : zoneOfPlace(place);
-  if (zone !== undefined) return [{ kind: 'iana', zone, said: true, via: { token, as: 'place' } }];
-  return undefined;
-}
-
 /**
  * The parts with every zone token this layer cannot read (an abbreviation
  * outside the app's map, `India time`) replaced by the zone the PERSON named
@@ -293,10 +156,14 @@ export function withZoneAnswered(
   zone: ZoneName,
   policy?: ZonePolicy,
 ): TimeParts[] {
-  const fix = (parts: TimeParts): TimeParts =>
-    parts.zoneToken !== undefined && zoneReadsOf(parts.zoneToken, zone, policy) === undefined
-      ? { ...parts, zoneToken: zone }
-      : parts;
+  const fix = (parts: TimeParts): TimeParts => {
+    if (parts.zoneToken === undefined) return parts;
+    const needsZone =
+      parts.relative !== undefined && 'count' in parts.relative
+        ? !Array.isArray(lookbackZoneReadsOf(parts.zoneToken, zone, policy))
+        : zoneReadsOf(parts.zoneToken, zone, policy) === undefined;
+    return needsZone ? { ...parts, zoneToken: zone } : parts;
+  };
   return parses.map((parts) => {
     const outer = fix(parts);
     return outer.rangeOf === undefined
@@ -560,8 +427,6 @@ interface Point {
   readonly anchor: 'message' | 'none';
 }
 
-type Unresolved = { readonly unsupported: string } | { readonly needsZone: true };
-
 /**
  * The points of one side. `dayAfter` reads its date one calendar day later —
  * only for the right side of an overnight range (`overnightPairs`), whose day
@@ -585,18 +450,6 @@ function pointsOf(
     out.push(...points);
   }
   return out;
-}
-
-/** What a zone read adds to a point: the note naming the words, and the abbreviation's reading tag. */
-function viaOf(zone: ZoneRead): { notes: TimeNote[]; tags: Pick<ReadingTags, 'abbreviation'> } {
-  if (zone.kind === 'offset' && zone.via === undefined) {
-    return { notes: [{ kind: 'offset-said', offset: zone.spelled }], tags: {} };
-  }
-  const via = zone.via;
-  if (via === undefined) return { notes: [], tags: {} };
-  const note: TimeNote = { kind: 'zone-read', token: via.token, as: via.as };
-  if (via.as === 'place') return { notes: [note], tags: {} };
-  return { notes: [note], tags: { abbreviation: via.as === 'abbreviation' ? 'zone' : 'literal' } };
 }
 
 /** The points of the parts under ONE zone read. */
@@ -710,11 +563,6 @@ function windowZone(zone: ZoneRead, clock: ResolveClock): ZoneName {
   return zone.kind === 'iana' ? zone.zone : zone.shownIn ?? clock.zone;
 }
 
-interface Built {
-  readonly candidate: Omit<TimeCandidate, 'reader' | 'said' | 'parse'>;
-  readonly said: readonly TimePart[];
-}
-
 function fromPoint(point: Point, clock: ResolveClock): Built | undefined {
   const from = spell(point.fromMs, point.zone);
   const to = spell(point.toMs, point.zone);
@@ -791,41 +639,6 @@ function fromSides(l: Point, r: Point, clock: ResolveClock): Built | undefined {
   };
 }
 
-const LOOKBACK_LETTER: Readonly<Record<string, string>> = {
-  second: 's',
-  minute: 'm',
-  hour: 'h',
-  day: 'd',
-  week: 'w',
-};
-
-function lookbackBuilt(parts: TimeParts, clock: ResolveClock): Built | Unresolved | undefined {
-  const rel = parts.relative;
-  if (rel === undefined || !('count' in rel)) return undefined;
-  const others = Object.keys(parts).filter((k) => k !== 'relative');
-  if (others.length > 0) return { unsupported: 'a look-back with other parts' };
-  const duration = `${rel.count}${LOOKBACK_LETTER[rel.unit] as string}`;
-  let range: TimeRange;
-  try {
-    range = lookbackRange(clock.now, duration, 'smhdw');
-  } catch {
-    return { unsupported: 'a look-back past the calendar' };
-  }
-  return {
-    said: ['duration'],
-    candidate: {
-      window: { kind: 'lookback', duration },
-      range,
-      zone: clock.zone,
-      grain: rel.unit,
-      implied: [],
-      anchor: 'message',
-      notes: [],
-      reading: {},
-    },
-  };
-}
-
 /** A range side with what it takes from the whole mention and the other side: the day, the zone. */
 function sideOf(side: TimeParts, outer: TimeParts, other: TimeParts): TimeParts {
   const hasDay = (p: TimeParts): boolean => p.date !== undefined || p.relative !== undefined;
@@ -839,25 +652,6 @@ function sideOf(side: TimeParts, outer: TimeParts, other: TimeParts): TimeParts 
     ...(day?.relative !== undefined && { relative: day.relative }),
     ...(zoneToken !== undefined && { zoneToken }),
   };
-}
-
-/**
- * A literal-offset reading that names the same window as the zone reading is
- * no second reading: `PST` in January IS America/Los_Angeles's −08:00.
- */
-function withoutAgreeingLiterals(built: readonly Built[]): Built[] {
-  const key = (b: Built): string => {
-    const from = instantOf(b.candidate.range.from, 'strict')?.ms;
-    const to = instantOf(b.candidate.range.to, 'strict')?.ms;
-    const r = b.candidate.reading;
-    return JSON.stringify([from, to, r.dateOrder, r.year, r.meridiem, r.endMeridiem]);
-  };
-  const zoneWindows = new Set(
-    built.filter((b) => b.candidate.reading.abbreviation === 'zone').map(key),
-  );
-  return built.filter(
-    (b) => b.candidate.reading.abbreviation !== 'literal' || !zoneWindows.has(key(b)),
-  );
 }
 
 const HALF_DAY_MS = 12 * 3_600_000;
@@ -951,8 +745,7 @@ function builtOf(
   // The person's zone is unknown (G15): a mention that names none waits on it — even a
   // look-back, whose window would be shown, confirmed and converted in a zone nobody said.
   if (clock.zoneSource === 'unknown' && !namesZone(parts)) return { needsZone: true };
-  const built = builtOfAll(parts, clock, nowMs, policy);
-  return Array.isArray(built) ? withoutAgreeingLiterals(built) : built;
+  return builtOfAll(parts, clock, nowMs, policy);
 }
 
 function builtOfAll(
@@ -961,8 +754,8 @@ function builtOfAll(
   nowMs: number,
   policy: ZonePolicy | undefined,
 ): Built[] | Unresolved {
-  const lookback = lookbackBuilt(parts, clock);
-  if (lookback !== undefined) return 'candidate' in lookback ? [lookback] : lookback;
+  const lookback = lookbackBuilt(parts, clock, policy);
+  if (lookback !== undefined) return lookback;
   if (parts.rangeOf === undefined) {
     const points = pointsOf(parts, clock, nowMs, policy);
     if (!Array.isArray(points)) return points;
@@ -974,7 +767,10 @@ function builtOfAll(
   const [l, r] = parts.rangeOf;
   const left = sideOf(l, parts, r);
   const right = sideOf(r, parts, l);
-  if (lookbackBuilt(left, clock) !== undefined || lookbackBuilt(right, clock) !== undefined) {
+  if (
+    lookbackBuilt(left, clock, policy) !== undefined ||
+    lookbackBuilt(right, clock, policy) !== undefined
+  ) {
     return { unsupported: 'a look-back as a range side' };
   }
   const lp = pointsOf(left, clock, nowMs, policy);
@@ -1033,8 +829,10 @@ export function resolveMention(
   parses.forEach((parts, parse) => {
     const built = builtOf(parts, clock, now.ms, policy);
     if (!Array.isArray(built)) {
-      if ('needsZone' in built) needsZone = true;
-      else unsupported.push(built.unsupported);
+      if ('needsZone' in built) {
+        needsZone = true;
+        if (built.reason !== undefined) unsupported.push(built.reason);
+      } else unsupported.push(built.unsupported);
       return;
     }
     for (const b of built) {
@@ -1052,8 +850,7 @@ export function resolveMention(
 
 // ─── Choosing ────────────────────────────────────────────────────────────
 
-const windowKey = (c: TimeCandidate): string =>
-  c.window.kind === 'lookback' ? `lookback:${c.window.duration}` : `${c.range.from}/${c.range.to}`;
+const windowKey = timeChoiceIdentity;
 
 function openQuestions(candidates: readonly TimeCandidate[], confirm: boolean): OpenQuestion[] {
   const differs = (read: (c: TimeCandidate) => unknown): boolean =>

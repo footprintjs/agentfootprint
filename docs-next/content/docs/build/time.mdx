@@ -103,6 +103,13 @@ compact `last 24h` — and files every other time phrase it recognises as ONE
 unreadable mention quoting the whole phrase. `EnglishTimeReaderOptions` takes only a `locale` for the
 labels of the ask; it never decides a date order.
 
+A duration can name its display zone: `last 1 hour in America/New_York`
+keeps the same elapsed instants as `last 1 hour`, shown in the requested zone.
+Calendar words such as `yesterday` use that zone to determine the instants too.
+A stated abbreviation is resolved by the declared policy or asked. A fixed
+offset the IANA-only display contract cannot represent is asked as well;
+the library does not silently substitute the run's fallback zone.
+
 A reading only PROPOSES. Nothing typed in chat is filed as the person's words:
 when a tool that declares a period is about to be called, the reading is
 offered as a pre-filled, editable confirmation naming its window and its zone,

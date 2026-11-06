@@ -275,6 +275,21 @@ export async function run(input: string): Promise<string> {
   console.log('asked:', both?.description);
   both?.enum?.forEach((value, i) => console.log(`  ${String(value)}  (${both.labels?.[i]})`));
   check(both?.format === 'time-range' && both.enum?.length === 2, 'both readings of PST, one ask');
+
+  // 5. Elapsed words keep their stated display zone without moving the frozen interval.
+  const eastern = desk([]);
+  const elapsed = await eastern.run({
+    message: 'Any client activity in the last 1 hour in America/New_York?',
+    time,
+  });
+  check(isInputPause(elapsed), 'a confirmation of the elapsed hour in its stated zone');
+  if (!isInputPause(elapsed)) return String(elapsed);
+  const hour = elapsed.awaitingInput.fields[0];
+  check(
+    hour?.enum?.[0] === '2026-10-09T14:40:00Z/2026-10-09T15:40:00.001Z',
+    'the original elapsed endpoints',
+  );
+  check(hour?.labels?.[0]?.includes('America/New_York') === true, 'the stated display zone');
   return String(done);
 }
 

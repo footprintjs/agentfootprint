@@ -640,7 +640,7 @@ describe('boundary', () => {
   it('the reader is frozen and names itself', () => {
     expect(reader).toMatchObject({
       id: 'agentfootprint/english',
-      version: '1.2.0',
+      version: '1.3.0',
       locale: 'en-US',
       kind: 'rule',
     });
@@ -697,12 +697,26 @@ describe('property — over seeded texts', () => {
 describe('security', () => {
   it('the leaf law: `readers/` imports only the port', () => {
     const dir = join(__dirname, '..', '..', 'src', 'time', 'readers');
-    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+    const helpers = ['english/types.ts', 'english/zones.ts'];
+    expect(
+      readdirSync(join(dir, 'english'))
+        .filter((f) => f.endsWith('.ts'))
+        .sort(),
+    ).toEqual(['types.ts', 'zones.ts']);
+    const allowed: Readonly<Record<string, readonly string[]>> = {
+      'english.ts': ['../reader.js', './english/types.js', './english/zones.js'],
+      'english/types.ts': ['../../reader.js'],
+      'english/zones.ts': ['./types.js'],
+    };
+    const files = [...readdirSync(dir).filter((f) => f.endsWith('.ts')), ...helpers];
+    for (const file of files) {
       const text = readFileSync(join(dir, file), 'utf8');
       const specifiers = [
         ...text.matchAll(/^\s*(?:import|export)[^'"]*from\s+['"]([^'"]+)['"]/gm),
       ].map((m) => m[1] as string);
-      for (const spec of specifiers) expect(spec, `${file} imports ${spec}`).toBe('../reader.js');
+      for (const spec of specifiers) {
+        expect(allowed[file] ?? ['../reader.js'], `${file} imports ${spec}`).toContain(spec);
+      }
     }
   });
 

@@ -86,13 +86,15 @@ import {
   type TimeRelative,
   type TimeWall,
 } from '../reader.js';
+import type { Atom } from './english/types.js';
+import { attachZone } from './english/zones.js';
 
 // ─── The words (data) ────────────────────────────────────────────────────
 
 /** The reader's recorded identity — on every `time-reading` row with its version. */
 export const ENGLISH_TIME_READER_ID = 'agentfootprint/english';
 /** Raised whenever what the reader returns for some text changes. */
-export const ENGLISH_TIME_READER_VERSION = '1.2.0';
+export const ENGLISH_TIME_READER_VERSION = '1.3.0';
 
 const DAY_WORDS: Readonly<Record<string, number>> = { today: 0, yesterday: -1, tomorrow: 1 };
 
@@ -116,16 +118,6 @@ const MONTH_NUMBERS: Readonly<Record<string, number>> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 }; // prettier-ignore
 
-/** Zone abbreviations the reader TOKENIZES after a time or a date — never maps (§ 5.3). */
-const ZONE_ABBREVIATIONS = [
-  'UTC', 'GMT', 'PST', 'PDT', 'PT', 'MST', 'MDT', 'MT', 'CST', 'CDT', 'CT', 'EST', 'EDT', 'ET',
-  'AKST', 'AKDT', 'HST', 'AST', 'ADT', 'NST', 'NDT', 'BST', 'IST', 'CET', 'CEST', 'EET', 'EEST',
-  'WET', 'WEST', 'MSK', 'JST', 'KST', 'HKT', 'SGT', 'AEST', 'AEDT', 'ACST', 'ACDT', 'AWST',
-  'NZST', 'NZDT', 'SAST',
-] as const; // prettier-ignore
-
-const IANA_AREAS =
-  'Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific|Etc';
 const UNIT_WORDS =
   'seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?|years?|quarters?';
 const NUMBER_WORDS =
@@ -207,17 +199,6 @@ const MODIFIER_AFTER = new RegExp(
 
 // ─── The v1 phrases ──────────────────────────────────────────────────────
 
-/** One v1 phrase found in the text: its span and the parts it says. */
-interface Atom {
-  readonly start: number;
-  end: number;
-  readonly kind: 'instant' | 'date' | 'wall' | 'bare' | 'day' | 'span';
-  readonly date?: TimeDate;
-  readonly wall?: TimeWall;
-  readonly relative?: TimeRelative;
-  zoneToken?: string;
-}
-
 /** Text not preceded by something that would make these digits part of a larger token. */
 const NOT_AFTER = '(?<![\\w:./-])';
 /**
@@ -270,23 +251,6 @@ const MONTH_DATE = new RegExp(
 );
 /** `the last hour`, `the past week` — a look-back of one unit; without `the`, `last week` is a calendar week (not read). */
 const ONE_SPAN = /\bthe\s+(?:last|past)\s+(hour|day|week)\b/gi;
-
-/**
- * A place named with the word `time` — `London time`, `New York time` — kept
- * as written: which zone it names is `resolve.ts`'s (the tz database's one
- * zone for the place, else asked). Capitalised words only, so `the same
- * time` is no zone.
- */
-const PLACE_TIME = '[A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,2}\\s+[Tt]ime';
-
-/** A zone right after a phrase: optional `(`, or `in`, then the token (and a closing `)`). */
-const ZONE_AFTER = new RegExp(
-  '^(?<lead>\\s*\\(?\\s*|\\s+in\\s+)' +
-    `(?:(?<iana>(?:${IANA_AREAS})/[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)?)` +
-    '|(?:UTC|GMT)\\s?(?<offset>[+-]\\d{1,2}(?::?\\d{2})?)' +
-    `|(?<place>${PLACE_TIME})` +
-    `|(?<abbreviation>${ZONE_ABBREVIATIONS.join('|')}))(?![A-Za-z0-9_/])(?<close>\\s*\\))?`,
-);
 
 const num = (text: string | undefined): number | undefined =>
   text === undefined ? undefined : Number(text);
@@ -460,25 +424,6 @@ function atomsOf(text: string): Atom[] {
     if (last === undefined || atom.start >= last.end) out.push(atom);
   }
   return out;
-}
-
-/**
- * A zone written right after a date, a time or a day word joins that
- * phrase, as written — `yesterday London time` is a London day, and reading
- * `yesterday` alone would silently put it in the app's zone. A look-back
- * (`last 2 hours`) takes none: it runs until now in every zone.
- */
-function attachZone(text: string, atom: Atom): void {
-  if (atom.kind === 'span' || atom.kind === 'bare') return;
-  if (atom.zoneToken !== undefined) return;
-  const m = ZONE_AFTER.exec(text.slice(atom.end));
-  if (m === null || m.groups === undefined) return;
-  const { lead, iana, offset, place, abbreviation, close } = m.groups;
-  if ((lead as string).includes('(') !== (close !== undefined)) return;
-  // The IANA name, else the offset after `UTC` / `GMT`, else the place, else the abbreviation — each verbatim.
-  const token = iana ?? offset ?? place ?? (abbreviation as string);
-  atom.zoneToken = token;
-  atom.end += m[0].length;
 }
 
 // ─── The phrases v1 does not read ────────────────────────────────────────
