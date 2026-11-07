@@ -30,6 +30,7 @@ import { bindScopeComputation, captureLateEmitter } from '../redaction/runRedact
 import { createAgentRunValues, type AgentRunValues } from './agent/runValues.js';
 import {
   bindRunnerStage,
+  finishLeg,
   type RunnerScopeValues,
   type RunnerInvocation,
   type RunnerSelection,
@@ -2079,6 +2080,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       this.aroundTurnPort,
       { kind: 'run', input, options },
       (changes) => leg(runInputWith(input, options, changes)),
+      (legFailed) => finishLeg(invocation.run, legFailed),
       (failure) => this.noteAroundTurnFailed(invocation, failure),
     );
   }
@@ -2164,8 +2166,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // boundaries, which is the failure mode `recordRun` exists to prevent.
     // Returns `undefined` (and touches nothing) unless the dial is on.
     const recording = this.startRunRecording(invocation);
-    // (helper used in the catch block below — module-private function
-    // declared at file end via hoisting)
     invocation.value.answeredAsk = undefined;
     invocation.value.resumePassedTime = undefined;
     const prepared = this.prepareAgentRun(invocation, engineOptions, runRequest);
@@ -2197,8 +2197,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // Set here, beside the `try` whose `finally` clears it, so no exit path
     // can leave it behind for a turn this `run()` did not start.
     invocation.value.clockDraft = clockDraft;
-    // Armed here, beside the `try` whose `finally` releases it: no refused
-    // call above can leave a deadline running.
 
     try {
       const result = await invocation.execute(
@@ -2586,6 +2584,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       this.aroundTurnPort,
       { kind: 'resume', checkpoint, answer: input, options },
       () => this.resumeLeg(invocation, checkpoint, input, options),
+      (legFailed) => finishLeg(invocation.run, legFailed),
       (failure) => this.noteAroundTurnFailed(invocation, failure),
     );
   }

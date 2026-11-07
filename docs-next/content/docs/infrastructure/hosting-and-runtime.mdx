@@ -991,7 +991,9 @@ apart by `kind`, and its `proceed` is a `ProceedWithTurn` that takes `TurnChange
 says why in `AroundTurnError.reason`, an `AroundTurnRefusal`.
 
 `proceed()` runs the turn and resolves to nothing, so the wrapper cannot change how
-the turn ended: the answer, a pause and the checkpoint stay with the library.
+the turn ended: the answer, a pause and the checkpoint stay with the library. It
+settles only after the turn's record is filed, so the recording and resource cleanup
+run inside the wrapper's context, on a hosted run and a hosted resume too.
 `proceed({ time })` reaches the run the way `run({ time })` does. A field the wrapper
 names wins, and a field it leaves out stays the caller's. A resume accepts no change.
 

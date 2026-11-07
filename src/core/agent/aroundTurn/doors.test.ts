@@ -46,6 +46,7 @@ describe('the funnel with no wrapper', () => {
         undefined,
         turn,
         () => leg,
+        () => Promise.reject(new Error('finish is never called without a wrapper')),
         () => undefined,
       ),
     ).toBe(leg);

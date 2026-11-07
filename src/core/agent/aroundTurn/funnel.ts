@@ -55,17 +55,38 @@ function readOnlyTurn(turn: AgentTurn): AgentTurn {
       });
 }
 
+type Settled<O> = { readonly value: O } | { readonly error: unknown };
+
+/**
+ * Finishes the turn's run once its leg has settled: the run's finalizers (the
+ * recording filed, resources closed) run here, inside the wrapper's context and
+ * before `proceed` resolves. `legFailed` says the leg rejected, so a failure
+ * in the turn's own work is never finished as a completed or paused run.
+ */
+export type FinishTurn = (legFailed: boolean) => Promise<void>;
+
+/** The leg's outcome once the turn is finished. The leg's own error outranks a cleanup failure. */
+async function filed<O>(outcome: Settled<O>, finish: FinishTurn): Promise<Settled<O>> {
+  try {
+    await finish('error' in outcome);
+    return outcome;
+  } catch (error) {
+    return 'error' in outcome ? outcome : { error };
+  }
+}
+
 async function wrapped<O>(
   port: AroundTurn,
   turn: AgentTurn,
   leg: (changes: TurnChanges | undefined) => Promise<O>,
+  finish: FinishTurn,
   report: (failure: AgentAroundTurnFailedPayload) => void,
 ): Promise<O> {
   const { name } = port;
   let running: Promise<void> | undefined;
   // Taken before any code the wrapper can reach runs: a `time` getter may call `proceed`.
   let claimed = false;
-  let settled: { readonly value: O } | { readonly error: unknown } | undefined;
+  let settled: Settled<O> | undefined;
   let wrapperOpen = true;
   let lastNoted: unknown = NOTHING_NOTED;
   const note = (error: unknown): void => {
@@ -103,15 +124,15 @@ async function wrapped<O>(
       claimed = false;
       return refused(problem);
     }
-    running = (async () => leg(changes))().then(
-      (value) => {
-        settled = { value };
-      },
-      (error: unknown) => {
-        settled = { error };
-        throw error;
-      },
-    );
+    running = (async () => leg(changes))()
+      .then(
+        (value): Settled<O> => ({ value }),
+        (error: unknown): Settled<O> => ({ error }),
+      )
+      .then(async (outcome) => {
+        settled = await filed(outcome, finish);
+        if ('error' in settled) throw settled.error;
+      });
     return handled(running);
   };
 
@@ -129,7 +150,7 @@ async function wrapped<O>(
   }
   // The turn holds its lease until the run itself is over, awaited or not.
   await run.catch(() => undefined);
-  const outcome = settled as { readonly value: O } | { readonly error: unknown };
+  const outcome = settled as Settled<O>;
   const runError = 'error' in outcome ? outcome : undefined;
   if (thrown !== undefined && (runError === undefined || thrown.error !== runError.error))
     note(thrown.error);
@@ -137,14 +158,19 @@ async function wrapped<O>(
   return (outcome as { readonly value: O }).value;
 }
 
-/** The funnel. `undefined` is an agent with no wrapper: the leg, with nothing added. */
+/**
+ * The funnel. `undefined` is an agent with no wrapper: the leg, with nothing
+ * added, and the lease finishes the run as before. With a wrapper, `proceed`
+ * resolves only after `finish` has run.
+ */
 export function throughAroundTurn<O>(
   port: AroundTurn | undefined,
   turn: AgentTurn,
   leg: (changes: TurnChanges | undefined) => Promise<O>,
+  finish: FinishTurn,
   report: (failure: AgentAroundTurnFailedPayload) => void,
 ): Promise<O> {
-  return port === undefined ? leg(undefined) : wrapped(port, turn, leg, report);
+  return port === undefined ? leg(undefined) : wrapped(port, turn, leg, finish, report);
 }
 
 function isFieldBag(value: unknown): value is Readonly<Record<string, unknown>> {

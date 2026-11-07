@@ -35,7 +35,10 @@ wrapper's name and the error's class, never its message.
 
 ## The one law here
 The wrapper cannot change how the turn ended. `proceed` resolves to nothing; the
-library keeps the output, the pause, the checkpoint and the record binding. The
+library keeps the output, the pause, the checkpoint and the record binding. It
+settles only after the turn is finished: the run's finalizers (the recording
+filed, resources closed) run once, inside the wrapper's context, through
+footprintjs `OwnedRun.finish()`. The
 only change it accepts is `proceed({ time })` on a `run`, which reaches the run the
 way `run({ time })` does: a field the wrapper names wins, and a field it leaves
 out stays the caller's. A resume accepts no change.
@@ -47,7 +50,8 @@ out stays the caller's. A resume accepts no change.
 | calls `proceed` twice, or after it settled | That call is refused (`second-proceed`, `late-proceed`) and the first run stands. |
 | swallows a failed `proceed` | The run's original error still surfaces. |
 | throws after a good `proceed` | The outcome stands, and a pause is not lost. The failure goes on the diagnostic event. |
-| does not await `proceed` | The turn still waits for the run, inside its lease. |
+| does not await `proceed` | The turn still waits for the run and its finalizers, inside its lease. |
+| awaits a failed, cancelled or paused `proceed` | The run was finalized once, with that end, before `proceed` settled. A turn that fails in the agent's own work around a run that settled (a typed turn refusing a pause) is finalized by the lease after the wrapper, so its end still reads failed. |
 | queues a `proceed` and then fails | A call made before the wrapper settles counts: the run starts, the outcome stands, and the failure goes on the diagnostic event. |
 | never settles | The turn waits. Pass `turn.options` signals to your own work. |
 
@@ -56,7 +60,9 @@ Inside the run's lease and inside `preservePendingQuestion`; after a host's
 identity, admission and session checks; around `runLeg` / `resumeLeg`. The doors:
 `run`, `runTyped` (typed parsing and `.outputFallback()` included), `followUp`,
 `resumeOnError`, `resume`, the hosted ports, and so the stream handler. With no
-wrapper the funnel hands back the leg's own promise and adds no await. Inside the
+wrapper the funnel hands back the leg's own promise and adds no await, and the
+lease finishes the run as before (`finishLeg` in `../../runnerExecution.ts` is
+never called). Inside the
 lease means a wrapper cannot run the same instance again (`RunInFlightError`), and
 a run's `timeoutMs` starts when `proceed` does.
 
@@ -67,5 +73,6 @@ skipped. Not at `getSpec()`, which readers that mount nothing use too. `standing
 
 ## Files
 `types.ts`, `funnel.ts`, `errors.ts`, `guards.ts`, `readOnlyCopy.ts`, and the tests
-beside them: `failure-table.test.ts`, `doors.test.ts`, `context-and-time.test.ts`.
+beside them: `failure-table.test.ts`, `doors.test.ts`, `context-and-time.test.ts`,
+`finalization.test.ts`.
 The hosted half is pinned by `../../../hosting/around-turn.test.ts`.
