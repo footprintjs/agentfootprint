@@ -32,6 +32,7 @@ import type { RunnerPauseOutcome } from './pause.js';
 import type { AgentInput } from './agent/types.js';
 import type { AgentRunOptions } from './Agent.js';
 import type { AgentRunCheckpoint } from './runCheckpoint.js';
+import type { TurnMethod } from './agent/aroundTurn/guards.js';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
@@ -78,6 +79,8 @@ export interface RunnerLive {
       options?: AgentRunOptions,
       bind?: BindHostedInvocation,
     ): Promise<HostedTurn>;
+    /** The public doors no longer the class's own: this port does not call those. */
+    replaced(): readonly TurnMethod[];
   };
   /** Agent-only host ownership transfer, captured synchronously from an actual result. */
   readonly pause?: {

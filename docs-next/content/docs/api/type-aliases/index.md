@@ -2,12 +2,14 @@
 title: Type Aliases
 ---
 
-150 exported from `agentfootprint`.
+153 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
 - [`AgentOutput`](/docs/api/type-aliases/AgentOutput)
+- [`AgentTurn`](/docs/api/type-aliases/AgentTurn)
 - [`AnswerNegatives`](/docs/api/type-aliases/AnswerNegatives)
+- [`AroundTurnRefusal`](/docs/api/type-aliases/AroundTurnRefusal)
 - [`ArtifactDetailErrorCode`](/docs/api/type-aliases/ArtifactDetailErrorCode)
 - [`ArtifactDetailResult`](/docs/api/type-aliases/ArtifactDetailResult)
 - [`ArtifactEventFact`](/docs/api/type-aliases/ArtifactEventFact)
@@ -93,6 +95,7 @@ title: Type Aliases
 - [`PeriodSpelling`](/docs/api/type-aliases/PeriodSpelling)
 - [`PermissionCapability`](/docs/api/type-aliases/PermissionCapability)
 - [`Predicate`](/docs/api/type-aliases/Predicate)
+- [`ProceedWithTurn`](/docs/api/type-aliases/ProceedWithTurn)
 - [`ProposedEffect`](/docs/api/type-aliases/ProposedEffect)
 - [`ProviderKind`](/docs/api/type-aliases/ProviderKind)
 - [`RagDocument`](/docs/api/type-aliases/RagDocument)

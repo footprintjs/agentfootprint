@@ -4,6 +4,16 @@ import {
   refuseMissingPlainAnswer,
 } from './agent/resumeAnswer.js';
 import { hostedTurns } from './agent/hostTurn.js';
+import {
+  refuseMountedWrapper,
+  replacedTurnMethods,
+  runInputWith,
+  throughAroundTurn,
+  type AroundTurn,
+} from './agent/aroundTurn/index.js';
+import type { AgentAroundTurnFailedPayload } from '../events/payloads/agent.js';
+import { assertOutputStrategySupported } from './agent/run/outputStrategySupport.js';
+import { isTerminalRunError } from './agent/run/terminalRunError.js';
 import type { TypedScope, NativeMappingBinding } from 'footprintjs';
 import { componentResources } from './agent/componentResources.js';
 import { resumeStateOf, resumeSessionOf } from './agent/resumeCheckpoint.js';
@@ -57,21 +67,10 @@ import type { RunOptions } from './runner.js';
 import { type CommitValuesMode } from 'foottrace';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
-import { ReliabilityFailFastError } from '../reliability/types.js';
 import { extractSequence } from '../security/extractSequence.js';
-import { PolicyHaltError } from '../security/PolicyHaltError.js';
 import { updateSkillHistory as updateSkillHistoryStage } from '../cache/CacheGateDecider.js';
 import { cacheStrategyFor } from '../cache/cacheStrategyFor.js';
 import { cacheRequestedWithoutSupport } from './agent/cacheSupport.js';
-import {
-  forcedToolChoiceFor,
-  UnsupportedToolChoiceError,
-} from '../provider-contract/forcedToolChoice.js';
-import {
-  nativeOutputSchemaFor,
-  UnsupportedNativeOutputError,
-} from '../provider-contract/nativeOutputSchema.js';
-import { isRequestRefusal } from '../provider-contract/requestRefusal.js';
 import { assistantReplayFields } from './agent/assistantReplay.js';
 import { buildBrainFor, describeServingBrain } from './agent/skillBrains.js';
 import { SUBFLOW_IDS } from '../lib/conventions.js';
@@ -172,7 +171,6 @@ import { requireKeepLastToolResults } from './agent/window/options.js';
 import { buildDeliverStage } from './agent/stages/deliver.js';
 import { providerTargets } from './agent/providerTargets.js';
 import { assertInjectionDelivery } from './agent/run/injectionDelivery.js';
-import { CompactionUnmeasurableError } from './agent/window/errors.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
 import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
@@ -203,7 +201,6 @@ import { failFastRecordOf } from '../reliability/failFastRecord.js';
 import { terminalErrorOf, type ChildOutcome, type TerminalVerdict } from './terminalVerdict.js';
 import { isValidatedDelivery } from './agent/stages/breakFinal.js';
 import { evidenceRefusalSentence } from './agent/evidence/gate.js';
-import { UnsupportedValuesError } from './agent/evidence/errors.js';
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
 import type { ResolvedScriptTravel } from './agent/scripts/types.js';
 import { checkerGoverns } from '../provider-contract/types.js';
@@ -296,7 +293,6 @@ import { hasOutputMiddleware } from './agent/middleware/messagePhase.js';
 import { withAnswerCoverage } from './agent/stages/answerCoverage.js';
 import type { AnswerCoverage } from '../semantics/coverage/answer.js';
 import {
-  AnswerValidationError,
   type AnswerValidationReport,
   type ResolvedAnswerValidation,
   resolveAnswerValidation,
@@ -335,6 +331,7 @@ import {
   TOOL_TEARDOWN_STAGE_ID,
   LATE_ARTIFACT_FACT_STAGE_ID,
   RUN_MANIFEST_STAGE_ID,
+  AROUND_TURN_STAGE_ID,
   INTEGRITY_DISPOSITION_STAGE_ID,
   GRAPH_DECLARED_STAGE_ID,
 } from './agent/run/eventStageIds.js';
@@ -692,6 +689,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   /** The message chain (`.messageMiddleware()`), in declaration order. Empty
    *  keeps seed synchronous and prepare-final untouched. */
   private readonly messageMiddleware: readonly MessageMiddleware[];
+  /** `.aroundTurn()`, or undefined: the funnel then adds nothing to a turn. */
+  private readonly aroundTurnPort: AroundTurn | undefined;
   /** Snapshot read-tracking policy (#18/#14) — forwarded to the internal
    *  executor. Agent default is `'summary'` (cheap markers), NOT
    *  footprintjs's `'full'`. See AgentOptions.readTracking. */
@@ -1042,6 +1041,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     systemPromptCacheExplicit = false,
     negativeClaimsConfig?: ResolvedNegativeClaims,
     scriptTravel?: ResolvedScriptTravel,
+    aroundTurn?: AroundTurn,
   ) {
     super();
     // Which conversation this instance's self-explain evidence belongs to —
@@ -1171,7 +1171,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     if (opts.resultsLayer === true) this.resultsLayerOption = true;
     if (opts.answerLayer === true) this.answerLayerOption = {};
     else if (typeof opts.answerLayer === 'object' && opts.answerLayer !== null) {
-      // The builder judged the option (`AgentBuilder.ts` · `answerLayerArm`); `true` is 'always'.
+      // The builder judged the option (`assessment/answerLayerOptions.ts` · `answerLayerArm`); `true` is 'always'.
       const line = opts.answerLayer.standingLine;
       this.answerLayerOption =
         line === true
@@ -1238,6 +1238,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // call that provably never ran from one whose outcome is not known.
     registerConsentLedger(this, this.decisionLedger);
     this.messageMiddleware = messageMiddleware ?? [];
+    this.aroundTurnPort = aroundTurn;
     // Default 'summary' — measurement-gated (#18): stageReads values have
     // zero consumers across af/lens/eui, and 'full' clones ~18MB of unread
     // data per 200 iterations. Consumers opt into 'full' explicitly.
@@ -1507,6 +1508,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         return {
           recorder: observers.recorder,
           bindScope: (scope) => {
+            // No entry: mounted in a run this agent did not start. Refused as its
+            // first stage opens, where the mounting run's recorders hear the name.
+            if (entry === undefined) refuseMountedWrapper(this.aroundTurnPort);
             const run = this.runExecution().forScope(scope);
             value.resources?.bindReporter((status) =>
               captureLateEmitter(scope as object, TOOL_TEARDOWN_STAGE_ID)?.(
@@ -1533,6 +1537,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
           this.resumeOwned(run, checkpoint, input, options),
         prepareResume: (checkpoint) => this.noteResumeTakenUp(checkpoint),
         checkpoint: (run) => this.checkpointFor(run),
+        replaced: () => replacedTurnMethods(this, OWN_TURN_METHODS),
       }),
       pause: {
         capture: (outcome) => capturePauseOwnership(this.runExecution().selected()?.value, outcome),
@@ -1960,47 +1965,53 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
             `Agent.create({...}).outputSchema(parser).build() to enable typed output.`,
         );
       }
-      const out = await this.runOwned(invocation, input, options);
-      if (typeof out !== 'string') {
-        throw new Error(
-          'Agent.runTyped: run paused — typed mode does not support pauses. ' +
-            'Use agent.run() + agent.parseOutput(...) after resume.',
-        );
-      }
-      // `strategy: 'native'`: an answer whose last attempt failed on a refusal
-      // or truncation stop is refused here even when its text parses — the
-      // format did not hold for it (outputEnforcement.ts · nativeStopFailure).
-      // FIRST, before any delivery path. It takes the same path a parse failure
-      // takes, `.outputFallback()` included.
-      const stopped =
-        this.outputEnforcement?.outputFormat !== undefined ? this.outputContractUnmet() : undefined;
-      if (stopped?.stopReason !== undefined) {
-        return this.settleTypedFailure<T>(
-          out,
-          new OutputSchemaError(stopped.error, { rawOutput: out, stage: stopped.stage }),
-          invocation,
-        );
-      }
-      if (this.answerValidationConfig !== undefined) {
-        // The validator judged the schema's JSON output. Do not run a transforming
-        // or stateful parser again and hand back a value the validator never saw.
-        if (this.answerValidation()?.schemaAccepted !== true) {
-          throw new OutputSchemaError(
-            'Answer validation could not establish a JSON schema result.',
-            {
-              rawOutput: out,
-              stage: 'schema-validate',
-            },
-          );
-        }
-        return applyOutputSchema(out, { parse: (value: unknown) => value as T });
-      }
-      try {
-        return applyOutputSchema(out, this.outputSchemaParser as OutputSchemaParser<T>);
-      } catch (error) {
-        return this.settleTypedFailure<T>(out, error, invocation);
-      }
+      return this.runTurn(invocation, input, options, async (turnInput) =>
+        this.typedOutcome<T>(invocation, await this.runLeg(invocation, turnInput, options)),
+      );
     });
+  }
+
+  /** What `runTyped` makes of the answer: inside the turn, so a wrapper's context reaches it. */
+  private async typedOutcome<T>(
+    invocation: RunnerInvocation<AgentRunValues>,
+    out: AgentOutput | RunnerPauseOutcome,
+  ): Promise<T> {
+    if (typeof out !== 'string') {
+      throw new Error(
+        'Agent.runTyped: run paused — typed mode does not support pauses. ' +
+          'Use agent.run() + agent.parseOutput(...) after resume.',
+      );
+    }
+    // `strategy: 'native'`: an answer whose last attempt failed on a refusal
+    // or truncation stop is refused here even when its text parses — the
+    // format did not hold for it (outputEnforcement.ts · nativeStopFailure).
+    // FIRST, before any delivery path. It takes the same path a parse failure
+    // takes, `.outputFallback()` included.
+    const stopped =
+      this.outputEnforcement?.outputFormat !== undefined ? this.outputContractUnmet() : undefined;
+    if (stopped?.stopReason !== undefined) {
+      return this.settleTypedFailure<T>(
+        out,
+        new OutputSchemaError(stopped.error, { rawOutput: out, stage: stopped.stage }),
+        invocation,
+      );
+    }
+    if (this.answerValidationConfig !== undefined) {
+      // The validator judged the schema's JSON output. Do not run a transforming
+      // or stateful parser again and hand back a value the validator never saw.
+      if (this.answerValidation()?.schemaAccepted !== true) {
+        throw new OutputSchemaError('Answer validation could not establish a JSON schema result.', {
+          rawOutput: out,
+          stage: 'schema-validate',
+        });
+      }
+      return applyOutputSchema(out, { parse: (value: unknown) => value as T });
+    }
+    try {
+      return applyOutputSchema(out, this.outputSchemaParser as OutputSchemaParser<T>);
+    } catch (error) {
+      return this.settleTypedFailure<T>(out, error, invocation);
+    }
   }
 
   /**
@@ -2047,7 +2058,48 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     return this.runExecution().withRun((invocation) => this.runOwned(invocation, input, options));
   }
 
-  private async runOwned(
+  private runOwned(
+    invocation: RunnerInvocation<AgentRunValues>,
+    input: AgentInput | string,
+    options?: AgentRunOptions,
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
+    return this.runTurn(invocation, input, options, (turnInput) =>
+      this.runLeg(invocation, turnInput, options),
+    );
+  }
+
+  /** The funnel, for a new turn. Every top-level run enters here, inside its lease. */
+  private runTurn<R>(
+    invocation: RunnerInvocation<AgentRunValues>,
+    input: AgentInput | string,
+    options: AgentRunOptions | undefined,
+    leg: (turnInput: AgentInput | string) => Promise<R>,
+  ): Promise<R> {
+    return throughAroundTurn(
+      this.aroundTurnPort,
+      { kind: 'run', input, options },
+      (changes) => leg(runInputWith(input, options, changes)),
+      (failure) => this.noteAroundTurnFailed(invocation, failure),
+    );
+  }
+
+  /** A wrapper failed after its run: the outcome stands, and the record says so. */
+  private noteAroundTurnFailed(
+    invocation: RunnerInvocation<AgentRunValues>,
+    payload: AgentAroundTurnFailedPayload,
+  ): void {
+    const meta = { runtimeStageId: AROUND_TURN_STAGE_ID };
+    this.getDispatcher().dispatch({
+      type: 'agentfootprint.agent.around_turn_failed',
+      payload,
+      meta:
+        invocation.run.origin === undefined
+          ? { ...this.minimalMeta(), ...meta }
+          : buildEventMeta(meta, invocation.context()),
+    });
+  }
+
+  private async runLeg(
     invocation: RunnerInvocation<AgentRunValues>,
     input: AgentInput | string,
     options?: AgentRunOptions,
@@ -2194,47 +2246,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     } catch (cause) {
       // A THROWN pause is still a pause — see `endRunToolSessions`.
       // Wrap recoverable errors with the last-known-good checkpoint.
-      // Don't wrap intentional terminal signals — let them propagate as
-      // their typed shapes so callers can `instanceof` them:
-      //   • PauseSignal — askHuman pause, not a failure
-      //   • PolicyHaltError — policy-driven termination; resuming would
-      //     immediately re-trigger the same halt (the synthetic
-      //     tool_result is already in history)
-      //   • ReliabilityFailFastError — finalizeResult constructs and
-      //     throws this AFTER the chart returns cleanly, so it never
-      //     enters this catch (kept here for documentation only)
-      const isTerminalTypedError =
-        cause instanceof Error &&
-        (cause.name === 'PauseSignal' ||
-          cause instanceof PolicyHaltError ||
-          cause instanceof ReliabilityFailFastError ||
-          // A provider that reports no usage will report none on resume
-          // either — wrapping this in a checkpoint would invite the caller to
-          // retry into the same wall.
-          cause instanceof CompactionUnmeasurableError ||
-          // A forced-output capability refusal is terminal even after a
-          // correction turn: a checkpoint cannot repair this model contract.
-          isRequestRefusal(cause) ||
-          // 8.6.0 — a consent block is answered by a PERSON at the identity
-          // provider, not by replaying the run. Wrapping it in a crash
-          // checkpoint would hand the caller a retry handle for a wall, and
-          // would bury the `authorizationUrl` one `.cause` deep where the
-          // person who has to click it will not look.
-          cause instanceof CredentialConsentRequiredError ||
-          // 9.35.0 — an evidence refusal is a VERDICT, not a crash: the run
-          // finished, the loop already spent its one revision, and resuming
-          // would put the same model in front of the same evidence. Wrapping
-          // it would hand the caller a retry handle for a wall and bury the
-          // named values one `.cause` deep, where the person deciding what to
-          // do about them will not look.
-          cause instanceof UnsupportedValuesError ||
-          cause instanceof AnswerValidationError ||
-          // 9.60.0 — a dead checker is a WIRING verdict on this build, not a
-          // recoverable run state: resuming would run the same dead wiring.
-          cause.name === 'CheckerDeadError');
       if (
         cause instanceof Error &&
-        !isTerminalTypedError &&
+        !isTerminalRunError(cause) &&
         !invocation.value.checkpointObservationFailed &&
         tracker.history.length > 0
       ) {
@@ -2561,7 +2575,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     );
   }
 
-  private async resumeOwned(
+  /** The funnel, for an answered pause. Inside the lease and `preservePendingQuestion`. */
+  private resumeOwned(
+    invocation: RunnerInvocation<AgentRunValues>,
+    checkpoint: FlowchartCheckpoint,
+    input?: unknown,
+    options?: AgentRunOptions,
+  ): Promise<AgentOutput | RunnerPauseOutcome> {
+    return throughAroundTurn(
+      this.aroundTurnPort,
+      { kind: 'resume', checkpoint, answer: input, options },
+      () => this.resumeLeg(invocation, checkpoint, input, options),
+      (failure) => this.noteAroundTurnFailed(invocation, failure),
+    );
+  }
+
+  private async resumeLeg(
     invocation: RunnerInvocation<AgentRunValues>,
     checkpoint: FlowchartCheckpoint,
     input?: unknown,
@@ -3494,83 +3523,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     );
   }
 
-  /**
-   * Refuse, at run start, a `'tool-forced'` output strategy on a provider
-   * that does not put a forced tool choice on its wire (7.26).
-   *
-   * Run start rather than build time for the reason `assertDeliverableRoles`
-   * gives one method up: a decorated provider (`withFallback`, `withRetry`,
-   * a breaker) is only the thing it is once composed, and `withFallback`
-   * publishes the AND of its pair.
-   *
-   * Refusal rather than a quiet fall back to `'instruct'`, because the two
-   * are not interchangeable: one constrains the shape at generation, the
-   * other asks for it in prose. An agent that silently got the second while
-   * its config said the first would be a promise the recording could not
-   * even show was broken.
-   */
-  private assertForcedToolChoiceSupported(): void {
-    if (this.outputEnforcement?.schemaTool === undefined) return;
-    const first = this.reliabilityConfig?.providers?.[0];
-    const provider = first?.provider ?? this.provider;
-    const model = first?.model ?? this.model;
-    if (provider.carriesForcedToolChoice === true) {
-      // Configuration resolves the actual model at seed, after this check.
-      // Keep the early wire refusal, but let callLLM judge that final model.
-      if (
-        (first === undefined && this.runConfigFn !== undefined) ||
-        forcedToolChoiceFor(provider, model)
-      )
-        return;
-      throw new UnsupportedToolChoiceError({ provider: provider.name, model });
-    }
-    throw new Error(
-      `Agent: .outputSchema(parser, { strategy: 'tool-forced' }) needs a provider that puts ` +
-        `a forced tool choice on its wire, and '${provider.name}' does not declare one. ` +
-        `Anthropic, Bedrock, real OpenAI/Azure and the mock do; an OpenAI-COMPATIBLE endpoint ` +
-        `behind a custom baseURL (Ollama, vLLM, …) deliberately does not, because what that ` +
-        `server does with tool_choice is not this library's to promise. Use ` +
-        `{ strategy: 'instruct', retries: N } on this provider — it works on every wire — or ` +
-        `run the forced strategy on a provider that declares the capability.`,
-    );
-  }
-
-  /**
-   * Refuse, at run start, a `'native'` output strategy on a provider that
-   * does not put a structured-output format on its wire, or on a model that
-   * does not take one — the `assertForcedToolChoiceSupported` twin, for the
-   * same reasons: run start because a decorated provider is only what it is
-   * once composed; a refusal because `'instruct'` asks in prose for what this
-   * strategy constrains at decoding, and a quiet swap would be config that
-   * lies.
-   */
-  private assertNativeOutputSchemaSupported(): void {
-    if (
-      this.outputEnforcement?.outputFormat === undefined ||
-      this.outputEnforcement.nativeOutputAuto === true
-    )
-      return;
-    const first = this.reliabilityConfig?.providers?.[0];
-    const provider = first?.provider ?? this.provider;
-    const model = first?.model ?? this.model;
-    if (provider.carriesNativeOutputSchema === true) {
-      // A configured agent resolves its model at seed; callLLM judges it there.
-      if (
-        (first === undefined && this.runConfigFn !== undefined) ||
-        nativeOutputSchemaFor(provider, model)
-      )
-        return;
-      throw new UnsupportedNativeOutputError({ provider: provider.name, model });
-    }
-    throw new Error(
-      `Agent: .outputSchema(parser, { strategy: 'native' }) needs a provider that puts a ` +
-        `structured-output format on its wire, and '${provider.name}' does not declare one. ` +
-        `anthropic(), browserAnthropic() and the mock do; the Bedrock and gateway adapters do ` +
-        `not in this release. Use { strategy: 'instruct', retries: N } on this provider — it ` +
-        `works on every wire — or run the native strategy on a provider that declares it.`,
-    );
-  }
-
   private prepareAgentRun(
     invocation: RunnerInvocation<AgentRunValues>,
     runOptions?: AgentRunOptions,
@@ -3580,8 +3532,13 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     readonly binding: Parameters<RunnerInvocation<AgentRunValues>['execute']>[2];
   } {
     this.assertDeliverableRoles();
-    this.assertForcedToolChoiceSupported();
-    this.assertNativeOutputSchemaSupported();
+    assertOutputStrategySupported({
+      enforcement: this.outputEnforcement,
+      provider: this.provider,
+      model: this.model,
+      providers: this.reliabilityConfig?.providers,
+      modelResolvedAtSeed: this.runConfigFn !== undefined,
+    });
     const correlationId = runOptions?.correlationId;
     const traceId = runOptions?.traceId ?? runOptions?.env?.traceId;
     const sessionId = runOptions?.sessionId;
@@ -6051,7 +6008,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   }
 }
 
-// AgentBuilder extracted to ./agent/AgentBuilder.ts (v2.11.2).
-// Re-export so the 28+ existing import sites continue to work unchanged.
-
-// Validators + helpers extracted to ./agent/validators.ts (v2.11.1).
+/** The class's own turn doors, captured at load: patching the prototype later still counts. */
+const OWN_TURN_METHODS = Object.freeze({
+  run: Agent.prototype.run,
+  resume: Agent.prototype.resume,
+});

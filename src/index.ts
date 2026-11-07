@@ -262,17 +262,20 @@ export {
   type AskComponentRefusalReason,
 } from './tools/askComponent.js';
 
-// The middleware family — a typed chain around every tool dispatch
-// (`.toolMiddleware()`) and around the message boundary
-// (`.messageMiddleware()`): the input before the model sees it, the output
-// before the caller receives it.
-//
-// Three verbs, and no fourth: `allow()` / `allow(value, why)`, `deny(reason)`,
-// `ask({ question })`. There is no way to return a RESULT — the union has no
-// arm for one — so whatever a chain decides, the answer the model finally
-// reads is the real tool's output or a refusal. A transform commits both the
-// original and the replacement, so a scrub is legible in the trace instead of
-// silently rewriting history.
+export {
+  AroundTurnError,
+  type AgentTurn,
+  type AroundTurn,
+  type AroundTurnRefusal,
+  type ProceedWithTurn,
+  type ResumeTurn,
+  type RunTurn,
+  type TurnChanges,
+} from './core/agent/aroundTurn/index.js';
+
+// The middleware family: a typed chain around every tool dispatch and around the
+// message boundary. `allow()`, `deny(reason)` and `ask({ question })`, with no arm
+// for a RESULT: the model reads the real tool's output or a refusal.
 export {
   allow,
   ask,
@@ -712,11 +715,8 @@ export {
   RunCheckpointError,
   type AgentRunCheckpoint,
 } from './core/runCheckpoint.js';
-// 9.10.0 — the CLIENT half of a hosting session: one line in a page that mints
-// a session id, keeps it, and hands it back. Exported from the ROOT rather than
-// from `agentfootprint/hosting` on purpose — the rest of that door is Node
-// (`node:http`, `node:sqlite`) and a browser bundle must not have to reach
-// through it. The server half is `nodeHost({ sessionHeader | sessionCookie })`.
+// The CLIENT half of a hosting session, on the ROOT because the rest of the hosting
+// door is Node. The server half is `nodeHost({ sessionHeader | sessionCookie })`.
 export {
   browserSessionId,
   DEFAULT_SESSION_STORAGE_KEY,

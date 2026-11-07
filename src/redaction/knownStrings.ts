@@ -26,11 +26,9 @@ import { SERVED_PLACEHOLDER } from './placeholder.js';
 type Payloads = AgentfootprintEventMap[AgentfootprintEventType]['payload'];
 
 /**
- * The library's own envelopes a payload carries inside a field typed loosely
- * (a tool's `result`, what the model read): `absent()`'s and `coverage()`'s,
- * and the items an `among` miss composes into an absence's lists (typed
- * apart from `CoverageItem`, which they extend). Their field names and words
- * are the library's as much as a payload's.
+ * The library's own envelopes inside a loosely typed field (a tool's `result`):
+ * `absent()`'s, `coverage()`'s and an `among` miss's items (apart from
+ * `CoverageItem`, which they extend). Their names and words are the library's.
  */
 type Envelopes = ToolAbsence | CoveredResult | NamesFacetItem | SourceGapItem | CompletenessGapItem;
 
@@ -131,6 +129,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   advance: true,
   'after-miss': true,
   'after-tool': true,
+  'agentfootprint.agent.around_turn_failed': true,
   'agentfootprint.agent.budget_exhausted': true,
   'agentfootprint.agent.evidence_checked': true,
   'agentfootprint.agent.grounding_nudged': true,
@@ -1423,6 +1422,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   wonId: true,
   workExisted: true,
   wrappedUp: true,
+  wrapper: true,
   zone: true,
   // @generated fields — end
 };

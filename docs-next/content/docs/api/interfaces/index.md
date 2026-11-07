@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-388 exported from `agentfootprint`.
+392 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -28,6 +28,7 @@ title: Interfaces
 - [`AnswerValidationOptions`](/docs/api/interfaces/AnswerValidationOptions)
 - [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 - [`ArgumentRow`](/docs/api/interfaces/ArgumentRow)
+- [`AroundTurn`](/docs/api/interfaces/AroundTurn)
 - [`ArtifactConformanceKit`](/docs/api/interfaces/ArtifactConformanceKit)
 - [`ArtifactDetailAction`](/docs/api/interfaces/ArtifactDetailAction)
 - [`ArtifactDetailArgs`](/docs/api/interfaces/ArtifactDetailArgs)
@@ -264,6 +265,7 @@ title: Interfaces
 - [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize)
 - [`RequireInstructionEffect`](/docs/api/interfaces/RequireInstructionEffect)
 - [`ResolvedWindow`](/docs/api/interfaces/ResolvedWindow)
+- [`ResumeTurn`](/docs/api/interfaces/ResumeTurn)
 - [`RetrievalEvidence`](/docs/api/interfaces/RetrievalEvidence)
 - [`RetrievalStrategy`](/docs/api/interfaces/RetrievalStrategy)
 - [`RetrievedCandidate`](/docs/api/interfaces/RetrievedCandidate)
@@ -286,6 +288,7 @@ title: Interfaces
 - [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)
 - [`RunnerSelection`](/docs/api/interfaces/RunnerSelection)
 - [`RunTime`](/docs/api/interfaces/RunTime)
+- [`RunTurn`](/docs/api/interfaces/RunTurn)
 - [`S3ArtifactsOptions`](/docs/api/interfaces/S3ArtifactsOptions)
 - [`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder)
 - [`ScriptRow`](/docs/api/interfaces/ScriptRow)
@@ -375,6 +378,7 @@ title: Interfaces
 - [`TruncatedToolResult`](/docs/api/interfaces/TruncatedToolResult)
 - [`TryInsteadTool`](/docs/api/interfaces/TryInsteadTool)
 - [`Turn`](/docs/api/interfaces/Turn)
+- [`TurnChanges`](/docs/api/interfaces/TurnChanges)
 - [`TurnEndScripts`](/docs/api/interfaces/TurnEndScripts)
 - [`UnsettledByAbsenceRow`](/docs/api/interfaces/UnsettledByAbsenceRow)
 - [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)

@@ -1,4 +1,8 @@
 {
+  "agentfootprint.agent.around_turn_failed": {
+    "errorClass": "kept",
+    "wrapper": "kept"
+  },
   "agentfootprint.agent.budget_exhausted": {
     "action": "kept",
     "iteration": "kept",

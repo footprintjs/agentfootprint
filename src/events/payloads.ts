@@ -28,6 +28,7 @@ export type {
   FixedPauseReason,
   AgentRouteDecidedPayload,
   AgentHandoffPayload,
+  AgentAroundTurnFailedPayload,
 } from './payloads/agent.js';
 export type {
   LLMStartPayload,

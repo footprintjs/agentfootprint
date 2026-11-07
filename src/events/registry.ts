@@ -9,6 +9,7 @@ import type {
   AgentHandoffPayload,
   AgentIterationEndPayload,
   AgentIterationStartPayload,
+  AgentAroundTurnFailedPayload,
   AgentBudgetExhaustedPayload,
   AgentRouteDecidedPayload,
   AgentTurnEndPayload,
@@ -135,9 +136,7 @@ import type {
   IntegrityExternalGroundUsedPayload,
 } from './payloads.js';
 
-// ─── Event type constants ─────────────────────────────────────────────
-// Single source of truth for every event name. Low cardinality,
-// all under the `agentfootprint.` namespace, three-segment dotted form.
+// ─── Every event name, once: `agentfootprint.<domain>.<action>` ─────────
 export const EVENT_NAMES = {
   composition: {
     enter: 'agentfootprint.composition.enter',
@@ -165,6 +164,7 @@ export const EVENT_NAMES = {
     thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
     thinkingOmitted: 'agentfootprint.agent.thinking_omitted',
     budgetExhausted: 'agentfootprint.agent.budget_exhausted',
+    aroundTurnFailed: 'agentfootprint.agent.around_turn_failed',
   },
   stream: {
     llmStart: 'agentfootprint.stream.llm_start',
@@ -326,9 +326,7 @@ export const EVENT_NAMES = {
   },
 } as const;
 
-// ─── Event type → payload map (EventMap) ──────────────────────────────
-// The discriminated-union key table. Consumers reference this for typed
-// `.on<K extends keyof AgentfootprintEventMap>(type: K, ...)` handlers.
+// ─── Event type → payload: the key table typed `.on(type, ...)` reads ───
 export interface AgentfootprintEventMap {
   // composition
   'agentfootprint.composition.enter': AgentfootprintEventEnvelope<
@@ -423,6 +421,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.agent.budget_exhausted': AgentfootprintEventEnvelope<
     'agentfootprint.agent.budget_exhausted',
     AgentBudgetExhaustedPayload
+  >;
+  'agentfootprint.agent.around_turn_failed': AgentfootprintEventEnvelope<
+    'agentfootprint.agent.around_turn_failed',
+    AgentAroundTurnFailedPayload
   >;
   // stream
   'agentfootprint.stream.llm_start': AgentfootprintEventEnvelope<
@@ -878,10 +880,7 @@ export type AgentfootprintEvent = AgentfootprintEventMap[keyof AgentfootprintEve
 /** Every known event-type string, useful for runtime lookups / lints. */
 export type AgentfootprintEventType = keyof AgentfootprintEventMap;
 
-/**
- * Complete list of every registered event type, for lint / runtime validation.
- * A new event MUST be added here or the exhaustiveness tests fail.
- */
+/** Every registered event type. A new event MUST be added or exhaustiveness tests fail. */
 export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.composition.enter',
   'agentfootprint.composition.exit',
@@ -906,6 +905,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.agent.thinking_parse_failed',
   'agentfootprint.agent.thinking_omitted',
   'agentfootprint.agent.budget_exhausted',
+  'agentfootprint.agent.around_turn_failed',
   'agentfootprint.stream.llm_start',
   'agentfootprint.stream.llm_end',
   'agentfootprint.stream.token',

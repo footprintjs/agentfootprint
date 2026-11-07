@@ -3,6 +3,7 @@ Fold: `assess.ts` (the one fold), `reasons.ts` (the closed reason table) and `so
 Map: `witness.ts` (the answer layer's committed witness rows — `grounded`, `steps-unfinished`, `script-shown` — filed by the Route decider).
 Walker: `stage.ts` (the answer layer's one stage, at the head of the final branch).
 Lens: `compose.ts` (the standing as data, and as one line for the person under its own arm).
+Support: `answerLayerOptions.ts` (the rules `.answerLayer()` and its option door share).
 
 **The law.** The standing is folded from the rows, never from the model's
 confidence, and "known" needs a row that supports it.

@@ -10,6 +10,8 @@ These small modules support the Agent facade in `../../Agent.ts`. Native compone
 - `ledgerFacts.ts` validates and resolves the findings-window dial.
 - `clocks.ts` reads run-time inputs, seeds the kept clock and projects the answer time context.
 - `withoutTime.ts` removes the engine-external time option while preserving absent-time identity.
+- `terminalRunError.ts` names the errors a crash checkpoint must not wrap.
+- `outputStrategySupport.ts` refuses, at run start, an output strategy the provider cannot carry.
 - `resumeRedaction.ts` reads a carried policy and refuses an uncovered resume.
 
 Runtime policy and error identities remain owned by the existing redaction and conversation modules. State and registration remain with their original owners.

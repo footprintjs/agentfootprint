@@ -7,6 +7,7 @@ import type { BindHostedInvocation, HostedTurn, RunnerLive } from '../runnerLive
 import type { AgentRunCheckpoint } from '../runCheckpoint.js';
 import { capturePauseOwnership, preservePendingQuestion } from './pauseOwnership.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
+import type { TurnMethod } from './aroundTurn/guards.js';
 
 interface HostTurnPorts {
   run(
@@ -22,6 +23,7 @@ interface HostTurnPorts {
   ): Promise<AgentOutput | RunnerPauseOutcome>;
   prepareResume(checkpoint: FlowchartCheckpoint): void;
   checkpoint(run: RunnerSelection<AgentRunValues>): AgentRunCheckpoint | undefined;
+  replaced(): readonly TurnMethod[];
 }
 /** Host delivery uses this invocation's result and view, captured before its native lease ends. */
 export function hostedTurns(
@@ -63,6 +65,7 @@ export function hostedTurns(
       };
     });
   return {
+    replaced: ports.replaced,
     run: (input, options, bind) => capture((run) => ports.run(run, input, options), bind),
     resume: (checkpoint, input, options, bind) => {
       ports.prepareResume(checkpoint);

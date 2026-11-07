@@ -976,6 +976,42 @@ Authenticate the caller by your own means and check they are allowed that
 session before you serve it.
 </Callout>
 
+### Work around a turn — `.aroundTurn`
+
+Some work has to wrap a whole turn: awaited analysis before the first model call,
+an `AsyncLocalStorage` every tool and provider call can read, the turn's time
+anchor. Message middleware cannot hold a context or set `time`, and wrapping the
+host's handler runs before identity, admission and session ownership. Declare the
+wrapper on the builder instead. It runs after those checks, on every door.
+
+<CodeFile path="examples/deploy/around-turn.ts" region="around-turn" title="examples/deploy/around-turn.ts (region: around-turn)" />
+
+The wrapper is an `AroundTurn`. Its `AgentTurn` is a read-only `RunTurn` or `ResumeTurn`, told
+apart by `kind`, and its `proceed` is a `ProceedWithTurn` that takes `TurnChanges`. A refusal
+says why in `AroundTurnError.reason`, an `AroundTurnRefusal`.
+
+`proceed()` runs the turn and resolves to nothing, so the wrapper cannot change how
+the turn ended: the answer, a pause and the checkpoint stay with the library.
+`proceed({ time })` reaches the run the way `run({ time })` does. A field the wrapper
+names wins, and a field it leaves out stays the caller's. A resume accepts no change.
+
+| The wrapper | What happens |
+|---|---|
+| throws before `proceed` | The turn rejects with that error. No run starts, and a pending question stays pending. |
+| returns without `proceed`, or calls it twice or late | Refused by name: `AroundTurnError`. A first run that already started stands. |
+| swallows a failed `proceed` | The run's original error still surfaces. |
+| throws after a good `proceed` | The outcome stands, and a pause is not lost. `agentfootprint.agent.around_turn_failed` carries the wrapper's name and the error's class, never its message. |
+
+A wrapper that never settles holds the turn, so give your own work a timeout or the
+signal on `turn.options`. A mounted agent with a wrapper is refused when its chart is
+entered, because a mount has no turn to wrap.
+
+<Callout type="warn" title="A replaced run or resume is refused">
+Since 14.0.0 a hosted turn does not call a replaced `agent.run` or `agent.resume`.
+`standingAgent` refuses such an agent, as an own property or a subclass override, with
+`ReplacedRunnerMethodError`. Move that work into `.aroundTurn`.
+</Callout>
+
 ### Resuming is a REPLAY, and that has a cost
 
 A stored conversation is restored through `agent.run({ message, continueFrom })`

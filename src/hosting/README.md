@@ -242,6 +242,21 @@ access token through the strategy's own `verify` (rule 4).
 
 The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 
+## Work around a hosted turn (`.aroundTurn`)
+Since 14.0.0 a hosted turn does not call a replaced `agent.run` or `agent.resume`,
+so `standingAgent` refuses such an agent by name (`ReplacedRunnerMethodError`).
+Awaited work before a turn, an `AsyncLocalStorage` around it and the turn's `time`
+belong on the builder. The wrapper runs after identity, admission and session
+ownership, on every door (`../core/agent/aroundTurn/README.md`;
+`examples/deploy/around-turn.ts`):
+
+```ts
+.aroundTurn({ name: 'prepare', around: async (turn, proceed) => {
+  const prepared = await prepare(turn);
+  await context.run(prepared, () => proceed({ time: { now: prepared.at } }));
+} })
+```
+
 ## Files
 - `types.ts` — the three ports.
 - `httpHost.ts`, `nodeHost.ts`, `standingAgent.ts` — the hosts.
@@ -249,23 +264,17 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
 - `signin/` — the sign-in cookie, the seam that strips it, the lifetimes.
 - `admission.ts` — refuse before it costs anything.
 - `ingressRecord.ts` — what the door decided for requests that never ran.
-- `turnArtifacts.ts` — the artifact hand-over a turn gives its host, and its
-  lifetime (live only while its turn is, bounded).
+- `turnArtifacts.ts` — the artifact hand-over a turn gives its host (bounded).
 - `answerAccounts.ts` — the `answer-account` op's cache, single-flight and
-  the pure recording → `{ account, shown }` step (the op itself is a branch of
-  `standingAgent.ts · answerArtifact`).
+  the pure recording → `{ account, shown }` step.
 - `sessionOwnership.ts`, `sessionRetention.ts`, `sessionWire.ts`,
-  `artifactWire.ts`, `wireOps.ts`, `envelope.ts`, `headers.ts`, `errors.ts`.
+  `artifactWire.ts`, `wireOps.ts`, `envelope.ts`, `headers.ts`, `errors.ts`, `requireCapability.ts`.
 - `memorySessions.ts`, `sqliteSessions.ts` — reference session stores.
-- `browserSession.ts`, `webSocketConversation.ts`, `webSocketFrames.ts`,
-  `identityVerification.ts`, `durability.ts`.
+- `browserSession.ts`, `webSocketConversation.ts`, `webSocketFrames.ts`, `identityVerification.ts`.
 - `streamHandler.ts` — the Fetch-API host for a protocol whose response is a
-  stream of EVENTS (AG-UI is one). The request is UNTRUSTED and nothing is
-  shared between requests: a FRESH runner per request from the app's factory
-  (one handed back twice is refused), the thread bound to the caller by the
-  app's `ThreadBinder` (the named id never a key), the conversation and a paused
-  run kept under that binding (`sessions`), one turn per thread at a time, a
-  pause stored BEFORE the caller is told.
+  stream of EVENTS (AG-UI is one). The request is UNTRUSTED: a FRESH runner per
+  request, the thread bound by the app's `ThreadBinder`, one turn per thread at a
+  time, a pause stored BEFORE the caller is told.
 - `protocolAdapter.ts` — the port a protocol implements: `RunTranslation` and
   `RunSettlement` (the run's served events out), and `ProtocolAdapter` (read an
   untrusted request, plan the turn against `HeldConversation`, open a
@@ -279,20 +288,11 @@ The rules for the verifiers themselves are in `src/adapters/identity/README.md`.
   tools that turn already ran are not undone); `pendingAsk.ts` — the one
   projection of what a paused run waits on.
 - `answeredPause.ts` — a stored pause whose decision a resume may have used and
-  did not finish. The ONE reading of a stored session every door uses
-  (`readStoredSession`: an answered pause is a conversation to continue, never a
-  pause to answer), the watch a door opens before it hands an answer over
-  (`watchAnswer`), and the one step after that answer's resume failed
-  (`afterFailedAnswer` — marked when the watch says the decision reached a
-  ledger; closed when nothing was used and no decision could ever answer it),
-  shared by `standingAgent` and `streamHandler`; it settles the calls that run
-  left open (a declined one as declined, when the decline is what the ledger
-  spent) so the next message can continue. A pause no answer can reach any
-  more (`unanswerablePause`) is closed rather than held: the next message
-  continues `closedConversation`, every open call recorded as not run only when the ledger the
-  request was minted under spends the request itself (`consentRequest.ts` · `proveNeverRan` — a
-  tombstone, never a read; this process's default ledger only for a pause kept in
-  `memorySessions()`, `processLocalStore.ts`), else as possibly run (`OUTCOME_UNKNOWN_UNANSWERABLE`). `listedFormatOf` is the same reading for a session
+  did not finish; its own header states the laws. The ONE reading of a stored
+  session every door uses (`readStoredSession`), the watch a door opens before it
+  hands an answer over (`watchAnswer`), the one step after that answer's resume
+  failed (`afterFailedAnswer`), and the close of a pause no answer can reach
+  (`unanswerablePause`, `closedConversation`). `listedFormatOf` is the same reading for a session
   listing — `'flowchart-v1'` only for a pause still waiting — and every store
   that lists reports it (memory and Agent Engine at list time; SQLite and
   Firestore in the column they persist, a row that still says `'flowchart-v1'`
