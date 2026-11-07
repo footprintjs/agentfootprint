@@ -58,6 +58,11 @@ verbatim quote (checked against the text) and zone-less parts, `TimeParts`: a
 `TimeWall` clock time with an optional meridiem, or a `TimeRelative` phrase
 ("yesterday", "the last 40 minutes").
 
+The English reader accepts “last hour”, “past hour”, “last day” and “past day”,
+with or without “the”, as a one-unit lookback. A stated zone stays with the
+phrase. Bare “last week” and “past week” remain unreadable rather than being
+guessed as an elapsed span; “the last week” keeps its existing meaning.
+
 The library, not the reader, resolves the parts against the clock. Every
 reading the parts allow becomes a `TimeCandidate` — a `ResolvedWindow` (its
 `TimeWindow`, the range, and `TimeNote` entries saying how it was read) tagged

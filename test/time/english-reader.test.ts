@@ -640,7 +640,7 @@ describe('boundary', () => {
   it('the reader is frozen and names itself', () => {
     expect(reader).toMatchObject({
       id: 'agentfootprint/english',
-      version: '1.3.0',
+      version: '1.4.0',
       locale: 'en-US',
       kind: 'rule',
     });
