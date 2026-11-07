@@ -174,7 +174,8 @@ unless the host handles the pair:
   chooses the reading and waits for the form's send.
 
 An answer with neither value is held: the ask comes back with the reason on the
-range field, and no tool runs. The third such answer refuses the call.
+range field, and no tool runs. A field gets three rounds, and an earlier zone
+question uses one of them. When the rounds run out, the call is refused.
 
 Read the pair with `timeReplyPairs(request)` from `agentfootprint/time`, not from
 the reserved context key. It takes the ask (a `TimeReplyRequest`) as the run
