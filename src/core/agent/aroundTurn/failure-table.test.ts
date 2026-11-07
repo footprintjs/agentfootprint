@@ -313,6 +313,18 @@ describe('throws after a good proceed', () => {
     expect(failures).toEqual([{ wrapper: 'wrap', errorClass: 'non-error' }]);
   });
 
+  it('a proceed queued before the wrapper settled counts, and the failure is noted', async () => {
+    const { provider, calls } = counted(['one answer']);
+    const agent = built((_turn, proceed) => {
+      queueMicrotask(() => void proceed());
+      return Promise.reject(new CleanupFault(SECRET));
+    }, provider);
+    const failures = failuresOf(agent);
+    expect(await agent.run('hello')).toBe('one answer');
+    expect(calls).toHaveLength(1);
+    expect(failures).toEqual([{ wrapper: 'wrap', errorClass: 'CleanupFault' }]);
+  });
+
   it('a pause is not lost, and its resume still works', async () => {
     let throwAfter = true;
     const agent = asking(async (_turn, proceed) => {

@@ -39,6 +39,7 @@ import {
   type LLMRequest,
 } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
+import { timeReplyPairs, type TimeReplyRequest } from '../../src/doors/time.js';
 import { isCliEntry, printResult, type ExampleMeta } from '../helpers/cli.js';
 
 export const meta: ExampleMeta = {
@@ -229,9 +230,41 @@ async function correctionExample(): Promise<void> {
 }
 // #endregion time-correction
 
+// #region host-one-click
+/** A host's one-click confirm treats the declared sibling as not asked. */
+function answersWithOneClick(request: TimeReplyRequest, fieldId: string): boolean {
+  const siblings = new Set(timeReplyPairs(request).map((pair) => pair.correction));
+  const asked = request.fields.filter((field) => !siblings.has(field.id));
+  return asked.length === 1 && asked[0]?.id === fieldId;
+}
+
+async function hostOneClickExample(): Promise<void> {
+  handed.length = 0;
+  const agent = desk([]);
+  try {
+    const paused = await agent.run({ message: 'Show activity yesterday', time });
+    if (!isInputPause(paused)) throw new Error('Expected the time confirmation');
+    // What a browser host holds: the ask as JSON, off the wire.
+    const ask = JSON.parse(JSON.stringify(paused.awaitingInput)) as typeof paused.awaitingInput;
+    const range = ask.fields.find((field) => field.format === 'time-range');
+    if (range?.enum?.[0] === undefined) throw new Error('Expected the proposed interval');
+    check(ask.fields.length === 2, 'the correction text is declared beside the range');
+    check(answersWithOneClick(ask, range.id), 'one click on the reading is the whole answer');
+    await agent.resume(paused.checkpoint, {
+      requestId: ask.requestId,
+      values: { [range.id]: range.enum[0] },
+    });
+    check(handed.length === 1, 'one execution follows the click');
+  } finally {
+    await agent.shutdown();
+  }
+}
+// #endregion host-one-click
+
 export async function run(input: string): Promise<string> {
   await partialBoundsExample();
   await correctionExample();
+  await hostOneClickExample();
   // 1. "yesterday" is only PROPOSED: nothing is served, the call pauses on a one-click
   //    confirmation naming the window and its zone.
   const served: string[] = [];

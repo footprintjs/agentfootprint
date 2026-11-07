@@ -12,7 +12,8 @@ Fold: `maps.ts` (the mount kernel's vocabulary) and `time.ts` (the time layer's
 conversions — `convertForTool` over a tool's own `period`, and its steps — for
 an app that needs the library's answer outside a run; a door of its own because they
 are the layer's run-time half, which the main barrel keeps off the default
-graph).
+graph; it also carries `timeReplyPairs`, the reader a host's front end uses on
+a time ask, so the door stays free of anything from Node).
 Map + Lens: `ontology.ts` (the declared map — `defineOntology` and the shapes
 are Map; `ontologyPiece` and the always-on ask are Lens).
 Lens: `ag-ui.ts` (one run served to an AG-UI reader — `agUiSerializer` builds

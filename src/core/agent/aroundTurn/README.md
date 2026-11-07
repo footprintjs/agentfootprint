@@ -48,6 +48,7 @@ out stays the caller's. A resume accepts no change.
 | swallows a failed `proceed` | The run's original error still surfaces. |
 | throws after a good `proceed` | The outcome stands, and a pause is not lost. The failure goes on the diagnostic event. |
 | does not await `proceed` | The turn still waits for the run, inside its lease. |
+| queues a `proceed` and then fails | A call made before the wrapper settles counts: the run starts, the outcome stands, and the failure goes on the diagnostic event. |
 | never settles | The turn waits. Pass `turn.options` signals to your own work. |
 
 ## Where it sits

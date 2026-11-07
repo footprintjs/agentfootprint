@@ -53,3 +53,39 @@ it('refuses a missing sibling and a forged association to an ordinary field', ()
   forged.context.agentfootprint.fields[0].timeReply!.correction = 'f2';
   expect(() => timeReplyPairs(forged)).toThrow();
 });
+it('reads the same pair from the request as JSON carried it', () => {
+  const wire = JSON.parse(JSON.stringify(request())) as ReturnType<typeof request>;
+  expect(timeReplyPairs(wire)).toEqual([{ range: 'f1', correction: 'f1-correction' }]);
+});
+it('a request with no stamped binding is no pair, whatever else the wire holds', () => {
+  for (const junk of [null, undefined, 7, 'text', [], {}, { fields: 'x' }, { context: 'x' }])
+    expect(timeReplyPairs(junk as never), JSON.stringify(junk)).toEqual([]);
+});
+it('a stamped binding on junk fields is the one named TypeError, never a raw property read', () => {
+  const stamped = (fields: unknown) => ({ ...request(), fields } as never);
+  for (const fields of [undefined, null, 'x', {}, [], [null], [7], [null, null]]) {
+    let caught: unknown;
+    try {
+      timeReplyPairs(stamped(fields));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught, JSON.stringify(fields)).toBeInstanceOf(TypeError);
+    expect((caught as Error).message).toBe('Malformed time reply field binding.');
+  }
+});
+it('reads no inherited or accessor field fact', () => {
+  const inherited = request();
+  inherited.fields[0] = Object.create(inherited.fields[0]!) as (typeof inherited.fields)[0];
+  expect(() => timeReplyPairs(inherited)).toThrow('Malformed time reply field binding');
+  let reads = 0;
+  const accessor = request();
+  Object.defineProperty(accessor.fields[0], 'format', {
+    get() {
+      reads++;
+      return 'time-range';
+    },
+  });
+  expect(() => timeReplyPairs(accessor)).toThrow('Malformed time reply field binding');
+  expect(reads).toBe(0);
+});

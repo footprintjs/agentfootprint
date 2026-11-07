@@ -31,9 +31,15 @@
  *     run's zone check (an IANA name; `PST` and a bare offset are refused,
  *     although `Intl` takes them), for a session zone before it is passed as
  *     `time.zone`.
+ *   - the time ask as a HOST draws it: `timeReplyPairs(request)` — which optional
+ *     text field is the correction sibling of which time range, so a one-click
+ *     confirm can treat the sibling as not asked. It reads the ask itself, in
+ *     process or off a wire, and throws a `TypeError` when a stamped binding does
+ *     not match its fields.
  *
- * Pure functions over a clock the caller passes: no run, no record, no
- * `.time()`. A door of its own because the conversions are the time layer's
+ * Pure functions over the clock or the ask the caller passes: no run, no record,
+ * no `.time()`, nothing from Node, so a web front end can import this door. A
+ * door of its own because the conversions are the time layer's
  * RUN-TIME half, which a plain agent never loads (`src/time/README.md` ·
  * "What a plain agent carries"; pinned by
  * `test/trace-toolpack/browserGraph.test.ts`): on the main barrel they
@@ -75,4 +81,5 @@ export {
   type TimeRefusal,
 } from '../time/periodForm.js';
 export { presentRange, type Grain, type Presentation } from '../time/present.js';
+export { timeReplyPairs, type TimeReplyPair, type TimeReplyRequest } from '../time/replyForm.js';
 export { isZoneName, type ZoneName } from '../time/zone.js';
