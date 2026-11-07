@@ -152,13 +152,13 @@ export const MONTH_DATE = new RegExp(
   'gi',
 );
 /**
- * `the last hour` / `the past week`, or an explicit singular `one` / `a` / `an`.
- * The first branch preserves the existing bare-unit set. The second adds only
- * singular minute/hour/day/week forms; `last week` remains unreadable calendar text.
+ * `last hour` / `past day` with optional `the`, the existing `the past week`,
+ * or an explicit singular `one` / `a` / `an` minute/hour/day/week.
+ * Bare `last week` remains unreadable calendar text.
  * Capture 1 stays the unit consumed by the existing atom reader.
  */
 export const ONE_SPAN =
-  /\b(?:the\s+(?:last|past)\s+(?=(?:hour|day|week)\b)|(?:the\s+)?(?:last|past)\s+(?:one|an?)\s+)(minute|hour|day|week)\b/gi;
+  /\b(?:(?:the\s+)?(?:last|past)\s+(?=(?:hour|day)\b)|the\s+(?:last|past)\s+(?=week\b)|(?:the\s+)?(?:last|past)\s+(?:one|an?)\s+)(minute|hour|day|week)\b/gi;
 
 export function* matches(re: RegExp, text: string): Generator<RegExpExecArray> {
   re.lastIndex = 0;

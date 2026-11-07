@@ -36,11 +36,12 @@ by “time” is accepted only when the shared tz database lookup identifies a p
 ruled regional words need no place lookup. In an attached phrase, an unknown place
 still remains a token for the existing ask path, rather than disappearing.
 
-`ONE_SPAN` adds the selected explicit singular one/a/an minute, hour, day and week
-forms, including their attached zone. Its first capture remains the existing atom
-reader's unit. The old bare “the last hour/day/week” branch and digit forms stay
-intact; other number words, calendar “last week” and unsupported multi-quantity
-phrases gain no parser or guessed duration.
+`ONE_SPAN` reads last/past hour and day with or without “the”, plus the selected
+explicit singular one/a/an minute, hour, day and week forms, including their
+attached zone. Its first capture remains the existing atom reader's unit.
+“The last/past week” and digit forms stay intact; bare calendar “last/past week”,
+other number words and unsupported multi-quantity phrases gain no parser or
+guessed duration.
 
 `zones.test.ts` covers token case, regional qualifiers, complete affirmative
 wrappers, real versus unknown places and rejection controls. `reader.test.ts`
