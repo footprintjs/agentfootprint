@@ -12,7 +12,7 @@ The builder's `.time(options)` — the fallback zone, the reader and its policy 
 
 ### messages?
 
-> `readonly` `optional` **messages?**: `Partial`\<`Readonly`\<`Record`\<`"answer.not-an-instant"` \| `"answer.no-offset"` \| `"answer.not-a-range"` \| `"answer.out-of-order"` \| `"answer.dst-gap"` \| `"answer.not-a-zone"` \| `"answer.time-future"` \| `"answer.time-past"` \| `"answer.beyond-retention"` \| `"answer.over-max-range"` \| `"ask.which"` \| `"ask.confirm"` \| `"ask.zone"` \| `"ask.zone-unknown"` \| `"choice.confirm"`, `string`\>\>\>
+> `readonly` `optional` **messages?**: `Partial`\<`Readonly`\<`Record`\<`"answer.not-an-instant"` \| `"answer.no-offset"` \| `"answer.not-a-range"` \| `"answer.out-of-order"` \| `"answer.dst-gap"` \| `"answer.not-a-zone"` \| `"answer.time-future"` \| `"answer.time-past"` \| `"answer.beyond-retention"` \| `"answer.over-max-range"` \| `"ask.which"` \| `"ask.confirm"` \| `"ask.zone"` \| `"ask.zone-unknown"` \| `"choice.confirm"`, `string`\> & `Partial`\<`Record`\<`"choice.unconverted"` \| `"reply.correction"`, `string`\>\>\>\>
 
 Defined in: [src/time/clock.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/time/clock.ts#L136)
 

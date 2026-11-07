@@ -1,0 +1,56 @@
+{
+  "kind": "PORTABLE_PUBLISHED_NATIVE_WRITER_FIXTURE",
+  "node": "v24.22.2",
+  "packages": {
+    "agentfootprint": {
+      "version": "14.1.1",
+      "resolved": "https://registry.npmjs.org/agentfootprint/-/agentfootprint-14.1.1.tgz",
+      "integrity": "sha512-NMxIoO+Ap4Mf7Svh2/MYpMyQ9H/jLrh4HKNfmF4JManibFI4tm8Cm24l+RWd72CKBks6ifwQWy6We1P5zbULbA==",
+      "entrySHA256": "4a8d29d0c7dd8174c3784cc5a63016de8b3b15c9043abcb6d081cc2f17e642a2",
+      "packageRoot": "test/time/fixtures/writer-14.1.1/node_modules/agentfootprint"
+    },
+    "footprintjs": {
+      "version": "11.0.0",
+      "resolved": "https://registry.npmjs.org/footprintjs/-/footprintjs-11.0.0.tgz",
+      "integrity": "sha512-ERVLDzDqJBl9o524lIoIUC9AuPjmhOtZmgDZCODCre2vZxuzxYF6Hm71K1p5yIYLOCD9NFGnqDd0sOkATtfYrA==",
+      "entrySHA256": "f7beae17cc72430a983c98569c0efd6ac64235da80998fca973e091305904f4d",
+      "packageRoot": "test/time/fixtures/writer-14.1.1/node_modules/footprintjs"
+    },
+    "foottrace": {
+      "version": "1.11.1",
+      "resolved": "https://registry.npmjs.org/foottrace/-/foottrace-1.11.1.tgz",
+      "integrity": "sha512-gWeGl83xPBZjGOUCNms0h2uyF+DhTdZCxf/oSlcE1UVIOvGScSEXvx6Txsgir15d/ec7uL3C7ERWQwsZHnr9SA==",
+      "entrySHA256": "70c99a477eb331e3752f1ce0a8c66d70c3adc8abf8ed96ebf6a07b15189fcc86",
+      "packageRoot": "test/time/fixtures/writer-14.1.1/node_modules/foottrace"
+    }
+  },
+  "checkpointSHA256": "1b4b58013360e85edef9e34a8da1c19b80cc9b0e47677c1037bb3d043ae7f592",
+  "lockSHA256": "9266b53f817e323eed949138e1b64b04aa0bbf53939b81b84ff37b6ac5748efe",
+  "writerSHA256": "4d1fe995ea499ac1f26e0521ed3b402adaabba408bd038ad944d9f373954a15f",
+  "message": "Show activity in the last 2 hours",
+  "clock": {
+    "now": "2026-11-06T18:01:00Z",
+    "zone": "UTC"
+  },
+  "rangeField": {
+    "id": "f1",
+    "type": "string",
+    "required": true,
+    "description": "Is this the time you meant by “last 2 hours”?",
+    "enum": [
+      "2026-11-06T16:01:00Z/2026-11-06T18:01:00.001Z"
+    ],
+    "format": "time-range",
+    "labels": [
+      "I read “last 2 hours” as Fri, Nov 6, 2026, 4:01 – 6:01 PM UTC in UTC — is that right?"
+    ]
+  },
+  "toolEffects": 0,
+  "projection": {
+    "sourceManifestSHA256": "6b5c14c04f9818b6c1caabb561e4b6bd617243c92828b58f78149e345b3008cc",
+    "sourceArtifact": 13538959063,
+    "sourceRun": 42290829176,
+    "sourceAttempt": 1,
+    "packageRootBase": "repository"
+  }
+}

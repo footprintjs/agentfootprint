@@ -146,7 +146,7 @@ export interface SeedStageDeps {
    * that declare `askOrAssume`, by name. Present ONLY when the layer is armed
    * and at least one registered tool is ruled: the static tool list seeded for
    * iteration 1 then gets the same decoration the tools slot applies
-   * (`arguments/serve.ts` · `withArgumentRules`), one step before
+   * (`arguments/serve/schema.ts` · `withArgumentRules`), one step before
    * `withFindingsArgument`, so the first call's served schemas match every
    * later call's. Absent → the registry list, by reference.
    */
@@ -181,7 +181,7 @@ export interface SeedStageDeps {
    * does on every later call — inside the ledger's decoration beside
    * `findings` (`findings/reserved.ts` · `withFindingsArgument`'s `from`), or
    * alone without it (`withSourcesArgument`) — and an `ask` rule's sentence
-   * names `_findings.from` (`arguments/serve.ts` · `ASK_SOURCES_SENTENCE`); a
+   * names `_findings.from` (`arguments/serve/schema.ts` · `ASK_SOURCES_SENTENCE`); a
    * run whose caller passed `messageFrom: 'composed'` records the run constant
    * `userMessageFrom`, which the checks read. Absent → none of it.
    */
@@ -437,7 +437,7 @@ async function anchorTurnNumber(
   });
 }
 
-/** The inputs layer's schema decoration (`arguments/serve.ts` · `withArgumentRules`). */
+/** The inputs layer's schema decoration (`arguments/serve/schema.ts` · `withArgumentRules`). */
 type RuleDecoration = typeof import('../arguments/serve.js').withArgumentRules;
 
 /**

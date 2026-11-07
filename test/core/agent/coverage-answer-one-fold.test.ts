@@ -13,7 +13,7 @@
  * (`.outputSchema()` + `.limitsTravelWithTheAnswer()`) carried none — the
  * values a tool's rule assumed never reached `agent.answerCoverage()`. They do
  * now, as `assumed`: the same rows, read by the same function
- * (`arguments/serve.ts` · `assumedLinesFor`) the block prints from.
+ * (`arguments/serve/assumed.ts` · `assumedLinesFor`) the block prints from.
  *
  * Test types (Convention 3):
  *   - PROPERTY     — 300 generated declaration sets: the block's items equal

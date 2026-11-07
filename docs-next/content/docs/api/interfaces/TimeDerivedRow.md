@@ -4,7 +4,7 @@ title: TimeDerivedRow
 
 # Interface: TimeDerivedRow
 
-Defined in: [src/time/rows.ts:236](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L236)
+Defined in: [src/time/rows/types.ts:205](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L205)
 
 The answer's values the library itself spelled from a time reading of this
 turn (§ 9.5, step T7) — an implied year, an offset, the end-of-grain
@@ -18,7 +18,7 @@ gate never calls these invented.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L239)
+Defined in: [src/time/rows/types.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L208)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [src/time/rows.ts:239](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **kind**: `"time-derived"`
 
-Defined in: [src/time/rows.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L237)
+Defined in: [src/time/rows/types.ts:206](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L206)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/time/rows.ts:237](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows.ts:238](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L238)
+Defined in: [src/time/rows/types.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L207)
 
 ***
 
@@ -42,6 +42,6 @@ Defined in: [src/time/rows.ts:238](https://github.com/footprintjs/agentfootprint
 
 > `readonly` **values**: readonly `string`[]
 
-Defined in: [src/time/rows.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L241)
+Defined in: [src/time/rows/types.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L210)
 
 The values as the gate reports them — normalized, clipped, at most `MAX_DERIVED_VALUES`.

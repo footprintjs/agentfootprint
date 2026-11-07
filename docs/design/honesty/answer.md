@@ -113,7 +113,7 @@ decider committed, before PrepareFinal, which writes nothing the fold reads.
 5. **A typed answer's limits carry the assumed values** (follow-up 4). Step 3's "Assumed" admission
    reached only the prose block; a typed answer's limits data (9.121.0) had no place for it. It
    does now: `answerCoverage.assumed`, the same rows read by the same function the block prints
-   from (`arguments/serve.ts` · `assumedLinesFor`), each value in the tool's own view
+   from (`arguments/serve/assumed.ts` · `assumedLinesFor`), each value in the tool's own view
    (`'REDACTED'` with `hidden`). The value type is `AnswerCoverage` (a `Coverage` plus the optional
    list), so every 9.121.0 reader still compiles.
 6. **One fold, two forms** (follow-up 3). `coverage/answer.ts` · `foldSections` merges each

@@ -4,8 +4,8 @@ title: TimeAskMessages
 
 # Type Alias: TimeAskMessages
 
-> **TimeAskMessages** = `Readonly`\<`Record`\<[`TimeAskMessageKey`](/docs/api/type-aliases/TimeAskMessageKey), `string`\>\>
+> **TimeAskMessages** = `Readonly`\<`Record`\<`Exclude`\<[`TimeAskMessageKey`](/docs/api/type-aliases/TimeAskMessageKey), `"choice.unconverted"` \| `"reply.correction"`\>, `string`\> & `Partial`\<`Record`\<`"choice.unconverted"` \| `"reply.correction"`, `string`\>\>\>
 
-Defined in: [src/time/ask.ts:240](https://github.com/footprintjs/agentfootprint/blob/main/src/time/ask.ts#L240)
+Defined in: [src/time/ask.ts:242](https://github.com/footprintjs/agentfootprint/blob/main/src/time/ask.ts#L242)
 
-A whole catalog: one sentence per key.
+The original whole catalog; additive sentences may be omitted and use their defaults.

@@ -4,7 +4,7 @@ title: CallRow
 
 # Interface: CallRow
 
-Defined in: [src/time/rows.ts:81](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L81)
+Defined in: [src/time/rows/types.ts:41](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L41)
 
 One dispatched call's wall-clock moment (time design § 4, § 7.4).
 
@@ -14,7 +14,7 @@ One dispatched call's wall-clock moment (time design § 4, § 7.4).
 
 > `readonly` **dispatchedAt**: `string`
 
-Defined in: [src/time/rows.ts:88](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L88)
+Defined in: [src/time/rows/types.ts:48](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L48)
 
 The wall clock when the library handed the call to the tool — UTC, millisecond precision.
 
@@ -24,7 +24,7 @@ The wall clock when the library handed the call to the tool — UTC, millisecond
 
 > `readonly` `optional` **drift?**: `CallDrift`
 
-Defined in: [src/time/rows.ts:97](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L97)
+Defined in: [src/time/rows/types.ts:57](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L57)
 
 The clock at dispatch (§ 7.4, step T5b) — present only when the call sent
 a LOOK-BACK and `dispatchedAt − now` (`byMs`, signed) is more than the
@@ -39,7 +39,7 @@ shifted by `byMs` — `period-shifted`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows.ts:84](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L84)
+Defined in: [src/time/rows/types.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L44)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [src/time/rows.ts:84](https://github.com/footprintjs/agentfootprint/
 
 > `readonly` **kind**: `"call"`
 
-Defined in: [src/time/rows.ts:82](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L82)
+Defined in: [src/time/rows/types.ts:42](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L42)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [src/time/rows.ts:82](https://github.com/footprintjs/agentfootprint/
 
 > `readonly` **toolCallId**: `string`
 
-Defined in: [src/time/rows.ts:85](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L85)
+Defined in: [src/time/rows/types.ts:45](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L45)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: [src/time/rows.ts:85](https://github.com/footprintjs/agentfootprint/
 
 > `readonly` **toolName**: `string`
 
-Defined in: [src/time/rows.ts:86](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L86)
+Defined in: [src/time/rows/types.ts:46](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L46)
 
 ***
 
@@ -71,4 +71,4 @@ Defined in: [src/time/rows.ts:86](https://github.com/footprintjs/agentfootprint/
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows.ts:83](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L83)
+Defined in: [src/time/rows/types.ts:43](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L43)

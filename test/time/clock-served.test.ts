@@ -5,7 +5,7 @@
  * from its training date.
  *
  * Law: under `.time()` the run clock is the first sentence of the ONE served
- * time line on every request (`agent/arguments/serve.ts` · `clockSentence`) —
+ * time line on every request (`agent/arguments/serve/clock.ts` · `clockSentence`) —
  * the library's conclusion, late, one line: the turn's `now` to the minute,
  * its weekday and date in the person's zone, the zone named (under an unknown
  * zone, G15: UTC, named as not known). Never without `.time()`. The line is

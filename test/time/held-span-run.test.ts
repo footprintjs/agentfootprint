@@ -38,6 +38,7 @@ import {
   defineTool,
   englishTimeReader,
   isInputPause,
+  type InputField,
   type Tool,
 } from '../../src/index.js';
 import type { LLMMessage, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
@@ -124,7 +125,7 @@ function clientHealth(held: 'none' | 'all' = 'none'): Tool {
 
 interface Paused {
   checkpoint: unknown;
-  awaitingInput: { requestId: string; fields: { id: string; enum?: string[] }[] };
+  awaitingInput: { requestId: string; fields: readonly InputField[] };
 }
 
 /** The take-3 turn to its answer: the reading is offered, the person confirms it. */
@@ -159,10 +160,24 @@ async function heldRun(
     const typed = ['2026-09-30T06:00:00-07:00', '2026-09-30T12:00:00-07:00'];
     for (let i = 0; i < 3 && isInputPause(result); i += 1) {
       const p = result as unknown as Paused;
+      const fields = time
+        ? p.awaitingInput.fields.filter((field) => field.format === 'time-range')
+        : p.awaitingInput.fields;
+      if (time) {
+        expect(fields).toHaveLength(1);
+        expect(p.awaitingInput.fields).toHaveLength(2);
+        expect(p.awaitingInput.fields[1]).toEqual({
+          id: `${fields[0]!.id}-correction`,
+          type: 'string',
+          required: false,
+          description:
+            'Or say what should change, such as a time zone, yesterday, or a full interval.',
+        });
+      }
       result = await agent.resume(p.checkpoint as never, {
         requestId: p.awaitingInput.requestId,
         values: Object.fromEntries(
-          p.awaitingInput.fields.map((f, k) => [f.id, f.enum?.[0] ?? typed[k] ?? typed[0]!]),
+          fields.map((f, k) => [f.id, f.enum?.[0] ?? typed[k] ?? typed[0]!]),
         ),
       });
     }

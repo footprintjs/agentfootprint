@@ -227,7 +227,7 @@ describe('timeAskOf — unit', () => {
     expect(ask?.field).toMatchObject({
       id: 'time',
       type: 'string',
-      required: true,
+      required: false,
       format: 'time-range',
     });
     expect(ask?.field.enum).toEqual([

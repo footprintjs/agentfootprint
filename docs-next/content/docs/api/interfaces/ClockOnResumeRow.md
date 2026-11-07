@@ -4,7 +4,7 @@ title: ClockOnResumeRow
 
 # Interface: ClockOnResumeRow
 
-Defined in: [src/time/rows.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L69)
+Defined in: [src/time/rows/types.ts:29](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L29)
 
 A resume passed a `time` that differs from the frozen clock: recorded, not applied (TQ21).
 
@@ -14,7 +14,7 @@ A resume passed a `time` that differs from the frozen clock: recorded, not appli
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/time/rows.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L73)
+Defined in: [src/time/rows/types.ts:33](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L33)
 
 The iteration the paused batch ran in.
 
@@ -24,7 +24,7 @@ The iteration the paused batch ran in.
 
 > `readonly` **kept**: `object`
 
-Defined in: [src/time/rows.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L77)
+Defined in: [src/time/rows/types.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L37)
 
 The frozen clock's values the passed ones would have replaced.
 
@@ -46,7 +46,7 @@ The frozen clock's values the passed ones would have replaced.
 
 > `readonly` **kind**: `"clock-on-resume"`
 
-Defined in: [src/time/rows.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L70)
+Defined in: [src/time/rows/types.ts:30](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L30)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/time/rows.ts:70](https://github.com/footprintjs/agentfootprint/
 
 > `readonly` **passed**: `ReadRunTime`
 
-Defined in: [src/time/rows.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L75)
+Defined in: [src/time/rows/types.ts:35](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L35)
 
 What the resume passed, as read (values as written, a `Date` spelled in UTC).
 
@@ -64,4 +64,4 @@ What the resume passed, as read (values as written, a `Date` spelled in UTC).
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/time/rows.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows.ts#L71)
+Defined in: [src/time/rows/types.ts:31](https://github.com/footprintjs/agentfootprint/blob/main/src/time/rows/types.ts#L31)

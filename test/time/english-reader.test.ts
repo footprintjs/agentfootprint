@@ -640,7 +640,7 @@ describe('boundary', () => {
   it('the reader is frozen and names itself', () => {
     expect(reader).toMatchObject({
       id: 'agentfootprint/english',
-      version: '1.2.0',
+      version: '1.3.0',
       locale: 'en-US',
       kind: 'rule',
     });
@@ -695,14 +695,52 @@ describe('property — over seeded texts', () => {
 // ─── security ────────────────────────────────────────────────────────
 
 describe('security', () => {
-  it('the leaf law: `readers/` imports only the port', () => {
+  it('the leaf law: readers import the port, and whole-zone qualification uses the one zone owner', () => {
     const dir = join(__dirname, '..', '..', 'src', 'time', 'readers');
-    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+    const helpers = [
+      'english/atoms.ts',
+      'english/grammar.ts',
+      'english/reader.test.ts',
+      'english/zones.test.ts',
+      'english/types.ts',
+      'english/zones.ts',
+    ];
+    expect(
+      readdirSync(join(dir, 'english'))
+        .filter((f) => f.endsWith('.ts'))
+        .sort(),
+    ).toEqual([
+      'atoms.ts',
+      'grammar.ts',
+      'reader.test.ts',
+      'types.ts',
+      'zones.test.ts',
+      'zones.ts',
+    ]);
+    const allowed: Readonly<Record<string, readonly string[]>> = {
+      'english.ts': [
+        '../reader.js',
+        './english/types.js',
+        './english/atoms.js',
+        './english/grammar.js',
+        './english/zones.js',
+      ],
+      'english/atoms.ts': ['../../reader.js', './types.js', './zones.js', './grammar.js'],
+      'english/grammar.ts': [],
+      'english/reader.test.ts': ['vitest', '../english.js'],
+      'english/zones.test.ts': ['vitest', '../english.js', './zones.js', './types.js'],
+      'english/types.ts': ['../../reader.js'],
+      'english/zones.ts': ['./types.js', '../../zone.js'],
+    };
+    const files = [...readdirSync(dir).filter((f) => f.endsWith('.ts')), ...helpers];
+    for (const file of files) {
       const text = readFileSync(join(dir, file), 'utf8');
       const specifiers = [
         ...text.matchAll(/^\s*(?:import|export)[^'"]*from\s+['"]([^'"]+)['"]/gm),
       ].map((m) => m[1] as string);
-      for (const spec of specifiers) expect(spec, `${file} imports ${spec}`).toBe('../reader.js');
+      for (const spec of specifiers) {
+        expect(allowed[file] ?? ['../reader.js'], `${file} imports ${spec}`).toContain(spec);
+      }
     }
   });
 

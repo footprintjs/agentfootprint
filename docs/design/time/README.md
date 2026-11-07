@@ -1,5 +1,11 @@
 # Time as one library layer
 
+**Unreleased amendment, 2026-11-06:** the current time-reply direction is in
+§ 6.4. The earlier design and implementation record below is historical where
+it differs: one meaning confirmation remains; an extra zone question is needed
+only when the zone can change the interval. This amendment is not a release or
+a claim that its required compatibility and hosted gates have passed.
+
 **Design and implementation plan, 2026-09-29, revised twice the same day to apply one review in
 full (§ 15). Nothing in it is built. Every question in § 14 is open and carries a recommended answer; the owner
 decides.**
@@ -399,7 +405,7 @@ the others wait until a bench shows people need them:
 | a range between two of the above | `8 AM to 8:40 AM`, `08:00–08:40` | `rangeOf` | one per combination of the sides' candidates | v1 |
 | a zone | IANA (`America/Los_Angeles`), a numeric offset — after a time, a date or a day word | `zoneToken`, as written | directly | v1 |
 | a place named with `time` | `yesterday London time`, `8 AM New York time` | `zoneToken: 'London time'`, as written | the ONE zone the tz database names for the place (`zone.ts` · `zoneOfPlace`, noted `zone-read`); none or several (`India time`, `Pacific time`) → the zone is asked | v1 (reader follow-up) |
-| a zone abbreviation | `PST` | `zoneToken: 'PST'` | **only through the app's map** (`policy.abbreviations`, none ships): its zone's reading, and — when its DST state disagrees with the date — its letters' literal offset too, both offered in ONE confirmation (`open: ['abbreviation', 'confirm']`); with no map, or one missing it, the zone is asked (`format: 'zone'`) | tokenized; mapped only by the app's policy |
+| a zone abbreviation | `PST` | `zoneToken: 'PST'` | **only through the app's map** (`policy.abbreviations`, none ships): compare both complete interval boundaries for the regional and literal readings, offering distinct intervals in ONE confirmation; an unknown civil zone is asked. For an elapsed span, the endpoints are already known: keep the mapped display zone, or quote an unmapped label beside UTC as not converted (§ 6.4) | tokenized; mapped only by the app's policy |
 | day words | today, yesterday, tomorrow | `relative: { day, offset }` | anchored on the clock, in the person's zone | v1 |
 | relative spans | last 40 minutes, past 2 hours, the last hour, `last 24h`, `past 6h` | `relative: { unit, count }` | a look-back (§ 3.2) | v1 — proposed and confirmed like every reading (TQ29); the compact units (`m`, `h`, `d`, `w`) since packet "gaps" |
 | a named-month date | `11 September`, `Sept 29`, `September 29, 2026` | `date: fixed` — `year` only when written | the year from the policy (`year`), as for `10/9` | v1 since packet "gaps" (the host's field phrasings use them); a month named alone stays unreadable |
@@ -520,8 +526,9 @@ app may override every key, and only checks the app armed can produce one.
 | some readings the tool can read, some not (`10/08/26` to a look-back tool with `maxRange: '7d'`: 8 Oct in reach, 10 Aug and 2010 not) | the readable ones as choices |
 | a start and an end asked separately (`From when?`, `Until when?`) that together break the tool's `direction`, `retention` or `maxRange` | asked again naming the fact, bounded, then the call is refused — with the reader or without |
 | a wall time in a DST gap or overlap (a fixed v1 law: Temporal's `reject`) | the two instants as choices (Temporal's `earlier` and `later`) |
-| a zone abbreviation (v1 has no map), or one not in the map | the zone, `format: 'zone'` |
-| an abbreviation in the map whose DST state disagrees with the date (`PST` on 9 Oct) | both readings as choices — literal `−08:00`, or the zone's `−07:00` (`abbreviationMismatch: 'ask'`) |
+| an unknown zone whose interpretation can change the interval, including a civil date with an unmapped abbreviation | the zone, `format: 'zone'` |
+| a mapped abbreviation whose regional and literal readings give different complete intervals | both intervals as choices in the existing confirmation; compare both ends, not the current offset alone |
+| an elapsed span with a said zone, including one absent from the caller's map or not representable by the display carrier | no extra zone question: retain the elapsed endpoints; show the mapped zone or UTC with the exact said label and an explicit not-converted notice; the existing meaning confirmation remains |
 | a tool needs a period and the person wrote a time the library holds no reading of (words the reader could not read; a zone still to name) | the window, asked — the zone first, else "Which time did you mean by …?" with nothing pre-filled (`format: 'time-range'`), whatever the tool's own rule says: its default never stands in for words the person wrote (packet "gaps") |
 | a tool needs a period and the person said none | the carried window first (§ 5.6); else the tool's own `askOrAssume` rule, unchanged; its choices may now be ranges |
 | the only reading came from a `kind: 'model'` reader and a tool needs it | the reading as one choice to confirm (§ 5.5) |
@@ -531,6 +538,47 @@ One ask per batch, before anything dispatches — the inputs layer's rule
 evidence gate counts it as the person's words (§ 9.5).
 
 ---
+
+### 6.4 Unreleased reply correction and stated zones
+
+The existing `time-range` field retains its ID, strict format, ISO interval enum
+and labels. A new optional free-text sibling carries a correction; the range
+field becomes optional only when that sibling is present. Fill exactly one.
+There is no action field or opaque choice ID. A range answer is judged by the
+same strict validator. Correction text may name one zone, replacement time words
+or a full strict interval. Both/neither, unreadable text (including “no”),
+negation and conflicting readings stay pending with a fixed reason and examples;
+they are not treated as malformed ISO ranges or passed to a model classifier.
+
+`time/reply.ts` is one facade over plain decode, classify, resolve and project
+units. The existing resumed ask calls it and owns the native interrupt, request
+binding and tool gates. This fix does not mount a chart, move a pause or run a
+disconnected executor. Decisions carry a bounded rule label into the existing
+time record. A correction row is ephemeral working data under the existing ask
+privacy carrier: replacement words keep their actual checked quote, never a
+fabricated old quote. No new durable raw-correction mirror or raw text in rule
+metadata is added. Meaning acceptance still cannot overwrite already supplied
+partial call endpoints (#266).
+
+**Always confirm remains.** `timeReadingRows` continues to use `confirm: true`.
+Corrected time words and zones are proposals until the person confirms them.
+Only a redundant *zone* question goes away when it cannot change instants.
+An elapsed interval keeps the saved “now” and its endpoints, regardless of how
+long the answer took. An unknown label such as unmapped `EST` is not Eastern by
+guess: display UTC, quote the label and say it was not converted. Calendar
+windows still resolve under the stated zone; at the autumn transition, one
+reading of “yesterday” can span 25 hours and the literal-offset reading 24, so
+both interval boundaries must be compared before collapsing readings.
+
+The additive minor intent is an ordinary changes fragment, not a package-version
+edit. Acceptance requires the old range-field bytes to match except `required`,
+and a real native pause written by published 14.1.1 to resume with its old
+meaning. The existing 12.3.0 fixture is preserved and is not relabelled as that
+proof. The new optional data stays bound to its saved request; strict generic
+range validation, native cancellation and existing source/privacy gates remain.
+Hosts may ignore the sibling and keep their old range UI. Rendering a correction
+box is a follow-up after the library ships, subject to each host's own dependency
+and review gates.
 
 ## 7. Tool time capabilities and conversion
 
@@ -926,7 +974,7 @@ await agent.run({
 | `reader` | **none** | reading the person's words is armed separately; no reader means no `time-reading` rows and no word-driven asks (T-words, § 5.4) |
 | `policy.dateOrder` | `'ask'` | no silent MDY (dateparser's documented trap) |
 | `policy.year` | `'ask'` | a year the person did not say is a guess, and near New Year the current and previous years are both plausible (dateparser's `PREFER_DATES_FROM` exists for exactly this) |
-| `policy.abbreviations` | absent — no map ships | added by the reader follow-ups after the T6b bench (the field sentence's `PST` opened a bare zone ask with no pre-fill on every run, then a second round for the date order): a map the APP declares, `{ PST: { zone: 'America/Los_Angeles', offset: '-08:00' } }`; a mapped abbreviation is read as its zone and, when they disagree, as its letters — both offered in one confirmation, never corrected. Without it every byte is v1's |
+| `policy.abbreviations` | absent — no map ships | a map the APP declares, `{ PST: { zone: 'America/Los_Angeles', offset: '-08:00' } }`; regional and literal readings are offered together only when their complete intervals differ. An unmapped civil zone remains a question; an unmapped elapsed label is quoted beside UTC as not converted, with the one meaning confirmation retained (§ 6.4) |
 | tool `period` facts | absent: nothing checked | `direction`, `retention`, `maxRange`, `granularity`, `filtersToAsked` are facts about the tool (§ 7.1); a tool never sets policy |
 
 **Fixed laws in v1**, each a switch later only if a bench shows the need:
@@ -1251,7 +1299,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   — a seam with no production caller yet: no `InputField` carries a tool's facts in T5a, so those
   four sentences are not served until a field does; the batch ask's answer for a period argument is read back through its single-argument form
   and asked again (`invalid-answer`) outside the facts — the refusal of an exhausted ask names the
-  fact (`arguments/ask.ts` · `factExpectation`, registered as served). Refusing a CALL on its facts
+  fact (`arguments/ask/validation.ts` · `factExpectation`, registered as served). Refusing a CALL on its facts
   is T5b's. (10) The design's "this morning vs yesterday morning" test is "today vs yesterday": v1
   resolves no part of the day (T6a note (6)).
 
@@ -1265,7 +1313,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   `period-shifted { by }`). Both arms of `rows.ts` · `timeRowIsWellFormed` grew with them. (2)
   **The refusal door** is the one the unreadable-rules refusal already uses
   (`ArgumentResolution.refused`, the argument-refusal shape), with the registered sentence
-  `arguments/serve.ts` · `timeRefusal` — past tense, naming only the declared fact and an argument
+  `arguments/serve/refusals.ts` · `timeRefusal` — past tense, naming only the declared fact and an argument
   name, never the window's value (it may be the person's). A refused call files no argument row:
   its `call-window` row is the record, as a call whose rules cannot be read files none. The facts
   are checked on the person's window before a fill and on the read-back window of a sent one (the
@@ -1320,8 +1368,8 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   its word table is data inside the file, because `time/` is a leaf — a second language moves
   it beside `src/locales/`; `readers/` imports only the port, pinned); `resolve.ts` ·
   `withZoneAnswered`; `windows.ts` · `readerWindowsOf` and `TurnWindows.open`; the sentence in
-  `arguments/serve.ts` · `timeWindowsSentence` / `withTimeWindows` (through `rulesOnWire`'s
-  `windows`); the window field in `arguments/ask.ts` (`AskField.window`, `planAskFields`'s plan,
+  `arguments/serve/windows.ts` · `timeWindowsLine` (served through the `arguments/serve.ts`
+  facade); the window field in `arguments/ask.ts` (`AskField.window`, `planAskFields`'s plan,
   `bindAnswer`); the plan in `stages/argumentAsk.ts` · `windowPlanOf`. Exported: `englishTimeReader`
   and `EnglishTimeReaderOptions` (TQ12). (2) **What "unreadable" covers.** Every phrase of the
   "later" rows, and more it recognises as time — week days, named months, "ago", spans in words
@@ -1337,7 +1385,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   so; a value the tool's view hides is named hidden. **Placement (the T6b bench's pre-run check,
   the step-7b serving strategy):** it is ONE request-only `user` line appended LAST to the request
   — the conclusion at the decision point, never a tool description — composed at the slot's one
-  decoration site from the tools really served (`arguments/serve.ts` · `timeWindowsLine`), carried
+  decoration site from the tools really served (`arguments/serve/windows.ts` · `timeWindowsLine`), carried
   on `timeLine` (`{ iteration, text }`, served only on the iteration that composed it, so classic
   mode's cached slot never serves a stale line) and appended by `callLLM`; `servedView` rebuilds it
   (reason `time-window-line`). A settled window is named in the person's zone with its source and
@@ -1614,7 +1662,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   composed by ONE owner for both readers (`coverage/timeLimits.ts` · `timeLimitLinesOf`; the
   limits block asks it for the person, the served line for the model with "the person's window"
   for "your window" and, of the clocks, only the label that two differ), join the ONE served time
-  line (TQ13) after the windows' halves: `arguments/serve.ts` · `timeLimitsSentence`, composed at
+  line (TQ13) after the windows' halves: `arguments/serve/clock.ts` · `timeLimitsSentence`, composed at
   the tools slot's decoration site from the mount arg `timeLimits` and appended LAST to every
   later request of the turn by `callLLM` — never to history, so `servedView` rebuilds it from the
   same `timeLine` key. The gate widens from `.time({ reader })` to `.time()`: without a reader the
@@ -1622,7 +1670,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   opens by naming its source (`TIME_LIMITS_SOURCE`: a note from the library, not from the person —
   answer the person directly): the channel is a `user` message, and the bench's first paid rounds
   showed an unmarked line answered as the person's correction ("You're right"). (Since the time
-  follow-ups' packet "serving" that opening belongs to the whole line, said once: `serve.ts` ·
+  follow-ups' packet "serving" that opening belongs to the whole line, said once: `serve/clock.ts` ·
   `TIME_LINE_SOURCE`, applied by `timeLine`.) Pinned by
   `test/time/limits-served.test.ts` and its row in `test/modelFacingSurfaces.test.ts`. (8) **The bench** (`bench/time-checks/`, rule `time-rule-t8`,
   Haiku 4.5, arm off = the build before T8): round 2 (`bench/time/runs/t8`, 360 runs, $1.19) is
@@ -1651,12 +1699,12 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   it can read in SOME offers only those (§ 6.3). (3) **The served line concludes a refusal.** A
   refused window of the person's (its `call-window` row names the mention, or — an open reading
   refused in every reading — the row carries no range and the turn's one pending quote is it)
-  becomes the refused part of the line: the refusal's own reason (`serve.ts` · `refusalReason`,
+  becomes the refused part of the line: the refusal's own reason (`serve/refusals.ts` · `refusalReason`,
   the one text `timeRefusal` also serves), then "So the answer tells the person that … could not
   read that time, and claims nothing about it from …"; that quote is no longer pending for that
   tool. The T6b paid record's `future` case asked the same refused call until the budget ran out
   on 5/15 runs while the pending half kept naming it the next step. (4) **A start and end asked
-  separately are one window** (`arguments/ask.ts` · `pairsBroken`): the single-argument fact check
+  separately are one window** (`arguments/ask/validation.ts` · `pairsBroken`): the single-argument fact check
   could not judge one bound of two, so the unarmed arm's mock ran a future `start_time`/`end_time`
   pair to a `direction: 'past'` tool; the pair is now read back and judged together, asked again
   naming the fact, then refused. (5) **The checkpoint door** takes the open-reading refusal row (no
@@ -1668,7 +1716,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   pending sentence's "or the call is refused with the reason" keeps it true). Pinned by
   `test/time/lookback-only.test.ts` and `test/time/lookback-only-run.test.ts`.
 - **Time follow-ups, packet "serving" (2026-09-30).** The late line's voice. (1) **One line, one
-  opening.** The served time line is composed by ONE function, `arguments/serve.ts` · `timeLine`
+  opening.** The served time line is composed by ONE function, `arguments/serve/clock.ts` · `timeLine`
   (the windows' halves, then the limits), and opened ONCE with `TIME_LINE_SOURCE` — a note from the
   library that runs the tools, not from the person and not a correction from them — whichever halves
   it holds; no half carries its own (it replaces `TIME_LIMITS_SOURCE`, which opened the limits half
@@ -1683,7 +1731,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   of 10 answers after it. The sentence is now a conclusion about the results in hand — "The results
   for “…” cover the window written into the call — the assistant's own reading of those words. So
   the answer gives those results and names that window as the assistant's reading of “…”." — no
-  account of the call that ran and no negation of a confirmation (`serve.ts` · `pendingSentence`);
+  account of the call that ran and no negation of a confirmation (`serve/windows.ts` · `pendingSentence`);
   a 32-run probe drew 1 misread in 8 answers after it. (3) **A quote the library holds no reading of** (`windows.ts` ·
   `ReaderWindows.pendingZones`: no candidate, the choice open on `zone` — an abbreviation outside the
   app's map) no longer promises a form "which shows its reading": the pending half says the form
@@ -1787,7 +1835,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   half; an edited answer's zone is the one its typed offsets match (the offered zone first).
   (G16) **The run clock is served.** Apps used to send their own "application clock" block; with
   the layer armed the model had no date on any turn. Decision: the turn's clock is the FIRST
-  sentence of the one served time line on every request under `.time()` (`serve.ts` ·
+  sentence of the one served time line on every request under `.time()` (`serve/clock.ts` ·
   `clockSentence`, mount arg `timeClock`), to the minute, with the weekday in the person's zone and
   the zone named — "This turn's time: …", not "It is now": the model-facing checker refuses a
   deictic present, and a resumed request is read after the frozen clock. One opening for the whole
@@ -1805,7 +1853,7 @@ deterministic and are measured over retained recorded runs or unit tables, with 
   that call — not a question about the time in the reply". Following the playbook (record →
   served → late → phrasing): the record held `pendingUnread`, the line was served late, so the
   broken link was the phrasing — "could not read" came first and read as permission to ask, the
-  next step came last. Now (`serve.ts` · `unreadSentence`, replacing `unreadClause`) the line leads
+  next step came last. Now (`serve/windows.ts` · `unreadSentence`, replacing `unreadClause`) the line leads
   with the conclusion and the ONE next step, then the move not to make: "The library could not read
   “yesterday morning”, so the next step is to call client_activity with start_time, end_time left
   out: that call opens the library's own form, which asks the person which time they meant, with

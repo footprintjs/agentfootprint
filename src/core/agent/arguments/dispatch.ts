@@ -42,7 +42,7 @@ import {
 
 /**
  * The refusal a call reads when the batch's one human question was the
- * layer's ask and the call needed a person again (`serve.ts` ·
+ * layer's ask and the call needed a person again (`serve/refusals.ts` ·
  * `secondPauseRefusal`) — re-exported so ToolCalls reaches it through this
  * module's one `import()`.
  */
@@ -144,7 +144,7 @@ export function keepAnswers(
 
 /**
  * KEEP a refused call's answers and return the model's sentence for them
- * (`serve.ts` · `keptAnswersNote` over `keepAnswers`) — `''` when the call
+ * (`serve/refusals.ts` · `keptAnswersNote` over `keepAnswers`) — `''` when the call
  * carried no answer.
  */
 export function keptNote(
@@ -188,13 +188,13 @@ function carriedValue(proposed: ToolArgs | undefined, argument: string): InputVa
 }
 
 /**
- * The past-tense note for a call that RAN on filled values (`serve.ts` ·
+ * The past-tense note for a call that RAN on filled values (`serve/fills.ts` ·
  * `filledNote`) — one clause per fill it really ran with (`fillsThatRan`), a
  * value the tool's view hides never printed. `proposed` is the call's own
  * arguments before the fills: an answered fill that REPLACED a value the call
  * carried (declared sources ask about an untraced value) says what the call
  * had carried; under declared sources (`options.sources`) an answered clause
- * also says a later call may cite the answer (`serve.ts` ·
+ * also says a later call may cite the answer (`serve/fills.ts` ·
  * `ANSWERED_SOURCE_CLAUSE`). `''` when no fill ran.
  */
 export function noteFor(

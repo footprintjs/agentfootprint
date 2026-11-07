@@ -5,7 +5,7 @@
  * (`time/bind.ts` · `callWindowOf`), the refused row the checkpoint door
  * reads (`time/rows.ts` · `timeRowIsWellFormed`), the refused windows the
  * served line reads (`time/windows.ts` · `readerWindowsOf`) and the
- * served line's refused half (`agent/arguments/serve.ts` · `timeWindowsLine`).
+ * served line's refused half (`agent/arguments/serve/windows.ts` · `timeWindowsLine`).
  *
  * Law: a person's window reaches a tool exactly, else WIDER with what the
  * wider read adds, else it is REFUSED with a named reason — never silently

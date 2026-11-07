@@ -6,7 +6,7 @@
  *          (`AnswerAssessmentData`, the projection the answer layer files on
  *          `turn_end` and on `agentfootprint.answer.assessed`) and the values
  *          a tool's rule assumed this turn (the same `AssumedLine`s the
- *          "Assumed" block prints — `arguments/serve.ts` · `assumedLinesFor`).
+ *          "Assumed" block prints — `arguments/serve/assumed.ts` · `assumedLinesFor`).
  *          One closed, versioned table of words; nothing here reads the run.
  * Role:    core/ layer leaf of the answer layer (honesty layer 4). Loaded only
  *          by the layer's stage (`assessment/stage.ts`), which is itself
@@ -218,7 +218,7 @@ export function rewrittenBehind(assessed: AnswerAssessment): boolean {
 /**
  * Where this turn's assumed values are read from: the ledger, the turn, and
  * the before-tool rewrites a row may have been superseded by — handed to the
- * "Assumed" block's own reader (`arguments/serve.ts` · `assumedLinesFor`),
+ * "Assumed" block's own reader (`arguments/serve/assumed.ts` · `assumedLinesFor`),
  * which the caller loads: the answer layer's stage through `import()` (the
  * optional-family law), the answer account statically.
  */
@@ -505,7 +505,7 @@ function reasonClauses(
 
 // LENS · appended-answer · persistent-history
 // reads: the standing as data (`assessmentDataOf` over the one fold) and this turn's assumed values
-//        (`arguments/serve.ts` · `assumedLinesFor`, the "Assumed" block's own rows)
+//        (`arguments/serve/assumed.ts` · `assumedLinesFor`, the "Assumed" block's own rows)
 // law: may omit, never deny; says what the record holds, never that the answer is true.
 /**
  * The standing line for one answer — `''` never: every standing has words.

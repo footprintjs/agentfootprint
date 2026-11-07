@@ -1,0 +1,11 @@
+{
+  "name": "time-reply-published-writer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "agentfootprint": "14.1.1",
+    "footprintjs": "11.0.0",
+    "foottrace": "1.11.1"
+  }
+}

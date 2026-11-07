@@ -422,7 +422,7 @@ export const prepareFinalWithLimitsInZoneStage = (scope: TypedScope<AgentState>)
  * (honesty layer 2) — the limits stage above, plus the values a tool's
  * `assume` rule filled THIS turn: "Assumed (a tool's rule, not your words)",
  * composed by the framework from the committed `argument` rows
- * (`arguments/serve.ts` · `assumedBlockOf`), so the model cannot drop it.
+ * (`arguments/serve/assumed.ts` · `assumedBlockOf`), so the model cannot drop it.
  *
  * Mounted in place of `prepareFinalWithLimitsStage` by both chart builders
  * ONLY when both arms are on — the one place the final branch reads the

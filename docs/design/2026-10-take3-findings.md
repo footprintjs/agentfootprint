@@ -24,7 +24,7 @@ evidence gate then flagged `9:22`, `4:22` and `5:02` ("3 values not traced").
 `partly-held` row carries `held { queried, held }` (`results/subflow.ts` · `heldSpanOf`, the
 declared period the verdict came from); the served time line (model audience only) states it in
 the person's zone through the one renderer the person's `Period:` line uses (`timeLimits.ts` ·
-`heldLine`, `arguments/serve.ts` · `timeLimitsSentence`): "What the sources hold is not all of
+`heldLine`, `arguments/serve/clock.ts` · `timeLimitsSentence`): "What the sources hold is not all of
 the time asked about — pscale_client_health asked about 2026-09-30 06:00:00–11:59:50
 America/Los_Angeles (UTC-07:00); its source holds 2026-10-01 09:22:44.300–10:02:44.300
 America/Los_Angeles (UTC-07:00), which covers none of that time. So the answer to the person states what each

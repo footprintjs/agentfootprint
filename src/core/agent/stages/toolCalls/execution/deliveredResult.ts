@@ -207,7 +207,7 @@ export function landCallResult(
   // reads through the cut (`lib/toolBytes.ts` · `toolBytesOf`): a value
   // that sits only in the library's note grounds nothing and hides no
   // reading of the result. Under declared sources an answered clause
-  // also says a later call may cite the answer (`arguments/serve.ts` ·
+  // also says a later call may cite the answer (`arguments/serve/fills.ts` ·
   // `ANSWERED_SOURCE_CLAUSE`).
   const layerNote =
     frame.inputs !== undefined && frame.execution.executed

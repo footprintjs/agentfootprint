@@ -15,7 +15,7 @@
  *          the chain ran, so a rewrite supersedes the layer's row: the value
  *          the call ran with is the rewrite's. Two readers must agree on that —
  *          `assessment/assess.ts` · `readArgumentVerdicts` (the standing) and
- *          `arguments/serve.ts` · `assumedBlockOf` (the "Assumed" block) —
+ *          `arguments/serve/assumed.ts` · `assumedBlockOf` (the "Assumed" block) —
  *          and both load through `import()` (the fold on first use, the block
  *          under the arm), so neither can own the reading for the other: it
  *          lives here, once, and a plain agent's graph carries it for neither.
@@ -42,7 +42,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 // FOLD · the one owner of "which argument of which call a before-tool rewrite superseded"
 // consumers read this and never re-derive it: assessment/assess.ts · readArgumentVerdicts,
-// arguments/serve.ts · assumedBlockOf
+// arguments/serve/assumed.ts · assumedBlockOf
 // detached: yes — fresh maps of plain entries, rebuilt per read.
 /**
  * The before-tool middleware rewrites on the record — `middlewareDecisions`

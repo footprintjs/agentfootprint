@@ -118,7 +118,7 @@ execute, ask about everything else (§ 8.6), and show the person exactly what wi
 | `semantics/coverage/search/types.ts · ToolSearch`, `SearchArgument` | the search's words: `source.said`, `subject.said`, `fixed[].said`, and `said` on filter and source values | the rule reads them; population arguments gain words; an explicit `inert` role is the only thing that keeps an argument out of the scope digest (§ 8.4, § 8.6) |
 | `time/windows.ts · isOpenForPerson` | a reading waits on the person: to confirm, a zone, words not read | also open: leftovers, a modifier, a recurrence, an event, an unsupported shape, an unaccounted word or relation |
 | `time/bind.ts · callWindowOf`, `time/rows.ts · CallWindowRow` | which window a call carries (`person`, `asked`, `sent`); refuses what no form holds | names the requested and the executed window as separate fields; records the default (§ 9) |
-| `core/agent/arguments/ask.ts · planAskFields`, `stages/argumentAsk.ts · windowPlanOf`, `tools/inputRequest.ts · applyInputResponse` | the one batch ask before dispatch, and its resume door | the confirmation of each call's scope rides this ask; no second approval path (§ 8.4) |
+| `core/agent/arguments/ask/fields.ts · planAskFields`, `stages/argumentAsk.ts · windowPlanOf`, `tools/inputRequest.ts · applyInputResponse` | the one batch ask before dispatch, and its resume door | the confirmation of each call's scope rides this ask; no second approval path (§ 8.4) |
 | `time/rows.ts · TimeAnswerRow`, `answersOf`, `time/windows.ts · turnWindowsOf` | the person's answer to a mention, reused by mention | the answer also carries the digest of each scope confirmed; reuse is by digest (§ 8.4) |
 | `core/agent/stages/timeLayer.ts · timeAtDispatch` | the clock at dispatch; redraws the library's own lookback fill | also checks each call's scope digest against the confirmed one; a change asks again (§ 8.4) |
 | `core/agent/arguments/resolve.ts · verifyPlan`, `timeDecisionsOf` | routes open readings to the batch ask, before dispatch | unchanged route; more readings are open |
@@ -500,7 +500,7 @@ period: {
 | no time request found | the tool's own `askOrAssume` default, recorded as the default (§ 9) | the same |
 
 "Asked" is today's batch ask: one ask before anything in the batch dispatches
-(`arguments/ask.ts · planAskFields`, `stages/argumentAsk.ts · windowPlanOf`). A tool with no period is
+(`arguments/ask/fields.ts · planAskFields`, `stages/argumentAsk.ts · windowPlanOf`). A tool with no period is
 not affected.
 
 ### 8.3 The ask offers choices where it can
@@ -513,7 +513,7 @@ not affected.
 | a range or a day, to a lookback-only tool | the covering lookback as one labelled choice ("the last 34 hours, which includes all of yesterday"), and free entry. Never filled without that choice. |
 | a sampling instruction, to a tool with no `sampling` | the window without the sampling as one labelled choice ("the last 2 hours, every reading — the tool cannot sample every 5 minutes"), and free entry |
 | the current state, to a tool with no `current` | a short lookback as one labelled choice ("the last 15 minutes"), and free entry |
-| words no reader read | free entry, as today (`arguments/serve.ts · unreadSentence`) |
+| words no reader read | free entry, as today (`arguments/serve/windows.ts · unreadSentence`) |
 
 The sentences are new keys in the ask catalog (`src/locales/timeAsk.ts`), which the app may override,
 as every ask sentence may (TQ7). The answer is judged by `checkTimeAnswer`, as today.
@@ -545,7 +545,7 @@ independently written held-out set and field use.
 > 2 hours"), every reading in that window, with no other condition. Is that what you meant?
 
 The text is rendered from the planned call and the tool's declared words, never from the model's
-prose. It rides the existing batch ask (`arguments/ask.ts · planAskFields`, `requestInput`) and its
+prose. It rides the existing batch ask (`arguments/ask/fields.ts · planAskFields`, `requestInput`) and its
 resume door (`tools/inputRequest.ts · applyInputResponse`). There is no second approval system.
 The confirmation names the scope. It never promises that every page will be read: that stays a
 coverage fact, which the answer reports.
@@ -793,7 +793,7 @@ and says what the tool declared, or that it declared nothing:
   only knows that the default was applied.
 - A tool's declaration stays attributed to that tool. Missing, differing, partial or unknown coverage
   stays visible; nothing is presented as a completed read unless the tool declared it.
-- The model is served the same lines as a conclusion (`arguments/serve.ts · timeLimitsSentence`). The
+- The model is served the same lines as a conclusion (`arguments/serve/clock.ts · timeLimitsSentence`). The
   window is never taken from the model's prose.
 
 ## 10. Determinism

@@ -26,10 +26,10 @@
  * `format`, or the choices of a reading under `.time()`.
  */
 
-import type { TimeAskMessages } from '../time/ask.js';
+import { TIME_REPLY_MESSAGES, type TimeAskMessages } from '../time/ask.js';
 
 /** The time ask's English sentences — one per `TIME_ASK_MESSAGE_KEYS` key. */
-export const defaultTimeAskMessages: TimeAskMessages = Object.freeze({
+export const defaultTimeAskMessages: Required<TimeAskMessages> = Object.freeze({
   'answer.not-an-instant':
     '“{{value}}” is not a date and time. Write it with its offset, like 2026-10-09T08:00-07:00.',
   'answer.no-offset':
@@ -51,6 +51,7 @@ export const defaultTimeAskMessages: TimeAskMessages = Object.freeze({
   'ask.which': 'Which time did you mean by “{{quote}}”?',
   'ask.confirm': 'Is this the time you meant by “{{quote}}”?',
   'ask.zone': 'Which time zone did you mean by “{{token}}” in “{{quote}}”?',
-  'ask.zone-unknown': 'Which time zone are you in? It decides which time “{{quote}}” is.',
+  'ask.zone-unknown': 'Which time zone should be shown for “{{quote}}”?',
+  ...TIME_REPLY_MESSAGES,
   'choice.confirm': 'I read “{{quote}}” as {{window}} in {{zone}} — is that right?',
 });

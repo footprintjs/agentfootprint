@@ -94,7 +94,7 @@ export function timeWindowsArg(ledger: unknown): {
 
 /**
  * The Tools mount's `timeClock` arg — the turn's run clock for the served
- * line's first sentence (G16, `agent/arguments/serve.ts` · `clockSentence`),
+ * line's first sentence (G16, `agent/arguments/serve/clock.ts` · `clockSentence`),
  * or no key when the turn has no clock. Under an unknown zone (G15) the zone
  * is the UTC spelling, marked `zoneUnknown`.
  */

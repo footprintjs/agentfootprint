@@ -1,15 +1,15 @@
 import { readAbsence } from '../semantics/coverage/absent.js';
 import type { ToolAbsence } from '../semantics/coverage/types.js';
+import { checkTimeAnswer, isTimeFormat, type TimeFormat } from '../time/ask.js';
+import { own, object, nonempty, jsonValue } from './inputRequest/data.js';
 import {
-  checkTimeAnswer,
-  isTimeFormat,
-  refusalReason,
-  type TimeAnswerRefusal,
-  type TimeAskMessages,
-  type TimeFormat,
-} from '../time/ask.js';
-import type { ZoneName } from '../time/zone.js';
-import { defaultTimeAskMessages } from '../locales/timeAsk.js';
+  refusedTimeAnswers,
+  reaskRefused,
+  refusalStillStanding,
+  type TimeAnswerContext,
+} from './inputRequest/response.js';
+export type { TimeAnswerContext } from './inputRequest/response.js';
+import { hasDeclaredTimeReply } from '../time/replyForm.js';
 
 /** Typed missing-input values. Collection is distinct from permission or consent. */
 export type InputValue = string | number | boolean;
@@ -149,29 +149,6 @@ export interface InputResponseResult {
   readonly origin: AwaitingInput['origin'];
 }
 
-const own = (o: object, k: PropertyKey): boolean => Object.prototype.hasOwnProperty.call(o, k);
-function object(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
-  );
-}
-function nonempty(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= 4096;
-}
-function jsonValue(value: unknown, seen = new Set<object>(), depth = 0): boolean {
-  if (depth > 32) return false;
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (!Array.isArray(value) && !object(value)) return false;
-  if (seen.has(value)) return false;
-  seen.add(value);
-  const valid = Object.values(value).every((child) => jsonValue(child, seen, depth + 1));
-  seen.delete(value);
-  return valid;
-}
 function fail(reason: string): never {
   throw new InputRequestError(reason);
 }
@@ -533,93 +510,6 @@ export function readAwaitingInput(pauseData: unknown): AwaitingInput | undefined
 }
 
 /**
- * What the resume door knows when it checks a time field's answer: the
- * person's zone (the run clock's, under `.time()` — it arms the DST-gap check)
- * and the app's catalog overrides (`.time({ messages })`).
- */
-export interface TimeAnswerContext {
-  readonly zone?: ZoneName;
-  readonly messages?: Partial<TimeAskMessages>;
-}
-
-/**
- * The time fields' answers the check refuses, field id → why — in field
- * order. Only a field with a `format` is judged: only a check the app armed
- * can refuse (time design § 6.2, TQ7).
- */
-function refusedTimeAnswers(
-  fields: readonly InputField[],
-  values: Readonly<Record<string, InputValue>>,
-  zone: ZoneName | undefined,
-): [string, TimeAnswerRefusal][] {
-  const refused: [string, TimeAnswerRefusal][] = [];
-  for (const field of fields) {
-    if (field.format === undefined || !own(values, field.id)) continue;
-    const refusal = checkTimeAnswer(field.format, values[field.id] as string, zone);
-    if (refusal !== undefined) refused.push([field.id, refusal]);
-  }
-  return refused;
-}
-
-/**
- * The same ask, asked again: the refused time answers are not taken (the
- * fields are `missing` again, whether or not they are required — the person
- * tried to answer them), the rest of the reply is kept, and the re-ask
- * carries the 9.127.0 shapes — `refused: { answer, reason }` with the
- * catalog's reason, and the runtime's `repeat: { count }` (the refused
- * answer never reached the record, so there is no `previousAnswer`).
- */
-function reaskRefused(
-  waiting: AwaitingInput,
-  values: Readonly<Record<string, InputValue>>,
-  refused: readonly [string, TimeAnswerRefusal][],
-  time: TimeAnswerContext | undefined,
-): AwaitingInput {
-  const ids = new Set(refused.map(([id]) => id));
-  const accepted = Object.fromEntries(Object.entries(values).filter(([k]) => !ids.has(k)));
-  const drop = <T>(record: Readonly<Record<string, T>>): Record<string, T> =>
-    Object.fromEntries(Object.entries(record).filter(([k]) => !ids.has(k)));
-  const supplied = { ...drop(waiting.supplied), ...accepted };
-  const messages: TimeAskMessages = { ...defaultTimeAskMessages, ...time?.messages };
-  return {
-    ...waiting,
-    supplied,
-    origins: {
-      ...drop(waiting.origins),
-      ...Object.fromEntries(Object.keys(accepted).map((k) => [k, 'response' as const])),
-    },
-    missing: waiting.fields
-      .filter((f) => ids.has(f.id) || (f.required !== false && !own(supplied, f.id)))
-      .map((f) => f.id),
-    refused: {
-      answer: Object.fromEntries(refused.map(([id]) => [id, values[id] as InputValue])),
-      reason: refusalReason(
-        refused.map(([, refusal]) => refusal),
-        messages,
-      ),
-    },
-    repeat: { count: (waiting.repeat?.count ?? 0) + 1 },
-  };
-}
-
-/**
- * The refusal an ACCEPTED reply leaves standing. A refusal names the answer
- * it turned down (`InputRefusal.answer`); once the person has answered every
- * one of those fields again — and this reply was accepted — the refusal is
- * about an answer that no longer stands, so it is dropped: a UI must not say
- * "your answer was not accepted" beside a field it just took. A refusal that
- * names no answer, or one this reply did not answer again in full, stays.
- */
-function refusalStillStanding(
-  refusal: InputRefusal | undefined,
-  values: Readonly<Record<string, InputValue>>,
-): InputRefusal | undefined {
-  if (refusal?.answer === undefined) return refusal;
-  const named = Object.keys(refusal.answer);
-  return named.length > 0 && named.every((id) => own(values, id)) ? undefined : refusal;
-}
-
-/**
  * Accept typed fields, or explicit cancellation, without coercing free text.
  * A time field's answer (`InputField.format`) is checked here too; one the
  * check refuses comes back as the same ask with `refused` and `repeat`, its
@@ -641,7 +531,8 @@ export function applyInputResponse(
   if (Object.keys(raw).some((k) => !['requestId', 'values'].includes(k)))
     fail('unknown response field');
   const values = validateValues(waiting.fields, raw.values);
-  if (Object.keys(values).length === 0) fail('supply at least one field or cancel explicitly');
+  if (Object.keys(values).length === 0 && !hasDeclaredTimeReply(waiting))
+    fail('supply at least one field or cancel explicitly');
   const refused = refusedTimeAnswers(waiting.fields, values, time?.zone);
   if (refused.length > 0) return reaskRefused(waiting, values, refused, time);
   const supplied = { ...waiting.supplied, ...values };

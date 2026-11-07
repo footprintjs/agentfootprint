@@ -48,6 +48,7 @@ import type {
   ClockOnResumeRow,
   ClockRow,
   TimeAnswerRow,
+  TimeReplyRow,
   SourceClockRow,
   TimeDerivedRow,
   TimeReadingRow,
@@ -515,6 +516,7 @@ export type FindingsRow =
   | TimeReadingRow
   | CallWindowRow
   | TimeAnswerRow
+  | TimeReplyRow
   | TimeDerivedRow
   | SourceClockRow;
 

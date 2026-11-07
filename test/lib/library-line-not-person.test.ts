@@ -2,7 +2,7 @@
  * G17 — the library's own late lines are never the person's words.
  *
  * THE BUG. Three `role: 'user'` lines are served on a REQUEST and never
- * written to `history`: the time layer's late line (`arguments/serve.ts` ·
+ * written to `history`: the time layer's late line (`arguments/serve/clock.ts` ·
  * `timeLine`, opened with `TIME_LINE_SOURCE`), the figures dial's conclusion
  * (`evidence/figures.ts` · `figuresConclusionLine`, the same opening) and the
  * staged-refs nudge (`stagedRefs.ts` · `stagedRefsNudgeLine`). None of their

@@ -77,7 +77,7 @@ export interface AgentTurnEndPayload {
     /**
      * The values a tool's `assume` rule filled this turn (the inputs layer,
      * honesty layer 2) — the SAME rows, read the same way, that the prose
-     * answer's "Assumed" block prints (`arguments/serve.ts` ·
+     * answer's "Assumed" block prints (`arguments/serve/assumed.ts` ·
      * `assumedLinesFor`): one entry per distinct (tool, argument, value), a
      * row a before-tool rewrite superseded left out. `value` is the tool's
      * own argument view; `'REDACTED'` with `hidden` when that view hides it.

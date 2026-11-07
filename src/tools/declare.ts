@@ -260,7 +260,7 @@ export function parsesUnderSpelling(value: unknown, spelling: PeriodSpelling): b
  * `lookback` ↔ `signed-lookback`, by adding or removing the leading minus.
  * Nothing is ever turned into a duration; an `iso-range` is never converted.
  * `undefined` when the value does not parse under `from`. The one owner: the
- * batch ask's shared period field (`arguments/ask.ts` · `periodsShareField`) and the
+ * batch ask's shared period field (`arguments/ask/fields.ts` · `periodsShareField`) and the
  * declared-sources check's earlier answer in another spelling (`arguments/checks.ts` ·
  * `checkSource`, `matched: 'spelling'`) both convert through it.
  */

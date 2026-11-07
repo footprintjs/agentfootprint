@@ -13,7 +13,7 @@ inputs layer, honesty layer 2), which the prose answer prints as its
 `turn_end.answerCoverage` and `agent.answerCoverage()`.
 
 `assumed` is the SAME reading of the SAME rows the block prints
-(`arguments/serve.ts` · `assumedLinesFor`): one entry per distinct (tool,
+(`arguments/serve/assumed.ts` · `assumedLinesFor`): one entry per distinct (tool,
 argument, value), in the order the rows were filed, a row a before-tool
 rewrite superseded left out. `value` is the tool's own argument view —
 `'REDACTED'`, with `hidden: true`, when that view hides the argument.

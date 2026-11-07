@@ -537,7 +537,7 @@ export function explainFigure(
 
 /**
  * WHO says the late line — the library, not the person — in the exact words
- * the time line measured (`arguments/serve.ts` · `TIME_LINE_SOURCE`: an
+ * the time line measured (`arguments/serve/clock.ts` · `TIME_LINE_SOURCE`: an
  * unmarked request-only `user` line drew "You're right… I apologize" on 37 of
  * 37 answers). Both are the ONE copy in the authorship registry
  * (`lib/saidByPerson.ts`, a zero-import leaf — so this folder still never

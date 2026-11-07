@@ -748,7 +748,7 @@ export function periodRowIsWellFormed(row: Readonly<Record<string, unknown>>): b
  *
  * `audience` names who reads the line: the PERSON (the limits block, the
  * default — their window is "your window") or the MODEL (the served time line,
- * `agent/arguments/serve.ts` · `timeLimitsSentence` — the same window is "the
+ * `agent/arguments/serve/clock.ts` · `timeLimitsSentence` — the same window is "the
  * person's window"). That reference differs, and a SHIFTED read: the model is
  * handed the library's conclusion ({@link shiftedConclusion}) — which part of
  * the window the result does not cover, in the person's zone, and that the

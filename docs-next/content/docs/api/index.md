@@ -398,6 +398,7 @@ title: agentfootprint
 - [TimeReaderStamp](/docs/api/interfaces/TimeReaderStamp)
 - [TimeReading](/docs/api/interfaces/TimeReading)
 - [TimeReadingRow](/docs/api/interfaces/TimeReadingRow)
+- [TimeReplyRow](/docs/api/interfaces/TimeReplyRow)
 - [TimeWall](/docs/api/interfaces/TimeWall)
 - [TokenBudgetOptions](/docs/api/interfaces/TokenBudgetOptions)
 - [TokenBudgetRecord](/docs/api/interfaces/TokenBudgetRecord)

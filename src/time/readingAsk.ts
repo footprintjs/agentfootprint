@@ -21,7 +21,13 @@
  * ```
  */
 
-import { fillMessage, quoted, type TimeAskMessages, type TimeFormat } from './ask.js';
+import {
+  fillMessage,
+  quoted,
+  TIME_REPLY_MESSAGES,
+  type TimeAskMessages,
+  type TimeFormat,
+} from './ask.js';
 import { spellRange } from './range.js';
 import { presentRange } from './present.js';
 import type { TimeReadingRow } from './rows.js';
@@ -34,7 +40,7 @@ import { shownGrain } from './resolveRecord.js';
 export interface TimeAskField {
   readonly id: string;
   readonly type: 'string';
-  readonly required: true;
+  readonly required: boolean;
   readonly format: TimeFormat;
   readonly enum?: readonly string[];
   readonly labels?: readonly string[];
@@ -75,7 +81,7 @@ export function timeAskOf(
   if (choice?.by === 'none') {
     return {
       question: fillMessage(messages['ask.which'], { quote: quoted(row.quote) }),
-      field: { id, type: 'string', required: true, format: 'time-range' },
+      field: { id, type: 'string', required: false, format: 'time-range' },
     };
   }
   if (choice?.by !== 'open') return undefined;
@@ -114,6 +120,17 @@ export function timeAskOf(
       { zone: candidate.zone, locale: row.reader.locale },
       shownGrain(candidate),
     );
+    const unconverted = candidate.notes.find((note) => note.kind === 'zone-unconverted');
+    if (unconverted?.kind === 'zone-unconverted') {
+      return fillMessage(
+        messages['choice.unconverted'] ?? TIME_REPLY_MESSAGES['choice.unconverted'],
+        {
+          quote,
+          window,
+          token: quoted(unconverted.token),
+        },
+      );
+    }
     if (!confirm) return window;
     // The zone is named: the reading leaned on it, and the person may have meant another.
     return fillMessage(messages['choice.confirm'], { quote, window, zone: candidate.zone });
@@ -124,7 +141,7 @@ export function timeAskOf(
     field: {
       id,
       type: 'string',
-      required: true,
+      required: false,
       format: 'time-range',
       enum: offered.map((o) => o.value),
       labels,

@@ -89,6 +89,12 @@ const LA = 'America/Los_Angeles';
 const NOW = '2026-10-09T15:40:00Z';
 const NOW_MS = Date.parse(NOW);
 const FIELD = 'Show client activity 10/09/26 8 AM to 8:40 AM PST';
+const CORRECTION_FIELD = {
+  id: 'f1-correction',
+  type: 'string',
+  required: false,
+  description: 'Or say what should change, such as a time zone, yesterday, or a full interval.',
+} as const;
 /** `[NOW − 2h, NOW)` as `time/present.ts` · `presentRange` writes it in Los Angeles. */
 const WINDOW_2H = '2026-10-09 06:40–08:40 America/Los_Angeles (UTC-07:00)';
 
@@ -168,7 +174,7 @@ const CLOCK = "This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles (UT
 const OPEN = `${TIME_LINE_SOURCE} ${CLOCK}`;
 
 /**
- * The served time line holding only the pending half (`arguments/serve.ts` · `timeWindowsLine`),
+ * The served time line holding only the pending half (`arguments/serve/windows.ts` · `timeWindowsLine`),
  * opened once with who says it (`timeLine` · `TIME_LINE_SOURCE`).
  */
 const pendingLine = (quote: string, calls: string): string =>
@@ -232,7 +238,7 @@ describe('the field sentence — the zone, then the date order, then the tool ru
     });
     expect(ofKind(agent, 'time-reading')[0]).toMatchObject({
       quote: '10/09/26 8 AM to 8:40 AM PST',
-      reader: { id: 'agentfootprint/english', version: '1.2.0', kind: 'rule', locale: 'en-US' },
+      reader: { id: 'agentfootprint/english', version: '1.3.0', kind: 'rule', locale: 'en-US' },
       choice: { by: 'open', remaining: [], open: ['zone'] },
     });
     expect(ofKind(agent, 'call-window')[0]).toMatchObject({
@@ -415,10 +421,14 @@ describe('phrases v1 does not read — one unreadable row, asked as ONE window w
         { quote, problem: 'unreadable', choice: { by: 'none', why: 'unreadable' } },
       ]);
       expect(first.awaitingInput.fields).toEqual([
-        expect.objectContaining({
+        {
+          id: 'f1',
+          type: 'string',
+          required: false,
           format: 'time-range',
           description: `Which time did you mean by “${quote}”?`,
-        }),
+        },
+        CORRECTION_FIELD,
       ]);
       expect(first.awaitingInput.fields[0]!.enum).toBeUndefined();
     });
@@ -471,8 +481,17 @@ describe('every chat reading is a confirmation — never filed as said (the owne
       expect(timeLineOf(requests[0])).toBe(
         pendingLine(quote, 'client_activity is called with start_time, end_time left out'),
       );
-      // One field, pre-filled with the reading and its zone, free entry open.
-      expect(first.awaitingInput.fields).toHaveLength(1);
+      // The original range field remains first; its only new range property is required:false.
+      // The optional correction sibling is exact and cannot hide another unrelated field.
+      expect(first.awaitingInput.fields).toEqual([
+        expect.objectContaining({
+          id: 'f1',
+          type: 'string',
+          required: false,
+          format: 'time-range',
+        }),
+        CORRECTION_FIELD,
+      ]);
       const field = first.awaitingInput.fields[0]!;
       expect(field.format).toBe('time-range');
       expect(field.description).toBe(`Is this the time you meant by “${quote}”?`);
@@ -828,7 +847,10 @@ describe('reader edges — the end edge, a named zone, the app’s abbreviation 
         }),
     );
     const first = paused(await agent.run({ message: FIELD, time: { now: NOW } }));
-    expect(first.awaitingInput.fields).toHaveLength(1);
+    expect(first.awaitingInput.fields).toEqual([
+      expect.objectContaining({ id: 'f1', type: 'string', required: false, format: 'time-range' }),
+      CORRECTION_FIELD,
+    ]);
     const field = first.awaitingInput.fields[0]!;
     expect(field.format).toBe('time-range');
     expect(field.enum).toEqual([
