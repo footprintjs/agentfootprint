@@ -91,7 +91,14 @@ async function wrapped<O>(
     if (!wrapperOpen) return refused('late-proceed');
     if (claimed) return refused('second-proceed');
     claimed = true;
-    const problem = changeProblem(turn.kind, changes);
+    let problem: AroundTurnRefusal | undefined;
+    try {
+      problem = changeProblem(turn.kind, changes);
+    } catch (error) {
+      // A Proxy's trap threw. No leg started, so the wrapper may still call again.
+      claimed = false;
+      return handled(Promise.reject(error));
+    }
     if (problem !== undefined) {
       claimed = false;
       return refused(problem);

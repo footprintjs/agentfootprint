@@ -176,6 +176,32 @@ describe('a second or a late proceed', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it.each(['ownKeys', 'getOwnPropertyDescriptor'] as const)(
+    'changes whose %s trap throws start nothing and leave the wrapper free to call again',
+    async (trap) => {
+      const { provider, calls } = counted(['one answer']);
+      const boom = new RangeError('trap');
+      let caught: unknown;
+      const changes = new Proxy(
+        { time: {} },
+        {
+          [trap]() {
+            throw boom;
+          },
+        },
+      );
+      const agent = built(async (_turn, proceed) => {
+        caught = await proceed(changes as never).catch((error: unknown) => error);
+        await proceed();
+      }, provider);
+      const failures = failuresOf(agent);
+      expect(await agent.run('hello')).toBe('one answer');
+      expect(caught).toBe(boom);
+      expect(calls).toHaveLength(1);
+      expect(failures).toEqual([]);
+    },
+  );
+
   it('a call after the wrapper settled is refused by name and starts nothing', async () => {
     const { provider, calls } = counted(['one answer']);
     let held: (() => Promise<void>) | undefined;
