@@ -13,6 +13,8 @@ import { readOnlyCopy } from './readOnlyCopy.js';
 import type { AgentTurn, AroundTurn, ProceedWithTurn, RunTurn, TurnChanges } from './types.js';
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]{0,127}$/;
+/** Nothing noted yet. Not `undefined`: a wrapper may throw `undefined`. */
+const NOTHING_NOTED = Symbol('nothing noted');
 
 /** The class of a thrown value, or a fixed word. Never its message, and never throws. */
 function errorClassOf(thrown: unknown): string {
@@ -61,9 +63,11 @@ async function wrapped<O>(
 ): Promise<O> {
   const { name } = port;
   let running: Promise<void> | undefined;
+  // Taken before any code the wrapper can reach runs: a `time` getter may call `proceed`.
+  let claimed = false;
   let settled: { readonly value: O } | { readonly error: unknown } | undefined;
   let wrapperOpen = true;
-  let lastNoted: unknown;
+  let lastNoted: unknown = NOTHING_NOTED;
   const note = (error: unknown): void => {
     if (error === lastNoted) return;
     lastNoted = error;
@@ -80,14 +84,18 @@ async function wrapped<O>(
   };
   const refused = (reason: AroundTurnRefusal): Promise<void> => {
     const error = new AroundTurnError(reason, name);
-    if (running !== undefined) note(error);
+    if (claimed) note(error);
     return handled(Promise.reject(error));
   };
   const proceed: ProceedWithTurn = (changes) => {
     if (!wrapperOpen) return refused('late-proceed');
-    if (running !== undefined) return refused('second-proceed');
+    if (claimed) return refused('second-proceed');
+    claimed = true;
     const problem = changeProblem(turn.kind, changes);
-    if (problem !== undefined) return refused(problem);
+    if (problem !== undefined) {
+      claimed = false;
+      return refused(problem);
+    }
     running = (async () => leg(changes))().then(
       (value) => {
         settled = { value };

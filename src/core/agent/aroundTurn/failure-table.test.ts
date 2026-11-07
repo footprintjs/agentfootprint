@@ -140,6 +140,42 @@ describe('a second or a late proceed', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('a call from inside a time getter is refused and the first run stands', async () => {
+    const { provider, calls } = counted(['one answer']);
+    let second: unknown;
+    const agent = Agent.create({ provider, model: 'mock' })
+      .time({ zone: 'UTC' })
+      .aroundTurn({
+        name: 'wrap',
+        around: async (_turn, proceed) => {
+          const changes = {
+            get time() {
+              second = proceed();
+              return { now: '2026-11-07T00:00:00.000Z' };
+            },
+          };
+          await proceed(changes);
+          second = await (second as Promise<void>).catch((error: unknown) => error);
+        },
+      })
+      .build();
+    expect(await agent.run('hello')).toBe('one answer');
+    expect(second).toMatchObject({ code: 'ERR_AROUND_TURN', reason: 'second-proceed' });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a refused change leaves the wrapper free to call again', async () => {
+    const { provider, calls } = counted(['one answer']);
+    let refusal: unknown;
+    const agent = built(async (_turn, proceed) => {
+      refusal = await proceed({ nope: 1 } as never).catch((error: unknown) => error);
+      await proceed();
+    }, provider);
+    expect(await agent.run('hello')).toBe('one answer');
+    expect(refusal).toMatchObject({ code: 'ERR_AROUND_TURN', reason: 'unknown-change' });
+    expect(calls).toHaveLength(1);
+  });
+
   it('a call after the wrapper settled is refused by name and starts nothing', async () => {
     const { provider, calls } = counted(['one answer']);
     let held: (() => Promise<void>) | undefined;
@@ -235,6 +271,20 @@ describe('throws after a good proceed', () => {
     );
     expect(JSON.stringify(events)).not.toContain(SECRET);
     expect(JSON.stringify(agent.getLastSnapshot())).not.toContain(SECRET);
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['a string', 'text that is no class'],
+  ])('throwing %s is noted too, as a non-error', async (_label, thrown) => {
+    const agent = built(async (_turn, proceed) => {
+      await proceed();
+      throw thrown;
+    });
+    const failures = failuresOf(agent);
+    expect(await agent.run('hello')).toBe('done');
+    expect(failures).toEqual([{ wrapper: 'wrap', errorClass: 'non-error' }]);
   });
 
   it('a pause is not lost, and its resume still works', async () => {
