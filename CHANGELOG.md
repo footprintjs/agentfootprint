@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.2.1] - 2026-11-07
+
+### Fixed
+
+- **Read “last hour” and “last day” without requiring “the”.** The English time
+  reader accepts last/past hour and day with the same one-unit meaning and stated
+  zone as the existing forms with “the”. Calendar “last week” and “past week”
+  remain unreadable and ask for clarification.
+  The recorded reader identity advances so the changed readings remain distinguishable.
+
 ## [14.2.0] - 2026-11-07
 
 ### Added
