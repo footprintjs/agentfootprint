@@ -105,7 +105,7 @@ export { readEnglishZoneCorrection } from './english/zones.js';
 /** The reader's recorded identity — on every `time-reading` row with its version. */
 export const ENGLISH_TIME_READER_ID = 'agentfootprint/english';
 /** Raised whenever what the reader returns for some text changes. */
-export const ENGLISH_TIME_READER_VERSION = '1.3.0';
+export const ENGLISH_TIME_READER_VERSION = '1.4.0';
 
 // ─── The phrases v1 does not read ────────────────────────────────────────
 

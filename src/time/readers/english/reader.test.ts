@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { englishTimeReader } from '../english.js';
 
 describe('bare hour/day lookbacks', () => {
+  it('records a distinct reader identity for the changed readings', async () => {
+    const reader = englishTimeReader();
+    const reading = await reader.read('last hour', { locale: 'en-US' });
+    expect(reading.mentions[0]).toMatchObject({
+      parses: [{ relative: { unit: 'hour', count: 1 } }],
+    });
+    expect(reader).toMatchObject({ id: 'agentfootprint/english', version: '1.4.0' });
+  });
+
   it.each([
     ['last hour', 'hour', undefined],
     ['past hour', 'hour', undefined],
