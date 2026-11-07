@@ -587,11 +587,18 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'the evidence sentence of a cache-metrics Claim — observability output for a person or a dashboard, never a message on any wire',
     },
   ],
+  'src/core/agent/run/outputStrategySupport.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 2,
+      why: 'forced-tool and native-output run-start refusals thrown to the caller; moved here from Agent.ts, whose count went down by the same two',
+    },
+  ],
   'src/core/Agent.ts': [
     {
       kind: 'not-model-facing',
-      count: 9,
-      why: "typed-output, option-validation, forced-tool and native-output (`strategy: 'native'` run-start) errors thrown to the caller, the build-time refusal of `.toolChoice()` under reactMode 'classic' (findings is still refused, but its corrected sentence no longer matches this grammar), plus one console warning about a cached menu",
+      count: 7,
+      why: "typed-output and option-validation errors thrown to the caller, the build-time refusal of `.toolChoice()` under reactMode 'classic' (findings is still refused, but its corrected sentence no longer matches this grammar), plus one console warning about a cached menu",
     },
   ],
   'src/core/conversation.ts': [
@@ -1344,7 +1351,7 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // conversation.ts, files115→116, total206→207, notModelFacing137→138.
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
-        files: 117,
+        files: 118,
         total: 208,
         registry: 8,
         ephemeral: 26,

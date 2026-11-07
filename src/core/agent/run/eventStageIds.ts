@@ -11,6 +11,12 @@
 export const TOOL_TEARDOWN_STAGE_ID = 'tool-teardown#0';
 
 /**
+ * The pseudo-stage `agentfootprint.agent.around_turn_failed` is stamped with: a
+ * wrapper fails around the run, where there is no stage to inherit.
+ */
+export const AROUND_TURN_STAGE_ID = 'around-turn#0';
+
+/**
  * The pseudo-stage a LATE artifact fact is stamped with — one that lands after
  * the run its binding was made in had ended (a tool's floating upload). Its
  * stage is long gone; like the teardown events it says plainly where it came

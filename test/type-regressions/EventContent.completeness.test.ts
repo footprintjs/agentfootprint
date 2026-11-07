@@ -61,6 +61,7 @@ export type EventContent = 'shape' | 'fields' | 'structure';
 
 export const EVENT_CONTENT = {
   // agent.*
+  'agentfootprint.agent.around_turn_failed': 'structure',
   'agentfootprint.agent.budget_exhausted': 'structure',
   'agentfootprint.agent.evidence_checked': 'shape',
   'agentfootprint.agent.grounding_nudged': 'structure',

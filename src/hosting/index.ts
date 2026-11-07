@@ -182,10 +182,11 @@ export {
   TURN_ARTIFACTS_TIMEOUT_MS,
 } from './types.js';
 
+export { requireCapability } from './requireCapability.js';
 export {
-  requireCapability,
   HostClosedError,
   ConcurrentRunError,
+  ReplacedRunnerMethodError,
   PauseNotCarriedError,
   AwaitingDecisionError,
   NoPendingAskError,

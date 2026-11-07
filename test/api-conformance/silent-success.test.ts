@@ -58,6 +58,7 @@ import { mock } from '../../src/llm-providers.js';
 import { defineOntology } from '../../src/ontology/index.js';
 import { pauseHere } from '../../src/core/pause.js';
 import { unconfiguredCredentialProvider } from '../../src/identity/types.js';
+import type { AroundTurn } from '../../src/core/agent/aroundTurn/types.js';
 import type { CodeResult, CodeRunner, LLMRequest } from '../../src/provider-contract/types.js';
 
 const SRC = join(__dirname, '..', '..', 'src');
@@ -670,6 +671,8 @@ describe('silent success — reading a run', () => {
  */
 const REFUSES_A_SECOND_CALL = [
   'act',
+  // One wrapper per agent: a second would silently decide which work a turn skips.
+  'aroundTurn',
   'answerValidation',
   // One negative-citation contract per agent; replacing it would silently change the guarantee.
   'negativeClaims',
@@ -880,6 +883,10 @@ describe('silent success — the doctrine sweep', () => {
           .outputSchema({ parse: (v: string) => JSON.parse(v) }),
       reliability: () => base().reliability({}).reliability({}),
       selfExplain: () => base().selfExplain().selfExplain(),
+      aroundTurn: () => {
+        const wrapper: AroundTurn = { name: 'one', around: (_turn, proceed) => proceed() };
+        return base().aroundTurn(wrapper).aroundTurn(wrapper);
+      },
       skillGraph: () =>
         base()
           .skillGraph({ skills: [], nextSkill: () => undefined })

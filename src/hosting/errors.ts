@@ -2,24 +2,16 @@
  * hosting/errors — the refusals, authored once so every adapter refuses in the
  * same words.
  *
- * A refusal that varies by adapter is a refusal nobody can write a test or a
- * runbook against. These six carry a stable `code`, name WHO refused, and say
- * what the caller should do instead. Adapters map the codes onto whatever their
- * transport uses to say "no" — that mapping is the adapter's business and lives
- * in the adapter, never here.
+ * A refusal that varies by adapter is one nobody can write a test or a runbook
+ * against. These carry a stable `code`, name WHO refused and say what to do
+ * instead. Adapters map the codes onto their transport's "no", in the adapter.
  *
- * Note what is NOT here: a run that paused. That is unfinished work rather than
- * a refusal, and it leaves through `reply.awaiting(...)` — its own terminal —
- * not through an error dressed up as one.
- *
- * `requireCapability` is the last refusal and the only one that is a
- * programming mistake rather than a runtime condition, so it throws a plain
- * `Error`: nothing branches on "I forgot to feature-detect", it just needs to
- * say so loudly and name the adapter it is talking about.
+ * Not here: a run that paused. That is unfinished work, and it leaves through
+ * `reply.awaiting(...)`, its own terminal.
  */
 
 import { previewStored } from '../lib/storedPreview.js';
-import type { AgentHost, ConversationHost, HostCapability, PendingAsk } from './types.js';
+import type { PendingAsk } from './types.js';
 
 /**
  * Thrown when a request arrives at a host that is shutting down or shut down.
@@ -40,6 +32,28 @@ export class HostClosedError extends Error {
     );
     this.name = 'HostClosedError';
     this.hostName = hostName;
+  }
+}
+
+/**
+ * Thrown when `standingAgent` is handed an Agent whose `run` or `resume` is not
+ * the class's own — an own property or a subclass override. A hosted turn does
+ * not call those doors, so the replacement would be skipped with no error.
+ * `.aroundTurn()` on the builder is the supported place for that work.
+ */
+export class ReplacedRunnerMethodError extends Error {
+  readonly code = 'ERR_REPLACED_RUNNER_METHOD' as const;
+  /** Which doors were replaced. */
+  readonly methods: readonly string[];
+
+  constructor(methods: readonly string[]) {
+    super(
+      `[hosting] standingAgent refuses an agent whose ${methods.join(' and ')} was replaced: ` +
+        `a hosted turn does not call a replaced method, so that work would be skipped with no ` +
+        `error. Declare it with .aroundTurn({ name, around }) on the builder.`,
+    );
+    this.name = 'ReplacedRunnerMethodError';
+    this.methods = methods;
   }
 }
 
@@ -1289,18 +1303,4 @@ export class InvalidSessionIdError extends Error {
     this.name = 'InvalidSessionIdError';
     this.reason = reason;
   }
-}
-
-export function requireCapability(
-  host: AgentHost | ConversationHost,
-  capability: HostCapability,
-): void {
-  if (host.capabilities.includes(capability)) return;
-  const has = host.capabilities.length > 0 ? host.capabilities.join(', ') : 'none';
-  throw new Error(
-    `[hosting] the '${host.name}' host does not support '${capability}'. ` +
-      `It reports: ${has}. Feature-detect with ` +
-      `host.capabilities.includes('${capability}') and fall back, or serve on a host ` +
-      `that has it — capabilities are read from the adapter, never assumed from its name.`,
-  );
 }

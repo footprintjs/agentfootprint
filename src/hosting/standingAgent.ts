@@ -125,6 +125,7 @@ import {
 import { envelopeOwner, envelopeTranscript, toEnvelope, toPausedEnvelope } from './envelope.js';
 import {
   AdmissionRefusedError,
+  ReplacedRunnerMethodError,
   ArtifactNotCarriedError,
   ArtifactOpsBusyError,
   ArtifactNotFoundError,
@@ -310,9 +311,8 @@ export async function standingAgent<TH extends HostHandle>(
 
   // ── Refused at construction, before a socket exists ──────────────────
   //
-  // Two spellings of one decision, and nothing could make the winner visible
-  // afterwards: an operator reading `{ agent, agentFactory }` in a config would
-  // have no way to know whether their sessions were isolated or not.
+  // Two spellings of one decision: an operator reading `{ agent, agentFactory }`
+  // in a config could not know whether their sessions were isolated.
   if (sharedAgent !== undefined && factory !== undefined) {
     throw new Error(
       `[hosting] standingAgent was given both 'agent' and 'agentFactory'. They are two ` +
@@ -329,12 +329,9 @@ export async function standingAgent<TH extends HostHandle>(
         `Neither was given, so there is nothing to serve.`,
     );
   }
-  // Two options whose shape TypeScript enforces and plain JavaScript does not.
-  // Both fail CLOSED at runtime if left half-spelled — an `identity` with no
-  // `verify` would refuse every caller as unverifiable, an `admission` with no
-  // `decide` would throw on the first turn — and a door that refuses everybody
-  // for a configuration reason is exactly the outage that takes an hour to
-  // diagnose from the outside. Named here instead, before a socket exists.
+  // Two options TypeScript enforces and plain JavaScript does not. Half-spelled,
+  // both fail closed at runtime: an outage for a configuration reason that takes
+  // an hour to diagnose from outside. Named here instead, before a socket exists.
   if (
     identityOptions !== undefined &&
     typeof identityOptions.verify !== 'function' &&
@@ -466,6 +463,7 @@ export async function standingAgent<TH extends HostHandle>(
           'need it.',
       );
     }
+    if (live.turn !== undefined) hostedTurnOf(agent);
     const offLane = live.onRealEvent((event: AgentfootprintEvent) => {
       const turn = lane.turn;
       const runId = turn?.invocation.runId();
@@ -552,12 +550,10 @@ export async function standingAgent<TH extends HostHandle>(
    * One new agent out of the factory — or a refusal naming what went wrong.
    *
    * The repeat-instance check is the load-bearing one. A factory that closes
-   * over a single agent and returns it every time type-checks perfectly and
-   * destroys the only property the pool exists for: two sessions would share
-   * per-run state, both runs would finish, and one person's conversation would
-   * end up holding another person's turn with nothing in the recording to say
-   * so. That is the exact failure the shared shape serializes to avoid, and it
-   * is worth a loud refusal at the moment it becomes possible.
+   * over a single agent type-checks perfectly and destroys what the pool exists
+   * for: one person's conversation would end up holding another person's turn
+   * with nothing in the recording to say so — the failure the shared shape
+   * serializes to avoid.
    */
   function fromFactory(): Agent {
     const made = factory?.() as Agent | undefined;
@@ -1573,9 +1569,8 @@ export async function standingAgent<TH extends HostHandle>(
         }
       }
 
-      // The signal reaches tool execution, tool discovery and skill-entry
-      // scoring. It does NOT currently reach the LLM call, so a caller who
-      // hangs up mid-generation stops the tools, not the token stream.
+      // The signal reaches tools, tool discovery and skill-entry scoring, NOT the
+      // LLM call: a caller who hangs up mid-generation stops the tools, not the tokens.
       //
       // `sessionId` (9.4.0) rides the same bag onto every event this run
       // emits, so a shipped telemetry stream can be asked "what happened in
@@ -1588,15 +1583,10 @@ export async function standingAgent<TH extends HostHandle>(
       // a concurrency latch this host invented, and stamping it on telemetry
       // would be publishing a fact nobody can join to.
       //
-      // `identity` (9.12.0) is the WHO beside that WHICH-conversation: a
-      // transport that named the end user gets a principal on the run, which is
-      // what puts a real person in `EventMeta.principal`, in `ctx.identity`
-      // inside a tool, and in the identity a credential provider scopes its
-      // token vault on — the whole chain, from the front door to the downstream
-      // API, without anybody configuring it. See `identityForRequest` for what
-      // each field is composed from and why. A transport that named nobody
-      // produces `undefined` here and every earlier release's behaviour is
-      // unchanged.
+      // `identity` (9.12.0) is the WHO beside that WHICH-conversation: a named end
+      // user gets a principal on the run — in `EventMeta.principal`, `ctx.identity`
+      // and the identity a credential provider scopes its token vault on. See
+      // `identityForRequest`. A transport that named nobody produces `undefined`.
       const identity = identityForRequest(
         request.userId,
         sessionId,
@@ -1722,8 +1712,7 @@ export async function standingAgent<TH extends HostHandle>(
         // failure below may have used the decision (`answeredPause.ts`).
         const watch = watchAnswer(paused);
         try {
-          const turn = runnerLive(runner)?.turn;
-          if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
+          const turn = hostedTurnOf(runner);
           await deliver(
             lane,
             await turn.resume(paused.checkpoint, request.decision, resumeOptions, bind),
@@ -1774,8 +1763,7 @@ export async function standingAgent<TH extends HostHandle>(
       }
 
       const turnOptions = await withSealedRequest();
-      const turn = runnerLive(runner)?.turn;
-      if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
+      const turn = hostedTurnOf(runner);
       const completed = await turn.run(
         { message: request.input, ...(prior !== undefined && { continueFrom: prior }) },
         turnOptions,
@@ -2176,6 +2164,18 @@ async function withinBound(
     if (timer !== undefined) clearTimeout(timer);
     if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort);
   }
+}
+
+/**
+ * The agent's turn port, or a refusal: it does not call a replaced `run` or
+ * `resume`, so a replacement is refused when a lane is built and on every turn.
+ */
+function hostedTurnOf(agent: Agent) {
+  const turn = runnerLive(agent)?.turn;
+  if (turn === undefined) throw new TypeError('Agent turn ownership is unavailable');
+  const replaced = turn.replaced();
+  if (replaced.length > 0) throw new ReplacedRunnerMethodError(replaced);
+  return turn;
 }
 
 /** The routable half of a failure — class and code, never the message. */

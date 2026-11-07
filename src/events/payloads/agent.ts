@@ -9,6 +9,15 @@ export interface AgentTurnStartPayload {
   readonly userPrompt: string;
 }
 
+/**
+ * A `.aroundTurn()` wrapper threw after its run went well. The outcome stands;
+ * this is the only record of the failure. The error's class, never its message.
+ */
+export interface AgentAroundTurnFailedPayload {
+  readonly wrapper: string;
+  readonly errorClass: string;
+}
+
 export interface AgentTurnEndPayload {
   readonly turnIndex: number;
   readonly finalContent: string;

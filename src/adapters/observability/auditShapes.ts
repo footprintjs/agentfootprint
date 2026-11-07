@@ -1020,9 +1020,8 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       refusalReason: str,
       supersededBy: oneOf('earlier-proposal'),
     }),
-    // `reason` is `pauseData.reason` — the same words `questionPayload` hides.
+    // `reason` is `pauseData.reason`: the library's sentence stays, a pause's own is its data.
     'agentfootprint.pause.request': eventShape<'agentfootprint.pause.request'>({
-      // The library's own pause sentence stays; a pause's own reason is its data.
       reason: oneOf(FIXED_PAUSE_REASON),
       questionPayload: keysMarker,
     }),
@@ -1115,7 +1114,6 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       toolCallId: str,
       iteration: num,
     }),
-    // `tellLLM` is the tool result the model read in place of the call.
     'agentfootprint.permission.halt': eventShape<'agentfootprint.permission.halt'>({
       checkerId: str,
       target: str,
@@ -1125,8 +1123,7 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       sequenceLength: num,
       toolCallId: str,
     }),
-    // A router's `{ reason }` is the routing model's own words; `decide()`
-    // evidence is the engine's, kept (see audit.ts).
+    // A router's `{ reason }` is its model's words; `decide()` evidence is the engine's.
     'agentfootprint.composition.route_decided':
       eventShape<'agentfootprint.composition.route_decided'>({
         conditionalId: str,
@@ -1329,6 +1326,11 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       ),
       phase: oneOf('prepared'),
     }),
+    'agentfootprint.agent.around_turn_failed':
+      eventShape<'agentfootprint.agent.around_turn_failed'>({
+        wrapper: str,
+        errorClass: str,
+      }),
     'agentfootprint.agent.budget_exhausted': eventShape<'agentfootprint.agent.budget_exhausted'>({
       reason: oneOf('cost-budget', 'max-iterations'),
       iteration: num,
@@ -1341,8 +1343,7 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       content: charsMarker,
       contentWithheld: bool,
       toolCallCount: num,
-      // A provider's counts. Its usage object can carry more than these (structural
-      // typing lets it): a child the type does not declare is a marker.
+      // A provider's counts. A child the type does not declare is a marker.
       usage: shapeOf<PayloadOf<'agentfootprint.stream.llm_end'>['usage']>({
         input: num,
         output: num,
@@ -1619,8 +1620,7 @@ export function eventShapes(toolRan: (name: string) => boolean): {
       terminatedBy: str,
       shapeHash: str,
     }),
-    // One use of an MCP client pool: "ids, digests, evidence and outcomes only" —
-    // never an identity value, a session handle, an argument, a result or a server's text.
+    // An MCP pool's use: ids, digests, evidence and outcomes; never a value or a server's text.
     'agentfootprint.tools.mcp_client': eventShape<'agentfootprint.tools.mcp_client'>({
       server: str,
       at: oneOf('call', 'list'),
