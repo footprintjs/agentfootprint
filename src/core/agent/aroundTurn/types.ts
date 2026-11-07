@@ -53,6 +53,9 @@ export interface TurnChanges {
  * fails in the agent's own work around a run that settled (a typed run that
  * refuses a pause, for example), it rejects first, and those finalizers run
  * after the wrapper returns, outside its context, so the end stays failed.
+ * The stored recording covers the turn up to this point: a failure the wrapper
+ * raises after `proceed` resolves goes on the live
+ * `agentfootprint.agent.around_turn_failed` event only, not into the record.
  * Call it once, while the wrapper is still running.
  */
 export type ProceedWithTurn = (changes?: TurnChanges) => Promise<void>;
