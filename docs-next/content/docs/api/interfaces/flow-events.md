@@ -115,7 +115,7 @@ Event passed to FlowRecorder.onBreak.
 
 > `optional` **propagatedFromSubflow?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:320
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:322
 
 When true, this break event was raised on the PARENT because an inner
 subflow's break propagated up (via `SubflowMountOptions.propagateBreak`).
@@ -128,12 +128,14 @@ The originating inner break fires its own `onBreak` event separately
 
 > `optional` **reason?**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:313
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:315
 
 Optional free-form reason supplied by `scope.$break(reason)`. Absent
 when the stage invoked `$break()` without an argument. Propagates when
 a subflow is mounted with `propagateBreak: true` — the outer break
-event carries the inner break's reason too.
+event carries the inner break's reason too. Under a redaction policy it
+is the placeholder when the stage read a selected value, its args hold a
+selected key, or `logs.breakReason` is selected by name.
 
 ***
 
@@ -217,7 +219,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 ## Interface: FlowErrorEvent
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:323
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:325
 
 Event passed to FlowRecorder.onError.
 
@@ -227,7 +229,7 @@ Event passed to FlowRecorder.onError.
 
 > `optional` **channel?**: `"flow"`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:335
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:337
 
 Explicit channel discriminant — `'flow'` on every engine-dispatched
 event. `isFlowEvent()` checks it first (backlog B3); optional so
@@ -240,7 +242,7 @@ back to the legacy pipelineId-absence heuristic.
 
 > **message**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:325
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:327
 
 ***
 
@@ -248,7 +250,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **stageName**: `string`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:324
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:326
 
 ***
 
@@ -256,7 +258,7 @@ Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts
 
 > **structuredError**: `StructuredErrorInfo`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:327
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:329
 
 Structured error details — preserves field-level issues, error codes, etc.
 
@@ -266,7 +268,7 @@ Structured error details — preserves field-level issues, error codes, etc.
 
 > `optional` **traversalContext?**: [`TraversalContext`](/docs/api/interfaces/TraversalContext)
 
-Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:328
+Defined in: node\_modules/footprintjs/dist/types/lib/engine/narrative/types.d.ts:330
 
 
 ---

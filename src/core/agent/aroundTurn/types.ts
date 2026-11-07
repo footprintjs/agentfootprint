@@ -47,6 +47,8 @@ export interface TurnChanges {
 /**
  * Runs the turn. Resolves to nothing: the output, the pause and the checkpoint
  * stay with the library. Rejects with the run's own error when the run fails.
+ * It settles only after the turn's record is filed: the run's finalizers (its
+ * recording, resource cleanup) run inside the wrapper's context first.
  * Call it once, while the wrapper is still running.
  */
 export type ProceedWithTurn = (changes?: TurnChanges) => Promise<void>;

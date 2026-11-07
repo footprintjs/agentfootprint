@@ -4,7 +4,7 @@ title: Agent
 
 # Class: Agent
 
-Defined in: [src/core/Agent.ts:462](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L462)
+Defined in: [src/core/Agent.ts:463](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L463)
 
 Every primitive (LLMCall, Agent), every composition (Sequence, Parallel,
 Conditional, Loop), and every pattern factory result implements Runner.
@@ -21,7 +21,7 @@ composition.
 
 > **new Agent**(`opts`, `systemPromptValue`, `registry`, `voice`, `injections?`, `memories?`, `outputSchemaParser?`, `toolProvider?`, `systemPromptCachePolicy?`, `cachingDisabled?`, `cacheStrategy?`, `outputFallbackCfg?`, `reliabilityConfig?`, `thinkingHandlerValue?`, `thinkingBudgetValue?`, `skillGraphNextSkill?`, `skillGraphReachable?`, `skillGraphScoreEntries?`, `checkInOptions?`, `runConfigFn?`, `windowStrategy?`, `toolMiddleware?`, `messageMiddleware?`, `outputEnforcement?`, `skillGraphEdgeTargets?`, `skillGraphExplainNextSkill?`, `skillGraphIsTree?`, `skillGraphSupersededEntries?`, `skillGraphCascade?`, `skillBrains?`, `evidenceGate?`, `limitsTravelWithTheAnswer?`, `recipes?`, `skillGraphDeclared?`, `mapsPlan?`, `claimContract?`, `answerValidationConfig?`, `systemPromptCacheExplicit?`, `negativeClaimsConfig?`, `scriptTravel?`, `aroundTurn?`): `Agent`
 
-Defined in: [src/core/Agent.ts:994](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L994)
+Defined in: [src/core/Agent.ts:995](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L995)
 
 #### Parameters
 
@@ -227,7 +227,7 @@ readonly `DeclaredClaim`[]
 
 > `readonly` **appName**: `string`
 
-Defined in: [src/core/Agent.ts:794](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L794)
+Defined in: [src/core/Agent.ts:795](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L795)
 
 Voice config — shared by viewers (Lens, ChatThinkKit, CLI tail).
 `appName` is the active actor in narration ("Chatbot called…").
@@ -241,7 +241,7 @@ Defaults to bundled English; consumer overrides via builder.
 
 > `readonly` **commentaryTemplates**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/Agent.ts:795](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L795)
+Defined in: [src/core/Agent.ts:796](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L796)
 
 ***
 
@@ -266,7 +266,7 @@ instead of N `.on()` subscriptions.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/Agent.ts:464](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L464)
+Defined in: [src/core/Agent.ts:465](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L465)
 
 ***
 
@@ -274,7 +274,7 @@ Defined in: [src/core/Agent.ts:464](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/Agent.ts:463](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L463)
+Defined in: [src/core/Agent.ts:464](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L464)
 
 ***
 
@@ -282,7 +282,7 @@ Defined in: [src/core/Agent.ts:463](https://github.com/footprintjs/agentfootprin
 
 > `readonly` **thinkingTemplates**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [src/core/Agent.ts:796](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L796)
+Defined in: [src/core/Agent.ts:797](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L797)
 
 ## Methods
 
@@ -290,7 +290,7 @@ Defined in: [src/core/Agent.ts:796](https://github.com/footprintjs/agentfootprin
 
 > **abandonPause**(): `Promise`\<\{ `question?`: `string`; `toolCallId?`: `string`; `toolName?`: `string`; \} \| `undefined`\>
 
-Defined in: [src/core/Agent.ts:2399](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2399)
+Defined in: [src/core/Agent.ts:2397](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2397)
 
 Drop the question this agent's last run paused to ask, on the record.
 
@@ -316,7 +316,7 @@ remains resumable.
 
 > **answerCoverage**(): [`AnswerCoverage`](/docs/api/interfaces/AnswerCoverage) \| `undefined`
 
-Defined in: [src/core/Agent.ts:4241](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4241)
+Defined in: [src/core/Agent.ts:4240](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4240)
 
 The limits of the last run's TYPED answer, as data — what its tools
 declared they `checked`, did not check (`notChecked`) and can never see
@@ -374,7 +374,7 @@ for (const item of limits?.cannotCover ?? []) {
 
 > **answerNegatives**(): `AnswerNegativesPayload` \| `undefined`
 
-Defined in: [src/core/Agent.ts:4181](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4181)
+Defined in: [src/core/Agent.ts:4180](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4180)
 
 The library-composed negative statements and their recorded limits.
 Detached, in-process data for the caller. Record redaction applies to the
@@ -390,7 +390,7 @@ snapshots and emitted events, not this caller-owned value.
 
 > **answerValidation**(): [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport) \| `undefined`
 
-Defined in: [src/core/Agent.ts:4189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4189)
+Defined in: [src/core/Agent.ts:4188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4188)
 
 The last run's answer checks, detached from its execution record.
 Undefined means no terminal validation ran, never an implicit pass.
@@ -405,7 +405,7 @@ Undefined means no terminal validation ran, never an implicit pass.
 
 > **assessment**(`declarations?`): `Promise`\<`AnswerAssessment` \| `undefined`\>
 
-Defined in: [src/core/Agent.ts:4279](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4279)
+Defined in: [src/core/Agent.ts:4278](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4278)
 
 How far the last run's answer stands — folded from its COMMITTED record,
 never from how sure the model sounded: `known` · `consistent` (checks ran,
@@ -506,7 +506,7 @@ that run and none of its beginning.
 
 > **canExplain**(): `boolean`
 
-Defined in: [src/core/Agent.ts:2426](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2426)
+Defined in: [src/core/Agent.ts:2424](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2424)
 
 Whether Agent.selfExplain's why-questions have a run to answer
 from right now.
@@ -535,7 +535,7 @@ the run served last.
 
 > **checkpoint**(): [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint) \| `undefined`
 
-Defined in: [src/core/Agent.ts:2902](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2902)
+Defined in: [src/core/Agent.ts:2901](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2901)
 
 During preparation before native origin this is undefined; capture before the next call.
 
@@ -611,7 +611,7 @@ host.onSessionEnd(async (sessionId) => {
 
 > `static` **create**(`opts`): [`AgentBuilder`](/docs/api/classes/AgentBuilder)
 
-Defined in: [src/core/Agent.ts:1552](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1552)
+Defined in: [src/core/Agent.ts:1553](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1553)
 
 #### Parameters
 
@@ -629,7 +629,7 @@ Defined in: [src/core/Agent.ts:1552](https://github.com/footprintjs/agentfootpri
 
 > **drainObservers**(`opts?`): `Promise`\<`DrainResult`\>
 
-Defined in: [src/core/Agent.ts:4019](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4019)
+Defined in: [src/core/Agent.ts:4018](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4018)
 
 Flush the deferred-observer backlog of the most recent run's executor,
 then await async listener completions under a deadline (RFC-001 §11 —
@@ -704,7 +704,7 @@ minimal meta. Library events remain reserved under `agentfootprint.*`.
 
 > **findings**(): [`FindingsLedger`](/docs/api/type-aliases/FindingsLedger) \| `undefined`
 
-Defined in: [src/core/Agent.ts:4172](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4172)
+Defined in: [src/core/Agent.ts:4171](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4171)
 
 The last run's findings ledger (9.101.0) — the model's OWN standings on
 its tool results, as `.findings()` recorded them: `basis` rows (what a
@@ -751,7 +751,7 @@ for (const row of agent.findings() ?? []) {
 
 > **followUp**(`message`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/Agent.ts:2355](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2355)
+Defined in: [src/core/Agent.ts:2353](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2353)
 
 Continue this agent's own last completed conversation.
 
@@ -805,7 +805,7 @@ await agent.followUp('And move it to 8pm.');
 
 > **getArtifactStore**(): [`ArtifactStore`](/docs/api/interfaces/ArtifactStore) \| `undefined`
 
-Defined in: [src/core/Agent.ts:1579](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1579)
+Defined in: [src/core/Agent.ts:1580](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1580)
 
 The artifact store this agent was built with, or `undefined` when none
 was attached (9.23.0).
@@ -847,7 +847,7 @@ Zero during preparation before native origin; never the preceding run's count.
 
 > **getLastNarrativeEntries**(): readonly `CombinedNarrativeEntry`[]
 
-Defined in: [src/core/Agent.ts:1795](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1795)
+Defined in: [src/core/Agent.ts:1796](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1796)
 
 Empty during preparation before native origin; capture prior entries before the next call.
 
@@ -861,7 +861,7 @@ readonly `CombinedNarrativeEntry`[]
 
 > **getLastSnapshot**(): `RuntimeSnapshot` \| `undefined`
 
-Defined in: [src/core/Agent.ts:1779](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1779)
+Defined in: [src/core/Agent.ts:1780](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1780)
 
 The footprintjs `RuntimeSnapshot` from the most recent `run()` /
 `resume()`. Feeds Lens's Trace tab (ExplainableShell `runtimeSnapshot`
@@ -960,7 +960,7 @@ instead; this getter must remain a thin cache-read.
 
 > **getSystemPromptCachePolicy**(): `CachePolicy`
 
-Defined in: [src/core/Agent.ts:1562](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1562)
+Defined in: [src/core/Agent.ts:1563](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1563)
 
 Cache policy for the base system prompt. Read by the CacheDecision
 subflow (v2.6 Phase 4) to know how to treat the SystemPrompt slot's
@@ -1276,7 +1276,7 @@ Defined in: [src/core/RunnerBase.ts:750](https://github.com/footprintjs/agentfoo
 
 > **outputContractUnmet**(): \{ `attempts`: `number`; `brokenBy?`: `string`; `error`: `string`; `fallbackConfigured`: `boolean`; `path?`: `string`; `retriesSpent`: `number`; `stage`: `"json-parse"` \| `"schema-validate"`; `stopReason?`: `NativeStopReason`; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:4099](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4099)
+Defined in: [src/core/Agent.ts:4098](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4098)
 
 Did the last turn's answer FAIL this agent's `outputSchema` — and how (8.18.0)?
 
@@ -1379,7 +1379,7 @@ if (unmet) {
 
 > **parseOutput**\<`T`\>(`raw`): `T`
 
-Defined in: [src/core/Agent.ts:1853](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1853)
+Defined in: [src/core/Agent.ts:1854](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1854)
 
 Parse + validate a raw agent answer against the agent's
 `outputSchema` parser. Throws `OutputSchemaError` on JSON parse
@@ -1413,7 +1413,7 @@ layer; otherwise prefer `agent.runTyped()`.
 
 > **parseOutputAsync**\<`T`\>(`raw`): `Promise`\<`T`\>
 
-Defined in: [src/core/Agent.ts:1873](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1873)
+Defined in: [src/core/Agent.ts:1874](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1874)
 
 Async sister of `parseOutput()`. When the agent is configured
 with `.outputFallback({...})`, this is the version that engages
@@ -1473,7 +1473,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/Agent.ts:2563](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2563)
+Defined in: [src/core/Agent.ts:2561](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2561)
 
 Continue a run that paused to ask a person something, with their answer.
 
@@ -1541,7 +1541,7 @@ if (isPaused(outcome)) await agent.resume(outcome.checkpoint, 'yes', { identity,
 
 > **resumeOnError**(`checkpoint`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/Agent.ts:2474](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2474)
+Defined in: [src/core/Agent.ts:2472](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2472)
 
 Resume an agent run from a checkpoint produced by a prior
 `RunCheckpointError`. Unlike `agent.resume()` (which takes a
@@ -1607,7 +1607,7 @@ try {
 
 > **run**(`input`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/Agent.ts:2054](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2054)
+Defined in: [src/core/Agent.ts:2055](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L2055)
 
 Answer one turn.
 
@@ -1672,7 +1672,7 @@ await agent.followUp('Make it three.');       // remembers the table
 
 > **runTyped**\<`T`\>(`input`, `options?`): `Promise`\<`T`\>
 
-Defined in: [src/core/Agent.ts:1960](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1960)
+Defined in: [src/core/Agent.ts:1961](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L1961)
 
 Run the agent and return the schema-validated typed output.
 Convenience over `parseOutputAsync(await agent.run({...}))`.
@@ -1789,7 +1789,7 @@ Graceful exit for a script
 
 > **stoppedEarly**(): \{ `answerWasEmpty`: `boolean`; `iteration`: `number`; `pendingToolCalls`: `number`; `reason`: `"max-iterations"` \| `"cost-budget"`; `wrappedUp?`: `true`; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:4061](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4061)
+Defined in: [src/core/Agent.ts:4060](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4060)
 
 Did the last turn stop because a LIMIT cut it short — and if so, which?
 
@@ -1883,7 +1883,7 @@ if (cut) {
 
 > **unsupportedValues**(): \{ `candidates`: `number`; `posture`: `"assist"` \| `"guard"` \| `"rails"`; `refused`: `boolean`; `revised`: `boolean`; `values`: readonly [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)[]; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:4130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4130)
+Defined in: [src/core/Agent.ts:4129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L4129)
 
 Did the last turn's answer state names or numbers that appear in NO tool
 result (9.35.0)?

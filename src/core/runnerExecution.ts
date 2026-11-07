@@ -92,6 +92,34 @@ export function bindRunnerStage<T, S extends object, A extends unknown[], R>(
  */
 const hostContexts = new WeakMap<object, RunContext>();
 
+/** The execution each owned run started, so a finished leg can tell whose work failed. */
+const executions = new WeakMap<OwnedRun, ReturnType<OwnedRun['execute']>>();
+
+/**
+ * Finish an owned run from inside its body, once its leg has settled
+ * (footprintjs `OwnedRun.finish`): the finalizers run in the caller's async
+ * context, before it continues.
+ *
+ * `finish()` is the body's word that its own part did not fail: it decides the
+ * end from the execution alone. So it is called after a leg that succeeded, or
+ * one whose execution failed (cancellation included), where it decides the end
+ * the lease would. A leg that failed in its own work, before an execution or
+ * around one that settled, is left to the lease, which closes it as failed once
+ * the body returns.
+ */
+export async function finishLeg(run: OwnedRun, legFailed: boolean): Promise<void> {
+  if (legFailed) {
+    const execution = executions.get(run);
+    if (execution === undefined) return;
+    const executionFailed = await execution.then(
+      () => false,
+      () => true,
+    );
+    if (!executionFailed) return;
+  }
+  await run.finish();
+}
+
 function metadataOf(metadata: RunnerMetadata): RunnerMetadata {
   const {
     compositionPath,
@@ -208,7 +236,7 @@ export class RunnerExecution<T> {
         },
         execute: (entry, setup, binding) => {
           metadata = metadataOf(binding?.metadata ?? this.defaults);
-          return run.execute(nativeEntryFor(entry), {
+          const execution = run.execute(nativeEntryFor(entry), {
             ...setup,
             onOrigin: (cells, origin) => {
               cells.set(this.metadata, {
@@ -222,6 +250,9 @@ export class RunnerExecution<T> {
               return setup?.onOrigin?.(cells, origin);
             },
           });
+          // A reference only: no reaction is attached, so nothing is scheduled.
+          executions.set(run, execution);
+          return execution;
         },
       };
       try {
