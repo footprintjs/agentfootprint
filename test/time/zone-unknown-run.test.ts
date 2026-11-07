@@ -205,7 +205,7 @@ describe('G15 — the resolver under an unknown zone', () => {
       choice: { by: 'open', remaining: [], open: ['zone'] },
     } as unknown as TimeReadingRow;
     expect(timeAskOf(row, defaultTimeAskMessages)).toEqual({
-      question: 'Which time zone should be shown for “yesterday”?',
+      question: 'Which time zone should I use for “yesterday”?',
       field: { id: 'time', type: 'string', required: true, format: 'zone' },
     });
   });
@@ -284,7 +284,7 @@ describe('G15 — an agent with no zone anywhere asks the person’s zone first,
     expect(zone.awaitingInput.fields).toMatchObject([
       {
         format: 'zone',
-        description: 'Which time zone should be shown for “yesterday”?',
+        description: 'Which time zone should I use for “yesterday”?',
       },
     ]);
     const readings = paused(
@@ -321,6 +321,53 @@ describe('G15 — an agent with no zone anywhere asks the person’s zone first,
     expect(timeLineOf(last)).toContain(
       "This turn's time: Friday 2026-10-09 08:40 America/Los_Angeles",
     );
+  });
+
+  it('the question says “use”: the answer moves the query, “yesterday 8 AM to 9 AM” is other instants in Tokyo', async () => {
+    const read = async (zone: string) => {
+      const seen: Record<string, unknown>[] = [];
+      const { agent } = build([call('c1', 'client_activity'), answer('ok')], [epochTool(seen)]);
+      const asked = paused(
+        await agent.run({ message: 'any activity yesterday 8 AM to 9 AM?', time: { now: NOW } }),
+      );
+      const offered = paused(
+        await agent.resume(asked.checkpoint as never, {
+          requestId: asked.awaitingInput.requestId,
+          values: { f1: zone },
+        }),
+      );
+      await agent.resume(offered.checkpoint as never, {
+        requestId: offered.awaitingInput.requestId,
+        values: { f1: offered.awaitingInput.fields[0]!.enum![0]! },
+      });
+      return { question: asked.awaitingInput.fields[0]!.description, sent: seen[0] };
+    };
+    const question = 'Which time zone should I use for “yesterday 8 AM to 9 AM”?';
+    expect(await read(LA)).toMatchObject({
+      question,
+      sent: {
+        start_time: Date.parse('2026-10-08T15:00:00Z'),
+        end_time: Date.parse('2026-10-08T16:00:00Z'),
+      },
+    });
+    expect(await read('Asia/Tokyo')).toMatchObject({
+      question,
+      sent: {
+        start_time: Date.parse('2026-10-08T23:00:00Z'),
+        end_time: Date.parse('2026-10-09T00:00:00Z'),
+      },
+    });
+  });
+
+  it('the one sentence holds for elapsed words too, where the zone only names the same instants', async () => {
+    const { agent } = build([call('c1', 'client_activity')], [epochTool()]);
+    const asked = paused(
+      await agent.run({ message: 'any activity in the last 2 hours?', time: { now: NOW } }),
+    );
+    expect(asked.awaitingInput.fields[0]).toMatchObject({
+      format: 'zone',
+      description: 'Which time zone should I use for “last 2 hours”?',
+    });
   });
 
   it('a window the app set in its control is served in UTC, named as such, and fills the call exactly', async () => {

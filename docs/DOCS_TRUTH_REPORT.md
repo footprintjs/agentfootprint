@@ -6,15 +6,15 @@ _Recorded 2026-09-25._
 
 ## In plain words
 
-The package publishes **19 import paths** carrying **2713 distinct named exports**, plus **128 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
+The package publishes **19 import paths** carrying **2716 distinct named exports**, plus **128 typed events**. For each one this report asks three separate questions: is it really *exported* (declared), is it *described in prose on the published docs site* (documented), and does a *real run actually use it* (exercised).
 
-**2006 of 2713 exports (74%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
+**2009 of 2716 exports (74%) are described in prose on the site.** The rest split into five different problems, which is the whole point of keeping the columns apart:
 
 - **30 exist, provably work, and are undocumented.** A reference run exercises them and no page on the site describes them. This is the honest headline number for "features that work and nobody has written about". It is the list to work through.
 - **89 are already written up, just not published.** Prose about them exists inside the repo (`docs/`, `README.md`) but never made it onto the site. These are cheap wins: the writing is done, it needs moving.
 - **16 appear only inside a code sample** and nowhere in the surrounding text. A reader scanning the page never learns they exist, and site search does not find them.
 - **572 are undocumented and no reference run touches them.** This report will not guess whether they work. They are reported as UNKNOWN, which is the honest answer, and they need a human pass.
-- **1773 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
+- **1776 are documented but no reference run exercises them.** For a function or a class that is the shape a dead or unimplemented feature has. For a type or an interface it is mostly noise, because a type is used, not called — so read that class by kind, and the tables below split it.
 
 On events: **70** of the 128 typed events are both described on the site and were seen firing in a real run. **28** are described but were never observed firing — that is exactly the shape the resilience events had for months (fully declared, with payload types, and zero emitters), so this number is worth a look every time it moves. **30** are not described in prose on the site at all.
 
@@ -159,7 +159,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `agentfootprint.integrity.context_error` | `docs-next/content/docs/monitor/arming-context-integrity.mdx`, `docs-next/content/docs/monitor/column-types.mdx` |
 | `agentfootprint.integrity.external_ground_used` | `docs-next/content/docs/monitor/arming-context-integrity.mdx` |
 
-**Functions and classes described on the site but not touched by any reference run (524).** The other 1249 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
+**Functions and classes described on the site but not touched by any reference run (525).** The other 1251 in this class are types, interfaces and constants, which a run cannot "call" — they are named in `docs/docs-truth/baseline.json` rather than here.
 
 | Symbol | Kind | Exported from |
 |---|---|---|
@@ -578,6 +578,7 @@ The site describes it and it really is exported, but no reference run touches it
 | `summarizeVector` | function | `agentfootprint/observe` |
 | `textLoader` | function | `agentfootprint/rag` |
 | `thinkingHandlerFor` | function | `agentfootprint/providers` |
+| `timeReplyPairs` | function | `agentfootprint/time` |
 | `toolsRecorder` | function | `agentfootprint/observe` |
 | `toSkos` | function | `agentfootprint/ontology` |
 | `traceCauseTools` | function | `agentfootprint/observe` |
@@ -977,7 +978,7 @@ Whether a symbol comes from the root barrel or only from a subpath is a document
 | `agentfootprint/recipes` | 6 | 6 | 100% |
 | `agentfootprint/classify` | 17 | 17 | 100% |
 | `agentfootprint/ontology` | 38 | 38 | 100% |
-| `agentfootprint/time` | 20 | 20 | 100% |
+| `agentfootprint/time` | 23 | 23 | 100% |
 | `agentfootprint/ag-ui` | 33 | 33 | 100% |
 
 ## Honest limits of this report
