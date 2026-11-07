@@ -196,10 +196,10 @@ export class EventDispatcher {
   /**
    * Whether a run id names a RUN (as opposed to an address that names none —
    * a consumer's own emit, an event before the first run), supplied by the
-   * runner, which owns the id format (`RunnerBase · isMintedRunId`). A fact
-   * stamped with a run this dispatcher does not hold a serving for (past the
-   * bound, or never opened here) is served as the placeholder — never under a
-   * DIFFERENT run's policy.
+   * runner: to `RunnerBase`, every id but `CONSUMER_SCOPE_RUN_ID`
+   * (`bridge/eventMeta.ts`) names one. A fact stamped with a run this
+   * dispatcher does not hold a serving for (past the bound, or never opened
+   * here) is served as the placeholder — never under a DIFFERENT run's policy.
    */
   private namesARun: ((runId: string) => boolean) | undefined;
   /**

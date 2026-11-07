@@ -79,6 +79,7 @@ import * as ontology from '../../src/ontology/index.js';
 import * as timeConvert from '../../src/time/convert.js';
 import * as timePeriodForm from '../../src/time/periodForm.js';
 import * as timePresent from '../../src/time/present.js';
+import * as timeReplyForm from '../../src/time/replyForm.js';
 import * as timeZone from '../../src/time/zone.js';
 import * as agUi from '../../src/ag-ui/index.js';
 
@@ -408,6 +409,8 @@ describe('a door added after 9.0.0 is a re-export of its implementation barrel',
       // Time for a person, and the zone check, as the run writes and judges them.
       presentRange: timePresent as unknown as Record<string, unknown>,
       isZoneName: timeZone as unknown as Record<string, unknown>,
+      // The time ask as a host draws it: the same reader the resume door asks.
+      timeReplyPairs: timeReplyForm as unknown as Record<string, unknown>,
     };
     for (const [sample, impl] of Object.entries(owners)) {
       expect(impl[sample], `src/time lost ${sample}`).toBeDefined();

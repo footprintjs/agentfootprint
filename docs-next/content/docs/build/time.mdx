@@ -159,10 +159,39 @@ marks a corrected absolute interval. Later calls use this accepted meaning and
 do not attribute it to the original words. Older rows without the optional object
 keep their original meaning.
 
-Correction-box rendering is a separate host follow-up; a host ignoring the new
-text field keeps its current range UI.
-
 <CodeFile path="examples/features/86-english-time-reader.ts" region="time-correction" />
+
+### What a host's form does with the pair
+
+This ask has two optional fields and an empty `missing`, so a host's form changes
+unless the host handles the pair:
+
+- A host that draws every optional field shows the correction box and marks the
+  range as optional.
+- A host that answers from `missing` finds nothing to answer and sends
+  `values: {}`.
+- A one-click confirm that needs exactly one asked field counts two, so a click
+  chooses the reading and waits for the form's send.
+
+An answer with neither value is held: the ask comes back with the reason on the
+range field, and no tool runs. The third such answer refuses the call.
+
+Read the pair with `timeReplyPairs(request)` from `agentfootprint/time`, not from
+the reserved context key. It takes the ask (a `TimeReplyRequest`) as the run
+returned it or as JSON off the wire, and returns one `TimeReplyPair`
+(`{ range, correction }`) for each declared pair, or `[]` for an ask that has
+none. The door imports nothing from Node, so a web front end can use it. A
+host's one-click confirm treats the declared sibling as not asked:
+
+<CodeFile path="examples/features/86-english-time-reader.ts" region="host-one-click" />
+
+It throws a `TypeError` when a stamped binding does not match its fields. An ask
+the library wrote and JSON carried never does that, so the throw means something
+changed the ask on its way: a transport that dropped a field, or a front end
+older than the server. It does not return `[]`, because `[]` says the ask has no
+pair, and the server would still read one. Catch it where a bad response must not
+take the page down, and offer no one-click confirm there. The server judges
+whatever is sent.
 
 ### A call with only a start or stop
 

@@ -305,6 +305,29 @@ describe.skipIf(!built)('the default browser graph of the root entry', () => {
     expect(root.syncInputs.has('dist/esm/time/convert.js')).toBe(false);
   });
 
+  it('LAW: a web front end can import the /time door: its graph is the time leaves, nothing from Node', async () => {
+    // A host's front end imports `timeReplyPairs` from here. A package import
+    // would land in the inputs; `node:*` stays external so it can be read below.
+    const result = await build({
+      entryPoints: [resolve(DIST, 'doors/time.js')],
+      bundle: true,
+      format: 'esm',
+      platform: 'browser',
+      metafile: true,
+      write: false,
+      logLevel: 'silent',
+      external: ['node:*'],
+    });
+    const inputs = Object.keys(result.metafile.inputs).map(shipped);
+    expect(inputs).toContain('dist/esm/time/replyForm/bindings.js');
+    expect(inputs.filter((file) => !/^dist\/esm\/(time\/|doors\/time\.js$)/.test(file))).toEqual(
+      [],
+    );
+    // Each module's own imports, used or not: tree shaking must not be what keeps Node out.
+    const imports = Object.values(result.metafile.inputs).flatMap((input) => input.imports);
+    expect(imports.filter((item) => item.external === true)).toEqual([]);
+  });
+
   it('contrast: the /observe door carries the pack statically, by design', async () => {
     const graph = await splitGraph(resolve(DIST, 'observe.js'));
     expect(graph.syncInputs.has(PACK)).toBe(true);

@@ -2979,6 +2979,7 @@
       "periodFactProblem",
       "presentRange",
       "sugarForms",
+      "timeReplyPairs",
       "widestMsOf"
     ],
     "types": [
@@ -2989,6 +2990,8 @@
       "PeriodShapes",
       "Presentation",
       "TimeRefusal",
+      "TimeReplyPair",
+      "TimeReplyRequest",
       "ToolConversion",
       "WidenedConversion",
       "WindowToConvert",
