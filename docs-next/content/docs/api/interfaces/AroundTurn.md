@@ -4,7 +4,7 @@ title: AroundTurn
 
 # Interface: AroundTurn
 
-Defined in: [src/core/agent/aroundTurn/types.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L68)
+Defined in: [src/core/agent/aroundTurn/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L70)
 
 Work that must wrap a whole turn: awaited preparation before it, an
 `AsyncLocalStorage` held around it, cleanup after it. Declared with
@@ -16,7 +16,7 @@ Work that must wrap a whole turn: awaited preparation before it, an
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/agent/aroundTurn/types.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L70)
+Defined in: [src/core/agent/aroundTurn/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L72)
 
 Named on every refusal and on `agentfootprint.agent.around_turn_failed`.
 
@@ -26,7 +26,7 @@ Named on every refusal and on `agentfootprint.agent.around_turn_failed`.
 
 > **around**(`turn`, `proceed`): `void` \| `Promise`\<`void`\>
 
-Defined in: [src/core/agent/aroundTurn/types.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L72)
+Defined in: [src/core/agent/aroundTurn/types.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/aroundTurn/types.ts#L74)
 
 Do the work and call `proceed` once. Its return value is ignored.
 
