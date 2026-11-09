@@ -18,6 +18,8 @@ export interface StoredFixtureOptions {
   readonly withoutControl?: boolean;
   readonly fail?: boolean;
   readonly capture?: boolean;
+  /** A separately sealed native prefix, including a selected failed invocation. */
+  readonly closedCapture?: boolean;
   /** Two healthy steps with no retry configuration. */
   readonly plain?: boolean;
 }
@@ -82,6 +84,7 @@ export async function storedCauseFixture(options: StoredFixtureOptions = {}): Pr
   const capture = options.capture !== false;
   const executor = new FlowChartExecutor(chart.build(), {
     captureCoverage: capture,
+    ...(options.closedCapture ? { captureExtent: true, captureClosure: true } : {}),
     readTracking: options.readTracking ?? 'full',
     writeTracking: 'full',
     writeProvenance: 'reads-prefix',
@@ -146,7 +149,7 @@ export async function rehashStoredFixture(
     capture: payload.capture,
     executionTree: payload.executionTree,
   };
-  for (const key of ['recorders', 'readSources', 'absent'])
+  for (const key of ['recorders', 'readSources', 'absent', 'captureExtent', 'closure'])
     if (payload[key] !== undefined) evidence[key] = payload[key];
   const record = {
     commitLog: history.commitLog,

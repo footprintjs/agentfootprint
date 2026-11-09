@@ -15,6 +15,15 @@ async function savedOnly(entries: Iterable<unknown>, runId: string): Promise<str
     return result.reason;
   }
   const tools = traceCauseTools(result.cause, { maxNodes: 40, backward: { maxNodes: 32 } });
+  const prefix = result.cause.admission.native.closedPrefix;
+  if (prefix) {
+    const failed: 'failed' = prefix.boundary;
+    void failed;
+    // @ts-expect-error A saved failed prefix cannot be rewritten as a successful run.
+    prefix.boundary = 'completed';
+    // @ts-expect-error The exact selected invocation is immutable display evidence.
+    prefix.selectedFailure.attemptId = 'different';
+  }
   // @ts-expect-error Stored admission is a read-only assessment, not host-set authority.
   result.cause.admission.native.status = 'admitted';
   return callTraceTool(tools, 'attention_list');

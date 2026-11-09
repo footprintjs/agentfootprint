@@ -39,6 +39,8 @@ export interface StoredCauseAdmission {
     readonly version: 1 | 2;
     readonly scope: 'root-log';
     readonly persistence: 'memory-only';
+    /** Saved immutable failed prefix only; the outcome remains failed. */
+    readonly closedPrefix?: SnapshotCapture['closedPrefix'];
   };
   readonly storage: {
     readonly status: 'adapter-acknowledged-history';
