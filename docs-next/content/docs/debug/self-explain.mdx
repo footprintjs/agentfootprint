@@ -226,7 +226,8 @@ The factory preserves reads and writes whose value was `undefined`, including li
 
 ### Failed saved runs
 
-A failed run can have a fully recorded native prefix. The saved-history reader
+A failed run can have a fully recorded native prefix. This requires FootPrint
+11.2.0 or later. The saved-history reader
 admits that prefix only when FootPrint's public reader returns a supported
 `native-root-prefix-v1` closure for the same run and full saved log. Required
 read/write modes, captured channels, source ownership and same-run control

@@ -151,6 +151,41 @@ describe('saved failed native prefixes', () => {
     expect(result.cause.admission.native).not.toHaveProperty('closedPrefix');
   });
 
+  it('does not let a closed failed prefix replace missing storage acknowledgement', async () => {
+    const fixture = await storedCauseFixture({ fail: true, closedCapture: true });
+    const entries = fixture.entries.filter(
+      (entry) => (entry as { note?: string }).note !== 'capture-receipt',
+    );
+    expect(entries.length).toBe(fixture.entries.length - 1);
+    expect(await readStoredCauseArtifacts(entries, { runId: fixture.runId })).toEqual({
+      status: 'unknown',
+      reason: 'stored-admission',
+    });
+  });
+
+  it('keeps partial read sources uncertain even when the failed prefix is closed', async () => {
+    const fixture = await storedCauseFixture({
+      fail: true,
+      closedCapture: true,
+      readSources: true,
+      readSourceLimit: 1,
+    });
+    const history = await requireStoredHistory(fixture.entries, fixture.runId);
+    expect(history.readSources?.status).toBe('partial');
+    const result = await readStoredCauseArtifacts(fixture.entries, { runId: fixture.runId });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') throw Error('expected an incomplete graph');
+    expect(result.cause.admission.native).toMatchObject({
+      status: 'incomplete',
+      reason: 'channel-not-captured',
+    });
+    const response = JSON.parse(
+      await callTraceTool(traceCauseTools(result.cause), 'attention_list'),
+    );
+    expect(response.capture.status).toBe('incomplete');
+    expect(response.finding.confidence).toBe('incomplete');
+  });
+
   it.each(['readTracking', 'withoutControl'] as const)(
     'does not let closure replace required %s evidence',
     async (missing) => {
