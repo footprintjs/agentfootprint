@@ -594,11 +594,32 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'forced-tool and native-output run-start refusals thrown to the caller; moved here from Agent.ts, whose count went down by the same two',
     },
   ],
-  'src/core/Agent.ts': [
+  'src/core/agent/runtime/configuration/configure.ts': [
     {
       kind: 'not-model-facing',
-      count: 7,
-      why: "typed-output and option-validation errors thrown to the caller, the build-time refusal of `.toolChoice()` under reactMode 'classic' (findings is still refused, but its corrected sentence no longer matches this grammar), plus one console warning about a cached menu",
+      count: 2,
+      why: 'the unchanged constructor-time toolChoice and noticeEmptyLookups refusals, moved from Agent.ts; thrown to the caller before a run',
+    },
+  ],
+  'src/core/agent/runtime/skills/owner.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the unchanged classic read_skill menu warning, moved from Agent.ts; console output only',
+    },
+  ],
+  'src/core/agent/runtime/turn/owner.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the unchanged runTyped missing-schema refusal, moved from Agent.ts; thrown to the caller',
+    },
+  ],
+  'src/core/agent/runtime/typedOutput/owner.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 3,
+      why: 'the unchanged parseOutput, parseOutputAsync and typed-pause refusals, moved from Agent.ts; thrown to the caller',
     },
   ],
   'src/core/conversation.ts': [
@@ -1351,7 +1372,8 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // conversation.ts, files115→116, total206→207, notModelFacing137→138.
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
-        files: 118,
+        // Agent runtime split: the same seven host-only literals now have four owners.
+        files: 121,
         total: 208,
         registry: 8,
         ephemeral: 26,

@@ -52,7 +52,7 @@ Every fault is refused by name at definition: an id that is not
 identifier-safe, an edge to a node nobody declared, a node held by a source
 nobody declared, an empty or over-long text, a repeated alias, `via` or
 edge, a count past `ONTOLOGY_LIMITS`. The tool names in `via` are checked at
-`Agent` build against the registry (`core/Agent.ts · buildChart`, beside
+`Agent` build against the registry (`core/agent/runtime/catalog/buildCatalog.ts · buildCatalog`, beside
 `buildToolRegistry`): a map that points a need at a tool nobody can call is
 a map that lies.
 

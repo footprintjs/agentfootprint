@@ -80,3 +80,29 @@ documentation truth, layering and file size. Unrun checks are reported plainly.
 Path-literal readers and source citations move with their actual owners.
 There are no new public aliases, package exports, version changes or release
 effects in this split.
+
+## Implemented owners
+
+The documented `Agent` facade delegates through `native/host.ts`, which keeps
+the original RunnerBase identity and binds its protected native capabilities.
+`context.ts` assembles the private owners; it creates no executor, lease, run
+ID or selected-run substitute. Every owner function names the subset of that
+context it reads. Public runner calls still dispatch through the original
+runner, including subclass overrides. The original public documentation stays
+on the facade once; the implementation does not duplicate it in its owners.
+
+- `configuration/`: constructor declarations, defaults and ordered validation.
+- `native/`: captured capabilities and the existing initialization wiring.
+- `turn/`, `resume/`, `continuation/`: the existing admission and execution doors.
+- `conversation/`: checkpoint, restoration, clock and pending-question folds.
+- `recording/`, `resources/`, `integrity/`: the original captured-run effects.
+- `info/`, `observations/`, `typedOutput/`, `terminal/`: public projections and settlement.
+- `catalog/`, `skills/`, `slots/`: declared capabilities and their offers.
+- `seed/`, `request/`, `toolCalls/`, `routing/`, `chart/`: existing stage factories and chart wiring.
+
+The measured facade is 941 lines, with no private state or control flow. Its
+size-ratchet entry drops from 6014 to 941 under Claude's named facade ruling.
+Every new runtime TypeScript file is at most 600 lines. The public wrappers
+return their owner's result directly; an async owner does not gain a second
+async wrapper. Existing behavior suites move beside their owners with the
+same assertions and fixtures. No golden or package export changes belong here.

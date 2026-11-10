@@ -1,7 +1,7 @@
 import type { EntryDecl, RouteDecl } from './graphRoutes.js';
 
 // FOLD · the one owner of the skills reachable from where the cursor stands (declared successors ∪ entries, minus the cursor)
-// consumers read this and never re-derive it: the read_skill offer builder (Agent.ts · readSkillOfferFor), the
+// consumers read this and never re-derive it: the read_skill offer builder (core/agent/runtime/skills/owner.ts · readSkillOfferFor), the
 // injection-engine config's `reachableSkills` and the read_skill gate's `allowedSkillIds` (both Agent.ts) — which
 // toolCalls reads back as deps.allowedSkillIds at the propose-transition judge and at the gate itself
 // (toolCalls/routing/readSkillRoute.ts · `applyReadSkillRoute`).

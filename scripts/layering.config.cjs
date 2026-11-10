@@ -279,6 +279,21 @@ const TYPE_ONLY_ALLOWANCES = [
     reason: SELF_EXPLAIN_TYPES,
   },
   {
+    from: 'src/core/agent/runtime/contracts.ts',
+    to: 'src/trace-toolpack/selfExplain.ts',
+    reason: SELF_EXPLAIN_TYPES,
+  },
+  {
+    from: 'src/core/agent/runtime/info/owner.ts',
+    to: 'src/trace-toolpack/selfExplain.ts',
+    reason: SELF_EXPLAIN_TYPES,
+  },
+  {
+    from: 'src/core/agent/runtime/native/host.ts',
+    to: 'src/trace-toolpack/selfExplain.ts',
+    reason: SELF_EXPLAIN_TYPES,
+  },
+  {
     from: 'src/core/agent/AgentBuilder.ts',
     to: 'src/trace-toolpack/selfExplain.ts',
     reason: SELF_EXPLAIN_TYPES,
@@ -295,27 +310,71 @@ const TYPE_ONLY_ALLOWANCES = [
       'the dispatcher holds and applies `EventServing`, the served-event policy the redaction ' +
       'layer owns (`EventDispatcher · useServing`, `dispatchForRun`).',
   },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/artifacts/capability.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/artifacts/types.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/core/agent/arguments/rows.ts', reason: PAYLOAD_TYPES },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/artifacts/capability.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/artifacts/types.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/core/agent/arguments/rows.ts',
+    reason: PAYLOAD_TYPES,
+  },
   {
     from: 'src/events/payloads/dependencyTypes.ts',
     to: 'src/core/agent/assessment/types.ts',
     reason: PAYLOAD_TYPES,
   },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/core/agent/findings/types.ts', reason: PAYLOAD_TYPES },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/core/agent/findings/types.ts',
+    reason: PAYLOAD_TYPES,
+  },
   {
     from: 'src/events/payloads/dependencyTypes.ts',
     to: 'src/integrity/disposition/types.ts',
     reason: PAYLOAD_TYPES,
   },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/integrity/finding/types.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/memory/define.types.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/provider-contract/types.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/semantics/toolEffects.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/semantics/types.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/thinking/replay.ts', reason: PAYLOAD_TYPES },
-  { from: 'src/events/payloads/dependencyTypes.ts', to: 'src/thinking/types.ts', reason: PAYLOAD_TYPES },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/integrity/finding/types.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/memory/define.types.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/provider-contract/types.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/semantics/toolEffects.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/semantics/types.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/thinking/replay.ts',
+    reason: PAYLOAD_TYPES,
+  },
+  {
+    from: 'src/events/payloads/dependencyTypes.ts',
+    to: 'src/thinking/types.ts',
+    reason: PAYLOAD_TYPES,
+  },
   {
     from: 'src/recipes/types.ts',
     to: 'src/core/agent/AgentBuilder.ts',
