@@ -1,3 +1,5 @@
+**Support** — request actors and stored namespaces composed without a model surface.
+
 # Request identity composition
 
 `request.ts` composes a verified request actor with the stored conversation and

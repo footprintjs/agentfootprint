@@ -1,3 +1,5 @@
+**Walker** — verified request dispatch and turn admission.
+
 # Request dispatch
 
 `handler.ts` verifies once, selects the session or artifact read door, and admits

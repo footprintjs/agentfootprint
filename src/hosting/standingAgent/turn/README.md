@@ -1,3 +1,5 @@
+**Walker** — the admitted turn from hydration through persistence and delivery.
+
 # Admitted turn execution
 
 `port.ts` refuses replaced runner methods. `run.ts` hydrates and checks ownership,

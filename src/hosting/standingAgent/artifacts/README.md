@@ -1,3 +1,7 @@
+**Mixed** — hosted artifacts.
+`access.ts`, `wire.ts` and `handOver.ts` supply Support for scoped store access;
+`facts.ts` carries Trace by attributing artifact events to their admitted run.
+
 # Hosted artifacts
 
 `access.ts` binds the request seam and revokes bindings on retirement or close.

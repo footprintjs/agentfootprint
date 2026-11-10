@@ -1,3 +1,5 @@
+**Walker** — live instance ownership, admission and FIFO execution.
+
 # Live lane ownership
 
 `keys.ts` keeps client session keys disjoint from the anonymous pool key.

@@ -58,11 +58,21 @@ describe('artifact bindings and lane ownership', () => {
       await expect(binding.artifacts.head(meta.ref)).rejects.toMatchObject({
         code: 'ERR_ARTIFACT_OPS_BUSY',
       });
+      // The wire and seam must spend the same per-session budget.
+      const wire = await host.deliver({
+        input: '',
+        sessionId: 'first',
+        artifact: { op: 'head', ref: meta.ref },
+      });
+      expect(wire.code).toBe('ERR_ARTIFACT_OPS_BUSY');
       await host.deliver({ input: 'second', sessionId: 'second' });
       expect(made).toHaveLength(2);
       expect(shut).not.toHaveBeenCalled();
       release();
       await reading;
+      // Refresh the other lane after the read finishes; the first is now
+      // the oldest idle lane rather than relying on elapsed wall time.
+      await host.deliver({ input: 'refresh second', sessionId: 'second' });
       await host.deliver({ input: 'third', sessionId: 'third' });
       expect(shut).toHaveBeenCalled();
       await expect(binding.artifacts.get(meta.ref)).rejects.toMatchObject({

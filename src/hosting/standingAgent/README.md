@@ -1,3 +1,7 @@
+**Mixed** — private hosting composition.
+`configuration/read.ts` is Map; `lanes/pool.ts` and `turn/run.ts` carry Walker;
+`artifacts/facts.ts` carries Trace alongside the request and store Support ports.
+
 # Standing agent composition
 
 The adjacent `standingAgent.ts` facade wires configuration, lanes, history,

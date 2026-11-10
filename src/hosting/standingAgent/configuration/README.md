@@ -1,3 +1,5 @@
+**Map** — validated configuration before the host starts.
+
 # Construction configuration
 
 `read.ts` reads options and validates them before a host is served. It owns the

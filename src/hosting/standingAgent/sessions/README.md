@@ -1,3 +1,5 @@
+**Support** — owner-checked access to stored session history.
+
 # Stored session history
 
 `history.ts` owns history listing, transcript reads and the shared ownership
