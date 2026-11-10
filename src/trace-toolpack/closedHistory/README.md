@@ -1,4 +1,4 @@
-# Saved failed-prefix projection
+**Fold** — recognize the supported saved failed-prefix policy after producer admission.
 
 This folder recognizes the closed native root-prefix policy already admitted by
 FootPrint's public stored-history reader. It projects the failed boundary,

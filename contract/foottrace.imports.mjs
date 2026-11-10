@@ -13,7 +13,8 @@ export function importedFoottrace(root = new URL('../src/', import.meta.url)) {
       .sort((a, b) => a.name.localeCompare(b.name))) {
       const filename = path.join(directory, entry.name);
       if (entry.isDirectory()) walk(filename);
-      else if (/\.[cm]?tsx?$/.test(entry.name)) {
+      // Match the source build's src/**/*.test.ts exclusion: adjacent tests do not ship.
+      else if (/\.[cm]?tsx?$/.test(entry.name) && !entry.name.endsWith('.test.ts')) {
         const source = ts.createSourceFile(
           filename,
           fs.readFileSync(filename, 'utf8'),
