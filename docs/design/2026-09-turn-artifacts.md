@@ -3,8 +3,8 @@
 **Status:** built, unreleased (2026-09-25), revised twice after a security review
 and a code review the same day (fix round 1: awaited + revoked + session-stamped
 door facts; fix round 2: bounded, door ownership, late facts own their run, the
-failure event). Code: `src/hosting/standingAgent.ts` ·
-`sessionArtifactScope` / `offerTurnArtifacts` / `emitArtifactFact`;
+failure event). Code: `src/hosting/standingAgent/identity/request.ts` · `sessionArtifactScope`;
+`artifacts/handOver.ts` · `offerTurnArtifacts`; `artifacts/facts.ts` · `emitArtifactFact`;
 `src/hosting/turnArtifacts.ts` · `openTurnArtifacts`; `src/bridge/eventMeta.ts` ·
 `eventBelongsToRun`. Types: `src/hosting/types.ts` · `HostReply.turnArtifacts` /
 `TurnArtifacts`. Tests: `test/hosting/turn-artifacts.test.ts` (behaviour + known
@@ -259,7 +259,7 @@ id), so a reader joining on that run id must say "paused, no recording", not
   `{ agent }`. Until then: do not combine them.
 - **R2-12 — FIXED: the artifact door built and evicted pooled lanes for any
   named session.** A redemption and `artifactsForRequest` now go through
-  `standingAgent.ts · redeemerFor`: the live lane, else a single reader
+  `standingAgent/lanes/pool.ts · redeemerFor`: the live lane, else a single reader
   instance outside the pool. Pinned by `test/hosting/redemption-lanes.test.ts`.
   (As first shipped it answered the one not-found for a lane-less session with
   NO stored conversation, without asking the artifact store — on the premise

@@ -227,7 +227,7 @@ calls after the halted one unanswered, so a conversation continued from that
 `checkpoint()` carries them without a result. `abandonPause()` followed by
 `followUp()` (or `run({ continueFrom: agent.checkpoint() })`) continues the
 PAUSED turn's history, where the paused call and the calls after it have no
-result. And the hosting door's input cancel (`hosting/standingAgent.ts`, the
+result. And the hosting door's input cancel (`hosting/standingAgent/turn/run.ts`, the
 `'cancel' in response` branch of its decision handling) answers every
 unanswered call — the paused one and the ones after it — with
 `{"status":"input_cancelled","requestId":…}`, which carries no marker, so a
@@ -303,7 +303,7 @@ History readers that go by the role on purpose, because a settled message IS
 what they ask about: what pairs a `tool_use` with its `tool_result` on the
 wire (`core/agent/window/turns.ts` · `answeredCallIds` and `segmentTurns`;
 `core/agent/delivery/rules.ts`; `toolCalls/batch/paused.ts` · `pausedBatchOf`; the hosting
-door's cancel in `hosting/standingAgent.ts`) — the sentence does answer its
+door's cancel in `hosting/standingAgent/turn/run.ts`) — the sentence does answer its
 call; what the model read — the check-in's `read` frames and `drivers`
 (`core/checkin.ts` · `unitsFromHistory`; the `trail`, which claims
 "completed", reads the marker) and the unsupported-argument check's corpus of

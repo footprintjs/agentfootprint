@@ -994,7 +994,7 @@ the layers mount outside it, at the same places. Both chart builders call **one 
   pending ask is on the record twice: as the pause event (`agentfootprint.pause.request`, whose
   payload is the whole pause data) and in the paused run's checkpoint, whose pause data carries
   `awaitingInput` with the library's marker. The fold reads the checkpoint, never the event. A host
-  cancel (`hosting/standingAgent.ts`: `input_cancelled`, a fixed reply) runs no
+  cancel (`hosting/standingAgent/turn/run.ts`: `input_cancelled`, a fixed reply) runs no
   chart, so nothing reaches the ledger and nothing is served; only a later reader of the stored
   conversation can fold it as "ask".
 - **Lazy load.** Each layer's module loads through `import()` when armed — the optional-family law
@@ -1297,7 +1297,7 @@ Verdicts on the four-lens review. "Verified" means the finding's evidence was re
 | engineer: `given` run facts as an app source | SHOULD · both | applied | § 3.2 (c) |
 | engineer: fills must use a fresh object | NOTE | applied | § 3.2 (e) |
 | engineer: record whether the cited result's tool is in `argumentsFrom` | NOTE | arguments note (a flag on the row, step 5) | — |
-| engineer: a host cancel runs no fold | NOTE | verified (`hosting/standingAgent.ts`); applied | § 5.3 |
+| engineer: a host cancel runs no fold | NOTE | verified (`hosting/standingAgent/turn/run.ts`); applied | § 5.3 |
 | engineer: "seven frames" | NOTE | verified (six prefixes plus `injectedBy`); cite with no count | § 2.2 law 3 |
 | engineer: two doc comments change meaning | NOTE | applied | step 3 |
 | devil: a reading bypasses the ask | MUST · both | applied (a reading asks; author-declared phrases) | § 3.2 (c), (d) |
