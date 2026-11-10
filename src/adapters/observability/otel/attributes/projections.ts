@@ -1,5 +1,11 @@
 import type { Standing } from '../../../../core/agent/findings/types.js';
-import type { AgentEvidenceCheckedPayload, EvalScorePayload, FindingsStandingPayload, IntegrityDispositionPayload, ToolAbsentPayload } from '../../../../events/payloads.js';
+import type {
+  AgentEvidenceCheckedPayload,
+  EvalScorePayload,
+  FindingsStandingPayload,
+  IntegrityDispositionPayload,
+  ToolAbsentPayload,
+} from '../../../../events/payloads.js';
 import { toWireJson } from '../../../../lib/wireJson.js';
 import type { OtelAttributeValue } from '../types.js';
 import { bound, boundList } from './bounds.js';

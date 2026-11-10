@@ -608,7 +608,7 @@ export function eventShapeTable(
  * strategy has seen a tool of that name run (`createToolRunTracker`): a
  * `tryInsteadTool` names another tool, and that name is kept only then —
  * otherwise it is the tool author's word for a tool this agent may not hold
- * (`otel.ts` · `coverageAttrs`, the same rule).
+ * (`otel/attributes/projections.ts` · `coverageAttrs`, the same rule).
  */
 export function eventShapes(toolRan: (name: string) => boolean): {
   readonly [T in EventType]-?: BoundRule;
