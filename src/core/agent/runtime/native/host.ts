@@ -27,10 +27,21 @@ import type { AnswerNegatives } from '../../negativeClaims/delivery.js';
 import type { AnswerCoverage } from '../../../../semantics/coverage/answer.js';
 import { type AnswerValidationReport } from '../../../../answer-validation/index.js';
 
-import type { AgentContext } from '../contracts.js';
+import type { AgentContext, AgentPublicRunner } from '../contracts.js';
 import type { AgentNativeBindings } from './bindings.js';
 import { createAgentContext } from '../context.js';
 import { initializeAgent } from './initialize.js';
+
+const agentContexts = new WeakMap<AgentPublicRunner, AgentContext>();
+
+/** Private per-runner wiring, read without dispatching an application method.
+ * @internal
+ */
+export function getAgentRuntime(runner: AgentPublicRunner): AgentContext {
+  const context = agentContexts.get(runner);
+  if (context === undefined) throw new TypeError('Agent runtime has not been initialized.');
+  return context;
+}
 
 /** Original native runner identity with captured capabilities for its internal owners.
  * @internal
@@ -41,7 +52,6 @@ export abstract class AgentRuntimeHost extends RunnerBase<AgentInput, AgentOutpu
   readonly appName!: string;
   readonly commentaryTemplates!: Readonly<Record<string, string>>;
   readonly thinkingTemplates!: Readonly<Record<string, string>>;
-  private readonly agentContext: AgentContext;
 
   constructor(
     ownTurnMethods: Readonly<Record<'run' | 'resume', unknown>>,
@@ -75,21 +85,18 @@ export abstract class AgentRuntimeHost extends RunnerBase<AgentInput, AgentOutpu
       detectPause: (invocation, result) => this.detectPause(invocation, result),
       getLastSnapshot: () => super.getLastSnapshot(),
     };
-    this.agentContext = createAgentContext(this, native, ownTurnMethods);
-    initializeAgent.call(this.agentContext, ...args);
+    const context = createAgentContext(this, native, ownTurnMethods);
+    agentContexts.set(this, context);
+    initializeAgent.call(context, ...args);
   }
 
-  /** @internal */
-  protected runtime(): AgentContext {
-    return this.agentContext;
-  }
   protected override getGroupTranslator():
     | import('../../../translator.js').GroupTranslator
     | undefined {
-    return this.agentContext.getGroupTranslator();
+    return getAgentRuntime(this).getGroupTranslator();
   }
   protected override buildUIGroupMetadata(): import('../../../translator.js').GroupMetadata {
-    return this.agentContext.buildUIGroupMetadata();
+    return getAgentRuntime(this).buildUIGroupMetadata();
   }
 
   abstract getSystemPromptCachePolicy(): CachePolicy;

@@ -37,6 +37,20 @@ it('the documented Agent facade holds only declarations and direct wiring', () =
         : undefined;
     expect(expression).toBeDefined();
     expect(ts.isCallExpression(expression!) || ts.isNewExpression(expression!)).toBe(true);
+    if (
+      ts.isMethodDeclaration(member) &&
+      !ts.getModifiers(member)?.some((m) => m.kind === ts.SyntaxKind.StaticKeyword)
+    ) {
+      // Private wiring must not reserve a virtual application instance name.
+      const call = expression as ts.CallExpression;
+      expect(ts.isPropertyAccessExpression(call.expression)).toBe(true);
+      const context = (call.expression as ts.PropertyAccessExpression).expression;
+      expect(ts.isCallExpression(context)).toBe(true);
+      const lookup = context as ts.CallExpression;
+      expect(ts.isIdentifier(lookup.expression)).toBe(true);
+      expect(lookup.arguments).toHaveLength(1);
+      expect(lookup.arguments[0]!.kind).toBe(ts.SyntaxKind.ThisKeyword);
+    }
   }
 });
 

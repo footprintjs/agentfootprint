@@ -1,3 +1,4 @@
+import { getAgentRuntime } from '../../../src/core/agent/runtime/native/host.js';
 /**
  * `.toolsFromActiveSkill()` — the agent-level tool posture (9.36.0).
  *
@@ -407,9 +408,7 @@ describe('toolsFromActiveSkill — performance', () => {
       .skills({ list: () => skills })
       .build();
 
-    const registered = (
-      agent as unknown as { agentContext: { configuration: { injections: readonly Injection[] } } }
-    ).agentContext.configuration.injections;
+    const registered = getAgentRuntime(agent).configuration.injections;
     expect(registered[0]).toBe(skills[0]);
     expect(registered[1]).toBe(skills[1]);
   });

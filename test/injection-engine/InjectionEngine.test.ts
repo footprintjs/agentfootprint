@@ -1,3 +1,4 @@
+import { getAgentRuntime } from '../../src/core/agent/runtime/native/host.js';
 /**
  * Injection Engine — 7-pattern tests
  * (unit · scenario · integration · property · security · performance · ROI).
@@ -484,9 +485,7 @@ describe('Injection Engine — ROI (pedagogy + observability)', () => {
       .instruction(b)
       .fact(c)
       .build();
-    const seen = (
-      agent as unknown as { agentContext: { configuration: { injections: readonly Injection[] } } }
-    ).agentContext.configuration.injections;
+    const seen = getAgentRuntime(agent).configuration.injections;
     expect(seen.map((i) => i.flavor)).toEqual(['steering', 'instructions', 'fact']);
   });
 

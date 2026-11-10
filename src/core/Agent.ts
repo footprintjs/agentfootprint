@@ -1,4 +1,4 @@
-import { AgentRuntimeHost } from './agent/runtime/native/host.js';
+import { AgentRuntimeHost, getAgentRuntime } from './agent/runtime/native/host.js';
 
 import type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 export type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
@@ -245,7 +245,7 @@ export class Agent extends AgentRuntimeHost {
    * the Agent's encapsulation boundary stays clean.
    */
   getSystemPromptCachePolicy(): CachePolicy {
-    return this.runtime().getSystemPromptCachePolicy();
+    return getAgentRuntime(this).getSystemPromptCachePolicy();
   }
 
   /**
@@ -262,7 +262,7 @@ export class Agent extends AgentRuntimeHost {
    * their only door.
    */
   getArtifactStore(): ArtifactStore | undefined {
-    return this.runtime().getArtifactStore();
+    return getAgentRuntime(this).getArtifactStore();
   }
 
   /**
@@ -274,7 +274,7 @@ export class Agent extends AgentRuntimeHost {
    * @internal
    */
   ownsEvent(event: AgentfootprintEvent): boolean {
-    return this.runtime().ownsEvent(event);
+    return getAgentRuntime(this).ownsEvent(event);
   }
 
   /**
@@ -302,7 +302,7 @@ export class Agent extends AgentRuntimeHost {
    * live run, so redaction never changes what the agent continues from.
    */
   override getLastSnapshot(): RuntimeSnapshot | undefined {
-    return this.runtime().getLastSnapshot();
+    return getAgentRuntime(this).getLastSnapshot();
   }
 
   /**
@@ -318,7 +318,7 @@ export class Agent extends AgentRuntimeHost {
    */
   /** Empty during preparation before native origin; capture prior entries before the next call. */
   getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
-    return this.runtime().getLastNarrativeEntries();
+    return getAgentRuntime(this).getLastNarrativeEntries();
   }
 
   /**
@@ -333,7 +333,7 @@ export class Agent extends AgentRuntimeHost {
    * layer; otherwise prefer `agent.runTyped()`.
    */
   parseOutput<T = unknown>(raw: string): T {
-    return this.runtime().parseOutput<T>(raw);
+    return getAgentRuntime(this).parseOutput<T>(raw);
   }
 
   /**
@@ -347,7 +347,7 @@ export class Agent extends AgentRuntimeHost {
    * on validation failure.
    */
   parseOutputAsync<T = unknown>(raw: string): Promise<T> {
-    return this.runtime().parseOutputAsync<T>(raw);
+    return getAgentRuntime(this).parseOutputAsync<T>(raw);
   }
 
   /**
@@ -366,7 +366,7 @@ export class Agent extends AgentRuntimeHost {
    * `agent.answerCoverage()`.
    */
   runTyped<T = unknown>(input: AgentInput | string, options?: AgentRunOptions): Promise<T> {
-    return this.runtime().runTyped<T>(input, options);
+    return getAgentRuntime(this).runTyped<T>(input, options);
   }
 
   /**
@@ -410,7 +410,7 @@ export class Agent extends AgentRuntimeHost {
     input: AgentInput | string,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
-    return this.runtime().run(input, options);
+    return getAgentRuntime(this).run(input, options);
   }
 
   /**
@@ -446,7 +446,7 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   followUp(message: string, options?: AgentRunOptions): Promise<AgentOutput | RunnerPauseOutcome> {
-    return this.runtime().followUp(message, options);
+    return getAgentRuntime(this).followUp(message, options);
   }
 
   /**
@@ -468,7 +468,7 @@ export class Agent extends AgentRuntimeHost {
     | { readonly toolName?: string; readonly toolCallId?: string; readonly question?: string }
     | undefined
   > {
-    return this.runtime().abandonPause();
+    return getAgentRuntime(this).abandonPause();
   }
 
   /**
@@ -490,7 +490,7 @@ export class Agent extends AgentRuntimeHost {
    * the run served last.
    */
   canExplain(): boolean {
-    return this.runtime().canExplain();
+    return getAgentRuntime(this).canExplain();
   }
 
   /**
@@ -541,7 +541,7 @@ export class Agent extends AgentRuntimeHost {
     checkpoint: AgentRunCheckpoint | unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
-    return this.runtime().resumeOnError(checkpoint, options);
+    return getAgentRuntime(this).resumeOnError(checkpoint, options);
   }
 
   /**
@@ -576,7 +576,7 @@ export class Agent extends AgentRuntimeHost {
     input?: unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
-    return this.runtime().resume(checkpoint, input, options);
+    return getAgentRuntime(this).resume(checkpoint, input, options);
   }
 
   /**
@@ -635,7 +635,7 @@ export class Agent extends AgentRuntimeHost {
    */
   /** During preparation before native origin this is undefined; capture before the next call. */
   checkpoint(): AgentRunCheckpoint | undefined {
-    return this.runtime().checkpoint();
+    return getAgentRuntime(this).checkpoint();
   }
 
   /**
@@ -649,7 +649,7 @@ export class Agent extends AgentRuntimeHost {
    * @internal
    */
   bindSelfExplain(binding: SelfExplainBinding): void {
-    return this.runtime().bindSelfExplain(binding);
+    return getAgentRuntime(this).bindSelfExplain(binding);
   }
 
   /**
@@ -673,7 +673,7 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   drainObservers(opts?: { timeoutMs?: number }): Promise<ObserverDrainResult> {
-    return this.runtime().drainObservers(opts);
+    return getAgentRuntime(this).drainObservers(opts);
   }
 
   /**
@@ -713,7 +713,7 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   stoppedEarly(): AgentState['stoppedEarly'] {
-    return this.runtime().stoppedEarly();
+    return getAgentRuntime(this).stoppedEarly();
   }
 
   /**
@@ -750,7 +750,7 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   outputContractUnmet(): AgentState['outputContractUnmet'] {
-    return this.runtime().outputContractUnmet();
+    return getAgentRuntime(this).outputContractUnmet();
   }
 
   /**
@@ -778,7 +778,7 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   unsupportedValues(): AgentState['unsupportedValues'] {
-    return this.runtime().unsupportedValues();
+    return getAgentRuntime(this).unsupportedValues();
   }
 
   /**
@@ -817,20 +817,20 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   findings(): AgentState['findingsLedger'] {
-    return this.runtime().findings();
+    return getAgentRuntime(this).findings();
   }
 
   /** The library-composed negative statements and their recorded limits.
    * Detached, in-process data for the caller. Record redaction applies to the
    * snapshots and emitted events, not this caller-owned value. */
   answerNegatives(): AnswerNegatives | undefined {
-    return this.runtime().answerNegatives();
+    return getAgentRuntime(this).answerNegatives();
   }
 
   /** The last run's answer checks, detached from its execution record.
    * Undefined means no terminal validation ran, never an implicit pass. */
   answerValidation(): AnswerValidationReport | undefined {
-    return this.runtime().answerValidation();
+    return getAgentRuntime(this).answerValidation();
   }
 
   /**
@@ -880,7 +880,7 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   answerCoverage(): AnswerCoverage | undefined {
-    return this.runtime().answerCoverage();
+    return getAgentRuntime(this).answerCoverage();
   }
 
   /**
@@ -916,7 +916,7 @@ export class Agent extends AgentRuntimeHost {
    * ```
    */
   assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
-    return this.runtime().assessment(declarations);
+    return getAgentRuntime(this).assessment(declarations);
   }
 
   /**
@@ -930,7 +930,7 @@ export class Agent extends AgentRuntimeHost {
    * travels off tracked state, so it is raised by the run boundary only.
    */
   outcomeOf(sfOutput: unknown): ChildOutcome {
-    return this.runtime().outcomeOf(sfOutput);
+    return getAgentRuntime(this).outcomeOf(sfOutput);
   }
 }
 
