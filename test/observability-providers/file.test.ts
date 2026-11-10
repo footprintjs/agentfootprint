@@ -277,6 +277,99 @@ describe('fileObservability — P4 property', () => {
     strat.stop?.();
   });
 
+  it('P4 timer batches wait behind a slow size-triggered append and preserve complete NDJSON lines', async () => {
+    vi.useFakeTimers();
+    const mem = memoryFs();
+    const path = '/log/events.ndjson';
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const writing = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let active = 0,
+      concurrent = 0,
+      calls = 0;
+    const fs: FileSinkFs = {
+      ...mem.fs,
+      async appendFile(file, data) {
+        active += 1;
+        concurrent = Math.max(concurrent, active);
+        calls += 1;
+        const split = Math.floor(data.length / 2);
+        mem.files.set(file, (mem.files.get(file) ?? '') + data.slice(0, split));
+        if (calls === 1) {
+          started();
+          await held;
+        }
+        mem.files.set(file, (mem.files.get(file) ?? '') + data.slice(split));
+        active -= 1;
+      },
+    };
+    const strat = fileObservability({ path, _fs: fs, flushIntervalMs: 50, maxBufferEvents: 2 });
+    try {
+      strat.exportEvent(event('first', { pad: 'x'.repeat(1000) }));
+      strat.exportEvent(event('second'));
+      await writing;
+      strat.exportEvent(event('third'));
+      await vi.advanceTimersByTimeAsync(60);
+    } finally {
+      release();
+      await strat.flush?.();
+      strat.stop?.();
+    }
+    expect(concurrent).toBe(1);
+    expect(
+      mem.files
+        .get(path)!
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line).type),
+    ).toEqual(['first', 'second', 'third']);
+  });
+
+  it('P4 flush waits for a timer append already in flight even when its buffer is empty', async () => {
+    vi.useFakeTimers();
+    const mem = memoryFs();
+    const path = '/log/events.ndjson';
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const strat = fileObservability({
+      path,
+      flushIntervalMs: 50,
+      _fs: {
+        ...mem.fs,
+        async appendFile(file, data) {
+          await held;
+          await mem.fs.appendFile(file, data);
+        },
+      },
+    });
+    let settled = false;
+    let whileWriting = true;
+    try {
+      strat.exportEvent(event('timer'));
+      await vi.advanceTimersByTimeAsync(60);
+      const flush = Promise.resolve(strat.flush?.()).then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      whileWriting = settled;
+      release();
+      await flush;
+    } finally {
+      release();
+      await strat.flush?.();
+      strat.stop?.();
+    }
+    expect(whileWriting).toBe(false);
+    expect(JSON.parse(mem.files.get(path)!.trim()).type).toBe('timer');
+  });
+
   it('P4 rotation is ONE generation and replaces a previous `.1`', async () => {
     const mem = memoryFs();
     const path = '/log/events.ndjson';
