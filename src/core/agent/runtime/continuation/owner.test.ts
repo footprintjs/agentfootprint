@@ -7,7 +7,7 @@
  * `standingAgent`). One owner writes that entry: `seed.ts · historyForTurn`,
  * called after the chain has run.
  *
- * THE BUG IT PINS. Through 9.112.1, `Agent.ts · applyContinuation` pre-built the
+ * THE BUG IT PINS. Through 9.112.1, `src/core/agent/runtime/conversation/owner.ts · applyContinuation` pre-built the
  * continued history as `[...stored, { role: 'user', content: <RAW message> }]`
  * BEFORE seed ran the chain, and seed used that history verbatim. The run
  * committed the rewrite as `userMessage` and filed it in the ledger, while the
@@ -212,7 +212,7 @@ describe('input middleware on a continued turn — the rewrite is what the model
 
   // ─── (d) the .act() door reaches the same continuation path ─────
   // `AgentBuilder.act` forwards `input` rules to `.messageMiddleware()`
-  // (wrapped by `act.ts · onlyAt('input', …)`), so the fix — and the
+  // (wrapped by `src/core/agent/middleware/messagePhase.ts · messageAt('input', …)`), so the fix — and the
   // CHANGELOG's "who is affected" — covers both spellings.
 
   it('.act({ input }): a scrub applies on the continued turn, the same as .messageMiddleware()', async () => {

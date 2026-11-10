@@ -310,8 +310,9 @@ describe('attack regressions — nothing crosses into another session’s record
     inFlight.release();
     expect((await bobTurn).output).toBe('ok');
 
-    const binding = (agent as unknown as { selfExplainBinding?: SelfExplainBinding })
-      .selfExplainBinding;
+    const binding = (
+      agent as unknown as { agentContext: { selfExplainBinding?: SelfExplainBinding } }
+    ).agentContext.selfExplainBinding;
     const captured = binding?.artifacts?.events ?? [];
     expect(captured.length).toBeGreaterThan(0);
     expect(JSON.stringify(captured)).not.toContain(aliceRecording);

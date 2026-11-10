@@ -1,8 +1,8 @@
 **Mixed** — the two primitives that build a map, and the wiring that runs one.
-Map: `LLMCall.ts`, `Agent.ts`'s `buildChart`.
+Map: `LLMCall.ts`, `agent/runtime/chart/owner.ts`'s `buildChart`.
 Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
 `durabilityBarrier.ts`.
-Fold-feeding: `Agent.ts` · `readSkillOfferFor` and `Agent.ts` ·
+Fold-feeding: `agent/runtime/skills/owner.ts` · `readSkillOfferFor` and `agent/runtime/skills/owner.ts` ·
 `hiddenSkillIdsNow` — the two resolvers every model-facing composer downstream
 filters with. Trace: `cost.ts`. Support: `runInput.ts`,
 `conversation.ts`, `translator.ts`, `outputFallback.ts`,

@@ -279,21 +279,6 @@ const TYPE_ONLY_ALLOWANCES = [
     reason: SELF_EXPLAIN_TYPES,
   },
   {
-    from: 'src/core/agent/runtime/contracts.ts',
-    to: 'src/trace-toolpack/selfExplain.ts',
-    reason: SELF_EXPLAIN_TYPES,
-  },
-  {
-    from: 'src/core/agent/runtime/info/owner.ts',
-    to: 'src/trace-toolpack/selfExplain.ts',
-    reason: SELF_EXPLAIN_TYPES,
-  },
-  {
-    from: 'src/core/agent/runtime/native/host.ts',
-    to: 'src/trace-toolpack/selfExplain.ts',
-    reason: SELF_EXPLAIN_TYPES,
-  },
-  {
     from: 'src/core/agent/AgentBuilder.ts',
     to: 'src/trace-toolpack/selfExplain.ts',
     reason: SELF_EXPLAIN_TYPES,

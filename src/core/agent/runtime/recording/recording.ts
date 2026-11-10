@@ -1,4 +1,4 @@
-import type { ArtifactScope, ArtifactStore } from '../../../../artifacts/types.js';
+import type { ArtifactScope } from '../../../../artifacts/types.js';
 import { recordingPutInput } from '../../../../artifacts/recordingArtifact.js';
 import { eventBelongsToRun } from '../../../../bridge/eventMeta.js';
 import { recordRunWhere, type RunRecorder } from '../../../../recorders/observability/recordRun.js';
@@ -7,13 +7,9 @@ import { isPaused, type RunnerPauseOutcome } from '../../../pause.js';
 import type { Runner } from '../../../runner.js';
 import type { RunnerInvocation } from '../../../runnerExecution.js';
 import type { AgentRunValues } from '../../runValues.js';
-import type { AgentOutput, AgentRecordingsOptions, AgentState } from '../../types.js';
+import type { AgentOutput, AgentState } from '../../types.js';
 
-/** Static recording declarations; execution facts stay on the supplied invocation. */
-export interface RecordingConfiguration {
-  readonly artifactStore?: ArtifactStore;
-  readonly artifactRecordings?: AgentRecordingsOptions;
-}
+import type { AgentConfiguration } from '../configuration/types.js';
 
 /**
  * Start recording this run — or do nothing at all (9.26.0).
@@ -34,7 +30,7 @@ export interface RecordingConfiguration {
 export function startRunRecording(
   runner: Runner,
   invocation: RunnerInvocation<AgentRunValues>,
-  config: RecordingConfiguration,
+  config: Pick<AgentConfiguration, 'artifactStore' | 'artifactRecordings'>,
 ): { complete(outcome: AgentOutput | RunnerPauseOutcome): void } | undefined {
   if (config.artifactRecordings === undefined || config.artifactStore === undefined)
     return undefined;
@@ -91,7 +87,7 @@ export function startRunRecording(
  */
 async function fileRunRecording(
   runner: Runner,
-  config: RecordingConfiguration,
+  config: Pick<AgentConfiguration, 'artifactStore' | 'artifactRecordings'>,
   invocation: RunnerInvocation<AgentRunValues>,
   recorder: RunRecorder | undefined,
   outcome: AgentOutput | RunnerPauseOutcome,

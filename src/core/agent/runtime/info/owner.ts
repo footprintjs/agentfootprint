@@ -4,7 +4,7 @@ import { SUBFLOW_IDS } from '../../../../lib/conventions.js';
 import type { ArtifactStore } from '../../../../artifacts/types.js';
 import { eventBelongsToRun } from '../../../../bridge/eventMeta.js';
 import type { AgentfootprintEvent } from '../../../../events/registry.js';
-import type { SelfExplainBinding } from '../../../../trace-toolpack/selfExplain.js';
+
 import type { AgentContext } from '../contracts.js';
 
 export function getSystemPromptCachePolicy(this: Pick<AgentContext, 'configuration'>): CachePolicy {
@@ -85,7 +85,7 @@ export function canExplain(this: Pick<AgentContext, 'selfExplainBinding'>): bool
 
 export function bindSelfExplain(
   this: Pick<AgentContext, 'selfExplainBinding'>,
-  binding: SelfExplainBinding,
+  binding: Parameters<AgentContext['bindSelfExplain']>[0],
 ): void {
   this.selfExplainBinding = binding;
 }

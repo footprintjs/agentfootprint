@@ -28,7 +28,7 @@ import type {
 import type { AgentfootprintEvent, AgentfootprintEventType } from '../../../events/registry.js';
 import type { AnswerAssessment, AssessmentDeclarations } from '../assessment/types.js';
 import type { MemoryIdentity } from '../../../memory/identity/types.js';
-import type { SelfExplainBinding } from '../../../trace-toolpack/selfExplain.js';
+import type { SelfExplainExtension } from '../selfExplainPort.js';
 import type { ChildOutcome } from '../../terminalVerdict.js';
 import type { AgentRunCheckpoint } from '../../runCheckpoint.js';
 import type { TimeAnswerContext } from '../../../tools/inputRequest.js';
@@ -143,7 +143,7 @@ export interface AgentMethods {
   ): void;
   assertNoPendingQuestion(door: string, values: AgentRunValues | undefined): void;
   recordPendingQuestion(values: AgentRunValues, outcome: AgentOutput | RunnerPauseOutcome): void;
-  bindSelfExplain(binding: SelfExplainBinding): void;
+  bindSelfExplain(binding: ReturnType<SelfExplainExtension['binding']>): void;
   toolRunFacts(run: RunnerScopeValues<AgentRunValues>): {
     readonly runContext: RunContext;
     readonly runId: string;
@@ -251,5 +251,5 @@ export interface AgentContext extends AgentMethods {
   ontologyTools?: Readonly<Record<string, readonly string[]>>;
   integrityDanglingPresent: boolean;
   integrityColumnsPresent: boolean;
-  selfExplainBinding?: SelfExplainBinding;
+  selfExplainBinding?: ReturnType<SelfExplainExtension['binding']>;
 }

@@ -15,7 +15,6 @@ import type { AgentfootprintEvent } from '../../../../events/registry.js';
 
 import type { AnswerAssessment, AssessmentDeclarations } from '../../assessment/types.js';
 
-import type { SelfExplainBinding } from '../../../../trace-toolpack/selfExplain.js';
 import { type ChildOutcome } from '../../../terminalVerdict.js';
 
 import { type AgentRunCheckpoint } from '../../../runCheckpoint.js';
@@ -124,7 +123,7 @@ export abstract class AgentRuntimeHost extends RunnerBase<AgentInput, AgentOutpu
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome>;
   abstract checkpoint(): AgentRunCheckpoint | undefined;
-  abstract bindSelfExplain(binding: SelfExplainBinding): void;
+  abstract bindSelfExplain(binding: Parameters<AgentContext['bindSelfExplain']>[0]): void;
   abstract drainObservers(opts?: { timeoutMs?: number }): Promise<ObserverDrainResult>;
   abstract stoppedEarly(): AgentState['stoppedEarly'];
   abstract outputContractUnmet(): AgentState['outputContractUnmet'];

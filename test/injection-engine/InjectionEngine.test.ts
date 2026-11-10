@@ -484,7 +484,9 @@ describe('Injection Engine — ROI (pedagogy + observability)', () => {
       .instruction(b)
       .fact(c)
       .build();
-    const seen = (agent as unknown as { injections: readonly Injection[] }).injections;
+    const seen = (
+      agent as unknown as { agentContext: { configuration: { injections: readonly Injection[] } } }
+    ).agentContext.configuration.injections;
     expect(seen.map((i) => i.flavor)).toEqual(['steering', 'instructions', 'fact']);
   });
 
