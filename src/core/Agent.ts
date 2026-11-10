@@ -1,3 +1,10 @@
+import type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
+export type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
+import {
+  evidenceRecoveryOf,
+  foldedSpansOf,
+  findingsLedgerOf,
+} from './agent/runtime/conversation/checkpointParts.js';
 import {
   refuseFollowUpIdentity,
   refuseKnownSpentAnswer,
@@ -60,11 +67,9 @@ import {
   type FlowchartCheckpoint,
   type ObserverDrainResult,
   type ReadTrackingMode,
-  type RedactionPolicy,
   type RuntimeSnapshot,
   type RunSetup,
 } from 'footprintjs';
-import type { RunOptions } from './runner.js';
 import { type CommitValuesMode } from 'foottrace';
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
@@ -173,7 +178,6 @@ import { buildDeliverStage } from './agent/stages/deliver.js';
 import { providerTargets } from './agent/providerTargets.js';
 import { assertInjectionDelivery } from './agent/run/injectionDelivery.js';
 import type { WindowStrategy } from './agent/window/strategy.js';
-import type { FoldedSpan } from './agent/window/types.js';
 import type { FindingsLedger } from './agent/findings/types.js';
 import type { AnswerAssessment, AssessmentDeclarations } from './agent/assessment/types.js';
 import {
@@ -225,7 +229,6 @@ import {
   RunCheckpointError,
   validateCheckpoint,
   type AgentRunCheckpoint,
-  type EvidenceRecoveryCheckpoint,
   type RunCheckpointTracker,
 } from './runCheckpoint.js';
 import { requireVerificationOnResume } from './agent/findings/verificationCheckpoint.js';
@@ -254,7 +257,6 @@ import {
   type ClockDraft,
   type ReadRunTime,
   type ReadTimeOptions,
-  type RunTime,
 } from '../time/clock.js';
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
 import { buildOutputRetryStage } from './agent/stages/outputRetry.js';
@@ -363,97 +365,6 @@ export type {
   RunConfigFn,
   WriteProvenanceMode,
 };
-
-/**
- * `RunOptions` (footprintjs) + agentfootprint-domain correlation fields.
- *
- * `correlationId`/`traceId` are NOT footprintjs concepts — footprintjs's
- * `RunOptions.env` is an intentionally closed infra bag (signal/timeoutMs/
- * traceId only; see footprintjs's `ExecutionEnv`). These two ride separately
- * into the native invocation metadata, then each event's `EventMeta` via `buildEventMeta` (`RunContext` already declares both —
- * `../bridge/eventMeta.ts`), so a caller can join agentfootprint's event
- * stream against an external system (a upstream request id, an OTEL trace,
- * a cross-tier why() join key) without threading it through tool args.
- *
- * `traceId` here wins over `env.traceId` when both are set; `env.traceId`
- * remains a fallback since footprintjs already threads it to subflows.
- */
-export interface AgentRunOptions extends RunOptions {
-  /** Domain correlation id — forwarded onto every emitted event's `EventMeta.correlationId`. */
-  correlationId?: string;
-  /** OTEL-style trace id — forwarded onto every emitted event's `EventMeta.traceId`. Falls back to `options.env?.traceId` when unset. */
-  traceId?: string;
-  /**
-   * The hosting CONVERSATION this run belongs to (9.4.0) — forwarded onto
-   * every emitted event's `EventMeta.sessionId`, and from there into whatever
-   * an observability strategy ships (the CloudWatch/AgentCore adapters
-   * serialize the whole envelope, so it arrives without their knowing).
-   *
-   * `runId` is per run; a session spans many. Without this, a shipped event
-   * stream can answer "what happened in this run?" and not "what happened in
-   * this conversation?", which is the question a session-oriented host is
-   * built around. `standingAgent` sets this for you from the request's own
-   * session id, on both `run()` and `resume()`.
-   *
-   * **It also decides the memory namespace when you named no identity
-   * (9.10.0):** a run with a session and no `identity` scopes its memory to
-   * `{ conversationId: sessionId }`, because a hosting session IS a
-   * conversation. An `identity` you pass always wins. See
-   * {@link AgentInput.identity} for the full ladder.
-   *
-   * Omit it for an unhosted run. It is never derived, guessed, or defaulted to
-   * the runId: an absent session and an invented one are different facts.
-   */
-  sessionId?: string;
-  /**
-   * Who this run is for — the same tuple as `run({ identity })`, reachable
-   * from the doors whose input is a stored conversation rather than a
-   * message bag: `resumeOnError(checkpoint, { identity })` and
-   * `followUp(message, { identity })` (9.2.0).
-   *
-   * Before this existed, `resumeOnError` could not carry an identity at all,
-   * so every continued turn silently re-namespaced its memory under a fresh
-   * runId. Omitted, the conversation's own stored `identity` is used; given,
-   * it wins. On `run()` this is a second spelling of `run({ identity })` and
-   * the one on the input wins, since that is where the caller looked first.
-   */
-  identity?: MemoryIdentity;
-  /**
-   * THIS TURN'S CLOCK, on the doors whose input is not a message bag —
-   * `followUp(message, { time })`, `resumeOnError(checkpoint, { time })` and
-   * `resume(checkpoint, answer, { time })` — read only by an agent with
-   * `.time()`, refused on one without. On `run()` it is a second spelling of
-   * `run({ time })`, and the one on the input wins. On `resume()` the paused
-   * turn's clock is KEPT (its words were resolved against it): a `time` that
-   * differs is recorded as a `clock-on-resume` row, never applied.
-   */
-  time?: RunTime;
-  /**
-   * A redaction policy the CALLER adds for this run, joined with the agent's
-   * own `redact` — it can only add names, never remove one. This is how a
-   * policy reaches an agent run on someone else's behalf: a tool that runs
-   * another agent hands it the policy its own run is covered by, exactly as it
-   * hands `ctx.signal`:
-   *
-   * ```ts
-   * execute: (args, ctx) => specialist.run({ message: args.text }, {
-   *   ...(ctx.signal && { env: { signal: ctx.signal } }),
-   *   ...(ctx.redact && { redact: ctx.redact }),
-   * })
-   * ```
-   *
-   * Validated like `Agent.create({ redact })`. A pause carries it: the run
-   * commits it to its own state (`runRedaction`: its names, and each pattern
-   * as a reference), so `resume()` covers the resumed leg by it without being
-   * handed it again — except a pattern of your own, which is never compiled
-   * from a checkpoint: pass the same `redact` to `resume()` (or declare it on
-   * the agent), or the resume is refused (`ResumeRedactionError`,
-   * `'unknown-pattern'`). A `redact` passed to `resume()` adds to it. A
-   * conversation continued from the run (`followUp`, `continueFrom`) is a new
-   * run, covered by what it is given.
-   */
-  redact?: RedactionPolicy;
-}
 
 // Public types (AgentOptions, AgentInput, AgentOutput) extracted to
 // ./agent/types.ts and re-exported above (v2.11.1).
@@ -2267,7 +2178,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
           // are committed state. A crash checkpoint that carried the summary
           // in its history but not the span behind it would resume into a
           // conversation whose evidence the crash had quietly eaten.
-          this.foldedSpansOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
+          foldedSpansOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
           // A crash checkpoint is the same conversation carrier as
           // `checkpoint()`, so it carries the same two owner facts — otherwise
           // resuming after a crash would be the one path that still lost the
@@ -2277,10 +2188,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
           // …and the same graph cursor (SG-C), from the same snapshot reader —
           // one reader, two carriers, so neither can lose what the other keeps.
           this.continuityCursorOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
-          this.evidenceRecoveryOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
+          evidenceRecoveryOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
           // …and the findings ledger (9.101.0), from the same snapshot reader
           // `checkpoint()` uses — one reader, two carriers.
-          this.findingsLedgerOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
+          findingsLedgerOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
           // …and the turn the failing run was on (honesty layers), so the
           // retry is stamped the same turn — one reader, two carriers.
           this.turnNumberOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
@@ -2923,11 +2834,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         ...assistantReplayFields(state ?? {}),
       });
     }
-    const folded = this.foldedSpansOf(state);
+    const folded = foldedSpansOf(state);
     const owner = this.conversationOwner(selected!.value);
     const skillCursor = this.continuityCursorOf(state);
-    const evidenceRecovery = this.evidenceRecoveryOf(state);
-    const findingsLedger = this.findingsLedgerOf(state);
+    const evidenceRecovery = evidenceRecoveryOf(state);
+    const findingsLedger = findingsLedgerOf(state);
     const turnNumber = this.turnNumberOf(state);
     return {
       version: 1,
@@ -2986,22 +2897,6 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     return state?.messageDeniedPhase === 'input';
   }
 
-  /** Both checkpoint doors keep the repair budget separately from conversation text. */
-  private evidenceRecoveryOf(state?: Partial<AgentState>): EvidenceRecoveryCheckpoint | undefined {
-    if (state?.evidenceRevisionSpent !== true) return undefined;
-    const pending = state.evidenceRecovery;
-    return {
-      revisionSpent: true,
-      ...(pending !== undefined &&
-        state.evidenceRecoveryUsed !== true && {
-          pending: {
-            instruction: pending.instruction,
-            ...(pending.conclusion !== undefined && { conclusion: pending.conclusion }),
-          },
-        }),
-    };
-  }
-
   /**
    * The graph cursor a conversation carrier stores — the run's final
    * committed `currentSkillId`, read from the SNAPSHOT (the state the run
@@ -3023,39 +2918,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     return typeof cursor === 'string' && cursor.length > 0 ? cursor : undefined;
   }
 
-  /**
-   * The folded spans this run has committed, cloned on the way out.
-   *
-   * One reader for both carriers — `checkpoint()` and the crash checkpoint
-   * `RunCheckpointError` carries — so a conversation cannot keep its spans on
-   * one path and silently lose them on the other. The clone is the same
-   * promise `checkpoint()` makes about history: a persistence layer never gets
-   * a reference into the live heap.
-   *
-   * @internal
-   */
-  private foldedSpansOf(state?: Partial<AgentState>): readonly FoldedSpan[] | undefined {
-    const spans = state?.foldedSpans;
-    if (spans === undefined || spans.length === 0) return undefined;
-    return structuredClone(spans) as readonly FoldedSpan[];
-  }
-
   private timeAnswerContextOf(state: unknown): TimeAnswerContext | undefined {
     return agentTimeAnswerContext(state, this.timeOptions);
-  }
-
-  /**
-   * The findings ledger for a checkpoint (9.101.0) — `foldedSpansOf`'s twin:
-   * one reader for `checkpoint()` and the crash carrier, `undefined` when the
-   * run recorded no rows (so the key stays absent), and a detached copy
-   * otherwise, never a reference into the live heap.
-   *
-   * @internal
-   */
-  private findingsLedgerOf(state?: Partial<AgentState>): FindingsLedger | undefined {
-    const ledger = state?.findingsLedger;
-    if (ledger === undefined || ledger.length === 0) return undefined;
-    return structuredClone(ledger) as FindingsLedger;
   }
 
   /**

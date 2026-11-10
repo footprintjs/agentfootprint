@@ -25,9 +25,12 @@ run is not a substitute for the component whose stage is still executing.
 
 ## Module rules
 
-All new owners live inside `src/core/Agent/`, beside the facade. Each owner
-has a README and adjacent tests. Imports point towards contracts and plain
-functions; sibling owners never depend on each other both ways.
+All new owners live inside `src/core/agent/runtime/`, below the existing
+internal agent folder. This path differs from `Agent.ts` by more than case on
+every supported file system. There is no `index.ts`: `./Agent` continues to
+resolve to the facade file. Each owner has a README and adjacent tests.
+Imports point towards contracts and plain functions; sibling owners never
+depend on each other both ways.
 
 | Owner | Rule |
 | --- | --- |
@@ -60,8 +63,11 @@ do not become cached copies. Existing public methods retain their contracts.
 The documented facade may itself exceed the source line limit: the current
 public documentation and signatures already occupy more than that limit
 before implementation. Comments will not be shortened to pass the check.
-Completion requires either a facade within the limit or an explicit ruling
-naming its remaining documentation and wiring. No baseline will increase.
+The facade may retain exactly public documentation, public signatures and
+one-line delegation or wiring to owners. Branches, loops, validation and state
+belong to the internal owners. If that documented facade still exceeds the
+limit, its ratchet entry drops to the measured facade size. No baseline will
+increase. Run-option declarations move together with their documentation.
 
 ## Validation
 
