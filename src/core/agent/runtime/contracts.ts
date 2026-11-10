@@ -1,4 +1,4 @@
-import type { AgentConfigurationValues } from './configuration/values.js';
+import type { AgentConfiguration } from './configuration/types.js';
 import type { AgentRunOptions } from './runOptions/options.js';
 import type { AgentAroundTurnFailedPayload } from '../../../events/payloads/agent.js';
 import type { AgentRunValues } from '../runValues.js';
@@ -244,7 +244,7 @@ export type AgentPublicRunner = Runner<AgentInput, AgentOutput> &
 export interface AgentContext extends AgentMethods {
   readonly runner: AgentPublicRunner;
   readonly native: AgentNativeBindings;
-  readonly configuration: AgentConfigurationValues;
+  readonly configuration: AgentConfiguration;
   readonly ownTurnMethods: Readonly<Record<'run' | 'resume', unknown>>;
   inputsLayerArmed: boolean;
   resultsLayerArmed: boolean;

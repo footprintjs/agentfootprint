@@ -63,7 +63,7 @@ it('runtime owners do not import the facade or builder back', () => {
       ts.ScriptTarget.Latest,
       true,
     );
-    function visit(node: ts.Node): void {
+    const visit = (node: ts.Node): void => {
       if (
         ts.isStringLiteral(node) &&
         node.text.startsWith('.') &&
@@ -76,7 +76,7 @@ it('runtime owners do not import the facade or builder back', () => {
         expect(forbidden.has(target), `${path} imports ${node.text}`).toBe(false);
       }
       ts.forEachChild(node, visit);
-    }
+    };
     visit(source);
   }
 });

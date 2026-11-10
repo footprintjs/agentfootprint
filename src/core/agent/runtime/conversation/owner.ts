@@ -33,7 +33,6 @@ import type { AgentContext } from '../contracts.js';
  * @internal
  */
 export function identityFor(
-  this: Pick<AgentContext>,
   options: AgentRunOptions | undefined,
   cp: AgentRunCheckpoint,
 ): MemoryIdentity | undefined {
@@ -159,10 +158,7 @@ export function revisionWithholdsTools(this: Pick<AgentContext, 'configuration'>
 }
 
 /** Whether input middleware refused the last run's message — the one reading both doors ask. */
-export function lastInputRefused(
-  this: Pick<AgentContext>,
-  view: import('footprintjs').RunView | undefined,
-): boolean {
+export function lastInputRefused(view: import('footprintjs').RunView | undefined): boolean {
   const state = view?.snapshot()?.sharedState as Partial<AgentState> | undefined;
   return state?.messageDeniedPhase === 'input';
 }
@@ -319,11 +315,7 @@ export function applyContinuation(
 
 /** A person's unanswered question outranks a new message — see
  *  `PendingQuestionError`. @internal */
-export function assertNoPendingQuestion(
-  this: Pick<AgentContext>,
-  door: string,
-  values: AgentRunValues | undefined,
-): void {
+export function assertNoPendingQuestion(door: string, values: AgentRunValues | undefined): void {
   if (values?.pendingQuestion !== undefined) {
     throw new PendingQuestionError(door, values.pendingQuestion);
   }
@@ -340,7 +332,6 @@ export function assertNoPendingQuestion(
  * @internal
  */
 export function recordPendingQuestion(
-  this: Pick<AgentContext>,
   values: AgentRunValues,
   outcome: AgentOutput | RunnerPauseOutcome,
 ): void {

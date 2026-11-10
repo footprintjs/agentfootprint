@@ -49,15 +49,18 @@ export abstract class AgentRuntimeHost extends RunnerBase<AgentInput, AgentOutpu
     ...args: Parameters<typeof initializeAgent>
   ) {
     super();
-    const host = this;
+    const readSessions = () => this.toolSessionTier;
+    const writeSessions = (value: AgentNativeBindings['toolSessionTier']) => {
+      this.toolSessionTier = value;
+    };
     const native: AgentNativeBindings = {
       dispatcher: this.dispatcher,
       attachedRecorders: this.attachedRecorders,
       get toolSessionTier() {
-        return host.toolSessionTier;
+        return readSessions();
       },
       set toolSessionTier(value) {
-        host.toolSessionTier = value;
+        writeSessions(value);
       },
       runExecution: () => this.runExecution(),
       initChart: (builder, execution) => this.initChart(builder, execution),

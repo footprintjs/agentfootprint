@@ -1,6 +1,7 @@
-**Fold** — `owner.ts` parses and settles the existing typed-output contract.
+**Mixed** — parse and settle the existing typed-output contract.
+`owner.ts` is the **Fold** that parses accepted data and the **Trace** that
+files the existing fallback facts through the admitted invocation.
 
-The original parser, fallback and validation precedence remain unchanged.
-Events use the admitted invocation when there is one; an arbitrary parsed
-string does not invent a run or retry count. `owner.test.ts` covers native
-typed answers and parse-failure settlement through the public runner.
+Parser, fallback and validation precedence remain unchanged. An arbitrary
+parsed string does not invent a run or retry count. `owner.test.ts` covers
+native typed answers and parse-failure settlement through the public runner.

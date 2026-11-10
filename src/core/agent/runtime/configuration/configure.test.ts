@@ -55,4 +55,16 @@ describe('resolved Agent construction', () => {
     expect(agent.getArtifactStore()).toBeUndefined();
     await expect(agent.run('hello')).resolves.toBe('ok');
   });
+
+  it('uses the original runner identity in native run metadata', async () => {
+    const agent = new Agent({ ...options(), id: 'declared-id' }, 'system', [], voice);
+    let configured: unknown;
+    agent.on('agentfootprint.agent.run_configured', (event) => {
+      configured = event;
+    });
+    await expect(agent.run('hello')).resolves.toBe('ok');
+    expect(configured).toMatchObject({
+      meta: { compositionPath: ['Agent:declared-id'] },
+    });
+  });
 });

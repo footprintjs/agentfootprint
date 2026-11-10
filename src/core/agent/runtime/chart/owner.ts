@@ -53,9 +53,13 @@ export function buildChart(
     | 'runner'
     | 'seedClockDraft'
     | 'toolRunFacts'
-  >,
+  > &
+    ThisParameterType<typeof buildCatalog> &
+    ThisParameterType<typeof buildSlots> &
+    ThisParameterType<typeof chartDependencies> &
+    ThisParameterType<typeof routeFactory>,
 ): FlowChart {
-  const agent = this;
+  const readOntologyTools = () => this.ontologyTools;
   const governsOutput = hasOutputMiddleware(this.configuration.messageMiddleware);
   const provider = this.configuration.provider;
   const model = this.configuration.model;
@@ -154,7 +158,7 @@ export function buildChart(
     systemPromptValue,
     seedClockDraft: (value) => this.seedClockDraft(value),
     get ontologyTools() {
-      return agent.ontologyTools;
+      return readOntologyTools();
     },
     revisionWithholdsTools: () => this.revisionWithholdsTools(),
   });
@@ -360,7 +364,7 @@ export function buildChart(
   const configuredWindow = this.configuration.windowStrategy;
   const windowStage = configuredWindow
     ? {
-        strategyName: this.configuration.windowStrategy.name,
+        strategyName: configuredWindow.name,
         run: bindRunnerStage(
           (scope: TypedScope<AgentState>) => this.native.runExecution().forScope(scope),
           (run) =>

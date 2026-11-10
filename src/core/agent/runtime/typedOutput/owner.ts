@@ -97,10 +97,7 @@ export async function settleTypedFailure<T>(
  * any string, including one that never came from this agent, and reporting
  * `0` for "I do not know" would be an invented fact in an event payload.
  */
-export function retriesSpent(
-  this: Pick<AgentContext>,
-  invocation: RunnerInvocation<AgentRunValues>,
-): number | undefined {
+export function retriesSpent(invocation: RunnerInvocation<AgentRunValues>): number | undefined {
   const state = invocation.view.snapshot()?.sharedState as
     | Pick<AgentState, 'outputAttempts'>
     | undefined;

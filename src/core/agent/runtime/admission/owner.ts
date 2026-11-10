@@ -53,10 +53,10 @@ export function prepareAgentRun(
     | 'configuration'
     | 'emitRunManifest'
     | 'emitSkillGraphDeclared'
-    | 'id'
     | 'inputsLayerArmed'
     | 'native'
     | 'resultsLayerArmed'
+    | 'runner'
   >,
   invocation: RunnerInvocation<AgentRunValues>,
   runOptions?: AgentRunOptions,
@@ -103,7 +103,7 @@ export function prepareAgentRun(
       ? hostedConversationKey(hosted)
       : undefined;
   const metadata = {
-    compositionPath: [`Agent:${this.id}`],
+    compositionPath: [`Agent:${this.runner.id}`],
     ...(correlationId !== undefined && { correlationId }),
     ...(traceId !== undefined && { traceId }),
     ...(sessionId !== undefined && { sessionId }),

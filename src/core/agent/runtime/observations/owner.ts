@@ -1,6 +1,5 @@
 import { refusalVerdictOf, validationVerdictOf } from '../terminal/verdicts.js';
 import { type ObserverDrainResult } from 'footprintjs';
-import { isPaused } from '../../../pause.js';
 import type { AnswerAssessment, AssessmentDeclarations } from '../../assessment/types.js';
 import { type ChildOutcome } from '../../../terminalVerdict.js';
 import { isValidatedDelivery } from '../../stages/breakFinal.js';

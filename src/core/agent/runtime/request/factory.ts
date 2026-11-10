@@ -1,6 +1,5 @@
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
-import { findingsContextBytes } from '../../findings/context.js';
 import { buildBrainFor } from '../../skillBrains.js';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 import { retainReplayRetirements } from '../../../runCheckpoint.js';

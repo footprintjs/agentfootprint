@@ -94,10 +94,7 @@ export function assertIntegrityAlive(
  * circular: an unhooked check would report "no work existed" and silence
  * the very alarm it should be tripping.
  */
-export function integrityWorkExisted(
-  this: Pick<AgentContext>,
-  invocation: RunnerInvocation<AgentRunValues>,
-): boolean {
+export function integrityWorkExisted(invocation: RunnerInvocation<AgentRunValues>): boolean {
   const state = invocation.view.snapshot()?.sharedState as
     | { llmLatestContent?: unknown }
     | undefined;
@@ -139,7 +136,7 @@ export function fileIntegrityDisposition(
 }
 
 export function emitRunManifest(
-  this: Pick<AgentContext, 'configuration' | 'id' | 'native'>,
+  this: Pick<AgentContext, 'configuration' | 'native' | 'runner'>,
   context: RunContext,
 ): void {
   const type = 'agentfootprint.agent.run_configured';
@@ -148,7 +145,7 @@ export function emitRunManifest(
   dispatcher.dispatch({
     type,
     payload: buildRunManifest({
-      agentId: this.id,
+      agentId: this.runner.id,
       providerName: this.configuration.provider.name,
       model: this.configuration.model,
       hasRunConfig: this.configuration.runConfigFn !== undefined,

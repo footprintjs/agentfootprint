@@ -63,13 +63,13 @@ export function getGroupTranslator(
  *  memory visibility should listen for `agentfootprint.memory.*`
  *  events at runtime. */
 export function buildUIGroupMetadata(
-  this: Pick<AgentContext, 'configuration' | 'id' | 'name'>,
+  this: Pick<AgentContext, 'configuration' | 'runner'>,
 ): import('../../../translator.js').GroupMetadata {
   const toolNames = this.configuration.registry.map((r) => r.name);
   return {
     kind: 'Agent',
-    id: this.id,
-    name: this.name,
+    id: this.runner.id,
+    name: this.runner.name,
     members: [],
     extra: {
       slots: [SUBFLOW_IDS.SYSTEM_PROMPT, SUBFLOW_IDS.MESSAGES, SUBFLOW_IDS.TOOLS] as const,

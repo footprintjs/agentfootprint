@@ -68,10 +68,7 @@ import type { AgentContext } from '../contracts.js';
  * is withheld here for that reason — `sessionId` beside it is the fact the
  * transport really delivered.
  */
-export function toolRunFacts(
-  this: Pick<AgentContext>,
-  run: RunnerScopeValues<AgentRunValues>,
-): {
+export function toolRunFacts(run: RunnerScopeValues<AgentRunValues>): {
   readonly runContext: RunContext;
   readonly runId: string;
   readonly sessionId?: string;

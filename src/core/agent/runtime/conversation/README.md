@@ -1,7 +1,9 @@
-**Fold** — conversation carrier values read from the run's committed state.
+**Mixed** — preserve the accepted conversation across native turns.
+`checkpointParts.ts` is the **Fold** of detached checkpoint values;
+`owner.ts` is the **Walker** that restores and consumes continuation state.
 
-`checkpointParts.ts` owns the spent recovery carrier, folded spans and findings
-ledger. Absent or empty observations stay absent. Returned spans and ledger
-rows are detached copies; a persistence caller cannot mutate the live run.
-Both ordinary and crash checkpoints read these same functions. They read no
-selected run, clock, provider or recorder and import no facade or builder.
+The captured invocation owns checkpoint, clock, identity and pending-question
+facts. Restoration retains the original optional-key shapes and clears each
+consumed value at its existing point. `checkpointParts.test.ts` covers copying
+and spent repair state; continuation and resume owners keep their existing
+native behavior scenarios beside them.

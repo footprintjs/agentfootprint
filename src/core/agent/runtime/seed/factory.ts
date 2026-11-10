@@ -1,6 +1,5 @@
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerScopeValues } from '../../../runnerExecution.js';
-import { findingsContextBytes } from '../../findings/context.js';
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 import type { FindingsLedger } from '../../findings/types.js';
 import type { MemoryStore } from '../../../../memory/store/index.js';

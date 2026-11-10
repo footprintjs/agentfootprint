@@ -27,7 +27,6 @@ export function initializeAgent(
     | 'buildChart'
     | 'checkpointFor'
     | 'configuration'
-    | 'id'
     | 'native'
     | 'ownTurnMethods'
     | 'resumeOwned'
@@ -55,8 +54,8 @@ export function initializeAgent(
   // handlers are initialized in the actual native component, shared with
   // its internal charts and isolated from other mounts and admissions.
   this.native.initChart(() => this.buildChart(), {
-    runnerId: this.id,
-    compositionPath: [`Agent:${this.id}`],
+    runnerId: this.runner.id,
+    compositionPath: [`Agent:${this.runner.id}`],
     initialize: () => {
       const values = createAgentRunValues({
         window: this.configuration.windowStrategy !== undefined,
