@@ -240,11 +240,18 @@ describe('functional/gate — real agent run, loop 2 descends to loop 0 by dataf
     const artifacts = await realRun('reads-prefix');
     const injections = traceVariable(artifacts, 'systemPromptInjections');
     const toolResult = traceVariable(artifacts, 'lastToolResult');
+    const finalAnswer = traceVariable(artifacts, 'finalContent');
 
     // the dial recorded per-write provenance for the key the LLM actually read
     expect(injections.coverage).toBe('exact');
-    // …and NOT for the key nothing ever read back (vacuous ≠ exact)
-    expect(toolResult.coverage).toBe('unknown');
+    // …and NOT for a key whose last value nothing reads (vacuous ≠ exact). The forward slice
+    // starts at a key's LAST write. For `finalContent` that is the answer, the run's last write
+    // of the key, which leaves the chart as the run's result. (The key is read once before
+    // that, still holding the seeded empty text: the final sub-chart's mapper names it to leave
+    // it out. A read before the last write is no read of the answer.)
+    // `lastToolResult` stood here before. Its last value IS read, by the mapper that hands it
+    // to the injection engine; an engine that records a subflow mapper's reads shows that read.
+    expect(finalAnswer.coverage).toBe('unknown');
 
     // the join found the real writer and the real loop it happened in
     const writes = injections.moments.filter((m) => m.kind === 'write');

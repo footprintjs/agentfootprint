@@ -4,7 +4,7 @@ title: RedactionReport
 
 # Interface: RedactionReport
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:131
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:138
 
 State redaction report. Never includes values; emit and diagnostic
 selectors/activity are not represented here.
@@ -15,7 +15,7 @@ selectors/activity are not represented here.
 
 > **fieldRedactions**: `Record`\<`string`, `string`[]\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:135
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:142
 
 Keys with field-level redaction → which fields were scrubbed.
 
@@ -25,7 +25,7 @@ Keys with field-level redaction → which fields were scrubbed.
 
 > **patterns**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:137
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:144
 
 Pattern sources that were active (e.g. ['password|secret']).
 
@@ -35,6 +35,6 @@ Pattern sources that were active (e.g. ['password|secret']).
 
 > **redactedKeys**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:133
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:140
 
 Keys fully redacted (exact match or pattern match).

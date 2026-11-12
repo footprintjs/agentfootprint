@@ -77,7 +77,6 @@
     "src/hosting/README.md": 703,
     "src/hosting/signin/door.ts": 813,
     "src/hosting/sqliteSessions.ts": 762,
-    "src/hosting/standingAgent.ts": 2380,
     "src/hosting/streamHandler.ts": 817,
     "src/hosting/types.ts": 1793,
     "src/hosting/webSocketConversation.ts": 774,

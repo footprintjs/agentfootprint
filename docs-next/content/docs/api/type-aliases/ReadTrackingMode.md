@@ -6,13 +6,15 @@ title: ReadTrackingMode
 
 > **ReadTrackingMode** = `RetentionPolicy`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/frameTypes.d.ts:52
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/frameTypes.d.ts:54
 
 Policy for how tracked reads are recorded into `StageSnapshot.stageReads`.
 
-- `'full'` (default) — every tracked read `structuredClone`s the value into
-  the stage's read view. Byte-identical to the historical behavior; this is
-  what snapshot consumers (lens, agentfootprint) see today.
+- `'full'` (default) — a tracked read keeps a `structuredClone` of the value
+  in the stage's read view: what snapshot consumers (lens, agentfootprint)
+  see. The clone is taken once for each object a key holds, not at every
+  read (`keptReads.ts`); a text or a number needs no clone; a key the stage
+  itself has written is cloned at every read from then on.
 - `'summary'` — reads record a cheap [ReadSummaryMarker](/docs/api/interfaces/ReadSummaryMarker) (type + size
   proxy + short preview) instead of the cloned value. O(1)-ish per read —
   no value clone, no serialization of large objects.

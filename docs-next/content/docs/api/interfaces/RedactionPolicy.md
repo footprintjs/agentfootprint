@@ -4,7 +4,7 @@ title: RedactionPolicy
 
 # Interface: RedactionPolicy
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:88
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:90
 
 Declarative key/path redaction for recorded state and boundary records.
 
@@ -17,7 +17,7 @@ FlowChartExecutor to apply across all stages.
 
 > `optional` **diagnostics?**: `Pick`\<`RedactionPolicy`, `"keys"` \| `"patterns"` \| `"fields"`\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:111
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:118
 
 Diagnostic-only selectors, IN ADDITION to the state selectors above (which
 already cover a diagnostic entry by its name: `keys: ['token']` masks
@@ -33,7 +33,7 @@ intact. Applied before retention, not retroactively to existing bags.
 
 > `optional` **emitPatterns?**: `RegExp`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:125
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:132
 
 Regex patterns matched against `EmitEvent.name` for `scope.$emit(...)`
 calls. Any emit event whose name matches has its payload replaced with
@@ -53,7 +53,7 @@ Example:
 
 > `optional` **fields?**: `Record`\<`string`, `string`[]\>
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:101
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:108
 
 Field-level redaction within objects — key → array of fields to scrub.
  Supports dot-notation for nested paths (e.g. 'address.zip').
@@ -64,7 +64,7 @@ Field-level redaction within objects — key → array of fields to scrub.
 
 > `optional` **keys?**: `string`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:90
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:92
 
 Exact key names to always redact (e.g. ['ssn', 'creditCard']).
 
@@ -74,10 +74,15 @@ Exact key names to always redact (e.g. ['ssn', 'creditCard']).
 
 > `optional` **patterns?**: `RegExp`[]
 
-Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:98
+Defined in: node\_modules/footprintjs/dist/types/lib/memory/redaction.d.ts:105
 
 Regex patterns — any key matching a pattern is auto-redacted.
 
 Pattern matching is skipped for keys that exceed an internal length cap
 (designed to prevent ReDoS on pathological patterns). For very long key
 names, use `keys` (exact match) instead of patterns.
+
+A pattern that depends on a dotted PATH (for example `/auth\.token/`) is
+tested against paths inside a value handed out whole. A path past the same
+cap cannot be tested, so the value at it is served as the placeholder: the
+safe side. Use `keys` or `fields` for values that deep.
