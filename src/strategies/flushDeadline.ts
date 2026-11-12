@@ -8,7 +8,7 @@
  * slow. The deadline belongs to the caller that must finish,
  * `RunnerBase · shutdown`, never to the sink: nothing can cancel an in-flight
  * write, and pretending otherwise would be worse than saying we stopped
- * waiting (the `withinBound` law in hosting/standingAgent.ts).
+ * waiting (the `withinBound` law in hosting/standingAgent/artifacts/handOver.ts).
  *
  * A missed deadline is REPORTED, through the stuck strategy's own `_onError`
  * (the console when it has none), and names it — the same rule as every
