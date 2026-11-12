@@ -110,9 +110,10 @@ exclusive capabilities or measured superiority in answer accuracy.
 npm install agentfootprint footprintjs
 ```
 
-Agentfootprint 14 requires FootprintJS 11 (`^11.1.0`) and Foottrace
-`^1.11.1`. FootprintJS is a peer dependency, so install it explicitly as shown
-above. These are stable release ranges.
+Agentfootprint 14 works with FootprintJS 11 (from 11.1.0) and FootprintJS 12:
+the peer range is `^11.1.0 || ^12.0.0`. It also needs Foottrace `^1.11.1`.
+FootprintJS is a peer dependency, so install it explicitly as shown above.
+These are stable release ranges.
 
 ```typescript
 import { Agent, defineTool } from 'agentfootprint';
