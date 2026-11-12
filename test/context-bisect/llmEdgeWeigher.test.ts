@@ -17,6 +17,7 @@ import type { RuntimeSnapshot, StageSnapshot } from 'footprintjs/advanced';
 import { mockEmbedder } from '../../src/memory/embedding/mockEmbedder';
 import { embeddingCache, type Embedder } from '../../src/influence-core';
 import { llmEdgeWeigher, stepOutputText } from '../../src/context-bisect';
+import { executionStages } from '../../src/lib/executionStages';
 
 // ── Fixture: the 12-parent hairball ─────────────────────────────────
 
@@ -78,13 +79,10 @@ async function runHairball(): Promise<Hairball> {
   const commitLog = snapshot.commitLog as CommitBundle[];
 
   const reads = new Map<string, string[]>();
-  const visit = (node: StageSnapshot | undefined): void => {
-    if (!node) return;
+  for (const stage of executionStages(snapshot.executionTree)) {
+    const node = stage as Partial<StageSnapshot>;
     if (node.runtimeStageId) reads.set(node.runtimeStageId, Object.keys(node.stageReads ?? {}));
-    for (const child of node.children ?? []) visit(child);
-    visit(node.next);
-  };
-  visit(snapshot.executionTree as StageSnapshot | undefined);
+  }
   const keysRead = (id: string): string[] => reads.get(id) ?? [];
 
   const llmId = commitLog.find((b) => b.stageId === 'the-llm')!.runtimeStageId;
@@ -257,13 +255,10 @@ describe('llmEdgeWeigher — security (redaction respected)', () => {
     const commitLog = snapshot.commitLog as CommitBundle[];
 
     const reads = new Map<string, string[]>();
-    const visit = (node: StageSnapshot | undefined): void => {
-      if (!node) return;
+    for (const stage of executionStages(snapshot.executionTree)) {
+      const node = stage as Partial<StageSnapshot>;
       if (node.runtimeStageId) reads.set(node.runtimeStageId, Object.keys(node.stageReads ?? {}));
-      for (const child of node.children ?? []) visit(child);
-      visit(node.next);
-    };
-    visit(snapshot.executionTree as StageSnapshot | undefined);
+    }
 
     const llmId = commitLog.find((b) => b.stageId === 'the-llm')!.runtimeStageId;
     const dag = causalChain(commitLog, llmId, (id) => reads.get(id) ?? [])!;

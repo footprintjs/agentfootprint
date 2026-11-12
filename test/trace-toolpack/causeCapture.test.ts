@@ -3,6 +3,7 @@ import { controlDepRecorder } from 'footprintjs/trace';
 import { describe, expect, it } from 'vitest';
 import { traceToolpack, callTraceTool } from '../../src/trace-toolpack/traceToolpack.js';
 import { createRecordGraph } from 'foottrace/cause';
+import { executionStages } from '../../src/lib/executionStages.js';
 
 /** Real engine records; no fabricated capture note, custom graph, provider or model. */
 async function recorded() {
@@ -284,7 +285,8 @@ describe('native capture-note admission', () => {
     [
       'tree stripped',
       (s) => {
-        s.executionTree.next = undefined;
+        // Only the first stage is left, in either tree form.
+        s.executionTree = { ...executionStages(s.executionTree)[0], next: undefined };
       },
       'projection-incomplete',
     ],

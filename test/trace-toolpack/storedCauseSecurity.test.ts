@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { readStoredCauseArtifacts } from '../../src/trace-toolpack/storedCause.js';
 import { traceCauseTools } from '../../src/trace-toolpack/causeTools.js';
 import { callTraceTool, traceToolpack } from '../../src/trace-toolpack/traceToolpack.js';
+import { executionStages } from '../../src/lib/executionStages.js';
 import legacyV2 from './fixtures/public-v2-no-ownership.json';
 import {
   noteData,
@@ -126,9 +127,10 @@ describe('saved cause: public producer evidence', () => {
     expect(history.capture.version).toBe(2);
     expect(history.readSources).toBeDefined();
     expect(history.commitLog).toHaveLength(2);
-    expect(history.executionTree.attempts).toBeUndefined();
-    expect(history.executionTree.next?.attempts).toBeUndefined();
-    expect(history.executionTree.next?.readSourceCounts).toBeDefined();
+    const [first, second] = executionStages(history.executionTree);
+    expect(first?.attempts).toBeUndefined();
+    expect(second?.attempts).toBeUndefined();
+    expect(second?.readSourceCounts).toBeDefined();
     expect(history.readSources?.record?.occurrences.length).toBeGreaterThan(0);
     expect(
       history.readSources?.record?.occurrences.every((read) => read.attemptId === undefined),
@@ -145,7 +147,7 @@ describe('saved cause: public producer evidence', () => {
     expect(history.capture.persistence).toBe('memory-only');
     expect(history.readSources).toBeDefined();
     expect(history.commitLog).toHaveLength(2);
-    expect(history.executionTree.next?.readSourceCounts).toBeDefined();
+    expect(executionStages(history.executionTree)[1]?.readSourceCounts).toBeDefined();
     expect(history.readSources?.record?.occurrences.length).toBeGreaterThan(0);
     expect(history.readSources?.version).toBe(2);
     const answer = await readStoredCauseArtifacts(fixture.entries, { runId: fixture.runId });
@@ -275,10 +277,10 @@ describe('saved cause: independently rechecked security boundaries', () => {
     async ({ field, value }) => {
       const fixture = await storedCauseFixture();
       const original = await requireStoredHistory(fixture.entries, fixture.runId);
-      const tree = noteData(fixture.entries, 'capture-history').executionTree as Record<
-        string,
-        unknown
-      >;
+      // The first stage, in either tree form.
+      const tree = executionStages(
+        noteData(fixture.entries, 'capture-history').executionTree,
+      )[0] as Record<string, unknown>;
       tree[field] = value;
       await rehashStoredFixture(fixture.entries, original);
       // The producer reader validates persistence, not the cause projection's retained views.
