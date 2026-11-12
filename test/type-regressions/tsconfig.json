@@ -8,5 +8,9 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["**/*.ts", "../../src/core/agent/runtime/native/subclass.test.ts"]
+  "include": [
+    "**/*.ts",
+    "../../src/core/agent/runtime/native/subclass.test.ts",
+    "../../src/core/agent/runtime/native/borrowing.test.ts"
+  ]
 }

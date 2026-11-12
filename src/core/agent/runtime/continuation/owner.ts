@@ -1,6 +1,6 @@
+import * as nativeOperations from '../native/operations.js';
 import type { AgentRunOptions } from '../runOptions/options.js';
 import { refuseFollowUpIdentity } from '../../resumeAnswer.js';
-import { abandonPendingQuestion } from '../../pauseOwnership.js';
 import { type RunnerPauseOutcome } from '../../../pause.js';
 import { assertIdentityShape } from '../../callerIdentity.js';
 import { validateCheckpoint, type AgentRunCheckpoint } from '../../../runCheckpoint.js';
@@ -38,15 +38,13 @@ export async function followUp(
   });
 }
 
-export async function abandonPause(
+export function abandonPause(
   this: Pick<AgentContext, 'native'>,
 ): Promise<
   | { readonly toolName?: string; readonly toolCallId?: string; readonly question?: string }
   | undefined
 > {
-  return this.native
-    .runExecution()
-    .withRun((invocation) => abandonPendingQuestion(invocation.previous?.value));
+  return nativeOperations.abandonPause(() => this.native.runExecution());
 }
 
 export async function resumeOnError(

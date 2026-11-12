@@ -2,7 +2,8 @@ import { getAgentRuntime, initializeAgentRuntime } from './agent/runtime/native/
 import { RunnerBase } from './RunnerBase.js';
 import type { AgentNativeBindings } from './agent/runtime/native/bindings.js';
 import type { AgentRunValues } from './agent/runValues.js';
-import { narrativeEntries } from './agent/runtime/info/owner.js';
+import * as nativeOperations from './agent/runtime/native/operations.js';
+import { classifyOutcome } from './agent/runtime/observations/owner.js';
 import type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 export type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 import { type AroundTurn } from './agent/aroundTurn/index.js';
@@ -94,7 +95,6 @@ export type {
   RunConfigFn,
   WriteProvenanceMode,
 };
-
 export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   declare readonly name: string;
   declare readonly id: string;
@@ -272,7 +272,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * @internal
    */
   ownsEvent(event: AgentfootprintEvent): boolean {
-    return getAgentRuntime(this).ownsEvent(event);
+    return nativeOperations.ownsEvent(this.runExecution(), event);
   }
   /**
    * The footprintjs `RuntimeSnapshot` from the most recent `run()` /
@@ -299,7 +299,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * live run, so redaction never changes what the agent continues from.
    */
   override getLastSnapshot(): RuntimeSnapshot | undefined {
-    return getAgentRuntime(this).getLastSnapshot();
+    return super.getLastSnapshot();
   }
   /**
    * Structured narrative entries from the most recent run. Pairs with
@@ -314,7 +314,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    */
   /** Empty during preparation before native origin; capture prior entries before the next call. */
   getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
-    return narrativeEntries(this.runExecution());
+    return nativeOperations.narrativeEntries(this.runExecution());
   }
   /**
    * The FlowChart compiled for the most recent run (or a freshly-built
@@ -484,7 +484,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     | { readonly toolName?: string; readonly toolCallId?: string; readonly question?: string }
     | undefined
   > {
-    return getAgentRuntime(this).abandonPause();
+    return nativeOperations.abandonPause(() => this.runExecution());
   }
   /**
    * Whether {@link Agent.selfExplain}'s why-questions have a run to answer
@@ -683,7 +683,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * ```
    */
   drainObservers(opts?: { timeoutMs?: number }): Promise<ObserverDrainResult> {
-    return getAgentRuntime(this).drainObservers(opts);
+    return nativeOperations.drainObservers(this.runExecution(), opts);
   }
   /**
    * Did the last turn stop because a LIMIT cut it short — and if so, which?
@@ -722,7 +722,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * ```
    */
   stoppedEarly(): AgentState['stoppedEarly'] {
-    return getAgentRuntime(this).stoppedEarly();
+    return nativeOperations.stoppedEarly(this.liveSnapshot());
   }
   /**
    * Did the last turn's answer FAIL this agent's `outputSchema` — and how (8.18.0)?
@@ -758,7 +758,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * ```
    */
   outputContractUnmet(): AgentState['outputContractUnmet'] {
-    return getAgentRuntime(this).outputContractUnmet();
+    return nativeOperations.outputContractUnmet(this.liveSnapshot());
   }
   /**
    * Did the last turn's answer state names or numbers that appear in NO tool
@@ -785,7 +785,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * ```
    */
   unsupportedValues(): AgentState['unsupportedValues'] {
-    return getAgentRuntime(this).unsupportedValues();
+    return nativeOperations.unsupportedValues(this.liveSnapshot());
   }
   /**
    * The last run's findings ledger (9.101.0) — the model's OWN standings on
@@ -823,18 +823,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * ```
    */
   findings(): AgentState['findingsLedger'] {
-    return getAgentRuntime(this).findings();
+    return nativeOperations.findings(this.liveSnapshot());
   }
   /** The library-composed negative statements and their recorded limits.
    * Detached, in-process data for the caller. Record redaction applies to the
    * snapshots and emitted events, not this caller-owned value. */
   answerNegatives(): AnswerNegatives | undefined {
-    return getAgentRuntime(this).answerNegatives();
+    return nativeOperations.answerNegatives(this.liveSnapshot());
   }
   /** The last run's answer checks, detached from its execution record.
    * Undefined means no terminal validation ran, never an implicit pass. */
   answerValidation(): AnswerValidationReport | undefined {
-    return getAgentRuntime(this).answerValidation();
+    return nativeOperations.answerValidation(this.liveSnapshot());
   }
   /**
    * The limits of the last run's TYPED answer, as data — what its tools
@@ -883,7 +883,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * ```
    */
   answerCoverage(): AnswerCoverage | undefined {
-    return getAgentRuntime(this).answerCoverage();
+    return nativeOperations.answerCoverage(this.liveSnapshot());
   }
   /**
    * How far the last run's answer stands — folded from its COMMITTED record,
@@ -918,7 +918,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * ```
    */
   assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
-    return getAgentRuntime(this).assessment(declarations);
+    return nativeOperations.assessment(() => this.runExecution(), declarations);
   }
   /**
    * @internal What a mount of this agent's chart handed back
@@ -931,7 +931,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * travels off tracked state, so it is raised by the run boundary only.
    */
   outcomeOf(sfOutput: unknown): ChildOutcome {
-    return getAgentRuntime(this).outcomeOf(sfOutput);
+    return classifyOutcome(sfOutput, () => getAgentRuntime(this).configuration);
   }
 }
 /** The class's own turn doors, captured at load: patching the prototype later still counts. */

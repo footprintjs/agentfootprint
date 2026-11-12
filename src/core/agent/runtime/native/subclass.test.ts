@@ -81,3 +81,15 @@ it('keeps per-agent context behind one non-enumerable module Symbol', async () =
     await agent.shutdown({ stop: true });
   }
 });
+
+it('keeps receiver-free outcome branches independent of Agent configuration', () => {
+  const receiver = {};
+  for (const value of ['answer', 0, null, undefined, true]) {
+    expect(Reflect.apply(Agent.prototype.outcomeOf, receiver, [value])).toEqual({ answer: value });
+  }
+  expect(
+    Reflect.apply(Agent.prototype.outcomeOf, receiver, [
+      { finalContent: 'validated answer', answerValidationCommitted: true },
+    ]),
+  ).toEqual({ answer: 'validated answer' });
+});

@@ -57,10 +57,39 @@ it('the documented Agent facade holds only declarations and direct wiring', () =
       !ts.getModifiers(member)?.some((m) => m.kind === ts.SyntaxKind.StaticKeyword)
     ) {
       const call = expression as ts.CallExpression;
-      if (member.name.getText(source) === 'getLastNarrativeEntries') {
-        // This pre-existing public reader can be borrowed by another native runner.
-        expect(call.expression.getText(source)).toBe('narrativeEntries');
-        expect(call.arguments[0]!.getText(source)).toBe('this.runExecution()');
+      const name = member.name.getText(source);
+      if (name === 'getLastSnapshot') {
+        expect(call.expression.getText(source)).toBe('super.getLastSnapshot');
+        expect(call.arguments).toHaveLength(0);
+        continue;
+      }
+      const nativeReaders = new Set([
+        'ownsEvent',
+        'getLastNarrativeEntries',
+        'drainObservers',
+        'stoppedEarly',
+        'outputContractUnmet',
+        'unsupportedValues',
+        'findings',
+        'answerNegatives',
+        'answerValidation',
+        'answerCoverage',
+        'assessment',
+        'abandonPause',
+      ]);
+      if (nativeReaders.has(name)) {
+        const operation = name === 'getLastNarrativeEntries' ? 'narrativeEntries' : name;
+        expect(call.expression.getText(source)).toBe('nativeOperations.' + operation);
+        expect(call.arguments[0]!.getText(source)).toMatch(
+          /^(?:this\.(?:runExecution|liveSnapshot)\(\)|\(\) => this\.runExecution\(\))$/,
+        );
+        continue;
+      }
+      if (name === 'outcomeOf') {
+        expect(call.expression.getText(source)).toBe('classifyOutcome');
+        expect(call.arguments[1]!.getText(source)).toBe(
+          '() => getAgentRuntime(this).configuration',
+        );
         continue;
       }
       // Private wiring must not reserve a virtual application instance name.

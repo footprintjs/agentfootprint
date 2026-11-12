@@ -12,3 +12,9 @@ violating the non-configurable, non-writable property invariant.
 There is no extra executor, lease or run ID. Adjacent scenarios cover native
 component binding, transparent Proxies, hidden context, public inheritance
 and existing subclass methods/data; they also compile in the public type gate.
+
+`operations.ts` keeps native-only read/drain/pause operations independent of
+Agent configuration. Public wrappers pass the receiver's native capability,
+so borrowing a shared reader onto another RunnerBase still reads that runner.
+Async operations acquire execution inside the async body; synchronous drain
+keeps its original immediate errors and returns the native promise directly.

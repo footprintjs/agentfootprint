@@ -1,13 +1,11 @@
+import * as nativeOperations from '../native/operations.js';
 import { type CombinedNarrativeEntry, type RuntimeSnapshot } from 'footprintjs';
 import type { CachePolicy } from '../../../../cache/types.js';
 import { SUBFLOW_IDS } from '../../../../lib/conventions.js';
 import type { ArtifactStore } from '../../../../artifacts/types.js';
-import { eventBelongsToRun } from '../../../../bridge/eventMeta.js';
 import type { AgentfootprintEvent } from '../../../../events/registry.js';
 
 import type { AgentContext } from '../contracts.js';
-import type { RunnerExecution } from '../../../runnerExecution.js';
-import type { AgentRunValues } from '../../runValues.js';
 
 export function getSystemPromptCachePolicy(this: Pick<AgentContext, 'configuration'>): CachePolicy {
   return this.configuration.systemPromptCachePolicy;
@@ -20,8 +18,7 @@ export function getArtifactStore(
 }
 
 export function ownsEvent(this: Pick<AgentContext, 'native'>, event: AgentfootprintEvent): boolean {
-  const selected = this.native.runExecution().selected();
-  return selected !== undefined && eventBelongsToRun(event.meta, selected.context);
+  return nativeOperations.ownsEvent(this.native.runExecution(), event);
 }
 
 export function getLastSnapshot(this: Pick<AgentContext, 'native'>): RuntimeSnapshot | undefined {
@@ -31,17 +28,7 @@ export function getLastSnapshot(this: Pick<AgentContext, 'native'>): RuntimeSnap
 export function getLastNarrativeEntries(
   this: Pick<AgentContext, 'native'>,
 ): readonly CombinedNarrativeEntry[] {
-  return narrativeEntries(this.native.runExecution());
-}
-
-/** The narrative reader is also borrowable by other native RunnerBase implementations. */
-export function narrativeEntries(
-  execution: RunnerExecution<AgentRunValues>,
-): readonly CombinedNarrativeEntry[] {
-  const selected = execution.selected();
-  const coverage = selected?.value.redaction?.coverage;
-  if (selected === undefined || coverage === undefined || coverage.state === 'unknown') return [];
-  return selected.view.getNarrativeEntries();
+  return nativeOperations.narrativeEntries(this.native.runExecution());
 }
 
 export function getGroupTranslator(
