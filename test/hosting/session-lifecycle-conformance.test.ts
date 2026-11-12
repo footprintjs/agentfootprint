@@ -37,8 +37,9 @@
  * mistake with fewer characters.
  */
 
+import { productionSources } from '../helpers/productionSources.js';
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,7 +63,6 @@ import type { AgentCoreSessionClientLike } from '../../src/adapters/hosting/agen
 import { firestoreSessions } from '../../src/hosting-providers.js';
 import {
   agentEngineSessions,
-  DEFAULT_USER_ID,
   SESSION_STATE_KEY,
 } from '../../src/adapters/hosting/googleAgentEngine.js';
 import { fakeFirestore } from './firestoreDouble.js';
@@ -549,9 +549,8 @@ describe('what enrolling the container runtime’s two stores actually proved', 
     const factories = new Set<string>();
     for (const root of roots) {
       const dir = resolve(dirname(fileURLToPath(import.meta.url)), '../..', root);
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
-        const text = readFileSync(join(dir, entry.name), 'utf8');
+      for (const file of productionSources(dir)) {
+        const text = readFileSync(file, 'utf8');
         for (const match of text.matchAll(/^export function (\w*Sessions)\(/gm)) {
           factories.add(match[1]!);
         }

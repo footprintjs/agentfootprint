@@ -61,7 +61,7 @@ import {
   documentIdFor,
   firestoreFailure,
   grpcStatusOf,
-} from '../../src/adapters/hosting/firestoreSessions.js';
+} from '../../src/adapters/hosting/firestoreSessions/index.js';
 import type { AgentRunCheckpoint } from '../../src/core/runCheckpoint.js';
 import { fakeFirestore, grpcError, type FakeStore } from './firestoreDouble.js';
 import { inProcessHost } from './testHost.js';
@@ -1158,7 +1158,7 @@ describe('firestoreSessions — when @google-cloud/firestore is not installed', 
     }));
     try {
       const { firestoreSessions: isolated } = await import(
-        '../../src/adapters/hosting/firestoreSessions.js'
+        '../../src/adapters/hosting/firestoreSessions/index.js'
       );
       expect(() => isolated()).toThrow(/npm install @google-cloud\/firestore/);
       // A store that silently forgot everything is indistinguishable, from the
@@ -1177,7 +1177,7 @@ describe('firestoreSessions — when @google-cloud/firestore is not installed', 
     }));
     try {
       const { firestoreSessions: isolated } = await import(
-        '../../src/adapters/hosting/firestoreSessions.js'
+        '../../src/adapters/hosting/firestoreSessions/index.js'
       );
       expect(() => isolated()).toThrow(/FieldPath\.documentId/);
     } finally {

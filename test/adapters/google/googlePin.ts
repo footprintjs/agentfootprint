@@ -218,7 +218,15 @@ export const GOOGLE_SURFACE_PINS: readonly GoogleAdapterPin[] = [
   },
   {
     adapter: 'firestoreSessions',
-    sources: ['src/adapters/hosting/firestoreSessions.ts'],
+    sources: [
+      'src/adapters/hosting/firestoreSessions/backend.ts',
+      'src/adapters/hosting/firestoreSessions/factory.ts',
+      'src/adapters/hosting/firestoreSessions/stages/save/save.ts',
+      'src/adapters/hosting/firestoreSessions/stages/list/list.ts',
+      'src/adapters/hosting/firestoreSessions/stages/ownership/ownership.ts',
+      'src/adapters/hosting/firestoreSessions/stages/write/write.ts',
+      'src/adapters/hosting/firestoreSessions/stages/close/close.ts',
+    ],
     sdkPackage: '@google-cloud/firestore',
     kind: 'class',
     ctor: 'Firestore',

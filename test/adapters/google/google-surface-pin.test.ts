@@ -46,7 +46,7 @@ import {
   safeResourceId,
 } from '../../../src/adapters/google/aiPlatform.js';
 import { agentEngineSessions } from '../../../src/adapters/hosting/googleAgentEngine.js';
-import { firestoreSessions } from '../../../src/adapters/hosting/firestoreSessions.js';
+import { firestoreSessions } from '../../../src/adapters/hosting/firestoreSessions/index.js';
 import { fakeFirestore } from '../../hosting/firestoreDouble.js';
 import { memoryBankStore } from '../../../src/adapters/memory/memoryBank.js';
 import { googleIdentity } from '../../../src/adapters/identity/google.js';
@@ -730,7 +730,7 @@ describe('the registry covers every Google adapter in the source tree', () => {
     expect(GOOGLE_PACKAGES).toContain('@google/genai');
     expect([...loadSites.keys()].sort()).toEqual([
       'src/adapters/google/aiPlatform.ts',
-      'src/adapters/hosting/firestoreSessions.ts',
+      'src/adapters/hosting/firestoreSessions/backend.ts',
       'src/adapters/identity/google.ts',
       'src/adapters/llm/googleGenAI.ts',
       'src/artifacts/gcsArtifacts.ts',

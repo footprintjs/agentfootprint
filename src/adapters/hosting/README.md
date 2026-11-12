@@ -15,4 +15,4 @@ belong to `src/hosting/` so four stores cannot each get them slightly wrong.
 - `a2aWire.ts`, `responsesWire.ts` — two protocols, each as an `HttpWire`.
 - `agentcore.ts`, `agentCoreA2A.ts`, `foundryResponses.ts`,
   `googleAgentEngine.ts` — hosted-runtime adapters.
-- `firestoreSessions.ts` — conversations in a shared document store.
+- `firestoreSessions/` — conversations in a shared document store.

@@ -3,7 +3,6 @@
     "src/adapters/code/local.ts": 998,
     "src/adapters/google/aiPlatform.ts": 818,
     "src/adapters/hosting/agentcore.ts": 1097,
-    "src/adapters/hosting/firestoreSessions.ts": 1319,
     "src/adapters/hosting/googleAgentEngine.ts": 790,
     "src/adapters/identity/agentcore.ts": 724,
     "src/adapters/llm/BedrockProvider.ts": 716,
