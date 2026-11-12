@@ -2,6 +2,7 @@ import type { StageSnapshot } from 'footprintjs/advanced';
 import type { StoredCaptureHistory } from 'footprintjs/trace';
 import { copyJson } from '../lib/boundedJson.js';
 import { captureOwn as own } from './causeCapture.js';
+import { projectClosedHistory } from './closedHistory/index.js';
 import { projectCauseBasis } from './causeProjection.js';
 import { bindStoredCause } from './storedCauseBinding.js';
 import { storedCauseSources } from './storedCauseSources.js';
@@ -88,6 +89,10 @@ export function projectStoredCause(
     const sources = version === 2 ? storedCauseSources(history) : undefined;
     if (typeof sources === 'string') return { status: 'unknown', reason: sources };
     const { nodes, readKeys } = savedNodes(history);
+    const closedPrefix = projectClosedHistory(history, runId, history.commitLog.length);
+    if (closedPrefix === 'unsupported') return { status: 'unknown', reason: 'native-capture' };
+    if (closedPrefix && !nodes.has(closedPrefix.selectedFailure.runtimeStageId))
+      return { status: 'unknown', reason: 'projection-incomplete' };
     // These are facts from this one history; no runtime-only fields or alternate history are synthesized.
     const basis = {
       runId: history.runId,
@@ -100,6 +105,7 @@ export function projectStoredCause(
     };
     const projected = projectCauseBasis(basis, nodes, undefined, {
       readKeys,
+      ...(closedPrefix === undefined ? {} : { closedPrefix }),
       ...(history.initialState === undefined ? {} : { initialState: history.initialState }),
       ...(sources === undefined ? {} : { sources }),
     });

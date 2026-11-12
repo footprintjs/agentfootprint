@@ -4,6 +4,7 @@ import type { ControlDepLookup } from 'foottrace';
 import type { TraceCauseArtifacts } from './causeTypes.js';
 import {
   assessCapture,
+  assessClosedHistoryCapture,
   assessSourceCapture,
   captureAddress,
   captureAssessment,
@@ -11,6 +12,7 @@ import {
   type SnapshotCapture,
   type SourceCaptureStatus,
 } from './causeCapture.js';
+import type { ClosedNativePrefix } from './closedHistory/index.js';
 import { capturedControl } from './causeControl.js';
 
 export interface SnapshotCauseArtifacts extends TraceCauseArtifacts {
@@ -25,6 +27,7 @@ export function projectCauseBasis(
   extras?: {
     readonly readKeys?: ReadonlyMap<string, readonly string[]>;
     readonly initialState?: Record<string, unknown>;
+    readonly closedPrefix?: ClosedNativePrefix;
     readonly sources?: {
       readonly status: SourceCaptureStatus;
       readonly scope: NonNullable<RecordScope['readSources']>;
@@ -41,12 +44,19 @@ export function projectCauseBasis(
   const log = own(snapshot, 'commitLog') as RecordScope['commitLog'];
   if (!Array.isArray(log)) return undefined;
   if (log.length > 4096) return 'truncated';
-  let capture = extras?.sources
+  let capture = extras?.closedPrefix
+    ? assessClosedHistoryCapture(
+        snapshot,
+        log.length,
+        extras.sources?.status ?? 'not-collected',
+        extras.closedPrefix,
+      )
+    : extras?.sources
     ? assessSourceCapture(snapshot, log.length, extras.sources.status)
     : assessCapture(snapshot, log.length);
   const nativeControl = capture.status === 'admitted' ? capturedControl(snapshot) : undefined;
   if (capture.status === 'admitted' && nativeControl === undefined)
-    capture = captureAssessment('control-not-retained', capture.readSources);
+    capture = captureAssessment('control-not-retained', capture.readSources, capture.closedPrefix);
   const reads: Record<string, readonly string[]> = Object.create(null);
   const marks: Record<string, unknown> = Object.create(null);
   const control: Record<string, { deciderId: string }> = Object.create(null);
@@ -68,7 +78,7 @@ export function projectCauseBasis(
     capture.status === 'admitted' &&
     log.some((bundle) => !nodes.has(own(bundle, 'runtimeStageId') as string))
   )
-    capture = captureAssessment('projection-incomplete', capture.readSources);
+    capture = captureAssessment('projection-incomplete', capture.readSources, capture.closedPrefix);
   const complete = capture.status === 'admitted';
   const scopeAddress = (complete && captureAddress(own(snapshot, 'logAddress'))) || address;
   const scope: RecordScope = {

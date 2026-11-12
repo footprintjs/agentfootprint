@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -15,6 +15,25 @@ function withSource<T>(files: Record<string, string>, read: (root: string) => T)
 }
 
 describe('the Foottrace source-import inventory', () => {
+  it('excludes adjacent tests that the source build excludes, while retaining shipped test-like names', () => {
+    const build = JSON.parse(readFileSync(join(__dirname, '../../tsconfig.json'), 'utf8'));
+    expect(build.exclude).toContain('src/**/*.test.ts');
+    const imports = withSource(
+      {
+        'reader.test.ts': "import { memorySink } from 'foottrace/write';",
+        'reader.ts': "import { causalChain } from 'foottrace';",
+        'test-reader.ts': "export { explain } from 'foottrace/cause';",
+        'reader.spec.ts': "import type { CommitBundle } from 'foottrace';",
+      },
+      importedFoottrace,
+    );
+    expect(imports.map(({ module, name, typeOnly }) => ({ module, name, typeOnly }))).toEqual([
+      { module: 'foottrace', name: 'CommitBundle', typeOnly: true },
+      { module: 'foottrace', name: 'causalChain', typeOnly: false },
+      { module: 'foottrace/cause', name: 'explain', typeOnly: false },
+    ]);
+  });
+
   it('keeps named symbol coverage when a facade also loads the same module for its effects', () => {
     const imports = withSource(
       {

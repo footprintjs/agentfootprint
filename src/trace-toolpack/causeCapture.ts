@@ -1,4 +1,5 @@
 import type { LogAddress } from 'foottrace';
+import type { ClosedNativePrefix } from './closedHistory/index.js';
 
 /** Fixed public reasons only; never stringify caller metadata or exceptions. */
 export type CaptureReason =
@@ -23,6 +24,8 @@ export interface SnapshotCapture {
   readonly scope: 'root-log';
   readonly persistence: 'memory-only';
   readonly readSources: 'not-collected' | SourceCaptureStatus;
+  /** Saved-only; never authority over a live snapshot or unobserved work. */
+  readonly closedPrefix?: ClosedNativePrefix;
 }
 
 /** Own DATA only. A metadata getter is never a source of captured evidence. */
@@ -37,6 +40,7 @@ export function captureOwn(object: unknown, key: string): unknown {
 export function captureAssessment(
   reason: CaptureReason,
   readSources: SnapshotCapture['readSources'] = 'not-collected',
+  closedPrefix?: ClosedNativePrefix,
 ): SnapshotCapture {
   return {
     status: reason === 'captured-root-log' ? 'admitted' : 'incomplete',
@@ -44,6 +48,7 @@ export function captureAssessment(
     scope: 'root-log',
     persistence: 'memory-only',
     readSources,
+    ...(closedPrefix === undefined ? {} : { closedPrefix }),
   };
 }
 
@@ -69,12 +74,23 @@ export function assessSourceCapture(
   return assessCapturePolicy(snapshot, commits, sources);
 }
 
+/** Saved-only: closure facts come from the admitted producer history, never snapshot metadata. */
+export function assessClosedHistoryCapture(
+  snapshot: unknown,
+  commits: number,
+  sources: SnapshotCapture['readSources'],
+  closedPrefix: ClosedNativePrefix,
+): SnapshotCapture {
+  return assessCapturePolicy(snapshot, commits, sources, closedPrefix);
+}
+
 function assessCapturePolicy(
   snapshot: unknown,
   commits: number,
   sources: SnapshotCapture['readSources'],
+  closedPrefix?: ClosedNativePrefix,
 ): SnapshotCapture {
-  const assessment = (reason: CaptureReason) => captureAssessment(reason, sources);
+  const assessment = (reason: CaptureReason) => captureAssessment(reason, sources, closedPrefix);
   const exact = sources !== 'not-collected';
   try {
     const note = captureOwn(snapshot, 'capture');
@@ -105,7 +121,8 @@ function assessCapturePolicy(
     const extent = captureOwn(note, 'commits');
     if (captureOwn(extent, 'from') !== 0 || captureOwn(extent, 'to') !== commits)
       return assessment('incomplete-extent');
-    if (captureOwn(captureOwn(note, 'boundary'), 'status') !== 'completed')
+    const boundary = captureOwn(captureOwn(note, 'boundary'), 'status');
+    if (boundary !== 'completed' && (boundary !== 'failed' || closedPrefix === undefined))
       return assessment('run-not-completed');
     const modes = captureOwn(note, 'modes');
     const values = captureOwn(modes, 'commitValues');

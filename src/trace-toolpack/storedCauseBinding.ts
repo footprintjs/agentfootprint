@@ -28,6 +28,7 @@ function admissionFor(capture: SnapshotCapture, version: 1 | 2): StoredCauseAdmi
       version,
       scope: 'root-log' as const,
       persistence: 'memory-only' as const,
+      ...(capture.closedPrefix === undefined ? {} : { closedPrefix: capture.closedPrefix }),
     }),
     storage: Object.freeze({
       status: 'adapter-acknowledged-history' as const,

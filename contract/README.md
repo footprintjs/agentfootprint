@@ -17,8 +17,9 @@ npm install --no-save --package-lock=false --ignore-scripts /absolute/path/foott
 npm run test:contract:foottrace
 ```
 
-The suite parses every TypeScript file under `src/`, rather than using a saved
-API inventory. Every imported or re-exported runtime symbol must have one named
+The suite parses TypeScript files under `src/`, excluding adjacent `*.test.ts`
+files just as the source build does, rather than using a saved API inventory.
+Every imported or re-exported runtime symbol must have one named
 behavior contract; removed imports also fail until their obsolete contract is
 removed. Aliases keep the exported name. New namespace/default/dynamic/import-type
 forms are refused until their surface has explicit coverage.

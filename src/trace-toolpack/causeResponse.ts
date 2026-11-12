@@ -10,6 +10,9 @@ const STORED_LIMITATION =
 const SNAPSHOT_LIMITATION =
   'Snapshot-only records have no engine-written capture/end attestation. This reader cannot prove a root cause from them, even after a normally finished run.';
 
+const CLOSED_PREFIX_LIMITATION =
+  'This failed run has a saved, closed native root prefix only. Its selected invocation remains failed. Unobserved work, external work and producer identity remain unproven; recorded dependencies do not establish a semantic or service-internal cause.';
+
 const CAPTURE_REASONS: Record<CaptureReason, string> = {
   'captured-root-log':
     'Capture covers this in-memory root log only; exact read versions, child scopes and durable delivery remain unproven.',
@@ -42,7 +45,11 @@ function interpretationFor(
           : CAPTURE_REASONS[capture.reason]
       }`
     : text;
-  return storage === undefined ? native : `${native} ${STORED_LIMITATION}`;
+  const scoped =
+    capture && capture !== true && capture.closedPrefix
+      ? `${native} ${CLOSED_PREFIX_LIMITATION}`
+      : native;
+  return storage === undefined ? scoped : `${scoped} ${STORED_LIMITATION}`;
 }
 
 /** Fixed wording: no exception messages, state values or provider payloads cross this boundary. */

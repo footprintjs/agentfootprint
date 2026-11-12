@@ -224,6 +224,30 @@ A `ready` result can be passed to `traceCauseTools(result.cause, limits)`, which
 
 The factory preserves reads and writes whose value was `undefined`, including literal dotted or slash-containing keys. The returned native `capture` still describes an in-memory root segment. A separate `storage` field describes the adapter's acknowledgement of these saved bytes. Neither a receipt nor an unsigned checksum authenticates the producer or proves whole-workflow delivery. Authorize the source before admission. A ready graph can still have query gaps or no unique root.
 
+### Failed saved runs
+
+A failed run can have a fully recorded native prefix. This requires FootPrint
+11.2.0 or later. The saved-history reader
+admits that prefix only when FootPrint's public reader returns a supported
+`native-root-prefix-v1` closure for the same run and full saved log. Required
+read/write modes, captured channels, source ownership and same-run control
+evidence still have to pass. Older producer readers that omit the closure do not
+grant this capability.
+
+`admission.native.closedPrefix` and the tools' `capture.closedPrefix` describe
+the **failed** boundary, selected native invocation and retained limitations.
+The graph answers questions about that fixed prefix only. It does not turn the
+run into a success, authenticate its producer, prove unobserved or external work
+finished, or establish a semantic cause. A supported unique recorded root is a
+fact about the recorded dependency graph.
+
+This exception belongs only to `readStoredCauseArtifacts`; copying a closure
+onto a live snapshot does not admit it. Failed histories without a supported
+closure keep `run-not-completed`. Missing source ownership, partial channels,
+child and resumed histories remain uncertain.
+
+<CodeFile path="examples/features/112-closed-native-prefix-cause.ts" region="closed-prefix-cause" title="Read a saved failed native prefix, without a model" />
+
 These names describe the history and its evidence:
 
 | Name | What it describes |

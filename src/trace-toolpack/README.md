@@ -1,6 +1,10 @@
 **Lens** — the served view of a COMPLETED run's record, composed for a model:
 bounded by default, honest about what it cannot see, redaction-respecting.
 
+The saved-history cause door can also serve an immutable failed native prefix
+admitted by FootPrint's public stored reader. `closedHistory/` projects that
+policy and its explicit limits; it never grants closure to a live snapshot.
+
 ## What it reads / what it writes
 - Reads the finished run through footprintjs's own owners — `causalChain`,
   `commitValueAt`, `findLastWriter`, `sliceForKey`, `arrayProvenance`,
