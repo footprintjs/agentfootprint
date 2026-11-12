@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.4.0] - 2026-11-12
+
+### Added
+
+- **Works with footprintjs 12.** The peer range is now `^11.1.0 || ^12.0.0`, so an application can install agentfootprint beside footprintjs 11 (from 11.1.0) or footprintjs 12. Nothing changes for an application that stays on footprintjs 11. No agentfootprint code changed: the whole suite passes on both lines.
+
+### Fixed
+
+- **`ProceedWithTurn` now says when the record is filed outside the wrapper.** When a turn fails in the agent's own work around a run that settled (a typed run that refuses a pause, for example), `proceed` rejects first, and the run's finalizers run after the wrapper returns, outside its context, so the end stays failed. The API reference used to promise the record inside the wrapper in every case. Since 14.3.1 the stored recording ends when `proceed` resolves, so a failure the wrapper raises after it is reported on the live `agentfootprint.agent.around_turn_failed` event only; the docs now say so. A paused turn files no recording when `proceed` resolves; its one recording is filed when the resumed turn ends, and the docs now say so.
+
 ## [14.3.1] - 2026-11-07
 
 ### Fixed
