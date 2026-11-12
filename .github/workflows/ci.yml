@@ -39,8 +39,12 @@ jobs:
   #
   # Its own job, and NOT a dependency of any other job: the `test` and
   # `coverage` checks read the results of the jobs they need, and a hold must
-  # never turn an ordinary check red or change what the Release workflow's
-  # `verdict` reads. The `if:` is required: the mode refuses every event but
+  # never turn an ordinary check red. It does change one thing: a red `hold`
+  # job makes this run's conclusion `failure`, and publish.yml's `verdict`
+  # accepts only `success`, so a release pull request whose last run happened
+  # during a hold makes `build` run every gate again after the hold is lifted.
+  # That is safe (it costs minutes, never a release): `verdict` can only
+  # decline to skip the gates, never accept. The `if:` is required: the mode refuses every event but
   # `pull_request`, and this workflow also runs on pushes to main.
   #
   # PIN: `uses:` and `tool_sha` are one reviewed footprintjs/ci commit and move
