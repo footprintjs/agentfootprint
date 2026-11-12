@@ -6,13 +6,14 @@ title: CombinedRecorder
 
 > **CombinedRecorder** = `Partial`\<`Omit`\<[`ScopeRecorder`](/docs/api/interfaces/ScopeRecorder), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`FlowRecorder`](/docs/api/interfaces/FlowRecorder), `SharedLifecycleOverlap` \| `SharedLifecycle`\>\> & `Partial`\<`Omit`\<[`EmitRecorder`](/docs/api/interfaces/EmitRecorder), `SharedLifecycle`\>\> & `object`
 
-Defined in: node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:95
+Defined in: node\_modules/footprintjs/dist/types/lib/recorder/CombinedRecorder.d.ts:96
 
 A recorder that MAY observe any combination of supported event streams.
 
 Today's streams:
   - Scope data-flow (`ScopeRecorder`: onRead/onWrite/onCommit/onStageStart/…)
   - Control-flow (`FlowRecorder`: onDecision/onSubflowEntry/onLoop/…)
+  - Emit (`EmitRecorder`: onEmit)
 
 All event handlers are optional — implement only what you care about.
 `id` is required so the library can deduplicate re-attaches.
@@ -27,7 +28,7 @@ can either handle both variants uniformly, or discriminate with
 
 ## Forward compatibility
 
-When a third observer type ships (e.g. `OperationRecorder`), the type
+When another observer type ships (e.g. `OperationRecorder`), the type
 gains another `& Partial<…>` clause. Because every clause is `Partial`,
 existing `CombinedRecorder` implementations remain type-valid.
 
