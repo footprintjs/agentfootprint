@@ -6,7 +6,9 @@
  * now reads the repository's open issues and pull requests for the label, and
  * this repository calls it in three places (docs: footprintjs/ci docs/HOLD.md):
  *
- *   - publish.yml · `hold` job (first job; `build` needs it) — the early signal;
+ *   - publish.yml · `hold` job (`build` needs it) — the early signal. It runs only
+ *     in the modes where the run would build, tag, release or publish, so a push
+ *     to main that releases nothing stays green during a hold;
  *   - publish.yml · `publish` job, a STEP directly before the publish step — what
  *     actually holds, because GitHub does not re-run a job that already
  *     succeeded, so "Re-run failed jobs" would skip the job form;
@@ -39,14 +41,73 @@ function grantsOf(job: string): string[] {
 
 describe('publish.yml · the hold job', () => {
   const hold = jobBlock(PUBLISH, 'hold');
+  const build = jobBlock(PUBLISH, 'build');
   const uses = /^ {4}uses: footprintjs\/ci\/\.github\/workflows\/hold\.yml@([a-f0-9]{40})$/m.exec(
     hold,
   );
+  const conditionOf = (job: string): string | undefined => /^ {4}if: (.+)$/m.exec(job)?.[1];
 
-  it('is the first job, needs nothing, and carries no condition that could skip it', () => {
-    expect(jobIds(PUBLISH)[0]).toBe('hold');
-    expect(needsOf(hold)).toEqual([]);
-    expect(hold).not.toMatch(/^ {4}if:/m);
+  /** The mode test inside `build`'s condition: the part that says "this run releases". */
+  const publishingPartOf = (condition: string): string | undefined =>
+    /\((needs\.plan\.outputs\.mode == '[a-z]+'(?: \|\| needs\.plan\.outputs\.mode == '[a-z]+')*)\)/.exec(
+      condition,
+    )?.[1];
+
+  /** Every job a job waits for, directly or through another. */
+  const reach = (id: string, seen = new Set<string>()): Set<string> => {
+    for (const need of needsOf(jobBlock(PUBLISH, id))) {
+      if (!seen.has(need)) {
+        seen.add(need);
+        reach(need, seen);
+      }
+    }
+    return seen;
+  };
+
+  it('waits for plan, and is skipped in every mode that releases nothing', () => {
+    expect(needsOf(hold)).toEqual(['plan']);
+    const condition = conditionOf(hold);
+    expect(condition, 'hold has no `if:`').toBeDefined();
+    // Not `always()`/`!cancelled()`: a plan that failed must skip it, as it skips `build`.
+    expect(condition).toMatch(/^needs\.plan\.outputs\.mode == '[a-z]+'( \|\| .+)?$/);
+  });
+
+  it('runs in exactly the modes `build` runs in: the two conditions never differ', () => {
+    const inBuild = publishingPartOf(conditionOf(build) ?? '');
+    expect(inBuild, "build's `if:` no longer has the mode test").toBeDefined();
+    // `hold`'s own wording must be the SAME expression, not a second reading of it
+    // (and the same as the size gate's, which also guards exactly the releasing modes).
+    expect(conditionOf(hold)).toBe(inBuild);
+    expect(conditionOf(jobBlock(PUBLISH, 'file-size'))).toBe(inBuild);
+  });
+
+  it('is not skippable into a release: build also needs plan to have succeeded, hold to have succeeded', () => {
+    const condition = conditionOf(build) ?? '';
+    expect(condition).toContain("needs.hold.result == 'success'");
+    expect(condition).toContain("needs.plan.result == 'success'");
+    expect(needsOf(build)).toContain('hold');
+  });
+
+  it('is behind every job that tags, creates a release or publishes', () => {
+    // Anything holding a write or OIDC token on the release path: the tag and release
+    // job, the publish job. A new such job must wait for `hold` too.
+    const powerful = jobIds(PUBLISH).filter((id) =>
+      /^ {6}(contents: write|id-token: write)\b/m.test(jobBlock(PUBLISH, id)),
+    );
+    expect(powerful).toEqual(expect.arrayContaining(['release', 'publish']));
+    for (const id of powerful) {
+      expect(reach(id), `${id} can be reached without the hold`).toContain('hold');
+    }
+    // And each step of the chain needs the one before it to have SUCCEEDED
+    // (`!cancelled()` alone would run a job after a failed or skipped dependency).
+    expect(jobBlock(PUBLISH, 'release')).toContain("needs.build.result == 'success'");
+    expect(jobBlock(PUBLISH, 'publish')).toContain("needs.build.result == 'success'");
+  });
+
+  it('leaves opening the release pull request free of the hold', () => {
+    for (const id of ['propose', 'release-pr']) {
+      expect(reach(id), `${id} must not wait for hold`).not.toContain('hold');
+    }
   });
 
   it('calls the reusable workflow in publish mode, pinned to one full commit in both places', () => {
@@ -64,17 +125,9 @@ describe('publish.yml · the hold job', () => {
     expect(grantsOf(hold)).toEqual(['contents: read', 'issues: read', 'pull-requests: read']);
   });
 
-  it('is a dependency of build, by name in `needs` and by result in `if`', () => {
-    const build = jobBlock(PUBLISH, 'build');
-    expect(needsOf(build)).toContain('hold');
-    // `!cancelled()` lets a job run after a FAILED dependency, so the result is
-    // asked for: without it a held release would still build.
-    expect(build).toContain("needs.hold.result == 'success'");
-  });
-
   it('keeps release and publish behind build, so a held release reaches neither', () => {
-    expect(jobBlock(PUBLISH, 'release')).toContain("needs.build.result == 'success'");
-    expect(jobBlock(PUBLISH, 'publish')).toContain("needs.build.result == 'success'");
+    expect(needsOf(jobBlock(PUBLISH, 'release'))).toContain('build');
+    expect(needsOf(jobBlock(PUBLISH, 'publish'))).toContain('build');
   });
 });
 

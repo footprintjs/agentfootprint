@@ -43,9 +43,9 @@ jobs:
   # `verdict` reads. The `if:` is required: the mode refuses every event but
   # `pull_request`, and this workflow also runs on pushes to main.
   #
-  # PIN: `uses:` and `tool_sha` are one reviewed footprintjs/ci commit
-  # (b14f372d4c26e9f3059068b250544aa320b834aa) and move together, with the pins in
-  # publish.yml. `file-size` above pins an older commit for another check.
+  # PIN: `uses:` and `tool_sha` are one reviewed footprintjs/ci commit and move
+  # together, with the pins in publish.yml. `file-size` above pins an older
+  # commit for another check.
   # `permissions:` is on the job, not at the top of the file.
   hold:
     if: github.event_name == 'pull_request'

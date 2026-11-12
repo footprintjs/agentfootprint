@@ -139,11 +139,12 @@ and npm refuses a duplicate version.
 
 While an open issue or pull request in this repository carries the label `hold-release`, nothing
 publishes. To hold, label an issue or pull request `hold-release` and say why in its text. To lift,
-remove the label or close it. A blocked Release run fails its `hold` job, and its `publish` job
-fails at the "Refuse while a hold-release label is open" step, naming the open items and
-saying "Hold check FAILED". A release pull request is also red while a hold is open. After lifting
-a hold, use **Re-run failed jobs**. The label is exact apart from letter case, and nothing warns
-about a misspelt one. Details and limits: footprintjs/ci
+remove the label or close it. An ordinary merge to main stays green during a hold. The Release run
+that would publish fails at its `hold` job ("Hold check FAILED", naming the open items), and fails
+again at the "Refuse while a hold-release label is open" step of `publish` if that job is re-run. A
+release pull request is also red while a hold is open. After lifting a hold, use **Re-run failed
+jobs**. The label is exact apart from letter case, and nothing warns about a misspelt one. Details
+and limits: footprintjs/ci
 [`docs/HOLD.md`](https://github.com/footprintjs/ci/blob/b14f372d4c26e9f3059068b250544aa320b834aa/docs/HOLD.md).
 
 ### One-time setup: the release App
