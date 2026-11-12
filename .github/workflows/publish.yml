@@ -19,6 +19,11 @@ name: Release
 #      cannot be shown, `build` runs every one of them first, as it always did.
 #
 # Jobs:
+#   hold     is a release on hold? Fails while an open issue or pull request in
+#            this repository carries the label `hold-release`; `build` needs it,
+#            so a held release stops before it installs, builds or tags anything.
+#            The publish job runs the same check again as its last step before
+#            `npm publish` (a re-run of a failed job does not re-run this job).
 #   plan     what does main need? `publish` when package.json names a version
 #            with no tag; `propose` when fragments are waiting (or a bump was
 #            asked for by hand); otherwise nothing. Pins the commit every later
@@ -106,6 +111,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Nothing releases while an open issue or pull request carries the label
+  # `hold-release` (footprintjs/ci docs/HOLD.md). Why: a release was once
+  # published while another working session held it, and a published npm
+  # version cannot be taken back.
+  #
+  # PIN: this `uses:` and `tool_sha` are the same reviewed footprintjs/ci
+  # commit (b14f372d4c26e9f3059068b250544aa320b834aa), and the step in the `publish` job
+  # below is pinned to it too. All three must move together, to a commit that
+  # was reviewed; never a branch or a tag, because this code runs in a workflow
+  # that can publish. (`file-size` below pins an older footprintjs/ci commit for
+  # a different check; that pin is independent.)
+  #
+  # `permissions:` sits on the job, not at the top: a top-level block would
+  # replace the workflow's own. The called workflow needs these three reads.
+  hold:
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    uses: footprintjs/ci/.github/workflows/hold.yml@b14f372d4c26e9f3059068b250544aa320b834aa
+    with:
+      tool_sha: b14f372d4c26e9f3059068b250544aa320b834aa
+      mode: publish
+
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -318,11 +347,14 @@ jobs:
       source_sha: ${{ needs.plan.outputs.sha }}
 
   build:
-    needs: [plan, verdict, file-size]
+    needs: [hold, plan, verdict, file-size]
     # Runs even when `verdict` failed: its output is then unset, so every gate
     # below runs. The independent source-size ratchet must always pass, even
-    # when the other gates reuse an exact previously tested tree.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc') && needs.file-size.result == 'success' }}
+    # when the other gates reuse an exact previously tested tree. `hold` must
+    # have passed too: `!cancelled()` alone would let this job run after a
+    # failed `hold`, so its result is named here. `release` and `publish` need
+    # this job's success, so a held release reaches neither.
+    if: ${{ !cancelled() && needs.hold.result == 'success' && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc') && needs.file-size.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -543,6 +575,8 @@ jobs:
     permissions:
       contents: read
       id-token: write # OIDC trusted publishing — granted to THIS job only
+      issues: read # the hold step below lists open items with the hold label
+      pull-requests: read # same listing: a pull request can carry the label
     steps:
       # Pin trusted tools before any candidate source can influence them.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -605,6 +639,18 @@ jobs:
         with:
           name: package
           path: ${{ runner.temp }}/af-incoming-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The hold check, directly before the publish step. The `hold` job above
+      # does not run again on "Re-run failed jobs" (its green result is reused),
+      # so a hold set after the first attempt would be missed; this step lives in
+      # this job and runs every time the job does. It fails the job, so the
+      # publish step never starts, and it must stay the last step before that
+      # one: no `if:` and no `continue-on-error` here, and the step uses the
+      # job's own token by default (do not pass a token). Pinned to the same
+      # footprintjs/ci commit as the `hold` job (b14f372d4c26e9f3059068b250544aa320b834aa);
+      # the pins move together.
+      - name: Refuse while a hold-release label is open
+        uses: footprintjs/ci/.github/actions/hold@b14f372d4c26e9f3059068b250544aa320b834aa
 
       # Stage the inspected buffer in an empty npm directory, without extraction.
       # Stable supplies no tag; canonical RC alone selects next.
