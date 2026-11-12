@@ -1,10 +1,11 @@
-import { AgentRuntimeHost, getAgentRuntime } from './agent/runtime/native/host.js';
-
+import { getAgentRuntime, initializeAgentRuntime } from './agent/runtime/native/host.js';
+import { RunnerBase } from './RunnerBase.js';
+import type { AgentNativeBindings } from './agent/runtime/native/bindings.js';
+import type { AgentRunValues } from './agent/runValues.js';
+import { narrativeEntries } from './agent/runtime/info/owner.js';
 import type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
 export type { AgentRunOptions } from './agent/runtime/runOptions/options.js';
-
 import { type AroundTurn } from './agent/aroundTurn/index.js';
-
 /**
  * Agent — ReAct primitive (LLM + tools + iteration loop).
  *
@@ -20,55 +21,36 @@ import { type AroundTurn } from './agent/aroundTurn/index.js';
  *            agentfootprint.stream.tool_start / tool_end
  *            agentfootprint.context.* (via ContextRecorder)
  */
-
 import {
   type CombinedNarrativeEntry,
   type FlowchartCheckpoint,
   type ObserverDrainResult,
   type RuntimeSnapshot,
 } from 'footprintjs';
-
 import type { CachePolicy, CacheStrategy } from '../cache/types.js';
 import type { ReliabilityConfig } from '../reliability/types.js';
-
 import { type RunnerPauseOutcome } from './pause.js';
-
 import type { ArtifactStore } from '../artifacts/types.js';
-
 import type { AgentfootprintEvent } from '../events/registry.js';
-
 import type { SkillGraphDeclaredMap } from './agent/skillGraphDeclared.js';
 import type { AppliedRecipe } from '../recipes/types.js';
-
 import type { WindowStrategy } from './agent/window/strategy.js';
-
 import type { AnswerAssessment, AssessmentDeclarations } from './agent/assessment/types.js';
 import { type CheckInBuilderOptions } from './checkin.js';
-
 import type { MemoryDefinition } from '../memory/define.types.js';
-
 import type { SelfExplainBinding } from '../trace-toolpack/selfExplain.js';
-
 import { type ChildOutcome } from './terminalVerdict.js';
-
 import type { ResolvedEvidenceGate } from './agent/evidence/types.js';
 import type { ResolvedScriptTravel } from './agent/scripts/types.js';
-
 import type { Injection, InjectionContext } from '../injection-engine/types.js';
 import type { CursorMove, EntryScoring, TurnRoutingPlan } from '../injection-engine/skillGraph.js';
-
 import { type ResolvedOutputFallback } from './outputFallback.js';
 import { type AgentRunCheckpoint } from './runCheckpoint.js';
-
 import { type OutputSchemaParser } from '../answer-validation/outputSchema.js';
-
 import '../time/rows.js';
-
 import type { ResolvedOutputEnforcement } from './agent/outputEnforcement.js';
-
 import type { ToolRegistryEntry } from '../tools/tools.js';
 import type { ToolProvider } from '../tools/toolProvider.js';
-
 import type {
   AgentArtifactsOptions,
   AgentInput,
@@ -82,28 +64,20 @@ import type {
   RunConfigFn,
   WriteProvenanceMode,
 } from './agent/types.js';
-
 import type { ResolvedNegativeClaims } from './agent/negativeClaims/config.js';
-
 import type { AnswerNegatives } from './agent/negativeClaims/delivery.js';
-
 import type { AnswerCoverage } from '../semantics/coverage/answer.js';
 import {
   type AnswerValidationReport,
   type ResolvedAnswerValidation,
 } from '../answer-validation/index.js';
-
 import type { MessageMiddleware, ToolMiddleware } from './agent/middleware/types.js';
-
 import { AgentBuilder } from './agent/AgentBuilder.js';
 export type { SkillGraphOptions } from './agent/AgentBuilder.js';
 // Per-skill model switching (9.19.0) — the declared brain shapes.
 export type { ProviderChoice, EscalationPolicy } from './agent/skillBrains.js';
-
 import type { ThinkingHandler } from '../thinking/types.js';
-
 export { AgentBuilder };
-
 // Re-export public Agent types so the 28+ existing import sites
 // (e.g., `import { type AgentInput } from '../core/Agent.js'`) keep
 // working while implementation gradually moves into `./agent/*`.
@@ -120,11 +94,10 @@ export type {
   RunConfigFn,
   WriteProvenanceMode,
 };
-export class Agent extends AgentRuntimeHost {
+
+export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   declare readonly name: string;
-
   declare readonly id: string;
-
   /**
    * Voice config — shared by viewers (Lens, ChatThinkKit, CLI tail).
    * `appName` is the active actor in narration ("Chatbot called…").
@@ -133,9 +106,7 @@ export class Agent extends AgentRuntimeHost {
    * Defaults to bundled English; consumer overrides via builder.
    */
   declare readonly appName: string;
-
   declare readonly commentaryTemplates: Readonly<Record<string, string>>;
-
   declare readonly thinkingTemplates: Readonly<Record<string, string>>;
   constructor(
     opts: AgentOptions,
@@ -189,7 +160,36 @@ export class Agent extends AgentRuntimeHost {
     scriptTravel?: ResolvedScriptTravel,
     aroundTurn?: AroundTurn,
   ) {
-    super(
+    super();
+    const readSessions = () => this.toolSessionTier;
+    const writeSessions = (value: AgentNativeBindings['toolSessionTier']) => {
+      this.toolSessionTier = value;
+    };
+    initializeAgentRuntime(
+      this,
+      {
+        dispatcher: this.dispatcher,
+        attachedRecorders: this.attachedRecorders,
+        get toolSessionTier() {
+          return readSessions();
+        },
+        set toolSessionTier(value) {
+          writeSessions(value);
+        },
+        runExecution: () => this.runExecution(),
+        initChart: (builder, execution) => this.initChart(builder, execution),
+        noteResumeTakenUp: (checkpoint) => this.noteResumeTakenUp(checkpoint),
+        getDispatcher: () => this.getDispatcher(),
+        minimalMeta: () => this.minimalMeta(),
+        liveSnapshot: () => this.liveSnapshot(),
+        emitPauseResume: (checkpoint, input, handedDown) =>
+          this.emitPauseResume(checkpoint, input, handedDown),
+        prepareRunRedaction: (invocation, handedDown) =>
+          this.prepareRunRedaction(invocation, handedDown),
+        bindRunServing: (invocation) => this.bindRunServing(invocation),
+        detectPause: (invocation, result) => this.detectPause(invocation, result),
+        getLastSnapshot: () => super.getLastSnapshot(),
+      },
       OWN_TURN_METHODS,
       opts,
       systemPromptValue,
@@ -234,10 +234,10 @@ export class Agent extends AgentRuntimeHost {
       aroundTurn,
     );
   }
+
   static create(opts: AgentOptions): AgentBuilder {
     return new AgentBuilder(opts);
   }
-
   /**
    * Cache policy for the base system prompt. Read by the CacheDecision
    * subflow (v2.6 Phase 4) to know how to treat the SystemPrompt slot's
@@ -247,7 +247,6 @@ export class Agent extends AgentRuntimeHost {
   getSystemPromptCachePolicy(): CachePolicy {
     return getAgentRuntime(this).getSystemPromptCachePolicy();
   }
-
   /**
    * The artifact store this agent was built with, or `undefined` when none
    * was attached (9.23.0).
@@ -264,7 +263,6 @@ export class Agent extends AgentRuntimeHost {
   getArtifactStore(): ArtifactStore | undefined {
     return getAgentRuntime(this).getArtifactStore();
   }
-
   /**
    * Does `event` belong to the run this agent is serving (or served last)? The
    * run-membership rule (`bridge/eventMeta.ts · eventBelongsToRun`) against
@@ -276,7 +274,6 @@ export class Agent extends AgentRuntimeHost {
   ownsEvent(event: AgentfootprintEvent): boolean {
     return getAgentRuntime(this).ownsEvent(event);
   }
-
   /**
    * The footprintjs `RuntimeSnapshot` from the most recent `run()` /
    * `resume()`. Feeds Lens's Trace tab (ExplainableShell `runtimeSnapshot`
@@ -304,7 +301,6 @@ export class Agent extends AgentRuntimeHost {
   override getLastSnapshot(): RuntimeSnapshot | undefined {
     return getAgentRuntime(this).getLastSnapshot();
   }
-
   /**
    * Structured narrative entries from the most recent run. Pairs with
    * `getLastSnapshot()` for ExplainableShell's `narrativeEntries` prop.
@@ -318,9 +314,34 @@ export class Agent extends AgentRuntimeHost {
    */
   /** Empty during preparation before native origin; capture prior entries before the next call. */
   getLastNarrativeEntries(): readonly CombinedNarrativeEntry[] {
-    return getAgentRuntime(this).getLastNarrativeEntries();
+    return narrativeEntries(this.runExecution());
   }
-
+  /**
+   * The FlowChart compiled for the most recent run (or a freshly-built
+   * one if no run has happened yet). Feeds ExplainableShell's `spec`
+   * prop. Returning the cached chart matters: the spec must match what
+   * `getLastSnapshot()` traced, otherwise the Trace view's stage tree
+   * desyncs from the snapshot's runtime tree.
+   */
+  // `getSpec()` inherited from RunnerBase — returns the cached chart
+  // built once at constructor time via `initChart()`. Same reference
+  // every call, same reference the executor traces.
+  // ─── UI group translation (L1b) ───────────────────────────────
+  protected override getGroupTranslator(): import('./translator.js').GroupTranslator | undefined {
+    return getAgentRuntime(this).getGroupTranslator();
+  }
+  /** Agent has no nested-runner members (tools are function executors,
+   *  not Runner instances). Slot ids + tool names live in `extra` so
+   *  Lens can render an Agent card with slot rows + a tool list without
+   *  inspecting `buildTimeStructure`.
+   *
+   *  Memories are NOT included as members — they're an internal
+   *  mechanism, not a composition-level concept. Consumers who need
+   *  memory visibility should listen for `agentfootprint.memory.*`
+   *  events at runtime. */
+  protected override buildUIGroupMetadata(): import('./translator.js').GroupMetadata {
+    return getAgentRuntime(this).buildUIGroupMetadata();
+  }
   /**
    * Parse + validate a raw agent answer against the agent's
    * `outputSchema` parser. Throws `OutputSchemaError` on JSON parse
@@ -335,7 +356,6 @@ export class Agent extends AgentRuntimeHost {
   parseOutput<T = unknown>(raw: string): T {
     return getAgentRuntime(this).parseOutput<T>(raw);
   }
-
   /**
    * Async sister of `parseOutput()`. When the agent is configured
    * with `.outputFallback({...})`, this is the version that engages
@@ -349,7 +369,6 @@ export class Agent extends AgentRuntimeHost {
   parseOutputAsync<T = unknown>(raw: string): Promise<T> {
     return getAgentRuntime(this).parseOutputAsync<T>(raw);
   }
-
   /**
    * Run the agent and return the schema-validated typed output.
    * Convenience over `parseOutputAsync(await agent.run({...}))`.
@@ -368,7 +387,6 @@ export class Agent extends AgentRuntimeHost {
   runTyped<T = unknown>(input: AgentInput | string, options?: AgentRunOptions): Promise<T> {
     return getAgentRuntime(this).runTyped<T>(input, options);
   }
-
   /**
    * Answer one turn.
    *
@@ -412,7 +430,6 @@ export class Agent extends AgentRuntimeHost {
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     return getAgentRuntime(this).run(input, options);
   }
-
   /**
    * Continue this agent's own last completed conversation.
    *
@@ -448,7 +465,6 @@ export class Agent extends AgentRuntimeHost {
   followUp(message: string, options?: AgentRunOptions): Promise<AgentOutput | RunnerPauseOutcome> {
     return getAgentRuntime(this).followUp(message, options);
   }
-
   /**
    * Drop the question this agent's last run paused to ask, on the record.
    *
@@ -470,7 +486,6 @@ export class Agent extends AgentRuntimeHost {
   > {
     return getAgentRuntime(this).abandonPause();
   }
-
   /**
    * Whether {@link Agent.selfExplain}'s why-questions have a run to answer
    * from right now.
@@ -492,7 +507,6 @@ export class Agent extends AgentRuntimeHost {
   canExplain(): boolean {
     return getAgentRuntime(this).canExplain();
   }
-
   /**
    * Resume an agent run from a checkpoint produced by a prior
    * `RunCheckpointError`. Unlike `agent.resume()` (which takes a
@@ -543,7 +557,6 @@ export class Agent extends AgentRuntimeHost {
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     return getAgentRuntime(this).resumeOnError(checkpoint, options);
   }
-
   /**
    * Continue a run that paused to ask a person something, with their answer.
    *
@@ -578,7 +591,6 @@ export class Agent extends AgentRuntimeHost {
   ): Promise<AgentOutput | RunnerPauseOutcome> {
     return getAgentRuntime(this).resume(checkpoint, input, options);
   }
-
   /**
    * The conversation this agent's LAST completed run leaves behind, packed as
    * the same `AgentRunCheckpoint` that `resumeOnError(...)` accepts. Store it,
@@ -637,7 +649,6 @@ export class Agent extends AgentRuntimeHost {
   checkpoint(): AgentRunCheckpoint | undefined {
     return getAgentRuntime(this).checkpoint();
   }
-
   /**
    * Hand the `.selfExplain()` binding to the agent that owns it.
    *
@@ -651,7 +662,6 @@ export class Agent extends AgentRuntimeHost {
   bindSelfExplain(binding: SelfExplainBinding): void {
     return getAgentRuntime(this).bindSelfExplain(binding);
   }
-
   /**
    * Flush the deferred-observer backlog of the most recent run's executor,
    * then await async listener completions under a deadline (RFC-001 §11 —
@@ -675,7 +685,6 @@ export class Agent extends AgentRuntimeHost {
   drainObservers(opts?: { timeoutMs?: number }): Promise<ObserverDrainResult> {
     return getAgentRuntime(this).drainObservers(opts);
   }
-
   /**
    * Did the last turn stop because a LIMIT cut it short — and if so, which?
    *
@@ -715,7 +724,6 @@ export class Agent extends AgentRuntimeHost {
   stoppedEarly(): AgentState['stoppedEarly'] {
     return getAgentRuntime(this).stoppedEarly();
   }
-
   /**
    * Did the last turn's answer FAIL this agent's `outputSchema` — and how (8.18.0)?
    *
@@ -752,7 +760,6 @@ export class Agent extends AgentRuntimeHost {
   outputContractUnmet(): AgentState['outputContractUnmet'] {
     return getAgentRuntime(this).outputContractUnmet();
   }
-
   /**
    * Did the last turn's answer state names or numbers that appear in NO tool
    * result (9.35.0)?
@@ -780,7 +787,6 @@ export class Agent extends AgentRuntimeHost {
   unsupportedValues(): AgentState['unsupportedValues'] {
     return getAgentRuntime(this).unsupportedValues();
   }
-
   /**
    * The last run's findings ledger (9.101.0) — the model's OWN standings on
    * its tool results, as `.findings()` recorded them: `basis` rows (what a
@@ -819,20 +825,17 @@ export class Agent extends AgentRuntimeHost {
   findings(): AgentState['findingsLedger'] {
     return getAgentRuntime(this).findings();
   }
-
   /** The library-composed negative statements and their recorded limits.
    * Detached, in-process data for the caller. Record redaction applies to the
    * snapshots and emitted events, not this caller-owned value. */
   answerNegatives(): AnswerNegatives | undefined {
     return getAgentRuntime(this).answerNegatives();
   }
-
   /** The last run's answer checks, detached from its execution record.
    * Undefined means no terminal validation ran, never an implicit pass. */
   answerValidation(): AnswerValidationReport | undefined {
     return getAgentRuntime(this).answerValidation();
   }
-
   /**
    * The limits of the last run's TYPED answer, as data — what its tools
    * declared they `checked`, did not check (`notChecked`) and can never see
@@ -882,7 +885,6 @@ export class Agent extends AgentRuntimeHost {
   answerCoverage(): AnswerCoverage | undefined {
     return getAgentRuntime(this).answerCoverage();
   }
-
   /**
    * How far the last run's answer stands — folded from its COMMITTED record,
    * never from how sure the model sounded: `known` · `consistent` (checks ran,
@@ -918,7 +920,6 @@ export class Agent extends AgentRuntimeHost {
   assessment(declarations?: AssessmentDeclarations): Promise<AnswerAssessment | undefined> {
     return getAgentRuntime(this).assessment(declarations);
   }
-
   /**
    * @internal What a mount of this agent's chart handed back
    * (`core/terminalVerdict.ts` · `ReadsItsOwnOutcome`, read by every
@@ -933,7 +934,6 @@ export class Agent extends AgentRuntimeHost {
     return getAgentRuntime(this).outcomeOf(sfOutput);
   }
 }
-
 /** The class's own turn doors, captured at load: patching the prototype later still counts. */
 const OWN_TURN_METHODS = Object.freeze({
   run: Agent.prototype.run,

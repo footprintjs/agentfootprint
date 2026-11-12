@@ -1,6 +1,6 @@
 /** Actual native admission without a domain serving declaration, for fail-closed tests. */
 import { flowChart, type RedactionPolicy } from 'footprintjs';
-import { getLastNarrativeEntries } from '../../src/core/agent/runtime/info/owner.js';
+import { Agent } from '../../src/core/Agent.js';
 import { RunnerBase } from '../../src/core/RunnerBase.js';
 import { declareRedaction } from '../../src/redaction/declared.js';
 
@@ -40,10 +40,8 @@ export class UnknownRun extends RunnerBase<string, string> {
     return this.runExecution().view()?.getNarrativeEntries();
   }
 
-  /** Exercise Agent's reader owner on a genuinely admitted view missing domain coverage. */
+  /** Exercise Agent's actual reader on a genuinely admitted view missing domain coverage. */
   getLastNarrativeEntries() {
-    return getLastNarrativeEntries.call({
-      native: { runExecution: () => this.runExecution() },
-    } as ThisParameterType<typeof getLastNarrativeEntries>);
+    return Agent.prototype.getLastNarrativeEntries.call(this as unknown as Agent);
   }
 }

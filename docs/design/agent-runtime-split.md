@@ -83,8 +83,11 @@ effects in this split.
 
 ## Implemented owners
 
-The documented `Agent` facade delegates through `native/host.ts`, which keeps
-the original RunnerBase identity and binds its protected native capabilities.
+The documented `Agent` facade extends `RunnerBase` directly and binds its protected
+native capabilities through `native/host.ts`. A module-private non-enumerable
+Symbol carries the context through a transparent Proxy without reserving an
+application method or string field. The narrative projection retains its original
+borrowable native-runner contract.
 `context.ts` assembles the private owners; it creates no executor, lease, run
 ID or selected-run substitute. Every owner function names the subset of that
 context it reads. Public runner calls still dispatch through the original
