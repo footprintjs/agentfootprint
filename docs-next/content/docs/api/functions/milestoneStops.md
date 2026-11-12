@@ -6,7 +6,7 @@ title: milestoneStops
 
 > **milestoneStops**(`commitLog`, `executionTree?`): `Stop`\<[`Milestone`](/docs/api/interfaces/Milestone)\>[]
 
-Defined in: [src/time-travel/milestoneStops.ts:161](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/milestoneStops.ts#L161)
+Defined in: [src/time-travel/milestoneStops.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/milestoneStops.ts#L167)
 
 Derive one stop per committed MILESTONE from a recorded commit log.
 
@@ -78,9 +78,10 @@ the run's `commitLog`, or a subflow's own `history`.
 
 ### executionTree?
 
-`StageSnapshot`
+`ExecutionTree` \| `ExecutionChain`
 
-the run's `executionTree`, when the caller has it — it
+the run's `executionTree`, when the caller has it (either
+  form: footprintjs 13's list of stages or the older linked tree) — it
   is what makes a mount stop say `kind: 'mount'` rather than being guessed
   from bundle shape.
 

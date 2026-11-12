@@ -1,6 +1,7 @@
 import type { StageSnapshot } from 'footprintjs/advanced';
 import type { StoredCaptureHistory } from 'footprintjs/trace';
 import { copyJson } from '../lib/boundedJson.js';
+import { savedExecutionStages } from '../lib/executionStages.js';
 import { captureOwn as own } from './causeCapture.js';
 import { projectCauseBasis } from './causeProjection.js';
 import { bindStoredCause } from './storedCauseBinding.js';
@@ -13,16 +14,9 @@ function savedNodes(history: StoredCaptureHistory): {
 } {
   const nodes = new Map<string, StageSnapshot>();
   const paths = new Map<string, string>();
-  const pending: { node: unknown; path: string[] }[] = [
-    { node: history.executionTree, path: ['executionTree'] },
-  ];
-  let visited = 0;
-  while (pending.length) {
-    const current = pending.pop();
-    if (!current) break;
-    const { node, path } = current;
-    if (++visited > 4096 || node === null || typeof node !== 'object' || Array.isArray(node))
-      throw Error('Invalid saved tree.');
+  // Either tree form; own data only, bounded, and a malformed tree throws (lib/executionStages.ts).
+  const located = savedExecutionStages(history.executionTree, { maxStages: 4096, maxItems: 4096 });
+  for (const { stage: node, path } of located) {
     for (const field of ['stageReads', 'stageWrites']) {
       const view = own(node, field);
       if (
@@ -38,17 +32,9 @@ function savedNodes(history: StoredCaptureHistory): {
     if (id !== undefined) {
       if (typeof id !== 'string' || !id.length || id.length > 128 || nodes.has(id))
         throw Error('Ambiguous saved tree.');
-      nodes.set(id, node as StageSnapshot);
+      nodes.set(id, node as unknown as StageSnapshot);
       // JSON arrays of literal segments are injective; dotted/slashed business keys stay whole.
-      paths.set(JSON.stringify(path), id);
-    }
-    const next = own(node, 'next');
-    if (next !== undefined) pending.push({ node: next, path: [...path, 'next'] });
-    const children = own(node, 'children');
-    if (children !== undefined) {
-      if (!Array.isArray(children) || children.length > 4096) throw Error('Invalid saved tree.');
-      for (let index = children.length - 1; index >= 0; index--)
-        pending.push({ node: children[index], path: [...path, 'children', String(index)] });
+      paths.set(JSON.stringify(['executionTree', ...path]), id);
     }
   }
   const readKeys = new Map<string, string[]>();

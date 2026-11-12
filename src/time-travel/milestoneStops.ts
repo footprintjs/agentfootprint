@@ -36,9 +36,14 @@
  * rather than reading one.
  */
 
-import type { StageSnapshot } from 'footprintjs/advanced';
 import { commitStops, filterStops } from 'foottrace';
-import type { CommitBundle, Stop, TimeTravelStrategy } from 'foottrace';
+import type {
+  CommitBundle,
+  ExecutionChain,
+  ExecutionTree,
+  Stop,
+  TimeTravelStrategy,
+} from 'foottrace';
 import {
   MILESTONE_KINDS,
   milestoneFor,
@@ -139,7 +144,8 @@ export function milestoneOf(stop: Stop<unknown>): Milestone | null {
  * llm-turn, tool-call and decision stops).
  *
  * @param commitLog     the run's `commitLog`, or a subflow's own `history`.
- * @param executionTree the run's `executionTree`, when the caller has it — it
+ * @param executionTree the run's `executionTree`, when the caller has it (either
+ *   form: footprintjs 13's list of stages or the older linked tree) — it
  *   is what makes a mount stop say `kind: 'mount'` rather than being guessed
  *   from bundle shape.
  *
@@ -160,7 +166,7 @@ export function milestoneOf(stop: Stop<unknown>): Milestone | null {
  */
 export function milestoneStops(
   commitLog: readonly CommitBundle[],
-  executionTree?: StageSnapshot,
+  executionTree?: ExecutionTree | ExecutionChain,
 ): Stop<Milestone>[] {
   return filterStops<Milestone>(commitStops(commitLog, executionTree), (stop) => {
     const milestone = milestoneAt(commitLog, stop);

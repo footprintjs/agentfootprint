@@ -6,7 +6,7 @@ title: milestoneOf
 
 > **milestoneOf**(`stop`): [`Milestone`](/docs/api/interfaces/Milestone) \| `null`
 
-Defined in: [src/time-travel/milestoneStops.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/milestoneStops.ts#L75)
+Defined in: [src/time-travel/milestoneStops.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/milestoneStops.ts#L80)
 
 The milestone a stop stands for, or `null` when it stands for none (the
 `'start'` / `'end'` bookends).

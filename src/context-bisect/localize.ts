@@ -34,6 +34,7 @@
 import type { StageSnapshot } from 'footprintjs/advanced';
 import type { CausalNode, CommitBundle, ValueBasis } from 'foottrace';
 import { causalChain, commitValueAtWithBasis } from 'foottrace';
+import { executionStages } from '../lib/executionStages.js';
 
 import {
   scoreInfluence,
@@ -238,18 +239,15 @@ function buildArtifactIndex(artifacts: ContextBugArtifacts): ArtifactIndex {
 
   const readsOf = new Map<string, string[]>();
   let hasReadTracking = false;
-  const visit = (node: StageSnapshot | undefined): void => {
-    if (!node) return;
+  for (const stage of executionStages(artifacts.snapshot.executionTree)) {
+    const node = stage as Partial<StageSnapshot>;
     const id = node.runtimeStageId;
     if (id && !readsOf.has(id)) {
       const keys = node.stageReads ? Object.keys(node.stageReads) : [];
       readsOf.set(id, keys);
       if (keys.length > 0) hasReadTracking = true;
     }
-    for (const child of node.children ?? []) visit(child);
-    visit(node.next);
-  };
-  visit(artifacts.snapshot.executionTree as StageSnapshot | undefined);
+  }
 
   return {
     commitLog,

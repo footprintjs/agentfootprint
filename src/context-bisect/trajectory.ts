@@ -26,6 +26,7 @@ import type { StageSnapshot } from 'footprintjs/advanced';
 import { commitValueAtWithBasis, findLastWriterWithBasis, splitStageId } from 'foottrace';
 import type { CommitBundle, UntrackedSource, ValueBasis } from 'foottrace';
 import { STAGE_IDS, SUBFLOW_IDS } from '../lib/conventions.js';
+import { executionStages } from '../lib/executionStages.js';
 // The flat/grouped fork, from its ONE owner (9.88.0) — see time-travel/epochs.ts.
 import { llmCallMountKeys } from '../time-travel/epochs.js';
 import type { EvidenceInput } from '../influence-core/index.js';
@@ -256,17 +257,14 @@ export interface AssembleTrajectoryOptions {
 
 /** Build the per-runtimeStageId read-key map from the snapshot execution tree
  *  (same walk as the localizer's `buildArtifactIndex`). */
-function buildReadsOf(executionTree: StageSnapshot | undefined): Map<string, string[]> {
+function buildReadsOf(executionTree: unknown): Map<string, string[]> {
   const readsOf = new Map<string, string[]>();
-  const visit = (node: StageSnapshot | undefined): void => {
-    if (!node) return;
+  for (const stage of executionStages(executionTree)) {
+    const node = stage as Partial<StageSnapshot>;
     const id = node.runtimeStageId;
     if (id && !readsOf.has(id))
       readsOf.set(id, node.stageReads ? Object.keys(node.stageReads) : []);
-    for (const child of node.children ?? []) visit(child);
-    visit(node.next);
-  };
-  visit(executionTree);
+  }
   return readsOf;
 }
 
@@ -408,9 +406,7 @@ function assembleGroupedTrajectory(
 
   const frames: LoopFrame[] = kept.map((key, loopIndex) => {
     const innerLog = (sr[key]?.treeContext?.history ?? []) as CommitBundle[];
-    const innerReadsOf = buildReadsOf(
-      sr[key]?.treeContext?.stageContexts as StageSnapshot | undefined,
-    );
+    const innerReadsOf = buildReadsOf(sr[key]?.treeContext?.stageContexts);
     const innerLastIdxOf = new Map<string, number>();
     for (let i = 0; i < innerLog.length; i++) innerLastIdxOf.set(innerLog[i].runtimeStageId, i);
     const bodyIds = innerLog.map((b) => b.runtimeStageId);
@@ -474,7 +470,7 @@ export function assembleTrajectory(
   const commitLog = (artifacts.snapshot.commitLog ?? []) as CommitBundle[];
   const lastIdxOf = new Map<string, number>();
   for (let i = 0; i < commitLog.length; i++) lastIdxOf.set(commitLog[i].runtimeStageId, i);
-  const readsOf = buildReadsOf(artifacts.snapshot.executionTree as StageSnapshot | undefined);
+  const readsOf = buildReadsOf(artifacts.snapshot.executionTree);
 
   const heads = findLoopHeads(commitLog);
   const { frames: buckets, prelude } = bucketByAnchors(commitLog, heads);

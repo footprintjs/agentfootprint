@@ -60,7 +60,6 @@ import {
   sliceForKey,
 } from 'foottrace';
 import type { CommitBundle, ValueBasis } from 'foottrace';
-import type { StageSnapshot } from 'footprintjs/advanced';
 
 import { INJECTION_KEYS } from '../lib/conventions.js';
 // The flat/grouped fork, from its ONE owner (9.88.0). This file used to carry a
@@ -367,7 +366,8 @@ export function contextLedger(): ContextLedger {
     // chain" when its key's LAST WRITER is a slice member. Every injection
     // in the FINAL context of that slot gets the (shared) credit.
     let sliceAvailable = false;
-    const tree = snapshot?.executionTree as StageSnapshot | undefined;
+    // foottrace's reader takes either tree form (footprintjs 13's list, or the older linked tree).
+    const tree = snapshot?.executionTree;
     if (tree) {
       const reads = keysReadFromExecutionTree(tree);
       const slice = sliceForKey(log, 'finalContent', reads);
