@@ -171,9 +171,9 @@ export function stagedRefsNudgeLine(match: StagedRefsMatch): string {
 }
 
 /**
- * The refs sentence the evidence RECOVERY instruction carries when the join
- * holds at recheck time (`evidence/recovery.ts` · `buildEvidenceRecovery`) —
- * the same facts, spoken by the library after the quoted data ends.
+ * The refs sentence the evidence CORRECTION carries when the join holds at
+ * recheck time (see `buildEvidenceCorrection`) — the same facts, spoken
+ * inside the authored frame so the untrusted values still come last.
  */
 export function stagedRefsTeachingClause(match: StagedRefsMatch): string {
   return (

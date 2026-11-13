@@ -31,11 +31,8 @@ import {
 } from '../../../lib/saidByPerson.js';
 
 // Both markers live in the authorship registry (9.84.0) — the one list of
-// openings this library puts on a user-role message it wrote. The schema
-// frame is still written by `outputEnforcement.ts`. Nothing writes the
-// evidence frame any more (the revision request now travels as request-only
-// system context, `recovery.ts`), but a stored conversation from an older
-// release still holds it, so it stays recognised here.
+// openings this library puts on a user-role message it wrote. The sentences
+// that carry them are still `gate.ts`'s and `outputEnforcement.ts`'s.
 export { EVIDENCE_CHECK_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 
 /**

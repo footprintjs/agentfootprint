@@ -695,7 +695,7 @@ export { type OutputFallbackOptions, type OutputFallbackFn } from './core/output
 // real values — and it is deterministic on purpose: a guard that needed a
 // bigger model to police a smaller one would invert this library's thesis.
 // The frame prefix is exported so a reader (or a test) can recognise the
-// correction older releases put into a conversation without matching on prose.
+// correction this feature puts into a conversation without matching on prose.
 export {
   EVIDENCE_CHECK_FRAME_PREFIX,
   type EvidencePosture,

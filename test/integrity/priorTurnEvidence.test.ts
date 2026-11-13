@@ -61,8 +61,10 @@ import {
 } from '../../src/integrity/prior-turn-evidence/check.js';
 import { beginIntegrityRun } from '../../src/integrity/disposition/lifecycle.js';
 import { evidenceFromHistory } from '../../src/core/agent/evidence/evidenceIndex.js';
-import { evidenceRefusalSentence } from '../../src/core/agent/evidence/gate.js';
-import { LEGACY_EVIDENCE_CHECK_TURN } from '../helpers/legacyEvidenceFrame.js';
+import {
+  buildEvidenceCorrection,
+  evidenceRefusalSentence,
+} from '../../src/core/agent/evidence/gate.js';
 import { Agent, allow, defineTool, deny } from '../../src/index.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
@@ -210,15 +212,17 @@ describe('unit: the index stamps the turn that served each form', () => {
   });
 
   it("the library's OWN correction is not a turn boundary", () => {
-    // Older releases appended the evidence correction to history as a
-    // `role: 'user'` frame mid-run, and a stored conversation still holds it.
-    // Counting it would push this turn's own results into the earlier bucket
-    // and file against every revised answer.
+    // The evidence recheck appends a `role: 'user'` frame mid-run. Counting
+    // it would push this turn's own results into the earlier bucket and file
+    // against every revised answer.
+    const [, correction] = buildEvidenceCorrection('bad answer', [
+      { value: '9999', shape: 'number' },
+    ]);
     const corpus = evidenceFromHistory([
       { role: 'user', content: 'what arrays are there?' },
       { role: 'tool', content: INVENTORY },
       { role: 'assistant', content: 'bad answer' },
-      LEGACY_EVIDENCE_CHECK_TURN,
+      correction,
     ]);
     expect(corpus.currentTurn).toBe(1);
     expect(corpus.values.get(String(CAPACITY))).toBe(1);
@@ -238,7 +242,13 @@ describe('unit: the index stamps the turn that served each form', () => {
 describe('contract: the gate no longer claims a scope its index does not have', () => {
   const values = [{ value: '0xef0101', shape: 'identifier' }];
 
-  it('the warning printed to the OPERATOR says what the run read, and names the window', () => {
+  it('the correction sent to the MODEL says what the run read, not what this turn read', () => {
+    const [, correction] = buildEvidenceCorrection('an answer', values);
+    expect(correction.content).toContain('appear in NO tool result this run read');
+    expect(correction.content).not.toContain('from this turn');
+  });
+
+  it('the warning printed to the OPERATOR says the same, and names the window', () => {
     for (const posture of ['assist', 'rails'] as const) {
       const sentence = evidenceRefusalSentence(values, posture, false);
       expect(sentence).toContain('appear in no tool result this run read');

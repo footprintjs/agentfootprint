@@ -6,7 +6,7 @@ title: isDropNotice
 
 > **isDropNotice**(`msg`): `boolean`
 
-Defined in: [src/lib/saidByPerson.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L190)
+Defined in: [src/lib/saidByPerson.ts:186](https://github.com/footprintjs/agentfootprint/blob/main/src/lib/saidByPerson.ts#L186)
 
 True when this message is a notice a previous drop wrote.
 

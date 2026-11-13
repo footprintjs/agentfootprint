@@ -8,7 +8,7 @@
  * impossible. See ./README.md for the design.
  */
 
-export { EVIDENCE_CHECK_FRAME_PREFIX } from './frames.js';
+export { EVIDENCE_CHECK_FRAME_PREFIX } from './gate.js';
 export type {
   EvidencePosture,
   EvidenceShape,
