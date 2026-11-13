@@ -73,6 +73,14 @@ export const PRICES = Object.freeze({
   mock: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   'claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 2 },
   'claude-haiku-4-5-20251001': { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 2 },
+  // Read from the Claude API reference shipped with the `claude-api` skill (2026-11-13):
+  // `shared/model-migration.md` · "Migrating to Claude Haiku 5.5" — $0.10 / $0.50 per MTok when
+  // the prompt is 100K tokens or fewer ($0.50 / $2.50 above: bench/honest-report/harness/cost.mjs
+  // prices such a request at that card), cache reads 0.1× input, 1-hour cache writes 2× input.
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.2 },
+  // `shared/models.md` and "Migrating to Claude Opus 5.5" — $4 / $20 per MTok, cache reads $0.20;
+  // a cache write at 2× input, the 1-hour rate (`shared/cost-optimization.md`), the dearer one.
+  'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 8 },
 });
 
 /** The run's USD from its summed usage, at `PRICES[model]`. */

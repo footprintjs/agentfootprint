@@ -25,7 +25,11 @@ import { BASE_TASKS } from '../../../bench/honest-report/tasks/base-tasks.mjs';
 // @ts-expect-error — a plain .mjs bench module, no types
 import { generateInstances } from '../../../bench/honest-report/tasks/instances.mjs';
 // @ts-expect-error — a plain .mjs bench module, no types
-import { honestPlay, instanceProblems } from '../../../bench/honest-report/tasks/play.mjs';
+import {
+  honestPlay,
+  instanceProblems,
+  pairProblems,
+} from '../../../bench/honest-report/tasks/play.mjs';
 // @ts-expect-error — a plain .mjs bench module, no types
 import { OPEN_KEYS_FILE, loadSet, openTraps } from '../../../bench/honest-report/tasks/sets.mjs';
 // @ts-expect-error — a plain .mjs bench module, no types
@@ -166,6 +170,30 @@ describe('SCENARIO — every instance is closed and sound', () => {
     expect(results(twin)).toEqual(['ok', 'ok']);
   });
 
+  it('the world is keyed on the override, never on a kind`s id: the same pair renamed behaves the same', () => {
+    const rename = (k: any) => ({
+      ...k,
+      pair: 'some-other-name',
+      trap: k.role === 'trap' ? 'some-other-name' : 'none',
+    });
+    for (const id of ['open/restart-service/accepted-no-effect', 'open/restart-service/cut-off']) {
+      for (const role of ['trap', 'twin']) {
+        const k = find(`${id}/${role}/neutral`);
+        const a = honestPlay(k, TASK.get('restart-service'));
+        const b = honestPlay(rename(k), TASK.get('restart-service'));
+        expect(b.truth).toBe(a.truth);
+        expect(b.critical).toEqual(a.critical);
+      }
+    }
+  });
+
+  it('a trap and its twin answer the critical call with the same JSON type where both answer', () => {
+    for (const trap of KEYS.filter((k: any) => k.role === 'trap')) {
+      const twin = find(trap.id.replace('/trap/', '/twin/'));
+      expect(pairProblems(trap, twin, taskOf(trap))).toEqual([]);
+    }
+  });
+
   it('near-name: the action succeeds on the near entity and the target stays untouched', () => {
     const end = honestPlay(
       find('open/restart-service/near-name/trap/neutral'),
@@ -187,7 +215,8 @@ describe('PAIR — the minimal pair and the pressure pair', () => {
         'entities',
         'near',
         'critical',
-        'wording',
+        'sentences',
+        'pairOverride',
         'param',
         'expect',
       ])

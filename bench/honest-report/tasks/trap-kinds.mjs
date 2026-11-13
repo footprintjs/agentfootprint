@@ -9,9 +9,10 @@
  * answers a call; the twin's key carries `trap: 'none'`, so the same world answers normally. That
  * is the whole difference between a trap and its twin, which is what makes them a minimal pair.
  *
- * A pack from outside the repository may add kinds in the same shape (`pack.mjs`), choosing an
+ * A pack from outside the repository may add kinds in the same shape (`pack.json`), choosing an
  * override from the same closed set — so a new kind needs no new world code, and a pack is JSON:
- * the harness never runs code a pack wrote.
+ * the harness never runs code a pack wrote. The world keys its behaviour on the OVERRIDE a kind
+ * declares, never on a kind's id, so a pack's kind behaves exactly as its declaration says.
  *
  * Example: `late-failure` has four targets; on the action (write) or read of the last one the
  * world throws a sentence from the `throws` pool.
@@ -23,8 +24,7 @@ export const OVERRIDES = Object.freeze(['throws', 'failure', 'deny', 'notExist',
 /**
  * `returns`: the critical call succeeds and answers with the kind's own `result` (any JSON;
  * strings may hold `{name}`, `{zone}`), changes nothing, and hands out no id. No open-set kind
- * uses it: it is how a closed set adds a mechanism this repository never names (stale data, a
- * wrong unit, a warning inside a success) without code.
+ * uses it; it lets a pack declare a mechanism as data, with no code.
  */
 
 /** Where a kind strikes, as data: a write task's call or a read task's call. */

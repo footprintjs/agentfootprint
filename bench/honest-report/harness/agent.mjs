@@ -68,12 +68,12 @@ export function buildAgent(doors, { provider, model, arm, key, world }) {
   const tools = world.tools.map((t) =>
     doors.defineTool({ name: t.name, description: t.description, inputSchema: t.inputSchema, execute: async (args, ctx) => t.handle(args, ctx) }),
   );
+  // RULE.md § 3: no sampling parameter is sent (no temperature): the model runs at its defaults.
   let builder = doors.Agent.create({
     provider,
     model,
     maxIterations: PROPOSED.maxIterations,
     maxTokens: PROPOSED.maxTokens,
-    temperature: PROPOSED.temperature,
   })
     .system(key.system)
     .tools(tools)

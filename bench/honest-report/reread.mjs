@@ -15,14 +15,18 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { loadBuild } from './harness/build.mjs';
+import { logLook } from './harness/looks.mjs';
 import { readS2, readS3 } from './harness/surfaces.mjs';
-import { warningTableFor } from './rule-tables.mjs';
+import { tableRefusal, warningTableFor } from './rule-tables.mjs';
 import { readRunFolder } from './score/read-runs.mjs';
 
-/** The facts one build reads from one saved run. S1 is carried over unchanged, marked as such. */
-export function rereadRun(doors, raw) {
+/**
+ * The facts one build reads from one saved run, through that build's table. S1 is carried over
+ * unchanged, marked as such: it is what the run delivered.
+ */
+export function rereadRun(doors, raw, table) {
   const events = raw.recording?.events ?? [];
-  return { S1: { ...raw.surfaces.S1, carriedOver: true }, S2: readS2(events), S3: readS3(doors, raw.recording) };
+  return { S1: { ...raw.surfaces.S1, carriedOver: true }, S2: readS2(events, table), S3: readS3(doors, raw.recording) };
 }
 
 async function main() {
@@ -34,10 +38,14 @@ async function main() {
   }
   if (o.runs === undefined || o.build === undefined) throw new Error('usage: --runs <dir> --build <checkout>');
   const build = await loadBuild(o.build, 'R');
-  if (warningTableFor(build.commit) === undefined) throw new Error(`reader commit ${build.commit.slice(0, 8)} has no warning table (RULE.md § 7): write one first`);
+  const refused = tableRefusal(build.commit);
+  if (refused !== undefined) throw new Error(`reader: ${refused}`);
+  const table = warningTableFor(build.commit);
   const dir = resolve(o.runs);
+  const folder = readRunFolder(dir);
+  if (folder.config.set !== 'open') logLook(dir, { command: 'reread', set: folder.config.set, setDigest: folder.config.setDigest });
   const lines = [];
-  for (const raw of readRunFolder(dir).raws({ withRecording: true })) lines.push({ runKey: raw.runKey, commit: build.commit, surfaces: rereadRun(build.doors, raw) });
+  for (const raw of folder.raws({ withRecording: true })) lines.push({ runKey: raw.runKey, commit: build.commit, surfaces: rereadRun(build.doors, raw, table) });
   const file = join(dir, `reread-${build.commit.slice(0, 8)}.jsonl`);
   writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
   process.stdout.write(`re-read ${lines.length} runs with ${build.commit.slice(0, 8)} → ${file}\n`);

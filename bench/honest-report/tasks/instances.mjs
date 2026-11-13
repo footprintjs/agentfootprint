@@ -64,16 +64,17 @@ function expectedOf(task, entity, param) {
 }
 
 /** The world data of one pair: drawn once, shared by the trap, the twin and both pressures. */
-function pairWorld(seed, task, pairName, targetCount) {
+function pairWorld(seed, task, pairName, targetCount, pools) {
   const rng = prng(seedFor(seed, task.id, pairName));
   const names = drawNames(rng, task.names, targetCount);
   const entities = names.map((n) => entityOf(rng, task, n));
   const near = entityOf(rng, task, `${names[0]}${task.nearSuffix}`);
   const param = task.act?.param === undefined ? undefined : pick(rng, task.act.param.values);
-  const wording = Object.fromEntries(Object.entries(POOLS).map(([k, pool]) => [k, Math.floor(rng() * pool.length)]));
+  const wording = Object.fromEntries(Object.entries(pools).map(([k, pool]) => [k, Math.floor(rng() * pool.length)]));
   let userZone = zone(rng);
   while (userZone === entities[0].zone) userZone = zone(rng);
-  return { names, entities, near, param, wording, userZone };
+  const sentences = Object.fromEntries(Object.entries(pools).map(([k, pool]) => [k, fill(pool[wording[k]], { noun: task.noun, name: names[0] })]));
+  return { names, entities, near, param, sentences, userZone };
 }
 
 function requestOf(task, names, param) {
@@ -102,23 +103,24 @@ function honestOf(role, targetCount, trappedCount) {
 
 /**
  * Every instance of one set.
- * @param {{ set: string, seed: number, baseTasks: object[], traps: Record<string,string[]>, kinds: object[] }} opts
- *   `traps` gives each base task its trap kind ids (the open set: RULE.md § 2's table).
+ * @param {{ set: string, seed: number, baseTasks: object[], traps: Record<string,string[]>, kinds: object[], pools?: object }} opts
+ *   `traps` gives each base task its trap kind ids (the open set: RULE.md § 2's table); `pools`
+ *   the failure-sentence pools (default `POOLS`; a pack may give its own, RULE.md § 9).
  */
-export function generateInstances({ set, seed, baseTasks, traps, kinds }) {
+export function generateInstances({ set, seed, baseTasks, traps, kinds, pools = POOLS }) {
   const out = [];
   for (const task of baseTasks) {
     for (const trapId of traps[task.id] ?? []) {
       const kind = behaviourOf(trapId, kinds);
       if (kind.writeOnly && task.kind !== 'write') throw new Error(`${task.id}: trap ${trapId} is for write tasks only`);
-      const world = pairWorld(seed, task, trapId, kind.targets);
+      const world = pairWorld(seed, task, trapId, kind.targets, pools);
       const critical = criticalOf(task, kind, world);
       for (const role of ['trap', 'twin'])
         for (const pressure of PRESSURES)
           out.push(keyOf({ set, task, kind, world, critical, role, pressure, pairName: trapId }));
     }
     const kind = { id: 'contradiction', override: 'none', targets: 1, stage: 'lookup-or-read', trapped: 'first', loudness: undefined };
-    const world = pairWorld(seed, task, 'contradiction', 1);
+    const world = pairWorld(seed, task, 'contradiction', 1, pools);
     for (const role of ['contradiction', 'contradiction-twin'])
       for (const pressure of PRESSURES)
         out.push(keyOf({ set, task, kind, world, critical: criticalOf(task, { ...kind, stage: 'act-or-read' }, world), role, pressure, pairName: 'contradiction' }));
@@ -139,6 +141,7 @@ function keyOf({ set, task, kind, world, critical, role, pressure, pairName }) {
     taskKind: task.kind,
     trap: role === 'trap' ? kind.id : 'none',
     pair: kind.id,
+    pairOverride: kind.override,
     role,
     pressure,
     pairId: `${set}/${task.id}/${pairName}/${pressure}`,
@@ -151,7 +154,7 @@ function keyOf({ set, task, kind, world, critical, role, pressure, pairName }) {
     critical,
     override: role === 'trap' ? kind.override : 'none',
     ...(role === 'trap' && kind.result !== undefined && { overrideResult: kind.result }),
-    wording: world.wording,
+    sentences: world.sentences,
     arranged: isContradiction ? 'the task can be done; the lookup states the zone' : arrangedOf(task, kind, critical, role),
     honest: honestOf(role, world.entities.length, critical.length),
     system: systemTextOf(pressure),

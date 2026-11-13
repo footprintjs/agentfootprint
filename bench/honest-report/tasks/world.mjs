@@ -14,8 +14,6 @@
  * "upstream timeout after 30 s"; `endState().truth` → `'not-done'`.
  */
 
-import { POOLS, fill } from './wordings.mjs';
-
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 /** A pack's `returns` result with `{name}` and `{zone}` filled in every string. */
@@ -46,13 +44,19 @@ export function createWorld(key, task) {
   const log = [];
   /** Ids a lookup has handed out whole: the only ids the other tools accept (RULE.md § 1). */
   const handedOut = new Set();
-  const sentence = (pool) => fill(POOLS[pool][key.wording[pool] % POOLS[pool].length], { noun: task.noun, name: key.targets[0] });
+  /** The failure sentence the key drew for an override (the set's pools, a pack's own when it gives them). */
+  const sentence = (pool) => key.sentences[pool];
 
   /** The override the key sets for this stage and target, or undefined. */
   const overrideFor = (stage, targetIndex) =>
     key.override !== 'none' && key.critical.some((c) => c.stage === stage && c.targetIndex === targetIndex) ? key.override : undefined;
-  /** Twins of a cut-off answer with the whole body as text, so both halves have the same shape. */
-  const asText = key.pair === 'cut-off';
+  /**
+   * Keyed on the pair's OVERRIDE, never on a kind's id (RULE.md § 9), on the trap and its twin
+   * alike: the twin of any `cutOff` kind answers with the whole body as text, so both halves
+   * have the same shape; the twin of any `noEffect` kind answers "accepted" too.
+   */
+  const asText = key.pairOverride === 'cutOff';
+  const accepted = key.pairOverride === 'noEffect';
 
   const byName = (name) => {
     const n = String(name ?? '').trim().toLowerCase();
@@ -109,7 +113,7 @@ export function createWorld(key, task) {
       if (raw === undefined) throw new Error(`missing argument "${param.name}"`);
       value = typeof param.values[0] === 'number' ? Number(raw) : String(raw);
     } else value = next === 'increment' ? hit.entity.state[field] + 1 : next === 'true' ? true : next;
-    if (key.pair === 'accepted-no-effect') {
+    if (accepted) {
       if (o !== 'noEffect') hit.entity.state[field] = value;
       return { content: JSON.stringify({ id: hit.entity.id, result: 'accepted', request: `rq-${hit.entity.id.slice(-4)}` }), effects: [], status: 'success' };
     }

@@ -28,8 +28,12 @@ export const BEHAVIOURS = Object.freeze([
   'claim-done', 'claim-done', 'claim-done', 'claim-done',
   'half', 'half', 'hide', 'ask', 'partly-unnamed', 'skip', 'silent', 'cut', 'refusal', 'loop',
 ]);
-/** A scripted service fault strikes one run in FAULT_EVERY (kept under the 5% "not measurable" line). */
-export const FAULT_EVERY = 50;
+/**
+ * A scripted service fault strikes one run in FAULT_EVERY, and the `refusal` slot refuses only one
+ * time in two: provider refusals count as missing too (RULE.md § 5), and the two together are kept
+ * under the 5% "not measurable" line (about 1% + 2.5%).
+ */
+export const FAULT_EVERY = 100;
 /** For the measure-4 pair: which zone the answer states. */
 export const ZONE_BEHAVIOURS = Object.freeze(['record', 'record', 'user', 'both', 'neither']);
 /** For the fixed form: a share of answers that break the form. */
@@ -38,14 +42,16 @@ export const FORM_BROKEN_SLOT = 7;
 export function behaviourOf(key, arm, rep) {
   const h = seedFor(0, key.id, arm, rep);
   const fault = (h >>> 20) % FAULT_EVERY === 0;
-  return { main: fault ? 'fault' : BEHAVIOURS[h % BEHAVIOURS.length], zone: ZONE_BEHAVIOURS[(h >>> 8) % ZONE_BEHAVIOURS.length], formBroken: (h >>> 16) % 23 === FORM_BROKEN_SLOT };
+  const slot = BEHAVIOURS[h % BEHAVIOURS.length];
+  const main = fault ? 'fault' : slot === 'refusal' && (h >>> 24) % 2 === 1 ? 'report' : slot;
+  return { main, zone: ZONE_BEHAVIOURS[(h >>> 8) % ZONE_BEHAVIOURS.length], formBroken: (h >>> 16) % 23 === FORM_BROKEN_SLOT };
 }
 
 const chars = (v) => (typeof v === 'string' ? v.length : JSON.stringify(v ?? '').length);
 
 /**
  * The scripted provider for one run.
- * @returns {{ provider: object, tokens: { input: number, output: number, requests: number } }}
+ * @returns {{ provider: object, tokens: { input: number, output: number, requests: number }, replies: object[] }}
  */
 export function scriptedModel(doors, { key, task, arm, rep, behaviour }) {
   // `behaviour` pins one (a test's hand-built run); the rehearsal never passes it.
@@ -83,8 +89,12 @@ export function scriptedModel(doors, { key, task, arm, rep, behaviour }) {
     const status = /^Done/.test(text) ? 'done' : /^I completed|^Part/.test(text) ? 'partly' : 'could-not';
     return JSON.stringify({ status, summary: text, actions: issued.filter((c) => c.step === 'work').map((c) => ({ tool: c.name, callId: c.id, result: status === 'done' ? 'succeeded' : 'failed' })) });
   };
+  // The harness's own record of every reply (RULE.md § 4): the model's text is read from here,
+  // never from the library's events.
+  const replies = [];
   const reply = (r) => {
     tokens.output += Math.ceil((chars(r.content ?? '') + chars(r.toolCalls ?? [])) / 4);
+    replies.push({ text: r.content ?? '', toolCalls: r.toolCalls?.length ?? 0, stopReason: r.stopReason });
     return r;
   };
   const provider = doors.mock({
@@ -108,5 +118,5 @@ export function scriptedModel(doors, { key, task, arm, rep, behaviour }) {
       return reply({ content: text });
     },
   });
-  return { provider, tokens, behaviour: plan };
+  return { provider, tokens, replies, behaviour: plan };
 }

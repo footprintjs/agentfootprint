@@ -5,9 +5,9 @@
  * by id, read back by id), the field its action sets and how a fresh entity starts. The world
  * (`world.mjs`) turns it into a fake back end; the trap kinds (`trap-kinds.mjs`) change what one
  * call answers. Keeping tasks as data is what lets a task pack from outside the repository add
- * base tasks in the same shape (`pack.mjs`), with no code of its own.
+ * base tasks in the same shape (`pack.json`), with no code of its own.
  *
- * Shape of one entry (a pack's entries are checked against it, `pack.mjs` · `checkBaseTask`):
+ * Shape of one entry (a pack's entries are checked against it, `sets.mjs` · `baseTaskProblems`):
  *   id, kind ('write' | 'read'), noun, names (≥ 8 target names), nearSuffix,
  *   find { tool, description },
  *   write: act { tool, description, verb, field, param? { name, description, values } | next },

@@ -12,14 +12,19 @@
  * and change no library byte. A checkout with uncommitted library changes is refused: its
  * commit would not say what ran.
  *
+ * The built files must be those of that commit (RULE.md § 3): a paid run builds each checkout
+ * fresh first (`freshBuild`, `npm run build` in it), and every run records a digest of the
+ * `dist/esm` it loaded (`distDigest`), so two runs that loaded different files cannot pass for one.
+ *
  * Example: `await loadBuild('.')` → `{ label: 'A', commit: '05cbef675f27…', version: '14.4.0',
  * where: '.', doors: { Agent, defineTool, allow, deny, mock, anthropic, recordRun, assessAnswer,
  * accountForAnswer } }`.
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { recordedDir } from '../../recordedDir.mjs';
@@ -31,6 +36,27 @@ export function libraryCommitOf(root) {
   const commit = git(root, 'log', '-1', '--format=%H', '--', 'src', 'package.json');
   const dirty = git(root, 'status', '--porcelain', '--', 'src', 'package.json') !== '';
   return { commit, dirty };
+}
+
+/** A digest of every file under `dir` (path and bytes, in sorted order; sha256, first 16 hex). */
+export function distDigest(dir) {
+  const files = [];
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) files.push(p);
+    }
+  };
+  walk(dir);
+  const h = createHash('sha256');
+  for (const f of files.sort()) h.update(relative(dir, f)).update('\u0000').update(readFileSync(f));
+  return h.digest('hex').slice(0, 16);
+}
+
+/** Builds the checkout in `dir` from its own sources (`npm run build`); throws when the build fails. */
+export function freshBuild(dir) {
+  execFileSync('npm', ['run', 'build'], { cwd: resolve(dir), stdio: ['ignore', 'ignore', 'pipe'] });
 }
 
 /**
@@ -53,6 +79,7 @@ export async function loadBuild(dir, label) {
     commit,
     version,
     where: recordedDir(root),
+    dist: distDigest(esm),
     doors: {
       Agent: core.Agent,
       defineTool: core.defineTool,
@@ -69,5 +96,5 @@ export async function loadBuild(dir, label) {
 
 /** The build as a run records it: never the doors, never an absolute path. */
 export function buildStamp(build) {
-  return { label: build.label, commit: build.commit, version: build.version, where: build.where };
+  return { label: build.label, commit: build.commit, version: build.version, where: build.where, ...(build.dist !== undefined && { dist: build.dist }) };
 }

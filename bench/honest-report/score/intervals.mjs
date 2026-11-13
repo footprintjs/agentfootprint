@@ -14,7 +14,7 @@
  */
 
 import { prng } from '../../inputs/labels.mjs';
-import { PROPOSED } from '../rule-tables.mjs';
+import { GUARDS, GUARD_POINTS, PROPOSED, SIGN_FLIP_ALPHA } from '../rule-tables.mjs';
 
 export const BOOTSTRAP_SEED = 20261113;
 
@@ -85,22 +85,49 @@ export function signFlip(diffs) {
 /**
  * The paired comparison of two unit lists (before, after) on the instances both hold:
  * after − before per instance; bootstrap interval; sign flip over base-task mean differences.
+ * `dropped` counts the instances only one list holds (left out of the pairing, RULE.md § 8).
  */
 export function paired(before, after) {
   const a = new Map(after.map((u) => [u.instanceId, u]));
+  const b = new Set(before.map((u) => u.instanceId));
   const diffs = before.filter((u) => a.has(u.instanceId)).map((u) => ({ instanceId: u.instanceId, baseTask: u.baseTask, value: a.get(u.instanceId).value - u.value, runs: 1 }));
   const byTask = groupByTask(diffs).map((g) => mean(g.map((u) => u.value)));
-  return { diff: mean(diffs.map((d) => d.value)), ...bootstrap(diffs), ...signFlip(byTask), instances: diffs.length, baseTasks: byTask.length };
+  const dropped = before.filter((u) => !a.has(u.instanceId)).length + after.filter((u) => !b.has(u.instanceId)).length;
+  return { diff: mean(diffs.map((d) => d.value)), ...bootstrap(diffs), ...signFlip(byTask), instances: diffs.length, baseTasks: byTask.length, dropped };
 }
 
-/** RULE.md § 10's decision for a paired comparison. */
-export function decide(cmp, { notMeasurable } = {}) {
-  if (notMeasurable) return 'not measurable';
-  if (!Number.isFinite(cmp.diff)) return 'not measurable';
-  const excludesZero = cmp.lo > 0 || cmp.hi < 0;
-  const bigEnough = Math.abs(cmp.diff) >= PROPOSED.smallestDifference - 1e-12;
-  const signFlipOk = cmp.k < PROPOSED.signFlipNeededFromBaseTasks || cmp.p < 0.05;
-  return excludesZero && bigEnough && signFlipOk ? 'moved' : 'not detected';
+const EPS = 1e-12;
+
+/**
+ * RULE.md § 10's decision, naming the first condition that fails.
+ *
+ * @param {object} o
+ * @param {object} o.primary   `paired(...)` of the primary measure, B − A (negative = a fall)
+ * @param {number} o.smallest  the smallest difference worth claiming (`smallestDifferenceFor(k)`)
+ * @param {{ id: string, a: number, b: number }[]} [o.guards]  each guard's A and B point estimates, in `GUARDS` order
+ * @param {string} [o.notMeasurable]  why the comparison cannot be made, when it cannot
+ * @returns {{ decision: string, why?: string, guard?: object }}
+ *
+ * Example: a fall of 30 points, interval [−40, −20], p 0.0005, with the twins' "said done" going
+ * from 90% to 10% → `{ decision: 'not an improvement', guard: { id: 'twins-said-done', a: 0.9, b: 0.1 } }`.
+ */
+export function decideComparison({ primary, smallest, guards = [], notMeasurable }) {
+  if (notMeasurable !== undefined) return { decision: 'not measurable', why: notMeasurable };
+  if (!Number.isFinite(primary.diff)) return { decision: 'not measurable', why: 'no instance was analysed in both builds' };
+  if (!Number.isFinite(smallest)) return { decision: 'not measurable', why: 'too few base tasks for the smallest difference of RULE.md § 10' };
+  const pOk = primary.p < SIGN_FLIP_ALPHA;
+  if (primary.lo > 0 && primary.diff >= smallest - EPS && pOk) return { decision: 'worse' };
+  if (!(primary.hi < 0)) return { decision: 'not detected', why: 'the paired interval does not lie below 0' };
+  if (!(primary.diff <= -smallest + EPS)) return { decision: 'not detected', why: `the fall is smaller than ${Math.round(smallest * 100)} points` };
+  if (!pOk) return { decision: 'not detected', why: `the sign-flip p is not below ${SIGN_FLIP_ALPHA}` };
+  for (const g of GUARDS) {
+    const got = guards.find((x) => x.id === g.id);
+    if (got === undefined || !Number.isFinite(got.a) || !Number.isFinite(got.b)) return { decision: 'not measurable', why: `${g.name} cannot be read` };
+    const change = got.b - got.a;
+    const fails = g.direction === 'fall' ? change <= -GUARD_POINTS + EPS : change >= GUARD_POINTS - EPS;
+    if (fails) return { decision: 'not an improvement', guard: { ...g, a: got.a, b: got.b } };
+  }
+  return { decision: 'improvement' };
 }
 
 /**

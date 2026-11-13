@@ -40,31 +40,78 @@ export function workArgs(key, task, id) {
   return args;
 }
 
-/** Plays the honest script against a fresh world; each work call is made twice (a retry). */
+/**
+ * The JSON type of what a call answered, for the minimal-pair check: `'array'`, `'object'`,
+ * `'string'`, `'number'`, `'boolean'`, `'null'`; or how it did not answer: `'threw'`, `'refused'`,
+ * `'declared-failure'` (the library's failure envelope, a declared failure like a throw).
+ */
+export function answerTypeOf(outcome) {
+  if (outcome.refused !== undefined) return 'refused';
+  if (outcome.error !== undefined) return 'threw';
+  const v = outcome.value;
+  if (v !== null && typeof v === 'object' && !Array.isArray(v) && v.status === 'failure') return 'declared-failure';
+  if (Array.isArray(v)) return 'array';
+  return v === null ? 'null' : typeof v;
+}
+
+/**
+ * Plays the honest script against a fresh world; each work call is made twice (a retry).
+ * Returns the end state and, per critical call made (`{ stage, targetIndex }` of the key), the
+ * type of its first answer (`answerTypeOf`).
+ */
 export function honestPlay(key, task) {
   const world = createWorld(key, task);
   const tool = (name) => world.tools.find((t) => t.name === name);
+  const critical = [];
   let n = 0;
-  const call = (name, args) => {
+  const call = (name, args, stage, targetIndex) => {
     n += 1;
     const toolCallId = `play-${n}`;
     const refusal = world.refusalFor(name, args, toolCallId);
-    if (refusal !== undefined) return { refused: refusal };
-    try {
-      return { value: tool(name).handle(args, { toolCallId }) };
-    } catch (err) {
-      return { error: String(err?.message ?? err) };
+    let outcome;
+    if (refusal !== undefined) outcome = { refused: refusal };
+    else {
+      try {
+        outcome = { value: tool(name).handle(args, { toolCallId }) };
+      } catch (err) {
+        outcome = { error: String(err?.message ?? err) };
+      }
     }
+    const isCritical = key.critical.some((c) => c.stage === stage && c.targetIndex === targetIndex);
+    if (isCritical && !critical.some((c) => c.stage === stage && c.targetIndex === targetIndex)) critical.push({ stage, targetIndex, type: answerTypeOf(outcome) });
+    return outcome;
   };
-  for (const name of key.targets) {
-    const found = call(task.find.tool, { name });
+  key.targets.forEach((name, i) => {
+    const found = call(task.find.tool, { name }, 'find', i);
     const id = found.value === undefined ? undefined : idFrom(found.value, name);
-    if (id === undefined) continue;
-    call(workToolOf(task), workArgs(key, task, id));
-    call(workToolOf(task), workArgs(key, task, id));
-    if (task.kind === 'write') call(task.get.tool, { id });
+    if (id === undefined) return;
+    const stage = task.kind === 'read' ? 'read' : 'act';
+    call(workToolOf(task), workArgs(key, task, id), stage, i);
+    call(workToolOf(task), workArgs(key, task, id), stage, i);
+    if (task.kind === 'write') call(task.get.tool, { id }, 'get', i);
+  });
+  return { ...world.endState(), critical };
+}
+
+/** The answer types a declared failure may differ by: the arranged loud difference itself. */
+const DECLARED = new Set(['threw', 'refused', 'declared-failure']);
+
+/**
+ * What is wrong with a trap and its twin as a minimal pair (empty when sound): where the
+ * critical call answers in both halves, the two answers must have the same JSON type (RULE.md
+ * § 9). Example: a pack kind whose `returns` result is an object, on a read whose twin answers
+ * a list → `['…: the trap answers object, the twin array']`.
+ */
+export function pairProblems(trapKey, twinKey, task) {
+  const trap = honestPlay(trapKey, task).critical;
+  const twin = honestPlay(twinKey, task).critical;
+  const problems = [];
+  for (const t of trap) {
+    const w = twin.find((c) => c.stage === t.stage && c.targetIndex === t.targetIndex);
+    if (w === undefined || DECLARED.has(t.type) || DECLARED.has(w.type)) continue;
+    if (t.type !== w.type) problems.push(`${trapKey.id}: the critical ${t.stage} answers ${t.type} in the trap, ${w.type} in the twin`);
   }
-  return world.endState();
+  return problems;
 }
 
 /** What is wrong with one instance (empty when sound): RULE.md § 1 "every other way is closed". */
