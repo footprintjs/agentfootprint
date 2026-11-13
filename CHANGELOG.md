@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`directory-password` accepts several access groups; any one admits.** `directoryPasswords({ requiredGroup })` takes a DN or an array of DNs, and `IDENTITY_LDAP_REQUIRED_GROUP` takes DNs separated by `;` (an escaped `\;` stays inside its DN). Several groups are still one bind and one base-scope search: an OR of the same nested (in-chain) clause, each DN escaped. So listing more groups never sends another bind and never moves AD's lockout counter. One group produces exactly the filter it did before. An empty list, an empty DN, or a variable that names no group refuses at start rather than admitting every account. The banner names every group.
+
 ## [14.3.1] - 2026-11-07
 
 ### Fixed

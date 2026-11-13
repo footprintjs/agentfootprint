@@ -225,6 +225,55 @@ describe('directory-password — scenarios', () => {
     expect(await passwords.check('bob', 'Maple-Stone-52!')).toBeUndefined();
   });
 
+  it('several required groups: ANY one admits — still ONE bind and ONE group search per sign-in', async () => {
+    const engineers = 'CN=Storage Engineers,OU=G,DC=corp,DC=example';
+    const admins = 'CN=Storage Admins (HCL),OU=G,DC=corp,DC=example';
+    const { directory, passwords } = checker({ requiredGroup: [engineers, admins] });
+    // alice is in SAN-Ops, nested inside the SECOND group only.
+    directory.groups['CN=SAN-Ops,OU=G,DC=corp,DC=example'] = [admins];
+    expect(await passwords.check('alice', 'Quartz-River-41!')).toBeDefined();
+    expect(directory.binds).toHaveLength(1);
+    expect(directory.groupSearches).toBe(1);
+    expect(directory.lastFilter).toBe(
+      `(|(memberOf:1.2.840.113556.1.4.1941:=${escapeFilterValue(engineers)})` +
+        `(memberOf:1.2.840.113556.1.4.1941:=${escapeFilterValue(admins)}))`,
+    );
+    // In neither group: refused as not-in-group, after the same one bind + one search.
+    const notes: unknown[] = [];
+    expect(await passwords.check('bob', 'Maple-Stone-52!', (d) => notes.push(d))).toBeUndefined();
+    expect(notes).toEqual([{ reason: 'not-in-group' }]);
+    expect(directory.binds).toHaveLength(2);
+    expect(directory.groupSearches).toBe(2);
+  });
+
+  it('several required groups: a wrong password is one bind and NO group search', async () => {
+    const { directory, passwords } = checker({
+      requiredGroup: ['CN=A,OU=G,DC=corp,DC=example', 'CN=B,OU=G,DC=corp,DC=example'],
+    });
+    const notes: Array<{ reason: string }> = [];
+    expect(await passwords.check('alice', 'wrong', (d) => notes.push(d))).toBeUndefined();
+    expect(directory.binds).toHaveLength(1);
+    expect(directory.groupSearches).toBe(0);
+    expect(notes[0]?.reason).toBe('wrong-credential');
+  });
+
+  it('one group in a list is the SAME filter as the single string it always was', async () => {
+    const group = 'CN=SAN-Ops,OU=G,DC=corp,DC=example';
+    const one = checker({ requiredGroup: group });
+    const list = checker({ requiredGroup: [group, ` ${group.toLowerCase()} `] });
+    await one.passwords.check('alice', 'Quartz-River-41!');
+    await list.passwords.check('alice', 'Quartz-River-41!');
+    expect(list.directory.lastFilter).toBe(one.directory.lastFilter);
+  });
+
+  it('an empty group list or an empty DN refuses construction — never "every account"', () => {
+    expect(() => checker({ requiredGroup: [] })).toThrow(/empty list/);
+    expect(() => checker({ requiredGroup: ['CN=A,OU=G,DC=corp,DC=example', ' '] })).toThrow(
+      /empty group DN/,
+    );
+    expect(() => checker({ requiredGroup: '' })).toThrow(/empty group DN/);
+  });
+
   it('a user@other.example name is refused before the bind; user@corp.example is the user', async () => {
     const { directory, passwords } = checker();
     expect(await passwords.check('alice@other.example', 'Quartz-River-41!')).toBeUndefined();
@@ -355,5 +404,35 @@ describe('directory-password — ROI', () => {
     await expect(
       identityFromConfig(identityConfigFromEnv(env), { production: true }),
     ).rejects.toMatchObject({ key: undefined });
+  });
+
+  it('IDENTITY_LDAP_REQUIRED_GROUP: several DNs separated by ";" — the banner names them; a value naming none refuses', async () => {
+    const { writeFileSync, mkdtempSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'af-ldap-'));
+    writeFileSync(join(dir, 'ca.pem'), TEST_CA_PEM);
+    const env = {
+      IDENTITY_STRATEGY: 'directory-password',
+      IDENTITY_PUBLIC_URL: 'https://bot.corp.example',
+      IDENTITY_LDAP_URL: 'ldaps://dc1.corp.example:636',
+      IDENTITY_LDAP_CA_FILE: join(dir, 'ca.pem'),
+      IDENTITY_LDAP_DOMAIN: 'corp.example',
+      IDENTITY_LDAP_NETBIOS_DOMAIN: 'CORP',
+      IDENTITY_LDAP_BASE_DN: 'DC=corp,DC=example',
+      IDENTITY_LDAP_LOCKOUT_THRESHOLD: '10',
+      IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES: '30',
+      IDENTITY_LDAP_REQUIRED_GROUP:
+        'CN=Storage Engineers,OU=G,DC=corp,DC=example; CN=Storage Admins,OU=G,DC=corp,DC=example',
+    };
+    const boot = { production: true, crossSite: { allowedHosts: ['bot.corp.example'] } };
+    const banner = (await identityFromConfig(identityConfigFromEnv(env), boot)).banner.join('\n');
+    expect(banner).toContain(
+      'required group (any one of) CN=Storage Engineers,OU=G,DC=corp,DC=example | CN=Storage Admins,OU=G,DC=corp,DC=example',
+    );
+    expect(banner).not.toMatch(/no IDENTITY_LDAP_REQUIRED_GROUP/);
+    await expect(
+      identityFromConfig(identityConfigFromEnv({ ...env, IDENTITY_LDAP_REQUIRED_GROUP: ' ; ' }), boot),
+    ).rejects.toMatchObject({ key: 'IDENTITY_LDAP_REQUIRED_GROUP' });
   });
 });

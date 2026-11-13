@@ -250,6 +250,8 @@ IDENTITY_LDAP_DOMAIN=corp.example
 IDENTITY_LDAP_NETBIOS_DOMAIN=CORP
 IDENTITY_LDAP_BASE_DN=DC=corp,DC=example
 IDENTITY_LDAP_REQUIRED_GROUP=CN=Bot Users,OU=Groups,DC=corp,DC=example
+# or several, any one admits (still one bind, one search):
+# IDENTITY_LDAP_REQUIRED_GROUP=CN=Bot Users,OU=Groups,DC=corp,DC=example;CN=Bot Admins,OU=Groups,DC=corp,DC=example
 IDENTITY_LDAP_LOCKOUT_THRESHOLD=10
 IDENTITY_LDAP_LOCKOUT_WINDOW_MINUTES=30
 # optional: refuse (not only delay) an address after 20 failures per window —
