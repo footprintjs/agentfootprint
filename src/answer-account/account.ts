@@ -69,7 +69,7 @@ import {
 } from './facts/common.js';
 import { readAsked } from './facts/asked.js';
 import { readUnderstood } from './facts/understood.js';
-import { MAX_CALLS, readCalls } from './facts/calls.js';
+import { endedInError, MAX_CALLS, readCalls } from './facts/calls.js';
 import { answeringIteration, readInView } from './facts/inView.js';
 import { readCheckedRows } from './facts/checked.js';
 import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
@@ -687,7 +687,7 @@ export function buildAccount(
       limitsBlock: limits,
       limitsData,
       errors: {
-        failed: count('failed'),
+        failed: calls.all.filter(endedInError).length,
         refused: count('refused'),
         declined: count('declined'),
         notDispatched: count('not-dispatched'),

@@ -830,6 +830,36 @@
   ],
   "source": "library"
  },
+ "checked.notExecuted@1": {
+  "text": "It asked to run lookup_volumes; the call was not executed.",
+  "parts": [
+   {
+    "text": "It asked to run "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "; the call was not executed."
+   }
+  ],
+  "source": "library"
+ },
+ "checked.endedInError@1": {
+  "text": "It asked to run lookup_volumes; the call ended in an error.",
+  "parts": [
+   {
+    "text": "It asked to run "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": "; the call ended in an error."
+   }
+  ],
+  "source": "library"
+ },
  "checked.refused@1": {
   "text": "It asked to run lookup_volumes, and a rule named by value refused it.",
   "parts": [
@@ -1162,6 +1192,24 @@
   ],
   "source": "library"
  },
+ "notChecked.noResults@1": {
+  "text": "Nothing to report: no tool call returned a result in this record.",
+  "parts": [
+   {
+    "text": "Nothing to report: no tool call returned a result in this record."
+   }
+  ],
+  "source": "library"
+ },
+ "notChecked.notListed.noResults@1": {
+  "text": "None of the tool calls listed here returned a result; 2 calls that did are among the ones not listed.",
+  "parts": [
+   {
+    "text": "None of the tool calls listed here returned a result; 2 calls that did are among the ones not listed."
+   }
+  ],
+  "source": "library"
+ },
  "notChecked.beforePause@1": {
   "text": "What the tools run before the pause did not check is not in this record.",
   "parts": [
@@ -1299,6 +1347,33 @@
    },
    {
     "text": " returned an error, not a result."
+   }
+  ],
+  "source": "library"
+ },
+ "found.notExecuted@1": {
+  "text": "lookup_volumes did not run, so it found nothing.",
+  "parts": [
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " did not run, so it found nothing."
+   }
+  ],
+  "source": "library"
+ },
+ "found.endedInError@1": {
+  "text": "The call to lookup_volumes ended in an error, not a result.",
+  "parts": [
+   {
+    "text": "The call to "
+   },
+   {
+    "code": "lookup_volumes"
+   },
+   {
+    "text": " ended in an error, not a result."
    }
   ],
   "source": "library"

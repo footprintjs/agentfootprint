@@ -118,7 +118,7 @@ export const SHOW_ME_ALLOW_LIST: Readonly<Record<string, readonly string[]>> = O
   ),
   'stream.tool_start': list('/{toolName,toolCallId}'),
   'stream.tool_end': list(
-    '/{toolCallId,status,error,notExecuted}',
+    '/{toolCallId,status,error,entered,notExecuted}',
     '/notDispatched/pausedCall/{toolCallId,toolName}',
     '#emptiness',
   ),

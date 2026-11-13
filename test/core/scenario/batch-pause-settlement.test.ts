@@ -1211,7 +1211,7 @@ describe('batch settlement — a settled call is not a call that ran, to every r
     expect(checkIn.checkIn?.evidence.trail).toEqual({
       iteration: 2,
       toolCalls: [{ name: 'collect_input', ok: true }],
-      summary: '1 tool run over 2 iterations',
+      summary: '1 tool call over 2 iterations',
     });
     expect(ran).toEqual([]);
   });

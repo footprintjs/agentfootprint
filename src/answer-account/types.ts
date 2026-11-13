@@ -197,10 +197,29 @@ export interface Unreachable {
   readonly sentence: Sentence;
 }
 
-/** How one tool call of THIS run went. */
+/**
+ * How one tool call of THIS run went. Whether its tool ran is read off its
+ * `stream.tool_end` by `semantics/toolRan.ts` · `toolRanOf`; three outcomes
+ * end in an error and say different things about that: `failed`,
+ * `not-executed` (when its bracket carries `error`) and `ended-in-error`.
+ */
 export type CallOutcome =
+  /** The tool ran and returned. */
   | 'ran'
+  /** The tool ran, and the call ended in an error (`tool_end.entered: true`). */
   | 'failed'
+  /**
+   * The tool's function was never entered and no rule or person stopped it:
+   * an unknown tool name, arguments the schema rejected, a blocked
+   * credential (`tool_end.entered: false`).
+   */
+  | 'not-executed'
+  /**
+   * The call ended in an error on a record that does not say whether the
+   * tool ran: `tool_end.error` without `entered`, as every record written
+   * before that field existed holds it. Never read as "it ran".
+   */
+  | 'ended-in-error'
   /** A rule refused it BEFORE the tool ran. */
   | 'refused'
   /** A person was asked and declined. */
@@ -427,6 +446,11 @@ export interface AnswerFacts {
    */
   readonly limitsData: AccountFact<LimitsDataFact>;
   readonly errors: {
+    /**
+     * Every call that ended in an error: `failed`, `ended-in-error`, and a
+     * `not-executed` call whose bracket carries `error` (`calls.ts` ·
+     * `endedInError`). Each call's `outcome` says whether its tool ran.
+     */
     readonly failed: number;
     readonly refused: number;
     readonly declined: number;

@@ -935,6 +935,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   endpoint: true,
   endsWith: true,
   enforced: true,
+  entered: true,
   entity: true,
   ephemeral: true,
   epoch: true,

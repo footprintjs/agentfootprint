@@ -23,7 +23,13 @@ outcome and duration come off the LAST `tool_end` for the id
 (`traceToolpack/toolCallJournal.ts` · `buildInspectToolCall`), and it reads "not dispatched"
 when the latest bracket or message carries the batch settlement's marker
 (9.113.0, `notDispatchedOf`). The step line still names the step of the first
-call under the id that ran (`bracketsFor`).
+call under the id that ran (`bracketsFor`). Whether the call's tool ran is read
+off that bracket by the one reader (`semantics/toolRan.ts` · `toolRanOf`): a call
+that never reached its tool (an unknown name, rejected arguments, a rule that
+refused it) reads `ran with: nothing — call 'u1' was never executed.`, and its
+error `outcome: error — call 'u1' was not executed: the tool was never entered`;
+an error on a record written before `tool_end.entered` existed reads
+`outcome: error — this record does not say whether the tool ran`.
 
 ```text
 c1 answered 'first answer' in 1ms, then — reused — threw 'second call failed' after 27ms:

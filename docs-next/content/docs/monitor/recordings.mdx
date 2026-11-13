@@ -329,6 +329,15 @@ values as `AnswerAccountShownLeaf`s, keyed by `answerAccountPointerKey(pointer)`
 an allow-listed leaf of the record, a derived row count (never the rows), or
 the reason it is withheld.
 
+The account says a tool ran only when the record shows it ran. A call that
+ended in an error before its tool was reached — a tool name that does not
+exist, arguments the schema rejected, a blocked credential — reads "It asked
+to run reboot_host; the call was not executed.", read from
+`stream.tool_end.entered`. A tool that ran and threw reads "It ran crash, and
+the tool reported an error.". A recording made before `entered` existed does
+not say which, so an error there reads "It asked to run crash; the call ended
+in an error.".
+
 ## How far an answer stands
 
 The account's "How sure" row — and anything else that needs one word for an

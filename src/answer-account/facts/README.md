@@ -7,7 +7,7 @@ per-sentence catch). No reader reads another row's lines.
 | `common.ts` | the shared context (`say`, the size budgets), pointers, vars; the model's view of a result through the ONE emptiness reader (`core/agent/emptiness.ts`) |
 | `asked.ts` | You asked |
 | `understood.ts` | It understood — and check 1, decided-delivered (non-delivery needs a complete record) |
-| `calls.ts` | the calls of THIS run: outcome (before-tool refusals only), coverage, emptiness |
+| `calls.ts` | the calls of THIS run: outcome (before-tool refusals only; whether a tool ran, from `tool_end.entered` through `semantics/toolRan.ts` · `toolRanOf`), coverage, emptiness |
 | `checked.ts` | It checked / It did not check — and the calls before a pause |
 | `inView.ts` | earlier answers' results in front of the model — the witness rule, distance ≥ 1 |
 | `found.ts` | It found |

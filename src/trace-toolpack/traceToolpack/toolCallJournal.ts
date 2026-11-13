@@ -7,6 +7,7 @@ import type { Tool } from '../../tools/tools.js';
 import { defineTool } from '../../tools/tools.js';
 import { TOOL_CALL_SUGGESTION_CAP, TOOL_RESULT_PREVIEW_CHARS } from './structuralLimits.js';
 import { displayText, renderPreview, boundedPreview } from '../bounded.js';
+import { toolRanOf } from '../../semantics/toolRan.js';
 
 // ── inspect_tool_call ──────────────────────────────────────────────────────
 
@@ -397,6 +398,18 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       // tool that ran — read as one, it would be an `ok` in 0ms.
       const settled = facts.notDispatched;
 
+      // The LAST `tool_end` for the id — the call the result line shows,
+      // since a provider may reuse an id and the latest message decides the
+      // result. After a settlement that is the call that ran under the id
+      // again; a settled call itself never reaches the outcome lines
+      // (`settled`). Whether its tool ran is the record's own word, read by
+      // the one reader (`semantics/toolRan.ts` · `toolRanOf`): an unknown
+      // tool name ends in an error without its tool ever running.
+      const end = eventsOf('agentfootprint.stream.tool_end')
+        .reverse()
+        .find((event) => event.payload.toolCallId === toolCallId);
+      const ran = end === undefined ? undefined : toolRanOf(end.payload);
+
       // Ran-with args: the ledger is the ONLY record of a rule rewriting
       // them. No ledger row means no rule changed anything — say that
       // plainly rather than leaving the reader to assume it.
@@ -404,7 +417,7 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       const rewrite = [...rows]
         .reverse()
         .find((row) => row.changed === true && row.moment === 'before-tool');
-      if (settled !== undefined) {
+      if (settled !== undefined || ran === 'not-run') {
         lines.push(`ran with: nothing — call '${toolCallId}' was never executed.`);
       } else if (rewrite) {
         lines.push(
@@ -436,15 +449,9 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
               `it landed.`,
       );
 
-      // Outcome + duration: the event tail is the only clock a run has. Read
-      // off the LAST `tool_end` for the id — the call the result line shows,
-      // since a provider may reuse an id and the latest message decides the
-      // result. After a settlement that is the call that ran under the id
-      // again; a settled call itself never reaches these lines (`settled`).
+      // Outcome + duration: the event tail is the only clock a run has,
+      // read off the same `end` as above.
       const denial = rows.find((row) => row.outcome === 'deny');
-      const end = eventsOf('agentfootprint.stream.tool_end')
-        .reverse()
-        .find((event) => event.payload.toolCallId === toolCallId);
       const checkIn = eventsOf('agentfootprint.checkin.request').some(
         (event) => event.payload.toolCallId === toolCallId,
       );
@@ -460,7 +467,12 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       } else if (denial) {
         outcome = `denied by '${denial.middleware ?? '?'}'${denial.why ? `: "${denial.why}"` : ''}`;
       } else if (end?.payload.error === true) {
-        outcome = 'error — the tool threw or returned a failure';
+        outcome =
+          ran === 'ran'
+            ? 'error — the tool threw or returned a failure'
+            : ran === 'not-run'
+            ? `error — call '${toolCallId}' was not executed: the tool was never entered`
+            : 'error — this record does not say whether the tool ran';
       } else if (checkIn && end === undefined) {
         outcome = `paused — a check-in asked a human and call '${toolCallId}' has no recorded end`;
       } else if (facts.result !== undefined) {

@@ -10,7 +10,15 @@
  *   - `refused`        — BEFORE-tool only: `tool_end.notExecuted`, a deny
  *                        `middleware.decision` with `moment: 'before-tool'`, or a
  *                        `permission.check` for this call that did not allow;
- *   - `failed`         — `tool_end.error`;
+ *   - `not-executed`   — the tool's function was never entered and no rule
+ *                        or person stopped it (`tool_end.entered: false`: an
+ *                        unknown tool name, rejected arguments, a blocked
+ *                        credential);
+ *   - `failed`         — `tool_end.error` on a call whose tool ran
+ *                        (`entered: true`);
+ *   - `ended-in-error` — `tool_end.error` on a record that does not say
+ *                        whether the tool ran (no `entered`: written before
+ *                        that field existed) — never told as "it ran";
  *   - `unknown`        — a start with no recorded end;
  *   - `ran`            — otherwise. An AFTER-tool deny keeps `ran` and sets
  *                        `withheldBy`: the tool ran and the model read the
@@ -26,6 +34,7 @@
  */
 
 import { strip } from '../../semantics/coverage/read.js';
+import { toolRanOf } from '../../semantics/toolRan.js';
 import { v } from '../render.js';
 import type { RecordPointer, SentenceVar, ToolCallFact } from '../types.js';
 import { isKeptOut, isRecord, keptOut, str, type ViewEvent } from '../view.js';
@@ -330,7 +339,19 @@ interface Outcome {
 }
 
 /** The `tool_end` fields that say how a call ended — read by `outcomeOf`. */
-const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'error'] as const;
+const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'entered', 'error'] as const;
+
+/**
+ * The calls that ended in an error — the one list both counts read
+ * (`facts.errors.failed`, the "Anything wrong" line). A call that never
+ * reached its tool counts when its bracket carries `error` (an unknown name);
+ * one a person declined on resume, with no error, does not.
+ */
+export function endedInError(call: CallRead): boolean {
+  const outcome = call.fact.outcome;
+  if (outcome === 'failed' || outcome === 'ended-in-error') return true;
+  return outcome === 'not-executed' && call.end?.payload.error === true;
+}
 
 function outcomeOf(
   ctx: ReadContext,
@@ -383,8 +404,12 @@ function outcomeOf(
     };
   }
   if (end?.payload.notExecuted === true) return { outcome: 'refused', ruleEvent: end };
-  if (end?.payload.error === true) return { outcome: 'failed' };
   if (end === undefined) return { outcome: 'unknown' };
+  // No rule and no person stopped it: whether its tool ran is the record's
+  // own word (`entered`), never inferred from `error`.
+  const ran = toolRanOf(end.payload);
+  if (ran === 'not-run') return { outcome: 'not-executed' };
+  if (end.payload.error === true) return { outcome: ran === 'ran' ? 'failed' : 'ended-in-error' };
   const by = str(afterDeny?.payload.middleware);
   return afterDeny !== undefined
     ? { outcome: 'ran', ruleEvent: afterDeny, ...(by !== undefined && { withheldBy: by }) }
@@ -396,6 +421,8 @@ export function endPointer(end: ViewEvent, emptiness: EmptinessReading): RecordP
   if (isRecord(end.payload.notDispatched)) {
     return at(end, 'notDispatched', 'pausedCall', 'toolCallId');
   }
+  // A call whose tool never ran: the leaf that says so.
+  if (end.payload.notExecuted !== true && end.payload.entered === false) return at(end, 'entered');
   for (const key of ['notExecuted', 'error', 'status'] as const) {
     if (end.payload[key] !== undefined) return at(end, key);
   }

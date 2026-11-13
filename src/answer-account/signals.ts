@@ -32,7 +32,7 @@ import {
   type EmptinessReading,
   type ReadContext,
 } from './facts/common.js';
-import { itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
+import { endedInError, itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
 import { heldChip } from './facts/checked.js';
 import { beforePausePointers, inViewPointers, inViewVars } from './facts/found.js';
 import type { PausedLegRead } from './facts/pausedLeg.js';
@@ -382,12 +382,14 @@ export function wrongLines(
   // Every call, not only the listed ones: a count is a judgement.
   const all = calls.all;
   const count = (o: string) => all.filter((c) => c.fact.outcome === o).length;
-  const failed = count('failed');
+  // "failed" counts every call that ended in an error, whether or not its tool ran
+  // (`calls.ts` · `endedInError`); each call's own line says which.
+  const failed = all.filter(endedInError).length;
   const refused = count('refused');
   const declined = count('declined');
   const notDispatched = count('not-dispatched');
-  const troubled = all.filter((c) =>
-    ['failed', 'refused', 'declined', 'not-dispatched'].includes(c.fact.outcome),
+  const troubled = all.filter(
+    (c) => endedInError(c) || ['refused', 'declined', 'not-dispatched'].includes(c.fact.outcome),
   );
   if (troubled.length > 0) {
     lines.push(

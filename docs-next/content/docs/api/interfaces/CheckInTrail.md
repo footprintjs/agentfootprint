@@ -24,9 +24,12 @@ Which ReAct iteration this check-in fired on.
 
 > `readonly` **summary**: `string`
 
-Defined in: [src/core/checkin.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L130)
+Defined in: [src/core/checkin.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L135)
 
-One-line human summary, e.g. `"3 tools run over 2 iterations"`.
+One-line human summary, e.g. `"3 tool calls over 2 iterations"`. It counts
+CALLS, never runs: the history this is built from does not say whether a
+call's tool ran (an unknown tool name or a refused call is a call too), so
+the sentence an approver reads claims only what it can count.
 
 ***
 

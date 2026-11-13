@@ -62,6 +62,7 @@ export function streamingShapes() {
       result: typeMarker,
       error: bool,
       durationMs: num,
+      entered: bool,
       status: oneOf('absent', 'denied', 'failure', 'invalid', 'partial', 'pending', 'success'),
       notDispatched: shapeOf<At<PayloadOf<'agentfootprint.stream.tool_end'>, 'notDispatched'>>({
         pausedCall: shapeOf<

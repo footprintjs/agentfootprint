@@ -7,6 +7,7 @@
  * cannot hold another run's calls; it is written only on an agent with
  * `answerValidation`, so every other agent commits the keys it always did.
  */
+import { toolRanOf, type ToolRanFields } from '../semantics/toolRan.js';
 import type { AnswerToolCall, AnswerToolCallsView } from './types.js';
 
 /** Longest tool name or call id listed. A model can send any name and a
@@ -155,22 +156,25 @@ export function toolCallsView(
 const FAILED_STATUS: ReadonlySet<string> = new Set(['failure', 'denied', 'invalid']);
 
 /**
- * The outcome of one `stream.tool_end` bracket, in the view's words. `ran` is
- * whether the tool's own code ran: a call that did not run and carries no
- * `error` (a person declined it, a rule refused it, a paused batch settled it)
- * is `not-run`, never `ok`. A tool that ran but declared `failure`, `denied` or
- * `invalid` (a refused oversize result among them) is `error`.
+ * The outcome of one `stream.tool_end` bracket, in the view's words. Whether
+ * the tool ran is read off the bracket by the one reader
+ * (`semantics/toolRan.ts` · `toolRanOf`), never guessed from `error`: a call
+ * whose tool never ran is `not-run` whether or not it ended in an error (an
+ * unknown tool name, rejected arguments, a blocked credential, a person who
+ * declined, a rule that refused, a paused batch that settled it). A tool that
+ * ran and threw, or declared `failure`, `denied` or `invalid` (a refused
+ * oversize result among them), is `error`.
+ *
+ * The ledger is written live, by the version that stamps `entered`, so it
+ * never meets a bracket that does not say; one that did would read `error`.
+ *
+ * @example toolOutcomeOf({ error: true, entered: false }) // 'not-run' — an unknown tool name
+ * @example toolOutcomeOf({ error: true, entered: true })  // 'error'   — the tool threw
  */
 export function toolOutcomeOf(
-  bracket: {
-    readonly error?: boolean;
-    readonly notExecuted?: boolean;
-    readonly notDispatched?: unknown;
-    readonly status?: string;
-  },
-  ran: boolean,
+  bracket: ToolRanFields & { readonly status?: string },
 ): AnswerToolCall['outcome'] {
+  if (toolRanOf(bracket) === 'not-run') return 'not-run';
   if (bracket.error === true) return 'error';
-  if (bracket.notDispatched !== undefined || bracket.notExecuted === true || !ran) return 'not-run';
   return bracket.status !== undefined && FAILED_STATUS.has(bracket.status) ? 'error' : 'ok';
 }
