@@ -22,7 +22,9 @@ describe('session-store roster discovery', () => {
     source(
       'local.ts',
       `import type { SessionLifecycle } from './ports.js';
-export function openLocal(): SessionLifecycle { throw new Error('not executed'); }`,
+export function openLocal(): SessionLifecycle;
+export function openLocal(value: string): SessionLifecycle;
+export function openLocal(value?: string): SessionLifecycle { throw new Error('not executed'); }`,
     );
     source(
       'nested/deeper/remote.ts',
@@ -79,5 +81,22 @@ export function commentedSessions(): SessionLifecycle { throw new Error('not exe
       assertEnrolledSessionStores(factories, ['openLocal', 'remoteStore']),
     ).not.toThrow();
     expect(() => assertEnrolledSessionStores(new Set(), [])).toThrow('scan found nothing');
+  });
+
+  it('refuses two factory owners with the same name instead of hiding an omission', () => {
+    for (const name of ['first', 'second']) {
+      source(
+        `collision/${name}.ts`,
+        `import type { SessionLifecycle } from '../ports.js';
+export function openLocal(): SessionLifecycle { throw new Error('not executed'); }`,
+      );
+    }
+    try {
+      expect(() => sessionStoreFactories([root], join(root, 'ports.ts'))).toThrow(
+        'Multiple session-store factories named openLocal',
+      );
+    } finally {
+      rmSync(join(root, 'collision'), { recursive: true, force: true });
+    }
   });
 });

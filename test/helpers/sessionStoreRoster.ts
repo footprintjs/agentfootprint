@@ -21,7 +21,7 @@ export function sessionStoreFactories(roots: readonly string[], portFile: string
     );
   if (!port) throw new Error(`SessionLifecycle declaration not found in ${portFile}`);
   const portType = checker.getTypeAtLocation(port);
-  const factories = new Set<string>();
+  const factories = new Map<string, string>();
   for (const file of files) {
     const source = program.getSourceFile(file);
     if (!source) throw new Error(`Session-store source not found in program: ${file}`);
@@ -36,10 +36,18 @@ export function sessionStoreFactories(roots: readonly string[], portFile: string
       const returned = checker.getTypeFromTypeNode(node.type);
       // An unchecked annotation or a function that never returns is no store.
       if (returned.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never)) continue;
-      if (checker.isTypeAssignableTo(returned, portType)) factories.add(node.name.text);
+      if (checker.isTypeAssignableTo(returned, portType)) {
+        const owner = factories.get(node.name.text);
+        if (owner !== undefined && owner !== file) {
+          throw new Error(
+            `Multiple session-store factories named ${node.name.text}: ${owner}, ${file}`,
+          );
+        }
+        factories.set(node.name.text, file);
+      }
     }
   }
-  return factories;
+  return new Set(factories.keys());
 }
 
 /** Names come from the actual harness factory references, never source comments. */
