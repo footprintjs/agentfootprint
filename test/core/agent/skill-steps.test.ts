@@ -264,11 +264,11 @@ describe('functional: advance at the return boundary', () => {
     const hist = historyOf(agent);
     const lookupResult = hist.find((m) => m.toolName === 'lookup');
     expect(lookupResult?.content).toContain(
-      'Step 1 of 3 ran; its tool reported no outcome. Now on step 2 of 3: refund the charge',
+      'Step 1 of 3 ran; its tool declared no status. Now on step 2 of 3: refund the charge',
     );
     const exportResult = hist.find((m) => m.toolName === 'export');
     expect(exportResult?.content).toContain(
-      'Step 3 of 3 ran; its tool reported no outcome. It was the last step.',
+      'Step 3 of 3 ran; its tool declared no status. It was the last step.',
     );
 
     // Pointer complete on the snapshot; the post-completion offer is FULL
@@ -584,7 +584,7 @@ describe('integration: pause/resume — the HITL step (correction 2)', () => {
     const askResult = historyOf(agent).find((m) => m.toolName === 'ask_first');
     expect(askResult?.content).toContain('yes — approved');
     expect(askResult?.content).toContain(
-      'Step 2 of 3 ran; its tool reported no outcome. Now on step 3 of 3: export it',
+      'Step 2 of 3 ran; its tool declared no status. Now on step 3 of 3: export it',
     );
   });
 });
@@ -614,7 +614,7 @@ describe('integration: the nudge truth table', () => {
     // marker (so a rule reading history knows nobody said it) and reports the
     // unrun steps in the past tense.
     const teachingIdx = hist.findIndex(
-      (m) => m.role === 'user' && m.content.includes('had not run'),
+      (m) => m.role === 'user' && m.content.includes('had not been completed'),
     );
     expect(teachingIdx).toBeGreaterThan(0);
     expect(hist[teachingIdx]!.content.startsWith('[steps unrun')).toBe(true);

@@ -108,6 +108,8 @@ export function buildResumeCheckIn(
     let stepToolRan = false;
     /** The effects envelope the approved call returned (9.19.0). */
     let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    /** The unknown status word of a result that is an envelope but for it. */
+    let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
     let negativeResultId: string | undefined;
@@ -138,6 +140,7 @@ export function buildResumeCheckIn(
         dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
       if (dispatched.executed === true && error !== true) {
         resumeEnvelope = dispatched.envelope;
+        resumeUnknownStatus = dispatched.unknownStatus;
       }
       // Consent moved the execution to this side of the pause; the rules
       // about results move with it.
@@ -180,6 +183,7 @@ export function buildResumeCheckIn(
       ran: toolRan,
       clean: stepToolRan,
       ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+      ...(resumeUnknownStatus !== undefined && { unknownStatus: resumeUnknownStatus }),
     };
     // Step boundary (9.18.0) — a checkIn tool CAN be a step's tool: an
     // approved call advances or holds its step here by the same rule as the

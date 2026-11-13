@@ -4,7 +4,7 @@ title: ToolResultEnvelope
 
 # Interface: ToolResultEnvelope
 
-Defined in: [src/semantics/toolEffects.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L111)
+Defined in: [src/semantics/toolEffects.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L114)
 
 What a tool handler returns to opt into the channel:
 `{ content, effects, status? }`. `content` is what the model reads (any
@@ -24,7 +24,7 @@ explicit marker when only `status` matters.
 
 > `readonly` **content**: `unknown`
 
-Defined in: [src/semantics/toolEffects.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L112)
+Defined in: [src/semantics/toolEffects.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L115)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/semantics/toolEffects.ts:112](https://github.com/footprintjs/ag
 
 > `readonly` **effects**: readonly [`ProposedEffect`](/docs/api/type-aliases/ProposedEffect)[]
 
-Defined in: [src/semantics/toolEffects.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L113)
+Defined in: [src/semantics/toolEffects.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L116)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [src/semantics/toolEffects.ts:113](https://github.com/footprintjs/ag
 
 > `readonly` `optional` **status?**: [`ToolResultStatus`](/docs/api/type-aliases/ToolResultStatus)
 
-Defined in: [src/semantics/toolEffects.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L114)
+Defined in: [src/semantics/toolEffects.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L117)

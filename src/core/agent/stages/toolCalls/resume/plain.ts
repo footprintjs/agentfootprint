@@ -121,7 +121,7 @@ export function buildResumePlain(
     // step is decided here at the same boundary it would have been inline,
     // by the same rule (`stepOutcomeOf`). The answer is a value, never a
     // declared status, so the step advances as 'not-reported' and the model
-    // reads that the step ran and its tool reported no outcome. The pointer
+    // reads that the step ran and its tool declared no status. The pointer
     // itself crossed the checkpoint for free (it is committed shared state);
     // this is the half that has to be wired.
     if (deps.stepPlanFor) {

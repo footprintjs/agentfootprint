@@ -9,6 +9,14 @@ export interface SettledCall {
   readonly clean: boolean;
   /** The tool's DECLARED status (an effects envelope), when it gave one. */
   readonly status?: ToolResultStatus;
+  /**
+   * The word a tool wrote as `status` in a value that is an envelope but for
+   * that word, which names none of the library's seven
+   * (`semantics/toolEffects.ts` · `unknownStatusOf`, cleaned). The call
+   * declared no status; only the procedure step reads this, to name the word
+   * instead of saying the tool declared nothing. `callOutcomeOf` ignores it.
+   */
+  readonly unknownStatus?: string;
 }
 
 /**

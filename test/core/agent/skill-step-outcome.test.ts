@@ -12,7 +12,11 @@
  *                      its tool reported, and `skill.step_held` records it;
  *   - `not-finished` — the tool declared `pending` or `partial`: held the same way;
  *   - `not-reported` — the tool declared nothing: the step advances, and both
- *                      the model's sentence and `step_advanced.outcome` say so.
+ *                      the model's sentence and `step_advanced.outcome` say so;
+ *                      a status word the library does not know is named in both.
+ *
+ * A status word is read once (`semantics/toolOutcome.ts` · `readToolResultStatus`):
+ * 'FAILURE' and ' failure ' are 'failure'.
  *
  * The same rule runs at every door a step can advance through: the batch
  * loop and the plain, check-in, ask and credential resumes. One test per door.
@@ -24,6 +28,7 @@ import {
   allow,
   ask,
   checkInApproved,
+  checkInDeclined,
   defineTool,
   isAskPause,
   isPaused,
@@ -31,7 +36,6 @@ import {
 import { defineSkill, pointerOf, skillGraph } from '../../../src/injection-engine.js';
 import { mock } from '../../../src/llm-providers.js';
 import { bearer, type CredentialProvider } from '../../../src/identity.js';
-import type { ToolResultStatus } from '../../../src/semantics/toolOutcome.js';
 import { pausedRequest } from '../../helpers/pausedRequest.js';
 
 // ── Toolkit ──────────────────────────────────────────────────────────────
@@ -39,7 +43,8 @@ import { pausedRequest } from '../../helpers/pausedRequest.js';
 /** A marker the failed tool's content carries — the model must still read it. */
 const UPSTREAM = 'lookup could not run: upstream down';
 
-const envelope = (status: ToolResultStatus, content = UPSTREAM) => ({
+/** `status` is any word — the tests also write words the library does not know. */
+const envelope = (status: string, content = UPSTREAM) => ({
   content,
   effects: [],
   status,
@@ -225,9 +230,9 @@ describe('the batch loop: a declared failure holds the step', () => {
     );
     await agent.run({ message: 'refund' });
     expect(held).toHaveLength(0);
-    expect(advanced.map((a) => [a.toolCallId, a.outcome])).toEqual([
-      ['t2', 'succeeded'],
-      ['t3', 'succeeded'],
+    expect(advanced.map((a) => [a.toolCallId, a.outcome, a.status])).toEqual([
+      ['t2', 'succeeded', 'success'],
+      ['t3', 'succeeded', 'success'],
     ]);
     expect(toolMessage(agent, 't2')).toBe(
       'order 42 Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).',
@@ -235,7 +240,7 @@ describe('the batch loop: a declared failure holds the step', () => {
     expect(toolMessage(agent, 't3')).toBe('charged Step 2 of 2 done. All 2 steps complete.');
   });
 
-  it("'absent' (nothing found, declared) is a finished look: it advances as 'succeeded'", async () => {
+  it("'absent' (nothing found, declared) is a finished look: it advances as 'succeeded', and the event names 'absent'", async () => {
     const { agent, advanced, held } = build(
       [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
       { skill: refund(statusTool('lookup', envelope('absent', 'no order 42'))) },
@@ -243,7 +248,21 @@ describe('the batch loop: a declared failure holds the step', () => {
     await agent.run({ message: 'refund' });
     expect(held).toHaveLength(0);
     expect(advanced).toHaveLength(1);
-    expect(advanced[0]).toMatchObject({ toolCallId: 't2', outcome: 'succeeded' });
+    expect(advanced[0]).toMatchObject({ toolCallId: 't2', outcome: 'succeeded', status: 'absent' });
+    expect(advanced[0]).not.toHaveProperty('unknownStatus');
+  });
+
+  it("a returned absent(…) is declared 'absent' by the framework: 'succeeded' with status 'absent'", async () => {
+    const { absent } = await import('../../../src/index.js');
+    const { agent, advanced, held } = build(
+      [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+      {
+        skill: refund(statusTool('lookup', absent({ what: 'order 42', checked: ['orders db'] }))),
+      },
+    );
+    await agent.run({ message: 'refund' });
+    expect(held).toHaveLength(0);
+    expect(advanced[0]).toMatchObject({ toolCallId: 't2', outcome: 'succeeded', status: 'absent' });
   });
 
   it("no declared status: the step advances and it is said — 'not-reported' on the event and in the words", async () => {
@@ -262,14 +281,88 @@ describe('the batch loop: a declared failure holds the step', () => {
       ['t2', 'not-reported'],
       ['t3', 'not-reported'],
     ]);
+    // Neither field is present for a plain value: it declared nothing.
+    expect(advanced[0]).not.toHaveProperty('status');
+    expect(advanced[0]).not.toHaveProperty('unknownStatus');
     expect(toolMessage(agent, 't2')).toBe(
-      'lookup ran Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: ' +
+      'lookup ran Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: ' +
         'refund the charge (tool: `charge`).',
     );
     expect(toolMessage(agent, 't3')).toBe(
-      'charge ran Step 2 of 2 ran; its tool reported no outcome. It was the last step.',
+      'charge ran Step 2 of 2 ran; its tool declared no status. It was the last step.',
     );
     expect(pointer(agent)).toMatchObject({ step: 3, total: 2 });
+  });
+
+  it.each(['FAILURE', ' Failure ', 'failure\n'])(
+    'a second spelling of a known status (%j) is read as that status: held as failed',
+    async (spelled) => {
+      const { agent, advanced, held } = build(
+        [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+        { skill: refund(statusTool('lookup', envelope(spelled))) },
+      );
+      await agent.run({ message: 'refund' });
+      expect(advanced).toHaveLength(0);
+      expect(held).toHaveLength(1);
+      expect(held[0]).toMatchObject({ outcome: 'failed', status: 'failure', toolCallId: 't2' });
+      // Read as an envelope: the model reads the content, then the held sentence.
+      expect(toolMessage(agent, 't2')).toBe(UPSTREAM + HELD_FAILED);
+      expect(pointer(agent)).toMatchObject({ step: 1 });
+    },
+  );
+
+  it('a status word the library does not know is not reported, not held — and the word is told, cleaned and quoted', async () => {
+    const { agent, advanced, held } = build(
+      [
+        call('read_skill', 't1', { id: 'refund' }),
+        call('lookup', 't2'),
+        call('charge', 't3'),
+        final('x'),
+      ],
+      { skill: refund(statusTool('lookup', envelope('rejected\u202Eby-upstream'))) },
+    );
+    await agent.run({ message: 'refund' });
+    expect(held).toHaveLength(0);
+    expect(advanced.map((a) => [a.toolCallId, a.outcome, a.unknownStatus])).toEqual([
+      ['t2', 'not-reported', 'rejectedby-upstream'],
+      ['t3', 'not-reported', undefined],
+    ]);
+    expect(advanced[0]).not.toHaveProperty('status');
+    // The value is data under the envelope law (its bytes reach the model as
+    // before); the step sentence names the word without the bidi override.
+    const msg = toolMessage(agent, 't2');
+    expect(msg).toContain(
+      ' Step 1 of 2 ran; its tool reported "rejectedby-upstream", a status this library ' +
+        'does not know, so the step was not held. Now on step 2 of 2: refund the charge ' +
+        '(tool: `charge`).',
+    );
+    expect(msg).not.toContain('declared no status');
+    expect(pointer(agent)).toMatchObject({ step: 3 });
+  });
+
+  it('an unknown status word longer than 40 characters is cut', async () => {
+    const long = 'x'.repeat(60);
+    const { agent, advanced } = build(
+      [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+      { skill: refund(statusTool('lookup', envelope(long))) },
+    );
+    await agent.run({ message: 'refund' });
+    expect(advanced[0]).toMatchObject({
+      outcome: 'not-reported',
+      unknownStatus: 'x'.repeat(40) + '…',
+    });
+  });
+
+  it("a status without the envelope's effects marker declared nothing: 'declared no status' is literally true", async () => {
+    const { agent, advanced, held } = build(
+      [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+      { skill: refund(statusTool('lookup', { content: 'upstream down', status: 'failure' })) },
+    );
+    await agent.run({ message: 'refund' });
+    expect(held).toHaveLength(0);
+    expect(advanced[0]).toMatchObject({ outcome: 'not-reported' });
+    expect(advanced[0]).not.toHaveProperty('unknownStatus');
+    expect(toolMessage(agent, 't2')).toContain(' Step 1 of 2 ran; its tool declared no status.');
   });
 
   it('a thrown error still holds silently, as before — no step_held, no sentence', async () => {
@@ -339,6 +432,30 @@ describe('a skill-graph agent: the same rule', () => {
   });
 });
 
+describe('the nudge after a held step', () => {
+  it("says the step 'had not been completed' — true for a step whose tool ran and failed", async () => {
+    const { agent, held, unfinished } = build(
+      [
+        call('read_skill', 't1', { id: 'refund' }),
+        call('lookup', 't2'),
+        final('Could not refund: the lookup failed.'),
+        final('Could not refund: the lookup failed.'),
+      ],
+      { skill: refund(statusTool('lookup', envelope('failure'))) },
+    );
+    await agent.run({ message: 'refund' });
+    expect(held.map((h) => h.toolCallId)).toEqual(['t2']);
+    expect(unfinished.map((u) => u.action)).toEqual(['nudged', 'accepted']);
+    const nudge = historyOf(agent).find((m) => m.content.startsWith('[steps unrun'))?.content;
+    expect(nudge).toBe(
+      "[steps unrun — Steps 1–2 of 'refund' had not been completed when the answer above was " +
+        'given: 1: find the order first (`lookup`); 2: refund the charge (`charge`). This ' +
+        'message asked for them to be completed, or for the reason they were not.]',
+    );
+    expect(nudge).not.toContain('had not run');
+  });
+});
+
 describe('a step whose tool keeps failing ends with the turn', () => {
   it('maxIterations ends the turn: each failure is held and recorded, then the procedure is cut short', async () => {
     const { agent, advanced, held, unfinished } = build(
@@ -386,7 +503,7 @@ describe('every resume door asks the same rule', () => {
     expect(advanced).toHaveLength(1);
     expect(advanced[0]).toMatchObject({ toolCallId: 't2', outcome: 'not-reported' });
     expect(toolMessage(agent, 't2')).toBe(
-      'order 42 Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: ' +
+      'order 42 Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: ' +
         'refund the charge (tool: `charge`).',
     );
   });
@@ -467,6 +584,104 @@ describe('every resume door asks the same rule', () => {
     expect(toolMessage(agent, 't2')).toBe(UPSTREAM + HELD_FAILED);
   });
 
+  // The library's own refusals at a resume door: the call did not run, so the
+  // step holds with no step event and no step sentence — as before.
+  const stoppedAt = (agent: Agent, advanced: Payload[], held: Payload[], id = 't2') => {
+    expect(pointer(agent)).toMatchObject({ skillId: 'refund', step: 1, total: 2 });
+    expect(advanced).toHaveLength(0);
+    expect(held).toHaveLength(0);
+    expect(toolMessage(agent, id)).not.toContain('Step 1 of 2');
+  };
+
+  it('check-in door, declined: the call did not run — the step holds silently', async () => {
+    const lookup = statusTool('lookup', envelope('success', 'order 42'), { checkIn: 'always' });
+    const { agent, advanced, held } = build(
+      [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+      { skill: refund(lookup) },
+    );
+    const paused = await agent.run({ message: 'refund' });
+    expect(isPaused(paused)).toBe(true);
+    await agent.resume(
+      (paused as { checkpoint: never }).checkpoint,
+      checkInDeclined({ request: pausedRequest(paused), by: 'ops', note: 'not now' }),
+    );
+    stoppedAt(agent, advanced, held);
+    expect(toolMessage(agent, 't2')).toContain('declined');
+  });
+
+  it('ask door, declined: the call did not run — the step holds silently', async () => {
+    const { agent, advanced, held } = build(
+      [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+      {
+        skill: refund(statusTool('lookup', envelope('success', 'order 42'))),
+        middleware: {
+          name: 'approve-lookup',
+          onToolCall: (c) => (c.toolName === 'lookup' ? ask({ question: 'look it up?' }) : allow()),
+        },
+      },
+    );
+    const paused = await agent.run({ message: 'refund' });
+    expect(isAskPause(paused)).toBe(true);
+    await agent.resume(
+      (paused as { checkpoint: never }).checkpoint,
+      checkInDeclined({ request: pausedRequest(paused), by: 'ops', note: 'not now' }),
+    );
+    stoppedAt(agent, advanced, held);
+    expect(toolMessage(agent, 't2')).toContain('declined');
+  });
+
+  it('credential door, the resumed call did not run (the credential failed): the step holds silently', async () => {
+    let asked = 0;
+    const vault: CredentialProvider = {
+      id: 'test-3lo',
+      getCredential: () => {
+        asked += 1;
+        if (asked === 1)
+          return Promise.resolve({
+            status: 'authorization-required',
+            authorizationUrl: 'https://idp.example.test/authorize',
+            sessionId: 'sess',
+          });
+        return Promise.reject(new Error('token exchange failed'));
+      },
+    };
+    const lookup = statusTool('lookup', envelope('success', 'order 42'), {
+      needs: { credential: 'billing', mode: 'user', scopes: ['orders.read'] },
+    });
+    const { agent, advanced, held } = build(
+      [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+      { skill: refund(lookup), credentials: vault },
+    );
+    const paused = await agent.run({ message: 'refund' });
+    expect(isPaused(paused)).toBe(true);
+    await agent.resume((paused as { checkpoint: never }).checkpoint, undefined as never);
+    expect(asked).toBe(2);
+    stoppedAt(agent, advanced, held);
+    expect(toolMessage(agent, 't2')).toContain("credential error for 'billing'");
+  });
+
+  it('check-in door: an approved call whose tool writes an unknown status word advances, naming it', async () => {
+    const lookup = statusTool('lookup', envelope('queued-upstream'), { checkIn: 'always' });
+    const { agent, advanced, held } = build(
+      [call('read_skill', 't1', { id: 'refund' }), call('lookup', 't2'), final('x'), final('x')],
+      { skill: refund(lookup) },
+    );
+    const paused = await agent.run({ message: 'refund' });
+    await agent.resume(
+      (paused as { checkpoint: never }).checkpoint,
+      checkInApproved({ request: pausedRequest(paused), by: 'ops' }),
+    );
+    expect(held).toHaveLength(0);
+    expect(advanced[0]).toMatchObject({
+      toolCallId: 't2',
+      outcome: 'not-reported',
+      unknownStatus: 'queued-upstream',
+    });
+    expect(toolMessage(agent, 't2')).toContain(
+      'Step 1 of 2 ran; its tool reported "queued-upstream", a status this library does not know',
+    );
+  });
+
   it('check-in door: an approved call whose tool declares success advances as before', async () => {
     const lookup = statusTool('lookup', envelope('success', 'order 42'), { checkIn: 'always' });
     const { agent, advanced, held } = build(
@@ -480,7 +695,11 @@ describe('every resume door asks the same rule', () => {
     );
     expect(held).toHaveLength(0);
     expect(advanced).toHaveLength(1);
-    expect(advanced[0]).toMatchObject({ toolCallId: 't2', outcome: 'succeeded' });
+    expect(advanced[0]).toMatchObject({
+      toolCallId: 't2',
+      outcome: 'succeeded',
+      status: 'success',
+    });
     expect(toolMessage(agent, 't2')).toBe(
       'order 42 Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).',
     );

@@ -1394,6 +1394,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   type: true,
   unit: true,
   unknownId: true,
+  unknownStatus: true,
   unreachable: true,
   unsupported: true,
   upgraded: true,
@@ -1431,9 +1432,8 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   // @generated fields — end
 };
 
-/** (a) The library's own words — one exported frozen set. */
+/** (a) The library's own words, and the field names its payload types declare — frozen sets. */
 export const LIBRARY_WORDS: Readonly<Record<string, true>> = Object.freeze(WORDS);
-/** The field names the library's payload types declare. */
 export const FIELD_NAMES: Readonly<Record<string, true>> = Object.freeze(FIELDS);
 
 const has = (record: Readonly<Record<string, true>>, key: string): boolean =>

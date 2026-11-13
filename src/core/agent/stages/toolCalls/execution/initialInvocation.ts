@@ -34,6 +34,8 @@ import {
 import {
   readToolResultEnvelope,
   explainStatusOnlyNearMiss,
+  unknownStatusOf,
+  unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { isPauseRequest } from '../../../../pause.js';
 import { CONSENT_PAUSE_KEY } from '../../../../../identity/consent.js';
@@ -232,6 +234,11 @@ export async function invokeInitialTool(
       // dropped marker in dev mode.
       const nearMiss = explainStatusOnlyNearMiss(frame.outcome.result);
       if (nearMiss !== undefined) frame.warnEffect(frame.tc.name, nearMiss);
+      // An envelope in every way but an unknown status word is data too;
+      // the word is kept for the procedure step, which tells it.
+      frame.outcome.unknownStatus = unknownStatusOf(frame.outcome.result);
+      if (frame.outcome.unknownStatus !== undefined)
+        frame.warnEffect(frame.tc.name, unknownStatusWarning(frame.outcome.unknownStatus));
     }
     // Coverage (this release), on the UNWRAPPED content and before
     // the ceiling — the boundary a tool declared is not the channel

@@ -79,6 +79,9 @@ export function landCallResult(
     ran: frame.execution.executed && !frame.execution.denied,
     clean: !frame.outcome.error && !frame.execution.ceilingRefused,
     ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),
+    ...(frame.outcome.unknownStatus !== undefined && {
+      unknownStatus: frame.outcome.unknownStatus,
+    }),
   };
 
   // ── Step boundary (9.18.0): advance decided, then decorate, THEN
@@ -105,7 +108,8 @@ export function landCallResult(
     // refusal) holds the step silently — the model holds no data and was
     // told why. A call that ran clean holds it too when its tool DECLARED a
     // failure or unfinished work, and advances it otherwise ("done" only for
-    // a declared success; "ran; its tool reported no outcome" for none).
+    // a declared success or absent; "ran; its tool declared no status" for none, or
+    // the word itself when the tool wrote one the library does not know).
     frame.delivery.resultStr += frame.applyStepReturn(scope, {
       toolName: frame.tc.name,
       toolCallId: frame.tc.id,

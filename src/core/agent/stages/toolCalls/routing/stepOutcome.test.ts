@@ -37,6 +37,32 @@ describe('stepOutcomeOf — a step is done only when its tool says so', () => {
     expect(stepOutcomeOf({ ran: true, clean: true })).toEqual({ outcome: 'not-reported' });
   });
 
+  it("a succeeded outcome carries the declared word, so 'absent' is told apart from 'success'", () => {
+    expect(stepOutcomeOf({ ran: true, clean: true, status: 'success' })).toEqual({
+      outcome: 'succeeded',
+      status: 'success',
+    });
+    expect(stepOutcomeOf({ ran: true, clean: true, status: 'absent' })).toEqual({
+      outcome: 'succeeded',
+      status: 'absent',
+    });
+  });
+
+  it('an unknown status word is not reported, carried to be told — never held', () => {
+    expect(stepOutcomeOf({ ran: true, clean: true, unknownStatus: 'oops' })).toEqual({
+      outcome: 'not-reported',
+      unknownStatus: 'oops',
+    });
+    // A declared word wins: the unknown word is read only when none was declared.
+    expect(
+      stepOutcomeOf({ ran: true, clean: true, status: 'failure', unknownStatus: 'oops' }),
+    ).toEqual({ outcome: 'failed', status: 'failure' });
+    // The library's own stops still hold silently.
+    expect(stepOutcomeOf({ ran: false, clean: true, unknownStatus: 'oops' })).toEqual({
+      outcome: 'stopped',
+    });
+  });
+
   it("the library's own stops hold whatever the tool declared", () => {
     for (const status of [undefined, ...TOOL_RESULT_STATUSES]) {
       const s = status === undefined ? {} : { status };

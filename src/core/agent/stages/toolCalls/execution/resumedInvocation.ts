@@ -10,6 +10,8 @@ import {
   type ToolResultStatus,
   readToolResultEnvelope,
   explainStatusOnlyNearMiss,
+  unknownStatusOf,
+  unknownStatusWarning,
 } from '../../../../../semantics/toolEffects.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
 import { unknownToolResult } from '../helpers/dispatchRefusals.js';
@@ -119,6 +121,9 @@ export function buildResumedInvocation(
     /** An approved call's arguments no longer matched its request at the
      *  last moment before `execute` (`heldTo`): the call did not run. */
     callChanged?: true;
+    /** The result was an envelope in every way but an unknown status word —
+     *  that word, cleaned (`unknownStatusOf`); read by the procedure step. */
+    unknownStatus?: string;
   }> => {
     const tool = resolved.tool;
     /** What the approval covers — the arguments as handed in, before any
@@ -433,6 +438,11 @@ export function buildResumedInvocation(
                 },
         };
       }
+      // An envelope in every way but an unknown status word is data — read
+      // the word off the value the tool returned, before anything rewrites it.
+      const unknownStatus = unknownStatusOf(result);
+      if (unknownStatus !== undefined)
+        links.warnEffect(toolName, unknownStatusWarning(unknownStatus));
       const searched = links.searchFunnel.compose(scope, searchBoundary(undefined), result);
       if (searched !== undefined) result = searched.value;
       const coverageStatus = links.declareCoverage(
@@ -502,7 +512,12 @@ export function buildResumedInvocation(
           envelope: { content: result, effects: [], status: coverageStatus, malformed: [] },
         };
       }
-      return { result, executed: true, negativeResultId: negativeDispatch?.resultId };
+      return {
+        result,
+        executed: true,
+        negativeResultId: negativeDispatch?.resultId,
+        ...(unknownStatus !== undefined && { unknownStatus }),
+      };
     } catch (err) {
       if (ended !== undefined && err === ended) {
         // Nothing ran; the call's sessions are still released, and the run's

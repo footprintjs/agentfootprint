@@ -107,7 +107,9 @@ export function buildToolStepsOperations(
    * is said).
    *
    * - `'succeeded'` / `'not-reported'`: pointer + 1, `step_advanced` with
-   *   that `outcome` (and `completed` on the last step).
+   *   that `outcome` (and `completed` on the last step), plus the declared
+   *   `status` for `'succeeded'` and the cleaned `unknownStatus` when a
+   *   `'not-reported'` tool wrote a word the library does not know.
    * - `'failed'` / `'not-finished'`: the pointer stays (so the next step's
    *   tool stays held out of the offer), `step_held` with the declared
    *   `status`, and the held sentence.
@@ -132,7 +134,6 @@ export function buildToolStepsOperations(
       });
       return stepHeldSuffix(ptr, plan, verdict.outcome, verdict.status);
     }
-    const outcome = verdict.outcome;
     const next: StepPointer = {
       skillId: ptr.skillId,
       step: ptr.step + 1,
@@ -144,12 +145,15 @@ export function buildToolStepsOperations(
     typedEmit(scope, 'agentfootprint.skill.step_advanced', {
       skillId: ptr.skillId,
       step: stepFacts,
-      outcome,
+      outcome: verdict.outcome,
+      ...(verdict.outcome === 'succeeded' && { status: verdict.status }),
+      ...(verdict.outcome === 'not-reported' &&
+        verdict.unknownStatus !== undefined && { unknownStatus: verdict.unknownStatus }),
       iteration: call.iteration,
       toolCallId: call.toolCallId,
       ...(completed && { completed: true as const }),
     });
-    return stepAdvanceSuffix(next, plan, outcome);
+    return stepAdvanceSuffix(next, plan, verdict);
   };
 
   /** The `read_skill` activation intro for a STEPPED skill — where its

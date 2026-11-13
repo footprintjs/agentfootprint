@@ -35,5 +35,9 @@ export interface ResumedInvocation {
     /** An approved call's arguments no longer matched its request at the
      *  last moment before `execute` (`heldTo`): the call did not run. */
     callChanged?: true;
+    /** The result was an envelope in every way but an unknown status word —
+     *  that word, cleaned (`semantics/toolEffects.ts` · `unknownStatusOf`);
+     *  read only by the procedure step. */
+    unknownStatus?: string;
   }>;
 }

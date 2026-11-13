@@ -851,7 +851,7 @@
             ]
           },
           {
-            "content": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "content": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "role": "tool",
             "toolCallId": "c1",
             "toolName": "lookup"
@@ -859,7 +859,7 @@
         ],
         "iteration": 2,
         "lastToolResult": {
-          "result": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
+          "result": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: refund the charge (tool: `charge`).",
           "toolName": "lookup"
         },
         "stepPointer": [
@@ -880,7 +880,7 @@
         },
         "toolResults": [
           {
-            "result": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "result": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "toolCallId": "c1",
             "toolName": "lookup"
           }
@@ -1017,10 +1017,10 @@
           {
             "asRecency": "latest",
             "asRole": "tool",
-            "contentHash": "fa8638b8",
-            "contentSummary": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2…",
+            "contentHash": "f7d67fa1",
+            "contentSummary": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2:…",
             "position": 2,
-            "rawContent": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "rawContent": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "reason": "conversation history [2]",
             "slot": "messages",
             "source": "tool-result",
@@ -1320,8 +1320,8 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 301,
-                "jsonChars": 301
+                "jsonBytes": 300,
+                "jsonChars": 300
               },
               "systemPrompt": {
                 "jsonBytes": 348,
@@ -1334,8 +1334,8 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1762,
-              "jsonChars": 1744
+              "jsonBytes": 1761,
+              "jsonChars": 1743
             }
           },
           "system": {
@@ -1422,7 +1422,7 @@
             "role": "assistant"
           },
           {
-            "content": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be run, or for the reason they were not run.]",
+            "content": "[steps unrun — Step 2 of 'refund' had not been completed when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be completed, or for the reason they were not.]",
             "role": "user"
           }
         ],
@@ -1548,10 +1548,10 @@
           {
             "asRecency": "earlier",
             "asRole": "tool",
-            "contentHash": "fa8638b8",
-            "contentSummary": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2…",
+            "contentHash": "f7d67fa1",
+            "contentSummary": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2:…",
             "position": 2,
-            "rawContent": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "rawContent": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "reason": "conversation history [2]",
             "slot": "messages",
             "source": "tool-result",
@@ -1571,10 +1571,10 @@
           {
             "asRecency": "latest",
             "asRole": "user",
-            "contentHash": "fa10958e",
-            "contentSummary": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: …",
+            "contentHash": "f16cd4d3",
+            "contentSummary": "[steps unrun — Step 2 of 'refund' had not been completed when the answer above …",
             "position": 4,
-            "rawContent": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be run, or for the reason they were not run.]",
+            "rawContent": "[steps unrun — Step 2 of 'refund' had not been completed when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be completed, or for the reason they were not.]",
             "reason": "conversation history [4]",
             "slot": "messages",
             "source": "user"
@@ -1780,8 +1780,8 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 558,
-                "jsonChars": 556
+                "jsonBytes": 570,
+                "jsonChars": 568
               },
               "systemPrompt": {
                 "jsonBytes": 348,
@@ -1794,8 +1794,8 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 2019,
-              "jsonChars": 1999
+              "jsonBytes": 2031,
+              "jsonChars": 2011
             }
           },
           "system": {
@@ -2085,7 +2085,7 @@
               ]
             },
             {
-              "content": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
+              "content": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: refund the charge (tool: `charge`).",
               "role": "tool",
               "toolCallId": "c1",
               "toolName": "lookup"
@@ -2226,7 +2226,7 @@
               ]
             },
             {
-              "content": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
+              "content": "lookup result Step 1 of 2 ran; its tool declared no status. Now on step 2 of 2: refund the charge (tool: `charge`).",
               "role": "tool",
               "toolCallId": "c1",
               "toolName": "lookup"
@@ -2236,7 +2236,7 @@
               "role": "assistant"
             },
             {
-              "content": "[steps unrun — Step 2 of 'refund' had not run when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be run, or for the reason they were not run.]",
+              "content": "[steps unrun — Step 2 of 'refund' had not been completed when the answer above was given: 2: refund the charge (`charge`). This message asked for them to be completed, or for the reason they were not.]",
               "role": "user"
             }
           ],

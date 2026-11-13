@@ -560,7 +560,12 @@ them. **Zero-cost when unused:** recognition is strict (an envelope needs
 `content` plus an `effects` array whose every element speaks the reserved
 `kind` vocabulary; an empty `effects: []` also needs one of the seven
 statuses to say anything — `{ content }` alone is data), so every shape
-tools return today keeps its exact bytes and fires no new events.
+tools return today keeps its exact bytes and fires no new events. The status
+word is read in any case and with surrounding spaces trimmed: `'FAILURE'`
+and `' failure '` both declare `'failure'`. A word that names none of the
+seven still makes the whole value data, and dev mode names the word; a
+procedure step that such a call ran advances and the model reads the word
+(see [Skills → Steps as data](/docs/build/skills#steps-as-data-steps-9180)).
 
 ### The effects surface, named
 
@@ -577,7 +582,8 @@ All from `agentfootprint`:
 - `readToolResultEnvelope` — the strict recognizer itself (exported so a
   custom runner or a test can apply exactly the framework's rule);
   `ReadToolResultEnvelope` is its result: unwrapped `content`, the valid
-  `effects`, the `status`, and the `malformed` refusals.
+  `effects`, the `status` (always one of the seven, lower-case, whatever
+  case the tool wrote), and the `malformed` refusals.
 - `explainStatusOnlyNearMiss` — the recognizer's teaching companion: given a
   value that is *not* an envelope, it returns the warning sentence when the
   shape is a status-only envelope missing its `effects: []` marker

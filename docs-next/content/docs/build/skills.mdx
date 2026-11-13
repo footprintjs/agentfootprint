@@ -699,13 +699,24 @@ step**:
 - **run the tool** — the result gains a fresh position line, so the
   guidance that matters *now* never decays out of attention. What it says,
   and whether the step moves, depends on what the tool **declared** about
-  the call (its result envelope's `status`):
+  the call (an effects envelope's `status`, read in any case — `'FAILURE'`
+  is `'failure'` — or an `absent()` it returned, which the framework
+  declares as `'absent'`):
   - `'success'` or `'absent'` — the step advances: "Step 2 of 6 done. Now on
-    step 3 of 6: …";
-  - no declared status (a plain return value) — the step advances, and the
-    line says only what is known: "Step 2 of 6 ran; its tool reported no
-    outcome. Now on step 3 of 6: …". Return `{ content, effects: [],
-    status: 'success' }` when the tool can say its work was done;
+    step 3 of 6: …". `'absent'` (the tool looked and found nothing) counts
+    as a completed step, and `step_advanced` carries `status: 'absent'` so
+    the record tells it from a plain success;
+  - no declared status (a plain return value, or a `{ content, status }`
+    without the `effects` marker) — the step advances, and the line says
+    only what is known: "Step 2 of 6 ran; its tool declared no status. Now
+    on step 3 of 6: …". Return `{ content, effects: [], status: 'success' }`
+    when the tool can say its work was done;
+  - a status word the library does not know, in an otherwise well-formed
+    envelope (`{ content, effects: [], status: 'queued' }`) — the step
+    advances, not held (a tool with its own vocabulary must not lock a
+    procedure), and the line names the word: "Step 2 of 6 ran; its tool
+    reported "queued", a status this library does not know, so the step was
+    not held." `step_advanced` carries it as `unknownStatus`;
   - `'failure'`, `'denied'` or `'invalid'` — the step **holds**: the pointer
     stays, the next step's tool is not offered, and the line reads "Step 2
     of 6 was not completed: its tool reported 'failure'. The procedure
@@ -735,10 +746,16 @@ step**:
 A step whose tool asks a human (`askHuman` / `pauseHere`) pauses the run
 mid-procedure; the pointer rides the checkpoint and the person's answer
 advances the step on resume — human-in-the-loop as an ordinary step. The
-answer is a value, not a declared status, so that step advances as "ran;
-its tool reported no outcome". A step resumed after an approved check-in,
-an approved middleware `ask` or granted credential consent is decided by
-the same rule as one that ran inline:
+answer is a value, never read for a status (even an envelope-shaped one), so
+that step advances as "ran; its tool declared no status" and can never be
+held — a person's "no" to an approval step advances it too. Two other kinds
+of step tool can never declare a status either, so they always advance the
+same way: an MCP tool read in the default text mode (its result reaches the
+agent as a string; a structured mode can carry an envelope) and a
+frontend tool whose result the page sends back (it arrives as the answer to
+a pause). A step resumed after an approved check-in, an approved middleware
+`ask` or granted credential consent is decided by the same rule as one that
+ran inline:
 
 <CodeFile path="examples/context-engineering/16-skill-steps.ts" region="hitl-step" title="examples/context-engineering/16-skill-steps.ts (region: hitl-step)" />
 
@@ -787,8 +804,10 @@ Everything steps-related imports from `agentfootprint/injection-engine`
 
 On the event stream: `agentfootprint.skill.step_advanced` fires at every
 step that advanced, in batch call order, with `outcome: 'succeeded'` (its
-tool declared success) or `outcome: 'not-reported'` (it declared nothing);
-the last one carries `completed: true`. `agentfootprint.skill.step_held`
+tool declared success or absent; `status` says which) or
+`outcome: 'not-reported'` (it declared nothing; `unknownStatus` carries a
+word it wrote that the library does not know); the last one carries
+`completed: true`. `agentfootprint.skill.step_held`
 fires at every call that held its step because its tool declared a failure
 or unfinished work, with `outcome` (`'failed'` / `'not-finished'`) and the
 declared `status`; `agentfootprint.skill.step_skipped` records a decline

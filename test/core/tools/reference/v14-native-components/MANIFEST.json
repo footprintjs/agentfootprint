@@ -5,7 +5,7 @@
     {
       "case": "agent-answer-layer",
       "historicalSha256": "ee0af9399cd33b3a32aee207866034e63a7202beca275cd51432b1a4be1a3d13",
-      "expectedSha256": "14b68bbee3f39b4f36f528203ce7b84e26862ef6b470923912bfbed773ed08f0"
+      "expectedSha256": "7801743131805e74ce87ad8280f861864ba5b440ed6ec4ac50092cd6188e6bec"
     },
     {
       "case": "agent-arguments-ask-resumed",
@@ -120,7 +120,7 @@
     {
       "case": "agent-stepped-skill",
       "historicalSha256": "e9be43186c782ce54e3590c12f7ff1cbc41d2a04d19509143c36948ce285211f",
-      "expectedSha256": "1017efddbc0027f46b04283f46bb61e2e7c5bb4102f5e9e41fc815fc02553f22"
+      "expectedSha256": "f0ec983f7d8c38d992a854f5d9a4cd8f57ebcbbadfbd0b696d81e4f69266b691"
     },
     {
       "case": "agent-time-clock",

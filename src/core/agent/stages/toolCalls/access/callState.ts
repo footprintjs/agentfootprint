@@ -22,6 +22,7 @@ export function prepareCallState(
      *  today's path byte for byte. */
     toolEnvelope: undefined,
     toolStatus: findingsRefusal === undefined ? undefined : 'invalid',
+    unknownStatus: undefined,
   };
   // Permission gate — when a checker is configured, evaluate BEFORE
   // executing the tool. Emits `permission.check` with the decision.

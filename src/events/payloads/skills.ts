@@ -295,13 +295,29 @@ export interface SkillStepAdvancedPayload {
   /**
    * How the step's tool reported the call that advanced it:
    * `'succeeded'` = it declared `status: 'success'` or `'absent'` (an
-   * effects envelope); `'not-reported'` = it declared no status (a plain
-   * return value, or a person's answer to the tool's own pause), so the
-   * record shows the step ran, not that its work was done. A recording made
-   * before this field existed has no `outcome`, and its absence there says
-   * nothing either way.
+   * effects envelope's status, or a returned `absent(…)`, which the
+   * framework declares as `'absent'`); `'not-reported'` = it declared no
+   * status (a plain return value, an MCP tool's text, or a person's answer
+   * to the tool's own pause), so the record shows the step ran, not that its
+   * work was done. A recording made before this field existed has no
+   * `outcome`, and its absence there says nothing either way.
    */
   readonly outcome: 'succeeded' | 'not-reported';
+  /**
+   * The status word the tool declared, present exactly when `outcome` is
+   * `'succeeded'`: `'success'`, or `'absent'` when the tool looked and found
+   * nothing — a completed step, told apart from a plain success here.
+   */
+  readonly status?: 'success' | 'absent';
+  /**
+   * Present only when `outcome` is `'not-reported'` and the tool wrote a
+   * `status` the library does not know, in a value that was an effects
+   * envelope in every other way (`{ content, effects: [], status: 'oops' }`):
+   * that word, cleaned of control, separator and invisible format characters
+   * and cut at 40 characters. Such a value is data, so the step is not held;
+   * the model read the word too.
+   */
+  readonly unknownStatus?: string;
   readonly iteration: number;
   /** The provider's tool_use id for the call that advanced the step, when known. */
   readonly toolCallId?: string;
@@ -352,7 +368,9 @@ export interface SkillStepSkippedPayload {
 }
 
 /**
- * The turn is ending with steps unrun (9.18.0). `'nudged'` = the one
+ * The turn is ending with steps not completed (9.18.0): the current step and
+ * every step after it, whether the current one was never called or was held
+ * because its tool declared a failure or unfinished work. `'nudged'` = the one
  * teaching re-ask went back (at most once per turn); `'accepted'` = the
  * model stopped again and the framework honored it — never a forced
  * continue; `'cut-short'` = a limit (max-iterations / cost-budget) ended
@@ -360,6 +378,7 @@ export interface SkillStepSkippedPayload {
  */
 export interface SkillStepsUnfinishedPayload {
   readonly skillId: string;
+  /** The steps not completed, from the current one on. */
   readonly remaining: ReadonlyArray<{
     readonly index: number;
     readonly tool: string;

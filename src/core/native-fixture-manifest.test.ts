@@ -31,21 +31,61 @@ const fields = new Set([
 const slots = new Set(['System Prompt', 'Messages']);
 
 // Named delta (a step is done only when its tool says so): a step whose tool
-// declared no status now reads "Step 1 of 2 ran; its tool reported no outcome."
-// where it read "Step 1 of 2 done.". Admitted for the two stepped cases only:
-// the step sentence (from " Step k of n " to the end of the string) is cut from
-// every string on both sides, and the values computed from that text
-// (`contentHash`, `jsonBytes`, `jsonChars`) are dropped. Everything else stays exact.
+// declared no status now reads "Step 1 of 2 ran; its tool declared no
+// status." where it read "Step 1 of 2 done.", and the step nudge reads "had
+// not been completed when …" where it read "had not run when …". Admitted for
+// the two stepped cases only, and only where that text is:
+//   - the step sentence (from " Step k of n done." / " Step k of n ran;" to
+//     the end of the string) and the nudge's body (after "of '<skill>'") are
+//     cut from every string, on both sides;
+//   - `contentHash` is dropped only from an object whose own text carried one
+//     of them (it is computed from that text);
+//   - `jsonBytes` / `jsonChars` are dropped only for a request's `messages`
+//     slot and `total`, and only for a request measured AFTER a commit put
+//     that text into the history (the measured messages then hold it). The
+//     system prompt and tools slots, and every earlier request, stay exact.
 const stepSentenceCases = new Set(['agent-stepped-skill', 'agent-answer-layer']);
-const fromStepText = new Set(['contentHash', 'jsonBytes', 'jsonChars']);
-function withoutStepSentence(value: unknown): unknown {
-  if (typeof value === 'string') return value.replace(/ Step \d+ of \d+ (done\.|ran;)[\s\S]*$/, '');
-  if (Array.isArray(value)) return value.map(withoutStepSentence);
+const STEP_SENTENCE = / Step \d+ of \d+ (done\.|ran;)[\s\S]*$/;
+const NUDGE_BODY = /^(\[steps unrun — Steps? [\d–]+ of '[^']*')[\s\S]*$/;
+const carriesStepText = (text: string): boolean =>
+  STEP_SENTENCE.test(text) || NUDGE_BODY.test(text);
+function cutStepText(value: unknown): unknown {
+  if (typeof value === 'string') return value.replace(STEP_SENTENCE, '').replace(NUDGE_BODY, '$1');
+  if (Array.isArray(value)) return value.map(cutStepText);
   if (value === null || typeof value !== 'object') return value;
+  const entries = Object.entries(value);
+  const ownText = entries.some(([, inner]) => typeof inner === 'string' && carriesStepText(inner));
   const out: Record<string, unknown> = {};
-  for (const [key, inner] of Object.entries(value))
-    if (!fromStepText.has(key)) out[key] = withoutStepSentence(inner);
+  for (const [key, inner] of entries)
+    if (!(ownText && key === 'contentHash')) out[key] = cutStepText(inner);
   return out;
+}
+function withoutMeasuredMessages(commit: Record<string, unknown>): void {
+  const overwrite = commit.overwrite as Record<string, unknown> | undefined;
+  const receipt = overwrite?.receipt as Record<string, unknown> | undefined;
+  const measured = receipt?.requestMeasurement as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (measured === undefined) return;
+  for (const sizes of [measured.total, measured.slots?.messages as Record<string, unknown>])
+    if (sizes !== undefined) {
+      delete sizes.jsonBytes;
+      delete sizes.jsonChars;
+    }
+}
+function withoutStepSentence(capture: unknown): unknown {
+  const { commitLog, ...rest } = capture as Capture;
+  let historyHoldsStepText = false;
+  return {
+    ...(cutStepText(rest) as object),
+    commitLog: commitLog.map((commit) => {
+      const cut = cutStepText(commit) as Record<string, unknown>;
+      if (historyHoldsStepText) withoutMeasuredMessages(cut);
+      if (/ Step \d+ of \d+ (done\.|ran;)|\[steps unrun — /.test(JSON.stringify(commit)))
+        historyHoldsStepText = true;
+      return cut;
+    }),
+  };
 }
 
 /** Comparison only: canonical files and their full ordered equality stay untouched. */

@@ -1,6 +1,16 @@
 import type { At, ItemOf, PayloadOf } from '../vocabulary.js';
 import { appReasonWord, declaredValue } from '../../auditKeptByContract.js';
-import { bool, listOf, nullOr, num, oneOf, orList, shapeOf, str } from '../../auditBounding.js';
+import {
+  bool,
+  charsMarker,
+  listOf,
+  nullOr,
+  num,
+  oneOf,
+  orList,
+  shapeOf,
+  str,
+} from '../../auditBounding.js';
 import { eventShape } from '../vocabulary.js';
 
 export function routingShapes() {
@@ -104,6 +114,9 @@ export function routingShapes() {
         note: str,
       }),
       outcome: oneOf('not-reported', 'succeeded'),
+      status: oneOf('absent', 'success'),
+      // A word the TOOL wrote (its result's data), so only its size is kept.
+      unknownStatus: charsMarker,
       iteration: num,
       toolCallId: str,
       completed: bool,

@@ -17,11 +17,15 @@
  * its diff is that one added line. Every other reference is unchanged.
  *
  * STEP OUTCOME: a procedure step whose tool declared no status now ends its
- * tool message with "Step 1 of 2 ran; its tool reported no outcome." instead
- * of "Step 1 of 2 done." (`routing/stepOutcome.ts` · `stepOutcomeOf`). Only
+ * tool message with "Step 1 of 2 ran; its tool declared no status." instead
+ * of "Step 1 of 2 done." (`routing/stepOutcome.ts` · `stepOutcomeOf`), and
+ * the step nudge says the steps "had not been completed" (and asks for them
+ * to be completed) where it said they "had not run". Only
  * `agent-stepped-skill` and `agent-answer-layer` have such a step; both were
- * recaptured with AF_TOOLS_REFERENCE_CASES=agent-stepped-skill,agent-answer-layer
- * and each diff is that sentence plus the hash and sizes computed from it.
+ * recaptured with
+ * AF_TOOLS_REFERENCE=update AF_TOOLS_REFERENCE_CASES=agent-stepped-skill,agent-answer-layer
+ * and each diff is those two sentences plus the hashes and request sizes
+ * computed from them.
  *
  * THINKING REPLAY: the `provider-defaults` reader gap's boundary sentence now
  * says that later preparation notes do not prove what was sent or accepted.

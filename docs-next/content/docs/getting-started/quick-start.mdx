@@ -163,7 +163,7 @@ Every move is a typed event — `skill.step_advanced`, `skill.step_held`,
 `skill.step_skipped`, `skill.steps_unfinished` — and a step whose tool asks a
 human pauses the run and advances on resume. A step is done only when its tool
 says so: a declared `status: 'failure'` holds it (`skill.step_held`), and a
-plain return value advances it with "ran; its tool reported no outcome". Full walkthrough in [Skills → Steps as
+plain return value advances it with "ran; its tool declared no status". Full walkthrough in [Skills → Steps as
 data](doc:skills#steps-as-data-steps-9180); runnable end-to-end in
 `examples/context-engineering/16-skill-steps.ts`.
 

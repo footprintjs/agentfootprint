@@ -12,7 +12,7 @@
  *   • run the tool — what the tool DECLARED decides the step: a declared
  *     `status: 'success'` advances it ("Step k of n done. Now on step k+1…");
  *     a plain value advances it and says so ("Step k of n ran; its tool
- *     reported no outcome."); a declared failure or unfinished work holds it
+ *     declared no status."); a declared failure or unfinished work holds it
  *     (`skill.step_held`);
  *   • skip it with `skip_step(reason)` — the reason goes on the record
  *     (`skill.step_skipped`), and the declared `onSkip` policy decides

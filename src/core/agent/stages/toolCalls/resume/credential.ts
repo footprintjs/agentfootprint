@@ -121,6 +121,9 @@ export function buildResumeCredential(
       ran: dispatched.executed === true,
       clean: error !== true && dispatched.ceilingRefused !== true,
       ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+      ...(dispatched.executed === true &&
+        error !== true &&
+        dispatched.unknownStatus !== undefined && { unknownStatus: dispatched.unknownStatus }),
     };
     // Step boundary (9.18.0) — a step tool that waited on 3LO consent
     // advances or holds its step on the resumed dispatch by the same rule as

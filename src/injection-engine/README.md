@@ -718,7 +718,7 @@ What the model experiences, per iteration:
 - the current step's tool leads with the banner —
   `[Step 2 of 4 — confirm the duplicate charge] check_history.`;
 - every boundary result renews the position, saying only what the step's tool declared — `"…Step 2 of 4 done. Now on
-  step 3 of 4: refund the duplicate charge only (tool: \`issue_refund\`)."` for a declared `status: 'success'` (or `'absent'`), `"…Step 2 of 4 ran; its tool reported no outcome. Now on step 3 of 4: …"` for a plain value;
+  step 3 of 4: refund the duplicate charge only (tool: \`issue_refund\`)."` for a declared `status: 'success'` (or `'absent'`), `"…Step 2 of 4 ran; its tool declared no status. Now on step 3 of 4: …"` for a plain value (or the word itself — `its tool reported "queued", a status this library does not know, so the step was not held` — for an envelope whose status word the library does not know);
   a declared `'failure'` / `'denied'` / `'invalid'` / `'pending'` / `'partial'` HOLDS the step instead (`skill.step_held`; the pointer stays, the next step's tool stays held out, and the result says "Step 2 of 4 was not completed: its tool reported 'failure'.") —
   so the guidance that matters *now* never decays out of attention (this is the job the deprecated `refreshPolicy` promised and never did);
 - `skip_step(reason)` records a decline (`skill.step_skipped`) and moves or
@@ -752,7 +752,7 @@ alike, the tenure could never begin either) and `reactMode: 'classic'` (a
 frozen offer) are refused at `Agent.build()`. Zero-cost when unused: no stepped skill means no
 `skip_step`, no scope key, no event, no slot change — byte-identical.
 
-Events: `skill.step_advanced` (with `outcome`) · `skill.step_held` · `skill.step_skipped` · `skill.steps_unfinished`.
+Events: `skill.step_advanced` (with `outcome`, the declared `status` for a success or absent, and `unknownStatus` for a word the library does not know) · `skill.step_held` · `skill.step_skipped` · `skill.steps_unfinished`.
 Runnable end-to-end: `examples/context-engineering/16-skill-steps.ts` (a
 6-step refund with one human-approval pause and one recorded skip).
 
@@ -785,9 +785,9 @@ run, and it is still sitting in the window when they do.
 import { STEP_NUDGE_FRAME_PREFIX } from '../saidByPerson.js';
 
 return (
-  `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not run when the answer ` +
-  `above was given: ${list}. This message asked for them to be run, or for the reason ` +
-  `they were not run.]`
+  `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not been completed when ` +
+  `the answer above was given: ${list}. This message asked for them to be completed, or ` +
+  `for the reason they were not.]`
 );
 ```
 

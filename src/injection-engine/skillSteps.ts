@@ -369,24 +369,43 @@ export function readSkillStepIntro(plan: StepPlan): string {
 /**
  * Suffix for a step that advanced: how it ended + what is next.
  *
- * `'succeeded'` — its tool declared success: "Step 1 of 2 done.".
+ * `'succeeded'` — its tool declared `success` or `absent` (it looked and
+ * found nothing; the look is finished): "Step 1 of 2 done.".
  * `'not-reported'` — its tool declared no status, so the library cannot say
  * the work was done, only that the step ran: "Step 1 of 2 ran; its tool
- * reported no outcome." (and "It was the last step." in place of "All 2
- * steps complete."). Never "done" for a call whose tool did not say so.
+ * declared no status." (and "It was the last step." in place of "All 2
+ * steps complete."). "Declared" is exact: a status counts only inside an
+ * effects envelope, so `{ content, status: 'failure' }` without its
+ * `effects` marker declared none. When the tool wrote a word the library
+ * does not know in an otherwise well-formed envelope, the word is named
+ * instead: "Step 1 of 2 ran; its tool reported "oops", a status this
+ * library does not know, so the step was not held." Never "done" for a
+ * call whose tool did not say so.
+ *
+ * Why "declared no status" and not "reported no outcome" (the first wording
+ * of this sentence): a tool that wrote `status: 'FAILURE'` before the word
+ * was read in any case, or `{ content, status: 'failure' }` without the
+ * marker, did report something; only "declared" is true of every value that
+ * reaches this branch.
  */
 export function stepAdvanceSuffix(
   next: StepPointer,
   plan: StepPlan,
-  outcome: 'succeeded' | 'not-reported',
+  verdict:
+    | { readonly outcome: 'succeeded' }
+    | { readonly outcome: 'not-reported'; readonly unknownStatus?: string },
 ): string {
   const ran = next.step - 1;
   const head =
-    outcome === 'succeeded'
+    verdict.outcome === 'succeeded'
       ? ` Step ${ran} of ${next.total} done.`
-      : ` Step ${ran} of ${next.total} ran; its tool reported no outcome.`;
+      : verdict.unknownStatus === undefined
+      ? ` Step ${ran} of ${next.total} ran; its tool declared no status.`
+      : ` Step ${ran} of ${next.total} ran; its tool reported ` +
+        `${JSON.stringify(verdict.unknownStatus)}, a status this library does not know, ` +
+        `so the step was not held.`;
   if (next.step > next.total) {
-    return outcome === 'succeeded'
+    return verdict.outcome === 'succeeded'
       ? `${head} All ${next.total} steps complete.`
       : `${head} It was the last step.`;
   }
@@ -414,14 +433,15 @@ export function stepHeldSuffix(
   outcome: 'failed' | 'not-finished',
   status: string,
 ): string {
-  const step = plan.steps[ptr.step - 1]!;
+  const tool = plan.steps[ptr.step - 1]?.tool;
   const reported =
     outcome === 'not-finished'
       ? `its tool reported '${status}', so its work was not finished`
       : `its tool reported '${status}'`;
   return (
     ` Step ${ptr.step} of ${ptr.total} was not completed: ${reported}. ` +
-    `The procedure stayed on step ${ptr.step} (tool: \`${step.tool}\`).`
+    `The procedure stayed on step ${ptr.step}` +
+    `${tool === undefined ? '' : ` (tool: \`${tool}\`)`}.`
   );
 }
 
@@ -523,9 +543,17 @@ export function nudgeTeachingMessage(ptr: StepPointer, plan: StepPlan): string {
   // nudge persists in `history` past the call it was written for, and a bare
   // `this call` resolves to whichever call re-reads it. The message is the
   // one thing that stays where it is.
+  //
+  // "had not been completed" rather than "had not run", and "completed"
+  // rather than "run" in the ask (since a step is done only when its tool
+  // says so): a step whose tool ran and declared a failure is HELD, so the
+  // step the nudge names may well have run. Both readings stay true — a step
+  // never called and a step held after its tool failed were each not
+  // completed. The opening (`STEP_NUDGE_FRAME_PREFIX`, '[steps unrun') is
+  // unchanged: it is the frame marker readers match on, not a claim.
   return (
-    `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not run when the answer ` +
-    `above was given: ${list}. This message asked for them to be run, or for the reason ` +
-    `they were not run.]`
+    `${STEP_NUDGE_FRAME_PREFIX} — ${span} of '${ptr.skillId}' had not been completed when ` +
+    `the answer above was given: ${list}. This message asked for them to be completed, or ` +
+    `for the reason they were not.]`
   );
 }
