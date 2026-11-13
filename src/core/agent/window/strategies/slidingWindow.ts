@@ -33,7 +33,7 @@ import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '
 import type { SlidingWindowOptions, SlidingWindowRecord } from '../types.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
-export const SLIDING_WINDOW = 'sliding-window';
+const SLIDING_WINDOW = 'sliding-window';
 
 /**
  * Keep the most recent `keepRecentTurns` turns in the live window and drop
