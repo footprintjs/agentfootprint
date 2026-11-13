@@ -187,6 +187,11 @@ const PROVIDER_LEAVES: ReadonlyArray<readonly [file: string, why: string]> = [
     'reached by `provider-contract/types.ts` for `ThinkingBlock`. No imports.',
   ],
   [
+    'src/provider-contract/innerCalls.ts',
+    'reached by `provider-contract/types.ts` for `InnerCallRan` (`LLMMessage.calls`, the ' +
+      'calls a tool made through `ctx.tools` that ran). One interface, no imports.',
+  ],
+  [
     'src/thinking/replay.ts',
     'Replay metadata/report types reached by the provider PORT, plus a data-only refusal ' +
       'class. Its sole import points back to `LLMRequest` as a type: no replay planner, ' +

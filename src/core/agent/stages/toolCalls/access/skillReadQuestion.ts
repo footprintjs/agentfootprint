@@ -11,7 +11,7 @@ export interface SkillReadFacts {
   readonly args: Readonly<Record<string, unknown>>;
   /** The skill the cursor stands on — read only when the question is asked (a scope read is recorded). */
   readonly currentSkillId: () => unknown;
-  /** The parked skills (`catalog.ts` · `parkedNow`) — read only when the question is asked. */
+  /** The parked skills (`contracts/operations/catalog.ts` · `parkedNow`) — read only when asked. */
   readonly parked: () => ReadonlySet<string> | undefined;
 }
 
