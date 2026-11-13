@@ -250,17 +250,9 @@ function add(sink: Sink, raw: string): void {
   const norm = normalizeToken(raw);
   if (norm === '') return;
   for (const form of lookupForms(norm)) {
-    // Re-stamping a form the index already holds costs no entry, so it is
-    // done before the budget is consulted — but only for the forms of a
-    // token that reaches this function. Once the budget is spent, `walk`
-    // and `addText` return before calling `add`, so every LATER token and
-    // result is never seen: a form it would have re-served keeps its
-    // earlier turn stamp and gains no carrier. Example: a value first
-    // served in turn 1 and served again in turn 3 after the budget ran
-    // out still reads as turn 1, so `checkAnswer` counts it under
-    // `grounding.fromPriorTurns` (with `indexTruncated: true`). The
-    // readers that act on stamps refuse a truncated index, so this is a
-    // limit on the numbers, not a wrong verdict.
+    // Re-stamping a held form costs no entry, so it runs before the budget check — but only for a
+    // token that reaches `add`: past the budget a later re-serve is never seen (earlier stamp kept,
+    // no carrier; `indexTruncated: true`). Readers that act on a stamp refuse a truncated index.
     if (sink.values.has(form)) {
       sink.values.set(form, sink.turn);
       carry(sink, form);

@@ -119,12 +119,9 @@ export interface SystemPieceRecord {
 }
 
 /**
- * The separator between two fields inside one digest input — ASCII UNIT
- * SEPARATOR. Only a JSON-encoded part is guaranteed free of it (`JSON.
- * stringify` escapes control characters). A raw string — a prompt, a message's
- * content, a tool name, a tool call id, a run id — can contain it, and nothing
- * refuses or escapes it, so the separator makes accidental ambiguity unlikely
- * rather than impossible. Written as an escape rather than a literal control
+ * The separator between two fields inside one digest input — ASCII UNIT SEPARATOR. Only a
+ * JSON-encoded part is sure to be free of it; a raw string part can carry it, unescaped (folder
+ * README, "Separators are not escaped"). Written as an escape rather than a literal control
  * character so a reader can see it and a formatter cannot eat it.
  *
  * Without it a digest is a bare concatenation, and a bare concatenation is
@@ -138,17 +135,7 @@ const CALL_SEP = '\u001C';
 /** The separator between the fields of ONE tool call. */
 const CALL_FIELD_SEP = '\u001D';
 
-/**
- * The separator between the top-level parts of a message's digest
- * (`messageDigestInput`). The raw parts — `content`, `toolCallId`,
- * `toolName`, and a call's `id` and `name` under `CALL_FIELD_SEP` /
- * `CALL_SEP` — are NOT escaped, so they may contain these separators. Two
- * different messages can then give the same digest input: moving a U+001E
- * from the end of `content` to the start of `toolCallId` does not change the
- * joined string. Only the JSON-encoded parts (`digestJson`) cannot carry a
- * separator. Escaping or length-prefixing the raw parts would change every
- * message hash, so it is not done here.
- */
+/** The separator between a message digest's top-level parts; a raw part may carry it (README). */
 const FIELD_SEP = '\u001E';
 
 /**
@@ -590,9 +577,8 @@ export function toolDigestInput(tool: LLMToolSchema): string {
  *
  * Still deliberately NOT covered: `injectedBy` and `notDispatched` (both
  * stripped before the request exists) and `ephemeral` (a persistence flag,
- * invisible to the model). Two messages that hash the same are the same thing
- * said to the model, except where a raw field carries a separator (see
- * `FIELD_SEP`).
+ * invisible to the model). Two messages that hash the same are the same thing said to the
+ * model, unless a raw field carries a separator (folder README, "Separators are not escaped").
  */
 export function messageDigestInput(message: LLMMessage): string {
   const calls = (message.toolCalls ?? []).map((call) =>

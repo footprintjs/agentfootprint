@@ -4,7 +4,7 @@ title: ReceiptCacheMarker
 
 # Interface: ReceiptCacheMarker
 
-Defined in: [src/core/agent/receipt/receipt.ts:267](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L267)
+Defined in: [src/core/agent/receipt/receipt.ts:254](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L254)
 
 One `cache_control` breakpoint the cache strategy actually APPLIED — three
 scalars, no bytes.
@@ -38,7 +38,7 @@ at(3) === at(4); // false ⇒ the cached prefix moved, and the bill with it
 
 > `readonly` **boundaryIndex**: `number`
 
-Defined in: [src/core/agent/receipt/receipt.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L269)
+Defined in: [src/core/agent/receipt/receipt.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L256)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:269](https://github.com/footprint
 
 > `readonly` **field**: `"system"` \| `"messages"` \| `"tools"`
 
-Defined in: [src/core/agent/receipt/receipt.ts:268](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L268)
+Defined in: [src/core/agent/receipt/receipt.ts:255](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L255)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [src/core/agent/receipt/receipt.ts:268](https://github.com/footprint
 
 > `readonly` **ttl**: `"short"` \| `"long"`
 
-Defined in: [src/core/agent/receipt/receipt.ts:270](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L270)
+Defined in: [src/core/agent/receipt/receipt.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L257)

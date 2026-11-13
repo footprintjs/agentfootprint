@@ -52,9 +52,11 @@ export { RunInFlightError } from 'footprintjs';
  * say plainly that it is being dropped with `abandonPause()`. Either way the
  * choice is explicit, where silently starting a fresh run was not. Only the
  * answer is recorded by the library: `resume()` runs a leg on the record, while
- * `abandonPause()` emits no event and writes nothing to any run record — it
- * returns the dropped question to the caller, so the app must log it if an
- * audit needs it. The paused run's record keeps its pause request with no
+ * `abandonPause()` emits no pause event and writes no run record — it returns
+ * the dropped question to the caller, so the app must log it if an audit needs
+ * it. It does release the paused run's call- and run-scoped tool teardowns,
+ * which emit `agentfootprint.tools.session_closed` / `session_close_failed` as
+ * any teardown does. The paused run's record keeps its pause request with no
  * matching resume.
  */
 export class PendingQuestionError extends Error {

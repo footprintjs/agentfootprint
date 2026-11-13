@@ -418,7 +418,7 @@ scoped to the exact ledger identity and request; eviction or restart loses it.
 `pauseRecord.ts` holds the native-pause position and reason that the pause events carry
 (`pauseSegments`, `DEFAULT_PAUSE_REASON`). It is not the only reader of where a pause
 happened: the rule "the last `subflowPath` entry names the paused subflow, whose state is in
-`subflowStates`" is written again, each with its own validation, in `consentRequest.ts` ·
+`subflowStates`" is written again, each with its own checks, or none, in `consentRequest.ts` ·
 `pausedStateOf`, `agent/resumeAnswer.ts` · `refuseMissingPlainAnswer` and
 `agent/stages/argumentParties.ts` · `requireArgumentPartyCheckpoint`;
 `agent/checkpointDomain.ts` · `toolDomainStateOf` reads `subflowPath` by mount id instead.

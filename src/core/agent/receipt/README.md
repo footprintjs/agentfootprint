@@ -21,6 +21,18 @@ sides — `hash(servedAt(k)) === receiptAt(k).hash` — is documented in
 `time-travel/README.md` and pinned by
 `test/time-travel/receipt-conformance.test.ts`.
 
+## Separators are not escaped
+
+A digest input joins its parts with ASCII control characters (`receipt.ts` · `SEP`, `CALL_SEP`,
+`CALL_FIELD_SEP`, `FIELD_SEP`). Only a JSON-encoded part (`digestJson`) is sure to be free of them,
+because `JSON.stringify` escapes control characters. A raw string part — a prompt, a message's
+`content`, a `toolName`, a `toolCallId`, a call's `id` and `name`, a run id — can contain one, and
+nothing refuses or escapes it. So the separators make accidental ambiguity unlikely, not
+impossible: two different messages can give the same `messageDigestInput`. Example: moving a
+U+001E from the end of `content` to the start of `toolCallId` does not change the joined string,
+so the two messages hash the same. Escaping or length-prefixing the raw parts would change every
+message hash, so it is not done here.
+
 ## Files
 - `receipt.ts` — the receipt's shape, the salted hash (`receiptHash`), the
   digest inputs (`messageDigestInput`, `toolDigestInput`), the chained

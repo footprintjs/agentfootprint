@@ -4,7 +4,7 @@ title: CodeFile
 
 # Interface: CodeFile
 
-Defined in: [src/provider-contract/types.ts:1304](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1304)
+Defined in: [src/provider-contract/types.ts:1297](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1297)
 
 One file read back out of a code session — exactly as the backend returned it.
 
@@ -14,7 +14,7 @@ One file read back out of a code session — exactly as the backend returned it.
 
 > `readonly` **bytes**: `number`
 
-Defined in: [src/provider-contract/types.ts:1317](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1317)
+Defined in: [src/provider-contract/types.ts:1310](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1310)
 
 The size of `data` in bytes (a string's UTF-8 length).
 
@@ -24,7 +24,7 @@ The size of `data` in bytes (a string's UTF-8 length).
 
 > `readonly` **data**: `string` \| `Uint8Array`
 
-Defined in: [src/provider-contract/types.ts:1315](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1315)
+Defined in: [src/provider-contract/types.ts:1308](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1308)
 
 The contents. A string when the backend returned TEXT, bytes when it
 returned BYTES — decided by which of the two the backend filled, never by
@@ -38,7 +38,7 @@ guesses an encoding.
 
 > `readonly` `optional` **mediaType?**: `string`
 
-Defined in: [src/provider-contract/types.ts:1319](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1319)
+Defined in: [src/provider-contract/types.ts:1312](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1312)
 
 The backend's own statement of the media type, when it made one. Never guessed.
 
@@ -48,7 +48,7 @@ The backend's own statement of the media type, when it made one. Never guessed.
 
 > `readonly` **path**: `string`
 
-Defined in: [src/provider-contract/types.ts:1307](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1307)
+Defined in: [src/provider-contract/types.ts:1300](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1300)
 
 The path that was read, in the canonical form the backend was asked for
  (`./out//a.csv` → `out/a.csv`).

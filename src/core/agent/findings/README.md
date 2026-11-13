@@ -1074,16 +1074,11 @@ reserved argument carries one more part, on the calls of a RULED tool:
 
 ## Unreleased exact-claim protocol — the binding is not mounted
 
-The pure verification modules prepare an explicit opt-in. The comparison and
-retention half is not mounted: no public option or model request reaches
-`verificationCheck.ts` or `verificationState.ts` · `retainVerificationEvidence`
-yet. The reservation half already runs: every `Tool.search` call and every
-`.negativeClaims()` capture reserves a result identity through
-`verificationState.ts` · `reserveResultIdentity`, and a checkpoint decode reads
-the state back through `verificationCheckpoint.ts`. `verificationCheck.ts` binds
-one literal claim to one authorized result occurrence and asks the shared comparison owner. A match
-means agreement with identified tool evidence under an authored rule, not proof
-of truth, arbitrary prose or an entire answer. The model's standing is unchanged.
+The pure verification modules prepare an explicit opt-in. Its comparison and retention half is not mounted: no public option or model request reaches
+`verificationCheck.ts` or `verificationState.ts` · `retainVerificationEvidence` yet. Its reservation half runs: every `Tool.search` call and `.negativeClaims()`
+capture reserves a result identity (`verificationState.ts` · `reserveResultIdentity`), and a checkpoint decode reads the state back (`verificationCheckpoint.ts`).
+`verificationCheck.ts` binds one literal claim to one authorized result occurrence and asks the shared comparison owner. A match means agreement with identified
+tool evidence under an authored rule, not proof of truth, arbitrary prose or an entire answer. The model's standing is unchanged.
 
 `verificationRow.ts` admits a detached, bounded observation without rerunning
 the comparison. `verificationState.ts` retains exact receipts and namespace-global
