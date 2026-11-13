@@ -43,9 +43,9 @@ its two copied fields. § 15 lists all fifteen with what changed and what the de
 do. Nothing on this page is implemented. Facts found while building change this page, not a
 chat.
 
-**Where this sits.** [Declared control — what ships first](./2026-09-declared-control.md)
-keeps the chart-free items (run facts, `solo`, five small items). [The no-model hop]
-(./2026-09-no-model-hop.md) holds the chart-changing items and is marked not ready. This page
+**Where this sits.** "Declared control — what ships first" (not yet written; no such page is
+in this repository) keeps the chart-free items (run facts, `solo`, five small items). "The
+no-model hop" (not yet written either) holds the chart-changing items and is marked not ready. This page
 is the owner's proposed alternative to building more doors: make what the library already
 knows about an answer TYPED, compare it against the record, and let the verdict act through
 the doors that exist. It takes nothing away from the ship-first page (run facts is REQUIRED

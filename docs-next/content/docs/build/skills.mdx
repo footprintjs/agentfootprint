@@ -729,7 +729,8 @@ target). An open skill's tenure never begins, and a decision `.tree()`
 never writes a cursor at all — so steps on an unwired skill and steps on
 *any* skill of a tree agent (leaf or registered beside it) are both refused
 at build. Read the live position off a snapshot with
-`pointerOf(sharedState.stepPointer)` from `agentfootprint/injection-engine`.
+`pointerOf(sharedState.stepPointer)` from `agentfootprint/context` (also
+exported from `agentfootprint/skill-graph`).
 
 One honest cost note: the banner changes the tools block at every step
 boundary, so a `tools`-slot prompt-cache marker invalidates once per step —
@@ -738,8 +739,8 @@ the CacheGate's existing churn rules govern, exactly as they do for
 
 ### The steps surface, named
 
-Everything steps-related imports from `agentfootprint/injection-engine`
-(also reachable through its `agentfootprint/context` alias):
+Everything steps-related imports from `agentfootprint/context`; there is no
+`agentfootprint/injection-engine` path to import from:
 
 - `SkillStep` — one declared step: the `tool` it runs (one of the skill's
   own tools) and the `note` the model reads.

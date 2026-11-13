@@ -125,7 +125,8 @@ export interface AnswerValidationResult {
 /**
  * One of the agent's own answer checks, named for
  * {@link AnswerValidationOptions.agentChecks}: `'claims'` is the `.claims()`
- * contract, `'names-and-numbers'` is the `.namesAndNumbersFromEvidence()` gate.
+ * contract, `'names-and-numbers'` is the `.namesAndNumbersFromEvidence()` gate,
+ * `'negative-claims'` is the typed `.negativeClaims({ field, tools })` check.
  */
 export type AgentCheckName = 'claims' | 'names-and-numbers' | 'negative-claims';
 
@@ -203,6 +204,13 @@ export interface AnswerValidationOptions<T = unknown> {
    *   how many more were never looked up): `unreachable`.
    *   A clean pass is `not-applicable`: finding a value clears it, and never
    *   verifies the answer.
+   * - `'negative-claims'`: the typed `.negativeClaims({ field, tools })`
+   *   check's rows, ids starting `agent:negative-claims:` (for example
+   *   `agent:negative-claims:<field>#<n>`), built in
+   *   `core/agent/stages/answerValidation.ts`. You rarely list it: while typed
+   *   `.negativeClaims()` is armed the agent adds it for you, so its rows are
+   *   in the report either way. Listing it adds one thing, a `build()`
+   *   refusal when typed `.negativeClaims()` is not configured.
    *
    * No agent row is ever `checked-pass`: these checks can withhold an answer
    * and never verify one. `validate` stays required, and only your checks can

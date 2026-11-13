@@ -1,6 +1,8 @@
-**Mixed** — the four declared control-flow shapes (sequence, parallel, branch,
-iteration), each a thin typed wrapper over one footprintjs builder primitive —
-and one merge step that runs inside the walk and composes a turn of its own.
+**Mixed** — six compositions over the four declared control-flow shapes
+(sequence, parallel, branch, iteration): the four shapes, each a thin typed
+wrapper over one footprintjs builder primitive, plus `workflow()` (a sequence
+with typed hand-offs) and `graph()` (a fixed DAG run level by level) — and one
+merge step that runs inside the walk and composes a turn of its own.
 Map: `Sequence.ts`, `Conditional.ts`, `Loop.ts`, and Parallel's declared half
 (`Parallel.ts` · `Parallel`, the builder that names branches and a merge
 strategy): what could happen, still, never changed by a walk.
@@ -19,21 +21,26 @@ changed by a walk" holds for the other three shapes, not for this function.
 
 ## What lives here
 
-The four control-flow compositions. Each is a thin wrapper over a footprintjs builder primitive, adding typed events, symmetric fluent API, and integration with the 4 core recorders.
+Six compositions, all on the main barrel (`src/index.ts`). Four are the control-flow shapes, each a thin wrapper over a footprintjs builder primitive, adding typed events, symmetric fluent API, and integration with the 4 core recorders. `workflow()` and `graph()` are built from the same shapes (Decisions 10–13 cover them too).
 
 ```
 core-flow/
 ├── Sequence.ts      Sequential chain of runners (step → step → step).
 ├── Parallel.ts      Fan-out: N branches run concurrently, then merge.
 ├── Conditional.ts   Predicate-gated routing (one of N branches runs).
-└── Loop.ts          Iteration with mandatory budget guard.
+├── Loop.ts          Iteration under an iteration budget (default 10, at most 500).
+├── Workflow.ts      workflow(): sequential steps whose hand-offs the compiler checks;
+│                    a structured value reaches the next step unchanged.
+├── Graph.ts         graph(): a fixed DAG of runners, levelized at build time; the
+│                    nodes of one level run together.
+└── childOutcome.ts  How a composition reads a child's own outcome (Decision 11).
 ```
 
 ## Architectural decisions
 
-### Decision 1: Four compositions, not more
+### Decision 1: Four control-flow shapes; six compositions
 
-These are the four control-flow primitives from programming-language theory: **sequence**, **parallel**, **branch**, **iteration**. Every higher-level pattern (Swarm, MapReduce, ToT, Reflection, Debate) is expressible as a nested composition of these. Adding a fifth composition would be a sign we're modelling the wrong abstraction.
+The four control-flow primitives from programming-language theory are **sequence**, **parallel**, **branch**, **iteration**, and `Sequence`, `Parallel`, `Conditional` and `Loop` are one each. Every higher-level pattern (Swarm, MapReduce, ToT, Reflection, Debate) is expressible as a nested composition of these. The folder ships two more compositions that add no new shape: `workflow()` is a sequence whose step-to-step types the compiler checks, and `graph()` is a fixed DAG run level by level (parallel within a level, levels in sequence). Adding a fifth SHAPE would be a sign we're modelling the wrong abstraction.
 
 ### Decision 2: Each composition wraps ONE footprintjs primitive
 
@@ -102,14 +109,14 @@ outputMapper: (sfOutput) => ({
 
 This is the clean pattern — no `scope.result` side-channel needed. Every composition uses this same output-pipe mechanism.
 
-### Decision 6: Loop budget is MANDATORY
+### Decision 6: Loop always runs under an iteration budget
 
-`Loop.build()` without any budget guard fails at build time — but it's also safe by default: if you call `.body(runner).build()` with nothing else, you get `maxIterations: 10`. A hard iteration ceiling of **500** fires regardless of consumer config — runaway loops cannot happen.
+`.repeat(runner)` is required: `Loop.build()` without it throws. A budget is not: `Loop.create().repeat(runner).build()` succeeds and runs at most **10** iterations. The iteration count is clamped to 1..**500** (`lib/iterationBudget.ts` · `clampIterations`), so `.times(10_000)` runs at most 500 and never throws; runaway loops cannot happen.
 
 Three budget axes:
-- `maxIterations(n)` — hard iteration cap (default 10, hard ceiling 500)
-- `maxWallclockMs(n)` — wall-clock limit
-- `until(guard)` — semantic exit predicate
+- `.times(n)` — iteration cap (default 10; clamped to 1..500)
+- `.forAtMost(ms)` — wall-clock limit, checked after each iteration
+- `.until(guard)` — semantic exit predicate
 
 Any one fires → `iteration_exit` emits with the matching `reason: 'budget' | 'guard_false' | 'break' | 'body_complete'` + `composition.exit` with `status: 'budget_exhausted'` when it was a budget that fired.
 
@@ -246,7 +253,7 @@ All flow through the same dispatcher — consumers subscribe with `agent.on('age
 
 ## When to add a new composition
 
-Very rarely. The four primitives cover all control-flow shapes from programming language theory. Before adding a fifth, verify the behavior can't be expressed as a nested combination of the existing four. If you truly need one:
+Very rarely. The four primitives cover all control-flow shapes from programming language theory; the six compositions here are those four plus `workflow()` and `graph()`, which add typing and scheduling, not a new shape. Before adding a seventh, verify the behavior can't be expressed as a nested combination of the existing ones. If you truly need one:
 
 1. Confirm it represents a control-flow shape NOT expressible via nesting of the existing four
 2. Wrap exactly ONE footprintjs builder primitive

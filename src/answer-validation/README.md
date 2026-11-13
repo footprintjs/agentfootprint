@@ -129,6 +129,12 @@ with this door and with `rails` (`docs/design/honesty/README.md` § 8).
   well-formed `Claim`. Omitted or declined (`null`, `'unknown'`, an unknown
   `Claim`) → `not-applicable`. The detector's legacy ledger maps agreement
   and doubt to `checked-pass`; the row maps neither to a pass.
+- `'negative-claims'` rows (`agent:negative-claims:…`) are not built here but
+  in `core/agent/stages/answerValidation.ts`, from the typed
+  `.negativeClaims({ field, tools })` check. While typed `.negativeClaims()`
+  is armed the name is added to `agentChecks` automatically, so the rows are
+  in the report whether or not the app listed it. Listing it adds one thing:
+  `build()` refuses when typed `.negativeClaims()` is not configured.
 - `evidenceCheckOf` reads the gate's verdict on the SAME delivered candidate:
   the gate is handed over as an `EvidenceJudge` bound to the evidence the run
   read (`core/agent/stages/answerEvidence.ts`, a per-scope `WeakMap`, never

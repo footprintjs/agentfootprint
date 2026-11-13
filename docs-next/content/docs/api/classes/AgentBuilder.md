@@ -330,8 +330,8 @@ Defined in: [src/core/agent/AgentBuilder.ts:1582](https://github.com/footprintjs
 WHICH ANSWER FIELDS ARE CLAIMS ABOUT WHICH FACTS (9.61.0) — the claim
 seam's contract.
 
-The evidence gate (`.evidence()`) grounds the answer's names and
-numbers: every value must appear in a tool result. Its own limit is
+The evidence gate (`.namesAndNumbersFromEvidence()`) grounds the answer's
+names and numbers: every value must appear in a tool result. Its own limit is
 stated in its docs — it cannot catch a false claim assembled from real
 values ("fc1/3 is healthy" when the data says the port is down uses
 entirely grounded tokens). This closes that hole for the facts you

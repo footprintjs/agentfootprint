@@ -4,7 +4,7 @@ title: AnswerValidationError
 
 # Class: AnswerValidationError
 
-Defined in: [src/answer-validation/types.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L296)
+Defined in: [src/answer-validation/types.ts:304](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L304)
 
 An enforcing validation refused delivery; diagnostic metadata only, never
 content. Served by a hosting door, it is a refusal, not a failure: HTTP 422
@@ -22,7 +22,7 @@ already called have run, and nothing undoes them.
 
 > **new AnswerValidationError**(`report`): `AnswerValidationError`
 
-Defined in: [src/answer-validation/types.ts:300](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L300)
+Defined in: [src/answer-validation/types.ts:308](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L308)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_ANSWER_VALIDATION"`
 
-Defined in: [src/answer-validation/types.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L297)
+Defined in: [src/answer-validation/types.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L305)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 > `readonly` **report**: [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport)
 
-Defined in: [src/answer-validation/types.ts:298](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L298)
+Defined in: [src/answer-validation/types.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L306)
 
 ***
 

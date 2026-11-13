@@ -100,10 +100,13 @@ files the library's verdict beside it.
     dashboard"), inside a negation ("not the last 24h — the whole week"), or in another sentence.
     **So a membership pass never counts as support for "known".** It can only keep a reason from
     firing.
-  - *Tie checks* join a typed claim to a settled fact: a `.claims()` field that is
-    `checked-pass`, or a passed enforce `AnswerValidationReport` for these bytes
-    (`answer-validation/types.ts`). Only these support "known" — the honest-answer page's ruling
-    ([2026-09-honest-answer-ledger.md](../2026-09-honest-answer-ledger.md) § 15, R3-11).
+  - *Tie checks* join the answer's exact bytes to a check the app wrote: a passed enforce
+    `AnswerValidationReport` for these bytes (`answer-validation/types.ts`, with its
+    `candidateDigest`). It is the only row that supports "known" (`assessment/assess.ts` ·
+    `readAnswerRows` is the one place that sets `support`) — the honest-answer page's ruling
+    ([2026-09-honest-answer-ledger.md](../2026-09-honest-answer-ledger.md) § 15, R3-11). A
+    `.claims()` field that is `checked-pass` is not a tie check: it is a comparison that found no
+    conflict, so it never supports "known".
 - **The verified rate is a copying measure.** When the paper reports how often the model's quotes
   and cited ids check out, it reports how faithfully the model copies, not how honest it is.
 
@@ -808,9 +811,7 @@ plus the keys above — for this turn, and returns:
 interface AnswerAssessment {
   readonly assessment: 'known' | 'unrefuted' | 'unknown' | 'not-applicable';
   readonly reasons: readonly { reason: Reason; layer: 1 | 2 | 3 | 4; witness: readonly RowRef[] }[];
-  readonly support?:
-    | { kind: 'claims'; checkedPass: readonly string[] }
-    | { kind: 'answer-validation'; reportDigest: string };
+  readonly support?: { kind: 'answer-validation'; reportDigest: string };
   /** What actually ran this turn, printed verbatim — never a fixed list. */
   readonly checked: readonly { layer: 1 | 2 | 3 | 4; check: string; ran: number; of: number }[];
 }
@@ -823,7 +824,7 @@ value for "nothing was checked"; both are gone (research review, a MUST-FIX).
 | Value | When (this turn's committed rows) |
 |---|---|
 | `known` | a **supporting** row exists for these bytes — a passed enforce `.answerValidation()` report, the only row that supports it (a `.claims()` `checked-pass` never does: it is a comparison that found no conflict, not a tie to these bytes) — and no reason fired |
-| `unrefuted` | at least one check ran, none fired, nothing supports. A check ran when this turn's record holds its verdict: a recognized coverage declaration, a readable result shape (the emptiness reading below), an argument or period verdict, the gate's witness, a claim disposition |
+| `unrefuted` | at least one check ran, none fired, nothing supports. A check ran when this turn's record holds its verdict: a recognized coverage declaration, a readable result shape (the emptiness reading below), an argument or period verdict, the gate's witness. A `.claims()` disposition is not counted here: a disagreeing or unsettled claim makes a reason fire (`unsupported-claim`, `claim-unsettled`), and a passing one adds no check, so a turn whose only check is a passing claim is `not-applicable` |
 | `unknown` | at least one reason fired |
 | `not-applicable` | no check ran on this answer — for example, a turn whose tools declared nothing and returned nothing readable |
 
@@ -833,8 +834,8 @@ value for "nothing was checked"; both are gone (research review, a MUST-FIX).
 |---|---|---|
 | `unknown` | an **ask-class** reason: the turn ended in a typed ask (the library's argument ask, or a tool's own `requestInput`), or a ruled argument was asked and never answered | *Ask — Which period should the error search cover? (1h · 24h · 7d)* |
 | `unknown` | any other reason | *Not sure — window = "2h" was assumed (the tool's rule); you did not give it.* |
-| `known` | — | *Known — the answer's claims were checked against the run's settled facts: …* |
-| `unrefuted` | — | *Consistent with the run's record — 3 checks ran, none fired: argument sources · tool coverage · names and numbers.* (never "known", never "verified") |
+| `known` | — | *Known — the app's answer checks passed this exact answer.* |
+| `unrefuted` | — | *Consistent with the run's record — 3 checks ran and none fired: argument sources · tool coverage · names and numbers. This is not a verification.* (never "known", never "verified") |
 | `not-applicable` | — | *Not assessed — no check applied to this answer.* |
 
 Precedence: **ask > not sure > known > consistent > not assessed.** `known` and `unrefuted` exclude

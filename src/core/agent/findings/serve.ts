@@ -1,6 +1,12 @@
 /**
  * findings/serve — the answer turn served from the ledger.
  *
+ * Live and replay halves: `collapseJudged` is live (`callLLM` applies it on
+ * every armed call). `findingsLedgerPiece` is replay only: live calls send the
+ * findings DATA frame (`context.ts`) instead of this system piece, and its one
+ * caller is `time-travel/servedView/findings.ts`, rebuilding a recording made
+ * with the old layout. The sections on "the piece" below describe that layout.
+ *
  * Pattern: two pure functions over the folded ledger (the twin of
  *          `evidence/recovery.ts · evidenceRecoveryPiece`): no scope, no
  *          I/O, no clock. Same input, same bytes.

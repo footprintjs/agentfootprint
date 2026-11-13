@@ -81,10 +81,31 @@ boundary. Absence/doubt needs a future explicitly authored absence rule.
 
 ## Current integration limit
 
-This layer is unreleased source and is not mounted in the Agent. Its runtime
-boundary tests use real mock-provider Agent executions and capture at the actual
-execute and final-result seams. They demonstrate those inputs; they do not prove
-production integration across all dispatch paths. Existing `.claims()`, findings,
+Part of this layer runs on every armed call; the rest is not mounted. The
+README used to call the whole layer "not mounted", which was wrong.
+
+**Live, with no option set.** The result-identity codec, `capture.ts ·
+resultIdentityOf` and `readResultIdentity`, is in use. Every call to a tool
+that declares `search`, and every negative-claims call while `.negativeClaims()`
+is armed, reserves a result identity through
+`core/agent/findings/verificationState.ts · createVerificationState` /
+`reserveResultIdentity`. The reservation writes the `resultIdentities` carrier
+to shared state and gives the coverage row an ID such as
+`claim-result/<namespace>/<runId>/1`. `scope.ts · ownConfigArray` is used by
+`core/runCheckpoint.ts`; `admit.ts · readEvidenceSnapshot` runs when a saved
+carrier is read back (for example the negative-claims checkpoint), and
+`admit.ts · validateCoverage` when a stored verification row is read back.
+
+**Not mounted.** `captureDispatch`, `captureReturnedEvidence`,
+`finalizeEvidence`, `evidenceSnapshot`, `bindEvidence.ts · bindClaim` and
+`admit.ts · appendEvidenceSnapshot` have no caller reachable from a published
+entry point. Their only callers in `src/` are this layer and the unmounted
+findings verifier (`core/agent/findings/verificationCheck.ts`,
+`verificationConfig.ts`, `verificationState.ts · retainVerificationEvidence`);
+otherwise only tests call them. Their runtime boundary tests use real
+mock-provider Agent executions and capture at the actual execute and
+final-result seams. They demonstrate those inputs; they do not prove production
+integration across all dispatch paths. Existing `.claims()`, findings,
 checkpoints and provider requests retain their current behavior.
 
 The next slice must mount the opt-in and ship its evidence retention, row writer,

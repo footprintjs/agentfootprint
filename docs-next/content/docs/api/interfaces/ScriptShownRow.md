@@ -4,7 +4,7 @@ title: ScriptShownRow
 
 # Interface: ScriptShownRow
 
-Defined in: [src/core/agent/assessment/witness.ts:124](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L124)
+Defined in: [src/core/agent/assessment/witness.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L125)
 
 One fenced block the answer SHOWED, and the script match's verdict on it
 (`.namesAndNumbersFromEvidence({ code: 'match' })`, `scripts/match.ts`) —
@@ -23,7 +23,7 @@ verdict. A matched block fires nothing and supports nothing.
 
 > `readonly` **block**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:131](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L131)
+Defined in: [src/core/agent/assessment/witness.ts:132](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L132)
 
 1-based position among the answer's fenced blocks that were read.
 
@@ -33,7 +33,7 @@ Defined in: [src/core/agent/assessment/witness.ts:131](https://github.com/footpr
 
 > `readonly` `optional` **dispatch?**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L140)
+Defined in: [src/core/agent/assessment/witness.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L141)
 
 On a match: the call's dispatch within the turn (`ScriptRow.dispatch`) — its identity.
 
@@ -43,7 +43,7 @@ On a match: the call's dispatch within the turn (`ScriptRow.dispatch`) — its i
 
 > `readonly` `optional` **exitCode?**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:142](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L142)
+Defined in: [src/core/agent/assessment/witness.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L143)
 
 On a match: exactly the runner's exit code, when it supplied one.
 
@@ -53,7 +53,7 @@ On a match: exactly the runner's exit code, when it supplied one.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:129](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L129)
+Defined in: [src/core/agent/assessment/witness.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L130)
 
 The iteration whose answer the match read.
 
@@ -63,7 +63,7 @@ The iteration whose answer the match read.
 
 > `readonly` **kind**: `"script-shown"`
 
-Defined in: [src/core/agent/assessment/witness.ts:125](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L125)
+Defined in: [src/core/agent/assessment/witness.ts:126](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L126)
 
 ***
 
@@ -71,7 +71,7 @@ Defined in: [src/core/agent/assessment/witness.ts:125](https://github.com/footpr
 
 > `readonly` **label**: [`ScriptLabel`](/docs/api/type-aliases/ScriptLabel) \| `"unmatched"`
 
-Defined in: [src/core/agent/assessment/witness.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L133)
+Defined in: [src/core/agent/assessment/witness.ts:134](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L134)
 
 The matched call's label, or `'unmatched'`.
 
@@ -81,7 +81,7 @@ The matched call's label, or `'unmatched'`.
 
 > `readonly` `optional` **reason?**: [`UnmatchedReason`](/docs/api/type-aliases/UnmatchedReason)
 
-Defined in: [src/core/agent/assessment/witness.ts:135](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L135)
+Defined in: [src/core/agent/assessment/witness.ts:136](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L136)
 
 On `'unmatched'`: why.
 
@@ -91,7 +91,7 @@ On `'unmatched'`: why.
 
 > `readonly` `optional` **tool?**: `string`
 
-Defined in: [src/core/agent/assessment/witness.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L138)
+Defined in: [src/core/agent/assessment/witness.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L139)
 
 ***
 
@@ -99,7 +99,7 @@ Defined in: [src/core/agent/assessment/witness.ts:138](https://github.com/footpr
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/core/agent/assessment/witness.ts:137](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L137)
+Defined in: [src/core/agent/assessment/witness.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L138)
 
 On a match: the call it equals, and the name the model called.
 
@@ -109,6 +109,6 @@ On a match: the call it equals, and the name the model called.
 
 > `readonly` **turn**: `number`
 
-Defined in: [src/core/agent/assessment/witness.ts:127](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L127)
+Defined in: [src/core/agent/assessment/witness.ts:128](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/assessment/witness.ts#L128)
 
 `AgentState.turnNumber` when the row was filed — the conversation turn.

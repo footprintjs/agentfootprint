@@ -85,10 +85,17 @@ export function keysInWindow(history: readonly LLMMessage[]): ReadonlySet<string
  * `undefined` when it may.
  *
  * Two refusals, in the order a reader cares about them:
- *   • `unanswered-tool-call` — the tail is an assistant turn whose tool calls
- *     have no results yet. Appending here would sit BETWEEN a `tool_use` and
- *     its `tool_result`, which is the one split the window family refuses in
- *     the other direction too.
+ *   • `unanswered-tool-call` — ANY assistant turn in the window, not only the
+ *     tail, has a tool call with no result. At the tail, appending would sit
+ *     BETWEEN a `tool_use` and its `tool_result`, which is the one split the
+ *     window family refuses in the other direction too. The check scans the
+ *     whole window, so an orphan earlier in history (a conversation continued
+ *     after a permission halt mid-batch, or after `abandonPause()`) defers
+ *     every `slot: 'messages'` delivery, for every role, for as long as that
+ *     call stays in the window. The deferral note
+ *     (`injection-engine/messagesSlotRefusal.ts · messagesDeferralNote`) then
+ *     still says "the window ends on a tool call", even when the window ends
+ *     on a user or tool turn.
  *   • `role-collision` — the turn at the end already speaks in this effective
  *     role, and providers reject two in a row.
  */

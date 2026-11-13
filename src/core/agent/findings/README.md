@@ -40,9 +40,13 @@ legs with a new host configuration. Replay reads these call facts, uses the
 same composer, reads absent-discriminator old records with the legacy formatter,
 and reports an unknown/masked layout or bound as `findings-layout`.
 
-The historical sections below describe the earlier ledger/system-piece and
-schema-offer design where labelled. Live code no longer calls that enum path;
-`serve.ts`'s textual formatter remains for older recordings and its pure tests.
+Three sections below are labelled **Replay path only**: "Served (step 3)" (its piece, not its
+collapse), "The offer (packet 6)" and "The answer-turn ask (packet 7)". Live calls send no
+`toolCallId` enum, no findings system piece and no `FINDINGS_ANSWER_ASK`: result IDs travel in
+the DATA frame, the `quote-facts` sentence in `instruction.ts · findingsInstruction`, and a
+standing's result identity comes from the request witness (`admission.ts`; with a witness,
+`ledger.ts · standingRowsFrom` does not consult `knownResults`). `serve.ts`'s piece remains
+only for `time-travel/servedView` replay of older recordings and its pure tests.
 For current usage see [the cache guide](https://agentfootprint.dev/docs/build/caching).
 No cache savings or model citation quality is claimed from the free tests.
 
@@ -319,29 +323,15 @@ unarmed stream untouched) and § 14 (re-ask exits with and without a schema).
 
 ## Served (step 3)
 
-Why: a record alone changes nothing the model reads. The point of the ledger
-is that the ANSWER TURN is served the model's own judgments instead of the
-whole pile — and `serve.ts` does that on the wire only, with two pure
-functions. `history` is never rewritten (the window stage stays its only
-writer), and `servedView · viewOf` recomposes with the same two calls in the
-same order, so the receipt agrees with what went out by construction.
+Why: a record alone changes nothing the model reads, so the answer turn is served the model's
+own judgments instead of the whole pile, on the wire only. `history` is never rewritten.
 
-- `findingsLedgerPiece(rows, servedToolCallIds(messages))` — a
-  request-only system piece (`source: 'findings'`), joined AFTER the recovery
-  piece and never into `systemPromptInjections`: headed by the context
-  contract's own field meanings, one bucket per field marked "declared by the
-  model", `noise` as a count, results nobody named as `undeclared` (never
-  'open'); bounded by `FINDINGS_PIECE_LIMITS` with every overflow stated and
-  every empty bucket omitted; `undefined` for a basis-only ledger. The third
-  argument is the wire's `role: 'tool'` ids — a pure function cannot see the
-  wire, so the caller hands it the list and the rebuild hands it the same one.
-  The bytes are a function of those two arguments and nothing else — no call
-  number — because the piece joins the ONE system block a cache marker
-  covers: a re-ask is served the same system bytes as the call before it,
-  while a ledger that moves every call moves the block every call (`serve.ts`
-  · "The cache"; the design page names the trade).
-- `collapseJudged(messages, rows, mode)` — a result the model judged `noise`
-  or `ruled-out` becomes a ticket, `{ collapsed: true, standing, toolCallId,
+- `findingsLedgerPiece(rows, servedToolCallIds(messages))` — **replay path only**: live calls no
+  longer send this request-only system piece; `time-travel/servedView` rebuilds it for a
+  recording made with that layout. Its buckets, caps and cache law are in the `serve.ts` header
+  ("The piece", "The cache"); the example below is that old piece.
+- `collapseJudged(messages, rows, mode)` — live (`callLLM`, every armed call): a result the
+  model judged `noise` or `ruled-out` becomes a ticket, `{ collapsed: true, standing, toolCallId,
 ref? }` (`isCollapsedToolResult` reads one back); `fact` too under
   `'ledger-only'` (bench-gated, never a default); `open` and undeclared results
   verbatim. Same array instance when nothing collapses; otherwise count,
@@ -417,6 +407,9 @@ Measured on the long-run table of `npm run bench:findings`; the design page §
 Step 4 has the print.
 
 ## The offer (packet 6)
+
+> **Replay path only.** Live calls plant the schema with no enum; the offered IDs travel in the DATA frame. Kept because `time-travel/servedView` rebuilds recordings
+> made that way; "Current wire layout" says what goes out today.
 
 Why: on a hosted model the ask "by its tool_result id" produced standings
 named by ORDINAL — `"0"`, `"1"` — recorded honestly as `unknownId` and
@@ -553,6 +546,9 @@ ruled out (search_logs, tool:call_4): the optic was not swapped this week — te
 ```
 
 ## The answer-turn ask (packet 7)
+
+> **Replay path only.** Live calls send no `FINDINGS_ANSWER_ASK`; `quote-facts` appends a shorter sentence to the instruction (`instruction.ts`). Kept because `time-travel/servedView` rebuilds recordings
+> made that way; "Current wire layout" says what goes out today.
 
 Why: the fourth real-model run (`docs/design/2026-09-findings-ledger-real-model.md`
 § Fourth run) measured the cost of the served piece — one fact value in
@@ -1072,28 +1068,27 @@ reserved argument carries one more part, on the calls of a RULED tool:
   `kind: 'argument'` on this ledger) — never by this folder: a declaration is a claim, and the
   record keeps the library's verdict beside it.
 
-## Unreleased exact-claim protocol — not mounted
+## Exact-claim protocol — partly live, the checker not mounted
 
-The pure verification modules prepare an explicit opt-in; no public option or
-model request uses them yet. `verificationCheck.ts` binds one literal claim to
-one authorized result occurrence and asks the shared comparison owner. A match
-means agreement with identified tool evidence under an authored rule, not proof
-of truth, arbitrary prose or an entire answer. The model's standing is unchanged.
+Live with no option set: every call to a tool that declares `search`, and every armed
+negative-claims call, reserves a result identity (`verificationState.ts · createVerificationState`
+/ `reserveResultIdentity`) and writes the `resultIdentities` carrier; the coverage row's
+`claim-result/<namespace>/<runId>/<n>` ID comes from it. Every `resume`, `continueFrom` and
+`resumeOnError` runs `verificationCheckpoint.ts · requireVerificationOnResume(…, false)`, which
+refuses a saved run holding a `claimVerification` carrier (or verification rows without one); its
+message says to continue with "findings verification enabled", an option that does not exist yet.
 
-`verificationRow.ts` admits a detached, bounded observation without rerunning
-the comparison. `verificationState.ts` retains exact receipts and namespace-global
-reservation counters without eviction. `verificationConfig.ts` holds authored
-callbacks only in configuration and requires a separate grant for all original
-semantic metadata and selected executed scope; payload equality grants nothing.
-`verificationCheckpoint.ts` joins stored row identities to that carrier at both
-native checkpoint boundaries. Carrier-free observations are readable history,
-not resumable evidence. An unarmed continuation refuses instead of dropping the
-carrier; ordinary old checkpoints retain their existing shape and behavior.
-
-No extra ledger or event stream is introduced. `recordFindings` remains the one
-writer; its fold ignores these independent observations. Runtime dispatch/parser
-wiring, per-declaration bounds, delivered-answer binding and offline efficacy
-measurement remain pending before any opt-in use or release.
+Not mounted: no public option or model request reaches `verificationCheck.ts`,
+`verificationConfig.ts`, `reserveClaimIdentity` or `retainVerificationEvidence`; only tests do.
+`verificationCheck.ts` binds one literal claim to one authorized result occurrence and asks the
+shared comparison owner: a match is agreement with identified tool evidence under an authored
+rule, not proof of truth, arbitrary prose or an entire answer. `verificationRow.ts` admits a
+detached, bounded observation without rerunning the comparison; `verificationState.ts` retains
+exact receipts and namespace-global reservation counters without eviction; `verificationConfig.ts`
+holds authored callbacks only in configuration and requires a separate grant for original
+semantic metadata and selected executed scope. Carrier-free observations are readable history,
+not resumable evidence. `recordFindings` remains the one writer; runtime dispatch/parser wiring,
+per-declaration bounds, delivered-answer binding and offline measurement remain pending.
 
 ## Files
 
@@ -1130,10 +1125,15 @@ measurement remain pending before any opt-in use or release.
 - `ledger.ts` — `recordFindings`, `foldLedger` (`standingOf` the model's,
   `judgments` the judge's, `unsettled` the rows beside a current
   `ruled-out`), `standingRowsFrom`, `basisRowFrom`.
-- `serve.ts` — `findingsLedgerPiece`, `collapseJudged`, `servedToolCallIds`
-  (re-exported from `offer.ts`), `isCollapsedToolResult`,
-  `FINDINGS_PIECE_LIMITS`, `FindingsServeMode`, `FindingsAnswerAsk` (internal
-  path only; no barrel names them).
+- `serve.ts` — `findingsLedgerPiece` (replay only), `collapseJudged` (live),
+  `servedToolCallIds`, `isCollapsedToolResult`, `FINDINGS_PIECE_LIMITS`,
+  `FindingsServeMode`, `FindingsAnswerAsk` (internal path only).
+- `context.ts` — the one bounded DATA frame composer, live and replay; `instruction.ts` — the
+  cacheable findings instruction (+ the `quote-facts` sentence); `admission.ts` /
+  `answerAdmission.ts` — request-local result identity and the answer's reference check;
+  `refusal.ts` — the reference-refusal row; `ticket.ts` — the collapsed result's ticket;
+  `negativeProse.ts` — checkpoint admission for prose findings rows; `verification*.ts` (six
+  files) — the exact-claim protocol above.
 
 Design: `docs/design/2026-09-findings-ledger.md`; the spec of record is
 `docs/design/2026-09-findings-ledger-spec.md`.

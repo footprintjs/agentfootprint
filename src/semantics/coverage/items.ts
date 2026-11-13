@@ -4,7 +4,7 @@
  * Pattern: one validator, two doors (`absent()` and `coverage()`), so the two
  *          primitives cannot disagree about what a well-formed piece of
  *          ground looks like.
- * Role:    core/ layer, pure. Throws at the CALL SITE (the
+ * Role:    semantics/ layer (L1), pure. Throws at the CALL SITE (the
  *          `resolveEvidenceGate` precedent): a malformed declaration is a
  *          mistake in the line the author just wrote, and the stack should
  *          say so — not fail on the first absence of the first incident.

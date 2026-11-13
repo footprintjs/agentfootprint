@@ -24,17 +24,16 @@
  *   - Never coerce, never infer: a field that fails its enum check is dropped
  *     and COUNTED (`malformed`), never defaulted. An absent declaration stays
  *     absent — `splitFindings` returns no `findings` for it.
- *   - `FINDINGS_ARGUMENT_SCHEMA` is the frozen base and is never edited. The
- *     OFFER (`withFindingsArgument`'s second argument — the ids of served
- *     results the model can still read: no standing, `fact` or `open`,
- *     newest first; `offer.ts · offeredResultIds`) is a rebuilt copy per call
- *     whose `previous.items.properties.toolCallId` carries `enum: offer`; an
- *     empty offer serves the base by reference. The offer is what the model
- *     may COPY, never what the library resolves: an id outside it is still
- *     recorded as the model wrote it (`ledger.ts · standingRowsFrom`,
- *     `unknownId: true`), never mapped to a position — and every id inside
- *     it resolves, because the rows are identified against the same served
- *     history the offer was read from (`offer.ts · knownResults`).
+ *   - `FINDINGS_ARGUMENT_SCHEMA` is the frozen base and is never edited.
+ *     `withFindingsArgument(schema, { from? })` plants it (or its `from`
+ *     variant) with NO enum, stable across result changes. The offer (the
+ *     ids of served results the model can still read, `offer.ts ·
+ *     offeredResultIds`) travels in the request-only DATA frame
+ *     (`context.ts`); an `enum: offer` on `previous[].toolCallId` was the old
+ *     layout, rebuilt only by `time-travel/servedView`. An id the model writes
+ *     is recorded as written (`ledger.ts · standingRowsFrom`, `unknownId:
+ *     true`), never mapped to a position, and is identified against the
+ *     request witness (`admission.ts · referenceObservation`).
  *
  * Both model-facing strings here (`FINDINGS_INSTRUCTION` and the schema's
  * description) say what the model may DO and never what the library
@@ -385,17 +384,18 @@ export function findingsInstructionFor(arms: { readonly contingent: boolean }): 
 }
 
 /**
- * The answer-turn ask (9.103.0) — appended to the served ledger piece
- * (`serve.ts · findingsLedgerPiece`) ONLY under
- * `findings({ answerAsk: 'quote-facts' })`, a bench-gated dial whose default
- * is `'none'`. It tells the model HOW to answer from the piece: the real-model
- * page's fourth run measured one fact value in twelve restated when the
- * piece is served with no such ask (`docs/design/2026-09-findings-ledger-real-model.md`
- * § Fourth run), and this is the instruction variant that run asked for. It
- * says what the model may DO with each kind of line and promises nothing
- * about what the library serves; a constant, so the cache law of the piece
- * holds with it (`serve.ts` · "The cache"). Judged by `unprovable` at the
- * strictest lifetime in `test/modelFacingSurfaces.test.ts`.
+ * The answer-turn ask (9.103.0) — REPLAY ONLY: live calls no longer send it.
+ * Under `findings({ answerAsk: 'quote-facts' })` the model now gets the
+ * shorter sentence `instruction.ts · findingsInstruction` appends to the
+ * instruction; this constant stays so `time-travel/servedView` can rebuild a
+ * recording whose served ledger piece (`serve.ts · findingsLedgerPiece`)
+ * ended with it. Why it was written: the real-model page's fourth run
+ * measured one fact value in twelve restated with no such ask
+ * (`docs/design/2026-09-findings-ledger-real-model.md` § Fourth run). It
+ * says what the model may DO with each kind of line and promises nothing;
+ * a constant, so the old piece's cache law held with it (`serve.ts`).
+ * Its `test/modelFacingSurfaces.test.ts` row judges this constant, not the
+ * live sentence.
  */
 export const FINDINGS_ANSWER_ASK = [
   'When you answer, answer from the lines under `facts` and copy each value exactly as it is ' +

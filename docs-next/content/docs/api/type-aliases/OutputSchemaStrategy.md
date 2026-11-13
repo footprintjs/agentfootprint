@@ -6,7 +6,7 @@ title: OutputSchemaStrategy
 
 > **OutputSchemaStrategy** = `"auto"` \| `"instruct"` \| `"tool-forced"` \| `"native"`
 
-Defined in: [src/answer-validation/outputSchema.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L114)
+Defined in: [src/answer-validation/outputSchema.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/outputSchema.ts#L115)
 
 How the schema reaches the model.
 

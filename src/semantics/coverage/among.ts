@@ -5,7 +5,7 @@
  * Pattern: one rule set, two doors — `absent()` mints by it
  *          ({@link mintAmong}), and readers find the names facet by it
  *          ({@link namesFacetOf}).
- * Role:    core/ layer (L1), pure.
+ * Role:    semantics/ layer (L1), pure.
  * Emits:   N/A.
  *
  * ## The failure this file answers

@@ -46,7 +46,7 @@ Reviewed against main at `227c3abaf24ebadaaefc1d9ff6ac2874ceb14913`
 Relevant owners: [claim checker](../../src/integrity/unsupported-claim/check.ts),
 [route judges](../../src/core/agent/stages/route.ts),
 [artifact contracts](../../src/artifacts),
-[semantics](../../src/lib/semantics), and
+[semantics](../../src/semantics), and
 [runbook tools](../../src/core/runbook).
 The test companion is
 [`answer-validation-boundary.test.ts`](../../test/integrity/answer-validation-boundary.test.ts).

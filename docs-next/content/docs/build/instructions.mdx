@@ -89,7 +89,10 @@ carries it, or return the words from the tool.
 
 When a message cannot be placed, it is **deferred**, not dropped: it waits for the next
 iteration boundary, nothing is reordered to make room, and nothing is ever inserted
-between a tool call and its result. The reason is committed to
+between a tool call and its result. That check covers the whole window, not only its end:
+if any earlier tool call still has no result (for example a conversation continued after a
+permission halt in the middle of a batch, or after `abandonPause()`), every `messages`
+delivery is deferred, whatever its role, until that call is answered or leaves the window. The reason is committed to
 `snapshot.sharedState.messagesDelivery.deferred` as a sentence — that record is the
 answer to "why is my declaration not on the wire?".
 

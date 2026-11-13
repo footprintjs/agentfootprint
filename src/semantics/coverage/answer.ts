@@ -4,7 +4,7 @@
  * Pattern: composed by the FRAMEWORK, not requested from the model. Pure
  *          function of the run's declarations; the stage that calls it is a
  *          two-line wrapper (see `stages/prepareFinal.ts`).
- * Role:    core/ layer, pure.
+ * Role:    semantics/ layer (L1), pure.
  * Emits:   N/A.
  *
  * ## Why this is an append and not a check
