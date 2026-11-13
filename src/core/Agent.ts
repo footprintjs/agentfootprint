@@ -466,19 +466,19 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     return getAgentRuntime(this).followUp(message, options);
   }
   /**
-   * Drop the question this agent's last run paused to ask, on the record.
+   * Drop the question this agent's last run paused to ask. It emits no pause event and writes no
+   * run record, so the paused run's record keeps its pause request with no matching resume. It does
+   * release the paused run's call- and run-scoped tool teardowns, which emit
+   * `agentfootprint.tools.session_closed` / `session_close_failed` as any teardown does.
    *
-   * A paused run is waiting on a person. Sending a different message while one
-   * is outstanding is refused ({@link PendingQuestionError}) because silently
-   * discarding a pending question makes a consent gate something any later
-   * message can walk around. When the question really is being dropped —
-   * the user changed the subject, the session timed out, the approval is no
-   * longer wanted — say so with this, and the next `run()` proceeds.
+   * A paused run is waiting on a person. Sending a different message while one is outstanding is
+   * refused ({@link PendingQuestionError}) because silently discarding a pending question makes a
+   * consent gate something any later message can walk around. When the question really is being
+   * dropped — the user changed the subject, the session timed out, the approval is no longer
+   * wanted — say so with this, and the next `run()` proceeds.
    *
-   * Returns what was dropped (`undefined` when nothing was pending), so a
-   * caller can log or audit the abandonment rather than perform it blind. It
-   * does not touch the paused run's checkpoint: if you still hold that, it
-   * remains resumable.
+   * Returns what was dropped (`undefined` when nothing was pending), for the app to log if its
+   * audit needs it. It leaves the paused run's checkpoint untouched: a held one stays resumable.
    */
   abandonPause(): Promise<
     | { readonly toolName?: string; readonly toolCallId?: string; readonly question?: string }

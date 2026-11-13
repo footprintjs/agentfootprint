@@ -119,9 +119,9 @@ export interface SystemPieceRecord {
 }
 
 /**
- * The separator between two fields inside one digest input — ASCII UNIT
- * SEPARATOR, which no prompt, tool name or JSON payload can contain (`JSON.
- * stringify` escapes it). Written as an escape rather than a literal control
+ * The separator between two fields inside one digest input — ASCII UNIT SEPARATOR. Only a
+ * JSON-encoded part is sure to be free of it; a raw string part can carry it, unescaped (folder
+ * README, "Separators are not escaped"). Written as an escape rather than a literal control
  * character so a reader can see it and a formatter cannot eat it.
  *
  * Without it a digest is a bare concatenation, and a bare concatenation is
@@ -135,7 +135,7 @@ const CALL_SEP = '\u001C';
 /** The separator between the fields of ONE tool call. */
 const CALL_FIELD_SEP = '\u001D';
 
-/** The separator between the top-level parts of a message's digest. */
+/** The separator between a message digest's top-level parts; a raw part may carry it (README). */
 const FIELD_SEP = '\u001E';
 
 /**
@@ -577,8 +577,8 @@ export function toolDigestInput(tool: LLMToolSchema): string {
  *
  * Still deliberately NOT covered: `injectedBy` and `notDispatched` (both
  * stripped before the request exists) and `ephemeral` (a persistence flag,
- * invisible to the model). Two messages that hash the same are the same thing
- * said to the model.
+ * invisible to the model). Two messages that hash the same are the same thing said to the
+ * model, unless a raw field carries a separator (folder README, "Separators are not escaped").
  */
 export function messageDigestInput(message: LLMMessage): string {
   const calls = (message.toolCalls ?? []).map((call) =>

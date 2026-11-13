@@ -41,8 +41,8 @@ opaque token, not content.
 
 Still deliberately NOT covered: `injectedBy` and `notDispatched` (both
 stripped before the request exists) and `ephemeral` (a persistence flag,
-invisible to the model). Two messages that hash the same are the same thing
-said to the model.
+invisible to the model). Two messages that hash the same are the same thing said to the
+model, unless a raw field carries a separator (folder README, "Separators are not escaped").
 
 ## Parameters
 

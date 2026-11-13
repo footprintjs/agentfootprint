@@ -225,7 +225,8 @@ export function buildCallDispatch(
         // A PARKED cursor is the one case where the same id is not a
         // no-op, and the skip is scoped to exclude it (9.86.0 fix pass):
         // parking suppressed the map's contribution, so the dispatch gate
-        // 480 lines below reads that call as a RE-ENGAGEMENT and serves the
+        // (`routing/readSkillRoute.ts` · `applyReadSkillRoute`, called later
+        // in this function) reads that call as a RE-ENGAGEMENT and serves the
         // body and tools again on the next pass. That moves something, so
         // the policy keeps the question. `atMountedCursor` is where that
         // rule lives; the dispatch gate writes the same rule as two ordered

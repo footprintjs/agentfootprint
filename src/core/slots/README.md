@@ -12,8 +12,17 @@ request is assembled in `../agent/stages/callLLM.ts` · `buildCallLLMStage` —
 messages come from `scope.history` (`callLLM.ts` · `messages`), the tool list is
 EMPTIED on the wrap-up (`callLLM.ts` · `registeredToolSchemas`, the
 `scope.wrapUpAsked` arm that yields `EMPTY_TOOL_SCHEMAS`; the other arm is the
-`scope.dynamicToolSchemas` fallback), and the staged-refs nudge is appended by
-`callLLM.ts` · `wireMessages` without passing through any slot.
+`scope.dynamicToolSchemas` fallback), and `callLLM.ts` appends request-only
+lines to `wireMessages` without passing through any slot (each one is sent on
+this request only and written to no history; its reason is the `requestOnly`
+entry the receipt keeps):
+
+| `requestOnly` reason | When it is added |
+|---|---|
+| `staged-refs-nudge` | the evidence gate's `nudge: true` found staged refs the served tools want |
+| `time-window-line` | `.time({ reader })` composed a time line on this iteration, and the tools are not withheld |
+| `evidence-conclusion` | the figures dial flagged a number on the call that serves the revision instruction |
+| `findings-data` | the findings ledger is armed — its data line is added to every call |
 
 # `src/core/slots/` — the 3-slot context model
 
@@ -31,7 +40,8 @@ slots/
 
 ## The 3-slot abstraction
 
-Every LLM API call accepts exactly three payloads:
+An LLM API call carries three kinds of payload, and the agent composes each
+in one slot:
 
 | Slot | Role | Example source |
 |---|---|---|
@@ -39,7 +49,7 @@ Every LLM API call accepts exactly three payloads:
 | **Messages** | The conversation history | User message, assistant responses, tool results |
 | **Tools** | Which tools the LLM can call | Static registry, dynamic per-iteration filtering |
 
-Nothing else exists at the LLM wire. Every piece of content the agent engineers lands in one of these three slots — this is THE abstraction the library is built on.
+The slots are the abstraction the library is built on, but they are not the whole wire: the wrap-up empties the tool list and `callLLM.ts` adds the request-only lines listed in the correction at the top of this page, outside every slot.
 
 ## Architectural decisions
 

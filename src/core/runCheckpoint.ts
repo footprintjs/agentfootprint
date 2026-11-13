@@ -49,9 +49,9 @@
  *       retries the call on the next iteration.
  *
  * Pattern: Memento (GoF) — snapshot of an object's internal state
- *          for later restoration. Same shape as `FlowchartCheckpoint`
+ *          for later restoration. The same pattern as `FlowchartCheckpoint`
  *          but at the agent layer (one logical iteration vs. one
- *          DFS stage).
+ *          DFS stage); the two share no fields and are not interchangeable.
  */
 
 import { negativeProseRowIsWellFormed } from './agent/findings/negativeProse.js';

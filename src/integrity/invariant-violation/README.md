@@ -43,8 +43,10 @@ skill wins dispatch). The integration test pins exactly that leak firing one typ
 **What it will not do.** It never blocks the write. Recorders in this stack cannot veto — hook throws
 are swallowed and the error path commits regardless — and blocking a park because tools were still
 registered would invert causality: the park is the correct fact, the stale serving is the defect. Dev
-posture throws _after_ the finding is appended, in the writer's own caller. It also never picks a
-winner between the two channels; it names the pair.
+posture (`integrityPosture: 'dev'`) does not throw on a finding either — a run that files one finishes
+with its answer. Dev posture throws `CheckerDeadError` only when a registered check is dead: it filed
+no disposition in a run where work existed, or it missed its own canary (`disposition/ledger.ts` ·
+`assertAlive`). It also never picks a winner between the two channels; it names the pair.
 
 **How it decides.** It builds the two assertions (`availability(map) = suspended` from the write,
 `availability(map) = available` entailed by each owned tool still on the wire) and hands them to the
@@ -63,6 +65,12 @@ const findings = invariantViolationsOf(
 );
 // → one 'invariant-violation' at seam 'write', witnesses naming both channels
 ```
+
+The function returns `seam: 'write'`, but its only caller that files findings, the compose
+backstop in `core/slots/buildToolsSlot.ts`, files and emits each finding as `seam: 'compose'` — so a run's
+record and events say `compose`. Its dedup key (`integrityFindingIds`) is still computed from the
+`'write'` form; the two are not yet one value. (The dev-posture canary in
+`disposition/lifecycle.ts` also calls the function, but only counts what it returns.)
 
 Healthy cases return `[]` — which the caller files as `checked-pass`, never as silence. That
 distinction is the whole point of the disposition ledger next door.

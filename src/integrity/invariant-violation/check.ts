@@ -21,7 +21,12 @@
  * (hook throws are swallowed and the error path commits anyway), and
  * blocking a park because tools were still registered would invert
  * causality — the park is the correct fact; the stale serving is the
- * defect. Dev posture throws AFTER the append, in the writer's own caller.
+ * defect. Dev posture (`integrityPosture: 'dev'`) does not throw on a
+ * finding either: the run finishes with its answer. It throws
+ * `CheckerDeadError` only when a registered check is DEAD — it filed no
+ * disposition in a run where work existed, or missed its own canary
+ * (`disposition/ledger.ts` · `assertAlive`, called by
+ * `core/agent/runtime/integrity/owner.ts` · `assertIntegrityAlive`).
  */
 
 import type { Assertion, SubjectRef } from '../assertion/types.js';

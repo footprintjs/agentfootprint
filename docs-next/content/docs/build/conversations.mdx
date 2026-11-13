@@ -140,7 +140,7 @@ Agent.run: this agent's last run paused to ask a person something and is still
 waiting. 'issue_refund' (call c2) raised the question…
 ```
 
-A paused run is unfinished work with a person on the other end. Answer it with `resume(checkpoint, decision)`. If the question really is being dropped, say so — `abandonPause()` returns what it dropped, so the abandonment can be logged rather than performed blind:
+A paused run is unfinished work with a person on the other end. Answer it with `resume(checkpoint, decision)`. If the question really is being dropped, say so — `abandonPause()` returns what it dropped, so the abandonment can be logged rather than performed blind. It emits no pause event and writes no run record; it does release the paused run's call- and run-scoped tool teardowns, which emit `agentfootprint.tools.session_closed` / `session_close_failed` as any teardown does. So an app whose audit needs the abandonment logs the returned value:
 
 ```ts
 const dropped = await agent.abandonPause(); // { toolName, toolCallId, question }

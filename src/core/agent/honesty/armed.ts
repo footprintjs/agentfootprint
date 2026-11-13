@@ -3,10 +3,17 @@
  *
  * Pattern: a run constant, seeded once by `stages/seed.ts` (the
  *          `findingsServe` precedent) and never written again during the run.
- * Role:    core/ layer leaf. A reader of the RECORD — the standing fold, a
- *          lens, a bench — tells "this layer was armed and filed nothing" from
- *          "this layer was never armed" by this key alone, never by guessing
- *          from the rows.
+ * Role:    core/ layer leaf. The key a reader of the RECORD uses to tell
+ *          "this layer was armed and filed nothing" from "this layer was never
+ *          armed", instead of guessing from the rows. Who reads it today: the
+ *          inputs bench (`bench/inputs/harness.mjs` refuses a recording without
+ *          `honestyLayers.argumentSources`) and the Agent's checkpoint
+ *          (`runtime/conversation/owner.ts` · `turnNumberOf` stamps the turn
+ *          only while a layer is armed or `.negativeClaims()` is
+ *          configured). The standing fold does NOT read it:
+ *          `assessment/assess.ts` folds the same state to the same standing
+ *          with or without this key, so the fold cannot tell an armed layer
+ *          that filed nothing from one never armed. No lens reads it.
  * Emits:   N/A.
  *
  * Absent on a run with no layer armed, so an agent that armed nothing commits

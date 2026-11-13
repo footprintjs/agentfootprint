@@ -4,15 +4,22 @@ title: PendingQuestionError
 
 # Class: PendingQuestionError
 
-Defined in: [src/core/conversation.ts:55](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L55)
+Defined in: [src/core/conversation.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L62)
 
 Thrown when a new message is sent to an agent whose last run PAUSED to ask a
 person something, and that question has not been answered.
 
 The pause is not a failure and not a stale flag — it is unfinished work with
 a person on the other end. Answer it with `resume(checkpoint, decision)`, or
-say plainly that it is being dropped with `abandonPause()`; both are visible
-in the record, and silently starting a fresh run was not.
+say plainly that it is being dropped with `abandonPause()`. Either way the
+choice is explicit, where silently starting a fresh run was not. Only the
+answer is recorded by the library: `resume()` runs a leg on the record, while
+`abandonPause()` emits no pause event and writes no run record — it returns
+the dropped question to the caller, so the app must log it if an audit needs
+it. It does release the paused run's call- and run-scoped tool teardowns,
+which emit `agentfootprint.tools.session_closed` / `session_close_failed` as
+any teardown does. The paused run's record keeps its pause request with no
+matching resume.
 
 ## Extends
 
@@ -24,7 +31,7 @@ in the record, and silently starting a fresh run was not.
 
 > **new PendingQuestionError**(`door`, `pending`): `PendingQuestionError`
 
-Defined in: [src/core/conversation.ts:62](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L62)
+Defined in: [src/core/conversation.ts:69](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L69)
 
 #### Parameters
 
@@ -72,7 +79,7 @@ Defined in: node\_modules/typescript/lib/lib.es2022.error.d.ts:24
 
 > `readonly` **code**: `"ERR_PENDING_QUESTION"`
 
-Defined in: [src/core/conversation.ts:56](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L56)
+Defined in: [src/core/conversation.ts:63](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L63)
 
 ***
 
@@ -138,7 +145,7 @@ not capture any frames.
 
 > `readonly` `optional` **toolCallId?**: `string`
 
-Defined in: [src/core/conversation.ts:60](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L60)
+Defined in: [src/core/conversation.ts:67](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L67)
 
 The id of the tool call that asked, for joining back to the trace.
 
@@ -148,7 +155,7 @@ The id of the tool call that asked, for joining back to the trace.
 
 > `readonly` `optional` **toolName?**: `string`
 
-Defined in: [src/core/conversation.ts:58](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L58)
+Defined in: [src/core/conversation.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L65)
 
 The tool that asked, when the pause named one.
 

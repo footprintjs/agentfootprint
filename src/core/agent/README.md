@@ -3,11 +3,12 @@ the walk calls from inside its stages.
 Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
 `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
-`skillBrains.ts`, `types.ts`, `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
+`skillBrains.ts`, `types.ts`, `watch.ts` (one type alias for the `.watch()` door; it
+writes nothing), `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
 the trace toolpack registers there, since the agent may not import it).
 Walker: `assistantReplay.ts`, `toolDispatch.ts`,
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
-Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
+Trace: `runManifest.ts`, `integrityFindings.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `emptiness.ts` (which
 artifact-placed results hold no rows — the coverage primitives it reads are
 `semantics/coverage/`; the tool-result envelope grammar is `semantics/toolEffects.ts`).

@@ -4,7 +4,7 @@ title: FlowchartAsToolOptions
 
 # Interface: FlowchartAsToolOptions
 
-Defined in: [src/core/flowchartAsTool.ts:185](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L185)
+Defined in: [src/core/flowchartAsTool.ts:188](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L188)
 
 Options for `flowchartAsTool`.
 
@@ -14,7 +14,7 @@ Options for `flowchartAsTool`.
 
 > `readonly` **description**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L189)
+Defined in: [src/core/flowchartAsTool.ts:192](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L192)
 
 Tool description shown to the LLM.
 
@@ -24,7 +24,7 @@ Tool description shown to the LLM.
 
 > `readonly` **flowchart**: `FlowChart`
 
-Defined in: [src/core/flowchartAsTool.ts:199](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L199)
+Defined in: [src/core/flowchartAsTool.ts:202](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L202)
 
 The footprintjs flowchart to mount as the tool's body.
 The chart's stages receive args via `scope.$getArgs()`.
@@ -35,7 +35,7 @@ The chart's stages receive args via `scope.$getArgs()`.
 
 > `readonly` `optional` **inputSchema?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/flowchartAsTool.ts:194](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L194)
+Defined in: [src/core/flowchartAsTool.ts:197](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L197)
 
 JSON Schema describing the input args the LLM must produce.
 Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties: {} }`.
@@ -46,7 +46,7 @@ Becomes `flowchart.run({ input: args })`. Default: `{ type: 'object', properties
 
 > `readonly` `optional` **keepRecord?**: `boolean`
 
-Defined in: [src/core/flowchartAsTool.ts:262](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L262)
+Defined in: [src/core/flowchartAsTool.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L265)
 
 KEEP the inner run's record, so the agent's trace can go THROUGH this
 tool boundary instead of stopping at it.
@@ -84,7 +84,7 @@ the two agents can mint the same id: build the tool twice instead.
 
 > `readonly` `optional` **keepRecordLimit?**: `number`
 
-Defined in: [src/core/flowchartAsTool.ts:269](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L269)
+Defined in: [src/core/flowchartAsTool.ts:272](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L272)
 
 How many invocations `keepRecord` retains. Default
 DEFAULT\_INNER\_RUN\_LIMIT (20) — a debugging window, not an
@@ -97,7 +97,7 @@ refused rather than silently ignored.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/core/flowchartAsTool.ts:187](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L187)
+Defined in: [src/core/flowchartAsTool.ts:190](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L190)
 
 Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
@@ -107,7 +107,7 @@ Tool name the LLM dispatches by. Must be unique across the agent's tools.
 
 > `readonly` `optional` **recorders?**: readonly [`CombinedRecorder`](/docs/api/type-aliases/CombinedRecorder)[]
 
-Defined in: [src/core/flowchartAsTool.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L230)
+Defined in: [src/core/flowchartAsTool.ts:233](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L233)
 
 Observers to attach to the tool's INTERNAL `FlowChartExecutor`
 before each run. This is the hook that lets decide()/select()
@@ -139,7 +139,7 @@ detect the boundary via `event.traversalContext.runId !== lastRunId`
 
 > `readonly` `optional` **redact?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 
-Defined in: [src/core/flowchartAsTool.ts:340](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L340)
+Defined in: [src/core/flowchartAsTool.ts:346](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L346)
 
 Redaction policy for the INNER run, applied before every invocation
 (`executor.setRedactionPolicy`).
@@ -185,8 +185,11 @@ WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
    footprintjs serves it: its seed is a commit of its own (`history[0]`),
    so that base is the nested runtime's pre-seed state.
 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
-   which holds real values because resumption must replay against them;
-   it goes to the agent loop, never to a model.
+   which holds real values because resumption must replay against them.
+   It reaches only a direct caller of `execute`. Inside an Agent the
+   throw becomes a tool error: the model reads the error's message, and
+   no agent event or outcome carries the checkpoint object (item 4 of
+   the file header), so its values are never sent to a model.
 3. What the LOG itself carries — footprintjs's law, not this option's,
    and since footprintjs 9.19.0 (this package's floor from 9.89.2) that
    law is one rule: a policy covers everything the run retains or serves
@@ -216,7 +219,7 @@ WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
 
 > `readonly` `optional` **resultMapper?**: [`FlowchartResultMapper`](/docs/api/type-aliases/FlowchartResultMapper)
 
-Defined in: [src/core/flowchartAsTool.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L204)
+Defined in: [src/core/flowchartAsTool.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L207)
 
 Optional shaping function. Default: `JSON.stringify(snapshot.values)`.
 Errors throw into the tool's `[mapper-error: ...]` envelope.

@@ -12,8 +12,8 @@
  * expressed as a footprintjs flowchart (intake validation, refund
  * processing, claim adjudication — anything with branches, loops, or
  * decision evidence), let the LLM call it as ONE tool. The flowchart's
- * step-by-step recorders, narrative, and pause/resume continue to work
- * exactly as they do outside the agent.
+ * step-by-step recorders and narrative continue to work as they do outside
+ * the agent. Pause/resume does NOT — see item 4.
  *
  * Why this matters:
  *
@@ -39,12 +39,15 @@
  *      retained record is retained memory (bounded LRU, default 20
  *      invocations, `keepRecordLimit` to change it).
  *
- *   4. **Pause/resume composes.** A pausable handler inside the
- *      flowchart pauses the inner executor; the outer agent treats
- *      the pause as an unfinished tool call. Resume the agent and the
- *      inner flowchart resumes from its checkpoint. (Today: surfaces
- *      the pause as a thrown error with the checkpoint attached;
- *      polished agent-side pause integration in v2.6.)
+ *   4. **Pause is NOT bridged.** A pausable handler (an approval gate,
+ *      say) inside the flowchart pauses the inner executor, but the Agent
+ *      run does not pause and no person is asked. `execute` throws an
+ *      Error with the inner checkpoint on `err.checkpoint`; the Agent's
+ *      tool-call handler turns that into a tool error the MODEL reads, and
+ *      no agent event or outcome carries the checkpoint. So the checkpoint
+ *      reaches only code that calls `tool.execute` directly, and the inner
+ *      flowchart cannot be resumed through the agent. `runbookAsTool`
+ *      behaves the same and says so.
  *
  * Pattern: Adapter (GoF) over `FlowChartExecutor.run()`. Translates
  *          `Tool.execute(args, ctx)` into `executor.run({ input: args,
@@ -312,8 +315,11 @@ export interface FlowchartAsToolOptions {
    *    footprintjs serves it: its seed is a commit of its own (`history[0]`),
    *    so that base is the nested runtime's pre-seed state.
    * 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
-   *    which holds real values because resumption must replay against them;
-   *    it goes to the agent loop, never to a model.
+   *    which holds real values because resumption must replay against them.
+   *    It reaches only a direct caller of `execute`. Inside an Agent the
+   *    throw becomes a tool error: the model reads the error's message, and
+   *    no agent event or outcome carries the checkpoint object (item 4 of
+   *    the file header), so its values are never sent to a model.
    * 3. What the LOG itself carries — footprintjs's law, not this option's,
    *    and since footprintjs 9.19.0 (this package's floor from 9.89.2) that
    *    law is one rule: a policy covers everything the run retains or serves
@@ -353,8 +359,9 @@ export interface FlowchartAsToolOptions {
  *   3. Calls `executor.run({ input: args, env: { signal } })` with the
  *      LLM-supplied args + the agent's abort signal.
  *   4. If the run paused, throws an Error with the checkpoint attached
- *      (`error.checkpoint`) so the agent loop can surface it. Polished
- *      agent-side pause integration is v2.6 work.
+ *      (`error.checkpoint`). The agent loop does NOT surface it: inside an
+ *      Agent the throw becomes a tool error for the model (step 6), and the
+ *      checkpoint reaches only a direct caller of `execute`.
  *   5. If the run completed, calls `resultMapper(snapshot)` (or the
  *      default JSON.stringify) and returns the string. The snapshot is
  *      the SERVED view (`servableSnapshot`): redacted when `redact` is

@@ -250,9 +250,9 @@ function add(sink: Sink, raw: string): void {
   const norm = normalizeToken(raw);
   if (norm === '') return;
   for (const form of lookupForms(norm)) {
-    // Re-stamping a form the index already holds costs no entry, so it is
-    // done before the budget is consulted: a truncated index should still
-    // hold the freshest turn for everything it did manage to index.
+    // Re-stamping a held form costs no entry, so it runs before the budget check — but only for a
+    // token that reaches `add`: past the budget a later re-serve is never seen (earlier stamp kept,
+    // no carrier; `indexTruncated: true`). Readers that act on a stamp refuse a truncated index.
     if (sink.values.has(form)) {
       sink.values.set(form, sink.turn);
       carry(sink, form);

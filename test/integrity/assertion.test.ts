@@ -50,7 +50,7 @@ describe('functional: the recorded suspended-tools shape fires once', () => {
   });
 });
 
-describe('contract: the four false-positive fences', () => {
+describe('contract: the four false-positive fences, the epoch rule, and the multi-valued exception', () => {
   it('history is quotation — a quoted stratum never fires', () => {
     expect(conflictsOf([a({ value: 'v3', stratum: 'quoted' }), a({ value: 'v4' })])).toHaveLength(
       0,

@@ -27,10 +27,10 @@
  *     `'mid-stream-not-retryable'`. Matches LangChain's
  *     `RunnableWithFallbacks` first-chunk arbitration pattern.
  *
- * On fail-fast: writes `failKind` + `failPayload` to agent scope and
- * calls `$break(reason)`. The agent's main chart catches the break;
- * `Agent.run()` translates it into a typed `ReliabilityFailFastError`
- * at the API boundary (via `TranslateFailFast` stage).
+ * On fail-fast: writes `failKind` + `failPayload` to agent scope and calls `$break(reason)`. The
+ * agent's main chart catches the break; `Agent.run()` translates it into a typed
+ * `ReliabilityFailFastError` at the API boundary, after the run, from those scope fields — no
+ * chart stage does it.
  *
  * Closure-local state (NOT scope):
  *   • `attempt`         — 1-indexed attempt counter

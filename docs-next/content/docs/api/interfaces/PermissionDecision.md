@@ -69,7 +69,7 @@ continues and can pick differently.
 
 Defined in: [src/provider-contract/types.ts:934](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L934)
 
-v2.12 — content delivered to the LLM as the synthetic `tool_result`
-on `'deny'` and `'halt'`. When omitted, defaults to a deliberately
-generic `"Tool '${name}' is not available in this context."` —
-NEVER falls back to `reason` (which is telemetry, not user-facing).
+v2.12 — the synthetic `tool_result` the LLM reads on `'deny'` and `'halt'`. Default for a deny:
+`"[permission denied: ${rationale ?? 'policy'}]"`, so a `rationale` IS shown to the model (put
+nothing in it the model must not read); for a halt, the deliberately generic
+`"Tool '${name}' is not available in this context."`. Neither default uses `reason`.

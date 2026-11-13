@@ -1,11 +1,24 @@
 **Mixed** — the ReAct loop's stages, and the split is per FILE, not per section.
 Walker (the cursor, its guards and its moves): `seed.ts`, `pickEntry.ts`,
 `routeTurn.ts`, `window.ts`, `deliver.ts`, `route.ts`, `outputRetry.ts`,
-`reliabilityExecution.ts`, `prepareFinal.ts`, `breakFinal.ts`.
+`reliabilityExecution.ts`, `prepareFinal.ts`, `breakFinal.ts`, the guards and
+lookups the dispatch shares — `toolCallShape.ts` (refuses a tool-call batch
+outside its finite bounds: call count, ids, names), `toolResolver.ts` (which
+implementation answers a tool name on this call), `searchCoverage.ts` (a
+`Tool.search` call's reserved result identity and composed coverage) — and the
+`toolCalls/` handler (its own README says which of its files are what).
 Lens (a sentence a model reads, composed here because it has to be composed at
-the moment the gate fires): `callLLM.ts`'s wire assembly (`buildCallLLMStage`,
-`callLLM.ts` · `buildCallLLMStage`), `toolCalls/index.ts`'s refusals and result overwrites,
-`stepNudge.ts`, `evidenceRecheck.ts`, `wrapUp.ts`.
+the moment the gate fires): `callLLM.ts`'s wire assembly (`callLLM.ts` ·
+`buildCallLLMStage`), the tool-call refusals and settlements
+(`toolCalls/helpers/dispatchRefusals.ts`, `toolCalls/helpers/readSkillRefusal.ts`,
+`toolCalls/batch/settle.ts` — `toolCalls/index.ts` only re-exports and composes
+them), `stepNudge.ts`, `evidenceRecheck.ts`, `wrapUp.ts`, and `outputRetry.ts`,
+which is listed under both: it moves the loop AND composes its model-facing
+correction inline.
+Map (types only): `finalStageContract.ts` (the arms that pick which PrepareFinal
+body the final branch mounts).
+Trace: `routeIntegrity.ts` (the Route decider's half of the integrity family: the
+claim seam, and filing the rows the other seams held onto the findings ledger).
 This folder holds the library's densest set of model-facing composers, which is
 exactly why it may not claim one role: `Walker` on line 1 would let five Lens
 files inherit a word that says they compose nothing. The 9.86.0 sections below
@@ -30,8 +43,13 @@ One file per stage of the Agent chart, mounted by `buildAgentChart` /
 | window.ts | `.window()` compaction (loop head when configured) |
 | deliver.ts | messages-slot delivery (role-checked, sequence-checked) |
 | callLLM.ts | provider invocation + streaming + reliability retry loop. 9.19.0: ONE `brainFor(nextSkillCursor ?? currentSkillId, skillEscalated)` consult at the top — the cursor picks the brain; precedence escalation > skill brain > `.configure()` > build default; `llm_start.brain` stamps the winning rung (absent = the agent's own config answered) |
-| route.ts | the decider: tool-calls / output-retry / step-nudge / evidence-recheck / final. Three judges over a would-be-final answer, in this order: schema (a broken shape is replaced wholesale) → steps (`steps_unfinished` accepted/cut-short) → evidence (9.35.0 — every name and number must appear in a tool result). A DENIED answer is judged by none of them. Under the answer layer's arm (honesty layer 4) the step judge and the evidence gate also file their verdict's committed witness row — `steps-unfinished` on an accepted or cut-short stop, `grounded` on a clean pass (`../assessment/witness.ts`) — and every row this decider files carries the turn stamp |
-| toolCalls/routing/readSkillRoute.ts | tool dispatch (pausable): permission gate → middleware → validation → credentials → execute; the read_skill gate; the step boundary (9.18.0) — advance/skip at EVERY result-finalization site, the batch loop AND all four resume paths. 9.19.0: the escalation counter (both `skill.rejected` sites feed `skillRefusalsThisTurn`; at `afterRefusals` the flip is committed + `skill.escalated` fires once) and the typed tool-effects judge (`applyToolEffects` — envelope unwrapped at every execute boundary; propose-transition reachability-checked, first-accepted-wins with `route_conflict { source: 'tool-proposal' }`; require-instruction leases granted from the declared catalog — but lease DEATH is owned by the injection engine's Evaluate tenure sweep (`nextInstructionLeases`), which is what keeps a dead lease dead across cyclic re-entry; `status` rides `tool_end` + the batch; a status-only near-miss missing its `effects: []` marker stays data and gets a dev-mode warning naming the fix). This release: `declareCoverage` at those SAME two execute boundaries — `absent()` / `coverage()` recognized on the UNWRAPPED content and BEFORE the ceiling (a declared boundary is not the channel that overflows), files `tools.absent` / `tools.coverage_declared`, appends to `coverageDeclared`, and returns the delivered status: `'absent'` when an absence is in play, and only when the envelope declared none |
+| route.ts | the decider, seven branches (`route.ts` · `RouteBranch`): tool-calls (the LLM returned tool calls and no limit stops them — `willDispatch`: the iteration cap, a halting cost budget, tools off after a revision; loops back to the injection engine) / final (the subflow that persists memory writes and breaks the loop) / output-retry / step-nudge / evidence-recheck / negative-recheck (typed `.negativeClaims()` asks for one correction, through `answerValidation.ts`) / wrap-up (the iteration cap hit while tool calls were pending, when the wrap-up branch is mounted — `wantsWrapUp`, the default on an agent that can call tools: one more call with the tools withheld; otherwise those calls go to final). The decider never names a branch the chart did not mount. Under `.findings()` the findings-reference admission (`../findings/answerAdmission.ts` · `withFindingsAdmission`) runs before every judge: a final answer whose findings cite a result this request did not serve is re-asked through output-retry while a configured `.outputSchema()` retry remains, else the answer is denied (a terminal `final` with `messageDeniedBy: 'findings-reference-admission'`). Three judges over a would-be-final answer, in this order: schema (a broken shape is replaced wholesale) → steps (`steps_unfinished` accepted/cut-short) → evidence (9.35.0 — every name and number must appear in a tool result). A DENIED answer is judged by none of them. Under the answer layer's arm (honesty layer 4) the step judge and the evidence gate also file their verdict's committed witness row — `steps-unfinished` on an accepted or cut-short stop, `grounded` on a clean pass (`../assessment/witness.ts`) — and every row this decider files carries the turn stamp |
+| toolCalls/ | the tool-call handler (pausable), composed in `toolCalls/index.ts` · `buildToolCallsHandler`; its README names every sub-folder's job. The files a reader most often looks for: |
+| toolCalls/execution/dispatchCall.ts | ONE call of the batch: permission gate → middleware → validation → credentials → execute, then the result landing (`buildCallDispatch`) |
+| toolCalls/routing/readSkillRoute.ts | the read_skill gate only (`applyReadSkillRoute`): re-engagement of a parked map, the self-call arm, activation |
+| toolCalls/routing/stepsOperations.ts | the step boundary (9.18.0) — advance/skip at every result-finalization site, the batch loop AND the resume paths — and the escalation counter (`noteSkillRefusal`, called beside all three `skill.rejected` sites — self-call, reachability, posture — feeds `skillRefusalsThisTurn`; at `afterRefusals` the flip is committed + `skill.escalated` fires once) |
+| toolCalls/routing/effectsOperations.ts | the typed tool-effects judge (`applyToolEffects`). Envelope unwrapped at every execute boundary; propose-transition reachability-checked, first-accepted-wins with `route_conflict { source: 'tool-proposal' }`; require-instruction leases granted from the declared catalog — lease DEATH is owned by the injection engine's Evaluate tenure sweep (`nextInstructionLeases`); a status-only near-miss missing its `effects: []` marker stays data and gets a dev-mode warning naming the fix |
+| toolCalls/evidence/coverageOperations.ts | `declareCoverage` at the execute boundaries — `absent()` / `coverage()` recognized on the UNWRAPPED content and BEFORE the ceiling, files `tools.absent` / `tools.coverage_declared`, appends to `coverageDeclared`, and returns the delivered status (`'absent'` when an absence is in play, and only when the envelope declared none) |
 | outputRetry.ts | `.outputSchema()` re-ask branch |
 | outputAdmission.ts | pre-capture guard for an output-governed final branch. Consumes Route's refusal flag without walking the policy again; breaks before the selected composer, final events and memory writes. `prepareFinalFor` binds the declaration, and `captureTurnPayload` releases the captured answer once on acceptance. Raw audit state is not erased. |
 | stepNudge.ts | the unfinished-steps teaching re-ask (9.18.0): appends the premature answer + the nudge, once per turn, loops like SchemaRetry |
@@ -64,8 +82,10 @@ traversal — a pause mid-batch commits the partial batch, resume paths append):
   triggers and skill-graph routes read (via the injection-engine mappers), so
   a parallel batch routes on all its calls, not only the last.
 
-Any NEW dispatch path must write both (and apply `capResults` — see the note
-on the five `tool_end`-emitting paths in toolCalls/observation/observationsOperations.ts).
+Any NEW dispatch path must write both, and apply `capResults`
+(`toolCalls/decorators/limitsOperations.ts`) before it emits `tool_end` — its
+callers in `toolCalls/` (the dispatch loop's `execution/dispatchCall.ts` and the
+`resume/` doors) are the paths that do today.
 
 The batch settlement (9.113.0) is NOT a dispatch path and writes neither key.
 When a call pauses mid-batch, every resume path settles the calls after it
