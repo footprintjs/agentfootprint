@@ -19,7 +19,6 @@
     "src/adapters/memory/s3Vectors.ts": 1091,
     "src/adapters/memory/sqliteVector.ts": 1135,
     "src/adapters/observability/audit.ts": 774,
-    "src/adapters/observability/auditShapes.ts": 2119,
     "src/adapters/observability/githubBugReporter.ts": 682,
     "src/adapters/observability/otel.ts": 2342,
     "src/adapters/observability/xray.ts": 660,

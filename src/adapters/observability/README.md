@@ -203,8 +203,8 @@ descriptions, step notes, hints, display names).
 someone remembered, and every other field rode through as written, so a new
 content field leaked until someone noticed. Now:
 
-- **Every registered event has a shape** (`auditShapes.ts` · `eventShapes`,
-  total over the event registry) that names every field of its payload,
+- **Every registered event has a shape** (`auditShapes/events/` · whole event shapes,
+  assembled by `auditShapes.ts` · `eventShapes`, total over the event registry) that names every field of its payload,
   with a checked rule or a marker. A new event type, or a new field on a payload, does
   not compile until it is classified.
 - **What a shape does not name is a marker:** a field the payload type does
@@ -273,8 +273,10 @@ const audit = auditExport(); // bounded
 ## Files
 - `otel.ts`, `xray.ts`, `cloudwatch.ts`, `agentcore.ts`, `file.ts` — exporters.
 - `audit.ts` — a tamper-evident bundle.
-- `auditShapes.ts` — what its bounded mode keeps of each event: one shape per
-  registered event type.
+- `auditShapes.ts` — the audit shape facade and ordered whole-event table.
+- `auditShapes/events/` — what bounded mode keeps of each registered event type.
+- `auditShapes/pieces/` — the reusable script, coverage, decision, request, metadata
+  and semantics bounds used by those events.
 - `auditBounding.ts` — how it bounds: the markers, the sanitizer and the
   combinators the shapes are built from.
 - `githubBugReporter.ts`, `githubDeviceSignIn.ts` — filing a report as the
