@@ -145,8 +145,8 @@ each thing it carries is placed on purpose, and the rule for placing one is:
   not). The
   adapter redacts nothing itself and reads nothing but the events.
 - **No one but the operator sizes an attribute.** Every string outside the
-  content switches is capped at 256 characters (`otel.ts` · `capAttrs`),
-  span names carry a tool or model name at most 64 (`otel.ts` ·
+  content switches is capped at 256 characters (`otel/attributes/bounds.ts` · `capAttrs`),
+  span names carry a tool or model name at most 64 (`otel/attributes/bounds.ts` ·
   `spanNamePart`); a
   content value over `maxContentChars` is OMITTED with its size stated, never
   cut (the prompt and answer included); the session id is exported as its
@@ -271,6 +271,8 @@ const audit = auditExport(); // bounded
 ```
 
 ## Files
+- `otel/` — attribute projections, span writes, turn retention, content capture,
+  and event handlers behind the public OTel facade.
 - `otel.ts`, `xray.ts`, `cloudwatch.ts`, `agentcore.ts`, `file.ts` — exporters.
 - `audit.ts` — a tamper-evident bundle.
 - `auditShapes.ts` — the audit shape facade and ordered whole-event table.
