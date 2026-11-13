@@ -290,9 +290,12 @@ Defined in: [src/core/Agent.ts:110](https://github.com/footprintjs/agentfootprin
 
 > **abandonPause**(): `Promise`\<\{ `question?`: `string`; `toolCallId?`: `string`; `toolName?`: `string`; \} \| `undefined`\>
 
-Defined in: [src/core/Agent.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L483)
+Defined in: [src/core/Agent.ts:487](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L487)
 
-Drop the question this agent's last run paused to ask, on the record.
+Drop the question this agent's last run paused to ask. The library
+records nothing for it: no event is emitted and no run record is
+written, so the paused run's record keeps its pause request with no
+matching resume. What was dropped is returned to the caller instead.
 
 A paused run is waiting on a person. Sending a different message while one
 is outstanding is refused ([PendingQuestionError](/docs/api/classes/PendingQuestionError)) because silently
@@ -302,7 +305,8 @@ the user changed the subject, the session timed out, the approval is no
 longer wanted — say so with this, and the next `run()` proceeds.
 
 Returns what was dropped (`undefined` when nothing was pending), so a
-caller can log or audit the abandonment rather than perform it blind. It
+caller can log or audit the abandonment rather than perform it blind;
+an app whose audit needs the abandonment must log it itself. It
 does not touch the paused run's checkpoint: if you still hold that, it
 remains resumable.
 
@@ -316,7 +320,7 @@ remains resumable.
 
 > **answerCoverage**(): [`AnswerCoverage`](/docs/api/interfaces/AnswerCoverage) \| `undefined`
 
-Defined in: [src/core/Agent.ts:885](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L885)
+Defined in: [src/core/Agent.ts:889](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L889)
 
 The limits of the last run's TYPED answer, as data — what its tools
 declared they `checked`, did not check (`notChecked`) and can never see
@@ -374,7 +378,7 @@ for (const item of limits?.cannotCover ?? []) {
 
 > **answerNegatives**(): `AnswerNegativesPayload` \| `undefined`
 
-Defined in: [src/core/Agent.ts:831](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L831)
+Defined in: [src/core/Agent.ts:835](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L835)
 
 The library-composed negative statements and their recorded limits.
 Detached, in-process data for the caller. Record redaction applies to the
@@ -390,7 +394,7 @@ snapshots and emitted events, not this caller-owned value.
 
 > **answerValidation**(): [`AnswerValidationReport`](/docs/api/interfaces/AnswerValidationReport) \| `undefined`
 
-Defined in: [src/core/Agent.ts:836](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L836)
+Defined in: [src/core/Agent.ts:840](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L840)
 
 The last run's answer checks, detached from its execution record.
 Undefined means no terminal validation ran, never an implicit pass.
@@ -405,7 +409,7 @@ Undefined means no terminal validation ran, never an implicit pass.
 
 > **assessment**(`declarations?`): `Promise`\<`AnswerAssessment` \| `undefined`\>
 
-Defined in: [src/core/Agent.ts:920](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L920)
+Defined in: [src/core/Agent.ts:924](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L924)
 
 How far the last run's answer stands — folded from its COMMITTED record,
 never from how sure the model sounded: `known` · `consistent` (checks ran,
@@ -506,7 +510,7 @@ that run and none of its beginning.
 
 > **canExplain**(): `boolean`
 
-Defined in: [src/core/Agent.ts:507](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L507)
+Defined in: [src/core/Agent.ts:511](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L511)
 
 Whether Agent.selfExplain's why-questions have a run to answer
 from right now.
@@ -535,7 +539,7 @@ the run served last.
 
 > **checkpoint**(): [`AgentRunCheckpoint`](/docs/api/interfaces/AgentRunCheckpoint) \| `undefined`
 
-Defined in: [src/core/Agent.ts:649](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L649)
+Defined in: [src/core/Agent.ts:653](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L653)
 
 During preparation before native origin this is undefined; capture before the next call.
 
@@ -629,7 +633,7 @@ Defined in: [src/core/Agent.ts:238](https://github.com/footprintjs/agentfootprin
 
 > **drainObservers**(`opts?`): `Promise`\<`DrainResult`\>
 
-Defined in: [src/core/Agent.ts:685](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L685)
+Defined in: [src/core/Agent.ts:689](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L689)
 
 Flush the deferred-observer backlog of the most recent run's executor,
 then await async listener completions under a deadline (RFC-001 §11 —
@@ -704,7 +708,7 @@ minimal meta. Library events remain reserved under `agentfootprint.*`.
 
 > **findings**(): [`FindingsLedger`](/docs/api/type-aliases/FindingsLedger) \| `undefined`
 
-Defined in: [src/core/Agent.ts:825](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L825)
+Defined in: [src/core/Agent.ts:829](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L829)
 
 The last run's findings ledger (9.101.0) — the model's OWN standings on
 its tool results, as `.findings()` recorded them: `basis` rows (what a
@@ -1276,7 +1280,7 @@ Defined in: [src/core/RunnerBase.ts:750](https://github.com/footprintjs/agentfoo
 
 > **outputContractUnmet**(): \{ `attempts`: `number`; `brokenBy?`: `string`; `error`: `string`; `fallbackConfigured`: `boolean`; `path?`: `string`; `retriesSpent`: `number`; `stage`: `"json-parse"` \| `"schema-validate"`; `stopReason?`: `NativeStopReason`; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:760](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L760)
+Defined in: [src/core/Agent.ts:764](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L764)
 
 Did the last turn's answer FAIL this agent's `outputSchema` — and how (8.18.0)?
 
@@ -1473,7 +1477,7 @@ calling if you still want them. Does NOT touch attached recorders
 
 > **resume**(`checkpoint`, `input?`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/Agent.ts:587](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L587)
+Defined in: [src/core/Agent.ts:591](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L591)
 
 Continue a run that paused to ask a person something, with their answer.
 
@@ -1541,7 +1545,7 @@ if (isPaused(outcome)) await agent.resume(outcome.checkpoint, 'yes', { identity,
 
 > **resumeOnError**(`checkpoint`, `options?`): `Promise`\<`string` \| [`RunnerPauseOutcome`](/docs/api/interfaces/RunnerPauseOutcome)\>
 
-Defined in: [src/core/Agent.ts:554](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L554)
+Defined in: [src/core/Agent.ts:558](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L558)
 
 Resume an agent run from a checkpoint produced by a prior
 `RunCheckpointError`. Unlike `agent.resume()` (which takes a
@@ -1789,7 +1793,7 @@ Graceful exit for a script
 
 > **stoppedEarly**(): \{ `answerWasEmpty`: `boolean`; `iteration`: `number`; `pendingToolCalls`: `number`; `reason`: `"max-iterations"` \| `"cost-budget"`; `wrappedUp?`: `true`; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:724](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L724)
+Defined in: [src/core/Agent.ts:728](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L728)
 
 Did the last turn stop because a LIMIT cut it short — and if so, which?
 
@@ -1883,7 +1887,7 @@ if (cut) {
 
 > **unsupportedValues**(): \{ `candidates`: `number`; `posture`: `"assist"` \| `"guard"` \| `"rails"`; `refused`: `boolean`; `revised`: `boolean`; `values`: readonly [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)[]; \} \| `undefined`
 
-Defined in: [src/core/Agent.ts:787](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L787)
+Defined in: [src/core/Agent.ts:791](https://github.com/footprintjs/agentfootprint/blob/main/src/core/Agent.ts#L791)
 
 Did the last turn's answer state names or numbers that appear in NO tool
 result (9.35.0)?

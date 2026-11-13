@@ -466,7 +466,10 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     return getAgentRuntime(this).followUp(message, options);
   }
   /**
-   * Drop the question this agent's last run paused to ask, on the record.
+   * Drop the question this agent's last run paused to ask. The library
+   * records nothing for it: no event is emitted and no run record is
+   * written, so the paused run's record keeps its pause request with no
+   * matching resume. What was dropped is returned to the caller instead.
    *
    * A paused run is waiting on a person. Sending a different message while one
    * is outstanding is refused ({@link PendingQuestionError}) because silently
@@ -476,7 +479,8 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    * longer wanted — say so with this, and the next `run()` proceeds.
    *
    * Returns what was dropped (`undefined` when nothing was pending), so a
-   * caller can log or audit the abandonment rather than perform it blind. It
+   * caller can log or audit the abandonment rather than perform it blind;
+   * an app whose audit needs the abandonment must log it itself. It
    * does not touch the paused run's checkpoint: if you still hold that, it
    * remains resumable.
    */

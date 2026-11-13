@@ -22,8 +22,11 @@ offers a notice only when the removal reaches the front of what may leave;
 `fittingNotice` then tries the notice that names the dropped tools, falls back
 to the plain one, and serves neither when neither is shorter than the span. If
 nothing fits and the new head is already a user turn, the drop is silent toward
-the model; a removal that does not reach the front (a drop from the middle of
-the window) is always silent toward the model. In every case the record still names what left.
+the model. If nothing fits and the new head is NOT a user turn, the wire needs a
+message there, so the drop is refused (`replacement-not-smaller`) and nothing
+leaves. A removal that does not reach the front (a drop from the middle of the
+window) is always silent toward the model. Whenever something leaves, the record
+names it.
 
 ## A strategy never reads the ledger; the stage hands it what it may know
 

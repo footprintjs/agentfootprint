@@ -146,7 +146,10 @@ export function buildCatalog(
 
   // ── The inputs layer (honesty layer 2) — armed ONCE, here ──────────
   // A registered tool (static, skill-carried, or an MCP tool registered on
-  // the builder) that declares argument rules arms the mount — the
+  // the builder) that declares argument rules (`askOrAssume`) or a period
+  // (`period`, which `tools/declare.ts` · `rulesOf` also counts as a rule
+  // declaration) arms the mount — so a tool whose only declaration is a
+  // period arms it too, though `carriesRules` is false for it. The
   // `toolGrounding` harvest precedent, over the same catalog. Tools a
   // ToolProvider serves are invisible here, so `.inputsLayer()` arms the
   // mount for them; without it their calls are refused at dispatch (fail

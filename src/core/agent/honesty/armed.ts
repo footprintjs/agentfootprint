@@ -9,11 +9,11 @@
  *          inputs bench (`bench/inputs/harness.mjs` refuses a recording without
  *          `honestyLayers.argumentSources`) and the Agent's checkpoint
  *          (`runtime/conversation/owner.ts` · `turnNumberOf` stamps the turn
- *          only while a layer is armed). The standing fold does NOT read it:
+ *          only while a layer is armed or `.negativeClaims()` is
+ *          configured). The standing fold does NOT read it:
  *          `assessment/assess.ts` folds the same state to the same standing
  *          with or without this key, so the fold cannot tell an armed layer
- *          that filed nothing from one never armed (a run whose layers filed
- *          no rows reads `not-assessed` either way). No lens reads it.
+ *          that filed nothing from one never armed. No lens reads it.
  * Emits:   N/A.
  *
  * Absent on a run with no layer armed, so an agent that armed nothing commits

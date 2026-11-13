@@ -139,7 +139,7 @@ detect the boundary via `event.traversalContext.runId !== lastRunId`
 
 > `readonly` `optional` **redact?**: [`RedactionPolicy`](/docs/api/interfaces/RedactionPolicy)
 
-Defined in: [src/core/flowchartAsTool.ts:343](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L343)
+Defined in: [src/core/flowchartAsTool.ts:346](https://github.com/footprintjs/agentfootprint/blob/main/src/core/flowchartAsTool.ts#L346)
 
 Redaction policy for the INNER run, applied before every invocation
 (`executor.setRedactionPolicy`).
@@ -185,8 +185,11 @@ WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
    footprintjs serves it: its seed is a commit of its own (`history[0]`),
    so that base is the nested runtime's pre-seed state.
 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
-   which holds real values because resumption must replay against them;
-   it goes to the agent loop, never to a model.
+   which holds real values because resumption must replay against them.
+   It reaches only a direct caller of `execute`. Inside an Agent the
+   throw becomes a tool error: the model reads the error's message, and
+   no agent event or outcome carries the checkpoint object (item 4 of
+   the file header), so its values are never sent to a model.
 3. What the LOG itself carries — footprintjs's law, not this option's,
    and since footprintjs 9.19.0 (this package's floor from 9.89.2) that
    law is one rule: a policy covers everything the run retains or serves

@@ -66,10 +66,11 @@ const findings = invariantViolationsOf(
 // → one 'invariant-violation' at seam 'write', witnesses naming both channels
 ```
 
-The function returns `seam: 'write'`, but its only production caller, the compose backstop in
-`core/slots/buildToolsSlot.ts`, files and emits each finding as `seam: 'compose'` — so a run's
+The function returns `seam: 'write'`, but its only caller that files findings, the compose
+backstop in `core/slots/buildToolsSlot.ts`, files and emits each finding as `seam: 'compose'` — so a run's
 record and events say `compose`. Its dedup key (`integrityFindingIds`) is still computed from the
-`'write'` form; the two are not yet one value.
+`'write'` form; the two are not yet one value. (The dev-posture canary in
+`disposition/lifecycle.ts` also calls the function, but only counts what it returns.)
 
 Healthy cases return `[]` — which the caller files as `checked-pass`, never as silence. That
 distinction is the whole point of the disposition ledger next door.

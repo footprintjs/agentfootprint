@@ -98,7 +98,8 @@ today); which door armed the sources is on the record too (the findings
 ledger's own run constant, `findingsServe`, exists exactly when `.findings()` did). While any
 layer is armed, the one writer stamps every ledger row with its `turn`, a continued
 conversation's ledger is restored, and the checkpoint carries the turn it ended on
-(`AgentRunCheckpoint.turnNumber`) — seed continues the stamp from it and from the restored
+(`AgentRunCheckpoint.turnNumber`; `runtime/conversation/owner.ts` · `turnNumberOf` also
+carries it when no layer is armed but `.negativeClaims()` is configured) — seed continues the stamp from it and from the restored
 ledger's latest stamp (`stages/seed.ts` · `turnNumberFor`), because a window strategy trims the
 stored history and a count of its user messages repeats.
 
