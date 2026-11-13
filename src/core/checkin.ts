@@ -11,10 +11,10 @@
  * the {@link CheckInDecision} lands as a typed record.
  *
  * This is the LEAF that owns every check-in TYPE + the pure assembly logic.
- * It has one runtime import, the `lib/frozenCopy.ts` leaf (which reads only
- * footprintjs's dev-mode flag); the rest are type-only imports of the message
- * shape + the influence-core attribution unit — so it stays cheap to import
- * and trivial to unit-test. The pause plumbing lives in
+ * It has two runtime imports, both leaves: `lib/frozenCopy.ts` (which reads
+ * only footprintjs's dev-mode flag) and `trailBeforeOutcomeMarker.ts`; the
+ * rest are type-only imports of the message shape + the influence-core
+ * attribution unit, so it stays cheap to import. The pause plumbing lives in
  * `core/agent/stages/toolCalls/access/checkInAdmission.ts`; the events in `events/`; the store in
  * `recorders/core/CheckInRecorder.ts`.
  *
@@ -28,6 +28,7 @@
  */
 
 import { frozenView, warnFrozenWrite } from '../lib/frozenCopy.js';
+import { readsRefusedBeforeOutcomeMarker } from './trailBeforeOutcomeMarker.js';
 import type { ArtifactRef } from '../artifacts/types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AskComponent } from '../tools/askComponent.js';
@@ -580,16 +581,15 @@ function buildTrail(history: readonly LLMMessage[], iteration: number): CheckInT
     // marker, never the sentence. Its sentence stays in `read`: the model
     // did read it (`unitsFromHistory`).
     if (m.role === 'tool' && m.toolName && m.notDispatched === undefined) {
-      // A tool result whose content advertises an error is marked not-ok. The
-      // synthetic strings the loop writes ("[permission denied…]", "declined by
-      // human…", "credential error…") all read as failures here.
-      const c = (m.content ?? '').toLowerCase();
-      const ok = !(
-        c.startsWith('[permission denied') ||
-        c.startsWith('declined by human') ||
-        c.startsWith('credential error') ||
-        c.startsWith('authorization required')
-      );
+      // `ok` is how the call SETTLED, as the dispatch recorded it on the
+      // message (`outcome`; `callOutcomeOf` owns the rule): a tool that threw
+      // writes only its error text, so a lookup's "connection refused" reads
+      // `ok: false` by its mark. A host notice standing in for a result
+      // (`toolResultOrigin`) is not a completed call either. An UNMARKED
+      // message (all of a history stored before the mark) also reads not ok
+      // when its text opens with a library refusal form, as it did before the
+      // mark existed (`trailBeforeOutcomeMarker.ts` says why and what it costs).
+      const ok = !m.outcome && !m.toolResultOrigin && !readsRefusedBeforeOutcomeMarker(m.content);
       toolCalls.push({ name: m.toolName, ok });
     }
   }

@@ -80,6 +80,7 @@ import type {
   SkillRerouteSupersededPayload,
   SkillRouteConflictPayload,
   SkillStepAdvancedPayload,
+  SkillStepHeldPayload,
   SkillStepSkippedPayload,
   SkillStepsUnfinishedPayload,
   SkillTurnRoutedPayload,
@@ -224,6 +225,8 @@ export const EVENT_NAMES = {
     routeConflict: 'agentfootprint.skill.route_conflict',
     turnRouted: 'agentfootprint.skill.turn_routed',
     stepAdvanced: 'agentfootprint.skill.step_advanced',
+    // The step's tool declared a failure or unfinished work; the step stayed current.
+    stepHeld: 'agentfootprint.skill.step_held',
     stepSkipped: 'agentfootprint.skill.step_skipped',
     stepsUnfinished: 'agentfootprint.skill.steps_unfinished',
     escalated: 'agentfootprint.skill.escalated',
@@ -237,9 +240,7 @@ export const EVENT_NAMES = {
     disposition: 'agentfootprint.integrity.disposition',
     externalGroundUsed: 'agentfootprint.integrity.external_ground_used',
   },
-  validation: {
-    argsInvalid: 'agentfootprint.validation.args_invalid',
-  },
+  validation: { argsInvalid: 'agentfootprint.validation.args_invalid' },
   permission: {
     check: 'agentfootprint.permission.check',
     gateOpened: 'agentfootprint.permission.gate_opened',
@@ -252,9 +253,7 @@ export const EVENT_NAMES = {
     authorizationRequired: 'agentfootprint.credential.authorization_required',
     failed: 'agentfootprint.credential.failed',
   },
-  fallback: {
-    triggered: 'agentfootprint.fallback.triggered',
-  },
+  fallback: { triggered: 'agentfootprint.fallback.triggered' },
   cost: {
     tick: 'agentfootprint.cost.tick',
     limitHit: 'agentfootprint.cost.limit_hit',
@@ -286,9 +285,7 @@ export const EVENT_NAMES = {
     request: 'agentfootprint.checkin.request',
     decision: 'agentfootprint.checkin.decision',
   },
-  middleware: {
-    decision: 'agentfootprint.middleware.decision',
-  },
+  middleware: { decision: 'agentfootprint.middleware.decision' },
   findings: {
     declared: 'agentfootprint.findings.declared',
     standing: 'agentfootprint.findings.standing',
@@ -306,9 +303,7 @@ export const EVENT_NAMES = {
     outcome: 'agentfootprint.tool_choice.outcome',
     failed: 'agentfootprint.tool_choice.failed',
   },
-  ontology: {
-    served: 'agentfootprint.ontology.served',
-  },
+  ontology: { served: 'agentfootprint.ontology.served' },
   // The answer layer (honesty layer 4): the answer's standing, as data.
   answer: {
     assessed: 'agentfootprint.answer.assessed',
@@ -629,6 +624,10 @@ export interface AgentfootprintEventMap {
   'agentfootprint.skill.step_advanced': AgentfootprintEventEnvelope<
     'agentfootprint.skill.step_advanced',
     SkillStepAdvancedPayload
+  >;
+  'agentfootprint.skill.step_held': AgentfootprintEventEnvelope<
+    'agentfootprint.skill.step_held',
+    SkillStepHeldPayload
   >;
   'agentfootprint.skill.step_skipped': AgentfootprintEventEnvelope<
     'agentfootprint.skill.step_skipped',
@@ -956,6 +955,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.skill.route_conflict',
   'agentfootprint.skill.turn_routed',
   'agentfootprint.skill.step_advanced',
+  'agentfootprint.skill.step_held',
   'agentfootprint.skill.step_skipped',
   'agentfootprint.skill.steps_unfinished',
   'agentfootprint.skill.escalated',

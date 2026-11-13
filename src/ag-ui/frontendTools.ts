@@ -78,11 +78,32 @@ export function frontendToolBuilders(
   return builders;
 }
 
-/** Does this pause wait on the page — a frontend tool's call? Read from the pause's own data. */
-export function isFrontendToolPause(pauseData: unknown): boolean {
-  return (
-    typeof pauseData === 'object' &&
-    pauseData !== null &&
-    typeof (pauseData as Record<string, unknown>)[FRONTEND_TOOL_PAUSE] === 'string'
-  );
+/**
+ * Does this pause wait on the page — a call of one of the app's frontend
+ * tools?
+ *
+ * Read from WHERE the pause came from, not from what it says: any tool can
+ * put `agUiFrontendTool` in the data it pauses with, and a server tool that
+ * did would hand its own call to the page to answer. So the pause counts only
+ * when the NAME of the call that raised it is one of the frontend tools the
+ * app declared: the library writes the real call's `toolName` on every tool
+ * pause, over anything the tool wrote (`execution/initialInvocation.ts` ·
+ * `toolPauseData`). A server tool whose name is not a declared frontend tool
+ * therefore waits on a person.
+ *
+ * Not covered: a server tool the app named like one of its declared frontend
+ * tools (the page did not enable that frontend tool on this request, so the
+ * build's duplicate-name refusal never met it) still waits on the page when it
+ * writes `agUiFrontendTool`. The name is all this function sees.
+ *
+ * @example isFrontendToolPause({ toolName: 'pick_date', agUiFrontendTool: 'pick_date' }, builders) // true
+ * @example isFrontendToolPause({ toolName: 'lookup', agUiFrontendTool: 'pick_date' }, builders)    // false
+ */
+export function isFrontendToolPause(
+  pauseData: unknown,
+  declared: ReadonlyMap<string, unknown>,
+): boolean {
+  if (typeof pauseData !== 'object' || pauseData === null) return false;
+  const { toolName, [FRONTEND_TOOL_PAUSE]: named } = pauseData as Record<string, unknown>;
+  return typeof toolName === 'string' && named === toolName && declared.has(toolName);
 }

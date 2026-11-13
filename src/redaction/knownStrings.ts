@@ -220,6 +220,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'agentfootprint.skill.reroute_superseded': true,
   'agentfootprint.skill.route_conflict': true,
   'agentfootprint.skill.step_advanced': true,
+  'agentfootprint.skill.step_held': true,
   'agentfootprint.skill.step_skipped': true,
   'agentfootprint.skill.steps_unfinished': true,
   'agentfootprint.skill.turn_routed': true,
@@ -517,6 +518,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'not-applicable': true,
   'not-assessed': true,
   'not-entered': true,
+  'not-finished': true,
   'not-found': true,
   'not-held': true,
   'not-in-app-text': true,
@@ -525,6 +527,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'not-needed': true,
   'not-permitted': true,
   'not-replayable': true,
+  'not-reported': true,
   'not-retryable': true,
   'not-run': true,
   'not-sure': true,
@@ -675,6 +678,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   structural: true,
   subject: true,
   submitted: true,
+  succeeded: true,
   success: true,
   sum: true,
   summarize: true,
@@ -1390,6 +1394,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   type: true,
   unit: true,
   unknownId: true,
+  unknownStatus: true,
   unreachable: true,
   unsupported: true,
   upgraded: true,
@@ -1427,14 +1432,9 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   // @generated fields — end
 };
 
-Object.freeze(WORDS);
-Object.freeze(FIELDS);
-
-/** (a) The library's own words — one exported frozen set. */
-export const LIBRARY_WORDS: Readonly<Record<string, true>> = WORDS;
-
-/** The field names the library's payload types declare. */
-export const FIELD_NAMES: Readonly<Record<string, true>> = FIELDS;
+/** (a) The library's own words, and the field names its payload types declare — frozen sets. */
+export const LIBRARY_WORDS: Readonly<Record<string, true>> = Object.freeze(WORDS);
+export const FIELD_NAMES: Readonly<Record<string, true>> = Object.freeze(FIELDS);
 
 const has = (record: Readonly<Record<string, true>>, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, key);

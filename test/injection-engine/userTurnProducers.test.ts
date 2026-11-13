@@ -668,8 +668,8 @@ describe('what the model reads on those two calls survives being re-read', () =>
     const content = nudgeMessage().content;
     expect(content).not.toMatch(/have not run|has not run/);
     expect(content).not.toMatch(/Finish them/);
-    expect(content).toContain('had not run when the answer above was given');
-    expect(content).toContain('This message asked for them to be run');
+    expect(content).toContain('had not been completed when the answer above was given');
+    expect(content).toContain('This message asked for them to be completed');
     expect(content).not.toMatch(/\bthis call\b/i);
   });
 });

@@ -2,12 +2,15 @@
  * plainLine — the ONE rule for "one visible line of plain text" that a
  * person will read in a report.
  *
- * Pattern: One predicate, no imports, no state.
- * Role:    Leaf. Asked by the three doors that take a short declared label:
- *          `semantics/coverage/items.ts` (a coverage item's `short`, at the
- *          `absent()` / `coverage()` mint AND at the dispatch reader) and
- *          `injection-engine/factories/defineSkill.ts` (a skill's
- *          `title`). One rule, so the three cannot disagree.
+ * Pattern: One predicate and one cleaner, no imports, no state.
+ * Role:    Leaf. The predicate is asked by the three doors that take a short
+ *          declared label: `semantics/coverage/items.ts` (a coverage item's
+ *          `short`, at the `absent()` / `coverage()` mint AND at the
+ *          dispatch reader) and `injection-engine/factories/defineSkill.ts`
+ *          (a skill's `title`). The cleaner (`plainLineOf`) is asked by
+ *          `semantics/toolEffects.ts` · `unknownStatusOf`, for a status word
+ *          a tool wrote that the library tells but does not know. One rule,
+ *          so they cannot disagree.
  * Emits:   N/A.
  *
  * ## Why more than CR/LF
@@ -55,4 +58,27 @@ export function plainLineProblem(label: string, text: string): string | undefine
     'line/paragraph separator or invisible format character (a bidi override or a ' +
     'zero-width character), which a report would print as something other than what it says.'
   );
+}
+
+/** Every character of the class above, for removal. */
+const NOT_PLAIN_ALL = new RegExp(NOT_PLAIN.source, 'gu');
+
+/**
+ * A word written by code the library does not control (a tool's result), made
+ * safe to quote in a sentence the model or a person reads: every character
+ * the rule above refuses is removed, the rest is trimmed, and text longer
+ * than `maxChars` is cut there and ends in `…`. Never throws; may return ''.
+ *
+ * Why a cleaner here and not a refusal: a label is declared by the app at
+ * build time and can be refused there, but a word inside a tool's result
+ * arrives at run time and has to be told — so it is told without the
+ * characters that would change what the reader sees (a bidi override
+ * reversing the word, a line break starting a new instruction).
+ *
+ * @example plainLineOf('ok\u202Eay', 40) // 'okay'
+ */
+export function plainLineOf(text: string, maxChars: number): string {
+  // Counted in code points, so a cut never splits a surrogate pair.
+  const chars = Array.from(text.replace(NOT_PLAIN_ALL, '').trim());
+  return chars.length > maxChars ? `${chars.slice(0, maxChars).join('')}…` : chars.join('');
 }

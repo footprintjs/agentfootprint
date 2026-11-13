@@ -22,6 +22,7 @@ export function prepareCallState(
      *  today's path byte for byte. */
     toolEnvelope: undefined,
     toolStatus: findingsRefusal === undefined ? undefined : 'invalid',
+    unknownStatus: undefined,
   };
   // Permission gate — when a checker is configured, evaluate BEFORE
   // executing the tool. Emits `permission.check` with the decision.
@@ -32,6 +33,8 @@ export function prepareCallState(
   //   • 'halt'                → synthetic tool_result lands; run terminates
   //                             via scope.$break + Agent.run throws
   //                             PolicyHaltError at the API boundary
+  //   • anything else         → refused like a checker that threw
+  //                             (`readPermissionDecision`, fail-closed)
   //
   // Strict ordering on halt: synthetic tool_result → halt event →
   // commit (newHistory written to scope) → $break. This guarantees

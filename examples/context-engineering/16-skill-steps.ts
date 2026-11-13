@@ -9,7 +9,11 @@
  * sent, so the model cannot call step 5's tool from step 3 — no refusal
  * machinery, no gate. The model keeps the judgment INSIDE each step:
  *
- *   • run the tool — the result gains "Step k done. Now on step k+1…";
+ *   • run the tool — what the tool DECLARED decides the step: a declared
+ *     `status: 'success'` advances it ("Step k of n done. Now on step k+1…");
+ *     a plain value advances it and says so ("Step k of n ran; its tool
+ *     declared no status."); a declared failure or unfinished work holds it
+ *     (`skill.step_held`);
  *   • skip it with `skip_step(reason)` — the reason goes on the record
  *     (`skill.step_skipped`), and the declared `onSkip` policy decides
  *     whether the pointer moves or holds;
@@ -23,9 +27,9 @@
  * the pointer rides the checkpoint, and the person's answer advances the
  * step on resume — human-in-the-loop as an ordinary step.
  *
- * Every move lands on the typed event stream (`skill.step_advanced` /
- * `step_skipped` / `steps_unfinished`) — this example prints them, because
- * the record IS the feature.
+ * Every move lands on the typed event stream (`skill.step_advanced` with its
+ * `outcome` / `step_held` / `step_skipped` / `steps_unfinished`) — this
+ * example prints them, because the record IS the feature.
  */
 
 import { Agent, defineTool, isPaused, askHuman, type LLMProvider } from '../../src/index.js';
@@ -67,6 +71,22 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     execute: () => askHuman({ question: 'Refund $42.10 on order #4021 — approve?' }),
   });
 
+  // The one step whose tool can SAY how it went: it declares a status. Its
+  // first call reports `'failure'` (the payment service was busy), so the
+  // step HOLDS — `file_receipt` is not offered for a refund that did not
+  // happen — and the retry declares `'success'`, so the step advances as
+  // 'succeeded'. The plain tools advance as 'not-reported'.
+  let refundCalls = 0;
+  const issueRefund = defineTool<Record<string, never>, unknown>({
+    name: 'issue_refund',
+    description: 'Issue the refund.',
+    inputSchema: { type: 'object', properties: {} },
+    execute: () =>
+      ++refundCalls === 1
+        ? { content: 'payment service busy — nothing refunded', effects: [], status: 'failure' }
+        : { content: 'refund of $42.10 issued', effects: [], status: 'success' },
+  });
+
   // #region define-steps
   const refundProcedure = defineSkill({
     id: 'refund',
@@ -77,7 +97,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       t('check_history', 'one charge on 2026-08-01, one duplicate on 2026-08-02'),
       t('verify_identity', 'identity verified'),
       approveRefund,
-      t('issue_refund', 'refund of $42.10 issued'),
+      issueRefund,
       t('file_receipt', 'receipt R-991 filed'),
     ] as never,
     steps: [
@@ -108,9 +128,17 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
         if (e.name === 'agentfootprint.skill.step_advanced') {
           const s = p.step as { index: number; total: number; tool: string };
           record.push(
-            `step_advanced   ${s.index}/${s.total} ${s.tool}${
+            `step_advanced   ${s.index}/${s.total} ${s.tool} (${String(p.outcome)})${
               p.completed ? ' — procedure complete' : ''
             }`,
+          );
+        }
+        if (e.name === 'agentfootprint.skill.step_held') {
+          const s = p.step as { index: number; total: number; tool: string };
+          record.push(
+            `step_held       ${s.index}/${s.total} ${s.tool} — its tool reported '${String(
+              p.status,
+            )}'`,
           );
         }
         if (e.name === 'agentfootprint.skill.step_skipped') {
@@ -154,8 +182,8 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
 /**
  * Deterministic offline provider so the example runs with zero setup. The
  * script activates the skill, runs steps 1–2, SKIPS step 3 with a reason
- * (the caller already verified), pauses at the human approval, then
- * finishes 5–6 and answers.
+ * (the caller already verified), pauses at the human approval, retries
+ * step 5 after its tool declared a failure, then finishes 5–6 and answers.
  */
 function scriptedProvider(): LLMProvider {
   const script = [
@@ -164,7 +192,8 @@ function scriptedProvider(): LLMProvider {
     { name: 'check_history', args: {} },
     { name: 'skip_step', args: { reason: 'caller already passed identity verification' } },
     { name: 'approve_refund', args: {} },
-    { name: 'issue_refund', args: {} },
+    { name: 'issue_refund', args: {} }, // declares 'failure' — the step holds
+    { name: 'issue_refund', args: {} }, // declares 'success' — the step advances
     { name: 'file_receipt', args: {} },
   ];
   let i = 0;

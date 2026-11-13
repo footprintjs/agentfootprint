@@ -6,7 +6,7 @@ title: explainStatusOnlyNearMiss
 
 > **explainStatusOnlyNearMiss**(`result`): `string` \| `undefined`
 
-Defined in: [src/semantics/toolEffects.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L251)
+Defined in: [src/semantics/toolEffects.ts:265](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/toolEffects.ts#L265)
 
 Name the ONE near-miss a tool author is likeliest to write: a status-only
 envelope with the `effects` marker left off — `{ content, status: 'denied' }`.

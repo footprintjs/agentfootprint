@@ -25,6 +25,7 @@ import {
   skipHoldSentence,
   stepAdvanceSuffix,
   stepBannerPrefix,
+  stepHeldSuffix,
   stepInProgress,
   SKIP_STEP_TOOL_NAME,
   type StepPlan,
@@ -187,11 +188,42 @@ describe('functional: the grammar', () => {
     expect(stepBannerPrefix(at(2), plan.steps[1]!)).toBe('[Step 2 of 3 — refund the charge] ');
   });
 
-  it('the advance suffix names what is done and what is next — and the completion', () => {
-    expect(stepAdvanceSuffix(at(2), plan)).toBe(
+  it('the advance suffix says "done" only for a declared success — and names what is next', () => {
+    expect(stepAdvanceSuffix(at(2), plan, { outcome: 'succeeded' })).toBe(
       ' Step 1 of 3 done. Now on step 2 of 3: refund the charge (tool: `charge`).',
     );
-    expect(stepAdvanceSuffix(at(4), plan)).toBe(' Step 3 of 3 done. All 3 steps complete.');
+    expect(stepAdvanceSuffix(at(4), plan, { outcome: 'succeeded' })).toBe(
+      ' Step 3 of 3 done. All 3 steps complete.',
+    );
+    expect(stepAdvanceSuffix(at(2), plan, { outcome: 'not-reported' })).toBe(
+      ' Step 1 of 3 ran; its tool declared no status. Now on step 2 of 3: refund the charge ' +
+        '(tool: `charge`).',
+    );
+    expect(stepAdvanceSuffix(at(4), plan, { outcome: 'not-reported' })).toBe(
+      ' Step 3 of 3 ran; its tool declared no status. It was the last step.',
+    );
+    // A word the library does not know is named, quoted (JSON), never "done".
+    expect(
+      stepAdvanceSuffix(at(4), plan, { outcome: 'not-reported', unknownStatus: 'say "hi"' }),
+    ).toBe(
+      ' Step 3 of 3 ran; its tool reported "say \\"hi\\"", a status this library does not ' +
+        'know, so the step was not held. It was the last step.',
+    );
+  });
+
+  it('the held suffix names the declared status, where the procedure stayed, and never says "done"', () => {
+    const failed = stepHeldSuffix(at(2), plan, 'failed', 'failure');
+    expect(failed).toBe(
+      " Step 2 of 3 was not completed: its tool reported 'failure'. The procedure stayed on " +
+        'step 2 (tool: `charge`).',
+    );
+    const unfinished = stepHeldSuffix(at(2), plan, 'not-finished', 'pending');
+    expect(unfinished).toBe(
+      " Step 2 of 3 was not completed: its tool reported 'pending', so its work was not " +
+        'finished. The procedure stayed on step 2 (tool: `charge`).',
+    );
+    expect(failed).not.toMatch(/\bdone\b/);
+    expect(unfinished).not.toMatch(/\bdone\b/);
   });
 
   it('the skip sentences carry the reason, on both policies', () => {
@@ -214,11 +246,13 @@ describe('functional: the grammar', () => {
     // report of the call it was written for instead of "have not run … Finish
     // them", which the steps themselves falsify the moment they run.
     expect(msg.startsWith('[steps unrun')).toBe(true);
-    expect(msg).toContain("Steps 2–3 of 'refund' had not run when the answer above was given");
+    expect(msg).toContain(
+      "Steps 2–3 of 'refund' had not been completed when the answer above was given",
+    );
     expect(msg).toContain('2: refund the charge (`charge`)');
     expect(msg).toContain('3: file the receipt (`export`)');
     expect(msg).toContain(
-      'This message asked for them to be run, or for the reason they were not run.',
+      'This message asked for them to be completed, or for the reason they were not.',
     );
     // Not `this call` (9.86.1): the nudge outlives the call it was written for.
     expect(msg).not.toMatch(/\bthis call\b/i);

@@ -147,7 +147,7 @@ export function agUi(options: AgUiOptions = {}): ProtocolAdapter<AgUiRunInput, A
     readRequest: ({ body, headers }) => readAgUiRequest(reader, { body, headers }),
     conversation: (input) => input.threadId,
     plan: (input, held, facts) => planAgUiTurn(input, held, facts, rules),
-    awaitsCaller: isFrontendToolPause,
+    awaitsCaller: (pauseData) => isFrontendToolPause(pauseData, frontendTools),
     open: (input, resumed) => {
       const resume = resumed === undefined ? undefined : readAgUiSuspension(resumed);
       return translate({

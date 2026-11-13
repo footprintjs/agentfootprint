@@ -13,6 +13,10 @@ export interface CallResultCell {
   error: boolean | undefined;
   toolEnvelope: ReadToolResultEnvelope | undefined;
   toolStatus: ToolResultStatus | undefined;
+  /** The status word of a result that is an envelope but for an unknown
+   *  status (`semantics/toolEffects.ts` · `unknownStatusOf`), cleaned —
+   *  read only by the procedure step, which tells it. */
+  unknownStatus: string | undefined;
 }
 
 export interface CallArguments {

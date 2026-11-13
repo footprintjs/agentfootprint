@@ -4,7 +4,7 @@ title: CheckInDriver
 
 # Interface: CheckInDriver
 
-Defined in: [src/core/checkin.ts:111](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L111)
+Defined in: [src/core/checkin.ts:112](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L112)
 
 One ranked driver — a context unit and how strongly it aligns with the pick.
 
@@ -14,7 +14,7 @@ One ranked driver — a context unit and how strongly it aligns with the pick.
 
 > `readonly` **channel**: `string`
 
-Defined in: [src/core/checkin.ts:115](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L115)
+Defined in: [src/core/checkin.ts:116](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L116)
 
 Origin group: `'system' | 'task' | 'result'`.
 
@@ -24,7 +24,7 @@ Origin group: `'system' | 'task' | 'result'`.
 
 > `readonly` **id**: `string`
 
-Defined in: [src/core/checkin.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L113)
+Defined in: [src/core/checkin.ts:114](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L114)
 
 The unit id (the citation, e.g. `'system-1'`).
 
@@ -34,7 +34,7 @@ The unit id (the citation, e.g. `'system-1'`).
 
 > `readonly` **score**: `number`
 
-Defined in: [src/core/checkin.ts:120](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L120)
+Defined in: [src/core/checkin.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L121)
 
 Alignment score — higher means it drove the pick more. Scorer-defined
  units; compare within one request, not across scorers.
@@ -45,6 +45,6 @@ Alignment score — higher means it drove the pick more. Scorer-defined
 
 > `readonly` **text**: `string`
 
-Defined in: [src/core/checkin.ts:117](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L117)
+Defined in: [src/core/checkin.ts:118](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L118)
 
 The unit text (quotable).

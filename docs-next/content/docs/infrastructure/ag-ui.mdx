@@ -145,8 +145,13 @@ A call pauses the run: the segment completes with the call in
 `pendingToolCallIds`, the page runs it and sends the result as a `tool` message in
 its next request, and the SAME run continues with it. The tool holds no server
 privilege (no credential, no artifacts), and a name a server tool already has is
-refused when the agent is built. Frontend tools need a host that keeps the paused
-run: `threads` and `sessions`.
+refused when the agent is built. Only a call named like one of these tools waits
+on the page: a server tool whose name is not a declared frontend tool and that
+writes `agUiFrontendTool` into its own pause data still waits on a person,
+because the adapter reads the paused call's real tool name. Not covered: a server
+tool you named like a declared frontend tool that the page did not enable on this
+request; the name is all the adapter sees, so give server tools names of their own.
+Frontend tools need a host that keeps the paused run: `threads` and `sessions`.
 
 ## Interrupts
 

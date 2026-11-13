@@ -15,6 +15,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
+import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
@@ -107,6 +108,8 @@ export function buildResumeCheckIn(
     let stepToolRan = false;
     /** The effects envelope the approved call returned (9.19.0). */
     let resumeEnvelope: ReadToolResultEnvelope | undefined;
+    /** The unknown status word of a result that is an envelope but for it. */
+    let resumeUnknownStatus: string | undefined;
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
     let negativeResultId: string | undefined;
@@ -137,6 +140,7 @@ export function buildResumeCheckIn(
         dispatched.executed === true && error !== true && dispatched.ceilingRefused !== true;
       if (dispatched.executed === true && error !== true) {
         resumeEnvelope = dispatched.envelope;
+        resumeUnknownStatus = dispatched.unknownStatus;
       }
       // Consent moved the execution to this side of the pause; the rules
       // about results move with it.
@@ -174,10 +178,23 @@ export function buildResumeCheckIn(
     const decisionToolChars = decisionResultStr.length;
     if (deps.negativeClaimsArmed === true)
       decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
-    // Step boundary (9.18.0) — an approved consequential step (a checkIn
-    // tool CAN be a step's tool) advances on the resumed dispatch.
-    if (deps.stepPlanFor && stepToolRan) {
-      decisionResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
+    // How the call settled — read by the step and by the message's `outcome`.
+    const decisionSettled: DispatchSettlement = {
+      ran: toolRan,
+      clean: stepToolRan,
+      ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+      ...(resumeUnknownStatus !== undefined && { unknownStatus: resumeUnknownStatus }),
+    };
+    // Step boundary (9.18.0) — a checkIn tool CAN be a step's tool: an
+    // approved call advances or holds its step here by the same rule as the
+    // batch loop (`stepOutcomeOf`); a decline ran nothing and holds silently.
+    if (deps.stepPlanFor) {
+      decisionResultStr += links.applyStepReturn(scope, {
+        toolName,
+        toolCallId,
+        iteration,
+        settled: decisionSettled,
+      });
     }
     // Typed tool effects (9.19.0) — an approved consequential call may
     // carry them too; judged exactly as inline.
@@ -202,6 +219,8 @@ export function buildResumeCheckIn(
           toolCallId,
           toolName,
           ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+          // A decline ran nothing → 'refused'; read by the check-in trail.
+          ...outcomeField(decisionSettled),
         },
       ],
       { toolName, toolCallId },

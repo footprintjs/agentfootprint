@@ -785,6 +785,27 @@ describe('fail closed, and never leak the body', () => {
     const menus = await menusFor(checker);
     expect(menus[0]).toContain('No skills are available to you');
   });
+
+  it('an answer it does not recognise still hides the skill, as before the shared reader', async () => {
+    // Pins equal behaviour across the move to `readPermissionDecision`: the
+    // menu hid the skill for these answers before, and still does. It cannot
+    // see WHICH reader decided; the tool gate's tests hold that reader.
+    for (const result of ['ask', 'ALLOW', 'deny '] as const) {
+      const checker = {
+        name: 'odd',
+        governs: ['skill_read'],
+        check: () => ({ result }),
+      } as unknown as PermissionChecker;
+      const menus = await menusFor(checker);
+      expect(menus[0]).toContain('No skills are available to you');
+    }
+    const open: PermissionChecker = {
+      name: 'open',
+      governs: ['skill_read'],
+      check: () => ({ result: 'gate_open' }),
+    };
+    expect(idsIn((await menusFor(open))[0])).toEqual([...SKILLS]);
+  });
 });
 
 // ─── P7 ROI — the target convention has ONE owner ────────────────────

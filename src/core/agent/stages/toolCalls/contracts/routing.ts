@@ -36,16 +36,22 @@ export interface ToolRoutingPort {
   readonly skillGraphIsTree?: boolean;
   /**
    * The frozen step plans, keyed by skill id (9.18.0) — set only when ≥1
-   * registered skill declares `steps`. This stage owns the pointer's two
+   * registered skill declares `steps`. This stage owns the pointer's
    * RESULT-BOUNDARY moves, applied at EVERY site a result becomes final and
    * is pushed (the batch loop AND all the pausable resume paths — a step
-   * whose tool paused, an `askHuman` step first among them, must advance on
-   * the resumed call exactly as it would have inline):
+   * whose tool paused, an `askHuman` step first among them, is decided on
+   * the resumed call exactly as it would have been inline):
    *
-   *   • ADVANCE — the finalized call is the current step's tool, ran, and
-   *     was not an error/denial/refusal → pointer + 1, `step_advanced`, and
-   *     the model-visible result gains the "now on step k+1" suffix
-   *     (composed BEFORE the history push — one past, no splicing).
+   *   • ADVANCE OR HOLD — the finalized call is the current step's tool;
+   *     `routing/stepOutcome.ts` · `stepOutcomeOf` decides from how it
+   *     settled. Ran clean with a declared success or no declared status →
+   *     pointer + 1, `step_advanced { outcome }`, and the "now on step k+1"
+   *     suffix ("done" only for a declared success). Ran clean with a
+   *     declared failure or unfinished work → the pointer stays,
+   *     `step_held { outcome, status }`, and the held sentence. Did not
+   *     run, threw, or its result was withheld → the pointer stays, nothing
+   *     is added. Every suffix is composed BEFORE the history push — one
+   *     past, no splicing.
    *   • SKIP — a `skip_step` call: reason validated (empty → teaching
    *     result, no event), `step_skipped` emitted, pointer moved or held
    *     per the skill's declared `onSkip`, and the model-visible result is

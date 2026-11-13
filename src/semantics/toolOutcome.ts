@@ -23,8 +23,10 @@
 /**
  * Normalized outcome of one tool call, declared by the tool itself. Seven
  * values, deliberately closed: routing keyed on meaning needs a vocabulary
- * both sides spell identically. A string outside this set makes the value
- * NOT an envelope (data path, unchanged).
+ * both sides spell identically. A word a tool wrote is read by this
+ * module's `readToolResultStatus`: another case or surrounding spaces still
+ * name the same word, and a string that names none of the seven makes the
+ * value NOT an envelope (data path, unchanged).
  *
  * `'absent'` is the seventh (the `absent()` primitive, from field use), and
  * it earns its own word rather than folding into `'success'` or `'failure'`
@@ -54,3 +56,30 @@ export const TOOL_RESULT_STATUSES: readonly ToolResultStatus[] = [
   'pending',
   'absent',
 ];
+
+/**
+ * THE ONE READING of a status word a tool wrote: one of the seven, or
+ * `undefined`. A second spelling of a known word — another case, or spaces
+ * around it — is that word: `'FAILURE'`, `' Denied '` and `'failure'` all
+ * read as `'failure'`. Anything else (not a string, or no known word once
+ * trimmed and lower-cased) is `undefined`.
+ *
+ * Why: the envelope recognizer used to compare the word exactly, so a tool
+ * that wrote `status: 'FAILURE'` had its whole result treated as data, and a
+ * procedure step it ran advanced as if its tool had reported nothing. A
+ * tool written in another language or by hand, or a status read from an
+ * upstream API, spells the same meaning in more than one case; reading the
+ * word once, here, means the envelope, a step and a route edge cannot
+ * disagree about which word a tool meant. Read by
+ * `semantics/toolEffects.ts` (the recognizer and its near-miss diagnosis).
+ *
+ * @example readToolResultStatus(' Failure ') // 'failure'
+ * @example readToolResultStatus('oops')      // undefined
+ */
+export function readToolResultStatus(value: unknown): ToolResultStatus | undefined {
+  if (typeof value !== 'string') return undefined;
+  const word = value.trim().toLowerCase();
+  return (TOOL_RESULT_STATUSES as readonly string[]).includes(word)
+    ? (word as ToolResultStatus)
+    : undefined;
+}

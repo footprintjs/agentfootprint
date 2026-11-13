@@ -1681,7 +1681,10 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     ],
     // Both span arms: the range and the single step. They are one ternary
     // apart, and only one of them can be reached by any single fixture.
-    reaches: [/Steps 1–3 of 'refund' had not run/, /Step 3 of 'refund' had not run/],
+    reaches: [
+      /Steps 1–3 of 'refund' had not been completed/,
+      /Step 3 of 'refund' had not been completed/,
+    ],
     compose: async () => stepNudges(),
   },
   {

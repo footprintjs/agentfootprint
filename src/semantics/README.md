@@ -8,8 +8,14 @@ Also here, so the one law of an honest tool result has one folder (layer L1:
 it imports only `lib/` leaves and `time/`): `coverage/` (the two field-invented
 result primitives, `absent()` and `coverage()`, and the period a result
 declares — its own README), `toolEffects.ts` (the tool-result envelope grammar:
-the two effect kinds, the recognizer) and `toolOutcome.ts` (the outcome words a
-route edge keys on). The instruction leases an effect grants live with their
+the two effect kinds, the recognizer, and `unknownStatusOf` — the word of a value
+that is an envelope but for a status the library does not know, cleaned so a
+procedure step can tell it) and `toolOutcome.ts` (the outcome words a route edge
+keys on, and `readToolResultStatus`, the one reading of a word a tool wrote:
+`'FAILURE'` and `' failure '` are `'failure'`). Example:
+`readToolResultEnvelope({ content: 'x', effects: [], status: 'Denied' })?.status`
+is `'denied'`; `unknownStatusOf({ content: 'x', effects: [], status: 'queued' })`
+is `'queued'`. The instruction leases an effect grants live with their
 reader, `injection-engine/leases.ts`.
 
 # semantics — the semantic tool-result envelope + `check:semantics`
