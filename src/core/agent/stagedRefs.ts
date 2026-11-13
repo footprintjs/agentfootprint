@@ -66,10 +66,10 @@ export interface StagedRefsMatch {
 
 /** Most refs one nudge line names. Bounded so a fan-out that staged fifty
  *  parcels cannot turn the one-line nudge into a page. */
-export const MAX_NUDGE_REFS = 6;
+const MAX_NUDGE_REFS = 6;
 
 /** Most spender tools one nudge line names. */
-export const MAX_NUDGE_TOOLS = 3;
+const MAX_NUDGE_TOOLS = 3;
 
 /**
  * Harvest `Tool.wants` from the declared catalog — the `toolGrounding`

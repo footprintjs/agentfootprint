@@ -214,10 +214,6 @@ export function declarationAt(
 
 // ── vars ─────────────────────────────────────────────────────────────────
 
-/** A tool name the LIBRARY recorded (its claims are vouched by the template). */
-export const toolVar = (name: string, from?: RecordPointer): SentenceVar =>
-  v(name, 'library', from);
-
 /**
  * The `{{name:skill}}` pair: the id (library) and, when there is one, its plain
  * label — the recorded `title` (library) or the app's declared label (app).
