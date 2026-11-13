@@ -128,7 +128,15 @@ export async function invokeInitialTool(
           )
         : undefined;
     const callTime = dispatched?.context;
-    if (dispatched !== undefined) frame.callArguments.callArgs = dispatched.args as ToolArgs;
+    if (dispatched !== undefined) {
+      frame.callArguments.callArgs = dispatched.args as ToolArgs;
+      // The record's copy gets the same redraw, so `tool_end.changedArgKeys`
+      // names the keys the tool ran with (`dispatchCall.ts` re-judges it). A
+      // fresh object when redrawn, which the tool is never handed.
+      frame.callArguments.chainedArgs = dispatched.redraw(
+        frame.callArguments.chainedArgs,
+      ) as ToolArgs;
+    }
     // Set BEFORE the await: a tool that throws has still run, and a
     // tool that does not exist has not. This flag is the entire
     // precondition of the after-tool moment below.

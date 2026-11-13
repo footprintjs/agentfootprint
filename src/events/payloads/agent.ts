@@ -244,7 +244,12 @@ export interface AgentRouteDecidedPayload {
    * nudge still unspent. `'evidence-recheck'` (9.35.0) appears only on an
    * agent built with `.namesAndNumbersFromEvidence({ posture: 'guard' |
    * 'rails' })`, and only on a turn whose would-be-final answer stated values
-   * no tool result carried, with the one revision still unspent. `'wrap-up'`
+   * no tool result carried, with the one revision still unspent.
+   * `'negative-recheck'` appears only on an agent with typed negative claims
+   * (`.outputSchema()` + `.negativeClaims({ field, tools })`), on a turn whose
+   * answer cited a result that does not resolve, with that one correction
+   * still unspent — the wrapper that decides it announces it in place of the
+   * decider's `'final'`, so each iteration has one `route_decided`. `'wrap-up'`
    * (9.56.0) appears only on a turn whose `maxIterations` ran out while the
    * model was still asking for tools, on an agent that did not set
    * `wrapUpAtMaxIterations: false` — the loop is about to spend one last call

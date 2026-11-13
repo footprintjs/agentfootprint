@@ -366,8 +366,8 @@ again.
   permission rule) and what is known of a series' effect.
 - `replayUnavailable.ts` — what `'app-authorized'` needs of a connection, and the
   typed refusal (`McpReplayUnavailableError`) when the connection cannot give it.
-- `backoff.ts` — `exponentialBackoff` and `statedWaitFirst`, stand-ins for
-  footprintjs's own helpers (same names and laws) until a release ships them.
+- `retrySchedule.ts` — a retry rule's schedule on footprintjs's `exponentialBackoff`;
+  "no cap" (`Infinity`) and a cap below the base spelled in its terms, same waits.
 - `toolExtras.ts` — our own declarations, carried over MCP.
 - `toolResult.ts` — text and explicitly opted-in structured result decoding.
 - `elicitation.ts` — a typed ask (`AwaitingInput`) as an MCP elicitation and the

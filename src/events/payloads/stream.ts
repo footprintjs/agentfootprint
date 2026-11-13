@@ -215,7 +215,10 @@ export interface ToolEndPayload {
    * `core/toolShownArgs.ts` · `shownArgsOf`). Names only, never values: a
    * link may ADD a value (a server-side key) the model never saw, and an event
    * goes to every sink attached, each serializing what it gets. Taken BEFORE
-   * the tool runs, so nothing the tool writes into its arguments reaches it.
+   * the tool runs, and judged once more after it returns only when the time
+   * layer redrew a look-back at dispatch — on the record's copy, a fresh
+   * object the tool is never handed — so nothing the tool writes into its
+   * arguments reaches it.
    * A reader exporting the call's arguments shows these keys' values as
    * withheld. Absent when the tool ran with the proposal as it was.
    *

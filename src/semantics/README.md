@@ -30,7 +30,7 @@ forgot them.
 | `types.ts` | the vocabulary, as a PURE leaf (the `toolOutcome.ts` precedent): marker, field types, the closed `ToolResultClass` set, the counter-word list, the static note. Type-only imports of the coverage vocabulary — absorbed, never duplicated |
 | `envelope.ts` | `mintSemantics` (the ONE mint behind the canonical declaration door, refuses at the call site), `readSemantics()` (strict recognition — the zero-cost guarantee), `semanticIssues()`/`explainSemantics()` (ONE rule set for mint, recognition and the gate), `semanticsForModel()` (the model's compact rendering-free projection), `coverageOfSemantics()` (the absorb seam `readCoverageResult` uses) |
 | `described.ts` | `describedResult()` — the camelCase door: it says how its author spells the declaration and respells `grain`/`provenance`/`render` to the wire; it judges nothing itself |
-| `check.ts` | `checkSemantics(entries)` — the gate core over sample results; severity follows provability (the skillGraph check-up law) |
+| `check.ts` | `checkSemantics(entries)` — the gate core over sample results; severity follows provability (the skillGraph check-up law); a row's `search` is refused by `defineTool`'s own rule (`assertCatalogSearch`) |
 | `projection.ts` | bounded metadata preservation shared by `withDatasetArtifacts` and optional paired gate fixtures; no row scan or fact validation |
 | `overclaim.ts` | the overclaim rule pack the gate asks: a refusal or an absence never asserts more than was read (`refusal-asserts-absence`, `absence-asserts-wrongness`, `authoritative-names`); two closed, versioned English phrase lists |
 | `format.ts` | terminal rendering; every finding names its tool and its field |
@@ -227,6 +227,28 @@ coverage and ordinary success samples from the actual adapter. Capture the
 `before` fixture before executing a mutating adapter rather than keeping two
 aliases to the same object. `requestInput` is an exception-based pause and travels
 through the wrapper unchanged, before any result projection takes place.
+
+## A row's `search` is judged by `defineTool`'s rule
+
+A catalog row may carry the tool's `search` (dump it from the defined tool,
+`tool.search`); the CLI passes it through as written. A catalog is a file
+anyone can write, so `check.ts` · `assertCatalogSearch` asks the one rule
+`defineTool` uses (`coverage/search/declaration.ts` · `assertToolSearch`)
+before the gate reads it, and a search that rule refuses throws, naming the
+tool and the field: the CLI exits 2.
+
+```ts
+checkSemantics([{ name: 'list_incidents', search: { ...search, complete: 'bogus' }, results }]);
+// throws: checkSemantics: tool 'list_incidents' has a `search` defineTool would refuse —
+//   defineTool('list_incidents'): `search.complete` is "bogus" — …
+```
+
+What is NOT checked there: a row carries no `inputSchema` and no `period`, so
+the arguments the search classifies stand in for the schema's properties.
+`unknown-argument`, a schema property left unclassified
+(`unclassified-argument`) and the `period` cross-check cannot fail at the gate;
+they ran when `defineTool` accepted the tool. A missing or non-array
+`arguments` list is still refused (`unclassified-argument`).
 
 ## A declaration is a claim — the overclaim rules
 

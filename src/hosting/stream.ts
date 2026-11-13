@@ -18,6 +18,7 @@ import type { Runner } from '../core/runner.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
 import { runnerLive } from '../core/runnerLive.js';
 import { toWireJson } from '../lib/wireJson.js';
+import { unstreamedText } from './unstreamedText.js';
 
 /**
  * Hand the runner this iterable's caller before calling `runner.run()`.
@@ -53,11 +54,24 @@ export interface ToSSEOptions {
    *   - 'full' (default) — each event is JSON-serialized verbatim: the run's
    *     RECORD, so under an agent's `redact` policy it is the served event
    *     (the placeholder wherever the policy selected a value).
-   *   - 'text' — only `agentfootprint.stream.token.content` is yielded,
-   *     in plain text form (no event/data prefix). Useful for piping
-   *     directly into a chat UI. This is the REPLY to the person who asked —
-   *     the caller's own answer, like `run()`'s return — so a redaction
-   *     policy never masks it.
+   *   - 'text' — the answer as plain text (no event/data prefix), for
+   *     piping straight into a chat UI: each `agentfootprint.stream.token`'s
+   *     content, then, at the outermost run's `agent.turn_end`, what of
+   *     `turn_end.finalContent` the tokens did not carry — the limits block or
+   *     the standing line the library appends after the stream, or the whole
+   *     answer when nothing was written (`hosting/unstreamedText.ts`, the rule
+   *     the AG-UI adapter asks too). Nothing was written when nothing streamed
+   *     (a provider without `stream()`) and also when a `filter` dropped every
+   *     token: both get the whole answer. Nothing more is written for a
+   *     refused answer, when what was written since the last `llm_start` is not
+   *     the answer's start (a `filter` that dropped some of the tokens, a
+   *     rewrite), or at an inner agent's `turn_end` (a Sequence step, a
+   *     Parallel branch: its answer is not the run's). The stream ends at the
+   *     FIRST `agent.turn_end`, inner or not, so a composition's text stream
+   *     carries only the tokens streamed before its first agent's turn ended
+   *     (not covered: read a composition's reply from `run()`'s return). This
+   *     is the REPLY to the person who asked — the caller's own answer, like
+   *     `run()`'s return — so a redaction policy never masks it.
    */
   readonly format?: 'full' | 'text';
   /**
@@ -175,11 +189,18 @@ export async function* toSSE<TIn, TOut>(
   // `runnerLive`) — matched to its served event by the token's address (its
   // stage, iteration and index, none of which a policy selects), so a served
   // token that never arrives cannot shift the ones after it — and never
-  // handed to consumer code. A runner that is not a RunnerBase has no
-  // redaction and no live taps: its events are the record and the reply at once.
+  // handed to consumer code. The turn's answer, whose unstreamed rest is
+  // written at `turn_end`, comes from the same path, paired by the stage that
+  // ended the turn. A runner that is not a RunnerBase has no redaction and no
+  // live taps: its events are the record and the reply at once.
   const live = format === 'text' ? runnerLive(runner) : undefined;
   const replies = new Map<string, string[]>();
+  const answers = new Map<string, unknown>();
   const offReplies = live?.onRealEvent((event) => {
+    if (event.type === 'agentfootprint.agent.turn_end') {
+      answers.set(event.meta?.runtimeStageId ?? '', finalContentOf(event));
+      return;
+    }
     if (event.type !== 'agentfootprint.stream.token') return;
     const content = (event as { payload?: { content?: unknown } }).payload?.content;
     const key = tokenAddress(event);
@@ -195,16 +216,50 @@ export async function* toSSE<TIn, TOut>(
     if (waiting !== undefined && waiting.length === 0) replies.delete(key);
     return text;
   };
+  /**
+   * The turn's answer as the text format may write it: real, never a refused
+   * one, and only the OUTERMOST run's. An inner agent's turn (a Sequence step,
+   * a Parallel branch) answers its step, not the run, so its end writes
+   * nothing more. Decided by scope, as the AG-UI serializer decides it: an
+   * agent's `turn_end` fires inside its own stages (`['final']` for a lone
+   * agent, `['step-a', 'final']` for a Sequence step), so a turn is inner when
+   * a `turn_start` opened at a mount that leads its path, never by path length.
+   */
+  const answerFor = (event: AgentfootprintEvent): string | undefined => {
+    const key = event.meta?.runtimeStageId ?? '';
+    const answer = live === undefined ? finalContentOf(event) : answers.get(key);
+    answers.delete(key);
+    const path = pathOf(event);
+    if (innerTurns.some((mount) => leads(mount, path))) return undefined;
+    const refused = (event.payload as { refused?: unknown } | undefined)?.refused !== undefined;
+    return !refused && typeof answer === 'string' ? answer : undefined;
+  };
+  /** The mounts at which an inner agent's turn opened (a `turn_start` inside a subflow). */
+  const innerTurns: (readonly string[])[] = [];
   const listener = (event: AgentfootprintEvent): void => {
+    // Noted before the filter, so a filtered-out turn_start still marks its turn inner.
+    if (format === 'text' && event.type === 'agentfootprint.agent.turn_start') {
+      const path = pathOf(event);
+      if (path.length > 0) innerTurns.push(path);
+    }
     // Taken before the filter, so a filtered-out token still consumes its text.
     const reply =
       live !== undefined && event.type === 'agentfootprint.stream.token'
         ? replyFor(event)
         : undefined;
+    const answer =
+      format === 'text' && event.type === 'agentfootprint.agent.turn_end'
+        ? answerFor(event)
+        : undefined;
     if (filter && !filter(event)) return;
     queue.push(
       reply !== undefined
         ? ({ type: event.type, payload: { content: reply } } as unknown as AgentfootprintEvent)
+        : format === 'text' && event.type === 'agentfootprint.agent.turn_end'
+        ? ({
+            type: event.type,
+            payload: { finalContent: answer },
+          } as unknown as AgentfootprintEvent)
         : event,
     );
     wakeup();
@@ -235,6 +290,8 @@ export async function* toSSE<TIn, TOut>(
 
   /** Frames written to THIS stream so far — the {@link SseFramePosition} of the next one. */
   let written = 0;
+  /** 'text': what this stream wrote since the last `llm_start`; `undefined` = nothing. */
+  let streamed: string | undefined;
   try {
     while (!done || queue.length > 0) {
       while (queue.length > 0) {
@@ -246,9 +303,18 @@ export async function* toSSE<TIn, TOut>(
           continue;
         }
         if (format === 'text') {
-          if (event.type === 'agentfootprint.stream.token') {
+          if (event.type === 'agentfootprint.stream.llm_start') streamed = undefined;
+          else if (event.type === 'agentfootprint.stream.token') {
             const payload = (event as { payload?: { content?: string } }).payload;
-            if (payload?.content) yield payload.content;
+            if (payload?.content) {
+              streamed = (streamed ?? '') + payload.content;
+              yield payload.content;
+            }
+          } else if (event.type === 'agentfootprint.agent.turn_end') {
+            const answer = finalContentOf(event);
+            const rest = typeof answer === 'string' ? unstreamedText(streamed, answer) : undefined;
+            streamed = undefined;
+            if (rest !== undefined) yield rest;
           }
         } else {
           const frame = framing.frame(event, { sequence: written + 1 });
@@ -324,6 +390,24 @@ function framingOf(options: ToSSEOptions): SseFraming<AgentfootprintEvent> {
     );
   }
   return framing;
+}
+
+/**
+ * Where an event stands — its `meta.subflowPath`. A runner whose events carry
+ * no `meta` (not a RunnerBase) is one run with no mounts: `[]`.
+ */
+function pathOf(event: AgentfootprintEvent): readonly string[] {
+  return event.meta?.subflowPath ?? [];
+}
+
+/** Whether `mount` is `path` or one of its ancestors. */
+function leads(mount: readonly string[], path: readonly string[]): boolean {
+  return mount.length <= path.length && mount.every((segment, i) => segment === path[i]);
+}
+
+/** A `turn_end` event's `finalContent`, as it stands on that event. */
+function finalContentOf(event: AgentfootprintEvent): unknown {
+  return (event.payload as { finalContent?: unknown } | undefined)?.finalContent;
 }
 
 /**

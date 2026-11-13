@@ -3,9 +3,9 @@ me, outlive the request — plus local adapters that prove the ports work.
 
 ## What it reads / what it writes
 - Reads a request and a session; hands the runner a run.
-- Streams a run's events to a browser as server-sent events: `stream.ts`
-  (`toSSE`, `SSEFormatter`, `encodeSSE`, published through `/observe`), every
-  payload written by `lib/wireJson.ts` · `toWireJson`.
+- Streams a run's events to a browser as SSE: `stream.ts` (`toSSE`, `SSEFormatter`, `encodeSSE`, through `/observe`),
+  payloads by `lib/wireJson.ts` · `toWireJson`; text adds the OUTERMOST turn's unstreamed rest (`unstreamedText.ts`).
+  **Not covered:** `toSSE` ends at the FIRST `agent.turn_end`: a Sequence or Parallel stops at its first agent's turn.
 - Writes sessions through `SessionLifecycle`. One genuine record surface lives
   here: `ingressRecord.ts` keeps one row per request the door refused BEFORE a
   run existed, and states honestly that an empty bundle is not evidence that

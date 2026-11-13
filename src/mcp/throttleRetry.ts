@@ -97,22 +97,26 @@
  * which would cut every wait and send the request again before the server
  * said it may, is left unset. A stated wait too long for `maxWaitMs` or the
  * deadline is never shortened either: the series stops, and the 429 is
- * delivered as the server sent it.
+ * delivered as the server sent it. Both builders are footprintjs's own;
+ * `retrySchedule.ts` · `scheduleOf` hands our options to its schedule in the
+ * terms it takes, with the same waits.
  *
  * Pattern: Decorator over `fetch`. Role: Layer-3 tool transport.
  */
 
 import {
   attempt,
+  statedWaitFirst,
   type AttemptContext,
   type AttemptOptions,
   type AttemptRecord,
+  type BackoffFunction,
   type RetryPolicy,
 } from 'footprintjs';
 
 import type { ToolRequestPermission } from '../events/payloads.js';
 import { abortErrorOf, eitherSignal, linkedController } from '../lib/abort.js';
-import { exponentialBackoff, statedWaitFirst, type BackoffFunction } from './backoff.js';
+import { scheduleOf } from './retrySchedule.js';
 import {
   COMPATIBILITY,
   permit,
@@ -598,12 +602,6 @@ interface BoundRule extends RetryRule {
 
 function boundRule(rule: RetryRule, owner: RetryRule): BoundRule {
   const maxDelayMs = Math.min(rule.maxDelayMs, owner.maxDelayMs);
-  const schedule = exponentialBackoff({
-    baseDelayMs: rule.baseDelayMs,
-    multiplier: rule.multiplier,
-    jitter: rule.jitter,
-    maxDelayMs,
-  });
   return {
     ...rule,
     maxAttempts: Math.min(rule.maxAttempts, owner.maxAttempts),
@@ -611,7 +609,9 @@ function boundRule(rule: RetryRule, owner: RetryRule): BoundRule {
     maxElapsedMs: Math.min(rule.maxElapsedMs, owner.maxElapsedMs),
     maxDelayMs,
     // The cap is on the schedule's ceiling only: a stated wait wins, whole.
-    backoffMs: statedWaitFirst(retryAfterOf, schedule),
+    // "No cap" (Infinity) and a cap below the base are spelled for
+    // footprintjs's schedule by `scheduleOf`, with the same waits.
+    backoffMs: statedWaitFirst(retryAfterOf, scheduleOf(rule, maxDelayMs)),
   };
 }
 

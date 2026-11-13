@@ -236,6 +236,7 @@ stated on `RUN_STARTED`.
 | agentfootprint event | AG-UI events |
 |---|---|
 | `stream.token` | `TEXT_MESSAGE_START` · `TEXT_MESSAGE_CONTENT` · `TEXT_MESSAGE_END` — one message per LLM call |
+| `agent.turn_end` | the answer as one text message when nothing streamed; after a streamed answer, the text the library appended to it — the limits block, the standing line — as its own message |
 | `stream.tool_start` | `TOOL_CALL_START` · `TOOL_CALL_ARGS` · `TOOL_CALL_END` — the call, parented to its LLM call's message |
 | `stream.tool_end` | `TOOL_CALL_RESULT` |
 | `stream.thinking_delta` / `stream.thinking_end` | `REASONING_START` … `REASONING_END` — only with `reasoning: true` |
