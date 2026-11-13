@@ -17,6 +17,7 @@ import type {
   LLMRequest,
   LLMResponse,
 } from '../../../src/provider-contract/types.js';
+import type { ReplayPreparation } from '../../../src/thinking/replay.js';
 
 const MODEL = 'claude-sonnet-4-6';
 const response: AnthropicMessage = {
@@ -141,7 +142,7 @@ describe.each(['sdk', 'browser', 'gateway'])('%s replay leaf', (kind) => {
     async (mode) => {
       const h = harness(kind, mode);
       const req = request(true);
-      const onReplayPrepared = vi.fn(() => {
+      const onReplayPrepared = vi.fn((_preparation: ReplayPreparation) => {
         h.order.push('report');
       });
       const answer = await invoke(h.provider, mode, req, { onReplayPrepared });
@@ -162,7 +163,11 @@ describe.each(['sdk', 'browser', 'gateway'])('%s replay leaf', (kind) => {
       expect(req.messages[1]?.thinkingBlocks).toHaveLength(1);
       expect(answer.replay?.stopReason).toBe('end_turn');
       expect(answer.replay?.binding).toEqual(
-        thinkingReplayBinding(h.bodies[0]!, MODEL)('actual-reply'),
+        thinkingReplayBinding(
+          h.bodies[0]!,
+          onReplayPrepared.mock.calls[0]![0].request,
+          MODEL,
+        )('actual-reply'),
       );
     },
   );
@@ -487,6 +492,8 @@ describe('gateway asynchronous key lookup', () => {
     const answer = await invoke(provider, mode, req);
     expect(JSON.stringify(sent?.tools)).toContain('original');
     expect(JSON.stringify(sent?.tools)).not.toContain('changed during key lookup');
-    expect(answer.replay?.binding).toEqual(thinkingReplayBinding(sent!, MODEL)('actual-reply'));
+    expect(answer.replay?.binding).toEqual(
+      thinkingReplayBinding(sent!, req, MODEL)('actual-reply'),
+    );
   });
 });

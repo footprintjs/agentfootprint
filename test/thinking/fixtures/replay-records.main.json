@@ -1,0 +1,4606 @@
+{
+ "producedBy": {
+  "commit": "df8b7f8aa18e5d9894563e8b9b993e4e4578c17a",
+  "command": "GEN_OUT=<out> npx vitest run test/_gen/gen.test.ts in a worktree of the commit above (generator kept out of the repository; it imports that commit's src)"
+ },
+ "records": [
+  {
+   "model": "claude-opus-5-5",
+   "scenario": "unmarked-tool-turn",
+   "request": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-opus-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-opus-5-5",
+   "scenario": "unmarked-completed-turn",
+   "request": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 1",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+     "binding": {
+      "model": "claude-opus-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 1",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-opus-5-5",
+   "scenario": "system-and-tools-marked",
+   "request": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-opus-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-opus-5-5",
+   "scenario": "tail-marked-on-a-tool-result",
+   "request": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     },
+     {
+      "field": "messages",
+      "boundaryIndex": 2,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_2",
+      "name": "lookup",
+      "args": {
+       "key": "k2"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+     "binding": {
+      "model": "claude-opus-5-5",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_2",
+        "name": "lookup",
+        "args": {
+         "key": "k2"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k2",
+      "toolCallId": "toolu_main_2"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-opus-5-5",
+   "scenario": "tail-marked-on-an-assistant-turn",
+   "request": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "messages",
+      "boundaryIndex": 1,
+      "ttl": "long"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 2",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+     "binding": {
+      "model": "claude-opus-5-5",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-opus-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-sonnet-5-5",
+   "scenario": "unmarked-tool-turn",
+   "request": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-sonnet-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-sonnet-5-5",
+   "scenario": "unmarked-completed-turn",
+   "request": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 1",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+     "binding": {
+      "model": "claude-sonnet-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 1",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-sonnet-5-5",
+   "scenario": "system-and-tools-marked",
+   "request": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-sonnet-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-sonnet-5-5",
+   "scenario": "tail-marked-on-a-tool-result",
+   "request": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     },
+     {
+      "field": "messages",
+      "boundaryIndex": 2,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_2",
+      "name": "lookup",
+      "args": {
+       "key": "k2"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+     "binding": {
+      "model": "claude-sonnet-5-5",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_2",
+        "name": "lookup",
+        "args": {
+         "key": "k2"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k2",
+      "toolCallId": "toolu_main_2"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-sonnet-5-5",
+   "scenario": "tail-marked-on-an-assistant-turn",
+   "request": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "messages",
+      "boundaryIndex": 1,
+      "ttl": "long"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 2",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+     "binding": {
+      "model": "claude-sonnet-5-5",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-sonnet-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "scenario": "unmarked-tool-turn",
+   "request": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-haiku-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "scenario": "unmarked-completed-turn",
+   "request": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 1",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+     "binding": {
+      "model": "claude-haiku-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 1",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "scenario": "system-and-tools-marked",
+   "request": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-haiku-5-5",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "scenario": "tail-marked-on-a-tool-result",
+   "request": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     },
+     {
+      "field": "messages",
+      "boundaryIndex": 2,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_2",
+      "name": "lookup",
+      "args": {
+       "key": "k2"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+     "binding": {
+      "model": "claude-haiku-5-5",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_2",
+        "name": "lookup",
+        "args": {
+         "key": "k2"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k2",
+      "toolCallId": "toolu_main_2"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "scenario": "tail-marked-on-an-assistant-turn",
+   "request": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "messages",
+      "boundaryIndex": 1,
+      "ttl": "long"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 2",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+     "binding": {
+      "model": "claude-haiku-5-5",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-haiku-5-5",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-fable-5-1",
+   "scenario": "unmarked-tool-turn",
+   "request": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-fable-5-1",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-fable-5-1",
+   "scenario": "unmarked-completed-turn",
+   "request": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    }
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 1",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+     "binding": {
+      "model": "claude-fable-5-1",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 1",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "316a32c42a08a37f7b85ae4b6081b63e155181ea8a8829cbf9f1b11581d33001",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-fable-5-1",
+   "scenario": "system-and-tools-marked",
+   "request": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_1",
+      "name": "lookup",
+      "args": {
+       "key": "k1"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 1",
+      "signature": "main-sig-1"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_1",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+     "binding": {
+      "model": "claude-fable-5-1",
+      "salt": "msg_main_1",
+      "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+      "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+      "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+      "priorThinking": []
+     }
+    }
+   },
+   "next": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-fable-5-1",
+   "scenario": "tail-marked-on-a-tool-result",
+   "request": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "system",
+      "boundaryIndex": 0,
+      "ttl": "short"
+     },
+     {
+      "field": "tools",
+      "boundaryIndex": 1,
+      "ttl": "short"
+     },
+     {
+      "field": "messages",
+      "boundaryIndex": 2,
+      "ttl": "short"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "",
+    "toolCalls": [
+     {
+      "id": "toolu_main_2",
+      "name": "lookup",
+      "args": {
+       "key": "k2"
+      }
+     }
+    ],
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "tool",
+       "index": 0
+      }
+     ],
+     "stopReason": "tool_use",
+     "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+     "binding": {
+      "model": "claude-fable-5-1",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_2",
+        "name": "lookup",
+        "args": {
+         "key": "k2"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "e7bd9c68cfc24eec6c4f046279f04d999b31039205e45bf0514be6c73ed3e57a",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k2",
+      "toolCallId": "toolu_main_2"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  },
+  {
+   "model": "claude-fable-5-1",
+   "scenario": "tail-marked-on-an-assistant-turn",
+   "request": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     }
+    ],
+    "thinking": {
+     "budget": 2048
+    },
+    "cacheMarkers": [
+     {
+      "field": "messages",
+      "boundaryIndex": 1,
+      "ttl": "long"
+     }
+    ]
+   },
+   "record": {
+    "role": "assistant",
+    "content": "answer 2",
+    "thinkingBlocks": [
+     {
+      "type": "thinking",
+      "content": "reasoning 2",
+      "signature": "main-sig-2"
+     }
+    ],
+    "replay": {
+     "version": 1,
+     "protocol": "anthropic-messages",
+     "id": "msg_main_2",
+     "layout": [
+      {
+       "type": "thinking",
+       "index": 0
+      },
+      {
+       "type": "text",
+       "length": 8
+      }
+     ],
+     "stopReason": "end_turn",
+     "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+     "binding": {
+      "model": "claude-fable-5-1",
+      "salt": "msg_main_2",
+      "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+      "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+      "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+      "priorThinking": [
+       "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+      ]
+     }
+    }
+   },
+   "next": {
+    "model": "claude-fable-5-1",
+    "systemPrompt": "You answer questions about the reference table.",
+    "tools": [
+     {
+      "name": "lookup",
+      "description": "Look a key up.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "aside",
+      "description": "A second tool.",
+      "inputSchema": {
+       "type": "object",
+       "properties": {}
+      }
+     }
+    ],
+    "messages": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_main_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "main-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "f9c1653a195aa1b97f69a29f023e8abd4269a21db36674ee0d05deb52a97979f",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_1",
+        "system": "3657f66357133013ae03cbf7b45d4f486236e8bbec6d91edab0e24c62ccae4b4",
+        "tools": "edef150c084dc4be675a2c06868cc2109ab64e0112973d45a280f52a27a55dc4",
+        "messages": "ad6f5f0368d3a6190de833ba232358e6b1293393288a970af48ad2401cf82f33",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_main_1"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "main-sig-2"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_main_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "5433afdaf9c62a9d61e4d683a6e311f8b45adc3e26daae58464a98867bf6abda",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_main_2",
+        "system": "bdea125b7cacd25f5917da71e99e712059c24c61135bfe9655be3532ce1c9132",
+        "tools": "63d6d05b324c4b517be5f315032cb78d728c73fe0ea75498631897b4a348e300",
+        "messages": "cf46adb36df7783ea0a4246b34e829a7c378e2ab58b2e00ceede99eb8e51771f",
+        "priorThinking": [
+         "9b295af80b5990970eb63a6e821c71b163ab4a464f5fb07eb915da04330eecde"
+        ]
+       }
+      }
+     },
+     {
+      "role": "user",
+      "content": "And k2?"
+     }
+    ]
+   },
+   "mainVerdict": "passes"
+  }
+ ],
+ "checkpoints": [
+  {
+   "model": "claude-opus-5-5",
+   "answer": "answer 2",
+   "checkpoint": {
+    "version": 1,
+    "runId": "1794557125517-0000000001",
+    "history": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_agent_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "agent-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "94e4df3444026a6e6f6abefcf22b0e8209ffce8038363c47a2e0a395de05b031",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_agent_1",
+        "system": "8ebee6494177775369ebbd17181a605099c4b52762d6c1c7f8966f3e713c1250",
+        "tools": "3d5255d20a6c0295d50bb7abe2ae0066c89f290f4ed80bfe7a7c8f5c775b7d8d",
+        "messages": "f4d9df5581592e0df2239153853a7fc2a956b3ef60bd47be27289eeb7f971321",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_agent_1",
+      "toolName": "lookup"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "90a1d353d11f85c35d4b8ec0612897807c16d6df1bfe2229c0dfcbc83ab3d8c5",
+       "binding": {
+        "model": "claude-opus-5-5",
+        "salt": "msg_agent_2",
+        "system": "526f414f4c9c9be65c9cedc9027c4207dfddfdfc7964f63e76f5aceb59734e88",
+        "tools": "ca124a30a0771ff37ffa5b76626fa77e08ee973b52fd116cf829ae974d5515b7",
+        "messages": "e5bba1487f2951edfa06eba9e74d4c91f07d300929717b513e0e68996b87e460",
+        "priorThinking": [
+         "020b47ee8ae02fa8b26c9557da8ec968b3af4eab58643bfd588892d4be4d61a0"
+        ]
+       }
+      },
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "agent-sig-2"
+       }
+      ]
+     }
+    ],
+    "lastCompletedIteration": 2,
+    "originalInput": {
+     "message": "What is k1?"
+    },
+    "checkpointedAt": 1794557125541
+   }
+  },
+  {
+   "model": "claude-sonnet-5-5",
+   "answer": "answer 2",
+   "checkpoint": {
+    "version": 1,
+    "runId": "1794557125542-0000000002",
+    "history": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_agent_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "agent-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "94e4df3444026a6e6f6abefcf22b0e8209ffce8038363c47a2e0a395de05b031",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_agent_1",
+        "system": "8ebee6494177775369ebbd17181a605099c4b52762d6c1c7f8966f3e713c1250",
+        "tools": "3d5255d20a6c0295d50bb7abe2ae0066c89f290f4ed80bfe7a7c8f5c775b7d8d",
+        "messages": "f4d9df5581592e0df2239153853a7fc2a956b3ef60bd47be27289eeb7f971321",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_agent_1",
+      "toolName": "lookup"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "90a1d353d11f85c35d4b8ec0612897807c16d6df1bfe2229c0dfcbc83ab3d8c5",
+       "binding": {
+        "model": "claude-sonnet-5-5",
+        "salt": "msg_agent_2",
+        "system": "526f414f4c9c9be65c9cedc9027c4207dfddfdfc7964f63e76f5aceb59734e88",
+        "tools": "ca124a30a0771ff37ffa5b76626fa77e08ee973b52fd116cf829ae974d5515b7",
+        "messages": "e5bba1487f2951edfa06eba9e74d4c91f07d300929717b513e0e68996b87e460",
+        "priorThinking": [
+         "020b47ee8ae02fa8b26c9557da8ec968b3af4eab58643bfd588892d4be4d61a0"
+        ]
+       }
+      },
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "agent-sig-2"
+       }
+      ]
+     }
+    ],
+    "lastCompletedIteration": 2,
+    "originalInput": {
+     "message": "What is k1?"
+    },
+    "checkpointedAt": 1794557125549
+   }
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "answer": "answer 2",
+   "checkpoint": {
+    "version": 1,
+    "runId": "1794557125549-0000000003",
+    "history": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_agent_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "agent-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "94e4df3444026a6e6f6abefcf22b0e8209ffce8038363c47a2e0a395de05b031",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_agent_1",
+        "system": "8ebee6494177775369ebbd17181a605099c4b52762d6c1c7f8966f3e713c1250",
+        "tools": "3d5255d20a6c0295d50bb7abe2ae0066c89f290f4ed80bfe7a7c8f5c775b7d8d",
+        "messages": "f4d9df5581592e0df2239153853a7fc2a956b3ef60bd47be27289eeb7f971321",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_agent_1",
+      "toolName": "lookup"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "90a1d353d11f85c35d4b8ec0612897807c16d6df1bfe2229c0dfcbc83ab3d8c5",
+       "binding": {
+        "model": "claude-haiku-5-5",
+        "salt": "msg_agent_2",
+        "system": "526f414f4c9c9be65c9cedc9027c4207dfddfdfc7964f63e76f5aceb59734e88",
+        "tools": "ca124a30a0771ff37ffa5b76626fa77e08ee973b52fd116cf829ae974d5515b7",
+        "messages": "e5bba1487f2951edfa06eba9e74d4c91f07d300929717b513e0e68996b87e460",
+        "priorThinking": [
+         "020b47ee8ae02fa8b26c9557da8ec968b3af4eab58643bfd588892d4be4d61a0"
+        ]
+       }
+      },
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "agent-sig-2"
+       }
+      ]
+     }
+    ],
+    "lastCompletedIteration": 2,
+    "originalInput": {
+     "message": "What is k1?"
+    },
+    "checkpointedAt": 1794557125558
+   }
+  },
+  {
+   "model": "claude-fable-5-1",
+   "answer": "answer 2",
+   "checkpoint": {
+    "version": 1,
+    "runId": "1794557125559-0000000004",
+    "history": [
+     {
+      "role": "user",
+      "content": "What is k1?"
+     },
+     {
+      "role": "assistant",
+      "content": "",
+      "toolCalls": [
+       {
+        "id": "toolu_agent_1",
+        "name": "lookup",
+        "args": {
+         "key": "k1"
+        }
+       }
+      ],
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 1",
+        "signature": "agent-sig-1"
+       }
+      ],
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_1",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "tool",
+         "index": 0
+        }
+       ],
+       "stopReason": "tool_use",
+       "contentDigest": "94e4df3444026a6e6f6abefcf22b0e8209ffce8038363c47a2e0a395de05b031",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_agent_1",
+        "system": "8ebee6494177775369ebbd17181a605099c4b52762d6c1c7f8966f3e713c1250",
+        "tools": "3d5255d20a6c0295d50bb7abe2ae0066c89f290f4ed80bfe7a7c8f5c775b7d8d",
+        "messages": "f4d9df5581592e0df2239153853a7fc2a956b3ef60bd47be27289eeb7f971321",
+        "priorThinking": []
+       }
+      }
+     },
+     {
+      "role": "tool",
+      "content": "value of k1",
+      "toolCallId": "toolu_agent_1",
+      "toolName": "lookup"
+     },
+     {
+      "role": "assistant",
+      "content": "answer 2",
+      "replay": {
+       "version": 1,
+       "protocol": "anthropic-messages",
+       "id": "msg_agent_2",
+       "layout": [
+        {
+         "type": "thinking",
+         "index": 0
+        },
+        {
+         "type": "text",
+         "length": 8
+        }
+       ],
+       "stopReason": "end_turn",
+       "contentDigest": "90a1d353d11f85c35d4b8ec0612897807c16d6df1bfe2229c0dfcbc83ab3d8c5",
+       "binding": {
+        "model": "claude-fable-5-1",
+        "salt": "msg_agent_2",
+        "system": "526f414f4c9c9be65c9cedc9027c4207dfddfdfc7964f63e76f5aceb59734e88",
+        "tools": "ca124a30a0771ff37ffa5b76626fa77e08ee973b52fd116cf829ae974d5515b7",
+        "messages": "e5bba1487f2951edfa06eba9e74d4c91f07d300929717b513e0e68996b87e460",
+        "priorThinking": [
+         "020b47ee8ae02fa8b26c9557da8ec968b3af4eab58643bfd588892d4be4d61a0"
+        ]
+       }
+      },
+      "thinkingBlocks": [
+       {
+        "type": "thinking",
+        "content": "reasoning 2",
+        "signature": "agent-sig-2"
+       }
+      ]
+     }
+    ],
+    "lastCompletedIteration": 2,
+    "originalInput": {
+     "message": "What is k1?"
+    },
+    "checkpointedAt": 1794557125564
+   }
+  }
+ ]
+}

@@ -64,7 +64,7 @@ function assistant(
       stop_reason: stop,
       usage: { input_tokens: 1, output_tokens: 1 },
     },
-    thinkingReplayBinding(body, request.model)(id),
+    thinkingReplayBinding(body, request, request.model)(id),
   );
   return {
     role: 'assistant',

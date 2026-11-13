@@ -167,7 +167,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
           parallelToolCalls,
         ),
       };
-      const bindingFactory = thinkingReplayBinding(body, body.model);
+      const bindingFactory = thinkingReplayBinding(body, preparation.request, body.model);
       const serializedBody = JSON.stringify(body);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let response: Response;
@@ -214,7 +214,7 @@ export function browserAnthropic(options: BrowserAnthropicProviderOptions): LLMP
         ),
         stream: true,
       };
-      const bindingFactory = thinkingReplayBinding(body, body.model);
+      const bindingFactory = thinkingReplayBinding(body, preparation.request, body.model);
       const serializedBody = JSON.stringify(body);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let response: Response;
