@@ -34,7 +34,7 @@ import {
 } from '../core/terminalVerdict.js';
 
 /** The key a composition carries a child's verdict under, on its own state. */
-export const CHILD_VERDICT_KEY = 'childVerdict';
+const CHILD_VERDICT_KEY = 'childVerdict';
 
 /** What a child's mount handed back, read by the child's own runner when it can. */
 export function childOutcome(runner: unknown, sfOutput: unknown): ChildOutcome {

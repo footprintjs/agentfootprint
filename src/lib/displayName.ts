@@ -43,7 +43,7 @@ export const MAX_DISPLAY_NAME_CHARS = 60;
  * At most this many declared names in one phrase; any further call is counted
  * with the calls whose tools declared none. A line for a person, not a list.
  */
-export const MAX_NAMED_CALLS = 3;
+const MAX_NAMED_CALLS = 3;
 
 /**
  * Why `value` is not a display name, or `undefined` when it is — judged on the
