@@ -2,7 +2,7 @@ import type { FlowchartCheckpoint } from 'footprintjs';
 
 import { ResumeCheckpointError } from './resumeError.js';
 
-export function plainRecord(value: unknown): value is Record<string, unknown> {
+function plainRecord(value: unknown): value is Record<string, unknown> {
   return (
     value !== null &&
     typeof value === 'object' &&

@@ -9,7 +9,7 @@ import type {
   UnsupportedValue,
 } from './types.js';
 
-export const MAX_EVIDENCE_RECOVERY_GUIDANCE_CHARS = 4000;
+const MAX_EVIDENCE_RECOVERY_GUIDANCE_CHARS = 4000;
 /** Ceiling for the complete serialized carrier, including the rejected draft. */
 export const MAX_EVIDENCE_RECOVERY_CHARS = 1_000_000;
 
