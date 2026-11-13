@@ -185,9 +185,14 @@ describe('host-owned backward output', () => {
   });
 
   it('keeps the existing single deadline when a graph read never settles', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     let signal: AbortSignal | undefined;
     let calls = 0;
     let callsAtAbort = 0;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
     const graph: CauseGraph = {
       gaps(_id, context) {
         calls++;
@@ -199,6 +204,7 @@ describe('host-owned backward output', () => {
           },
           { once: true },
         );
+        entered();
         return new Promise(() => {});
       },
       parents: () => {
@@ -214,14 +220,24 @@ describe('host-owned backward output', () => {
         return [];
       },
     };
-    const response = await root(graph, 'target', { includeBackward: true, timeoutMs: 20 });
-    expect(signal?.aborted).toBe(true);
-    expect(calls).toBeGreaterThan(0);
-    expect(calls).toBe(callsAtAbort);
-    expect(response.finding.rootCause).toBeUndefined();
-    expect(
-      response.finding.backward.gaps.some((gap: { code: string }) => gap.code === 'timeout'),
-    ).toBe(true);
+    try {
+      const pending = root(graph, 'target', { includeBackward: true, timeoutMs: 20 });
+      await started;
+      const callsAtEntry = calls;
+      expect(callsAtEntry).toBeGreaterThan(0);
+      expect(signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(20);
+      const response = await pending;
+      expect(signal?.aborted).toBe(true);
+      expect(calls).toBe(callsAtEntry);
+      expect(calls).toBe(callsAtAbort);
+      expect(response.finding.rootCause).toBeUndefined();
+      expect(
+        response.finding.backward.gaps.some((gap: { code: string }) => gap.code === 'timeout'),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps uncollected evidence uncertain when backward output is requested', async () => {
@@ -301,43 +317,52 @@ describe('host-owned backward output', () => {
   });
 
   it('honors cancellation before any read and during an active public query', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     const original = fixture();
     const target = original.target;
     let calls = 0;
     let querySignal: AbortSignal | undefined;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
     const graph: CauseGraph = {
       ...original.graph,
       gaps(_id, context) {
         calls++;
         querySignal = context.signal;
+        entered();
         return new Promise(() => {});
       },
     };
     const tool = traceCauseTools({ graph }, { includeBackward: true }).find(
       (tool) => tool.schema.name === 'root_cause',
     )!;
-    const controller = new AbortController();
-    controller.abort('PRIVATE-CANCEL-REASON');
-    const early = String(
-      await tool.execute({ nodeId: target }, { signal: controller.signal } as never),
-    );
-    expect(calls).toBe(0);
-    expect(JSON.parse(early).gaps[0].code).toBe('cancelled');
-    const active = new AbortController();
-    const pending = tool.execute({ nodeId: target }, { signal: active.signal } as never);
-    for (let i = 0; i < 20 && querySignal === undefined; i++)
-      await new Promise((resolve) => setTimeout(resolve, 1));
-    expect(querySignal).toBeDefined();
-    active.abort('PRIVATE-CANCEL-REASON');
-    const text = String(await pending);
-    expect(querySignal!.aborted).toBe(true);
-    expect(
-      JSON.parse(text).finding.backward.gaps.some(
-        (gap: { code: string }) => gap.code === 'cancelled',
-      ),
-    ).toBe(true);
-    expect(calls).toBe(1);
-    expect(early + text).not.toContain('PRIVATE-CANCEL-REASON');
+    try {
+      const controller = new AbortController();
+      controller.abort('PRIVATE-CANCEL-REASON');
+      const early = String(
+        await tool.execute({ nodeId: target }, { signal: controller.signal } as never),
+      );
+      expect(calls).toBe(0);
+      expect(JSON.parse(early).gaps[0].code).toBe('cancelled');
+      const active = new AbortController();
+      const pending = tool.execute({ nodeId: target }, { signal: active.signal } as never);
+      await started;
+      expect(querySignal).toBeDefined();
+      active.abort('PRIVATE-CANCEL-REASON');
+      const text = String(await pending);
+      expect(querySignal!.aborted).toBe(true);
+      expect(
+        JSON.parse(text).finding.backward.gaps.some(
+          (gap: { code: string }) => gap.code === 'cancelled',
+        ),
+      ).toBe(true);
+      expect(calls).toBe(1);
+      expect(early + text).not.toContain('PRIVATE-CANCEL-REASON');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('passes through reopened saved evidence without upgrading its admission', async () => {
