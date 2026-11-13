@@ -32,7 +32,7 @@ import { throwIfAborted } from '../../../../lib/abort.js';
 import type { CompactionOptions, CompactionRecord, FoldedSpan, WindowRefusal } from '../types.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
-export const SUMMARIZE_OLDEST = 'summarize-oldest';
+const SUMMARIZE_OLDEST = 'summarize-oldest';
 
 /**
  * Fold the oldest contiguous run of foldable turns into one summary message,
