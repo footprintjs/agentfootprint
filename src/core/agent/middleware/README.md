@@ -25,7 +25,7 @@ chain let through, on a first turn and on a continued one
 (`run({ continueFrom })`, `followUp()`, a stored session behind
 `standingAgent`). One writer: `stages/seed.ts · historyForTurn`, called after
 the chain. A continuation stashes the stored history and a flag
-(`Agent.ts · applyContinuation`), never a pre-built entry — an entry built
+(`core/agent/runtime/conversation/owner.ts · applyContinuation`), never a pre-built entry — an entry built
 before the chain runs holds the raw text, which is what 9.112.1 and earlier
 served the model on every continued turn while the record said the rewrite
 happened. `resumeOnError` appends nothing (its last user entry is already

@@ -27,7 +27,7 @@ import type { AgentfootprintEvent } from '../../src/events.js';
 import { mock } from '../../src/llm-providers.js';
 import { eventBelongsToRun } from '../../src/bridge/eventMeta.js';
 import type { IngressRecord, TurnArtifacts } from '../../src/hosting/index.js';
-import type { SelfExplainBinding } from '../../src/trace-toolpack/selfExplain.js';
+import { getAgentRuntime } from '../../src/core/agent/runtime/native/host.js';
 import {
   ALICE,
   BOB,
@@ -310,8 +310,7 @@ describe('attack regressions — nothing crosses into another session’s record
     inFlight.release();
     expect((await bobTurn).output).toBe('ok');
 
-    const binding = (agent as unknown as { selfExplainBinding?: SelfExplainBinding })
-      .selfExplainBinding;
+    const binding = getAgentRuntime(agent).selfExplainBinding;
     const captured = binding?.artifacts?.events ?? [];
     expect(captured.length).toBeGreaterThan(0);
     expect(JSON.stringify(captured)).not.toContain(aliceRecording);

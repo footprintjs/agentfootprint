@@ -4,7 +4,7 @@
  *
  * An agent ends some runs on a record in its state instead of a throw — a
  * reliability fail-fast, a policy halt, a denied message, a refused answer —
- * and only its run boundary (`Agent · finalizeResult`) turns that record into
+ * and only its run boundary (`agent/runtime/terminal/owner.ts · finalizeResult`) turns that record into
  * the error. A composition mounts the agent's CHART, so that boundary never
  * runs: the composition asks the agent what the mount handed back
  * (`outcomeOf`, duck-typed — `core-flow/` imports no runner): its answer, or

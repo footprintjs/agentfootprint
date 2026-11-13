@@ -48,7 +48,7 @@ import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
 
 /**
  * A stored conversation handed to the next run — what
- * `Agent.ts · applyContinuation` stashes and `seedFrom` consumes.
+ * `runtime/conversation/owner.ts · applyContinuation` stashes and `seedFrom` consumes.
  *
  * It carries the history EXACTLY as stored and a flag, never a pre-built
  * user entry: the entry this turn adds is written in ONE place,
