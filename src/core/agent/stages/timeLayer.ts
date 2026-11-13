@@ -135,6 +135,12 @@ export function readTimeWords(
  * absolute form (`args` comes back redrawn), and any other look-back runs as
  * sent and is recorded shifted. Filed through the one writer; no event (the
  * row is the record).
+ *
+ * `redraw` is the same redraw as a function, for the call's OTHER copy of its
+ * arguments — the record's (`CallArguments.chainedArgs`), which
+ * `tool_end.changedArgKeys` is judged on. Redrawn, the tool runs with
+ * `{ start_time, end_time }` and without `window`, so those are the keys the
+ * record must name; not redrawn, it hands back the same object.
  */
 export function timeAtDispatch(
   scope: TypedScope<AgentState>,
@@ -143,7 +149,11 @@ export function timeAtDispatch(
   tool: RuledToolLike | undefined,
   args: Readonly<Record<string, unknown>>,
   appZone: ZoneName | undefined,
-): { readonly context: TimeContext | undefined; readonly args: Readonly<Record<string, unknown>> } {
+): {
+  readonly context: TimeContext | undefined;
+  readonly args: Readonly<Record<string, unknown>>;
+  readonly redraw: (args: Readonly<Record<string, unknown>>) => Readonly<Record<string, unknown>>;
+} {
   const atMs = Date.now();
   const dispatchedAt = new Date(atMs).toISOString();
   const ledger = scope.findingsLedger as FindingsLedger | undefined;
@@ -172,9 +182,16 @@ export function timeAtDispatch(
       : { byMs: drift.byMs, outcome: 'shifted' },
   );
   recordFindings(scope, [row]);
-  const redrawn =
-    drift?.outcome === 'redrawn' ? redrawnArgs(args, tool, window?.form, drift.values) : args;
-  return { context: callTimeContext(scope, call.toolCallId, row.dispatchedAt), args: redrawn };
+  const redraw =
+    drift?.outcome === 'redrawn'
+      ? (sent: Readonly<Record<string, unknown>>) =>
+          redrawnArgs(sent, tool, window?.form, drift.values)
+      : (sent: Readonly<Record<string, unknown>>) => sent;
+  return {
+    context: callTimeContext(scope, call.toolCallId, row.dispatchedAt),
+    args: redraw(args),
+    redraw,
+  };
 }
 
 /** `args` with the look-back form's argument dropped and the absolute form's values written — a fresh object. */

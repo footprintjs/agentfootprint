@@ -51,6 +51,9 @@ const USAGE = `usage: agentfootprint-check-semantics <semantics-catalog.json> [o
                             returns when it refuses a call, or { text, argument,
                             value } naming what it looked up; judged by the
                             overclaim rules.
+                            search: { ... } (optional) — the search declared on
+                            defineTool({ search }); without it a sample
+                            absent({ checked: 'declared' }) fails the gate.
 
   --strict                  warnings also fail the gate; the overclaim rules
                             report as errors
@@ -65,6 +68,12 @@ exit codes: 0 ok · 1 findings failed the gate · 2 usage/input error`;
  * a shape description) on unrecognized input — the CLI maps that to exit
  * code 2. `resultClass` values are passed through untouched; the checker is
  * the one owner of the closed-set refusal.
+ *
+ * Every optional field the checker reads is passed through as written, so
+ * the command line and `checkSemantics` judge one row alike. A field left
+ * out here changes the verdict, not just the report: a row with `search`
+ * and a sample `absent({ checked: 'declared' })` passes `checkSemantics`,
+ * but read without its `search` it fails with `declared-without-search`.
  */
 export function coerceSemanticsCatalog(json: unknown): readonly SemanticsCatalogEntry[] {
   const list = Array.isArray(json)
@@ -111,6 +120,9 @@ export function coerceSemanticsCatalog(json: unknown): readonly SemanticsCatalog
         : {}),
       ...(entry.refusals !== undefined
         ? { refusals: entry.refusals as SemanticsCatalogEntry['refusals'] }
+        : {}),
+      ...(entry.search !== undefined
+        ? { search: entry.search as SemanticsCatalogEntry['search'] }
         : {}),
     };
   });

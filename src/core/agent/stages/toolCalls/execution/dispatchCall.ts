@@ -167,7 +167,8 @@ export function buildCallDispatch(
     // redaction hides (`../../../../toolShownArgs.ts` · `changedArgKeys`).
     // Taken HERE, before anything executes: names only, so nothing the
     // tool later writes into its arguments can ride `tool_end`.
-    const changedKeys = changedArgKeys(args, shownArgsOf(tool, callArguments.chainedArgs));
+    const judgedOn = callArguments.chainedArgs;
+    let changedKeys = changedArgKeys(args, shownArgsOf(tool, judgedOn));
     // Tool-args validation (#9) — AFTER the permission gate (policy must
     // see every attempted call, valid or not) and BEFORE credential
     // resolution (never acquire credentials for a call that won't run).
@@ -389,6 +390,13 @@ export function buildCallDispatch(
           resolution,
         });
         if (pause !== undefined) return { kind: 'paused', pause };
+        // The time layer redrew a drifted look-back at dispatch
+        // (`timeLayer.ts` · `timeAtDispatch`): the record's copy was replaced
+        // by a fresh one the tool never held, so judging it again names the
+        // keys the tool ran with — `start_time`/`end_time`, not `window`.
+        if (callArguments.chainedArgs !== judgedOn) {
+          changedKeys = changedArgKeys(args, shownArgsOf(tool, callArguments.chainedArgs));
+        }
       }
     }
     const skillRoute: CallSkillRoute = {

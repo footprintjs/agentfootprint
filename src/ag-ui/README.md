@@ -33,6 +33,13 @@ across a thread, and the same with or without a policy.
 - Text is the streamed reply (`stream.token`); an agent's answer that streamed
   nothing is written whole from `turn_end`; an agent's `llm_end.content` is a
   draft and is never written.
+- Text the library appends after the stream — the limits block
+  (`.limitsTravelWithTheAnswer()`), the standing line
+  (`.answerLayer({ standingLine })`) — is only in `turn_end.finalContent`, so
+  the rest of that answer beyond what streamed is written at `turn_end` as its
+  own message (`unstreamedText.ts`). Streamed `There are 12.` and delivered
+  `There are 12.` + the line: the second message is the line. An answer that
+  does not begin with the streamed text writes nothing more — nothing is guessed.
 - A paused run ends with `RUN_FINISHED { outcome: interrupt }` (the question's
   text — from whichever home its kind keeps it in — nothing else of the pause's
   payload); a run paused on a tool the client runs (`awaiting: 'caller'`) ends
@@ -108,6 +115,7 @@ agUi({
   structural (no `@ag-ui/*` import).
 - `ids.ts` — the one id grammar.
 - `serializer.ts` — `agUiSerializer`, the per-run translation.
+- `unstreamedText.ts` — what of an answer the stream did not carry.
 - `framing.ts` — `agUiSse`, the framing strategy.
 - `request.ts` — the reader port (`AgUiRequestReader`), the core's read
   (`readAgUiRequest` → `readAgUiRunInput`) and the turn a request may ask for.

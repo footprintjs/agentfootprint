@@ -482,7 +482,9 @@ Gotchas:
   continued conversation never folds an earlier turn's rows as its own, even when
   a window strategy trims the stored history.
 - **The line is not streamed.** Like the limits block, it is appended to the
-  answer the run returns; `stream.token` carries the model's text.
+  answer the run returns; `stream.token` carries the model's text. A UI that
+  shows only tokens must render `turn_end.finalContent` when the turn ends; the
+  AG-UI adapter does, writing the appended text as its own message.
 - **A mode changes the line, nothing else.** The standing travels as data in every
   mode, the limits block is appended whether or not the line is, and memory keeps
   exactly the answer that was delivered — the line only when one was appended. With

@@ -56,12 +56,11 @@
  * scope answers that call under its own id — or, for a tool the client ran, is
  * not written at all, because the client holds the result it sent.
  *
- * TEXT. The reply is what the record streamed (`stream.token`) — the channel
- * `toSSE({ format: 'text' })` and a hosted reply read. An agent turn whose
- * answer streamed no token (a provider without `stream()`) is written whole
- * from `turn_end.finalContent`, unless the record marks it refused. An
- * agent's `llm_end.content` is a DRAFT the library may be holding back
- * (answer validation, an output policy) and is never written.
+ * TEXT. What the record streamed (`stream.token`, the channel `toSSE({ format: 'text' })`
+ * and a hosted reply read), then at `turn_end` what of `finalContent` it did not carry
+ * (`unstreamedText.ts`): all of it when nothing streamed, else the limits block or standing
+ * line the library appended after the stream, as its own message; never a refused answer.
+ * An agent's `llm_end.content` is a DRAFT the library may hold back and is never written.
  */
 
 import type { AgentfootprintEvent } from '../events/registry.js';
@@ -70,6 +69,7 @@ import type { RunTranslation } from '../hosting/protocolAdapter.js';
 import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
 import { agUiIdMinter } from './ids.js';
+import { unstreamedText } from './unstreamedText.js';
 import {
   AG_UI_PROTOCOL_VERSION,
   type AgUiAddress,
@@ -258,8 +258,8 @@ interface Scope {
   text: OpenText | undefined;
   /** The text message of the scope's current LLM call — the parent of its tool calls. */
   callMessageId: string | undefined;
-  /** A token streamed since the scope's last `llm_start`. */
-  streamed: boolean;
+  /** The text streamed since the scope's last `llm_start`; `undefined` = no token. */
+  streamedText: string | undefined;
   reasoning: OpenReasoning | undefined;
   /** Open step names, in the order they opened. */
   readonly steps: string[];
@@ -281,7 +281,7 @@ const newScope = (
   isAgent: false,
   text: undefined,
   callMessageId: undefined,
-  streamed: false,
+  streamedText: undefined,
   reasoning: undefined,
   steps: [],
   calls: [],
@@ -558,8 +558,8 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         closeReasoning(scope, out);
         const refused = payload.refused !== undefined;
         const answer = refused ? undefined : text(payload.finalContent);
-        if (!scope.streamed && answer !== undefined && answer.length > 0)
-          wholeText(scope, answer, event, out);
+        const rest = answer === undefined ? undefined : unstreamedText(scope.streamedText, answer);
+        if (rest !== undefined) wholeText(scope, rest, event, out);
         if (scope === root) {
           rootResult = answer;
           closeSteps(scope, out);
@@ -593,7 +593,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         const scope = scopeOf(path);
         closeText(scope, out);
         closeReasoning(scope, out);
-        scope.streamed = false;
+        scope.streamedText = undefined;
         scope.callMessageId = undefined;
         scope.llmAddress = address;
         return;
@@ -621,7 +621,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
         } else {
           open.lastTokenIndex = index;
         }
-        scope.streamed = true;
+        scope.streamedText = (scope.streamedText ?? '') + content;
         out.push({
           type: 'TEXT_MESSAGE_CONTENT',
           messageId: (scope.text as OpenText).id,
@@ -633,12 +633,12 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
       case 'agentfootprint.stream.llm_end': {
         const scope = scopeOf(path);
         closeText(scope, out);
-        // Inside an agent's turn the content is a draft; the turn's answer comes
-        // at turn_end. With no agent around (an LLMCall, a merge by LLM) it IS
-        // the answer — written whole when it streamed nothing.
+        // In an agent's turn the content is a draft; the answer comes at turn_end.
+        // With no agent around (an LLMCall, a merge by LLM) it IS the answer —
+        // written whole when it streamed nothing.
         const content = text(payload.content);
-        if (!scope.isAgent && !scope.streamed && payload.contentWithheld !== true && content)
-          wholeText(scope, content, event, out);
+        const quiet = scope.streamedText === undefined && payload.contentWithheld !== true;
+        if (!scope.isAgent && quiet && content) wholeText(scope, content, event, out);
         return;
       }
       case 'agentfootprint.stream.thinking_delta': {
