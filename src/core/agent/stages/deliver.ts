@@ -72,7 +72,7 @@ export interface DeliverStageDeps {
 }
 
 /** What a provider carries inside `messages`, with the floor applied. */
-export function carriedRoles(provider: LLMProvider): readonly WireRole[] {
+function carriedRoles(provider: LLMProvider): readonly WireRole[] {
   return provider.carriesInMessages ?? DEFAULT_CARRIES_IN_MESSAGES;
 }
 

@@ -650,7 +650,7 @@ describe('window strategies — tree-shakeable', () => {
     ]);
 
     expect(Object.keys(globalThis).length).toBe(globalsBefore);
-    // Each module's only export shape is its factory (plus its name constant).
+    // Each module's only export is its factory; the name constant stays private.
     for (const mod of mods) {
       for (const value of Object.values(mod)) {
         expect(['function', 'string']).toContain(typeof value);

@@ -75,12 +75,12 @@ import { toAnthropicMessages } from '../../src/adapters/llm/anthropicMessageProj
 import { buildDropNotice } from '../../src/core/agent/window/notice.js';
 import { buildSummaryMessage } from '../../src/core/agent/window/summarize.js';
 import { buildCorrectiveTurn } from '../../src/core/agent/outputEnforcement.js';
-import { buildEvidenceCorrection } from '../../src/core/agent/evidence/gate.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
 import { WRAP_UP_INSTRUCTION, wrapUpStage } from '../../src/core/agent/stages/wrapUp.js';
 import { buildStepNudgeStage } from '../../src/core/agent/stages/stepNudge.js';
 import type { StepPlan } from '../../src/injection-engine/skillSteps.js';
 import {
+  EVIDENCE_CHECK_FRAME_PREFIX,
   LIBRARY_AUTHORED_PREFIXES,
   LIBRARY_NOTE_OPENING,
   STAGED_DATA_FRAME_PREFIX,
@@ -90,6 +90,7 @@ import { timeLine } from '../../src/core/agent/arguments/serve.js';
 import { figuresConclusionLine } from '../../src/core/agent/evidence/figures.js';
 import { stagedRefsNudgeLine } from '../../src/core/agent/stagedRefs.js';
 import { unprovable, INJECTED_TURN } from '../helpers/modelFacingClaims.js';
+import { LEGACY_EVIDENCE_CHECK_TURN } from '../helpers/legacyEvidenceFrame.js';
 
 const REPO = resolve(__dirname, '../..');
 
@@ -145,14 +146,6 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
       why:
         'the schema-check correction — opens with SCHEMA_CHECK_FRAME_PREFIX, then quotes ' +
         "the validator's error as data",
-    },
-  ],
-  'src/core/agent/evidence/gate.ts': [
-    {
-      cls: 'authored-frame',
-      why:
-        'the evidence-check correction — opens with EVIDENCE_CHECK_FRAME_PREFIX, then ' +
-        "quotes the model's own flagged values as data",
     },
   ],
   'src/core/agent/stages/wrapUp.ts': [
@@ -349,6 +342,22 @@ const SITES: Readonly<Record<string, readonly Site[]>> = {
   ],
 };
 
+/**
+ * Openings the registry still RECOGNISES although no site in `src/` writes
+ * them any more. A conversation stored by an older release can hold such a
+ * turn, and it must keep reading as the library's words, not the person's.
+ * Each one is asserted below against a frozen copy of the bytes its removed
+ * writer produced (`test/helpers/legacyEvidenceFrame.ts`).
+ */
+const RECOGNISED_ONLY: ReadonlyArray<{ readonly opening: string; readonly why: string }> = [
+  {
+    opening: EVIDENCE_CHECK_FRAME_PREFIX,
+    why:
+      'the evidence-check correction; the revision request became request-only system ' +
+      'context (evidence/recovery.ts), so nothing appends this turn to history now',
+  },
+];
+
 // ─── The scan ────────────────────────────────────────────────────────────
 
 /** Every `.ts` file under `src/`, in a stable order. */
@@ -456,14 +465,20 @@ describe("every `role: 'user'` producer in src/ is classified", () => {
         .flat()
         .flatMap((s) => (s.opening === undefined ? [] : [s.opening])),
     );
-    // Six history openings, six construction sites that carry one; plus the
-    // two openings the request-only late lines carry (G17 — the time line and
-    // the figures conclusion share one). The library-authored class with no
+    // One construction site per history opening that is still written; plus
+    // the openings the request-only late lines carry (G17 — the time line and
+    // the figures conclusion share one); plus the openings only recognised
+    // from older stored conversations. The library-authored class with no
     // opening — a DELIVERED injection message — has no literal to find
     // (deliver.ts copies the role off the Injection) and is asserted by its
     // marker below instead.
-    expect(framed.length + requestOnly.size).toBe(LIBRARY_AUTHORED_PREFIXES.length);
+    expect(framed.length + requestOnly.size + RECOGNISED_ONLY.length).toBe(
+      LIBRARY_AUTHORED_PREFIXES.length,
+    );
     for (const opening of requestOnly) expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
+    for (const { opening } of RECOGNISED_ONLY) {
+      expect(LIBRARY_AUTHORED_PREFIXES).toContain(opening);
+    }
     expect(LIBRARY_AUTHORED_PREFIXES).toHaveLength(10);
   });
 
@@ -596,7 +611,7 @@ describe('the two frames registered in 9.86.0, built by their real writers', () 
     expect(isSaidByPerson(msg)).toBe(false);
   });
 
-  it('the four frames registered in 9.84.0 are still recognised by their real writers', () => {
+  it('the four frames registered in 9.84.0 are still recognised (three by their real writers)', () => {
     const notice = buildDropNotice({
       droppedMessageCount: 2,
       iteration: 4,
@@ -616,9 +631,9 @@ describe('the two frames registered in 9.86.0, built by their real writers', () 
         totalAttempts: 2,
       },
     )[1];
-    const evidence = buildEvidenceCorrection('A-9 ships tuesday', [
-      { value: 'A-9', shape: 'identifier' },
-    ])[1];
+    // No writer is left for the evidence frame; a stored conversation still
+    // holds the bytes the removed writer produced.
+    const evidence = LEGACY_EVIDENCE_CHECK_TURN;
     for (const msg of [notice, compacted, schema, evidence]) {
       expect(isLibraryAuthoredFrame(msg)).toBe(true);
       expect(isSaidByPerson(msg)).toBe(false);

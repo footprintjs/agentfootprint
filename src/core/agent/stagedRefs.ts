@@ -61,10 +61,10 @@ export interface StagedRefsMatch {
 
 /** Most refs one nudge line names. Bounded so a fan-out that staged fifty
  *  parcels cannot turn the one-line nudge into a page. */
-export const MAX_NUDGE_REFS = 6;
+const MAX_NUDGE_REFS = 6;
 
 /** Most spender tools one nudge line names. */
-export const MAX_NUDGE_TOOLS = 3;
+const MAX_NUDGE_TOOLS = 3;
 
 /**
  * Harvest `Tool.wants` from the declared catalog — the `toolGrounding`
@@ -171,9 +171,9 @@ export function stagedRefsNudgeLine(match: StagedRefsMatch): string {
 }
 
 /**
- * The refs sentence the evidence CORRECTION carries when the join holds at
- * recheck time (see `buildEvidenceCorrection`) — the same facts, spoken
- * inside the authored frame so the untrusted values still come last.
+ * The refs sentence the evidence RECOVERY instruction carries when the join
+ * holds at recheck time (`evidence/recovery.ts` · `buildEvidenceRecovery`) —
+ * the same facts, spoken by the library after the quoted data ends.
  */
 export function stagedRefsTeachingClause(match: StagedRefsMatch): string {
   return (

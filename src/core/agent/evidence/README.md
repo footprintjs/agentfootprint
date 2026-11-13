@@ -8,8 +8,8 @@ answer (handed to `gate.ts` as a parameter), and since 9.110.0
 `../stages/toolCalls/evidence/towers.ts` · `towersFor` at dispatch, under `.findings()`
 beside the gate only, for the contingent check's second moment.
 Lens: `recovery.ts` · `buildEvidenceRecovery` — request-only system context for
-the revision. `gate.ts` · `buildEvidenceCorrection` remains a legacy compatibility
-helper; runtime repair no longer adds its synthetic conversation turns.
+the revision. Runtime repair adds no synthetic conversation turns; the old
+`[evidence check` frame is only recognised (`frames.ts`), never written.
 Not model-facing: `gate.ts` · `evidenceRefusalSentence`, `errors.ts` (the caller reads them).
 
 # `evidence/` — names and numbers must come from a tool result
@@ -108,8 +108,11 @@ as `unreachable`, never as a clean pass.
 An unsupported draft under `guard` or `rails` gets the existing single revision.
 Its correction now arrives in request-only system context: the rejected draft
 is quoted as untrusted data, and no synthetic assistant/user turns are added
-to conversation history. The legacy `buildEvidenceCorrection` export remains
-available, but the runtime uses the new recovery delivery.
+to conversation history. The helper that used to write those turns is gone;
+no package door ever exported it. `EVIDENCE_CHECK_FRAME_PREFIX` stays exported
+and recognised, because a conversation stored by an older release can still
+hold a `role: 'user'` turn opening with `[evidence check`, and that turn must
+not count as the person's words or exempt the values it quotes.
 
 Use `recoveryInstruction` to teach what to do when the missing evidence cannot
 be fetched:

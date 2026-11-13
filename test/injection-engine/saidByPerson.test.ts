@@ -39,9 +39,11 @@
  * a surprise.
  *
  * Nothing here hand-authors the library's own messages: the compaction frame,
- * the drop notice and the two corrections come from the real writers, and the
+ * the drop notice and the schema correction come from the real writers, and the
  * delivered message is stamped by the real `deliver` stage. A test that typed
- * those strings out would keep passing after the writers changed.
+ * those strings out would keep passing after the writers changed. The one
+ * exception is the evidence-check correction: nothing writes it any more, so it
+ * is the frozen copy of what older releases stored in a conversation.
  *
  * Test types (Convention 3): unit (the predicate over one window) · functional
  * (the real evaluator, two predicates, one history) · integration (the real
@@ -58,12 +60,12 @@ import type { Injection, InjectionContext } from '../../src/injection-engine.js'
 import type { LLMMessage, LLMProvider } from '../../src/provider-contract/types.js';
 import { buildDropNotice } from '../../src/core/agent/window/notice.js';
 import { buildCorrectiveTurn } from '../../src/core/agent/outputEnforcement.js';
-import { buildEvidenceCorrection } from '../../src/core/agent/evidence/gate.js';
 import { buildSummaryMessage } from '../../src/core/agent/window/summarize.js';
 import { WRAP_UP_INSTRUCTION } from '../../src/core/agent/stages/wrapUp.js';
 import { nudgeTeachingMessage } from '../../src/injection-engine/skillSteps.js';
 import { LIBRARY_AUTHORED_PREFIXES } from '../../src/lib/saidByPerson.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
+import { LEGACY_EVIDENCE_CHECK_TURN } from '../helpers/legacyEvidenceFrame.js';
 import { buildDeliverStage } from '../../src/core/agent/stages/deliver.js';
 import type { AgentState } from '../../src/core/agent/types.js';
 import type { TypedScope } from 'footprintjs';
@@ -146,9 +148,9 @@ function windowWithEveryClass(): {
     { stage: 'schema-validate', error: `expected an object with an ${TOOL} id` },
     { attempt: 1, totalAttempts: 2 },
   )[1];
-  const evidenceCheck: LLMMessage = buildEvidenceCorrection('order A-9 ships tuesday', [
-    { value: 'A-9', shape: 'identifier' },
-  ])[1];
+  // No writer is left for this one: older releases appended it to history,
+  // and a stored conversation still holds these bytes.
+  const evidenceCheck: LLMMessage = LEGACY_EVIDENCE_CHECK_TURN;
   // The two frames registered in 9.86.0, from their real writers too. The
   // wrap-up instruction is the exported constant the stage appends verbatim;
   // the nudge is composed by the grammar that owns every procedure sentence,

@@ -27,10 +27,8 @@ import {
   exemptFromRun,
 } from '../../../src/core/agent/evidence/evidenceIndex.js';
 import {
-  buildEvidenceCorrection,
   checkAnswer,
   describeValues,
-  EVIDENCE_CHECK_FRAME_PREFIX,
   evidenceRefusalSentence,
   resolveEvidenceGate,
 } from '../../../src/core/agent/evidence/gate.js';
@@ -378,16 +376,7 @@ describe('security: a substring is not evidence', () => {
   });
 });
 
-describe('security: the correction frames untrusted text', () => {
-  it('puts the library words first and the quoted values last', () => {
-    const [answerTurn, correction] = buildEvidenceCorrection('bad answer', [
-      { value: '0xef0101', shape: 'identifier' },
-    ]);
-    expect(answerTurn).toEqual({ role: 'assistant', content: 'bad answer' });
-    expect(correction.content.startsWith(EVIDENCE_CHECK_FRAME_PREFIX)).toBe(true);
-    expect(correction.content.trimEnd().endsWith('`0xef0101` (identifier)')).toBe(true);
-  });
-
+describe('security: the refusal quotes flagged values, bounded', () => {
   it('truncates the named list rather than pasting a whole answer back', () => {
     const many = Array.from({ length: 40 }, (_, i) => ({
       value: `0xaa${i}`,
