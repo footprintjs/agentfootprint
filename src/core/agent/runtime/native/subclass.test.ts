@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { Agent } from '../../../Agent.js';
 import { RunnerBase } from '../../../RunnerBase.js';
 import { getAgentRuntime } from './host.js';
@@ -48,7 +48,16 @@ it('runs through a transparent Proxy and retains the original native run view', 
     await expect(proxy.run('hello')).resolves.toBe('ok');
     expect(proxy.getLastSnapshot()).toEqual(agent.getLastSnapshot());
     expect(proxy.getLastNarrativeEntries()).toEqual(agent.getLastNarrativeEntries());
-    expect(proxy.checkpoint()).toEqual(agent.checkpoint());
+    // Each checkpoint reads the clock afresh; compare both receivers at one instant.
+    const checkpointedAt = Date.now();
+    const wallClock = vi.spyOn(Date, 'now').mockReturnValue(checkpointedAt);
+    try {
+      const fromProxy = proxy.checkpoint();
+      expect(fromProxy).toEqual(agent.checkpoint());
+      expect(fromProxy?.checkpointedAt).toBe(checkpointedAt);
+    } finally {
+      wallClock.mockRestore();
+    }
     await expect(proxy.followUp('again')).resolves.toBe('ok');
     expect(proxy.getLastSnapshot()).toEqual(agent.getLastSnapshot());
   } finally {
