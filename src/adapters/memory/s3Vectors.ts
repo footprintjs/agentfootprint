@@ -730,7 +730,6 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
       open('list entries');
       const limit = storeRequestLimit(listOptions?.limit, 'limit') ?? 100;
       const ns = identityNamespace(identity);
-      const prefix = `${ns}#`;
       const tierFilter = listOptions?.tiers ? new Set(listOptions.tiers) : undefined;
 
       const page: MemoryEntry<T>[] = [];
@@ -753,7 +752,7 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
         )) as { vectors?: RawVector[]; nextToken?: string } | undefined;
         token = out?.nextToken;
         for (const row of out?.vectors ?? []) {
-          if (typeof row.key !== 'string' || !row.key.startsWith(prefix)) continue;
+          if (!inNamespace(row, ns)) continue;
           const entry = vectorToEntry<T>(row);
           if (!entry || isExpired(entry.ttl)) continue;
           if (tierFilter && (entry.tier === undefined || !tierFilter.has(entry.tier))) continue;
@@ -811,7 +810,6 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
     async forget(identity: MemoryIdentity): Promise<void> {
       open('forget a namespace');
       const ns = identityNamespace(identity);
-      const prefix = `${ns}#`;
       let token: string | undefined;
       do {
         const out = (await call(
@@ -819,13 +817,12 @@ export function s3VectorsStore(options: S3VectorsStoreOptions): S3VectorsStore {
             new c.List({
               ...scope,
               maxResults: 500,
+              returnMetadata: true, // `inNamespace` reads the row's `ns`
               ...(token !== undefined && { nextToken: token }),
             }),
         )) as { vectors?: RawVector[]; nextToken?: string } | undefined;
         token = out?.nextToken;
-        const keys = (out?.vectors ?? [])
-          .map((v) => v.key)
-          .filter((k): k is string => typeof k === 'string' && k.startsWith(prefix));
+        const keys = (out?.vectors ?? []).filter((v) => inNamespace(v, ns)).map((v) => v.key);
         // Deleted page by page rather than collected and deleted at the end: a
         // GDPR erasure that fails half way should have erased half, not
         // nothing.
@@ -952,18 +949,21 @@ function refuse(method: string, because: string, why: string, fix: string): neve
 // ─── Keys, payloads, rows ────────────────────────────────────────────
 
 /**
- * `'<namespace>#<id>'`.
- *
- * The namespace is in the KEY as well as in the metadata, and the redundancy is
- * deliberate: `search` filters server-side on the metadata, while `list` and
- * `forget` need to select a namespace out of a page of keys, which ListVectors
- * gives no filter for.
+ * `'<namespace>#<id>'`. Not injective, since a namespace may contain `#`: `c` + `x#y` and
+ * `c#x` + `y` share a key, a later write replacing the earlier, and `c#` prefixes `c#x`'s keys
+ * (r3-62-adapters-memory-2; `inNamespace` selects; a collision-free key re-keys stored data).
  */
 function vectorKey(namespace: string, id: string): string {
   return `${namespace}#${id}`;
 }
 
-/** The entry id back out of a key. Ids may contain `#` (`'refunds.md#3'`); namespaces may not. */
+/** Whether a ListVectors row is this namespace's: by its own `ns` metadata, never its key alone. */
+function inNamespace(row: RawVector, ns: string): row is RawVector & { key: string } {
+  const { key } = row;
+  return typeof key === 'string' && key.startsWith(`${ns}#`) && readMetaString(row, NS_KEY) === ns;
+}
+
+/** The entry id back out of a key whose namespace is known from its metadata. */
 function idFromKey(key: string, prefixLength: number): string {
   return key.slice(prefixLength);
 }

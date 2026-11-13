@@ -18,7 +18,7 @@
  *      (`msg-<turn>-<index>`, `fact:<key>`, `snap-<turn>`), so an address built
  *      from the entry id alone is ONE row for every tenant that writes it. That
  *      one is tested against a faithful service double rather than a call
- *      recorder — see `fakeBank` — because the bug it guards is not "which call
+ *      recorder — see `fakeMemoryBank.ts · fakeBank` — because the bug it guards is not "which call
  *      did we make" but "what does the bank end up holding".
  *
  * Nothing here reaches Google or needs a credential.
@@ -34,6 +34,7 @@ import {
 } from '../../../src/adapters/memory/memoryBank.js';
 import type { MemoryEntry } from '../../../src/memory/entry/index.js';
 import type { MemoryIdentity } from '../../../src/memory/identity/index.js';
+import { fakeBank } from './fakeMemoryBank.js';
 
 // ── Fixtures ────────────────────────────────────────────────────────
 
@@ -114,77 +115,6 @@ const store = (
   const fake = fakeVertex(handlers);
   return { fake, store: memoryBankStore({ ...CONNECTION, ...options, _client: fake.client }) };
 };
-
-/** A row as the service holds one. */
-interface Row {
-  name: string;
-  fact?: string;
-  scope: Record<string, string>;
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * A faithful-enough Memory Bank: rows in a map keyed by resource NAME, created
- * under a caller-supplied `memoryId`, **patched by name with no question about
- * whose row it is**, and retrieved by exact scope match.
- *
- * That one italicised behaviour is the service's, not a simplification — it is
- * why an adapter that addresses two identities' memories to one name silently
- * merges them, and why the addressing law is tested against a double that holds
- * state rather than against a recorder that lists calls.
- */
-function fakeBank() {
-  const rows = new Map<string, Row>();
-  const memories = {
-    create: ({ parent, memoryId, requestBody }: Record<string, never>) => {
-      const name = `${String(parent)}/memories/${String(memoryId)}`;
-      if (rows.has(name)) throw { code: 409 };
-      rows.set(name, { ...(requestBody as unknown as Row), name });
-      return Promise.resolve({ data: { done: true } });
-    },
-    get: ({ name }: Record<string, never>) => {
-      const row = rows.get(String(name));
-      if (row === undefined) throw { code: 404 };
-      return Promise.resolve({ data: row });
-    },
-    patch: ({ name, requestBody }: Record<string, never>) => {
-      const row = rows.get(String(name));
-      if (row === undefined) throw { code: 404 };
-      // The service writes what it was told, to the row it was named. It never
-      // checks the caller's scope against the row's — that is our job.
-      rows.set(String(name), { ...row, ...(requestBody as unknown as Row) });
-      return Promise.resolve({ data: { done: true } });
-    },
-    delete: ({ name }: Record<string, never>) => {
-      if (!rows.delete(String(name))) throw { code: 404 };
-      return Promise.resolve({ data: { done: true } });
-    },
-    list: () => Promise.resolve({ data: {} }),
-    retrieve: ({ requestBody }: Record<string, never>) => {
-      const wanted = (requestBody as unknown as { scope: Record<string, string> }).scope;
-      const hits = [...rows.values()].filter((row) => exactScope(row.scope, wanted));
-      return Promise.resolve({ data: { retrievedMemories: hits.map((memory) => ({ memory })) } });
-    },
-    operations: { wait: () => Promise.resolve({ data: { done: true } }) },
-  };
-  const client = { projects: { locations: { reasoningEngines: { sessions: {}, memories } } } };
-  return {
-    client: client as never,
-    rows,
-    names: () => [...rows.keys()],
-    /** The one row there is, when a test means to assert on exactly one. */
-    only: (): Row => {
-      if (rows.size !== 1) throw new Error(`expected one row, found ${rows.size}`);
-      return [...rows.values()][0]!;
-    },
-  };
-}
-
-/** Scope matching as the service does it: same keys, same values, no subsets. */
-function exactScope(a: Record<string, string>, b: Record<string, string>): boolean {
-  const keys = Object.keys(a);
-  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
-}
 
 const bankStore = (options: Record<string, unknown> = {}) => {
   const bank = fakeBank();
@@ -510,6 +440,79 @@ describe('one entry id, two identities, two rows', () => {
     ]);
     expect(bank.rows.size).toBe(1);
     expect(['first', 'second']).toContain(bank.only().fact);
+  });
+});
+
+// ── 2c. A SCOPE PART THAT IS NOT TEXT ───────────────────────────────
+
+describe('a scope part that is not text is refused, never dropped (r3-61-adapters-memory-6)', () => {
+  // An app that derives a numeric tenant id from request data, in plain
+  // JavaScript or through `any`. The part used to be dropped, so every tenant
+  // shared the scope `{ principal }`: tenant 43 listed, read and erased tenant
+  // 42's memory. Against `fakeBank`, which matches scope exactly as the service does.
+  const numericTenant = (id: MemoryIdentity) =>
+    ({ tenant: Number(id.tenant), principal: id.principal } as unknown as Record<string, string>);
+  const ALICE_42: MemoryIdentity = { tenant: '42', principal: 'alice', conversationId: 'c1' };
+  const ALICE_43: MemoryIdentity = { tenant: '43', principal: 'alice', conversationId: 'c2' };
+
+  it('a numeric tenant id is refused by name, before anything is written or read', async () => {
+    const { store: s, bank } = bankStore({ scopeFor: numericTenant });
+    const error = await s.put(ALICE_42, entry('fact:pw', 'tenant 42 secret')).catch((e) => e);
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toContain(`scope part 'tenant'`);
+    // The key is named; the value, which addresses a tenant, is not.
+    expect((error as Error).message).not.toContain('42');
+    expect(bank.rows.size).toBe(0);
+  });
+
+  it('every operation refuses it — none reaches the bank under a narrowed scope', async () => {
+    const { store: s, bank } = bankStore({ scopeFor: numericTenant });
+    // The row tenant 42 wrote before this fix, under the narrowed scope that
+    // every tenant shared; planted directly, since such a write now refuses.
+    bank.rows.set(`${PARENT}/memories/planted`, {
+      name: `${PARENT}/memories/planted`,
+      fact: 'tenant 42 secret',
+      scope: { principal: 'alice' },
+      metadata: memory('fact:pw', 'tenant 42 secret', {}).metadata,
+    });
+    const calls: [string, () => Promise<unknown>][] = [
+      ['list', () => s.list(ALICE_43)],
+      ['search', () => s.search(ALICE_43, [], { text: 'secret' })],
+      ['get', () => s.get(ALICE_43, 'fact:pw')],
+      ['put', () => s.put(ALICE_43, entry('fact:pw', 'overwrite'))],
+      ['delete', () => s.delete(ALICE_43, 'fact:pw')],
+      ['forget', () => s.forget(ALICE_43)],
+    ];
+    for (const [op, call] of calls) {
+      await expect(call(), op).rejects.toThrow(/scope part 'tenant'/);
+    }
+    expect(bank.only().fact).toBe('tenant 42 secret');
+  });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a boolean', true],
+    ['an object', { id: 't1' }],
+  ])('%s is refused the same way', async (_kind, value) => {
+    const { store: s } = bankStore({ scopeFor: () => ({ tenant: 't1', principal: value }) });
+    await expect(s.list(IDENTITY)).rejects.toThrow(/scope part 'principal'/);
+  });
+
+  it('an empty key is refused too, rather than dropped', async () => {
+    const { store: s } = bankStore({ scopeFor: () => ({ '': 'x', principal: 'alice' }) });
+    await expect(s.list(IDENTITY)).rejects.toThrow(/scope part with an empty key/);
+  });
+
+  it('a caller whose scope is text sees no change: tenants "42" and "43" stay apart', async () => {
+    const { store: s, bank } = bankStore({
+      scopeFor: (id: MemoryIdentity) => ({ tenant: id.tenant!, principal: id.principal! }),
+    });
+    await s.put(ALICE_42, entry('fact:pw', 'tenant 42 secret'));
+    expect(bank.only().scope).toEqual({ tenant: '42', principal: 'alice' });
+    expect((await s.list(ALICE_43)).entries).toEqual([]);
+    expect(await s.get(ALICE_43, 'fact:pw')).toBeNull();
+    expect((await s.get(ALICE_42, 'fact:pw'))?.value).toBe('tenant 42 secret');
   });
 });
 
