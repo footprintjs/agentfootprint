@@ -20,20 +20,25 @@ import { RedactionRule } from 'footprintjs/advanced';
 import type { RedactionPolicy } from 'footprintjs';
 import { describe, expect, it } from 'vitest';
 
-import { ALL_EVENT_TYPES } from '../../src/events/registry.js';
-import { EventDispatcher } from '../../src/events/dispatcher.js';
-import { conversationRedaction } from '../../src/doors/security.js';
+import { ALL_EVENT_TYPES } from '../../events/registry.js';
+import { EventDispatcher } from '../../events/dispatcher.js';
+import { conversationRedaction } from '../../doors/security.js';
 import {
   FIELD_NAMES,
   keepKnownValues,
   LIBRARY_WORDS,
   servedString,
-} from '../../src/redaction/knownStrings.js';
-import { createRunRedaction, emitServed } from '../../src/redaction/runRedaction.js';
-import { eventServing, SERVED_PLACEHOLDER } from '../../src/redaction/served.js';
-import { namesAnything } from '../../src/redaction/policy.js';
-import type { EventMeta } from '../../src/events/types.js';
-import { adversarialStrings, locationsOf, NOT_KEPT, unknownStringsIn } from './fixture.js';
+} from '../../redaction/knownStrings.js';
+import { createRunRedaction, emitServed } from '../../redaction/runRedaction.js';
+import { eventServing, SERVED_PLACEHOLDER } from '../../redaction/served.js';
+import { namesAnything } from '../../redaction/policy.js';
+import type { EventMeta } from '../../events/types.js';
+import {
+  adversarialStrings,
+  locationsOf,
+  NOT_KEPT,
+  unknownStringsIn,
+} from '../../../test/redaction/fixture.js';
 
 const serve = (policy: RedactionPolicy | undefined, type: string, payload: unknown): unknown => {
   const rule = new RedactionRule(policy);

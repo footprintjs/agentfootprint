@@ -46,6 +46,58 @@ log records what each stage *wrote* — never when a boundary was *crossed*. Cal
 `recordRun()` before `run()`, or you are recording the next one.
 </Callout>
 
+### Save repeated context once
+
+Use `recordContextRun` when a saved run repeats the same rules, skill bodies,
+tool schemas, domain map or menu on many model calls. It captures the assembled
+context at each logical call, before cache/provider decorations; it does not change the request sent to the model
+or prove that a provider accepted it.
+
+The `ContextValueWriter` and `OpenContextValues` ports take a fresh value-table
+writer and its reader adapter. Foottrace's value table
+implements these ports. AgentFootprint has already served the captured values
+under the native run's policy, so the table preserves those values with an
+identity redactor. No second interning implementation is needed.
+
+<CodeFile path="examples/observability/27-context-values.ts" region="record" title="Record with the host's value-table adapter" />
+
+`toRecording()` is asynchronous on this recorder: it waits for content ids.
+The `ContextValueRecording` saved record holds each captured text/schema value once and each call's
+`added`, `removed` and `unchanged` change list. `applyContextChange` restores the
+ordered ids, including duplicate occurrences and reordering.
+`contextCallCommentary` narrates the changes once, for example “Context
+unchanged since call 3 (12 rules, 18 tools).” The CLI example demonstrates that
+sentence with a labelled synthetic fixture; `recordExample` runs the full
+recording path when a host supplies the concrete adapter.
+
+For a composition, name the instances whose sensitive context may be captured:
+`recordContextRun(pipeline, values, { members: [firstAgent, secondAgent] })`.
+This is explicit capture consent. Recording does not invoke UI translators to
+discover members. Each call is keyed by its native run and mount path, so
+parallel siblings do not inherit each other's context.
+
+An exact context subscription enables additional sensitive content for those
+instances until `stop()`. Wildcard listeners alone do not enable it. Once
+enabled, every sink receives the same served event. This is not a session
+authorization mechanism or a new whole-record redaction policy.
+
+Read the saved format with `readContextRecording(saved, readValueRecord)`.
+Only declared reference positions are expanded: literal `{ ref: ... }` data
+stays literal. The returned `recording` is decoded wire data for the ordinary
+recording reader to validate; `calls` carries validated `ContextCallChange` rows. The result is a
+`ReadContextRecording`, with a `ContextValueReader` for resolving one explicit
+reference at a time.
+New records also disclose `droppedEvents` and `firstRetainedEventIndex`; these
+remain unknown for an old record that did not carry them. Old records pass
+through unchanged.
+
+`ContextRunRecorder` owns the capture lifetime, and `RecordContextRunOptions`
+names any additional members. `ContextRecordingError` is a fixed refusal:
+missing capture is `capture-unavailable`; an omitted table value is
+`value-omitted`. Neither becomes an empty list or an unredacted inline fallback.
+The table owns storage limits. The reader bounds expansion and refuses
+dangling/overlapping references and malformed data.
+
 ### What a recording keeps of a vector
 
 A retrieval turn drags every retrieved entry's embedding through the

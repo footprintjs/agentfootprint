@@ -1,3 +1,4 @@
+import { recordModelContext } from '../../recorders/core/recordModelContext.js';
 /**
  * buildAgentMessageApiChart — the Agent (ReAct) form of the messageAPI
  * merge-tree, as ONE FLAT main chart (no inner LLM-call sub-box).
@@ -191,6 +192,12 @@ export function buildAgentMessageApiChart(deps: AgentMessageApiChartDeps): FlowC
       ...(toolSchemas.length > 0 && { tools: toolSchemas }),
       model,
     };
+
+    recordModelContext(scope, () => ({
+      iteration: scope.iteration,
+      systemPieces: (scope.systemPromptInjections ?? []) as readonly InjectionRecord[],
+      tools: toolSchemas,
+    }));
 
     // ── THE RECEIPT (9.91.0) ───────────────────────────────────────────
     // Minted immediately before the port is called, so it is committed in the
