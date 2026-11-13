@@ -15,12 +15,6 @@ import { openSubflow } from './subflowRecords.js';
 import { innerRunStore } from '../core/innerRunRecords.js';
 import { storedCauseFixture } from '../../test/trace-toolpack/storedCauseFixtures.js';
 
-// Instrument only the transport: every query still executes the actual public reader.
-vi.mock('foottrace/cause', async (original) => {
-  const actual = await original<typeof import('foottrace/cause')>();
-  return { ...actual, explain: vi.fn(actual.explain), attentionList: vi.fn(actual.attentionList) };
-});
-
 function fixture(complete = true) {
   const address = { logRunId: 'backward-output', drillPath: [] };
   const graph = createRecordGraph([
@@ -63,30 +57,70 @@ async function root(
 }
 
 describe('host-owned backward output', () => {
-  it('requests backward output in exactly one root query, and never in impact or attention', async () => {
-    const { graph, target } = fixture();
-    const tools = traceCauseTools(
-      { graph },
-      { includeBackward: true, maxCalls: 12, backward: { maxCalls: 7 } },
-    );
-    vi.mocked(explain).mockClear();
-    await callTraceTool(tools, 'root_cause', { nodeId: target });
-    expect(explain).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(explain).mock.calls[0]![2]).toMatchObject({
-      includeBackward: true,
-      maxCalls: 12,
-      backward: { maxCalls: 7 },
-    });
-    vi.mocked(explain).mockClear();
-    await callTraceTool(tools, 'impact', { nodeId: target });
-    expect(explain).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(explain).mock.calls[0]![2]).not.toHaveProperty('includeBackward');
-    vi.mocked(explain).mockClear();
-    vi.mocked(attentionList).mockClear();
-    await callTraceTool(tools, 'attention_list', { nodeIds: [target] });
-    expect(explain).not.toHaveBeenCalled();
-    expect(attentionList).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(attentionList).mock.calls[0]![1]).not.toHaveProperty('includeBackward');
+  it('matches one public query through the real graph port for root, impact and attention', async () => {
+    const original = fixture();
+    const calls: { operation: string; nodeId: string; aborted: boolean }[] = [];
+    const graph: CauseGraph = {
+      parents: (...args) => {
+        calls.push({ operation: 'parents', nodeId: args[0], aborted: args[1].signal.aborted });
+        return original.graph.parents(...args);
+      },
+      children: (...args) => {
+        calls.push({ operation: 'children', nodeId: args[0], aborted: args[1].signal.aborted });
+        return original.graph.children(...args);
+      },
+      attention: (...args) => {
+        calls.push({ operation: 'attention', nodeId: args[0], aborted: args[1].signal.aborted });
+        return original.graph.attention(...args);
+      },
+      gaps: (...args) => {
+        calls.push({ operation: 'gaps', nodeId: args[0], aborted: args[1].signal.aborted });
+        return original.graph.gaps(...args);
+      },
+    };
+    const hostOptions = { includeBackward: true, maxCalls: 12, backward: { maxCalls: 7 } };
+    const resolved = causeLimits(hostOptions);
+    const traversal = {
+      maxNodes: resolved.maxNodes,
+      maxDepth: resolved.maxDepth,
+      maxEdges: resolved.maxEdges,
+      maxCalls: resolved.maxCalls,
+      timeoutMs: resolved.timeoutMs,
+    };
+    const directions = { backward: resolved.backward, impact: resolved.impact };
+    const tools = traceCauseTools({ graph }, hostOptions);
+    for (const operation of ['root_cause', 'impact', 'attention_list'] as const) {
+      calls.length = 0;
+      const question =
+        operation === 'attention_list'
+          ? { nodeIds: [original.target] }
+          : { nodeId: original.target };
+      const response = JSON.parse(await callTraceTool(tools, operation, question));
+      const toolCalls = [...calls];
+      expect(toolCalls.length).toBeGreaterThan(0);
+      calls.length = 0;
+      // One direct public query is the baseline, including its actual port work.
+      // No module mock or private reader hook observes or replaces the reader.
+      const expected =
+        operation === 'attention_list'
+          ? await attentionList(graph, { ...traversal, nodeIds: [original.target] })
+          : await explain(graph, original.target, {
+              ...traversal,
+              ...directions,
+              ...(operation === 'root_cause' ? { includeBackward: true } : {}),
+            });
+      expect(toolCalls).toEqual(calls);
+      if (operation === 'root_cause') {
+        expect(response.finding).toEqual(expected);
+        expect(response.finding.backward.edges.length).toBeGreaterThan(0);
+      } else if (operation === 'impact') {
+        expect(response.finding).toEqual((expected as CauseResult).impact);
+        expect(response.finding).not.toHaveProperty('backward');
+      } else {
+        expect(response.finding).toEqual(expected);
+        expect(response.finding).not.toHaveProperty('backward');
+      }
+    }
   });
 
   it('omits output by default and with false, while true returns the public reader proof unchanged', async () => {
