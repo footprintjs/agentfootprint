@@ -18,7 +18,7 @@ import { unboundCallRefusal } from './bindings.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
-import { shownArgsOf } from '../../../../toolShownArgs.js';
+import { hiddenArgNames, shownArgsOf } from '../../../../toolShownArgs.js';
 import {
   markPrivateCheckIn,
   requirePrivateQuestionSupport,
@@ -138,11 +138,18 @@ export async function admitCheckInCall(
           )
         : undefined;
     const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
+    // The arguments the view hides from `shown`, by name, read from the same
+    // bound copy the view was applied to — the person is told what they
+    // cannot see, and the decision's record repeats it (`resume/checkIn.ts`).
+    // Frozen: the assembler and every listener share this one list.
+    const hiddenArgs = Object.freeze(hiddenArgNames(frame.tool, bound.args));
+    const hidden = hiddenArgs.length > 0 ? { hiddenArgs } : {};
     let evidence: CheckInRequest['evidence'];
     try {
       evidence = await deps.checkIn!.assembler({
         tool: { name: frame.tc.name, description: frame.tool.schema.description },
         args: shown,
+        ...hidden,
         ...(intent !== undefined && { intent }),
         iteration: frame.iteration,
         history: historyForEvidence,
@@ -159,6 +166,7 @@ export async function admitCheckInCall(
       id: bound.request.id,
       tool: frame.tc.name,
       args: shown,
+      ...hidden,
       ...(intent !== undefined && { intent }),
       evidence,
       ...(gateComponent !== undefined && { component: gateComponent }),

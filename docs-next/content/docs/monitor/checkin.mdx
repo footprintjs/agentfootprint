@@ -35,12 +35,27 @@ When the demand trips, `agent.run()` pauses BEFORE the tool executes and returns
 
 The `evidence` pack (`'standard'`) has four plain-named fields:
 
-- **`willDo`** — a plain-words claim: the tool description + the rendered args.
+- **`willDo`** — a plain-words claim: the tool description + the rendered args (as the tool's argument view shows them — see below).
 - **`read`** — what context this run consumed, one frame per piece (`system` rules, the `task`, `result`s from earlier tools).
 - **`drivers`** — which context drove THIS choice, ranked. The default scorer is deterministic and makes **zero LLM calls**; pass your own (e.g. an embedding-backed one wrapping `explainChoice`) via `.checkIn({ scorer })`.
 - **`trail`** — a compact grouped run-so-far summary.
 
 `evidence: 'minimal'` ships only `willDo` (zero cost). The whole pack survives `structuredClone` + JSON, so it can ride the checkpoint to another process.
+
+### When the tool hides an argument's value
+
+A tool can hide some argument values from everything the run shows (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`). A check-in on such a tool still asks the person, through that same view: `checkIn.args` shows a hidden value as `'REDACTED'`, and the person is told which values those are.
+
+```ts
+// a wire tool whose view hides `to`; the model proposed { to: 'acct-9', amount: 5000 }
+out.checkIn.args;            // { to: 'REDACTED', amount: 5000 }
+out.checkIn.hiddenArgs;      // ['to']
+out.checkIn.evidence.willDo; // 'Wire money. — with to=REDACTED, amount=5000. Values hidden from this view: to. The call runs with the real values.'
+```
+
+- **`hiddenArgs`** names the arguments the view hides — names only, never values, absent when nothing is hidden. It is read from the view itself, not from the shown text: an argument whose real value is the string `'REDACTED'` is not listed, and a hidden one always is. A screen should show it next to the arguments.
+- The built-in assemblers (`'standard'`, `'minimal'`) end `willDo` with that fixed sentence. A custom assembler is handed the same names (`input.hiddenArgs`) and writes its own words.
+- On approval the tool runs with the **real** values. The approval is bound to that exact call (the request id below), so the person approves the real call without seeing the hidden values — and the record says so: the `checkin.decision` event and `CheckInRecorder`'s decision record carry the same `hiddenArgs`.
 
 ### The ask can name the screen that collects the decision
 
@@ -67,7 +82,7 @@ The human answers with `checkInApproved({ request, by, note? })` or `checkInDecl
 
 <CodeFile path="examples/features/33-checkin.ts" region="decide" title="examples/features/33-checkin.ts (region: decide)" />
 
-Both the ask and the decision fire typed events — `agentfootprint.checkin.request` and `agentfootprint.checkin.decision` — that any recorder can observe via the emit channel, and the built-in `CheckInRecorder` captures them as a queryable audit trail (`getRequests()` / `getDecisions()` / `getStats()`). When the ask carried a `checkInComponent`, the decision event and the recorder's record additionally carry the `componentId` that collected the answer — the trace says which surface asked, while the decision itself stays the same structured fact.
+Both the ask and the decision fire typed events — `agentfootprint.checkin.request` and `agentfootprint.checkin.decision` — that any recorder can observe via the emit channel, and the built-in `CheckInRecorder` captures them as a queryable audit trail (`getRequests()` / `getDecisions()` / `getStats()`). When the ask carried a `checkInComponent`, the decision event and the recorder's record additionally carry the `componentId` that collected the answer — the trace says which surface asked, while the decision itself stays the same structured fact. When the tool's view hid values from the person, both also carry `hiddenArgs`, the names of those arguments — the record says the decision was given without seeing them.
 
 ### A decision answers one request, once
 

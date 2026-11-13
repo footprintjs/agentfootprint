@@ -1000,6 +1000,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   headroomChars: true,
   held: true,
   hidden: true,
+  hiddenArgs: true,
   hint: true,
   history: true,
   id: true,

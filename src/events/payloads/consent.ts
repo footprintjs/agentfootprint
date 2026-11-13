@@ -52,6 +52,16 @@ export interface CheckInDecisionPayload {
   readonly approved: boolean;
   readonly by: string;
   readonly note?: string;
+  /**
+   * The arguments the tool's view hid from the person when they decided — the
+   * names the request carried (`CheckInRequest.hiddenArgs`), so a later
+   * reader can tell this decision was given without seeing those values.
+   * Names only, never values. Absent when the view hid nothing. Read again
+   * from the tool the resumed call resolves to and the bound arguments the
+   * approval is tied to (`core/toolShownArgs.ts` · `hiddenArgNames`); a
+   * decision on a tool the resumed agent no longer has carries none.
+   */
+  readonly hiddenArgs?: readonly string[];
   /** The registered component that COLLECTED this decision (9.24.0) — the
    *  `componentId` the ask carried. Absent when the ask was prose-only. The
    *  decision itself is unchanged: a structured fact, never parsed from the

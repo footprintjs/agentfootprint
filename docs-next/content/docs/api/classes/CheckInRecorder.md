@@ -4,7 +4,7 @@ title: CheckInRecorder
 
 # Class: CheckInRecorder
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:95](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L95)
+Defined in: [src/recorders/core/CheckInRecorder.ts:100](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L100)
 
 A queryable store of every check-in ask + decision. Attach once; read after
 the run (or between runs — it accumulates across `agent.run()` calls until
@@ -35,7 +35,7 @@ const checkins = new CheckInRecorder();
 
 > **new CheckInRecorder**(`id?`): `CheckInRecorder`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:104](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L104)
+Defined in: [src/recorders/core/CheckInRecorder.ts:109](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L109)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Stable recorder id for idempotent attach/detach. Give distinct
 
 > `readonly` **id**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:96](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L96)
+Defined in: [src/recorders/core/CheckInRecorder.ts:101](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L101)
 
 #### Implementation of
 
@@ -68,7 +68,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:96](https://github.com/footpr
 
 > **getDecisions**(): readonly [`CheckInDecisionRecord`](/docs/api/interfaces/CheckInDecisionRecord)[]
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:138](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L138)
+Defined in: [src/recorders/core/CheckInRecorder.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L144)
 
 Every human decision captured, oldest first.
 
@@ -82,7 +82,7 @@ readonly [`CheckInDecisionRecord`](/docs/api/interfaces/CheckInDecisionRecord)[]
 
 > **getRequests**(): readonly [`CheckInRequestRecord`](/docs/api/interfaces/CheckInRequestRecord)[]
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:133](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L133)
+Defined in: [src/recorders/core/CheckInRecorder.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L139)
 
 Every check-in ask captured, oldest first.
 
@@ -96,7 +96,7 @@ readonly [`CheckInRequestRecord`](/docs/api/interfaces/CheckInRequestRecord)[]
 
 > **getStats**(): [`CheckInStats`](/docs/api/interfaces/CheckInStats)
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:143](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L143)
+Defined in: [src/recorders/core/CheckInRecorder.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L149)
 
 Roll-up counts. `pending` = asks still awaiting a decision.
 
@@ -110,7 +110,7 @@ Roll-up counts. `pending` = asks still awaiting a decision.
 
 > **onEmit**(`event`): `void`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L108)
+Defined in: [src/recorders/core/CheckInRecorder.ts:113](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L113)
 
 Fires for every `scope.$emit(name, payload)` call during a stage.
 Optional — implement only if you want to observe consumer-emitted
@@ -141,7 +141,7 @@ EmitRecorder in `src/lib/recorder/EmitRecorder.ts`
 
 > **reset**(): `void`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:156](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L156)
+Defined in: [src/recorders/core/CheckInRecorder.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L162)
 
 Drop all captured records (e.g. between runs when reusing the recorder).
 

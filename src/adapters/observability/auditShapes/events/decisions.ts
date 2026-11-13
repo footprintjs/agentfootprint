@@ -151,6 +151,8 @@ export function decisionsShapes() {
       approved: bool,
       by: str,
       note: charsMarker,
+      // Argument NAMES the tool's view hid from the person — never values.
+      hiddenArgs: listOf(str),
       componentId: str,
     }),
 

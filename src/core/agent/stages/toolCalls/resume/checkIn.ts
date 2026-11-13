@@ -5,6 +5,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { boundArgsOf } from '../access/bindings.js';
+import { hiddenArgNames } from '../../../../toolShownArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
@@ -88,6 +89,14 @@ export function buildResumeCheckIn(
     // stays exactly what it was — a structured `CheckInDecision`, never
     // parsed from prose — and the record now says which surface asked.
     const answeredVia = scope.pausedComponentId as string | undefined;
+    // Resolved against the party the checkpoint carries (9.92.0) — the tool
+    // an approval runs, and so the view whose hidden arguments the record
+    // names: the same rule over the same bound copy the request was built
+    // from (`access/checkInAdmission.ts`), so the record repeats the names
+    // the person was shown. Read from the tool and the bound arguments, not
+    // from a checkpoint field a holder could edit.
+    const resolved = links.resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
+    const hiddenArgs = resolved.tool === undefined ? [] : hiddenArgNames(resolved.tool, args);
     typedEmit(scope, 'agentfootprint.checkin.decision', {
       toolName,
       toolCallId,
@@ -96,6 +105,7 @@ export function buildResumeCheckIn(
       approved: decision.approved,
       by: decision.by,
       ...(decision.note !== undefined && { note: decision.note }),
+      ...(hiddenArgs.length > 0 && { hiddenArgs }),
       ...(answeredVia !== undefined && { componentId: answeredVia }),
     });
 
@@ -114,8 +124,6 @@ export function buildResumeCheckIn(
     const scriptSeen: ResumedCallFacts = {};
     if (decision.approved) {
       const env = scope.$getEnv();
-      // Resolved against the party the checkpoint carries (9.92.0).
-      const resolved = links.resolveTool(toolName, scope.pausedToolParty as ToolParty | undefined);
       const tool = resolved.tool;
       const dispatched = await links.resolveCredentialAndExecute(
         scope,

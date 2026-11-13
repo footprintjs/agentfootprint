@@ -6,7 +6,7 @@ title: CheckInAssembler
 
 > **CheckInAssembler** = (`input`) => [`CheckInEvidence`](/docs/api/interfaces/CheckInEvidence) \| `Promise`\<[`CheckInEvidence`](/docs/api/interfaces/CheckInEvidence)\>
 
-Defined in: [src/core/checkin.ts:504](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L504)
+Defined in: [src/core/checkin.ts:540](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L540)
 
 Builds the evidence pack for one check-in. Two are built in
 ([standardEvidenceAssembler](/docs/api/variables/standardEvidenceAssembler), [minimalEvidenceAssembler](/docs/api/variables/minimalEvidenceAssembler));

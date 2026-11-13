@@ -54,12 +54,33 @@ export interface CheckInRequest {
   /** The tool the agent wants to run (its name). */
   readonly tool: string;
   /**
-   * The arguments the call will run with: the model's proposal, with any value
-   * the inputs layer filled (a tool's `askOrAssume` `assume` rule) and any
-   * before-tool middleware rewrite applied — what a person approves is what
-   * runs.
+   * The arguments of the call, SHOWN THROUGH THE TOOL'S ARGUMENT VIEW: the
+   * model's proposal, with any value the inputs layer filled (a tool's
+   * `askOrAssume` `assume` rule) and any before-tool middleware rewrite
+   * applied, then the tool's view (`flowchartAsTool({ redact })`,
+   * `runbookAsTool({ redact })`). A value the view hides reads `'REDACTED'`
+   * here and its argument is named in {@link hiddenArgs}. The call runs with
+   * the REAL values, and the approval is bound to them through {@link id}: a
+   * person who approves a call with hidden values approves the real call
+   * without having seen those values. A tool without a view shows every
+   * value as it will run.
+   *
+   * @example a view hiding `to`
+   *   // args: { to: 'REDACTED', amount: 5000 }, hiddenArgs: ['to']
+   *   // on approval the tool runs with { to: 'acct-9', amount: 5000 }
    */
   readonly args: Readonly<Record<string, unknown>>;
+  /**
+   * The names of the arguments the tool's view hides from {@link args}, in
+   * argument order — what a screen tells the person they cannot see. Absent
+   * when nothing is hidden. Computed from the view itself
+   * (`core/toolShownArgs.ts` · `hiddenArgNames`), never from the shown text:
+   * an argument whose real value is the string `'REDACTED'` is not listed, and
+   * a hidden one always is. Names only; no hidden value travels here. The
+   * decision's record carries the same names
+   * (`CheckInDecisionPayload.hiddenArgs`).
+   */
+  readonly hiddenArgs?: readonly string[];
   /**
    * The model's stated reasoning for THIS call, when the assistant turn
    * carried text alongside the tool call. Omitted when the turn was a bare
@@ -84,8 +105,19 @@ export interface CheckInRequest {
  * {@link willDo} (zero cost); the `'standard'` assembler fills all four.
  */
 export interface CheckInEvidence {
-  /** Plain-words claim of what will happen: the tool description + the
-   *  rendered arguments. Always present. */
+  /**
+   * Plain-words claim of what will happen: the tool description + the
+   * arguments as {@link CheckInRequest.args} shows them, through the tool's
+   * view. When the view hides values, the built-in assemblers end it with one
+   * fixed sentence that says so and names the hidden arguments — the call
+   * still runs with the real values, to which the approval is bound. A custom
+   * assembler writes its own words; it is handed the same names
+   * (`CheckInAssemblerInput.hiddenArgs`). Always present.
+   *
+   * @example a view hiding `to`
+   *   'Wire money. — with to=REDACTED, amount=5000. Values hidden from this
+   *   view: to. The call runs with the real values.'
+   */
   readonly willDo: string;
   /** What context this run consumed so far — one frame per context piece
    *  (system rules, the user task, prior tool results). Absent under the
@@ -482,8 +514,12 @@ export const lexicalDriverScorer: CheckInScorer = ({ tool, units }) => {
 export interface CheckInAssemblerInput {
   /** The chosen tool — `name` for citations, `description` for `willDo`. */
   readonly tool: { readonly name: string; readonly description: string };
-  /** The proposed arguments. */
+  /** The proposed arguments, as the tool's view shows them
+   *  ({@link CheckInRequest.args}). */
   readonly args: Readonly<Record<string, unknown>>;
+  /** The arguments the tool's view hides from {@link args}
+   *  ({@link CheckInRequest.hiddenArgs}); absent when nothing is hidden. */
+  readonly hiddenArgs?: readonly string[];
   /** The model's stated reasoning, if any (assistant-turn text). */
   readonly intent?: string;
   /** The ReAct iteration this check-in fired on. */
@@ -525,14 +561,26 @@ function renderArgs(args: Readonly<Record<string, unknown>>): string {
   return parts.join(', ');
 }
 
+/**
+ * The fixed sentence a person reads when the tool's view hides values: it says
+ * that they are hidden, names them, and says what runs. Names only — the
+ * hidden values never reach it.
+ */
+function hiddenValuesSentence(hiddenArgs: readonly string[] | undefined): string {
+  if (hiddenArgs === undefined || hiddenArgs.length === 0) return '';
+  return `. Values hidden from this view: ${hiddenArgs.join(
+    ', ',
+  )}. The call runs with the real values.`;
+}
+
 /** Plain-words "what will happen" claim. */
-function buildWillDo(
-  tool: { readonly name: string; readonly description: string },
-  args: Readonly<Record<string, unknown>>,
-): string {
+function buildWillDo(input: CheckInAssemblerInput): string {
+  const { tool, args } = input;
   const desc = tool.description.trim() || tool.name;
   const rendered = renderArgs(args);
-  return rendered ? `${desc} — with ${rendered}` : desc;
+  return `${rendered ? `${desc} — with ${rendered}` : desc}${hiddenValuesSentence(
+    input.hiddenArgs,
+  )}`;
 }
 
 /**
@@ -610,7 +658,7 @@ function buildTrail(history: readonly LLMMessage[], iteration: number): CheckInT
 export const standardEvidenceAssembler: CheckInAssembler = async (input) => {
   const { tool, args, iteration, history, scorer, signal } = input;
   const units = unitsFromHistory(history);
-  const willDo = buildWillDo(tool, args);
+  const willDo = buildWillDo(input);
   const read = framesFromUnits(units);
   const trail = buildTrail(history, iteration);
   let drivers: readonly CheckInDriver[] = [];
@@ -627,7 +675,7 @@ export const standardEvidenceAssembler: CheckInAssembler = async (input) => {
 
 /** The `'minimal'` assembler — only `willDo`. Zero cost; no scorer call. */
 export const minimalEvidenceAssembler: CheckInAssembler = (input) => ({
-  willDo: buildWillDo(input.tool, input.args),
+  willDo: buildWillDo(input),
 });
 
 // ─── Config resolution (builder → runtime) ─────────────────────────────

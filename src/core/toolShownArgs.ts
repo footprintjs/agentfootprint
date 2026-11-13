@@ -23,7 +23,10 @@
  * real values. It is the form the RECORD may show: the dispatch path compares it
  * with the model's proposal (`changedArgKeys` below) and stamps the NAMES of
  * the keys that differ on `stream.tool_end` (`events/payloads.ts` ·
- * `ToolEndPayload`), never their values.
+ * `ToolEndPayload`), never their values. A check-in shows a person this form
+ * too, and names the arguments it hides (`hiddenArgNames` below →
+ * `CheckInRequest.hiddenArgs`), so an approval given on a hidden value is
+ * given knowingly and recorded as such.
  */
 import type { RedactionPolicy } from 'footprintjs';
 import { RedactionRule } from 'footprintjs/advanced';
@@ -82,6 +85,45 @@ export function shownArgsOf(tool: unknown, args: ToolArgs): ToolArgs {
     return Object.fromEntries(Object.keys(args).map((key) => [key, 'REDACTED']));
   }
 }
+
+/**
+ * The names of the arguments `tool`'s view hides in this call, in the order
+ * of `args`; empty when the tool carries no view or the view hides nothing.
+ * The ONE answer to "which values can a person or a record not see here" —
+ * the check-in request (`CheckInRequest.hiddenArgs`), the decision's record
+ * and the private-answer marks all ask it.
+ *
+ * Read from the VIEW, never from the shown text: a value the view replaced,
+ * removed or rebuilt (a nested field hidden inside it) is hidden. A value the
+ * view handed back unchanged is asked once more: the view is run on a copy in
+ * which each such value is a stand-in string, and a key whose stand-in did not
+ * come back is hidden too. Why: a hidden value that already equals the
+ * placeholder reads unchanged, and the text alone cannot tell it from an
+ * argument whose real value is the string `'REDACTED'`.
+ *
+ * Example — a view hiding `to`:
+ *   hiddenArgNames(tool, { to: 'acct-9', memo: 'REDACTED' })  → ['to']
+ *   hiddenArgNames(tool, { to: 'REDACTED', memo: 'rent' })    → ['to']
+ *
+ * Names only, plain strings: no value of `args` is copied into the answer.
+ */
+export function hiddenArgNames(tool: unknown, args: ToolArgs): readonly string[] {
+  if (!carriesArgumentView(tool)) return [];
+  const keys = Object.keys(args);
+  const shown = shownArgsOf(tool, args);
+  const passed = (key: string) => hasOwn(shown, key) && shown[key] === args[key];
+  const unchanged = keys.filter(passed);
+  if (unchanged.length === 0) return keys;
+  const standIn = (key: string) => `\u0000agentfootprint.shownArgs.standIn:${key}`;
+  const probe = shownArgsOf(tool, {
+    ...args,
+    ...Object.fromEntries(unchanged.map((key) => [key, standIn(key)])),
+  });
+  return keys.filter((key) => !passed(key) || !hasOwn(probe, key) || probe[key] !== standIn(key));
+}
+
+const hasOwn = (record: ToolArgs, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(record, key);
 
 /**
  * The names of the keys whose value differs between the proposal and the

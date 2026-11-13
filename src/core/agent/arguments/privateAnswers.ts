@@ -4,7 +4,7 @@ import {
   privateFieldsInForce,
 } from '../../../redaction/runRedaction.js';
 import type { PrivateFieldRoot, PrivateRecordFields } from '../../../redaction/privateFields.js';
-import { carriesArgumentView, changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
+import { carriesArgumentView, hiddenArgNames } from '../../toolShownArgs.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolArgs } from '../../../tools/runChain.js';
 import type { ArgumentAskState } from './ask.js';
@@ -82,7 +82,7 @@ function keptFacts(prior: PrivateRecordFields | undefined, before: unknown) {
 }
 
 function hiddenKeys(tool: unknown, args: ToolArgs): ReadonlySet<string> {
-  return new Set(tool === undefined ? [] : changedArgKeys(args, shownArgsOf(tool, args)));
+  return new Set(hiddenArgNames(tool, args));
 }
 
 /** Resolve index selectors to this exact call/iteration, never by matching answer values. */

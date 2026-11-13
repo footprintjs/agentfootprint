@@ -61,6 +61,11 @@ export interface CheckInDecisionRecord {
   readonly approved: boolean;
   readonly by: string;
   readonly note?: string;
+  /** The arguments the tool's view hid from the person when they decided
+   *  (`CheckInDecisionPayload.hiddenArgs`): this approval or decline was
+   *  given without seeing those values. Names only. Absent when none were
+   *  hidden. */
+  readonly hiddenArgs?: readonly string[];
   /** The registered component that collected this decision (9.24.0), when the
    *  ask carried one — which SURFACE the person answered through. */
   readonly componentId?: string;
@@ -124,6 +129,7 @@ export class CheckInRecorder implements CombinedRecorder {
         approved: p.approved,
         by: p.by,
         ...(p.note !== undefined && { note: p.note }),
+        ...(p.hiddenArgs !== undefined && { hiddenArgs: [...p.hiddenArgs] }),
         ...(p.componentId !== undefined && { componentId: p.componentId }),
       });
     }
