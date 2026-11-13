@@ -580,16 +580,16 @@ function buildTrail(history: readonly LLMMessage[], iteration: number): CheckInT
     // marker, never the sentence. Its sentence stays in `read`: the model
     // did read it (`unitsFromHistory`).
     if (m.role === 'tool' && m.toolName && m.notDispatched === undefined) {
-      // A tool result whose content advertises an error is marked not-ok. The
-      // synthetic strings the loop writes ("[permission denied…]", "declined by
-      // human…", "credential error…") all read as failures here.
-      const c = (m.content ?? '').toLowerCase();
-      const ok = !(
-        c.startsWith('[permission denied') ||
-        c.startsWith('declined by human') ||
-        c.startsWith('credential error') ||
-        c.startsWith('authorization required')
-      );
+      // `ok` is how the call SETTLED, as the dispatch recorded it on the
+      // message (`outcome`: refused / failed; `callOutcomeOf` owns the rule),
+      // never its first words: a tool that threw writes only its error text
+      // ("connection refused"), and a tool can return text that merely reads
+      // like a refusal ("declined by human: …"). A host notice standing in
+      // for a result (`toolResultOrigin`) is not a completed call either. A
+      // message from before the marker existed reads as completed, which is
+      // all its record can say. Example: a lookup that threw reads
+      // `{ name: 'lookup', ok: false }`, whatever its error text said.
+      const ok = m.outcome === undefined && m.toolResultOrigin === undefined;
       toolCalls.push({ name: m.toolName, ok });
     }
   }

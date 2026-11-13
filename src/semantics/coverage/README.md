@@ -448,8 +448,8 @@ defineTool({
   - a raise the library refuses — a tool that pauses on any RESUMED dispatch
     (an approved middleware ask, an approved check-in, granted credential
     consent — all three run `../../core/agent/stages/toolCalls/execution/resumedInvocation.ts` ·
-    `resolveCredentialAndExecute`, whose pause catch refuses every pause,
-    worded for a check-in): that call settles as an ERROR, and an errored
+    `resolveCredentialAndExecute`, whose pause catch refuses every pause
+    and names the door it came through): that call settles as an ERROR, and an errored
     call files no coverage on any door;
   - the unsettled-by-absence row (`../../core/agent/findings/README.md`): its rule needs
     the SERVED result to read as an absence, and a paused lookup is served

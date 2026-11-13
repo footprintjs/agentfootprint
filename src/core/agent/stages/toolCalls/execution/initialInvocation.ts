@@ -457,15 +457,14 @@ export async function invokeInitialTool(
               );
         // Returning a defined value triggers footprintjs pause —
         // the returned object becomes the checkpoint's pauseData.
-        return {
-          toolCallId: frame.tc.id,
-          toolName: frame.tc.name,
-          ...(awaitingInput !== undefined
-            ? { question: awaitingInput.question, awaitingInput }
-            : typeof err.data === 'object' && err.data !== null
-            ? (err.data as Record<string, unknown>)
-            : { data: err.data }),
-        };
+        return awaitingInput !== undefined
+          ? {
+              toolCallId: frame.tc.id,
+              toolName: frame.tc.name,
+              question: awaitingInput.question,
+              awaitingInput,
+            }
+          : toolPauseData(frame.tc, err.data);
       }
     }
     // A tool that threw still RAN, and may have opened the thing it
@@ -493,4 +492,39 @@ export async function invokeInitialTool(
         : String(err));
   }
   return undefined;
+}
+
+/**
+ * Keys of `pauseData` that are the LIBRARY's words, never a tool's: which
+ * call paused, and which consent gate or typed ask is open
+ * (`pause.ts` · `pauseDemandsDecision` reads the gate from `checkIn` / `ask`;
+ * `RunnerBase` reads `awaitingInput`). A gate opened by a tool's own data is
+ * a request the library never minted: no decision can answer it.
+ */
+const LIBRARY_PAUSE_KEYS = ['toolCallId', 'toolName', 'checkIn', 'ask', 'awaitingInput'];
+
+/**
+ * The checkpoint's `pauseData` for a tool's own `pauseHere(data)` /
+ * `askHuman(data)`: the REAL call's `toolCallId` / `toolName`, then the
+ * tool's fields minus the library's keys, so nothing a tool writes can rename
+ * the call or open a gate. (The real keys stay first, the order every plain
+ * pause has always serialized in.)
+ *
+ * @example a tool raising askHuman({ question: 'ok?', toolName: 'transfer_funds' })
+ *   from `lookup_weather` call `c1` pauses with
+ *   { toolCallId: 'c1', toolName: 'lookup_weather', question: 'ok?' }
+ */
+function toolPauseData(
+  tc: { readonly id: string; readonly name: string },
+  raised: unknown,
+): Record<string, unknown> {
+  const own: Record<string, unknown> = {};
+  if (typeof raised === 'object' && raised !== null) {
+    for (const [key, value] of Object.entries(raised)) {
+      if (!LIBRARY_PAUSE_KEYS.includes(key)) own[key] = value;
+    }
+  } else {
+    own.data = raised;
+  }
+  return { toolCallId: tc.id, toolName: tc.name, ...own };
 }

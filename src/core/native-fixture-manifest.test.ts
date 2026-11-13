@@ -34,6 +34,13 @@ const slots = new Set(['System Prompt', 'Messages']);
 function domainCommit(input: Commit): DomainCommit {
   const { idx: _idx, ...commit } = JSON.parse(JSON.stringify(input)) as Commit;
   for (const key of fields) delete commit.overwrite[key];
+  // Named delta (tool-outcome marker): a committed tool message whose call did
+  // not complete carries `outcome` (`execution/callOutcome.ts`). Only that key
+  // on a `role: 'tool'` history entry is admitted; everything else stays exact.
+  const history = commit.overwrite.history;
+  if (Array.isArray(history))
+    for (const m of history as Record<string, unknown>[])
+      if (m !== null && typeof m === 'object' && m.role === 'tool') delete m.outcome;
   const ask = commit.overwrite.argumentAsk;
   if (ask !== null && typeof ask === 'object' && !Array.isArray(ask))
     delete (ask as Record<string, unknown>).toolParties;

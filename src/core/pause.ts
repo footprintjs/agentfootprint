@@ -33,7 +33,7 @@ export interface RunnerPauseOutcome {
   readonly paused: true;
   /** Serializable checkpoint — store anywhere (Redis, Postgres, localStorage). */
   readonly checkpoint: FlowchartCheckpoint;
-  /** Data passed to `scope.$pause()` / `pauseHere()`. Consumer-typed. */
+  /** Data passed to `scope.$pause()` / `pauseHere()`; an Agent tool's pause names its real call and drops its `checkIn`/`ask`/`awaitingInput` keys. */
   readonly pauseData: unknown;
   /** Typed data collection; answers are values, never approval decisions. */
   readonly awaitingInput?: AwaitingInput;

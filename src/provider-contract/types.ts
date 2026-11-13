@@ -43,6 +43,20 @@ export interface LLMMessage {
    */
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
   /**
+   * For `role: 'tool'` only — how the call settled, as the dispatch recorded it,
+   * when it did not complete: `'refused'` (it never ran — a gate, a person or a
+   * missing credential stopped it — or the tool declared `status: 'denied'`) or
+   * `'failed'` (`execute` threw, its result was withheld, or the tool declared
+   * `'failure'` / `'invalid'`). Absent on a call that completed.
+   *
+   * `content` is whatever the model reads and a tool can write anything there,
+   * "declined by human" included, so a reader asking "did that call work?"
+   * reads this field, never the words (`core/checkin.ts` · `buildTrail`).
+   * Written by `core/agent/stages/toolCalls/execution/callOutcome.ts` · `callOutcomeOf`.
+   * JSON/checkpoint safe; never reaches a provider (`stripFrameworkFields`).
+   */
+  readonly outcome?: 'refused' | 'failed';
+  /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
    * tool_use blocks across iterations: when the next `complete()` includes
@@ -970,22 +984,8 @@ export interface PermissionChecker {
   readonly governs?: readonly PermissionCapability[];
 }
 
-/**
- * Does this checker ask to be consulted about `capability`? (9.11.0)
- *
- * `'tool_call'` is always true — it has been enforced since v2.4 and needs no
- * declaration. Everything else is true only when the checker named it.
- * Absence is NO.
- */
-export function checkerGoverns(
-  checker: PermissionChecker | undefined,
-  capability: PermissionCapability,
-): boolean {
-  if (!checker) return false;
-  if (capability === 'tool_call') return true;
-  return checker.governs?.includes(capability) === true;
-}
-
+// Lives beside the one reader of a checker's answer (`readPermissionDecision`).
+export { checkerGoverns } from './permissionDecision.js';
 // ─── Pricing Table ──────────────────────────────────────────────────
 
 export type TokenKind = 'input' | 'output' | 'cacheRead' | 'cacheWrite';
