@@ -18,10 +18,10 @@ import {
   AG_UI_RUN_FAILED,
   AG_UI_SUBAGENT_CANCELLED,
   AG_UI_SUBAGENT_UNFINISHED,
-  AG_UI_TOOL_FAILED,
   agUiSerializer,
   type AgUiSerializerOptions,
 } from '../../src/ag-ui/serializer.js';
+import { AG_UI_TOOL_FAILED, AG_UI_TOOL_NOT_EXECUTED } from '../../src/ag-ui/toolResultWords.js';
 import type { AgUiEvent } from '../../src/ag-ui/types.js';
 import { LLM_ERROR_SENTENCES } from '../../src/lib/humanizeLLMError.js';
 
@@ -1072,6 +1072,43 @@ describe('agUiSerializer — a failed tool call says only that it failed', () =>
       ),
     ]);
     expect(only(out, 'TOOL_CALL_RESULT')[0]).toMatchObject({ content: AG_UI_TOOL_FAILED });
+  });
+
+  it('a call that never reached its tool is "not executed", never "The tool failed."', () => {
+    const ended = (extra: Record<string, unknown>) =>
+      feed([
+        ...failing.slice(0, 2),
+        ev(
+          t('stream.tool_end'),
+          { toolCallId: 'c1', result: "Unknown tool 'db'", error: true, ...extra },
+          { rsid: 'tool-calls#2' },
+        ),
+      ]).out;
+    expect(only(ended({ entered: false }), 'TOOL_CALL_RESULT')[0]).toMatchObject({
+      content: AG_UI_TOOL_NOT_EXECUTED,
+    });
+    // A tool that ran and threw, and a record that does not say, keep the old words.
+    expect(only(ended({ entered: true }), 'TOOL_CALL_RESULT')[0]).toMatchObject({
+      content: AG_UI_TOOL_FAILED,
+    });
+    expect(only(ended({}), 'TOOL_CALL_RESULT')[0]).toMatchObject({ content: AG_UI_TOOL_FAILED });
+    // `toolErrors: 'served'` still sends the record's own result.
+    expect(
+      only(
+        feed(
+          [
+            ...failing.slice(0, 2),
+            ev(
+              t('stream.tool_end'),
+              { toolCallId: 'c1', result: "Unknown tool 'db'", error: true, entered: false },
+              { rsid: 'tool-calls#2' },
+            ),
+          ],
+          { toolErrors: 'served' },
+        ).out,
+        'TOOL_CALL_RESULT',
+      )[0]!.content,
+    ).toContain('Unknown tool');
   });
 
   it('a call that succeeded is unaffected', () => {

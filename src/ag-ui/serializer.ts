@@ -70,6 +70,7 @@ import type { RunTranslation } from '../hosting/protocolAdapter.js';
 import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
 import { agUiIdMinter } from './ids.js';
+import { failedCallWords } from './toolResultWords.js';
 import {
   AG_UI_PROTOCOL_VERSION,
   type AgUiAddress,
@@ -162,9 +163,11 @@ export interface AgUiSerializerOptions {
    */
   readonly reasoning?: boolean;
   /**
-   * What a FAILED tool call's result says. Default `'withheld'`: the fixed words
-   * "The tool failed." — the record's result for a failed call is the thrown
-   * text, which may hold a connection string, a path or a provider's response.
+   * What a FAILED tool call's result says. Default `'withheld'`: fixed words
+   * (`toolResultWords.ts`) — "The tool failed.", or "The call was not executed."
+   * for a call that never reached its tool (an unknown name, rejected
+   * arguments) — as the record's result for a failed call is the thrown text,
+   * which may hold a connection string, a path or a provider's response.
    * `'served'` sends the record's own result (still the served value: the
    * placeholder wherever a redaction policy selected one).
    */
@@ -196,9 +199,6 @@ export interface AgUiTranslation extends RunTranslation<AgUiEvent> {
    */
   suspension(awaiting?: 'person' | 'caller'): AgUiSuspension | undefined;
 }
-
-/** Said by `TOOL_CALL_RESULT` for a failed call, unless `toolErrors: 'served'`. */
-export const AG_UI_TOOL_FAILED = 'The tool failed.';
 
 /** Said by `RUN_ERROR` when the run's `error.fatal` is not one of the record's fixed sentences. */
 export const AG_UI_RUN_FAILED = 'The run failed.';
@@ -768,7 +768,7 @@ export function agUiSerializer(options: AgUiSerializerOptions): AgUiTranslation 
           messageId:
             call.n < 0 ? ids.next('result', address).id : ids.at('result', call.n, call.address),
           toolCallId: call.id,
-          content: failed ? AG_UI_TOOL_FAILED : resultText(payload.result),
+          content: failed ? failedCallWords(payload) : resultText(payload.result),
           role: 'tool',
           ...owned(scope, event),
         });

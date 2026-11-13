@@ -32,7 +32,8 @@ import {
   type EmptinessReading,
   type ReadContext,
 } from './facts/common.js';
-import { endedInError, itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
+import { itemAt, type CallsRead, type CoverageRead } from './facts/calls.js';
+import { endedInError, errorCounts } from './facts/errorCounts.js';
 import { heldChip } from './facts/checked.js';
 import { beforePausePointers, inViewPointers, inViewVars } from './facts/found.js';
 import type { PausedLegRead } from './facts/pausedLeg.js';
@@ -381,15 +382,13 @@ export function wrongLines(
   const lines: Sentence[] = checks.signals.map((s) => s.sentence);
   // Every call, not only the listed ones: a count is a judgement.
   const all = calls.all;
-  const count = (o: string) => all.filter((c) => c.fact.outcome === o).length;
-  // "failed" counts every call that ended in an error, whether or not its tool ran
-  // (`calls.ts` · `endedInError`); each call's own line says which.
-  const failed = all.filter(endedInError).length;
-  const refused = count('refused');
-  const declined = count('declined');
-  const notDispatched = count('not-dispatched');
+  // The same tally as `facts.errors` (`calls.ts` · `errorCounts`): a call that never
+  // reached its tool is "not executed", never "failed" (set 16).
+  const { failed, notExecuted, refused, declined, notDispatched } = errorCounts(all);
   const troubled = all.filter(
-    (c) => endedInError(c) || ['refused', 'declined', 'not-dispatched'].includes(c.fact.outcome),
+    (c) =>
+      endedInError(c) ||
+      ['not-executed', 'refused', 'declined', 'not-dispatched'].includes(c.fact.outcome),
   );
   if (troubled.length > 0) {
     lines.push(
@@ -397,6 +396,7 @@ export function wrongLines(
         vars: {
           n: n(troubled.length),
           failed: n(failed),
+          notExecuted: n(notExecuted),
           refused: n(refused),
           declined: n(declined),
           notDispatched: n(notDispatched),

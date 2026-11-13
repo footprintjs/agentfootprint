@@ -69,7 +69,8 @@ import {
 } from './facts/common.js';
 import { readAsked } from './facts/asked.js';
 import { readUnderstood } from './facts/understood.js';
-import { endedInError, MAX_CALLS, readCalls } from './facts/calls.js';
+import { MAX_CALLS, readCalls } from './facts/calls.js';
+import { errorCounts, NO_ERRORS } from './facts/errorCounts.js';
 import { answeringIteration, readInView } from './facts/inView.js';
 import { readCheckedRows } from './facts/checked.js';
 import { readPausedLeg, type BeforePauseCall } from './facts/pausedLeg.js';
@@ -539,7 +540,7 @@ function notToldAccount(
       standing: none(),
       limitsBlock: none(),
       limitsData: none(),
-      errors: { failed: 0, refused: 0, declined: 0, notDispatched: 0, withheld: 0 },
+      errors: NO_ERRORS,
       checks: { reachable: [], unreachable: [], notApplicable: [] },
     },
     rows,
@@ -661,9 +662,6 @@ export function buildAccount(
     row('how-sure', howSure.lines),
     row('anything-wrong', wrong, { chips: wrongChips }),
   ];
-  // Counts are judgements: over EVERY call. Only the listing (`facts.calls`) is capped.
-  const all = calls.all.map((c) => c.fact);
-  const count = (o: string) => all.filter((c) => c.outcome === o).length;
   const told: AnswerAccount = {
     kind: 'agentfootprint/answer-account',
     shape: 1,
@@ -686,13 +684,7 @@ export function buildAccount(
       standing: howSure.standing,
       limitsBlock: limits,
       limitsData,
-      errors: {
-        failed: calls.all.filter(endedInError).length,
-        refused: count('refused'),
-        declined: count('declined'),
-        notDispatched: count('not-dispatched'),
-        withheld: all.filter((c) => c.withheldBy !== undefined).length,
-      },
+      errors: errorCounts(calls.all),
       checks: {
         reachable: checks.reachable,
         unreachable: checks.unreachableChecks,

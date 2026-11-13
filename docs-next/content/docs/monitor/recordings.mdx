@@ -336,7 +336,9 @@ to run reboot_host; the call was not executed.", read from
 `stream.tool_end.entered`. A tool that ran and threw reads "It ran crash, and
 the tool reported an error.". A recording made before `entered` existed does
 not say which, so an error there reads "It asked to run crash; the call ended
-in an error.".
+in an error.". The "Anything wrong" count says such a call as "not executed",
+never "failed": "1 tool call did not run cleanly: 0 failed, 1 not executed, 0
+refused by a rule, 0 declined by a person, 0 not run.".
 
 ## How far an answer stands
 

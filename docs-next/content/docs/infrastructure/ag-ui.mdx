@@ -275,10 +275,13 @@ request's `threadId` and `runId`, and three decisions that are yours:
   ```
 
   `custom: {}` sends no `CUSTOM` events at all.
-- **`toolErrors`** — what a FAILED tool call's result says. By default the fixed
-  words "The tool failed." (`'withheld'`): the record's result for a failed call is
-  the thrown text, which may hold a connection string, a path or a provider's
-  response. `'served'` sends the record's own result.
+- **`toolErrors`** — what a FAILED tool call's result says. By default fixed
+  words (`'withheld'`): "The tool failed.", or "The call was not executed." for a
+  call that never reached its tool (a tool name that does not exist, arguments
+  the schema rejected, a blocked credential: `stream.tool_end.entered: false`).
+  The record's result for a failed call is the thrown text, which may hold a
+  connection string, a path or a provider's response. `'served'` sends the
+  record's own result.
 - **`reasoning`** — the model's chain of thought (`REASONING_*`), from the served
   thinking events. Off unless you set `reasoning: true`; whether a person may read
   it is a product decision.

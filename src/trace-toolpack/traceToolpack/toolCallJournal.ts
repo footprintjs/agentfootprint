@@ -458,6 +458,9 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
       const invalid = eventsOf('agentfootprint.validation.args_invalid').some(
         (event) => event.payload.toolCallId === toolCallId,
       );
+      const declined = eventsOf('agentfootprint.checkin.decision').some(
+        (event) => event.payload.toolCallId === toolCallId && event.payload.approved === false,
+      );
       let outcome: string;
       if (settled !== undefined) {
         outcome =
@@ -473,6 +476,16 @@ function buildInspectToolCall(artifacts: TraceToolpackArtifacts, reader: ToolCal
             : ran === 'not-run'
             ? `error — call '${toolCallId}' was not executed: the tool was never entered`
             : 'error — this record does not say whether the tool ran';
+      } else if (ran === 'not-run') {
+        // Never "ok" for a call that did not run and carries no error: a
+        // person's decline or a rule's refusal is said first, then the fact.
+        outcome = declined
+          ? `declined — a person was asked at the check-in; call '${toolCallId}' never reached its tool`
+          : end?.payload.notExecuted === true
+          ? `refused by a rule — call '${toolCallId}' never reached its tool`
+          : `not executed — call '${toolCallId}' never reached its tool`;
+      } else if (ran === 'not-recorded') {
+        outcome = '⚠ unknown — this record does not say whether the tool ran';
       } else if (checkIn && end === undefined) {
         outcome = `paused — a check-in asked a human and call '${toolCallId}' has no recorded end`;
       } else if (facts.result !== undefined) {

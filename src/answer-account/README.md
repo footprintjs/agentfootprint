@@ -287,11 +287,55 @@ the tool ran. "Nothing to report: none of the tool calls ran."
 to report: no tool call returned a result in this record."
 (`notChecked.noResults@1`). The long-list line follows the same rule
 (`notChecked.notListed@1` or `notChecked.notListed.noResults@1`).
-`facts.errors.failed` and the "Anything wrong" count still count every call
-that ended in an error (`facts/calls.ts` · `endedInError`); each call's own
-line says whether its tool ran. Example, an unknown tool name:
+The "Anything wrong" count gives a call that never reached its tool its own
+count, "not executed" (`wrong.errors@2`), and never counts it as "failed":
+"failed" is a tool that ran and ended in an error (`failed`) or an error on a
+record that does not say (`ended-in-error`). `facts.errors` holds the same
+tally (`failed`, the new `notExecuted`, …), read by both from one function,
+`facts/errorCounts.ts` · `errorCounts`, so the data and the line cannot
+disagree. The words live in `didItRunTemplates.ts`. Example, an unknown tool
+name:
 
 ```text
   It asked to run reboot_host; the call was not executed.  ⟨checked.notExecuted@1 · library · recorded⟩
+  Nothing to report: none of the tool calls ran.  ⟨notChecked.noneRan@1 · library · not-applicable⟩
   reboot_host did not run, so it found nothing.  ⟨found.notExecuted@1 · library · recorded⟩
+  1 tool call did not run cleanly: 0 failed, 1 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.  ⟨wrong.errors@2 · library · recorded⟩
 ```
+
+A `tool_end` leaf that is present but not a boolean (a hand-edited record) is
+not a value any writer writes: `toolRanOf` reads it as a record that does not
+say, and with no `error` beside it the call's outcome is `unknown` ("how the
+call ended is not recorded"), never "It ran". A redaction placeholder on one of
+these leaves is read the same way, earlier, by `keptOut`.
+
+**Not covered yet.** These readers still answer "did this call run?" without
+asking `toolRanOf`. They are part of the planned change "one answer to: did
+this call run", which builds on this one:
+
+- `adapters/observability/auditBounding.ts` · `createToolRunTracker`, and the
+  OpenTelemetry adapter's `ranTools` (filled in `otel/events/dispatch.ts`,
+  held in `otel/turns/state.ts`) and `otel/content/tools.ts` · `toolContent`:
+  they treat a call as run when its
+  bracket has no `error` and no `notExecuted`. A call declined on resume
+  (a check-in or an ask) was never entered and carries no `error` (it reads
+  `{ entered: false }`), so they count it as run, and the OpenTelemetry
+  adapter exports its arguments and its "declined by human" text as tool
+  content.
+- The approver's trail, `core/checkin.ts` · `buildTrail`: each
+  `CheckInTrail.toolCalls[].ok` is read from the history message's text, so an
+  unknown tool name reaches the approver as `ok: true`. It is built from
+  history, which does not carry `tool_end`; the per-call outcome on history
+  comes with pull request 343 (`LLMMessage.outcome`), and is open until it
+  merges. Only the summary sentence changed here ("1 tool call over 2
+  iterations": calls, never runs).
+- Projections that drop `entered`: `recorders/observability/BoundaryRecorder.ts`
+  (the `tool.end` domain event copies `error`, never `entered`) and
+  `bug-report/transcript.ts` (a step copies `error`, drops `entered`). Lens,
+  the step graph and a bug report still show a call that never reached its
+  tool as an errored tool step, the same as one that ran and threw.
+- The account's rows before a pause (`facts/pausedLeg.ts`, read by
+  `facts/checked.ts` · `checkedBeforePauseBlock`): they are read from committed
+  history, which carries no `tool_end`, so an unknown tool name before a pause
+  reads "the model read what came back from reboot_host; the tool did not say
+  what it checked."

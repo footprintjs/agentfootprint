@@ -341,18 +341,6 @@ interface Outcome {
 /** The `tool_end` fields that say how a call ended — read by `outcomeOf`. */
 const OUTCOME_FIELDS = ['notDispatched', 'notExecuted', 'entered', 'error'] as const;
 
-/**
- * The calls that ended in an error — the one list both counts read
- * (`facts.errors.failed`, the "Anything wrong" line). A call that never
- * reached its tool counts when its bracket carries `error` (an unknown name);
- * one a person declined on resume, with no error, does not.
- */
-export function endedInError(call: CallRead): boolean {
-  const outcome = call.fact.outcome;
-  if (outcome === 'failed' || outcome === 'ended-in-error') return true;
-  return outcome === 'not-executed' && call.end?.payload.error === true;
-}
-
 function outcomeOf(
   ctx: ReadContext,
   byCall: CallIndex,
@@ -407,9 +395,12 @@ function outcomeOf(
   if (end === undefined) return { outcome: 'unknown' };
   // No rule and no person stopped it: whether its tool ran is the record's
   // own word (`entered`), never inferred from `error`.
+  // A leaf no writer writes (`toolRanOf` reads `'not-recorded'`) with no `error`
+  // says nothing about how the call ended: not guessed, as a kept-out field.
   const ran = toolRanOf(end.payload);
   if (ran === 'not-run') return { outcome: 'not-executed' };
   if (end.payload.error === true) return { outcome: ran === 'ran' ? 'failed' : 'ended-in-error' };
+  if (ran === 'not-recorded') return { outcome: 'unknown' };
   const by = str(afterDeny?.payload.middleware);
   return afterDeny !== undefined
     ? { outcome: 'ran', ruleEvent: afterDeny, ...(by !== undefined && { withheldBy: by }) }

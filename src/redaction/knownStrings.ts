@@ -1445,8 +1445,7 @@ export function servedString(value: string): string {
   return value === SERVED_PLACEHOLDER || has(WORDS, value) ? value : SERVED_PLACEHOLDER;
 }
 
-/** A walk deeper than this is not a record's data: served as the placeholder. */
-const MAX_DEPTH = 64;
+const MAX_DEPTH = 64; // A walk deeper than this is not a record's data: served as the placeholder.
 
 /**
  * THE RULE — `value` with every string that is not a library word served as

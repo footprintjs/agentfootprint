@@ -80,10 +80,17 @@ describe('withEntered — the writer', () => {
 });
 
 describe('toolRanOf — a saved record is data', () => {
-  it('a leaf that is not a boolean reads as absent: it never proves the tool ran', () => {
+  it('a leaf that is not a boolean is a record that does not say: it never proves the tool ran', () => {
     expect(toolRanOf({ error: true, entered: 'true' })).toBe('not-recorded');
     expect(toolRanOf({ error: true, entered: 1 })).toBe('not-recorded');
-    expect(toolRanOf({ error: 'yes', entered: 'no' })).toBe('ran');
+    expect(toolRanOf({ error: 'yes', entered: 'no' })).toBe('not-recorded');
     expect(toolRanOf({ notExecuted: 'true', error: true })).toBe('not-recorded');
+    // With no `error` at all, too: a placeholder or a hand-edited stamp is not "it returned".
+    expect(toolRanOf({ entered: 'false' })).toBe('not-recorded');
+    expect(toolRanOf({ entered: '[REDACTED]' })).toBe('not-recorded');
+    expect(toolRanOf({ error: 'true' })).toBe('not-recorded');
+    expect(toolRanOf({ notExecuted: 'true' })).toBe('not-recorded');
+    // A boolean `false` leaf is a value a reader can read: it is not a gap.
+    expect(toolRanOf({ error: false })).toBe('ran');
   });
 });

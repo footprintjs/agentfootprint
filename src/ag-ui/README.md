@@ -17,7 +17,9 @@ Every value in an AG-UI event comes from a served event, from the record's
 address (`runtimeStageId`, `subflowPath` — never selected by a policy), or from
 the AG-UI request's own ids. The record's own `runId` is never written (it
 counts every run the process made); a failed tool call's result is the fixed
-words unless the app chose `toolErrors: 'served'`; a tool's progress `payload`
+words unless the app chose `toolErrors: 'served'` ("The tool failed.", or "The
+call was not executed." for a call that never reached its tool, read by the one
+reader `semantics/toolRan.ts` · `toolRanOf` — `toolResultWords.ts`); a tool's progress `payload`
 goes out only when the app lists it. Every id is minted
 by `ids.ts` from that address under the request's `runId`: injective, unique
 across a thread, and the same with or without a policy.

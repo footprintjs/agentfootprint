@@ -295,6 +295,7 @@
   },
   "errors": {
    "failed": 0,
+   "notExecuted": 0,
    "refused": 0,
    "declined": 0,
    "notDispatched": 0,

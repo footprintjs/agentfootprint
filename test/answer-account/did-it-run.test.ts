@@ -15,8 +15,9 @@
  *
  * Test types: SCENARIO (real runs, each case of the contract), REGRESSION
  * (the byte law: a success keeps its bytes), BOUNDARY (a record that does not
- * say), INTEGRATION (the ledger an answer check reads; a resumed door; the
- * trace toolpack's call journal; the summary an approver reads).
+ * say; a stamp that is not a boolean), INTEGRATION (the ledger an answer
+ * check reads; a resumed door; the trace toolpack's call journal; the
+ * chat-interface door; the summary an approver reads).
  */
 import { describe, expect, it } from 'vitest';
 
@@ -37,6 +38,9 @@ import { accountForAnswer } from '../../src/answer-account/account.js';
 import type { AnswerAccount, RowId } from '../../src/answer-account/types.js';
 import type { Recording } from '../../src/recorders/observability/recordRun.js';
 import type { TraceToolpackArtifacts } from '../../src/trace-toolpack/types.js';
+import { agUiSerializer } from '../../src/ag-ui/serializer.js';
+import { AG_UI_TOOL_FAILED, AG_UI_TOOL_NOT_EXECUTED } from '../../src/ag-ui/toolResultWords.js';
+import type { AgUiEvent } from '../../src/ag-ui/types.js';
 import { pausedRequest } from '../helpers/pausedRequest.js';
 import { assertP1 } from './helpers.js';
 
@@ -148,6 +152,12 @@ describe('a call that never reached its tool — "It asked to run {tool}; the ca
     expect(rowText(account, 'not-checked')).toEqual([
       'Nothing to report: none of the tool calls ran.',
     ]);
+    // The same account never contradicts itself: the count line says "not executed",
+    // never "failed", and never "0" of what the lines above just said.
+    expect(rowText(account, 'anything-wrong')).toContain(
+      '1 tool call did not run cleanly: 0 failed, 1 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.',
+    );
+    expect(account.facts.errors).toMatchObject({ failed: 0, notExecuted: 1 });
   });
 
   it('arguments the schema rejects', async () => {
@@ -188,7 +198,38 @@ describe('a tool that ran and threw — "It ran {tool}, and the tool reported an
     expect(rowText(account, 'not-checked')).toEqual([
       'Nothing to report: no tool call returned a result in this record.',
     ]);
-    expect(account.facts.errors.failed).toBe(1);
+    expect(account.facts.errors).toMatchObject({ failed: 1, notExecuted: 0 });
+    expect(rowText(account, 'anything-wrong')).toContain(
+      '1 tool call did not run cleanly: 1 failed, 0 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.',
+    );
+  });
+});
+
+describe('the long-list line follows the same rule (more calls than the account lists)', () => {
+  // The account lists the first five calls; the sixth, the only one that returned, is not listed.
+  const six = (name: string, args: Record<string, unknown> = {}): Call[] => [
+    ...[1, 2, 3, 4, 5].map((i) => ({ id: `c${i}`, name, args })),
+    { id: 'ok1', name: 'lookup', args: { id: 'r1' } },
+  ];
+
+  it('five tools that ran and threw, then one that returned: "returned a result", never "ran"', async () => {
+    const { entered, account } = await runAndRead(six('crash'));
+    expect(entered.crash).toBe(5);
+    expect(rowText(account, 'not-checked')).toContain(
+      'None of the tool calls listed here returned a result; 1 call that did is among the ones not listed.',
+    );
+    expect(rowText(account, 'not-checked').join('\n')).not.toContain('listed here ran');
+  });
+
+  it('five unknown tool names, then one that returned: "none of the listed ran" is true', async () => {
+    const { entered, account } = await runAndRead(six('reboot_host'));
+    expect(entered).toEqual({ lookup: 1, crash: 0, billing: 0 });
+    expect(rowText(account, 'not-checked')).toContain(
+      'None of the tool calls listed here ran; 1 call that ran is among the ones not listed.',
+    );
+    expect(rowText(account, 'anything-wrong')).toContain(
+      '5 tool calls did not run cleanly: 0 failed, 5 not executed, 0 refused by a rule, 0 declined by a person, 0 not run.',
+    );
   });
 });
 
@@ -246,6 +287,21 @@ describe('a record that does not say (written before `entered`)', () => {
     expect(rowText(account, 'checked')).toEqual([
       'It asked to run reboot_host; the call ended in an error.',
     ]);
+    expect(JSON.stringify(account.rows)).not.toContain('It ran');
+  });
+
+  it('a stamp that is not a boolean (a hand-edited record) proves nothing: never "It ran"', async () => {
+    const { recording } = await runAndRead([{ id: 'u1', name: 'reboot_host', args: {} }]);
+    const edited = {
+      ...recording,
+      events: recording.events.map((e) => {
+        if (!String(e.type).endsWith('stream.tool_end')) return e;
+        const { error: _error, ...payload } = e.payload as Payload;
+        return { ...e, payload: { ...payload, entered: 'false' } };
+      }),
+    } as Recording;
+    const account = accountForAnswer(edited);
+    expect(account.facts.calls[0]).toMatchObject({ outcome: 'unknown' });
     expect(JSON.stringify(account.rows)).not.toContain('It ran');
   });
 });
@@ -364,7 +420,7 @@ describe('a resumed door writes the same field', () => {
     const { recording } = await resumed(true);
     const account = accountForAnswer(recording);
     expect(account.facts.calls.find((c) => c.toolCallId === 'b1')?.outcome).toBe('not-executed');
-    expect(account.facts.errors.failed).toBe(1);
+    expect(account.facts.errors).toMatchObject({ failed: 0, notExecuted: 1 });
     expect(JSON.stringify(account.rows)).not.toContain('It ran billing');
   });
 });
@@ -390,6 +446,72 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
     expect(out).not.toContain('the tool threw');
   });
 
+  it('a rule refused it: never "outcome: ok" for a call that did not run', async () => {
+    const { list } = tools();
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          { toolCalls: [{ id: 'p1', name: 'lookup', args: { id: 'a' } }] },
+          { content: 'Done.' },
+        ] as never,
+      }),
+      model: 'mock',
+      permissionChecker: {
+        name: 'deny-all',
+        check: async () => ({ result: 'deny', rationale: 'policy' }),
+      },
+    } as never)
+      .tools(list)
+      .build();
+    const recorder = recordRun(agent);
+    await agent.run({ message: 'go' });
+    recorder.stop();
+    const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+    expect(ends(recording)[0]).toMatchObject({ notExecuted: true });
+    const out = await journal(recording, 'p1');
+    expect(out).toContain("ran with: nothing — call 'p1' was never executed.");
+    expect(out).toContain("outcome: refused by a rule — call 'p1' never reached its tool");
+    expect(out).not.toContain('outcome: ok');
+  });
+
+  it('a person declined its check-in: the decline is said first, never "outcome: ok"', async () => {
+    let ran = 0;
+    const gated = defineTool({
+      name: 'gated',
+      description: 'asks a person first',
+      inputSchema: { type: 'object', properties: {} },
+      checkIn: 'always',
+      execute: () => {
+        ran += 1;
+        return 'done';
+      },
+    });
+    const agent = Agent.create({
+      provider: mock({
+        replies: [{ toolCalls: [{ id: 'g1', name: 'gated', args: {} }] }, { content: 'Done.' }],
+      }),
+      model: 'mock',
+    })
+      .tool(gated)
+      .build();
+    const recorder = recordRun(agent);
+    const paused = (await agent.run({ message: 'go' })) as { checkpoint?: unknown };
+    await agent.resume(
+      paused.checkpoint as never,
+      checkInDeclined({ request: pausedRequest(paused), by: 'reviewer' }),
+    );
+    recorder.stop();
+    const recording = JSON.parse(JSON.stringify(recorder.toRecording())) as Recording;
+    expect(ran).toBe(0);
+    expect(ends(recording).at(-1)).toMatchObject({ entered: false });
+    const out = await journal(recording, 'g1');
+    expect(out).toContain("ran with: nothing — call 'g1' was never executed.");
+    expect(out).toContain(
+      "outcome: declined — a person was asked at the check-in; call 'g1' never reached its tool",
+    );
+    expect(out).not.toContain('outcome: ok');
+  });
+
   it('a tool that ran and threw keeps its words; an old record does not say', async () => {
     const { recording } = await runAndRead([{ id: 't1', name: 'crash', args: {} }]);
     expect(await journal(recording, 't1')).toContain(
@@ -398,6 +520,34 @@ describe('the trace toolpack reads the same answer (inspect_tool_call)', () => {
     expect(await journal(writtenBeforeEntered(recording), 't1')).toContain(
       'outcome: error — this record does not say whether the tool ran',
     );
+  });
+});
+
+describe('the chat-interface door (AG-UI) asks the same reader', () => {
+  it('an unknown tool name: "The call was not executed.", never "The tool failed."', async () => {
+    const { list } = tools();
+    const agent = Agent.create({
+      provider: mock({
+        replies: [
+          {
+            toolCalls: [
+              { id: 'u1', name: 'reboot_host', args: {} },
+              { id: 't1', name: 'crash', args: {} },
+            ],
+          },
+          { content: 'Done.' },
+        ] as never,
+      }),
+      model: 'mock',
+    })
+      .tools(list)
+      .build();
+    const serializer = agUiSerializer({ threadId: 'thread', runId: 'run' });
+    const out: AgUiEvent[] = [];
+    agent.on('*', (event) => out.push(...serializer.event(event as never)));
+    await agent.run({ message: 'go' });
+    const results = out.filter((e) => e.type === 'TOOL_CALL_RESULT') as { content?: string }[];
+    expect(results.map((r) => r.content)).toEqual([AG_UI_TOOL_NOT_EXECUTED, AG_UI_TOOL_FAILED]);
   });
 });
 

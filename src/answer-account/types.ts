@@ -447,11 +447,20 @@ export interface AnswerFacts {
   readonly limitsData: AccountFact<LimitsDataFact>;
   readonly errors: {
     /**
-     * Every call that ended in an error: `failed`, `ended-in-error`, and a
-     * `not-executed` call whose bracket carries `error` (`calls.ts` ·
-     * `endedInError`). Each call's `outcome` says whether its tool ran.
+     * Calls that ended in an error and are not known not to have run:
+     * `failed` (the tool ran) and `ended-in-error` (the record does not say)
+     * — `calls.ts` · `endedInError`. A call that never reached its tool is
+     * never counted here; it is `notExecuted`.
      */
     readonly failed: number;
+    /**
+     * Calls whose tool's function was never entered and that no rule or
+     * person stopped (`outcome: 'not-executed'`: an unknown tool name,
+     * rejected arguments, a blocked credential). The "Anything wrong" line
+     * says them as "{n} not executed". Example: the model calls
+     * `reboot_host`, which no tool is named → `notExecuted: 1, failed: 0`.
+     */
+    readonly notExecuted: number;
     readonly refused: number;
     readonly declined: number;
     readonly notDispatched: number;

@@ -33,6 +33,7 @@
  * `tool` means "the tool named by the `tool` var".
  */
 
+import { DID_IT_RUN_TEMPLATES } from './didItRunTemplates.js';
 import { HOW_SURE_REASON_TEMPLATES } from './howSureReasonTemplates.js';
 import { t, type AccountTemplate } from './templateEntry.js';
 
@@ -166,11 +167,6 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'checked.silent': t('{{tool:code}} declared its limits but did not say what it checked.'),
   'checked.undeclared': t('It ran {{tool:code}}. The tool did not say what it checked.'),
   'checked.failed': t('It ran {{tool:code}}, and the tool reported an error.'),
-  // Set 16: "It ran" only when the record shows the tool ran (`tool_end.entered`). A call that
-  // never reached its tool (an unknown name, rejected arguments, a blocked credential), and an
-  // error on a record that does not say (written before `entered`), get words true of them.
-  'checked.notExecuted': t('It asked to run {{tool:code}}; the call was not executed.'),
-  'checked.endedInError': t('It asked to run {{tool:code}}; the call ended in an error.'),
   'checked.refused': t('It asked to run {{tool:code}}, and a rule named {{by:code}} refused it.'),
   'checked.refused.unnamed': t('It asked to run {{tool:code}}, and a rule refused it.'),
   'checked.declined': t('It asked to run {{tool:code}}; a person was asked and declined.'),
@@ -216,12 +212,6 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
   'notChecked.noCalls': t('Nothing to report: no tool ran.'),
   'notChecked.noneRan': t('Nothing to report: none of the tool calls ran.'),
-  // Set 16: no call returned a result, and at least one of them may have run (`facts/checked.ts`
-  // · `knownNotRun`) — "none ran" would be false of a tool that ran and threw.
-  'notChecked.noResults': t('Nothing to report: no tool call returned a result in this record.'),
-  'notChecked.notListed.noResults': t(
-    "None of the tool calls listed here returned a result; {{count:n,'call that did is','calls that did are'}} among the ones not listed.",
-  ),
   'notChecked.beforePause': t(
     'What the tools run before the pause did not check is not in this record.',
   ),
@@ -251,9 +241,6 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   'found.clarify': t('{{tool:code}} handed back a question instead of data.', 'tool'),
   'found.result': t('{{tool:code}} returned a result.'),
   'found.failed': t('{{tool:code}} returned an error, not a result.'),
-  // Set 16: never "returned an error" for a call that did not reach its tool.
-  'found.notExecuted': t('{{tool:code}} did not run, so it found nothing.'),
-  'found.endedInError': t('The call to {{tool:code}} ended in an error, not a result.'),
   'found.refused': t('{{tool:code}} did not run, so it found nothing.'),
   'found.declined': t('{{tool:code}} did not run, so it found nothing.'),
   'found.notDispatched': t('{{tool:code}} did not run, so it found nothing.'),
@@ -357,6 +344,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "Result periods: {{ran}} of {{count:of,'call','calls'}} had a period verdict on the record.",
   ),
   ...HOW_SURE_REASON_TEMPLATES,
+  ...DID_IT_RUN_TEMPLATES,
   'howSure.expected.direct': t(
     'Before calling {{tool:code}}, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: {{expect}}.',
     'model',
@@ -553,9 +541,6 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
 
   // ── Anything wrong: the row's own lines ──────────────────────────────
-  'wrong.errors': t(
-    "{{count:n,'tool call','tool calls'}} did not run cleanly: {{failed}} failed, {{refused}} refused by a rule, {{declined}} declined by a person, {{notDispatched}} not run.",
-  ),
   'wrong.withheld': t(
     "{{count:n,'result was','results were'}} withheld from the model by a rule after the tool ran.",
   ),
