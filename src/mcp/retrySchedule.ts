@@ -17,7 +17,8 @@
  *     base. Every ceiling is then the cap, so the schedule is a flat one AT the
  *     cap: `{ baseDelayMs: 50, multiplier: 1, maxDelayMs: 50 }`. Jitter is
  *     still drawn under it (25–50 ms with `'equal'`). footprintjs refuses a cap
- *     below the base because the exponential would never be reached.
+ *     below the base when the schedule is built (its rule: "a `maxDelayMs` >=
+ *     `baseDelayMs`"); it states the rule and no reason.
  *
  * Every other rule is passed through as written. `test/mcp/retrySeries.test.ts`
  * pins the waits of both cases on the wire.

@@ -56,10 +56,10 @@
  * scope answers that call under its own id — or, for a tool the client ran, is
  * not written at all, because the client holds the result it sent.
  *
- * TEXT. What the record streamed (`stream.token`, the channel `toSSE({ format: 'text' })`
- * and a hosted reply read), then at `turn_end` what of `finalContent` it did not carry
- * (`unstreamedText.ts`): all of it when nothing streamed, else the limits block or standing
- * line the library appended after the stream, as its own message; never a refused answer.
+ * TEXT. What the record streamed (`stream.token`), then at `turn_end` what of `finalContent`
+ * it did not carry (`hosting/unstreamedText.ts`, the rule `toSSE({ format: 'text' })` asks
+ * too): all of it when nothing streamed, else the limits block or standing line the
+ * library appended after the stream, as its own message; never a refused answer.
  * An agent's `llm_end.content` is a DRAFT the library may hold back and is never written.
  */
 
@@ -69,7 +69,7 @@ import type { RunTranslation } from '../hosting/protocolAdapter.js';
 import { LLM_ERROR_SENTENCES } from '../lib/humanizeLLMError.js';
 import { toWireJson, withWireErrors } from '../lib/wireJson.js';
 import { agUiIdMinter } from './ids.js';
-import { unstreamedText } from './unstreamedText.js';
+import { unstreamedText } from '../hosting/unstreamedText.js';
 import {
   AG_UI_PROTOCOL_VERSION,
   type AgUiAddress,

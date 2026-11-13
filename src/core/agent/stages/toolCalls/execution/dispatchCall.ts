@@ -165,8 +165,9 @@ export function buildCallDispatch(
     // The keys the tool will run with a different value for than the
     // model proposed — a link's rewrite, or a key the tool's own
     // redaction hides (`../../../../toolShownArgs.ts` · `changedArgKeys`).
-    // Taken HERE, before anything executes: names only, so nothing the
-    // tool later writes into its arguments can ride `tool_end`.
+    // Taken HERE, before anything executes (names only), and judged again
+    // below only on a redrawn copy the tool never holds: nothing the tool
+    // writes into its arguments can ride `tool_end`.
     const judgedOn = callArguments.chainedArgs;
     let changedKeys = changedArgKeys(args, shownArgsOf(tool, judgedOn));
     // Tool-args validation (#9) — AFTER the permission gate (policy must

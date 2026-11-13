@@ -136,7 +136,7 @@ const draining = (async () => {
 await Promise.all([agent.run({ message: userInput }), draining]);
 ```
 
-`toSSE(runner, options?)` accepts `filter` (skip events), `format: 'full' | 'text'` (`'text'` yields raw token content only — pipe straight into a chat UI), `eventName` (rename events), and `heartbeatMs` (keep-alive `: ping` comments for proxies). The class form `new SSEFormatter(agent).stream()` is identical. `encodeSSE(name, payload)` formats a one-off frame for app-level events outside the typed registry.
+`toSSE(runner, options?)` accepts `filter` (skip events), `format: 'full' | 'text'` (`'text'` yields the answer as raw text — pipe straight into a chat UI: the token content, then at `turn_end` what of `turn_end.finalContent` the tokens did not carry, such as the limits block or the standing line the library appends after the stream, or the whole answer when nothing streamed; nothing more for a refused answer), `eventName` (rename events), and `heartbeatMs` (keep-alive `: ping` comments for proxies). The class form `new SSEFormatter(agent).stream()` is identical. `encodeSSE(name, payload)` formats a one-off frame for app-level events outside the typed registry.
 
 **Existing helper limits:** its filter runs before terminal detection, so a filter that excludes `turn_end` or `error.fatal` can leave it waiting forever. Use `format: 'text'` without a filter for text-only delivery. The helper currently stops on any `error.fatal`, including observer errors, and does not close on a pause or an input refusal that raises without a terminal event. It is not a universal run-lifecycle adapter. For those flows, use a hosting transport or own the subscriptions and close from the run's returned outcome or rejection too.
 

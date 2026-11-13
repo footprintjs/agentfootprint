@@ -70,7 +70,8 @@ exit codes: 0 ok · 1 findings failed the gate · 2 usage/input error`;
  * the one owner of the closed-set refusal.
  *
  * Every optional field the checker reads is passed through as written, so
- * the command line and `checkSemantics` judge one row alike. A field left
+ * the command line and `checkSemantics` judge one row alike — and the checker
+ * is the one owner of refusing a malformed `search` (`assertCatalogSearch`). A field left
  * out here changes the verdict, not just the report: a row with `search`
  * and a sample `absent({ checked: 'declared' })` passes `checkSemantics`,
  * but read without its `search` it fails with `declared-without-search`.

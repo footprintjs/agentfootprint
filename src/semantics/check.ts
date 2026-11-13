@@ -44,6 +44,7 @@
 import { namesFacetOf } from './coverage/among.js';
 import { readCoverageResult } from './coverage/read.js';
 import { readDeclaredAbsence, readDeclaredLedger } from './coverage/recognize.js';
+import { assertToolSearch } from './coverage/search/declaration.js';
 import { searchReviewItems } from './coverage/search/review.js';
 import type { ToolSearch } from './coverage/search/types.js';
 import { explainSemantics, readSemantics } from './envelope.js';
@@ -78,8 +79,11 @@ export interface SemanticsCatalogEntry {
    * The tool's `search` declaration (`defineTool({ search })`), when it has
    * one — dumped with the catalog. The gate lists its review items
    * (`source-said`, `said-overlap`) as warnings, and reads a sample
-   * `checked: 'declared'` as declared coverage. Structure was judged at
-   * `defineTool`; the gate does not re-judge it.
+   * `checked: 'declared'` as declared coverage. A catalog is a FILE, so the
+   * gate asks `defineTool`'s own rule of it first and refuses a malformed
+   * one by name (exit 2) — except the checks that need the tool's
+   * `inputSchema` and `period`, which a row does not carry
+   * (`semantics/check.ts` · `assertCatalogSearch`).
    */
   readonly search?: ToolSearch;
   /** Optional paired adapter fixtures. Exact preservation, not inference or factual validation. */
@@ -185,6 +189,42 @@ function classCoverageFinding(entry: SemanticsCatalogEntry, resultIndex: number)
 }
 
 /**
+ * Refuse a catalog row's `search` that `defineTool` would refuse, by ITS rule
+ * (`coverage/search/declaration.ts` · `assertToolSearch`) — never a second copy.
+ *
+ * WHY. A catalog is a JSON file anyone can write, not a declaration
+ * `defineTool` already accepted. Read unjudged, `{}` crashed the review with a
+ * `TypeError` and `complete: 'bogus'` passed the gate.
+ *
+ * A row carries no `inputSchema`, so the arguments the search classifies stand
+ * in for its properties: `unknown-argument` and `unclassified-argument` cannot
+ * fail here, and neither can the `period` cross-check (a row carries no
+ * `period`). Those were judged when `defineTool` accepted the tool the row was
+ * dumped from.
+ *
+ * @example
+ * ```ts
+ * assertCatalogSearch('list_incidents', { source: …, subject: …, arguments: [], complete: 'bogus' });
+ * // throws: checkSemantics: tool 'list_incidents' has a `search` defineTool would refuse — …
+ * ```
+ */
+export function assertCatalogSearch(toolName: string, search: unknown): void {
+  const args = isPlainObject(search) && Array.isArray(search.arguments) ? search.arguments : [];
+  const named = args.flatMap((a: unknown) =>
+    isPlainObject(a) && typeof a.name === 'string' ? [a.name] : [],
+  );
+  const inputSchema = { type: 'object', properties: Object.fromEntries(named.map((n) => [n, {}])) };
+  try {
+    assertToolSearch(toolName, search as ToolSearch, { inputSchema });
+  } catch (error) {
+    throw new Error(
+      `checkSemantics: tool '${toolName}' has a \`search\` defineTool would refuse — ` +
+        (error instanceof Error ? error.message : String(error)),
+    );
+  }
+}
+
+/**
  * Judge a semantics catalog. Pure; throws only on a malformed CATALOG (a
  * definition-side mistake — the CLI maps it to exit code 2), never on a
  * malformed RESULT (that is a finding, the thing this gate exists to report).
@@ -227,6 +267,7 @@ export function checkSemantics(
 
     // A search's review items — warnings for a person, never a refusal.
     if (entry.search !== undefined) {
+      assertCatalogSearch(entry.name, entry.search);
       for (const item of searchReviewItems(entry.search)) {
         findings.push({
           tool: entry.name,
