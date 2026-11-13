@@ -1,4 +1,4 @@
 ---
 type: internal
 ---
-Move AgentBuilder graph options and standalone setup guards into small owners, preserving public signatures, diagnostics and behavior.
+Move AgentBuilder setup guards, configuration rules and ordered assembly into small owners, preserving public signatures, documentation, diagnostics and live receiver behavior.
