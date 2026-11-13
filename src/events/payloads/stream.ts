@@ -162,6 +162,42 @@ export interface ToolEndPayload {
   readonly error?: boolean;
   readonly durationMs: number;
   /**
+   * Whether the tool's own function (`execute`) was entered — written from
+   * the dispatch's own fact by the door every bracket of the Agent's tool-call
+   * stages passes (`core/agent/stages/toolCalls/observation/
+   * observationsOperations.ts` · `emitToolEnd`), read by
+   * `semantics/toolRan.ts` · `toolRanOf`. The demo chart
+   * `buildAgentMessageApiChart` emits its own brackets without it: it runs
+   * no tool function, so its brackets prove nothing about a tool.
+   *
+   * WHY: `error: true` alone is the same bytes for a tool that ran and threw
+   * and for a call that never reached its tool (an unknown tool name,
+   * arguments the schema rejected, a `wants` or credential block), so a
+   * reader could not tell "it ran and failed" from "it never ran".
+   *
+   * What it proves, on a record written by this version:
+   * - `false`: the function was never entered. On every bracket of such a
+   *   call, with or without `error` — except one that already says so with
+   *   `notExecuted` (a rule refused it) or `notDispatched` (a paused batch
+   *   settled it), which keeps the bytes it had.
+   * - `true`: the function was entered and the call ended in an error. Only
+   *   beside `error: true`.
+   * - absent, on a bracket with no `notExecuted` and no `notDispatched`: the
+   *   function was entered and the call ended without `error` (it returned —
+   *   a declared `failure` status included). A call that succeeded keeps
+   *   exactly the bytes it had before this field existed. (A bracket with one
+   *   of those markers has no `entered` either; the marker says it never ran.)
+   *
+   * A record written BEFORE this field existed carries it nowhere, so there
+   * its absence proves nothing: an `error` bracket without it does not say
+   * whether the tool ran. A saved value that is not a boolean (a hand-edited
+   * record, a placeholder) proves nothing either: `toolRanOf` reads it as a
+   * record that does not say.
+   *
+   * @example { toolCallId: 'c1', result: "Unknown tool 'reboot_host'…", durationMs: 0, error: true, entered: false }
+   */
+  readonly entered?: boolean;
+  /**
    * The tool's OWN declared outcome (9.19.0) — present only when the tool
    * returned a result envelope carrying `status`. Normalized vocabulary
    * (`'denied'` must never read like `'success'`); route edges key on it
@@ -231,9 +267,12 @@ export interface ToolEndPayload {
    *
    * NOT a general "never ran" marker, and its absence proves nothing: a call
    * that could not run with no rule involved (an unknown tool name, an args
-   * rejection, a `wants` or credential block) carries `error: true` instead,
-   * a settled bracket carries `notDispatched`, and a resumed leg's bracket
-   * carries neither. Batch-dispatch bracket only.
+   * rejection, a `wants` or credential block) carries `error: true` and
+   * `entered: false` instead, a settled bracket carries `notDispatched`, and
+   * a resumed leg's bracket of a call that did not run (a person declined,
+   * a credential was blocked) carries `entered: false`. The general answer is
+   * `entered`, read through `semantics/toolRan.ts` · `toolRanOf`.
+   * Batch-dispatch bracket only.
    */
   readonly notExecuted?: true;
 }

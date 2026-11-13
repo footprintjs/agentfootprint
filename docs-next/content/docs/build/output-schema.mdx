@@ -428,10 +428,11 @@ allows into an answer.
 
 The check's second argument also carries `toolCalls`: this run's tool calls, in
 the order they landed, each with its `name`, `callId` and `outcome` —
-`'ok'` (it ran and returned), `'error'` (it threw, declared `failure`,
-`denied` or `invalid`, or could not run as written, such as an unknown name or
-rejected arguments) or `'not-run'` (a permission policy, a rule or a person
-declined it, or a paused batch never dispatched it). Arguments and results are
+`'ok'` (it ran and returned), `'error'` (the tool ran, and it threw or declared
+`failure`, `denied` or `invalid`) or `'not-run'` (the tool never ran: a
+permission policy, a rule or a person declined it, a paused batch never
+dispatched it, or it could not run as written, such as an unknown name or
+rejected arguments). Arguments and results are
 never in it. These are the model's own calls: a call a tool makes from inside
 itself is that tool's work and is not listed. The list is frozen, read from the
 run's own state, and never holds another run's calls, even when runs share one

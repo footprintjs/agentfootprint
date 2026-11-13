@@ -70,6 +70,7 @@ function varsFor(id: TemplateId, source: AccountSource = 'library'): Record<stri
         'top',
         'next',
         'failed',
+        'notExecuted',
         'refused',
         'declined',
         'notDispatched',

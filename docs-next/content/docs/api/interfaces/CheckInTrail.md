@@ -26,7 +26,7 @@ Which ReAct iteration this check-in fired on.
 
 Defined in: [src/core/checkin.ts:130](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L130)
 
-One-line human summary, e.g. `"3 tools run over 2 iterations"`.
+One-line summary that counts calls, never runs: `"3 tool calls over 2 iterations"`.
 
 ***
 

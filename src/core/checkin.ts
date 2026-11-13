@@ -126,7 +126,7 @@ export interface CheckInTrail {
   readonly iteration: number;
   /** The tool calls already completed this run, oldest first. */
   readonly toolCalls: readonly { readonly name: string; readonly ok: boolean }[];
-  /** One-line human summary, e.g. `"3 tools run over 2 iterations"`. */
+  /** One-line summary that counts calls, never runs: `"3 tool calls over 2 iterations"`. */
   readonly summary: string;
 }
 
@@ -593,12 +593,12 @@ function buildTrail(history: readonly LLMMessage[], iteration: number): CheckInT
       toolCalls.push({ name: m.toolName, ok });
     }
   }
+  // Calls, not runs: history does not always say whether a call's tool ran (`tool_end.entered`).
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const summary =
     toolCalls.length === 0
-      ? `no tools run yet (iteration ${iteration})`
-      : `${toolCalls.length} tool${
-          toolCalls.length === 1 ? '' : 's'
-        } run over ${iteration} iteration${iteration === 1 ? '' : 's'}`;
+      ? `no tool calls yet (iteration ${iteration})`
+      : `${plural(toolCalls.length, 'tool call')} over ${plural(iteration, 'iteration')}`;
   return { iteration, toolCalls, summary };
 }
 

@@ -66,10 +66,12 @@ export function recordCallSettlement(
       // Each only when a CONFIGURED RULE acted — an `onToolResult` link or
       // the cap (`modelResult`), an `onToolCall` link or the tool's own
       // redaction (`changedArgKeys`), a permission policy or a link that
-      // refused (`notExecuted`). With no rule, `tool_end` is the bytes it
-      // always was: a call that failed to run on its own (an unknown name,
-      // an args rejection, a credential block) keeps saying so with
-      // `error: true` alone.
+      // refused (`notExecuted`). Whether the tool was entered is not stamped
+      // here: `emitToolEnd` writes `entered` from the `executed` flag passed
+      // below, for this path and every resume alike, so a call that failed
+      // to run on its own (an unknown name, an args rejection, a credential
+      // block) reads `error: true, entered: false`, and a success keeps its
+      // bytes.
       ...(frame.modelResult !== frame.capped.result && { modelResult: frame.modelResult }),
       ...(frame.execution.executed &&
         frame.changedKeys.length > 0 && { changedArgKeys: frame.changedKeys }),

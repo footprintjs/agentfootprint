@@ -197,10 +197,29 @@ export interface Unreachable {
   readonly sentence: Sentence;
 }
 
-/** How one tool call of THIS run went. */
+/**
+ * How one tool call of THIS run went. Whether its tool ran is read off its
+ * `stream.tool_end` by `semantics/toolRan.ts` · `toolRanOf`; three outcomes
+ * end in an error and say different things about that: `failed`,
+ * `not-executed` (when its bracket carries `error`) and `ended-in-error`.
+ */
 export type CallOutcome =
+  /** The tool ran and returned. */
   | 'ran'
+  /** The tool ran, and the call ended in an error (`tool_end.entered: true`). */
   | 'failed'
+  /**
+   * The tool's function was never entered and no rule or person stopped it:
+   * an unknown tool name, arguments the schema rejected, a blocked
+   * credential (`tool_end.entered: false`).
+   */
+  | 'not-executed'
+  /**
+   * The call ended in an error on a record that does not say whether the
+   * tool ran: `tool_end.error` without `entered`, as every record written
+   * before that field existed holds it. Never read as "it ran".
+   */
+  | 'ended-in-error'
   /** A rule refused it BEFORE the tool ran. */
   | 'refused'
   /** A person was asked and declined. */
@@ -427,7 +446,21 @@ export interface AnswerFacts {
    */
   readonly limitsData: AccountFact<LimitsDataFact>;
   readonly errors: {
+    /**
+     * Calls that ended in an error and are not known not to have run:
+     * `failed` (the tool ran) and `ended-in-error` (the record does not say)
+     * — `facts/errorCounts.ts` · `endedInError`. A call that never reached
+     * its tool is never counted here; it is `notExecuted`.
+     */
     readonly failed: number;
+    /**
+     * Calls whose tool's function was never entered and that no rule or
+     * person stopped (`outcome: 'not-executed'`: an unknown tool name,
+     * rejected arguments, a blocked credential). The "Anything wrong" line
+     * says them as "{n} not executed". Example: the model calls
+     * `reboot_host`, which no tool is named → `notExecuted: 1, failed: 0`.
+     */
+    readonly notExecuted: number;
     readonly refused: number;
     readonly declined: number;
     readonly notDispatched: number;

@@ -1049,6 +1049,7 @@
   "agentfootprint.stream.tool_end": {
     "changedArgKeys[]": "kept",
     "durationMs": "kept",
+    "entered": "kept",
     "error": "kept",
     "modelResult": "type",
     "notDispatched.pausedCall.toolCallId": "kept",

@@ -147,9 +147,20 @@ function checkedBlock(ctx: ReadContext, call: CallRead): Sentence[] {
   const rule = rulePointer(call);
   const endPointers = call.fact.pointers;
   switch (call.fact.outcome) {
+    // "It ran" only when the record shows the tool ran (`entered: true`).
     case 'failed':
       return [
         ctx.say('checked.failed', {
+          vars: { tool },
+          pointers: call.end ? [at(call.end, 'error'), at(call.end, 'entered')] : [],
+        }),
+      ];
+    case 'not-executed':
+      return [ctx.say('checked.notExecuted', { vars: { tool }, pointers: endPointers })];
+    // A record that does not say whether the tool ran: words true either way.
+    case 'ended-in-error':
+      return [
+        ctx.say('checked.endedInError', {
           vars: { tool },
           pointers: call.end ? [at(call.end, 'error')] : [],
         }),
@@ -309,6 +320,23 @@ function notCheckedBlock(
   return lines;
 }
 
+/**
+ * Outcomes that prove a call's tool never ran. "None of the tool calls ran"
+ * is said only when every call has one of them; a call that ended in an
+ * error may have run (`failed` did; `ended-in-error` cannot be told), so
+ * then the line says only that no call returned a result.
+ */
+const NOT_RUN: ReadonlySet<CallRead['fact']['outcome']> = new Set([
+  'refused',
+  'declined',
+  'not-dispatched',
+  'not-executed',
+]);
+
+/** Every one of `calls` is known not to have run. */
+export const knownNotRun = (calls: readonly CallRead[]): boolean =>
+  calls.every((c) => NOT_RUN.has(c.fact.outcome));
+
 export interface CheckedRows {
   readonly checked: readonly Sentence[];
   readonly checkedMore?: Sentence;
@@ -435,16 +463,18 @@ export function readCheckedRows(
       ctx.say('notChecked.noCalls', { status: 'not-applicable', pointers: anchorPointer(ctx) }),
     );
   } else if (ranAll.length === 0) {
+    // No call returned a result. "None ran" only when that is known of every one.
     notChecked.push(
-      ctx.say('notChecked.noneRan', {
+      ctx.say(knownNotRun(calls.all) ? 'notChecked.noneRan' : 'notChecked.noResults', {
         status: 'not-applicable',
         pointers: calls.all.flatMap((c) => c.fact.pointers.slice(-1)),
       }),
     );
   } else if (notChecked.length === 0) {
-    // Calls ran, but none of the LISTED ones did: say where they are, never "none ran".
+    // Calls returned results, but none of the LISTED ones did: say where they are. "None of
+    // the listed ran" only when that is known of every listed call.
     notChecked.push(
-      ctx.say('notChecked.notListed', {
+      ctx.say(knownNotRun(listed) ? 'notChecked.notListed' : 'notChecked.notListed.noResults', {
         vars: { n: n(ranAll.length) },
         pointers: ranAll.flatMap((c) => c.fact.pointers.slice(0, 1)),
       }),

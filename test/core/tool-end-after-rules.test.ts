@@ -15,6 +15,11 @@
  *   - `notExecuted`    — a configured rule (permission policy, `onToolCall`)
  *                        refused the call.
  *
+ * Not a rule field: `entered` says whether the tool's function was entered
+ * (`semantics/toolRan.ts`). It is written on a call that never reached its
+ * tool (`false`) and beside the `error` of one that did (`true`); a success
+ * and a rule's refusal keep their bytes. Pinned here per case.
+ *
  * Test types: UNIT (the helpers), SCENARIO (real Agent runs through the
  * dispatch path), BOUNDARY (the byte law on every no-rule path the second
  * review found), SECURITY (the privacy review's round-2 attacks, inverted).
@@ -77,16 +82,17 @@ describe('BOUNDARY — the byte law: no configured rule, no new field', () => {
     expect(Object.keys(ends[0]!).sort()).toEqual(['durationMs', 'result', 'toolCallId']);
   });
 
-  it('an unknown tool name — error: true alone', async () => {
+  it('an unknown tool name — error: true, entered: false', async () => {
     const { ends } = await runCapturing((b) => b.tool(lookup(() => 'x')), {
       name: 'nope',
       args: {},
     });
     expect(ends[0]!.error).toBe(true);
+    expect(ends[0]!.entered).toBe(false);
     expect(newFieldsOn(ends[0]!)).toEqual([]);
   });
 
-  it('arguments rejected under the default enforce validation — error: true alone', async () => {
+  it('arguments rejected under the default enforce validation — error: true, entered: false', async () => {
     const { ends } = await runCapturing(
       (b) =>
         b.tool(
@@ -100,10 +106,11 @@ describe('BOUNDARY — the byte law: no configured rule, no new field', () => {
       { name: 'num', args: { n: 'not-a-number' } },
     );
     expect(ends[0]!.error).toBe(true);
+    expect(ends[0]!.entered).toBe(false);
     expect(newFieldsOn(ends[0]!)).toEqual([]);
   });
 
-  it('a credential provider that throws — error: true alone', async () => {
+  it('a credential provider that throws — error: true, entered: false', async () => {
     const credentials = {
       id: 'v',
       getCredential: async () => {
@@ -124,6 +131,7 @@ describe('BOUNDARY — the byte law: no configured rule, no new field', () => {
       { credentials },
     );
     expect(ends[0]!.error).toBe(true);
+    expect(ends[0]!.entered).toBe(false);
     expect(newFieldsOn(ends[0]!)).toEqual([]);
   });
 
@@ -156,7 +164,7 @@ describe('BOUNDARY — the byte law: no configured rule, no new field', () => {
     ]);
   });
 
-  it('a tool that threw DID run: error, and no notExecuted', async () => {
+  it('a tool that threw DID run: error, entered: true, and no notExecuted', async () => {
     const { ends } = await runCapturing(
       (b) =>
         b.tool(
@@ -167,6 +175,7 @@ describe('BOUNDARY — the byte law: no configured rule, no new field', () => {
       { name: 'lookup', args: {} },
     );
     expect(ends[0]!.error).toBe(true);
+    expect(ends[0]!.entered).toBe(true);
     expect(newFieldsOn(ends[0]!)).toEqual([]);
   });
 });
@@ -210,6 +219,8 @@ describe('SCENARIO — each field appears exactly when its rule acted', () => {
     expect(ends[0]!.notExecuted).toBe(true);
     expect(ends[0]!.error).toBeUndefined();
     expect('changedArgKeys' in ends[0]!).toBe(false);
+    // The rule's marker already says it never ran: its bytes do not move.
+    expect('entered' in ends[0]!).toBe(false);
   });
 
   it('flowchartAsTool({ redact }) — the hidden key is named, its value never rides', async () => {

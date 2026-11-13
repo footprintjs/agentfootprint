@@ -33,13 +33,14 @@
  * `tool` means "the tool named by the `tool` var".
  */
 
+import { DID_IT_RUN_TEMPLATES } from './didItRunTemplates.js';
 import { HOW_SURE_REASON_TEMPLATES } from './howSureReasonTemplates.js';
 import { t, type AccountTemplate } from './templateEntry.js';
 
 export type { AccountTemplate, TemplateVoucher } from './templateEntry.js';
 
 /** Bumped whenever any template's words change (a pinned digest enforces it). */
-export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 15;
+export const ANSWER_ACCOUNT_TEMPLATE_SET_VERSION = 16;
 
 /** The closed table. Ids are `row.part@version` in prose; the version lives on the entry. */
 export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
@@ -343,6 +344,7 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
     "Result periods: {{ran}} of {{count:of,'call','calls'}} had a period verdict on the record.",
   ),
   ...HOW_SURE_REASON_TEMPLATES,
+  ...DID_IT_RUN_TEMPLATES,
   'howSure.expected.direct': t(
     'Before calling {{tool:code}}, the model said it expected this call to answer the question directly, and rated how useful it expected the result to be: {{expect}}.',
     'model',
@@ -539,9 +541,6 @@ export const ANSWER_ACCOUNT_TEMPLATES = Object.freeze({
   ),
 
   // ── Anything wrong: the row's own lines ──────────────────────────────
-  'wrong.errors': t(
-    "{{count:n,'tool call','tool calls'}} did not run cleanly: {{failed}} failed, {{refused}} refused by a rule, {{declined}} declined by a person, {{notDispatched}} not run.",
-  ),
   'wrong.withheld': t(
     "{{count:n,'result was','results were'}} withheld from the model by a rule after the tool ran.",
   ),
