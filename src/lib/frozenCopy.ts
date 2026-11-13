@@ -129,7 +129,7 @@ export function frozenView<T>(value: T): T | undefined {
  * the engines' own words for assigning a read-only property, adding to an
  * object that is not extensible, deleting or redefining a property.
  */
-export function isFrozenWriteError(error: unknown): boolean {
+function isFrozenWriteError(error: unknown): boolean {
   if (!(error instanceof TypeError)) return false;
   return /read[- ]only|not extensible|non-writable|object is frozen|Cannot delete property|Cannot redefine property|Cannot (assign|add|define)/i.test(
     error.message,
