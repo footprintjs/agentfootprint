@@ -119,6 +119,9 @@ describe('check:semantics × search — a malformed search refuses the catalog',
     ['a list', [], /`search` must be/],
     ['a number', 1, /`search` must be/],
     ["complete: 'bogus'", { ...SEARCH, complete: 'bogus' }, /search\.complete/],
+    // No schema property can be left unclassified here, but a missing list still is refused.
+    ['no arguments', { ...SEARCH, arguments: undefined }, /\(unclassified-argument\)/],
+    ['arguments: a string', { ...SEARCH, arguments: 'x' }, /\(unclassified-argument\)/],
   ];
 
   it.each(MALFORMED)(

@@ -197,10 +197,11 @@ function classCoverageFinding(entry: SemanticsCatalogEntry, resultIndex: number)
  * `TypeError` and `complete: 'bogus'` passed the gate.
  *
  * A row carries no `inputSchema`, so the arguments the search classifies stand
- * in for its properties: `unknown-argument` and `unclassified-argument` cannot
- * fail here, and neither can the `period` cross-check (a row carries no
- * `period`). Those were judged when `defineTool` accepted the tool the row was
- * dumped from.
+ * in for its properties: `unknown-argument` and a schema property left
+ * unclassified (`unclassified-argument`) cannot fail here, and neither can the
+ * `period` cross-check (a row carries no `period`). Those were judged when
+ * `defineTool` accepted the tool the row was dumped from. A missing or
+ * non-array `arguments` list is still refused, under that same code.
  *
  * @example
  * ```ts

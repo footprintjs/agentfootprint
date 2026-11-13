@@ -486,7 +486,7 @@ Gotchas:
   shows only tokens must render the rest of `turn_end.finalContent` (what the
   tokens did not carry) when the turn ends. The AG-UI adapter does, writing that
   rest as its own message, and so does `toSSE({ format: 'text' })`, as one more
-  chunk.
+  chunk at the outermost agent's turn end.
 - **A mode changes the line, nothing else.** The standing travels as data in every
   mode, the limits block is appended whether or not the line is, and memory keeps
   exactly the answer that was delivered — the line only when one was appended. With

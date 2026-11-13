@@ -9,18 +9,20 @@
  * given yet — the same rule the AG-UI adapter asks (`hosting/unstreamedText.ts`).
  *
  * Sections: Scenario (streamed, both arms; not streamed) · Regression (nothing
- * appended; a filter that drops tokens; a refused answer; text on a tool turn) · Redaction (the real
- * answer, never the served one).
+ * appended; a filter that drops some tokens or all of them; a refused answer;
+ * text on a tool turn) · Composition (only the outermost turn's end writes the
+ * rest) · Redaction (the real answer, never the served one).
  */
 
 import { describe, expect, it } from 'vitest';
 
-import { absent, Agent, defineTool } from '../../src/index.js';
+import { absent, Agent, defineTool, Parallel, Sequence } from '../../src/index.js';
 import { conversationRedaction } from '../../src/doors/security.js';
 import { mock } from '../../src/doors/providers.js';
 import { toSSE, type ToSSEOptions } from '../../src/hosting/stream.js';
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import type { LLMProvider } from '../../src/provider-contract/types.js';
+import type { MockReply } from '../../src/adapters/llm/MockProvider.js';
 
 const lookup = defineTool({
   name: 'lookup',
@@ -64,6 +66,12 @@ async function textReply(
 
 const STREAMED = 'There are 4242 open orders.';
 
+/** A provider with no `stream()`: no token at all, the answer comes whole. */
+function completeOnly(...replies: MockReply[]): LLMProvider {
+  const scripted = mock({ replies });
+  return { name: scripted.name, complete: (request) => scripted.complete(request) };
+}
+
 describe('toSSE text — the appended text reaches the reader', () => {
   it('the standing line follows the streamed answer', async () => {
     const agent = Agent.create({
@@ -99,13 +107,7 @@ describe('toSSE text — the appended text reaches the reader', () => {
   });
 
   it('an answer that streamed nothing is written whole, once', async () => {
-    // A provider with no `stream()`: no token at all, the answer comes whole.
-    const scripted = mock({ replies: [call('lookup'), STREAMED] });
-    const completeOnly: LLMProvider = {
-      name: scripted.name,
-      complete: (request) => scripted.complete(request),
-    };
-    const agent = Agent.create({ provider: completeOnly, model: 'm' })
+    const agent = Agent.create({ provider: completeOnly(call('lookup'), STREAMED), model: 'm' })
       .tool(lookup)
       .namesAndNumbersFromEvidence({ posture: 'assist' })
       .answerLayer({ standingLine: true })
@@ -129,7 +131,7 @@ describe('toSSE text — regression', () => {
     expect(reply).toBe('There are 12 open orders.');
   });
 
-  it('a filter that drops tokens gets no guessed rest — what it was given is not the answer’s start', async () => {
+  it('a filter that drops some tokens gets no guessed rest — what it was given is not the answer’s start', async () => {
     const agent = Agent.create({
       provider: mock({ chunkDelayMs: 0, replies: [call('lookup'), STREAMED] }),
       model: 'm',
@@ -145,6 +147,22 @@ describe('toSSE text — regression', () => {
     expect(reply.length).toBeGreaterThan(0);
     expect(reply.length).toBeLessThan(STREAMED.length);
     expect((answer as string).startsWith(reply)).toBe(false);
+  });
+
+  it('a filter that drops every token gets the whole answer — nothing was written, as when nothing streamed', async () => {
+    const agent = Agent.create({
+      provider: mock({ chunkDelayMs: 0, replies: [call('lookup'), STREAMED] }),
+      model: 'm',
+    })
+      .tool(lookup)
+      .namesAndNumbersFromEvidence({ posture: 'assist' })
+      .answerLayer({ standingLine: true })
+      .build();
+    const noTokens = (event: AgentfootprintEvent) => event.type !== 'agentfootprint.stream.token';
+    const { reply, chunks, answer } = await textReply(agent, { filter: noTokens });
+    expect((answer as string).length).toBeGreaterThan(STREAMED.length);
+    expect(reply).toBe(answer);
+    expect(chunks).toHaveLength(1);
   });
 
   it('a refused answer adds nothing after what streamed, though its text extends it', async () => {
@@ -196,6 +214,56 @@ describe('toSSE text — regression', () => {
     const { reply, answer } = await textReply(agent);
     expect((answer as string).length).toBeGreaterThan(STREAMED.length);
     expect(reply).toBe('Let me look.' + (answer as string));
+  });
+});
+
+describe('toSSE text — composition: only the outermost turn writes the rest', () => {
+  // The stream still ends at the FIRST agent's turn_end, inner or not (older
+  // than this rule; README "Not covered"). That inner turn's answer is not the
+  // run's answer, so an inner turn_end writes nothing more: these runs read as
+  // they did before the rest was written at all.
+  it('a Sequence whose providers do not stream writes nothing, not its first step', async () => {
+    const sequence = Sequence.create({ name: 'steps' })
+      .step('a', Agent.create({ provider: completeOnly('First step answer.'), model: 'm' }).build())
+      .step(
+        'b',
+        Agent.create({ provider: completeOnly('Second step answer.'), model: 'm' }).build(),
+      )
+      .build();
+    const { reply, answer } = await textReply(sequence);
+    expect(answer).toBe('Second step answer.');
+    expect(reply).toBe('');
+  });
+
+  it('a Parallel whose providers do not stream writes nothing, not its branches', async () => {
+    const parallel = Parallel.create({ name: 'both' })
+      .branch('a', Agent.create({ provider: completeOnly('Alpha.'), model: 'm' }).build())
+      .branch('b', Agent.create({ provider: completeOnly('Beta.'), model: 'm' }).build())
+      .mergeWithFn((results) => Object.values(results).join(' | '))
+      .build();
+    const { reply } = await textReply(parallel);
+    expect(reply).toBe('');
+  });
+
+  it('a Sequence whose providers stream writes the first step’s tokens and nothing more', async () => {
+    const sequence = Sequence.create({ name: 'steps' })
+      .step(
+        'a',
+        Agent.create({
+          provider: mock({ chunkDelayMs: 0, replies: ['First step answer.'] }),
+          model: 'm',
+        }).build(),
+      )
+      .step(
+        'b',
+        Agent.create({
+          provider: mock({ chunkDelayMs: 0, replies: ['Second step answer.'] }),
+          model: 'm',
+        }).build(),
+      )
+      .build();
+    const { reply } = await textReply(sequence);
+    expect(reply).toBe('First step answer.');
   });
 });
 

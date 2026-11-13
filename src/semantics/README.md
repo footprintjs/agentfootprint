@@ -245,8 +245,10 @@ checkSemantics([{ name: 'list_incidents', search: { ...search, complete: 'bogus'
 
 What is NOT checked there: a row carries no `inputSchema` and no `period`, so
 the arguments the search classifies stand in for the schema's properties.
-`unknown-argument`, `unclassified-argument` and the `period` cross-check
-cannot fail at the gate; they ran when `defineTool` accepted the tool.
+`unknown-argument`, a schema property left unclassified
+(`unclassified-argument`) and the `period` cross-check cannot fail at the gate;
+they ran when `defineTool` accepted the tool. A missing or non-array
+`arguments` list is still refused (`unclassified-argument`).
 
 ## A declaration is a claim — the overclaim rules
 

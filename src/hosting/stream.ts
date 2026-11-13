@@ -56,15 +56,22 @@ export interface ToSSEOptions {
    *     (the placeholder wherever the policy selected a value).
    *   - 'text' — the answer as plain text (no event/data prefix), for
    *     piping straight into a chat UI: each `agentfootprint.stream.token`'s
-   *     content, then, at `agent.turn_end`, what of `turn_end.finalContent`
-   *     the tokens did not carry — the limits block or the standing line the
-   *     library appends after the stream, or the whole answer when nothing
-   *     streamed (`hosting/unstreamedText.ts`, the rule the AG-UI adapter asks
-   *     too). Nothing more is written for a refused answer, or when what was
-   *     written since the last `llm_start` is not the answer's start (a
-   *     `filter` that dropped tokens, a rewrite). This is the REPLY to the
-   *     person who asked — the caller's own answer, like `run()`'s return —
-   *     so a redaction policy never masks it.
+   *     content, then, at the outermost run's `agent.turn_end`, what of
+   *     `turn_end.finalContent` the tokens did not carry — the limits block or
+   *     the standing line the library appends after the stream, or the whole
+   *     answer when nothing was written (`hosting/unstreamedText.ts`, the rule
+   *     the AG-UI adapter asks too). Nothing was written when nothing streamed
+   *     (a provider without `stream()`) and also when a `filter` dropped every
+   *     token: both get the whole answer. Nothing more is written for a
+   *     refused answer, when what was written since the last `llm_start` is not
+   *     the answer's start (a `filter` that dropped some of the tokens, a
+   *     rewrite), or at an inner agent's `turn_end` (a Sequence step, a
+   *     Parallel branch: its answer is not the run's). The stream ends at the
+   *     FIRST `agent.turn_end`, inner or not, so a composition's text stream
+   *     carries only the tokens streamed before its first agent's turn ended
+   *     (not covered: read a composition's reply from `run()`'s return). This
+   *     is the REPLY to the person who asked — the caller's own answer, like
+   *     `run()`'s return — so a redaction policy never masks it.
    */
   readonly format?: 'full' | 'text';
   /**
@@ -209,15 +216,32 @@ export async function* toSSE<TIn, TOut>(
     if (waiting !== undefined && waiting.length === 0) replies.delete(key);
     return text;
   };
-  /** The turn's answer as the text format may write it: real, and never a refused one. */
+  /**
+   * The turn's answer as the text format may write it: real, never a refused
+   * one, and only the OUTERMOST run's. An inner agent's turn (a Sequence step,
+   * a Parallel branch) answers its step, not the run, so its end writes
+   * nothing more. Decided by scope, as the AG-UI serializer decides it: an
+   * agent's `turn_end` fires inside its own stages (`['final']` for a lone
+   * agent, `['step-a', 'final']` for a Sequence step), so a turn is inner when
+   * a `turn_start` opened at a mount that leads its path, never by path length.
+   */
   const answerFor = (event: AgentfootprintEvent): string | undefined => {
     const key = event.meta?.runtimeStageId ?? '';
     const answer = live === undefined ? finalContentOf(event) : answers.get(key);
     answers.delete(key);
+    const path = pathOf(event);
+    if (innerTurns.some((mount) => leads(mount, path))) return undefined;
     const refused = (event.payload as { refused?: unknown } | undefined)?.refused !== undefined;
     return !refused && typeof answer === 'string' ? answer : undefined;
   };
+  /** The mounts at which an inner agent's turn opened (a `turn_start` inside a subflow). */
+  const innerTurns: (readonly string[])[] = [];
   const listener = (event: AgentfootprintEvent): void => {
+    // Noted before the filter, so a filtered-out turn_start still marks its turn inner.
+    if (format === 'text' && event.type === 'agentfootprint.agent.turn_start') {
+      const path = pathOf(event);
+      if (path.length > 0) innerTurns.push(path);
+    }
     // Taken before the filter, so a filtered-out token still consumes its text.
     const reply =
       live !== undefined && event.type === 'agentfootprint.stream.token'
@@ -366,6 +390,19 @@ function framingOf(options: ToSSEOptions): SseFraming<AgentfootprintEvent> {
     );
   }
   return framing;
+}
+
+/**
+ * Where an event stands — its `meta.subflowPath`. A runner whose events carry
+ * no `meta` (not a RunnerBase) is one run with no mounts: `[]`.
+ */
+function pathOf(event: AgentfootprintEvent): readonly string[] {
+  return event.meta?.subflowPath ?? [];
+}
+
+/** Whether `mount` is `path` or one of its ancestors. */
+function leads(mount: readonly string[], path: readonly string[]): boolean {
+  return mount.length <= path.length && mount.every((segment, i) => segment === path[i]);
 }
 
 /** A `turn_end` event's `finalContent`, as it stands on that event. */
