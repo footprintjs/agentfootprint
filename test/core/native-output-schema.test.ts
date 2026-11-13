@@ -25,6 +25,7 @@ import { UnsupportedNativeOutputError } from '../../src/providers.js';
 import { NativeOutputSchemaError } from '../../src/core/agent/nativeOutputFormat.js';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../../src/provider-contract/types.js';
 import type { OutputAttempt } from '../../src/core/agent/outputEnforcement.js';
+import { executionStages } from '../../src/lib/executionStages.js';
 
 const SCHEMA = {
   type: 'object',
@@ -314,17 +315,11 @@ describe("a 'refusal' or 'max_tokens' stop", () => {
 });
 
 describe('review round 1', () => {
-  type Node = { stageReads?: Record<string, unknown>; next?: Node; children?: Node[] };
   /** Every key any stage tracked a read of — an absent key read still lands here. */
   const readKeysOf = (agent: Agent): Set<string> => {
     const keys = new Set<string>();
-    const walk = (node: Node | undefined): void => {
-      if (!node) return;
-      for (const key of Object.keys(node.stageReads ?? {})) keys.add(key);
-      for (const child of node.children ?? []) walk(child);
-      walk(node.next);
-    };
-    walk(agent.getSnapshot()?.executionTree as Node);
+    for (const stage of executionStages(agent.getSnapshot()?.executionTree))
+      for (const key of Object.keys((stage.stageReads as object | undefined) ?? {})) keys.add(key);
     return keys;
   };
 

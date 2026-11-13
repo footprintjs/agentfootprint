@@ -29,6 +29,13 @@ naming `events/types.ts` · `ContextSlot`, is erased and is not an edge;
 `npm run check:layering` refuses a run-time import that would leave the set.
 Every subfolder here has its own role and its own README.
 
+`executionStages.ts` is the one reader of a run's execution tree shape: footprintjs 13 serves the
+tree as a list of stages in run order (a fork's children as `branches`), footprintjs 12 and older
+— and every run saved by them — as a linked tree (`next` / `children`). It turns either into the
+stages in run order (`executionStages`), or, for a saved tree, the stages with their literal paths
+under strict bounds (`savedExecutionStages`). Every reader of the tree goes through it, so no other
+file checks the shape. Its test lives beside it.
+
 `cosine.ts` is the zero-import vector similarity metric shared by memory stores, influence scoring, context bisection and injection scoring. Its own test lives beside it.
 
 ## What it reads / what it writes

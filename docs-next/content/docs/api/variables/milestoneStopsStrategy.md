@@ -6,7 +6,7 @@ title: milestoneStopsStrategy
 
 > `const` **milestoneStopsStrategy**: `TimeTravelStrategy`\<[`Milestone`](/docs/api/interfaces/Milestone)\>
 
-Defined in: [src/time-travel/milestoneStops.ts:204](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/milestoneStops.ts#L204)
+Defined in: [src/time-travel/milestoneStops.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/time-travel/milestoneStops.ts#L210)
 
 `milestoneStops` as a footprintjs `TimeTravelStrategy` — what you hand
 `timeTravel(snapshot, { strategy })`. Typed over [Milestone](/docs/api/interfaces/Milestone), so the

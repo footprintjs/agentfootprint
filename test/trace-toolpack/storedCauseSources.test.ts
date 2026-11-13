@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { traceCauseTools } from '../../src/trace-toolpack/causeTools.js';
 import { readStoredCauseArtifacts } from '../../src/trace-toolpack/storedCause.js';
 import { callTraceTool } from '../../src/trace-toolpack/traceToolpack.js';
+import { executionStages } from '../../src/lib/executionStages.js';
 import {
   noteData,
   rehashStoredFixture,
@@ -96,7 +97,9 @@ describe('saved exact read sources from the public producer', () => {
     const executions = value.history.readSources!.ownership.executions;
     expect(executions).toHaveLength(2);
     expect(executions.every((execution) => execution.attemptIds.length === 1)).toBe(true);
-    expect(value.history.executionTree.readSourceCounts?.observed).toBe(0);
+    expect(executionStages(value.history.executionTree)[0]?.readSourceCounts).toMatchObject({
+      observed: 0,
+    });
     expect(value.cause.admission.native.status).toBe('admitted');
   });
 
@@ -175,7 +178,8 @@ describe('saved exact read sources from the public producer', () => {
       const sources = data.readSources;
       if (attack === 'namespace') sources.record.occurrences[0].stateAddress = ['foreign'];
       if (attack === 'attempt') sources.record.occurrences[0].attemptId = 'forged';
-      if (attack === 'count') data.executionTree.next.readSourceInvocations++;
+      if (attack === 'count')
+        (executionStages(data.executionTree)[1] as any).readSourceInvocations++;
       if (attack === 'first commit') sources.ownership.executions[0].firstCommit++;
       if (attack === 'zero-read owner') sources.ownership.executions.shift();
       if (attack === 'future source') sources.record.occurrences[0].source.commitIdx = 1;

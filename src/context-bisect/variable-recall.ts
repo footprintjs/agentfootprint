@@ -31,7 +31,6 @@
  * change before GA.
  */
 
-import type { StageSnapshot } from 'footprintjs/advanced';
 import {
   forwardSliceForKey,
   keyTimeline,
@@ -414,7 +413,8 @@ export function traceVariable(
   opts: TraceVariableOptions = {},
 ): AgentVariableSlice {
   const commitLog = (artifacts.snapshot.commitLog ?? []) as CommitBundle[];
-  const tree = artifacts.snapshot.executionTree as StageSnapshot | undefined;
+  // foottrace's reader takes either tree form (footprintjs 13's list, or the older linked tree).
+  const tree: unknown = artifacts.snapshot.executionTree;
   // No execution tree ⇒ no reads to resolve; the empty map is honest (it
   // reports zero coverage) where a fabricated lookup would not be.
   const reads = tree !== undefined ? keysReadFromExecutionTree(tree) : keysReadFromMap({});

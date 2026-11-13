@@ -1,5 +1,6 @@
 import type { CommitBundle, HonestyCode } from 'foottrace';
 import type { StageSnapshot } from 'footprintjs/advanced';
+import { executionStages } from '../../lib/executionStages.js';
 import type { TraceToolpackArtifacts } from '../types.js';
 import { WITHOUT_SUBFLOW_DOOR } from './artifactFacts.js';
 import { subflowResultsOf, homeMountOf } from '../subflowRecords.js';
@@ -91,13 +92,13 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
   const subflowResults = subflowDoor ? subflowResultsOf(artifacts.snapshot) : undefined;
   const homes = new Map<string, string | undefined>();
 
-  // Walk the execution tree: node → children → next (≈ execution order).
+  // Every stage in run order, from either tree form (lib/executionStages.ts).
   const nodes = new Map<string, StageSnapshot>();
   const orderedIds: string[] = [];
   const errorSteps: { id: string; keys: string[] }[] = [];
   let hasReadTracking = false;
-  const visit = (node: StageSnapshot | undefined): void => {
-    if (!node) return;
+  for (const stage of executionStages(artifacts.snapshot.executionTree)) {
+    const node = stage as StageSnapshot;
     const id = node.runtimeStageId;
     if (id && !nodes.has(id)) {
       nodes.set(id, node);
@@ -106,10 +107,7 @@ function buildIndex(artifacts: TraceToolpackArtifacts): ToolpackIndex {
       const errorKeys = Object.keys(node.errors ?? {});
       if (errorKeys.length > 0) errorSteps.push({ id, keys: errorKeys });
     }
-    for (const child of node.children ?? []) visit(child);
-    visit(node.next);
-  };
-  visit(artifacts.snapshot.executionTree);
+  }
 
   // Steps present in the commit log but missing from the tree. A subflow's own
   // log opens with its MOUNT's seed commit, which its tree does not hold — so

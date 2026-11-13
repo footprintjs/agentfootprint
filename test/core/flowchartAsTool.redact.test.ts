@@ -35,6 +35,7 @@ import { flowchartAsTool, type FlowchartToolSnapshot } from '../../src/index.js'
 import { innerRunsOf } from '../../src/observe.js';
 import { servableSnapshot } from '../../src/core/servableSnapshot.js';
 import { unconfiguredCredentialProvider } from '../../src/identity.js';
+import { executionStages } from '../../src/lib/executionStages.js';
 
 const SECRET = 'sk-live-SUPER-SECRET-BYTES';
 
@@ -536,13 +537,16 @@ describe('flowchartAsTool({ redact }) — closed by footprintjs 9.19.x: the reco
     const snapshot = keptSnapshot(tool, 'c1') as unknown as {
       sharedState: unknown;
       commitLog: unknown;
-      executionTree: { next?: { stageReads?: Record<string, unknown> } };
+      executionTree: unknown;
     };
     expect(JSON.stringify(snapshot.sharedState)).not.toContain(SECRET);
     expect(JSON.stringify(snapshot.commitLog)).not.toContain(SECRET);
     // 9.18: read-tracking retention was not one of the redaction points, so
     // `executionTree.*.stageReads` carried the value the stage read.
-    expect(snapshot.executionTree.next?.stageReads?.apiKey).toBe('[REDACTED]');
+    const second = executionStages(snapshot.executionTree)[1] as {
+      stageReads?: Record<string, unknown>;
+    };
+    expect(second?.stageReads?.apiKey).toBe('[REDACTED]');
     expect(JSON.stringify(snapshot.executionTree)).not.toContain(SECRET);
     expect(keptBytes(tool, 'c1')).not.toContain(SECRET);
   });

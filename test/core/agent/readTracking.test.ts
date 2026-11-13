@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { Agent, defineTool } from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
 import type { ReadTrackingMode, ReadSummaryMarker } from '../../../src/index.js';
+import { executionStages } from '../../../src/lib/executionStages.js';
 
 /** Build a deterministic 2-iteration agent (one tool call, then final). */
 function buildAgent(readTracking?: ReadTrackingMode): Agent {
@@ -57,22 +58,11 @@ function buildAgent(readTracking?: ReadTrackingMode): Agent {
     .build();
 }
 
-type StageSnapshotLike = {
-  stageReads?: Record<string, unknown>;
-  next?: StageSnapshotLike;
-  children?: StageSnapshotLike[];
-};
-
-/** Collect every stageReads record across the execution tree (next + children). */
-function collectStageReads(root: StageSnapshotLike): Record<string, unknown>[] {
+/** Collect every stageReads record across the execution tree (either form). */
+function collectStageReads(tree: unknown): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
-  const walk = (node: StageSnapshotLike | undefined): void => {
-    if (!node) return;
-    if (node.stageReads !== undefined) out.push(node.stageReads);
-    for (const child of node.children ?? []) walk(child);
-    walk(node.next);
-  };
-  walk(root);
+  for (const stage of executionStages(tree))
+    if (stage.stageReads !== undefined) out.push(stage.stageReads as Record<string, unknown>);
   return out;
 }
 
@@ -88,7 +78,7 @@ describe('AgentOptions.readTracking — snapshot stageReads policy', () => {
 
     const snap = agent.getSnapshot();
     expect(snap).toBeDefined();
-    const reads = collectStageReads(snap!.executionTree as StageSnapshotLike);
+    const reads = collectStageReads(snap!.executionTree);
     // Reads of undefined values record `undefined` in EVERY mode (footprintjs
     // contract: `value === undefined ? undefined : marker/clone`) — they are
     // policy-neutral, so the shape assertion covers defined entries only.
@@ -108,7 +98,7 @@ describe('AgentOptions.readTracking — snapshot stageReads policy', () => {
     const agent = buildAgent('full');
     await agent.run({ message: 'go' });
 
-    const reads = collectStageReads(agent.getSnapshot()!.executionTree as StageSnapshotLike);
+    const reads = collectStageReads(agent.getSnapshot()!.executionTree);
     const entries = reads.flatMap((r) => Object.values(r)).filter((v) => v !== undefined);
     expect(entries.length).toBeGreaterThan(0);
     // 'full' = historical behavior: real values, never markers.
@@ -121,7 +111,7 @@ describe('AgentOptions.readTracking — snapshot stageReads policy', () => {
     const agent = buildAgent('off');
     await agent.run({ message: 'go' });
 
-    const reads = collectStageReads(agent.getSnapshot()!.executionTree as StageSnapshotLike);
+    const reads = collectStageReads(agent.getSnapshot()!.executionTree);
     expect(reads).toHaveLength(0);
   });
 

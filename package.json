@@ -532,6 +532,6 @@
   },
   "dependencies": {
     "contextfootprint": "0.1.1",
-    "foottrace": "^1.11.1"
+    "foottrace": "^1.15.0"
   }
 }
