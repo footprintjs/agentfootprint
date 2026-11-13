@@ -35,7 +35,12 @@ export function hostedTurns(
     bind?: BindHostedInvocation,
   ): Promise<HostedTurn> =>
     execution.withRun(async (run) => {
-      const recorder = bind?.({ view: run.view, runId: () => run.run.origin?.runId });
+      const recorder = bind?.({
+        view: run.view,
+        runId: () => run.run.origin?.runId,
+        // The value `conversationOwner` stamps on the finished checkpoint.
+        identity: () => run.value.identity,
+      });
       const owned =
         recorder === undefined
           ? run
