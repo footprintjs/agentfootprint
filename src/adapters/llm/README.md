@@ -151,6 +151,18 @@ each block. The receipt annotation says **prepared**, not sent or accepted;
 `servedAt` names the downstream gap. A final reply with no thinking still carries
 completion evidence. Checkpoints keep that JSON evidence, not a closure registry.
 
+The binding a reply carries (`anthropicThinkingReplay.ts · thinkingReplayBinding`)
+digests the conversation as the library sent it, BEFORE the cache marks. The
+check re-projects the history with no marks, so it must: a mark turns a string
+turn into a one-block array (`anthropicCacheWire.ts · applyCacheMarkers`), and a
+binding of the marked body never matched on a bound model, so default caching
+stopped every thinking-and-tool agent at its second call (r3-59-adapters-llm-1).
+For example, a first call `[{ role: 'user', content: 'What is k1?' }]` goes out
+marked as `[{ type: 'text', text: 'What is k1?', cache_control }]`, and its reply
+is bound to the plain string. Pinned through a real agent in
+`test/thinking/replay-with-default-caching.test.ts`, with records saved before
+the fix.
+
 No beta header or server drop policy is installed. The rule follows Anthropic's
 [tool workflow](https://platform.claude.com/docs/en/build-with-claude/thinking-tool-workflows)
 and [preserved-thinking](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking)

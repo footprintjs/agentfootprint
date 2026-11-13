@@ -328,7 +328,7 @@ export function invokeModelGateway(options: InvokeModelGatewayOptions): LLMProvi
       defaultMaxTokens,
       options.parallelToolCalls,
     );
-    const bindingFactory = thinkingReplayBinding(body, modelId);
+    const bindingFactory = thinkingReplayBinding(body, preparation.request, modelId);
     // Capture and send the same body even if caller-owned nested values change
     // while an asynchronous key source is resolving.
     const serializedBody = JSON.stringify(body);

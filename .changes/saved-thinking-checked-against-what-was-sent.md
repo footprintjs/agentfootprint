@@ -1,0 +1,6 @@
+---
+type: fixed
+---
+**Thinking agents with tools work again on the newest Claude models with default caching.** With default settings, an agent that used thinking and at least one tool on `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` or `claude-fable-5-1` stopped before its second model call with `UnsafeThinkingReplayError` (`prefix-changed`), and a finished thinking turn was dropped from the next request with a `prefix-changed` omission. The conversation had not changed: the saved check of the thinking was taken over the request after the library added its own cache marks, which rewrite a plain text turn into a marked block. The check is now taken over the conversation as the library sent it, before the cache marks, on `anthropic()`, `browserAnthropic()` and `invokeModelGateway()`.
+
+What an app will notice: the default setup completes its tool turns, and finished thinking is kept in the next request. Every saved conversation that replayed before still replays. A conversation saved by the broken path (its first call made, its second refused) still refuses on resume with the same error: start that turn again. `caching: 'off'`, which some apps used to get past this, is no longer needed.

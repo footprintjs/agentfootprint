@@ -88,15 +88,31 @@ function thinkingSequence(messages: readonly AnthropicMessageParam[]): string[] 
   );
 }
 
-/** Capture actual serialized request values BEFORE awaiting transport. */
+/**
+ * Capture actual serialized request values BEFORE awaiting transport.
+ *
+ * `request` is the prepared request `body` was built from. The conversation
+ * is digested from it, as the library sent it BEFORE the cache marks: the
+ * marks (`anthropicCacheWire.ts · applyCacheMarkers`) turn a string turn into
+ * a one-block array, which `inconsistency` never sees when it re-projects the
+ * history — so a binding of the marked body could never match on a bound
+ * model (r3-59-adapters-llm-1). Where no mark rewrote a turn, both forms
+ * digest the same, so every binding that matched before still matches.
+ *
+ * @example
+ *   const bind = thinkingReplayBinding(body, preparation.request, body.model);
+ */
 export function thinkingReplayBinding(
   body: AnthropicMessagesBody,
+  request: LLMRequest,
   model: string,
 ): (id: string) => Binding {
   const system = canonicalJson(systemOf(body.system));
   const tools = canonicalJson(toolsOf(body.tools));
-  const messages = canonicalJson(messagesWithoutThinking(body.messages));
-  const priorThinking = thinkingSequence(body.messages);
+  // The same projection `buildMessagesBody` sends and `inconsistency` checks.
+  const sent = toAnthropicMessages(request.messages);
+  const messages = canonicalJson(messagesWithoutThinking(sent));
+  const priorThinking = thinkingSequence(sent);
   return (id) => ({
     model,
     salt: id,

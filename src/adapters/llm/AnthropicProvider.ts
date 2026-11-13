@@ -233,7 +233,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
       const params = buildParams(preparation.request);
-      const bindingFactory = thinkingReplayBinding(params, params.model);
+      const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       try {
         // The signal rides the SDK's request options, so an abort cancels the
@@ -260,7 +260,7 @@ export function anthropic(options: AnthropicProviderOptions = {}): LLMProvider {
       throwIfAborted(req.signal);
       const preparation = prepareAnthropicReplay(req, modelOf(req.model), 'anthropic');
       const params = buildParams(preparation.request);
-      const bindingFactory = thinkingReplayBinding(params, params.model);
+      const bindingFactory = thinkingReplayBinding(params, preparation.request, params.model);
       if (preparation.omissions.length > 0) hooks?.onReplayPrepared?.(preparation);
       let stream: AnthropicStream;
       try {
