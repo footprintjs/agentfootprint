@@ -329,8 +329,8 @@ of scope.
   spec, same bytes, no call number, no clock — so an unchanged map serves
   unchanged bytes on every call and reuses the cached system prefix
   (`findings/serve.ts` · "The cache"). It is joined into `systemPieces`
-  AFTER the recovery piece and BEFORE the findings piece (injections →
-  recovery → ontology → findings, FIXED) and never pushed into
+  after the recovery piece (injections → recovery → ontology, FIXED; the
+  findings DATA goes after history) and never pushed into
   `systemPromptInjections` — a piece there would be exempt from the evidence
   gate. `servedView.ts · viewOf` recomposes it from the record in the same
   slot, so the receipt agrees by construction.

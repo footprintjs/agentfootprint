@@ -1810,7 +1810,7 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       'last line of the always-on findings instruction: a system piece the injection engine ' +
       'recomposes on every pass and the receipt hashes per request — never a `history` turn',
     drivenBy: [
-      'test/core/agent/findings-ledger.test.ts',
+      'test/core/agent/findings-declarations.test.ts',
       'test/time-travel/receipt-conformance.test.ts',
     ],
     // What the model may DO with facts, open readings, omitted entries and a
@@ -2642,8 +2642,8 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     surface: LEDGER_PIECE,
     lifetimeBecause:
       '`callLLM · buildCallLLMStage` composes it per request by `ontologyPiece` from the run ' +
-      'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece, ' +
-      'before the findings piece) — never pushed into `systemPromptInjections`, never written ' +
+      'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece; ' +
+      'the findings DATA goes after history) — never pushed into `systemPromptInjections`, never written ' +
       'into `history`; `servedView/ontology.ts · ontologyAt` recomposes the same one from the record and the ' +
       'receipt hashes it per request',
     drivenBy: [

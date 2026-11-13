@@ -14,8 +14,10 @@ import type { FindingsLedger, Standing, StandingRow } from './types.js';
 
 /**
  * The standings after which a result leaves the offer: a ticket on the wire
- * under every serve mode, a count or one line in the piece — nothing left to
- * re-judge. Every other current standing (`fact`, `open`) and no standing at
+ * under every serve mode, and in the findings DATA (`findings/context.ts ·
+ * findingsContext`) a `noise` result's id under `noise` and a `ruled-out`
+ * one's declaration under `limitations` — nothing left to re-judge. Every
+ * other current standing (`fact`, `open`) and no standing at
  * all keep the id nameable.
  */
 export const RETIRING_STANDINGS: readonly Standing[] = Object.freeze(['noise', 'ruled-out']);

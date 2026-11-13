@@ -395,7 +395,7 @@ export function findingsInstructionFor(arms: { readonly contingent: boolean }): 
  * says what the model may DO with each kind of line and promises nothing;
  * a constant, so the old piece's cache law held with it (`serve.ts`).
  * Its `test/modelFacingSurfaces.test.ts` row judges this constant, not the
- * live sentence.
+ * live sentence; the live sentence has its own row.
  */
 export const FINDINGS_ANSWER_ASK = [
   'When you answer, answer from the lines under `facts` and copy each value exactly as it is ' +

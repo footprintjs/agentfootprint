@@ -12,8 +12,8 @@ import { findingsFrame } from '../../helpers/findingsData.js';
  *     it again;
  *   • `callLLM · buildCallLLMStage` serves ONE piece with `source:
  *     'ontology'` on EVERY call, composed by `ontology/serve.ts ·
- *     ontologyPiece` from that key, joined after the recovery piece and
- *     before the findings piece, never as an injection;
+ *     ontologyPiece` from that key, joined after the recovery piece (the
+ *     findings DATA goes after history), never as an injection;
  *   • `servedView.ts · viewOf` recomposes it byte-equal from the record and
  *     the receipt hashes it as sent (the conformance law);
  *   • the grouped chart's `sf-llm-call` boundary carries the key across, so
@@ -237,9 +237,9 @@ describe('the declared ontology — served on every call', () => {
     expect((stateOf(r).activeInjections ?? []).some((i) => i.source === 'ontology')).toBe(false);
   });
 
-  it('joined AFTER the recovery piece and BEFORE the findings piece: injections → recovery → ontology → findings', async () => {
+  it('joined AFTER the recovery piece and LAST of the system pieces: the findings DATA goes after history', async () => {
     // A findings ledger with a standing declared on the second call, so the
-    // third call serves a findings piece beside the ontology piece.
+    // third call serves the findings DATA beside the ontology piece.
     const declaring: readonly Reply[] = [
       call('c1', 'lookup_port', { q: 'p1', _findings: { basis: 'exploratory' } }),
       call('c2', 'lookup_port', {
