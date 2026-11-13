@@ -382,8 +382,8 @@ export function wrongLines(
   const lines: Sentence[] = checks.signals.map((s) => s.sentence);
   // Every call, not only the listed ones: a count is a judgement.
   const all = calls.all;
-  // The same tally as `facts.errors` (`calls.ts` · `errorCounts`): a call that never
-  // reached its tool is "not executed", never "failed" (set 16).
+  // The same tally as `facts.errors` (`facts/errorCounts.ts` · `errorCounts`): a call that
+  // never reached its tool is "not executed", never "failed" (set 16).
   const { failed, notExecuted, refused, declined, notDispatched } = errorCounts(all);
   const troubled = all.filter(
     (c) =>

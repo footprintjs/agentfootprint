@@ -1,7 +1,7 @@
 /**
  * The "Anything wrong" counts of the answer account — ONE tally that
- * `facts.errors` (`account.ts`) and the `wrong.errors` line (`signals.ts` ·
- * `wrongLines`) both read, so the data and the sentence cannot disagree.
+ * `facts.errors` (`answer-account/account.ts`) and the `wrong.errors` line
+ * (`answer-account/signals.ts` · `wrongLines`) both read, so the data and the sentence cannot disagree.
  *
  * WHY its own module: since set 16 a call that never reached its tool has its
  * own count ("not executed") and is never "failed"; two hand-written copies

@@ -449,8 +449,8 @@ export interface AnswerFacts {
     /**
      * Calls that ended in an error and are not known not to have run:
      * `failed` (the tool ran) and `ended-in-error` (the record does not say)
-     * — `calls.ts` · `endedInError`. A call that never reached its tool is
-     * never counted here; it is `notExecuted`.
+     * — `facts/errorCounts.ts` · `endedInError`. A call that never reached
+     * its tool is never counted here; it is `notExecuted`.
      */
     readonly failed: number;
     /**

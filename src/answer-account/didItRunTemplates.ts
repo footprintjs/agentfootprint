@@ -29,7 +29,7 @@ export const DID_IT_RUN_TEMPLATES = {
   'found.notExecuted': t('{{tool:code}} did not run, so it found nothing.'),
   'found.endedInError': t('The call to {{tool:code}} ended in an error, not a result.'),
   // Version 2: a call that never reached its tool has its own count ("not executed"),
-  // never "failed" (`facts/calls.ts` · `errorCounts`). Version 1 counted it as failed.
+  // never "failed" (`facts/errorCounts.ts` · `errorCounts`). Version 1 counted it as failed.
   'wrong.errors': t(
     "{{count:n,'tool call','tool calls'}} did not run cleanly: {{failed}} failed, {{notExecuted}} not executed, {{refused}} refused by a rule, {{declined}} declined by a person, {{notDispatched}} not run.",
     'library',

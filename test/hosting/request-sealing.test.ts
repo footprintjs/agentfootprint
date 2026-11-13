@@ -245,7 +245,10 @@ describe('streamHandler — sealRequest', () => {
     );
     expect(out.status).toBe(200);
     expect(seenByCrm).toEqual([TOKEN('alice')]); // bob's call never reached the CRM
-    expect(out.wire).toContain('The tool failed.');
+    // The call never reached its tool (its credential was missing), so the page is told
+    // that, never "The tool failed." (`ag-ui/toolResultWords.ts`).
+    expect(out.wire).toContain('The call was not executed.');
+    expect(out.wire).not.toContain('The tool failed.');
     expect(out.wire).not.toContain(TOKEN('alice'));
   });
 
