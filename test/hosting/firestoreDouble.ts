@@ -70,7 +70,7 @@ import type {
   FirestoreQuerySnapshotLike,
   FirestoreSdkModule,
   FirestoreTransactionLike,
-} from '../../src/adapters/hosting/firestoreSessions.js';
+} from '../../src/adapters/hosting/firestoreSessions/index.js';
 
 /** The sentinel `FieldPath.documentId()` answers. Identity is all it needs. */
 export const DOCUMENT_ID_SENTINEL = { __documentId__: true } as const;

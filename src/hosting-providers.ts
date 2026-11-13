@@ -205,7 +205,7 @@ export {
   FIRESTORE_MAX_ENVELOPE_BYTES,
   EnvelopeTooLargeError,
   FirestoreIndexMissingError,
-} from './adapters/hosting/firestoreSessions.js';
+} from './adapters/hosting/firestoreSessions/index.js';
 
 export type {
   FirestoreSessions,
@@ -219,7 +219,7 @@ export type {
   FirestoreDocumentReferenceLike,
   FirestoreDocumentSnapshotLike,
   FirestoreTransactionLike,
-} from './adapters/hosting/firestoreSessions.js';
+} from './adapters/hosting/firestoreSessions/index.js';
 
 export type {
   AgentCoreRuntimeHostOptions,

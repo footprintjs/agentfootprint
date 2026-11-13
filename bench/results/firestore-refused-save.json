@@ -1,0 +1,162 @@
+{
+  "sentence": "Save refused: 1400228 bytes exceeds the 1040384-byte envelope ceiling; no transaction started.",
+  "error": {
+    "name": "EnvelopeTooLargeError",
+    "code": "ERR_ENVELOPE_TOO_LARGE",
+    "message": "[hosting] firestoreSessions: the conversation for session 'pilot-refused' serializes to 1400228 bytes, and one Firestore document holds at most 1048576 (this store refuses above 1040384, leaving room for the document's other fields).\n  Nothing was written and nothing was truncated — half a conversation stored as if it were whole is worse than a refusal you can see.\n  Compact the conversation before persisting it, keep large payloads as artifacts rather than in the transcript, or use a store with no per-record ceiling.",
+    "bytes": 1400228
+  },
+  "record": {
+    "operation": "save",
+    "snapshot": {
+      "sharedState": {
+        "failed": true,
+        "bytes": 1400228,
+        "envelopeLimit": 1040384,
+        "reason": "envelope-too-large"
+      },
+      "executionTree": {
+        "id": "save",
+        "runtimeStageId": "save#0",
+        "name": "Validate, snapshot and start save",
+        "isDecider": false,
+        "isFork": false,
+        "logs": {},
+        "errors": {},
+        "metrics": {},
+        "evals": {},
+        "stageWrites": {
+          "bytes": 1400228,
+          "envelopeLimit": 1040384,
+          "failed": true,
+          "reason": "envelope-too-large"
+        },
+        "stageReads": {
+          "bytes": {
+            "__readSummary": true,
+            "type": "number",
+            "preview": "1400228"
+          }
+        },
+        "flowMessages": [
+          {
+            "type": "next",
+            "description": "Moving to Save outcome stage",
+            "timestamp": 1794497703086,
+            "targetStage": "Save outcome"
+          }
+        ],
+        "next": {
+          "id": "save-outcome",
+          "runtimeStageId": "save-outcome#1",
+          "name": "Save outcome",
+          "isDecider": false,
+          "isFork": false,
+          "logs": {},
+          "errors": {},
+          "metrics": {},
+          "evals": {},
+          "flowMessages": [
+            {
+              "type": "branch",
+              "description": "Evaluated scope and returned 'refuse' → chose Preserve refusal path.",
+              "timestamp": 1794497703086,
+              "targetStage": "Preserve refusal",
+              "rationale": "returned branchId: refuse"
+            }
+          ],
+          "children": [
+            {
+              "id": "refuse",
+              "runtimeStageId": "refuse#2",
+              "name": "Preserve refusal",
+              "isDecider": false,
+              "isFork": false,
+              "logs": {},
+              "errors": {},
+              "metrics": {},
+              "evals": {},
+              "stageWrites": {
+                "failed": true,
+                "bytes": 1400228,
+                "envelopeLimit": 1040384,
+                "reason": "envelope-too-large"
+              }
+            }
+          ]
+        }
+      },
+      "initialState": {},
+      "commitLog": [
+        {
+          "overwrite": {
+            "failed": true,
+            "bytes": 1400228,
+            "envelopeLimit": 1040384,
+            "reason": "envelope-too-large"
+          },
+          "updates": {},
+          "redactedPaths": [],
+          "trace": [
+            {
+              "path": "failed",
+              "verb": "set"
+            },
+            {
+              "path": "bytes",
+              "verb": "set"
+            },
+            {
+              "path": "envelopeLimit",
+              "verb": "set"
+            },
+            {
+              "path": "reason",
+              "verb": "set"
+            }
+          ],
+          "stage": "Validate, snapshot and start save",
+          "stageId": "save",
+          "runtimeStageId": "save#0",
+          "untrackedSources": [
+            "args"
+          ],
+          "idx": 0
+        },
+        {
+          "overwrite": {},
+          "updates": {},
+          "redactedPaths": [],
+          "trace": [],
+          "stage": "Save outcome",
+          "stageId": "save-outcome",
+          "runtimeStageId": "save-outcome#1",
+          "untrackedSources": [
+            "args"
+          ],
+          "idx": 1
+        },
+        {
+          "overwrite": {},
+          "updates": {},
+          "redactedPaths": [],
+          "trace": [],
+          "stage": "Preserve refusal",
+          "stageId": "refuse",
+          "runtimeStageId": "refuse#2",
+          "untrackedSources": [
+            "args"
+          ],
+          "idx": 2
+        }
+      ],
+      "logAddress": {
+        "logRunId": "1794497703082-0000000001",
+        "drillPath": []
+      },
+      "commitValues": "delta",
+      "writeProvenance": "off",
+      "runId": "1794497703082-0000000001"
+    }
+  }
+}

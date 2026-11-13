@@ -1,0 +1,118 @@
+{
+  "schema": "firestore-chart-pilot-v1",
+  "label": "after",
+  "measuredAt": "2026-11-12T15:35:04.241Z",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "darwin",
+    "release": "25.5.0",
+    "architecture": "arm64",
+    "cpu": "Apple M5 Pro",
+    "cpuCount": 18
+  },
+  "source": {
+    "revision": "0fb3961f8cc78ef375683e97fa24fecd11ee569f",
+    "sourceSha256": "354d0d83b2cef7fda292ff66272a5d5fcf5503c28301dc666fe5db80936eb1eb",
+    "files": [
+      "src/adapters/hosting/firestoreSessions/address.ts",
+      "src/adapters/hosting/firestoreSessions/backend.ts",
+      "src/adapters/hosting/firestoreSessions/call.ts",
+      "src/adapters/hosting/firestoreSessions/chart.ts",
+      "src/adapters/hosting/firestoreSessions/constants.ts",
+      "src/adapters/hosting/firestoreSessions/errors.ts",
+      "src/adapters/hosting/firestoreSessions/execute.ts",
+      "src/adapters/hosting/firestoreSessions/factory.ts",
+      "src/adapters/hosting/firestoreSessions/failure.ts",
+      "src/adapters/hosting/firestoreSessions/index.ts",
+      "src/adapters/hosting/firestoreSessions/record.ts",
+      "src/adapters/hosting/firestoreSessions/retention.ts",
+      "src/adapters/hosting/firestoreSessions/rules.ts",
+      "src/adapters/hosting/firestoreSessions/run.ts",
+      "src/adapters/hosting/firestoreSessions/stages/close/close.ts",
+      "src/adapters/hosting/firestoreSessions/stages/complete/complete.ts",
+      "src/adapters/hosting/firestoreSessions/stages/decode/decode.ts",
+      "src/adapters/hosting/firestoreSessions/stages/forget/forget.ts",
+      "src/adapters/hosting/firestoreSessions/stages/list/list.ts",
+      "src/adapters/hosting/firestoreSessions/stages/owner/owner.ts",
+      "src/adapters/hosting/firestoreSessions/stages/ownership/ownership.ts",
+      "src/adapters/hosting/firestoreSessions/stages/project/project.ts",
+      "src/adapters/hosting/firestoreSessions/stages/read/read.ts",
+      "src/adapters/hosting/firestoreSessions/stages/save/save.ts",
+      "src/adapters/hosting/firestoreSessions/stages/write/write.ts",
+      "src/adapters/hosting/firestoreSessions/types.ts"
+    ],
+    "sourceDirty": true
+  },
+  "harnessSha256": "2ef3b7080c4bd508b685e09f822f11b286ade1d5eccd79daac130473e49f14a7",
+  "fixture": {
+    "serializedBytes": 290,
+    "sha256": "573aac43d9bcfcb78c3952814197b31b7706673e3ac4b2553ca3417d7e018098"
+  },
+  "protocol": {
+    "fakeBackend": true,
+    "networkCalls": 0,
+    "storeConstructionIncluded": false,
+    "warmupOperations": 100,
+    "warmupSaves": 50,
+    "warmupLoads": 50,
+    "measuredRounds": 5,
+    "savesPerRound": 1000,
+    "loadsPerRound": 1000,
+    "serial": true,
+    "assertionsTimed": false
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "persistMs": 89.50824999999998,
+      "hydrateMs": 48.185541,
+      "persistUsPerCall": 89.50824999999998,
+      "hydrateUsPerCall": 48.185541,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 2,
+      "persistMs": 91.23987499999998,
+      "hydrateMs": 32.921333000000004,
+      "persistUsPerCall": 91.23987499999998,
+      "hydrateUsPerCall": 32.921333000000004,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 3,
+      "persistMs": 61.30895799999996,
+      "hydrateMs": 30.771749999999997,
+      "persistUsPerCall": 61.30895799999996,
+      "hydrateUsPerCall": 30.771749999999997,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 4,
+      "persistMs": 68.039583,
+      "hydrateMs": 33.87129200000004,
+      "persistUsPerCall": 68.039583,
+      "hydrateUsPerCall": 33.87129200000004,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 5,
+      "persistMs": 55.596250000000055,
+      "hydrateMs": 31.8788330000001,
+      "persistUsPerCall": 55.59625000000006,
+      "hydrateUsPerCall": 31.8788330000001,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    }
+  ],
+  "median": {
+    "persistMs": 68.039583,
+    "hydrateMs": 32.921333000000004,
+    "persistUsPerCall": 68.039583,
+    "hydrateUsPerCall": 32.921333000000004
+  },
+  "limit": "In-process SDK double only; this does not measure service or network latency."
+}

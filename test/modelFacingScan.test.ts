@@ -496,11 +496,18 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "vendor-failure errors thrown to the host, saying the SDK's own message is withheld, and the long-running-operation timeout thrown to the host ('this call will not report a write')",
     },
   ],
-  'src/adapters/hosting/firestoreSessions.ts': [
+  'src/adapters/hosting/firestoreSessions/errors.ts': [
     {
       kind: 'not-model-facing',
-      count: 2,
-      why: 'store errors thrown to the operator, one of them printing the index command to run',
+      count: 1,
+      why: 'unchanged store index error thrown to the operator, printing the index command to run',
+    },
+  ],
+  'src/adapters/hosting/firestoreSessions/failure.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'unchanged sanitized store SDK error thrown to the operator',
     },
   ],
   'src/adapters/identity/agentcore.ts': [
@@ -1373,7 +1380,8 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 121,
+        // The two unchanged Firestore error literals also live in two owner files.
+        files: 122,
         total: 208,
         registry: 8,
         ephemeral: 26,

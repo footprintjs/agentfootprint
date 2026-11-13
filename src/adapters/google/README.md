@@ -12,7 +12,7 @@ operation, or describes a Vertex failure.
 | `agentEngineSessions` | `SessionLifecycle`   | `adapters/hosting/googleAgentEngine.ts`                           |
 | `memoryBankStore`     | `MemoryStore`        | `adapters/memory/memoryBank.ts`                                   |
 | `googleIdentity`      | `CredentialProvider` | `adapters/identity/google.ts` (its own SDK — see below)           |
-| `firestoreSessions`   | `SessionLifecycle`   | `adapters/hosting/firestoreSessions.ts` (its own SDK — see below) |
+| `firestoreSessions`   | `SessionLifecycle`   | `adapters/hosting/firestoreSessions/index.ts` (its own SDK — see below) |
 
 The first two share `aiPlatform.ts`. `googleIdentity` does not: it loads
 `google-auth-library` directly, because vending a token is a different job from

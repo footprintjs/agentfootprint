@@ -13,7 +13,7 @@
  *
  * So the laws moved out of the four suites and into `sessionLifecycleConformance`,
  * which is exported from `agentfootprint/hosting` for stores nobody here has
- * written. This file is the in-tree binding: six harnesses, one battery, one
+ * written. This file is the in-tree binding: seven harnesses, one battery, one
  * `it()` per case per store.
  *
  * Where a store cannot satisfy a case it DECLARES it by name with the reason,
@@ -37,8 +37,12 @@
  * mistake with fewer characters.
  */
 
+import {
+  assertEnrolledSessionStores,
+  sessionStoreFactories,
+} from '../helpers/sessionStoreRoster.js';
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,16 +64,19 @@ import type {
 import { agentCoreSessions } from '../../src/adapters/hosting/agentcore.js';
 import type { AgentCoreSessionClientLike } from '../../src/adapters/hosting/agentcore.js';
 import { firestoreSessions } from '../../src/hosting-providers.js';
+import { buildStore } from '../../src/adapters/hosting/firestoreSessions/factory.js';
 import {
   agentEngineSessions,
-  DEFAULT_USER_ID,
   SESSION_STATE_KEY,
 } from '../../src/adapters/hosting/googleAgentEngine.js';
 import { fakeFirestore } from './firestoreDouble.js';
 
+type EnrolledHarness = SessionStoreHarness & { factory: { readonly name: string } };
+
 // ─── memory ──────────────────────────────────────────────────────────
 
-const memoryHarness: SessionStoreHarness = {
+const memoryHarness: EnrolledHarness = {
+  factory: memorySessions,
   name: 'memorySessions',
   createStore: () => memorySessions(),
   // The Map is closed over, so there is no reaching into it — but this store
@@ -88,7 +95,8 @@ let sqliteNth = 0;
  *  wants. */
 const sqliteFiles = new WeakMap<object, string>();
 
-const sqliteHarness: SessionStoreHarness = {
+const sqliteHarness: EnrolledHarness = {
+  factory: sqliteSessions,
   name: 'sqliteSessions',
   createStore: () => {
     const file = join(tempDir, `s-${++sqliteNth}.db`);
@@ -124,7 +132,8 @@ function openRaw(file: string): RawDb {
 
 const firestoreStores = new WeakMap<object, ReturnType<typeof fakeFirestore>>();
 
-const firestoreHarness: SessionStoreHarness = {
+const firestoreHarness: EnrolledHarness = {
+  factory: firestoreSessions,
   name: 'firestoreSessions (double)',
   createStore: () => {
     const fake = fakeFirestore();
@@ -137,6 +146,20 @@ const firestoreHarness: SessionStoreHarness = {
     const documentId = (store as { documentIdFor(id: string): string }).documentIdFor(sessionId);
     const row = fake.store.get(documentId);
     if (row !== undefined) fake.store.set(documentId, { ...row, envelope: '{not json at all' });
+  },
+};
+
+// The internal factory returns the same port and is therefore in the census,
+// too. Exercise it directly under the same laws, not through a name exception.
+const firestoreBuildHarness: EnrolledHarness = {
+  ...firestoreHarness,
+  factory: buildStore,
+  name: 'buildStore (double)',
+  createStore: () => {
+    const fake = fakeFirestore();
+    const store = buildStore({ _sdk: fake.sdk });
+    firestoreStores.set(store, fake);
+    return store;
   },
 };
 
@@ -248,7 +271,8 @@ function fakeService() {
 
 const services = new WeakMap<object, ReturnType<typeof fakeService>>();
 
-const agentEngineHarness: SessionStoreHarness = {
+const agentEngineHarness: EnrolledHarness = {
+  factory: agentEngineSessions,
   name: 'agentEngineSessions (fake service)',
   createStore: () => {
     const service = fakeService();
@@ -296,7 +320,8 @@ const agentEngineHarness: SessionStoreHarness = {
 let agentCoreNth = 0;
 const agentCoreFiles = new WeakMap<object, string>();
 
-const agentCoreFileHarness: SessionStoreHarness = {
+const agentCoreFileHarness: EnrolledHarness = {
+  factory: agentCoreSessions,
   name: "agentCoreSessions({ store: 'session-storage' })",
   createStore: () => {
     const path = join(tempDir, `agentcore-${++agentCoreNth}.json`);
@@ -357,7 +382,8 @@ function fakeEventLog(): {
 
 const agentCoreLogs = new WeakMap<object, ReturnType<typeof fakeEventLog>>();
 
-const agentCoreMemoryHarness: SessionStoreHarness = {
+const agentCoreMemoryHarness: EnrolledHarness = {
+  factory: agentCoreSessions,
   name: "agentCoreSessions({ store: 'memory' })",
   createStore: () => {
     const log = fakeEventLog();
@@ -390,6 +416,7 @@ const HARNESSES = [
   memoryHarness,
   sqliteHarness,
   firestoreHarness,
+  firestoreBuildHarness,
   agentEngineHarness,
   agentCoreFileHarness,
   agentCoreMemoryHarness,
@@ -539,30 +566,23 @@ describe('what enrolling the container runtime’s two stores actually proved', 
   });
 
   it('no session store in this repository is missing from the roster', () => {
-    // The crude guard the original omission needed. `agentCoreSessions` was a
+    // The guard the original omission needed. `agentCoreSessions` was a
     // shipped `SessionLifecycle` that appeared here zero times and was not
-    // declared anywhere — so a factory whose name ends in `Sessions`, exported
-    // from either hosting folder, must be NAMED in this file. Cruder than a
-    // type-level check and a better guardrail: the failure it catches is
+    // declared anywhere — so every exported factory returning that port,
+    // including a nested owner, must have a real harness reference. The
+    // return type distinguishes a store from a reply helper; the failure is
     // somebody adding a store on a Friday and enrolling it "next week".
-    const roots = ['src/hosting', 'src/adapters/hosting'];
-    const factories = new Set<string>();
-    for (const root of roots) {
-      const dir = resolve(dirname(fileURLToPath(import.meta.url)), '../..', root);
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
-        const text = readFileSync(join(dir, entry.name), 'utf8');
-        for (const match of text.matchAll(/^export function (\w*Sessions)\(/gm)) {
-          factories.add(match[1]!);
-        }
-      }
-    }
+    const here = dirname(fileURLToPath(import.meta.url));
+    const roots = ['src/hosting', 'src/adapters/hosting'].map((root) =>
+      resolve(here, '../..', root),
+    );
+    const factories = sessionStoreFactories(roots, resolve(here, '../../src/hosting/types.ts'));
     // If this ever finds nothing, the test would pass vacuously.
     expect(factories.size).toBeGreaterThanOrEqual(5);
-    const thisFile = readFileSync(fileURLToPath(import.meta.url), 'utf8');
-    for (const factory of factories) {
-      expect(thisFile, `${factory} ships and is not enrolled in the battery`).toContain(factory);
-    }
+    assertEnrolledSessionStores(
+      factories,
+      HARNESSES.map((harness) => harness.factory.name),
+    );
   });
 });
 

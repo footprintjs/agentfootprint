@@ -1,0 +1,93 @@
+{
+  "schema": "firestore-chart-pilot-v1",
+  "label": "before",
+  "measuredAt": "2026-11-12T15:03:04.290Z",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "darwin",
+    "release": "25.5.0",
+    "architecture": "arm64",
+    "cpu": "Apple M5 Pro",
+    "cpuCount": 18
+  },
+  "source": {
+    "revision": "0fb3961f8cc78ef375683e97fa24fecd11ee569f",
+    "sourceSha256": "f949e6517a7e87c2c93a8ca2c78b25bcdb2210b0116341a8bc6f41cdf0cf0bd9",
+    "files": [
+      "src/adapters/hosting/firestoreSessions.ts"
+    ],
+    "sourceDirty": false
+  },
+  "harnessSha256": "afd2094fe9179e9756371df42ffe29ecd9ca4cb99f7bf04a6c3109f4ffc111bd",
+  "fixture": {
+    "serializedBytes": 290,
+    "sha256": "573aac43d9bcfcb78c3952814197b31b7706673e3ac4b2553ca3417d7e018098"
+  },
+  "protocol": {
+    "fakeBackend": true,
+    "networkCalls": 0,
+    "storeConstructionIncluded": false,
+    "warmupOperations": 100,
+    "warmupSaves": 50,
+    "warmupLoads": 50,
+    "measuredRounds": 5,
+    "savesPerRound": 1000,
+    "loadsPerRound": 1000,
+    "serial": true,
+    "assertionsTimed": false
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "persistMs": 5.49879199999998,
+      "hydrateMs": 2.8039999999999736,
+      "persistUsPerCall": 5.49879199999998,
+      "hydrateUsPerCall": 2.8039999999999736,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 2,
+      "persistMs": 3.248917000000006,
+      "hydrateMs": 2.405708000000004,
+      "persistUsPerCall": 3.248917000000006,
+      "hydrateUsPerCall": 2.405708000000004,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 3,
+      "persistMs": 3.493249999999989,
+      "hydrateMs": 2.396041999999966,
+      "persistUsPerCall": 3.493249999999989,
+      "hydrateUsPerCall": 2.396041999999966,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 4,
+      "persistMs": 3.0315420000000017,
+      "hydrateMs": 2.2550830000000133,
+      "persistUsPerCall": 3.0315420000000017,
+      "hydrateUsPerCall": 2.2550830000000133,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    },
+    {
+      "round": 5,
+      "persistMs": 2.509124999999983,
+      "hydrateMs": 2.622458999999992,
+      "persistUsPerCall": 2.509124999999983,
+      "hydrateUsPerCall": 2.622458999999992,
+      "transactionCalls": 1000,
+      "documentReadCalls": 1000
+    }
+  ],
+  "median": {
+    "persistMs": 3.248917000000006,
+    "hydrateMs": 2.405708000000004,
+    "persistUsPerCall": 3.248917000000006,
+    "hydrateUsPerCall": 2.405708000000004
+  },
+  "limit": "In-process SDK double only; this does not measure service or network latency."
+}
