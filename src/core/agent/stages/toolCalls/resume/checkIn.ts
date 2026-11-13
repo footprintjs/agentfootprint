@@ -5,6 +5,7 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import { boundArgsOf } from '../access/bindings.js';
+import { recordedHiddenArgs } from '../../../../checkInHiddenArgs.js';
 import { type CheckInDecision, declinedResult } from '../../../../checkin.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ReadToolResultEnvelope } from '../../../../../semantics/toolEffects.js';
@@ -88,6 +89,10 @@ export function buildResumeCheckIn(
     // stays exactly what it was — a structured `CheckInDecision`, never
     // parsed from prose — and the record now says which surface asked.
     const answeredVia = scope.pausedComponentId as string | undefined;
+    // The names the person was told were hidden — kept with the request and
+    // bound into its id, never worked out again from the tool as it is now
+    // (`checkInHiddenArgs.ts`); `'not-recorded'` for a pause stored before.
+    const hiddenArgs = recordedHiddenArgs(scope.pausedRequest);
     typedEmit(scope, 'agentfootprint.checkin.decision', {
       toolName,
       toolCallId,
@@ -96,6 +101,7 @@ export function buildResumeCheckIn(
       approved: decision.approved,
       by: decision.by,
       ...(decision.note !== undefined && { note: decision.note }),
+      ...((typeof hiddenArgs === 'string' || hiddenArgs.length > 0) && { hiddenArgs }),
       ...(answeredVia !== undefined && { componentId: answeredVia }),
     });
 

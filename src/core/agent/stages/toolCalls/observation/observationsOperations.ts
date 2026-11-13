@@ -4,6 +4,7 @@ import type { AgentState } from '../../../types.js';
 import type { AgentfootprintEventMap } from '../../../../../events/registry.js';
 import { frozenView, frozenProjectionOf } from '../../../../../lib/frozenCopy.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
+import { shownFieldsOf } from '../../../../toolShownArgs.js';
 import {
   startToolCall,
   toolOutcomeOf,
@@ -20,14 +21,18 @@ export function buildToolObservationsOperations(
   const emitToolStart = (
     scope: TypedScope<AgentState>,
     payload: AgentfootprintEventMap['agentfootprint.stream.tool_start']['payload'],
+    tool?: unknown,
   ): void => {
     // A listener sees the call's frozen copy — the dispatch loop's shared one
     // when it hands that over — never the arguments the tool runs with: one
     // that set `amount = 9000` used to refund 9000. Arguments no copy can be
     // made of are carried as a frozen, detached projection — what JSON writes
-    // of them — never as their live objects.
+    // of them — never as their live objects. A tool whose argument view hides
+    // something adds the view's output and the hidden names, read from that
+    // same copy (`toolShownArgs.ts` · `shownFieldsOf`).
     const args = frozenView(payload.args) ?? frozenProjectionOf(payload.args);
-    typedEmit(scope, 'agentfootprint.stream.tool_start', { ...payload, args });
+    const shown = shownFieldsOf(tool, args);
+    typedEmit(scope, 'agentfootprint.stream.tool_start', { ...payload, args, ...shown });
     const ledger = deps.toolCallLedger;
     if (ledger === undefined) return;
     const prior = scope.toolCallLedger;

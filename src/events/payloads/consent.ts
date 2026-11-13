@@ -52,6 +52,18 @@ export interface CheckInDecisionPayload {
   readonly approved: boolean;
   readonly by: string;
   readonly note?: string;
+  /**
+   * The arguments the tool's view hid from the person when they decided — the
+   * names the request carried (`CheckInRequest.hiddenArgs`), kept with the
+   * pause and bound into the request id, never worked out again from the tool
+   * at resume — so a later reader can tell this decision was given without
+   * seeing those values. Names only, never values. Absent when the view hid
+   * nothing. `'not-recorded'` when the pause was stored before the list
+   * existed: the record does not say what was hidden. Under a run's
+   * redaction policy the names are served like any string the library did not
+   * write: masked, as the tool's name is.
+   */
+  readonly hiddenArgs?: readonly string[] | 'not-recorded';
   /** The registered component that COLLECTED this decision (9.24.0) — the
    *  `componentId` the ask carried. Absent when the ask was prose-only. The
    *  decision itself is unchanged: a structured fact, never parsed from the

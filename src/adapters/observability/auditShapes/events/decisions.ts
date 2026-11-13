@@ -151,6 +151,9 @@ export function decisionsShapes() {
       approved: bool,
       by: str,
       note: charsMarker,
+      // Argument NAMES the tool's view hid from the person — never values —
+      // or the fixed word for a pause stored before the list existed.
+      hiddenArgs: either(listOf(str), oneOf('not-recorded')),
       componentId: str,
     }),
 

@@ -4,7 +4,7 @@ title: CheckInStats
 
 # Interface: CheckInStats
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:70](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L70)
+Defined in: [src/recorders/core/CheckInRecorder.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L75)
 
 Roll-up counts across a run (or the recorder's lifetime).
 
@@ -14,7 +14,7 @@ Roll-up counts across a run (or the recorder's lifetime).
 
 > `readonly` **approved**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L72)
+Defined in: [src/recorders/core/CheckInRecorder.ts:77](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L77)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:72](https://github.com/footpr
 
 > `readonly` **declined**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L73)
+Defined in: [src/recorders/core/CheckInRecorder.ts:78](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L78)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:73](https://github.com/footpr
 
 > `readonly` **pending**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L75)
+Defined in: [src/recorders/core/CheckInRecorder.ts:80](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L80)
 
 Asks with no decision yet (paused, awaiting a human).
 
@@ -40,4 +40,4 @@ Asks with no decision yet (paused, awaiting a human).
 
 > `readonly` **requested**: `number`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L71)
+Defined in: [src/recorders/core/CheckInRecorder.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L76)

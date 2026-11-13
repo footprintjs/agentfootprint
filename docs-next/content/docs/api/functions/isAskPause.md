@@ -6,7 +6,7 @@ title: isAskPause
 
 > **isAskPause**(`result`): `result is RunnerPauseOutcome & { ask: MiddlewareAsk }`
 
-Defined in: [src/core/pause.ts:167](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L167)
+Defined in: [src/core/pause.ts:169](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L169)
 
 Type guard — is this a middleware-ask pause (a `toolMiddleware` answered
 `ask`), as opposed to a check-in or a plain `askHuman` pause? Narrows `ask`

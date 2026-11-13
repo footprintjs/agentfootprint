@@ -524,6 +524,7 @@ const WORDS: { readonly [W in LibraryWord]: true } = {
   'not-in-result': true,
   'not-needed': true,
   'not-permitted': true,
+  'not-recorded': true,
   'not-replayable': true,
   'not-retryable': true,
   'not-run': true,
@@ -1000,6 +1001,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   headroomChars: true,
   held: true,
   hidden: true,
+  hiddenArgs: true,
   hint: true,
   history: true,
   id: true,
@@ -1262,6 +1264,7 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   shapeHash: true,
   short: true,
   shown: true,
+  shownArgs: true,
   shownBytes: true,
   signature: true,
   sizeChars: true,
@@ -1427,14 +1430,11 @@ const FIELDS: { readonly [F in FieldName]: true } = {
   // @generated fields — end
 };
 
-Object.freeze(WORDS);
-Object.freeze(FIELDS);
-
 /** (a) The library's own words — one exported frozen set. */
-export const LIBRARY_WORDS: Readonly<Record<string, true>> = WORDS;
+export const LIBRARY_WORDS: Readonly<Record<string, true>> = Object.freeze(WORDS);
 
 /** The field names the library's payload types declare. */
-export const FIELD_NAMES: Readonly<Record<string, true>> = FIELDS;
+export const FIELD_NAMES: Readonly<Record<string, true>> = Object.freeze(FIELDS);
 
 const has = (record: Readonly<Record<string, true>>, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, key);

@@ -4,9 +4,11 @@ import type { AgentfootprintEventMap } from '../../../../../../events/registry.j
 
 /** Explicit callback contract for existing observations operations. */
 export interface ToolObservationsOperations {
+  /** `tool` — the resolved tool, whose argument view the event's `shownArgs` applies. */
   readonly emitToolStart: (
     scope: TypedScope<AgentState>,
     payload: AgentfootprintEventMap['agentfootprint.stream.tool_start']['payload'],
+    tool?: unknown,
   ) => void;
   readonly emitToolEnd: (
     scope: TypedScope<AgentState>,

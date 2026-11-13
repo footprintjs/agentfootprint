@@ -18,7 +18,7 @@ import { unboundCallRefusal } from './bindings.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
-import { shownArgsOf } from '../../../../toolShownArgs.js';
+import { viewedCall } from './viewedCall.js';
 import {
   markPrivateCheckIn,
   requirePrivateQuestionSupport,
@@ -73,11 +73,16 @@ export async function admitCheckInCall(
     },
   );
   if (trips && frame.askedLayer === undefined) requirePrivateQuestionSupport(scope, [frame.tool]);
+  const asking = trips && frame.askedLayer === undefined;
+  // What the person is shown, and the names it hides: the tool's view, run
+  // on the call's shared frozen copy (never on the arguments that run), once.
+  const viewed = asking ? viewedCall(frame.tool, frame.viewOf, frame.callArguments.callArgs) : {};
   // The request the person would be asked (`core/consentRequest.ts`):
   // an id their decision must quote, bound to a detached copy of this
-  // exact call — minted only for a call that is about to pause.
+  // exact call AND to the names the person is told are hidden — minted
+  // only for a call that is about to pause.
   const bound =
-    trips && frame.askedLayer === undefined
+    viewed.hiddenArgs !== undefined
       ? mintConsentRequest(
           {
             gate: 'checkIn',
@@ -85,17 +90,16 @@ export async function admitCheckInCall(
             toolCallId: frame.tc.id,
             party: frame.resolved.party,
             args: frame.callArguments.callArgs,
+            hiddenArgs: viewed.hiddenArgs,
           } satisfies GatedCall,
           frame.decisionLedger,
         )
       : undefined;
-  // What the person is shown — and the evidence assembler and every
-  // `checkin.request` listener handed: the call's shared frozen copy
-  // (equal to `bound.args`, which was copied from the same arguments).
-  // The paused state keeps `bound.args`, the copy the request is bound
-  // to, so nothing that sees the question can change the call the
-  // answer runs.
-  const shown = bound === undefined ? undefined : frame.viewOf(shownArgsOf(frame.tool, bound.args));
+  // The evidence assembler and every `checkin.request` listener are
+  // handed a frozen copy of the shown form. The paused state keeps
+  // `bound.args`, the copy the request is bound to, so nothing that sees
+  // the question can change the call the answer runs.
+  const shown = bound === undefined ? undefined : viewed.shown;
   if (!trips) {
     // Predicate said no — fall through to the normal credential+execute
     // path below (this `if` block is the ONLY thing the gate adds).
@@ -138,11 +142,16 @@ export async function admitCheckInCall(
           )
         : undefined;
     const intent = scope.llmLatestContent ? String(scope.llmLatestContent) : undefined;
+    // The person is told what they cannot see; the request id commits to
+    // it and the decision's record repeats it (`resume/checkIn.ts`).
+    const hiddenArgs = bound.request.hiddenArgs ?? [];
+    const hidden = hiddenArgs.length > 0 ? { hiddenArgs } : {};
     let evidence: CheckInRequest['evidence'];
     try {
       evidence = await deps.checkIn!.assembler({
         tool: { name: frame.tc.name, description: frame.tool.schema.description },
         args: shown,
+        ...hidden,
         ...(intent !== undefined && { intent }),
         iteration: frame.iteration,
         history: historyForEvidence,
@@ -159,6 +168,7 @@ export async function admitCheckInCall(
       id: bound.request.id,
       tool: frame.tc.name,
       args: shown,
+      ...hidden,
       ...(intent !== undefined && { intent }),
       evidence,
       ...(gateComponent !== undefined && { component: gateComponent }),

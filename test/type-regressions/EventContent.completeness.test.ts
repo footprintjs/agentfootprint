@@ -401,6 +401,7 @@ const CANARY_PAYLOAD: {
     approved: true,
     by: 'approver-7',
     note: leaf(c, 'note'),
+    hiddenArgs: ['account'],
     componentId: 'approve-card',
   }),
   'agentfootprint.checkin.request': (c) => ({

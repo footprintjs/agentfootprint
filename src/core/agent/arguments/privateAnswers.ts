@@ -4,7 +4,8 @@ import {
   privateFieldsInForce,
 } from '../../../redaction/runRedaction.js';
 import type { PrivateFieldRoot, PrivateRecordFields } from '../../../redaction/privateFields.js';
-import { carriesArgumentView, changedArgKeys, shownArgsOf } from '../../toolShownArgs.js';
+import { carriesArgumentView, hiddenArgNames } from '../../toolShownArgs.js';
+import { frozenView } from '../../../lib/frozenCopy.js';
 import type { Tool } from '../../../tools/tools.js';
 import type { ToolArgs } from '../../../tools/runChain.js';
 import type { ArgumentAskState } from './ask.js';
@@ -81,8 +82,9 @@ function keptFacts(prior: PrivateRecordFields | undefined, before: unknown) {
   return { hidden, unknown: false };
 }
 
+/** The view runs on a frozen copy: it is the tool author's code, and `args` may be what runs. */
 function hiddenKeys(tool: unknown, args: ToolArgs): ReadonlySet<string> {
-  return new Set(tool === undefined ? [] : changedArgKeys(args, shownArgsOf(tool, args)));
+  return new Set(hiddenArgNames(tool, frozenView(args) ?? args));
 }
 
 /** Resolve index selectors to this exact call/iteration, never by matching answer values. */

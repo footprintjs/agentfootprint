@@ -47,6 +47,8 @@ export function buildToolResume(
     const catalog = deps.prepareProviderTools?.(scope);
     if (catalog) await catalog;
     runSignal?.throwIfAborted();
+    // A check-in's approval covers the view it was asked on (`access/heldView.ts`).
+    if (consentGate === 'checkIn') operations.heldView(scope);
     // The time layer: the paused turn's clock is KEPT — its words were
     // resolved against it. A resume that passed a different `time` is
     // recorded here, first, and never applied (TQ21).

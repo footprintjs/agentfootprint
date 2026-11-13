@@ -30,10 +30,23 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:62](https://github.com/footpr
 
 > `readonly` `optional` **componentId?**: `string`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:66](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L66)
+Defined in: [src/recorders/core/CheckInRecorder.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L71)
 
 The registered component that collected this decision (9.24.0), when the
  ask carried one — which SURFACE the person answered through.
+
+***
+
+### hiddenArgs?
+
+> `readonly` `optional` **hiddenArgs?**: readonly `string`[] \| `"not-recorded"`
+
+Defined in: [src/recorders/core/CheckInRecorder.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L68)
+
+The arguments the tool's view hid from the person when they decided
+ (`CheckInDecisionPayload.hiddenArgs`): this approval or decline was
+ given without seeing those values. Names only. Absent when none were
+ hidden; `'not-recorded'` for a pause stored before the list existed.
 
 ***
 

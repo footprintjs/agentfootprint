@@ -108,6 +108,10 @@ agUi({
   structural (no `@ag-ui/*` import).
 - `ids.ts` — the one id grammar.
 - `serializer.ts` — `agUiSerializer`, the per-run translation.
+- `shownArgs.ts` — a tool call's arguments as the page may see them: for a tool
+  whose argument view hides values, the view's output (`stream.tool_start.shownArgs`)
+  as `TOOL_CALL_ARGS`, and the hidden names on `metadata.agentfootprint.hiddenArgs`
+  of `TOOL_CALL_START` and of a check-in's interrupt.
 - `framing.ts` — `agUiSse`, the framing strategy.
 - `request.ts` — the reader port (`AgUiRequestReader`), the core's read
   (`readAgUiRequest` → `readAgUiRunInput`) and the turn a request may ask for.

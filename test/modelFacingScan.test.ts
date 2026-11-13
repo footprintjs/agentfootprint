@@ -695,8 +695,15 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
   'src/core/pause.ts': [
     {
       kind: 'not-model-facing',
-      count: 5,
-      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape, or with a decision that does not answer the paused request (ResumeDecisionError, its `closed-by-host` sentence included — served as a 409 body, never on a model`s wire)',
+      count: 2,
+      why: 'resume errors thrown to the host when a checkpoint is answered with the wrong shape (DecisionRequiredError, PauseAnswerRequiredError — never on a model`s wire)',
+    },
+  ],
+  'src/core/resumeDecisionMessage.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 4,
+      why: 'ResumeDecisionError`s sentences, moved out of pause.ts, for a decision that does not answer the paused request — its `closed-by-host` and `view-changed` sentences included — thrown to the caller of resume() and served as a 409 body, never on a model`s wire',
     },
   ],
   'src/core/runCheckpoint.ts': [
@@ -1373,12 +1380,16 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 121,
-        total: 208,
+        // The approver is told what is hidden: ResumeDecisionError's sentences
+        // move from pause.ts (5 → 2) to resumeDecisionMessage.ts (4), which adds
+        // the host-facing `view-changed` sentence ("hidden now, shown when
+        // asked"). files 121 → 122, total 208 → 209, notModelFacing 139 → 140.
+        files: 122,
+        total: 209,
         registry: 8,
         ephemeral: 26,
         unrepaired: 35,
-        notModelFacing: 139,
+        notModelFacing: 140,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —

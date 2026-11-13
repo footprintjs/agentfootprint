@@ -7,7 +7,9 @@ Fold-feeding: `agent/runtime/skills/owner.ts` · `readSkillOfferFor` and `agent/
 filters with. Trace: `cost.ts`. Support: `runInput.ts`,
 `conversation.ts`, `translator.ts`, `outputFallback.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
-may show), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
+may show), `checkInHiddenArgs.ts` / `checkInWillDo.ts` (what a check-in tells
+the person is hidden), `consentRequestId.ts` (a request id's derivation),
+`resumeDecisionMessage.ts` (a refused resume's sentences), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
 the one input a composition hands them).
 Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 `LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
@@ -416,3 +418,26 @@ not proof that a call ran or that a host closed it. Local close evidence is
 scoped to the exact ledger identity and request; eviction or restart loses it.
 
 `pauseRecord.ts` holds the complete native-pause position/reason utilities. `runnerCoreValues.ts` names per-invocation domain values; RunnerBase remains the shared native wiring facade.
+
+## What a check-in tells the person is hidden
+
+A tool can carry an argument view (`toolShownArgs.ts`; `flowchartAsTool({ redact })`,
+`runbookAsTool({ redact })`). A check-in shows the person the view's output and names the
+arguments it hides (`CheckInRequest.hiddenArgs`). That list is the library's READING of the
+view (`toolShownArgs.ts` · `hiddenArgNames`), never of the shown text: a name is listed when
+the view's output for it differs from the input, or when the library could not decide (a
+string handed back unchanged is probed on its own with a stand-in; a probe the view throws
+on is listed). Two cases it cannot see: a view that is not a function of its input alone (a
+clock, a counter, outside state), and a placeholder that is not a string equal to the real
+value. Example: a view hiding `to` reads `{ to: 'REDACTED', memo: 'REDACTED' }` → `['to']`
+when the real `memo` is the string `'REDACTED'`.
+
+The list is bound when the request is made: it is part of what the request id is computed
+from (`consentRequestId.ts`, left out when empty), kept on the paused request and read back
+on resume (`checkInHiddenArgs.ts`); a resume whose tool's view would hide another set is
+refused `'view-changed'` (`agent/stages/toolCalls/access/heldView.ts`). A pause stored before
+the list existed reads `'not-recorded'`. At the ask (`access/viewedCall.ts`), the resume's
+check, `stream.tool_start` and the private-answer marks the view runs on a frozen copy, so
+those readings cannot change the call. Not covered yet: `execution/dispatchCall.ts` takes
+`stream.tool_end`'s `changedArgKeys` by running the view on the call's own arguments, before
+the check-in, so a view that writes into its input still changes the call that runs.
