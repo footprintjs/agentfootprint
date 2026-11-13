@@ -35,7 +35,7 @@ import type { WindowStrategy, WindowStrategyInput, WindowStrategyResult } from '
 import type { TokenBudgetOptions, TokenBudgetRecord } from '../types.js';
 
 /** `WindowRecord.strategy` written by every record this strategy files. */
-export const TOKEN_BUDGET = 'token-budget';
+const TOKEN_BUDGET = 'token-budget';
 
 /**
  * Drop the oldest turns whenever the last call's adapter-reported input
