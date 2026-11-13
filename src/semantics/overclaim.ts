@@ -43,7 +43,10 @@
  * they miss is a missed finding, never a pass. The fuller detection grammar
  * (clauses, negation scope, languages) belongs to the delivery check, a later
  * piece; it may reuse these lists. {@link OVERCLAIM_PHRASES_VERSION} changes
- * whenever a list does.
+ * whenever a list does: `test/semantics/overclaim.test.ts` pins a digest of
+ * both lists' source lines per version, so a list edit without a bump fails
+ * CI. Nothing reads the version at run time: no finding carries it, and it
+ * is on no public door.
  */
 
 import { readAbsence, readCoverageLedger } from './coverage/recognize.js';
@@ -51,7 +54,10 @@ import { namesFacetOf } from './coverage/among.js';
 import { readToolResultEnvelope } from './toolEffects.js';
 import type { ToolAbsence } from './coverage/types.js';
 
-/** Bumped whenever {@link NON_EXISTENCE} or {@link WRONGNESS} changes. */
+/**
+ * Bumped whenever {@link NON_EXISTENCE} or {@link WRONGNESS} changes; the
+ * digest test in `test/semantics/overclaim.test.ts` fails until it is.
+ */
 export const OVERCLAIM_PHRASES_VERSION = 1;
 
 /** The opt-in rule sets `check:semantics` takes (`rules: ['overclaim']`). */

@@ -56,8 +56,11 @@
  *
  * Not proof the arithmetic answered the question: "59.2% used" is accepted
  * as the ratio of two columns even if the person asked about one pool. Not
- * open-ended: a product, an average, a chain of two derivations, or a sum
- * over an arbitrary subset of rows is not reconstructed and is flagged — the
+ * open-ended: a product, an average, a sum over an arbitrary subset of rows,
+ * or any derivation beyond the six listed above is not reconstructed and is
+ * flagged. Those six already include combinations: a scaled column sum, a
+ * ratio or a difference of two column sums, and 100 − such a ratio; a scaled
+ * difference or a scaled average is not among them and is flagged — the
  * set is closed on purpose, because every derivation added is a window an
  * invented number can fall through by coincidence. The coincidence is real
  * and bounded by precision: a whole-number figure matches anything within

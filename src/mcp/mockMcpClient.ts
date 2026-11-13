@@ -54,8 +54,8 @@ export interface MockMcpTool {
   /**
    * MCP's extensibility bag, exactly as a real server would send it (9.71.0).
    *
-   * agentfootprint's tool DECLARATIONS — `argumentsFrom`, `resultKind`,
-   * `owner`, `resultClass`, `resultCeiling` — ride under the `agentfootprint`
+   * agentfootprint's tool DECLARATIONS — the declarations in `McpToolExtras`
+   * (`toolExtras.ts`), such as `argumentsFrom` — ride under the `agentfootprint`
    * key here, and this mock reads them through the SAME defensive reader
    * `mcpClient` uses. So a rail armed by a remotely-declared tool can be
    * developed and tested before the real server exists, and so can the

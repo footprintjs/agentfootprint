@@ -6,7 +6,7 @@
  *          dispatch door READS a foreign `in_progress` (a sidecar in another
  *          language mints `af_coverage` too) and drops a malformed one from the
  *          record, dev-warned, never repaired. Both ask {@link readInProgressList}.
- * Role:    core/ layer, pure.
+ * Role:    semantics/ layer (L1), pure.
  * Emits:   N/A (the caller emits `agentfootprint.tools.coverage_declared`).
  *
  * ## Why a third outcome needs its own words

@@ -1,6 +1,7 @@
 **Map** — the declared, versioned, inspectable unit of agent configuration: a
-named noun on the record, so two runs of "the support agent" can never be
-indistinguishable.
+named noun on the record, so a run can say which recipe, at which version, its
+author declared. The name is the author's label; it does not prove what the
+recipe configured.
 
 # `recipes/` — the declared unit of agent configuration
 
@@ -11,6 +12,17 @@ So an agent's setup lived as prose in an example, was copy-pasted into an app,
 drifted there — and afterwards nothing on the run could say which composition
 produced the agent that answered. Two runs of "the support agent" could differ
 in every tool and every instruction and be indistinguishable on the record.
+
+A recipe row narrows that gap; it does not close it. The row is the `{ id,
+version }` its author declared, and nothing derived from what `configure`
+actually did goes into it. Two recipes with the same id and version but
+different `configure` bodies (another system prompt, other tools) produce
+identical `run_configured` rows, and tools a later builder call adds do not
+show on the row either. What the agent was given is on other events: the tool
+names on `tools.offered` and the injections on `context.injected`. A per-run
+`.configure` override is flagged on the manifest (`llm.modelOverrides`
+includes `'configure'`), but its content is not. A real guarantee would need a
+digest of the configured tools and injections on the row; there is none today.
 
 A recipe is the missing noun:
 

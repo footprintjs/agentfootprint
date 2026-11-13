@@ -5,12 +5,11 @@ declares), and `period.ts` (the one period shape a result declares, its one
 rule set, and the verdict row the results layer files — honesty step 7b).
 Walker: `read.ts` — the ONE reader both dispatch boundaries and the raise site
 (`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`) call.
-Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground)
-and `emptiness.ts` (`readEmptiness` — the ONE reader of what came back, shared by
-the answer account and the answer's standing), `period.ts` · `periodVerdict`
-(the ONE verdict over a declared period), and `answer.ts` ·
-`coverageOfAnswer` — the answer's limits as data, which a typed answer carries
-instead of the block.
+Fold: `evidence.ts` (`absenceEvidenceProjection` — what an absence may ground),
+[`../../core/agent/emptiness.ts`](../../core/agent/emptiness.ts) — not in this folder — (`readEmptiness`,
+the ONE reader of what came back, shared by the answer account and the answer's standing),
+`period.ts` · `periodVerdict` (the ONE verdict over a declared period), and `answer.ts` ·
+`coverageOfAnswer` — the answer's limits as data, which a typed answer carries instead of the block.
 Lens: `answer.ts` · `composeAnswerWithCoverage`, the coverage block appended to
 a prose answer so the model cannot drop it, and `timeLimits.ts` ·
 `timeLimitLinesOf` — the time layer's limits lines of one turn (step T8), the
@@ -531,7 +530,7 @@ kind }`): an unknown one is still dropped — § 3's "Not the coverage lists'
 **The law.** A result reads as empty, non-empty or unreadable by ONE rule, and
 silence about what was searched is recorded as silence.
 
-`emptiness.ts` · `readEmptiness` — called as `readEmptiness(value, { rowsAt?, door? })` — takes the value the
+[`../../core/agent/emptiness.ts`](../../core/agent/emptiness.ts) · `readEmptiness` (not in this folder) — called as `readEmptiness(value, { rowsAt?, door? })` — takes the value the
 model read and the door the RECORD says the call returned, and answers with
 typed routes only — never a guess:
 
@@ -1010,12 +1009,13 @@ armed: the final branch cannot write back, and one key has one writer.
 | `absent.ts`     | `absent()`, the static note, and the ONE rule set for a suggestion (`tryInsteadOfAbsence` and `tryInsteadToolOfAbsence` read by it); re-exports its recognizer                                                                                                                                |
 | `among.ts`      | the `among` rule set (§ 9): `mintAmong` (the names facet, the irremovable gap, the count check) and `namesFacetOf` |
 | `ledger.ts`     | `coverage()` and the static note; re-exports its recognizer                                                                                                                                                                                                                                   |
-| `emptiness.ts`  | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
+| [`../../core/agent/emptiness.ts`](../../core/agent/emptiness.ts) (not in this folder) | the ONE reader of what came back (§ 6) — typed routes, the door the record holds, what a value's own envelope declares (`declaredByValue`), the `rowsAt` rule                                                                                                                                 |
 | `read.ts`       | the ONE reader both dispatch boundaries and the raise site (`../../core/agent/stages/toolCalls/evidence/coverageOperations.ts` · `declareRaisedAbsence`) call — lifts the suggestion beside the coverage                                                                                                                                |
 | `evidence.ts`   | what an absence is allowed to ground                                                                                                                                                                                                                                                          |
 | `period.ts`     | the ONE period shape (`DeclaredPeriod`), its ONE rule set (`periodProblem` — asked by every mint and every reader), the verdict (`periodVerdict`), the person's line (`periodLine`), the wire spelling as data (`PERIOD_WIRE`), and the results layer's `period` row with its checkpoint door |
 | `inProgress.ts` | the third outcome (§ 8) — the ONE rule set for `inProgress` (`readInProgressList`: the mint refuses by it, the dispatch door reads by it), the served clause and its inverse, the person's line, and the wire spelling as data (`IN_PROGRESS_WIRE`)                                           |
 | `answer.ts`     | folding the run's declarations into one appended block (a prose answer), or into the answer's coverage as data (`coverageOfAnswer`, a typed answer)                                                                                                                                           |
+| `timeLimits.ts`, `timeLimitFacts.ts`, `composedCoverage.ts`, `index.ts`, [`search/`](search/README.md) | the time layer's limits lines of one turn and, unrendered, what they say (the header's Lens line); the coverage row the library composes for a call of a tool that declares `search` (`composedCoverage.ts`), whose own rules live in `search/` (see its README); and `index.ts`, the door the main barrel publishes `absent()` and `coverage()` through |
 
 ## The notes cross a language boundary (9.70.0)
 

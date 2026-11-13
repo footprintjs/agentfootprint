@@ -152,13 +152,13 @@ already completed); the window's result naming
 last-tool-result pin, the drop notice, the dangling-reference check); and
 the trace toolpack's `inspect_tool_call`
 (`trace-toolpack/traceToolpack/toolCallJournal.ts` · `notDispatchedOf`); and, under
-`.findings()`, the offer, the identity source, the piece's `undeclared:`
-line, the collapse, the window's `droppedStandings` and a turn's standing
-(`core/agent/findings/offer.ts`, `findings/serve.ts` · `collapseJudged`,
-`stages/window.ts`, `core/agent/window/ledgerFactPins.ts` ·
-`turnStandingOf` — the `'ledger-fact'` pin and
-`WindowStrategyInput.standingOf`) — a settled message is not a result to
-judge. None of them parses the sentence.
+`.findings()`, the offer, the identity source, the findings DATA's `undeclaredResultIds`
+(and the replay-only piece's `undeclared:` line), the collapse, the window's
+`droppedStandings` and a turn's standing (`core/agent/findings/offer.ts`,
+`findings/context.ts` · `findingsContext`, `findings/serve.ts` · `collapseJudged`,
+`stages/window.ts`, `core/agent/window/ledgerFactPins.ts` · `turnStandingOf` — the
+`'ledger-fact'` pin and `WindowStrategyInput.standingOf`) — a settled message is not a
+result to judge. None of them parses the sentence.
 
 **One definition, two carriers.** The settled call's two brackets on the
 event stream carry the same fact under the same name, typed off THIS field

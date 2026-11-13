@@ -1,13 +1,13 @@
 /**
  * ontology/serve — the map served as one request-only system piece.
  *
- * Pattern: one pure function over the committed spec (the twin of
- *          `findings/serve.ts · findingsLedgerPiece`): no scope, no I/O, no
- *          clock, no call number. Same spec, same bytes.
+ * Pattern: one pure function over the committed spec (the twin of the
+ *          replay-only `findings/serve.ts · findingsLedgerPiece`): no scope,
+ *          no I/O, no clock, no call number. Same spec, same bytes.
  * Role:    Lens. `ontologyPiece` composes the piece `callLLM ·
- *          buildCallLLMStage` joins AFTER the recovery piece and BEFORE the
- *          findings piece (injections → recovery → ontology → findings,
- *          FIXED) and `servedView.ts · viewOf` recomposes from the run
+ *          buildCallLLMStage` joins after the recovery piece (injections →
+ *          recovery → ontology, FIXED; the findings DATA goes after history)
+ *          and `servedView.ts · viewOf` recomposes from the run
  *          constant `ontology` in the same slot, so the receipt agrees by
  *          construction. It is never pushed into `systemPromptInjections`
  *          (a piece there is exempt from the evidence gate) and never a

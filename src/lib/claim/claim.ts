@@ -2,14 +2,25 @@
  * Claim<T> — a value that says how it knows itself.
  *
  * Pattern: tagged union + tiny constructors. Pure, zero dependencies.
- * Role:    the library's honesty primitive — ONE vocabulary leaf, many doors.
- *          Every dynamic fact a subsystem states about the world is a Claim,
- *          never a bare value — so "unknown" carries its reason, and a count
- *          that nobody measured can never be rendered as a zero. It lives
- *          under lib/ (not under any one door) because two doors already need
- *          it: `agentfootprint/maps` (the mount kernel) and
- *          `agentfootprint/cache` (the hit-rate meter, 9.59.0). Both re-export
+ * Role:    one honesty vocabulary leaf, used by a few parts of the library —
+ *          not by all of them. Where it is used, a fact is a Claim, never a
+ *          bare value — so "unknown" carries its reason, and a count that
+ *          nobody measured can never be rendered as a zero. Its users today:
+ *          the cache meter (`cache/`, the hit-rate meter, 9.59.0), the
+ *          `agentfootprint/maps` door (a re-export only), and the
+ *          unsupported-claim reader (`integrity/unsupported-claim/evaluate.ts`,
+ *          which reads this shape off tool results). Other subsystems state
+ *          their facts in their own shapes: the answer account's `AccountFact`
+ *          and the answer assessment's standing do not use Claim. It lives
+ *          under lib/ (not under any one door) because two doors need it,
+ *          `agentfootprint/maps` and `agentfootprint/cache`; both re-export
  *          THESE symbols, so `known` from either door is the same function.
+ *
+ * `known` is not the assessment's "known". `known(value, evidence)` takes
+ * the caller's sentence as `evidence` and the library does not check it: any
+ * string is accepted, even `''` (`describeClaim` then renders `42 ()`). The
+ * answer assessment and the standing say "known" only after the library ran
+ * a tie check (a passed enforce `.answerValidation()` report for these bytes).
  *
  * Why it exists: two recorded failures came from a system stating a value it
  * did not hold — a final summary written from a trimmed memory, and a served

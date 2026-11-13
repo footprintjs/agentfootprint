@@ -6,7 +6,7 @@
  *          `describedResult()`), so they
  *          cannot disagree about what a refusal looks like or which keys a
  *          declaration may carry.
- * Role:    core/ layer, pure, a leaf — no imports.
+ * Role:    semantics/ layer (L1), pure, a leaf — no imports.
  * Emits:   N/A.
  *
  * ## Why the prefix never names the helper

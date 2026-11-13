@@ -83,6 +83,7 @@ import {
   findingsInstructionFor,
 } from '../src/core/agent/findings/reserved.js';
 import { findingsLedgerPiece } from '../src/core/agent/findings/serve.js';
+import { findingsInstruction } from '../src/core/agent/findings/instruction.js';
 import { heldLine, UNKNOWN_ZONE_LINE } from '../src/semantics/coverage/timeLimits.js';
 import {
   filledNote,
@@ -1739,11 +1740,11 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     module: 'src/core/agent/findings/serve.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      '`callLLM · buildCallLLMStage` composes it per request by `findingsLedgerPiece` from the ' +
-      'committed `findingsLedger` key and joins it into `systemPieces` ONLY (after the recovery ' +
-      'piece) — never pushed into `systemPromptInjections`, never written into `history`; the ' +
-      'model reads a fresh composition on each call, `servedView/findings.ts · findingsAt` recomposes the ' +
-      'same one from the record, and the receipt hashes it per request',
+      'REPLAY ONLY: live calls no longer send this piece (they send the request-only DATA ' +
+      'message, `findings/context.ts`). `servedView/findings.ts · findingsAt` recomposes it by ' +
+      '`findingsLedgerPiece` for a record made before the DATA layout (no `findingsLayout`), as ' +
+      'a system piece of that request — never a `history` turn — so the sentences it rebuilds ' +
+      'are still what such a model read',
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1775,11 +1776,10 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     module: 'src/core/agent/findings/reserved.ts',
     surface: LEDGER_PIECE,
     lifetimeBecause:
-      "a constant (`FINDINGS_ANSWER_ASK`) that `findingsLedgerPiece` appends as the piece's last " +
-      "section ONLY under `findings({ answerAsk: 'quote-facts' })` — the same request-only " +
-      'system piece as the row above, composed per request, joined into `systemPieces` only, ' +
-      'never an injection and never a `history` turn; `servedView/findings.ts · findingsAt` re-appends it ' +
-      'from the run constant `findingsAnswerAsk`',
+      'REPLAY ONLY: a constant (`FINDINGS_ANSWER_ASK`) that `findingsLedgerPiece` appends as the ' +
+      "old piece's last section when `servedView/findings.ts · findingsAt` rebuilds a record made " +
+      'before the DATA layout under the run constant `findingsAnswerAsk`; live calls under ' +
+      "`answerAsk: 'quote-facts'` send the instruction sentence of the next row instead",
     drivenBy: [
       'test/core/agent/findings-served.test.ts',
       'test/core/agent/findings/serve.test.ts',
@@ -1799,6 +1799,35 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
       /facts \(declared by the model\):/,
     ],
     compose: async () => findingsAskPieces(),
+  },
+  {
+    id: 'findings ledger — the live `quote-facts` sentence of the instruction (answerAsk)',
+    module: 'src/core/agent/findings/instruction.ts',
+    surface: ALWAYS_ON_INSTRUCTION,
+    lifetimeBecause:
+      '`AgentBuilder · findings` registers `findingsInstruction(contingent, answerAsk === ' +
+      "'quote-facts')` through `defineInstruction`, so under `'quote-facts'` the sentence is the " +
+      'last line of the always-on findings instruction: a system piece the injection engine ' +
+      'recomposes on every pass and the receipt hashes per request — never a `history` turn',
+    drivenBy: [
+      'test/core/agent/findings-declarations.test.ts',
+      'test/time-travel/receipt-conformance.test.ts',
+    ],
+    // What the model may DO with facts, open readings, omitted entries and a
+    // ticket, and its one refusal to invent, composed by the shipped function
+    // for both instruction variants, so a rewrite that drops one goes red here.
+    reaches: [
+      /^Findings v1\./,
+      /copy values exactly from the facts assertions or a served tool result/,
+      /Treat evidenceRefs as unsettled, omitted entries as unknown/,
+      /collapsed results as tickets without data/,
+      /Never invent a value\.$/,
+    ],
+    compose: async () =>
+      [false, true].map(
+        (contingent) =>
+          (findingsInstruction(contingent, true).inject as { systemPrompt: string }).systemPrompt,
+      ),
   },
   {
     id: 'findings ledger — the CONTINGENT line of the instruction (9.110.0)',
@@ -2613,8 +2642,8 @@ const PRODUCERS: readonly ModelFacingProducer[] = [
     surface: LEDGER_PIECE,
     lifetimeBecause:
       '`callLLM · buildCallLLMStage` composes it per request by `ontologyPiece` from the run ' +
-      'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece, ' +
-      'before the findings piece) — never pushed into `systemPromptInjections`, never written ' +
+      'constant `ontology` and joins it into `systemPieces` ONLY (after the recovery piece; ' +
+      'the findings DATA goes after history) — never pushed into `systemPromptInjections`, never written ' +
       'into `history`; `servedView/ontology.ts · ontologyAt` recomposes the same one from the record and the ' +
       'receipt hashes it per request',
     drivenBy: [

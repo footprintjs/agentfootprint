@@ -47,7 +47,7 @@ export function requestFactory(environment: RequestEnvironment) {
       ...(environment.revisionWithholdsTools() && { toolsOffAfterRevision: true as const }),
       // The findings ledger (9.101.0): the choice seam and `postValidate`
       // read peeled args / content under `findings`; the SERVING (step 3) —
-      // the ledger piece after the recovery piece, the wire-only collapse of
+      // the DATA message after history, the wire-only collapse of
       // judged results — rides `hasFindingsLedger` with its mode, the same
       // value seed records as the run constant `findingsServe`. One gate,
       // the `hasEvidenceRecovery` grammar: an unarmed agent hands the stage
@@ -57,8 +57,8 @@ export function requestFactory(environment: RequestEnvironment) {
         hasFindingsLedger: true as const,
         findingsServe: environment.configuration.findingsOptions.serve ?? 'ledger-and-facts',
         findingsContextBytes: environment.configuration.findingsOptions.maxContextBytes,
-        // The answer-turn ask (9.103.0): the same value seed records, so the
-        // wire and the rebuild append it from one fact; absent on `'none'`.
+        // The answer-turn ask (9.103.0): the same value seed records; replay
+        // of a pre-DATA record reads it there. Absent on `'none'`.
         ...(environment.configuration.findingsOptions.answerAsk === 'quote-facts' && {
           findingsAnswerAsk: 'quote-facts' as const,
         }),

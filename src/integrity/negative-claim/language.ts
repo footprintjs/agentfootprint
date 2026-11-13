@@ -1,6 +1,9 @@
 /**
  * language — whether a unit is English, over a CLOSED stop-word set. The grammar is English
- * only; a unit in another language is noted `language-unsupported`, never passed silently.
+ * only; a unit this heuristic RECOGNIZES as another language is noted `language-unsupported`.
+ * Detection itself can miss text: a short Latin-script sentence with fewer than two of one
+ * language's listed stop words ("Keine Vorfälle gefunden.", "Aucun incident trouvé.") counts as
+ * English, the English packs find no claim in it, and it passes with no claim and no note.
  *
  * Pattern: a count, not a model. A unit is unsupported when it is mostly letters of a non-Latin
  *          script, or when one other language's stop words outnumber the English ones (and at

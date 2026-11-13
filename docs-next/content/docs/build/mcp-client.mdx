@@ -190,16 +190,23 @@ a second-class citizen of every check this library ships.
 
 It is not thin any more. A server that speaks the `_meta.agentfootprint` bag
 ([the serving side describes it](doc:mcp-serve#declarations-travel-execution-does-not))
-hands over five declarations, and they land on the registered `Tool` exactly as
-if you had written them in `defineTool`:
+hands over its declarations — every field of `McpToolExtras`, twelve — and they
+land on the registered `Tool` exactly as if you had written them in `defineTool`:
 
 | field | what it arms |
 |---|---|
 | `argumentsFrom` | the dangling-reference and unsupported-argument [integrity checks](doc:context-integrity) |
-| `resultKind` | placement's mint — a placed result a `wants` argument can spend |
+| `resultKind` | placement's mint, so a placed result is spendable by a `wants` argument |
+| `resultColumns` | the write seam's `column-type-mismatch` and `missing-column` checks |
 | `owner` | the identity edge subject-joined checks read |
 | `resultClass` | the per-class `check:semantics` rules |
 | `resultCeiling` | the author's refusing ceiling on an oversized result |
+| `composedOf` | the receiving agent's build-time drift gate over the named ingredient tools |
+| `gates` | composition-time checks that keep a gating tool out of a fan-out branch |
+| `askOrAssume` | the per-argument rules: the client fills or asks before it sends the call, judged against the tool's `inputSchema` |
+| `period` | which arguments set the period the answer covers, judged against `inputSchema` and the kept `askOrAssume` |
+| `search` | what one call searches; rows composed from it are marked `composed: 'remote'` and establish nothing |
+| `script` | the record of which program a call submitted (the tool runs the program in its one string argument) |
 
 Nothing that governs **execution** is on that list — `needs`, `checkIn`, the
 session hooks. They decide how a tool runs, and the tool runs on the server.
@@ -591,7 +598,7 @@ From `agentfootprint/providers`:
 | `McpSdkClient` | `McpConnection` plus `connect` — the surface the library uses when IT builds the client, and what `_client` takes in tests. |
 | `ThrottleFetch` | The fetch shape `retryingFetch` takes and returns. |
 | `MCP_TOOL_EXTRAS_KEY` | The `_meta` key declarations travel under — `'agentfootprint'`. |
-| `McpToolExtras` | The shape inside that key: `argumentsFrom`, `resultKind`, `owner`, `resultClass`, `resultCeiling`, all optional. |
+| `McpToolExtras` | The shape inside that key: `argumentsFrom`, `resultKind`, `resultColumns`, `owner`, `resultClass`, `resultCeiling`, `composedOf`, `gates`, `askOrAssume`, `period`, `search`, `script`, all optional. |
 
 `MCP_TOOL_EXTRAS_KEY` and `McpToolExtras` are public so a server this library
 did not write can speak the bag: put `McpToolExtras`-shaped data under that key

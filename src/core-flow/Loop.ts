@@ -9,11 +9,12 @@
  *          composition.iteration_start / iteration_exit
  *          (via compositionRecorder).
  *
- * Budget guard is MANDATORY. You must set at least one of:
- *   - maxIterations (default 10 if only .body() is set)
- *   - maxWallclockMs
- * Hard ceiling of 500 iterations prevents runaway loops even if a guard
- * misfires; exceeding it throws.
+ * Always under an iteration budget. `.repeat(runner)` is required (build
+ * throws without it); a budget is not: with only `.repeat()` set the loop
+ * runs at most 10 iterations. `.times(n)` is clamped to 1..500
+ * (`lib/iterationBudget.ts` · `clampIterations`), so a larger value runs 500
+ * iterations and never throws. `.forAtMost(ms)` and `.until(guard)` add a
+ * wall-clock limit and an exit predicate.
  */
 
 import {

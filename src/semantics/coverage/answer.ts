@@ -4,7 +4,7 @@
  * Pattern: composed by the FRAMEWORK, not requested from the model. Pure
  *          function of the run's declarations; the stage that calls it is a
  *          two-line wrapper (see `stages/prepareFinal.ts`).
- * Role:    core/ layer, pure.
+ * Role:    semantics/ layer (L1), pure.
  * Emits:   N/A.
  *
  * ## Why this is an append and not a check
@@ -255,9 +255,10 @@ function periodsOf(declared: readonly DeclaredCoverage[]): AnswerPeriod[] {
 
 /**
  * The in-progress items the run's declarations carried, one entry per
- * DECLARING call, in declaration order. Fresh plain objects.
+ * DECLARING call, in declaration order. Fresh plain objects. (Not the
+ * `inProgress.ts · inProgressOf` that reads one marker's wire list.)
  */
-function inProgressOf(declared: readonly DeclaredCoverage[]): AnswerInProgress[] {
+function inProgressByCall(declared: readonly DeclaredCoverage[]): AnswerInProgress[] {
   const out: AnswerInProgress[] = [];
   for (const row of declared) {
     if (row.inProgress === undefined || row.inProgress.length === 0) continue;
@@ -304,7 +305,7 @@ export function coverageOfAnswer(
   const periods = periodsOf(declared);
   // What the calls found still running — the data twin of the block's
   // "In progress" lines; the key only when a call declared some.
-  const inProgress = inProgressOf(declared);
+  const inProgress = inProgressByCall(declared);
   const sections = copyCoverage(foldSections(declared));
   const folded: AnswerCoverage = {
     ...sections,
@@ -523,7 +524,7 @@ function coverageBlock(
   // What the calls found still running — one line per item, tool first, as
   // declared (`inProgress.ts` · `inProgressLine`). None declared → no section,
   // and the block is the bytes it always was.
-  const inProgress = inProgressOf(declared);
+  const inProgress = inProgressByCall(declared);
   if (inProgress.length > 0) {
     sections.push(
       renderLines(

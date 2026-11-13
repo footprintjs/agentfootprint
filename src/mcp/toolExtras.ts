@@ -108,7 +108,7 @@ export interface McpToolExtras {
    * What this tool's ROWS contain (9.78.0) — see {@link Tool.resultColumns}.
    * Arms the write seam's `column-type-mismatch` and `missing-column` checks.
    *
-   * It clears the bar this file states, and by the widest margin of the eight.
+   * It clears the bar this file states, and by the widest margin.
    * It is a flat, inert fact about the RESULT that a consumer-side check
    * reads; it governs nothing about how the tool runs, and the tool runs on
    * the server. It is also the field case for carrying declarations at all: a
