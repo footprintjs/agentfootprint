@@ -2,7 +2,6 @@
  * Agent type definitions — both PUBLIC types (AgentOptions, AgentInput,
  * AgentOutput) consumed by `Agent.create({...}).run({...})` callers AND
  * the INTERNAL `AgentState` shape used by stage functions.
- *
  */
 
 import type {
@@ -36,6 +35,7 @@ import type { FoldedSpan, WindowRecord } from './window/types.js';
 import type { ExternalGround } from '../../integrity/unsupported-argument/check.js';
 import type { MessagesDelivery } from './delivery/types.js';
 import type { MiddlewareDecision } from './middleware/types.js';
+import type { InnerToolCallRow } from './innerToolCalls.js';
 import type { Receipt } from './receipt/receipt.js';
 import type { OutputAttempt } from './outputEnforcement.js';
 import type { PendingEvidenceRecovery, UnsupportedValue } from './evidence/types.js';
@@ -237,12 +237,11 @@ export interface AgentOptions {
     readonly tools?: number;
   };
   /**
-   * Permission adapter. When set, the Agent calls
-   * `permissionChecker.check({capability: 'tool_call', ...})` BEFORE every
-   * `tool.execute()`. Emits `agentfootprint.permission.check` with the
-   * decision. On `deny`, the tool is skipped and its result is a
-   * synthetic denial string; on `allow` / `gate_open`, execution proceeds
-   * normally.
+   * Permission adapter. When set, the Agent calls `permissionChecker.check({capability:
+   * 'tool_call', ...})` BEFORE every `tool.execute()` — a model call's, and an inner call's
+   * (`ctx.tools.call`, under its own id). Emits `agentfootprint.permission.check` with the
+   * decision. On `deny`, the tool is skipped: a model call's result is a synthetic denial
+   * string, an inner call is refused to the tool that made it. On `allow` / `gate_open`, it runs.
    */
   readonly permissionChecker?: PermissionChecker;
   /**
@@ -1654,13 +1653,14 @@ export interface AgentState {
   // only as `CredentialConsentRequiredError`.
 
   // ── The middleware ledger (`.toolMiddleware()` / `.messageMiddleware()`) ──
-  /** One row per middleware decision, in the order they were decided —
-   *  including the pass-throughs, because "the rule looked and was fine with
-   *  it" and "the rule never ran" are different facts about a run. A transform
-   *  files both the value it received and the value it produced, so a slice
-   *  taken later can find the moment the text changed and who changed it.
-   *  Written only by an agent that configured a chain; absent otherwise. */
+  /** One row per middleware decision, in the order they were decided — including the
+   *  pass-throughs, because "the rule looked and was fine with it" and "the rule never ran"
+   *  are different facts about a run. A transform files both the value it received and the
+   *  value it produced, so a slice taken later can find the moment the text changed and who
+   *  changed it. Written only by an agent that configured a chain; absent otherwise. */
   middlewareDecisions?: readonly MiddlewareDecision[];
+  /** One row per `ctx.tools.call`, kept when it ends (`innerToolCalls.ts`); absent if none. */
+  innerToolCalls?: readonly InnerToolCallRow[];
 
   // ── The output-schema ledger (`.outputSchema(s, { retries })`) ──────────
   /** One row per final-answer attempt, in order: what was answered, whether

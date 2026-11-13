@@ -3,7 +3,12 @@ import type { buildCallStart } from '../execution/callStart.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
-import type { PermissionCapability } from '../../../../../provider-contract/types.js';
+import {
+  checkerGoverns,
+  type PermissionCapability,
+  type PermissionChecker,
+  type ToolCapability,
+} from '../../../../../provider-contract/types.js';
 import { checkerContextOf } from './bindings.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
@@ -98,4 +103,30 @@ export function buildCapabilityQuestion(bindings: CapabilityQuestionBindings) {
     }
   };
   return askCapability;
+}
+
+/**
+ * Ask about every capability the tool DECLARES and the checker GOVERNS, in
+ * the tool's order, until one refuses (9.11.0). Beside the `tool_call` gate,
+ * at the same layer and before any middleware, so an existing checker still
+ * decides first. Either side silent and the loop asks nothing, which is why
+ * an agent that has not opted in is byte-identical. One owner for the model
+ * call (`execution/dispatchCall.ts`) and an inner call (`innerCallGates.ts`).
+ */
+export async function askDeclaredCapabilities(
+  askCapability: ReturnType<typeof buildCapabilityQuestion>,
+  permissionChecker: PermissionChecker,
+  capabilities: readonly ToolCapability[],
+  toolName: string,
+  execution: CallExecution,
+): Promise<void> {
+  for (const capability of capabilities) {
+    if (execution.denied) break;
+    if (!checkerGoverns(permissionChecker, capability)) continue;
+    await askCapability(
+      capability,
+      toolName,
+      `Tool '${toolName}' is not available in this context.`,
+    );
+  }
 }

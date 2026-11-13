@@ -139,7 +139,8 @@ the existing invalid-arguments event at initial and resumed admission, before
 artifact resolution and credentials. A middleware approval is not schema
 approval. In warn mode the resumed admission can emit another warning.
 `toolDispatch.ts` · `agentToolDispatch` enforces the same rules on inner calls
-after its existing unsupported-declaration checks, before allocating context
+after the permission and middleware gates (`stages/toolCalls/access/innerCallGates.ts`)
+and its existing unsupported-declaration checks, before allocating context
 or credentials; it throws the shared correction without inventing a model
 call or a separate validation event. Raw `Tool.execute` stays caller-governed.
 The validator remains a documented subset, not a full JSON Schema engine.

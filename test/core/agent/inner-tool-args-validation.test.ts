@@ -56,8 +56,9 @@ function harness(
     onTeardown: vi.fn(),
     teardownScopes: ['run'],
   };
-  const innerContext = vi.fn((_name: string, _seq: number) => base);
+  const innerContext = vi.fn((_name: string, _toolCallId: string) => base);
   const dispatch = agentToolDispatch({
+    outerToolCallId: 'outer',
     lookup: (name) => (name === 'weather' ? { ...tool, ...declarations } : undefined),
     innerContext,
   });
@@ -115,9 +116,10 @@ describe.each(['raw', 'defined'] as const)('inner argument validation — %s Too
       expect(h.getCredential).not.toHaveBeenCalled();
       expect(h.execute).not.toHaveBeenCalled();
 
-      // Refusal consumes no call sequence number; the first accepted call is 1.
+      // A refused call takes its own inner id too (its row names it), so the
+      // first accepted call after it is the second.
       await h.dispatch.call('weather', { city: 'Reno' });
-      expect(h.innerContext).toHaveBeenCalledExactlyOnceWith('weather', 1);
+      expect(h.innerContext).toHaveBeenCalledExactlyOnceWith('weather', 'outer#inner-2');
       expect(h.execute).toHaveBeenCalledTimes(1);
     },
   );
@@ -154,7 +156,7 @@ describe.each(['raw', 'defined'] as const)('inner argument validation — %s Too
       });
 
       await h.dispatch.call('weather', args);
-      expect(h.innerContext).toHaveBeenLastCalledWith('weather', 2);
+      expect(h.innerContext).toHaveBeenLastCalledWith('weather', 'outer#inner-2');
       expect(h.execute.mock.calls[1][1].signal).toBe(h.base.signal);
     },
   );
@@ -200,7 +202,7 @@ describe('inner argument validation preserves existing refusal priority', () => 
     expect(h.execute).not.toHaveBeenCalled();
 
     await expect(h.dispatch.call('weather', { city: 'Reno' })).resolves.toBe(h.result);
-    expect(h.innerContext).toHaveBeenCalledExactlyOnceWith('weather', 1);
+    expect(h.innerContext).toHaveBeenCalledExactlyOnceWith('weather', 'outer#inner-2');
   });
 
   it('keeps the missing-tool refusal before any dispatch effects', async () => {

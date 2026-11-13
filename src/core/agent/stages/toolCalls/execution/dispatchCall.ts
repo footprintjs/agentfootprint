@@ -1,7 +1,7 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
 import { checkToolPermission } from '../access/toolPermission.js';
-import { buildCapabilityQuestion } from '../access/capabilityQuestion.js';
+import { askDeclaredCapabilities, buildCapabilityQuestion } from '../access/capabilityQuestion.js';
 import { checkerGoverns } from '../../../../../provider-contract/types.js';
 import { prepareArgumentGate } from '../access/argumentGate.js';
 import { admitMiddlewareCall } from '../access/middlewareAdmission.js';
@@ -89,22 +89,15 @@ export function buildCallDispatch(
       execution,
       outcome,
     });
-    // ── Declared tool capabilities (9.11.0) ──────────────────────────
-    // Beside the tool_call gate, at the same layer and before any
-    // middleware, so an existing checker still decides first. Asked once
-    // per capability the TOOL declared and the CHECKER governs — either
-    // side silent and this loop does not run at all, which is why an agent
-    // that has not opted in is byte-identical.
+    // ── Declared tool capabilities (9.11.0) — `askDeclaredCapabilities` ──
     if (!execution.denied && operations.permissionChecker && tool?.capabilities) {
-      for (const capability of tool.capabilities) {
-        if (execution.denied) break;
-        if (!checkerGoverns(operations.permissionChecker, capability)) continue;
-        await askCapability(
-          capability,
-          tc.name,
-          `Tool '${tc.name}' is not available in this context.`,
-        );
-      }
+      await askDeclaredCapabilities(
+        askCapability,
+        operations.permissionChecker,
+        tool.capabilities,
+        tc.name,
+        execution,
+      );
     }
     const { argumentGate, consentGate, unmounted } = prepareArgumentGate(
       scope,
@@ -366,6 +359,7 @@ export function buildCallDispatch(
           toolProgress: operations.toolProgress,
           sessionContext: operations.sessionContext,
           toolDispatchCtx: operations.toolDispatchCtx,
+          historyForCallbacks,
           searchFunnel: operations.searchFunnel,
           execution,
           runFactsOf: operations.runFactsOf,

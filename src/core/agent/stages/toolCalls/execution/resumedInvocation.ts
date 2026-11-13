@@ -265,7 +265,12 @@ export function buildResumedInvocation(
         ...requestEvidenceFor(scope, { toolName, toolCallId, iteration }),
         ...mcpClientUseFor(scope, { toolCallId }),
         ...links.sessionContext(scope, toolName, toolCallId),
-        ...links.toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
+        // The resume doors hand their gates the committed history; so does an inner call.
+        ...links.toolDispatchCtx(
+          scope,
+          { toolName, toolCallId, iteration, history: () => [...(scope.history ?? [])] },
+          env.signal,
+        ),
       };
       // The last moment before the call runs, after every await that prepared
       // it — its artifacts (`wants`), its credential (`needs`), its clock, and

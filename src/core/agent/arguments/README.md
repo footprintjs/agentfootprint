@@ -517,9 +517,9 @@ declaration synchronously, at definition), the row's shape and its checkpoint ch
 on every armed agent's graph) and the composed-message marker (`core/messageFrom.ts`, which the
 compositions call) — the checks and the corpora load with the layer. Two small armed pieces stay static on purpose: the argument
 row's event (`findings/ledger.ts` · `emitArgumentRow`, inside the one writer's emit half) and
-the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`, which
-refuses before `ctx.tools.call` takes its sequence number — an `await` there would reorder
-concurrent inner calls). `test/trace-toolpack/browserGraph.test.ts` pins the split.
+the inner-dispatch refusal (`toolDispatch.ts` · `refuseUnaccountedRuledArguments`;
+`ctx.tools.call` numbers each inner call before its first `await`, so concurrent
+inner calls keep the order they were made in). `test/trace-toolpack/browserGraph.test.ts` pins the split.
 
 ## The period argument, and the results layer (honesty step 7b)
 

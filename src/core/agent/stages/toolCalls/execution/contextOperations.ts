@@ -1,6 +1,7 @@
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
+import type { LLMMessage } from '../../../../../provider-contract/types.js';
 import type { ToolExecutionContext } from '../../../../../tools/tools.js';
 import type {
   AgentfootprintEventType,
@@ -14,6 +15,8 @@ import {
   bindArtifacts,
 } from '../../../../../artifacts/capability.js';
 import { agentToolDispatch } from '../../../toolDispatch.js';
+import { recordInnerToolCall } from '../../../innerToolCalls.js';
+import { buildInnerCallGates } from '../access/innerCallGates.js';
 import { policyInForce } from '../../../../../redaction/runRedaction.js';
 import { reportingCredentials } from '../decorators/reportingCredentials.js';
 import { bindToolSecurityEvents } from '../../../toolSecurityEvents.js';
@@ -39,7 +42,13 @@ interface ToolContextOperationsLinks {
 export function buildToolContextOperations(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'emitForRun' | 'currentRun' | 'isRunRetired' | 'time' | 'artifactStore'
+    | 'emitForRun'
+    | 'currentRun'
+    | 'isRunRetired'
+    | 'time'
+    | 'artifactStore'
+    | 'permissionChecker'
+    | 'toolMiddleware'
   >,
   links: ToolContextOperationsLinks,
 ): ToolContextOperations {
@@ -180,6 +189,10 @@ export function buildToolContextOperations(
    * mistaken for a call the model made. No `tool_start`/`tool_end` fires for
    * an inner call — it is the outer call's work; `ctx.progress` is its
    * visible channel and the composed envelope its record.
+   *
+   * Each inner call passes the model call's gates (`../access/innerCallGates.ts`)
+   * with the outer call's iteration and history, and leaves one row on
+   * `innerToolCalls` (`../../../innerToolCalls.ts`) — gate or no gate.
    */
   const toolDispatchCtx = (
     scope: TypedScope<AgentState>,
@@ -187,13 +200,17 @@ export function buildToolContextOperations(
       readonly toolName: string;
       readonly toolCallId: string;
       readonly iteration: number;
+      /** The history the outer call's own gates were handed. */
+      readonly history: () => LLMMessage[];
     },
     signal?: AbortSignal,
   ): Pick<ToolExecutionContext, 'tools'> => ({
     tools: agentToolDispatch({
+      outerToolCallId: call.toolCallId,
       lookup: (name) => links.registryByName.get(name),
-      innerContext: (name, seq) => {
-        const innerId = `${call.toolCallId}#inner-${seq}`;
+      gates: buildInnerCallGates(scope, deps, { iteration: call.iteration, history: call.history }),
+      record: (facts) => recordInnerToolCall(scope, call, facts),
+      innerContext: (name, innerId) => {
         // An inner call runs inside the same run, under the same policy.
         const redact = policyInForce(scope);
         return {

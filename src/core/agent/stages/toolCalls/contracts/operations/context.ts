@@ -1,5 +1,6 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
+import type { LLMMessage } from '../../../../../../provider-contract/types.js';
 import type { ToolExecutionContext } from '../../../../../../tools/tools.js';
 import type { ArtifactScope } from '../../../../../../artifacts/types.js';
 
@@ -16,6 +17,8 @@ export interface ToolContextOperations {
       readonly toolName: string;
       readonly toolCallId: string;
       readonly iteration: number;
+      /** The history the outer call's own gates were handed — its inner calls' gates get it too. */
+      readonly history: () => LLMMessage[];
     },
     signal?: AbortSignal,
   ) => Pick<ToolExecutionContext, 'tools'>;

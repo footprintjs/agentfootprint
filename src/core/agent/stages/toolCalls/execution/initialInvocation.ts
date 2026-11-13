@@ -66,6 +66,7 @@ interface InvokeInitialToolFrame {
   readonly toolProgress: ReturnType<typeof buildToolProgressOperations>['toolProgress'];
   readonly sessionContext: ReturnType<typeof buildToolResourcesOperations>['sessionContext'];
   readonly toolDispatchCtx: ReturnType<typeof buildToolContextOperations>['toolDispatchCtx'];
+  readonly historyForCallbacks: CallStartFacts['historyForCallbacks'];
   readonly searchFunnel: ReturnType<typeof buildSearchCoverage>;
   readonly execution: CallExecution;
   readonly runFactsOf: ReturnType<typeof buildToolResourcesOperations>['runFactsOf'];
@@ -166,7 +167,12 @@ export async function invokeInitialTool(
       ...frame.sessionContext(scope, frame.tc.name, frame.tc.id),
       ...frame.toolDispatchCtx(
         scope,
-        { toolName: frame.tc.name, toolCallId: frame.tc.id, iteration: frame.iteration },
+        {
+          toolName: frame.tc.name,
+          toolCallId: frame.tc.id,
+          iteration: frame.iteration,
+          history: frame.historyForCallbacks,
+        },
         frame.env.signal,
       ),
     };

@@ -4,7 +4,8 @@
  * Pattern: one writer for one committed key.
  * Role:    core/ layer. `runChain` decides; this file is the only thing
  *          that commits what it decided and emits the matching event, so
- *          the three call sites cannot record the same fact three
+ *          the agent's call sites (the tool dispatch, an inner call through
+ *          `ctx.tools`, the message boundary) cannot record the same fact
  *          different ways.
  * Emits:   `agentfootprint.middleware.decision`, one per row.
  *

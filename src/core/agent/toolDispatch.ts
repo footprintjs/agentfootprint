@@ -3,28 +3,43 @@
  *
  * Pattern: a deps-closure factory beside `toolArtifacts` / `toolProgress` in
  *          the tool-calls handler; this module holds the PURE half (the
- *          dispatch object over a lookup + an inner-context maker) so the
- *          handler wires closures and nothing else.
+ *          dispatch object over a lookup, an inner-context maker, the gates
+ *          and a row writer) so the handler wires closures and nothing else.
  * Role:    core/agent — composition over the registry (the runbookAsTool
  *          substrate; any tool may consume it).
  * Emits:   nothing itself. Inner executes flow through the tool's own
  *          channels (`ctx.progress`, its result); they do NOT fire
  *          `tool_start`/`tool_end` — an inner call is the OUTER call's work,
  *          not a turn of the model's, and synthesizing model-facing events
- *          for it would put calls in the record the model never made.
+ *          for it would put calls in the record the model never made. The
+ *          gates file their own events under the inner call's id, and each
+ *          call leaves one row through `deps.record` (`innerToolCalls.ts`).
+ *
+ * What an inner call PASSES (the model's own gates, by the same functions):
+ *   - the permission checker, about `tool_call` and every capability the
+ *     tool declares (`stages/toolCalls/access/innerCallGates.ts`), then the
+ *     before-tool middleware chain — under the inner call's own id
+ *     (`<outer>#inner-<n>`) and with its own arguments. What those functions
+ *     refuse for a model call they refuse here: the inner call is refused by
+ *     name and the tool's function is not entered. A link's rewrite is what
+ *     the tool runs with, as on a model call.
  *
  * What an inner call is NOT (phase 1, refused loudly, never silently):
- *   - it cannot pause — a `checkIn` tool or a credential that needs
- *     interactive consent refuses by name (a pause the inner tool itself
- *     RAISES, `requestInput` or `pauseHere`, is not refused: it passes up as
- *     the OUTER call's pause, and an `absence` it declares is filed under the
- *     outer call — `semantics/coverage/README.md` § 4);
+ *   - it cannot pause — a `checkIn` tool, a middleware `ask` or a credential
+ *     that needs interactive consent refuses by name; a checker's `halt`
+ *     refuses the inner call and does not end the run (a pause the inner
+ *     tool itself RAISES, `requestInput` or `pauseHere`, is not refused: it
+ *     passes up as the OUTER call's pause, and an `absence` it declares is
+ *     filed under the outer call — `semantics/coverage/README.md` § 4);
  *   - it cannot redeem artifact refs — a `wants` tool refuses by name
  *     (dispatch-time resolution belongs to the model-facing loop);
  *   - it does not see ToolProvider-delivered tools — there is no build-time
  *     list of those (the 9.72.0 caveat, carried forward honestly);
  *   - it does not carry `ctx.tools` itself — composition depth stops at one,
  *     the same bound the runbook grammar declares for sub-runbooks;
+ *   - its result meets no after-tool link — those see the OUTER call's
+ *     result, which is what the model reads; no after-tool row is filed
+ *     for an inner call, so no chain is recorded as having allowed it;
  *   - it does not apply argument rules — a tool that declares `askOrAssume`
  *     refuses an inner call that leaves a ruled argument out (the inputs
  *     layer fills and records only the model's own calls). A declared
@@ -44,35 +59,95 @@ import {
   untakenBesides,
 } from '../../tools/declare.js';
 import { formArguments, type PeriodForm } from '../../time/periodForm.js';
+import type { ToolArgs } from '../../tools/runChain.js';
 import type {
   Tool,
   ToolDispatch,
   ToolDispatchCallOptions,
   ToolExecutionContext,
 } from '../../tools/tools.js';
+import { isPauseRequest } from '../pause.js';
+
+/** The one spelling of an inner call's id: the outer call's id, `#inner-`, its number. */
+export function innerToolCallId(outerToolCallId: string, seq: number): string {
+  return `${outerToolCallId}#inner-${seq}`;
+}
+
+/** One inner call as a gate is asked about it — its own id, tool and arguments. */
+export interface InnerCallAsked {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly tool: Tool;
+  readonly args: ToolArgs;
+  readonly signal?: AbortSignal;
+}
+
+/** A gate's answer: run with these arguments, or refuse with the gate's own words. */
+export type InnerGateAnswer =
+  | { readonly kind: 'allow'; readonly args: ToolArgs }
+  | { readonly kind: 'refuse'; readonly reason: string };
+
+/** The gates an inner call passes, in order. A gate the agent did not configure is absent. */
+export interface InnerCallGates {
+  readonly permission?: (call: InnerCallAsked) => Promise<InnerGateAnswer>;
+  readonly middleware?: (call: InnerCallAsked) => Promise<InnerGateAnswer>;
+}
+
+/** How an inner call ended: `'returned'`, `'threw'` and `'paused'` only after its function was entered. */
+export type InnerCallEnd = 'returned' | 'threw' | 'paused' | 'refused';
+
+/** Who refused an inner call: a gate, or inner dispatch's own refusals (an unknown name, a check-in, …). */
+export type InnerCallRefuser = 'permission' | 'middleware' | 'dispatch';
+
+/** The facts of one finished inner call, handed to `deps.record`. */
+export interface InnerCallFacts {
+  readonly toolCallId: string;
+  readonly toolName: string;
+  /** The tool the name resolved to — absent for a name the map does not hold. */
+  readonly tool?: Tool;
+  /** The arguments as they stood when the call ended: after every rewrite a gate allowed. */
+  readonly args: unknown;
+  readonly entered: boolean;
+  readonly ended: InnerCallEnd;
+  readonly refusedBy?: InnerCallRefuser;
+}
 
 /** What the handler wires in — everything the dispatch cannot know itself. */
 export interface AgentToolDispatchDeps {
+  /** The model's call whose tool holds this dispatch — every inner id derives from it. */
+  readonly outerToolCallId: string;
   /** Name → Tool over the agent's dispatch map (static + skill-carried).
    *  Provider-delivered tools are invisible by construction. */
   readonly lookup: (name: string) => Tool | undefined;
   /**
    * Compose the execution context for ONE inner call: the outer call's own
-   * facts with `hasArtifacts: false`, a derived `toolCallId` (`seq` makes it
-   * unique within the outer call), and NO `tools` of its own.
+   * facts with `hasArtifacts: false`, the inner call's `toolCallId`, and NO
+   * `tools` of its own.
    */
-  readonly innerContext: (toolName: string, seq: number) => ToolExecutionContext;
+  readonly innerContext: (toolName: string, toolCallId: string) => ToolExecutionContext;
+  /** The model call's gates, put to each inner call (`innerCallGates.ts`). */
+  readonly gates?: InnerCallGates;
+  /** Keep one row for each inner call, when it ends (`innerToolCalls.ts`). */
+  readonly record?: (facts: InnerCallFacts) => void;
 }
+
+const GATE_NAMES: Readonly<Record<keyof InnerCallGates, string>> = {
+  permission: 'the permission check',
+  middleware: 'the tool middleware',
+};
 
 /**
  * Build the `ctx.tools` dispatch for one outer tool call.
  *
- * `call` resolves the inner tool's declared `needs` through the inner
- * context's own credential provider (fail-closed — the provider throws its
- * teaching refusal when none is attached), refuses the shapes an inner call
- * cannot honor (see the module header), validates the declared input schema
- * before creating an inner context, executes, and returns the result exactly
- * as the tool returned it. Policy about what a result MEANS — an
+ * `call` takes the inner call's id first (synchronously, so concurrent calls
+ * are numbered in the order they were made), then puts the call to the
+ * model's gates (`deps.gates`), refuses the shapes an inner call cannot honor
+ * (see the module header), validates the arguments the gates let through
+ * against the declared input schema, resolves a declared `needs` through the
+ * inner context's own credential provider (fail-closed — the provider throws
+ * its teaching refusal when none is attached), executes, and returns the
+ * result exactly as the tool returned it. Every call — refused, thrown or
+ * returned — ends in one `deps.record`. Policy about what a result MEANS — an
  * absence that should short-circuit, a coverage ledger that should fold —
  * belongs to the consumer wrapping this dispatch, never here.
  */
@@ -83,48 +158,131 @@ export function agentToolDispatch(deps: AgentToolDispatchDeps): ToolDispatch {
       return deps.lookup(name) !== undefined;
     },
     async call(name: string, args: unknown, opts?: ToolDispatchCallOptions): Promise<unknown> {
-      const tool = deps.lookup(name);
-      if (tool === undefined) {
-        throw new Error(
-          `ctx.tools.call('${name}'): no tool of that name is in this agent's dispatch map ` +
-            `(static .tool() registrations plus skill-carried tools). Tools delivered by a ` +
-            `ToolProvider are not visible to inner dispatch — there is no build-time list of ` +
-            `them. Register the tool statically, or check ctx.tools.has() first.`,
-        );
-      }
-      if (tool.checkIn !== undefined) {
-        throw new Error(
-          `ctx.tools.call('${name}'): that tool declares a human check-in, and an inner ` +
-            `dispatch call cannot pause — running it here would silently skip a consent ` +
-            `gate somebody declared. Call it as a top-level tool, where the check-in rail ` +
-            `holds.`,
-        );
-      }
-      if (tool.wants !== undefined) {
-        throw new Error(
-          `ctx.tools.call('${name}'): that tool declares artifact arguments (wants), and ` +
-            `inner dispatch does not resolve refs — the tool would run believing the ` +
-            `framework delivered data it did not. Call it as a top-level tool, or pass the ` +
-            `data through a tool that takes it directly.`,
-        );
-      }
-      refuseUnaccountedRuledArguments(name, tool, args);
-      const validation = validateToolArgs(args, tool.schema.inputSchema);
-      if (!validation.ok) {
-        throw new Error(formatToolArgIssues(name, validation.issues));
-      }
       seq += 1;
-      const base = deps.innerContext(name, seq);
-      const ctx: ToolExecutionContext = {
-        ...base,
-        ...(opts?.signal !== undefined && { signal: opts.signal }),
-        ...(tool.needs !== undefined && {
-          credential: await resolveInnerCredential(name, tool, base),
-        }),
-      };
-      return await tool.execute(args as Record<string, unknown>, ctx);
+      const toolCallId = innerToolCallId(deps.outerToolCallId, seq);
+      const tool = deps.lookup(name);
+      let ran = args;
+      let entered = false;
+      let refusedBy: InnerCallRefuser = 'dispatch';
+      const end = (ended: InnerCallEnd): void =>
+        keepRow(deps, {
+          toolCallId,
+          toolName: name,
+          ...(tool !== undefined && { tool }),
+          args: ran,
+          entered,
+          ended,
+          ...(ended === 'refused' && { refusedBy }),
+        });
+      try {
+        if (tool === undefined) {
+          throw new Error(
+            `ctx.tools.call('${name}'): no tool of that name is in this agent's dispatch map ` +
+              `(static .tool() registrations plus skill-carried tools). Tools delivered by a ` +
+              `ToolProvider are not visible to inner dispatch — there is no build-time list of ` +
+              `them. Register the tool statically, or check ctx.tools.has() first.`,
+          );
+        }
+        for (const gate of ['permission', 'middleware'] as const) {
+          const ask = deps.gates?.[gate];
+          if (ask === undefined) continue;
+          const answer = await askGate(ask, {
+            toolCallId,
+            toolName: name,
+            tool,
+            args: argsOf(ran),
+            ...(opts?.signal !== undefined && { signal: opts.signal }),
+          });
+          if (answer.kind === 'allow') {
+            ran = answer.args;
+            continue;
+          }
+          refusedBy = gate;
+          throw new Error(
+            `ctx.tools.call('${name}'): ${GATE_NAMES[gate]} refused this inner call, so the ` +
+              `tool did not run: ${answer.reason}`,
+          );
+        }
+        refuseWhatAnInnerCallCannotHonor(name, tool, ran);
+        const base = deps.innerContext(name, toolCallId);
+        const ctx: ToolExecutionContext = {
+          ...base,
+          ...(opts?.signal !== undefined && { signal: opts.signal }),
+          ...(tool.needs !== undefined && {
+            credential: await resolveInnerCredential(name, tool, base),
+          }),
+        };
+        entered = true;
+        const result = await tool.execute(ran as Record<string, unknown>, ctx);
+        end('returned');
+        return result;
+      } catch (err) {
+        end(!entered ? 'refused' : isPauseRequest(err) ? 'paused' : 'threw');
+        throw err;
+      }
     },
   };
+}
+
+/**
+ * Ask one gate. A gate that throws refuses: something that did not answer did
+ * not say yes (the model call's law, `toolPermission.ts`). Its message is an
+ * operator's fact and stays off the refusal the composing tool reads.
+ */
+async function askGate(
+  ask: (call: InnerCallAsked) => Promise<InnerGateAnswer>,
+  call: InnerCallAsked,
+): Promise<InnerGateAnswer> {
+  try {
+    return await ask(call);
+  } catch {
+    return { kind: 'refuse', reason: 'the gate gave no answer, and no answer is not an allow.' };
+  }
+}
+
+/** The arguments as a gate is handed them: an object, or an empty one for anything else. */
+function argsOf(args: unknown): ToolArgs {
+  return args !== null && typeof args === 'object' && !Array.isArray(args)
+    ? (args as ToolArgs)
+    : {};
+}
+
+/**
+ * Keep the call's row. A row that cannot be kept — the composing tool did not
+ * await its inner call, and the stage it ran in has already committed — must
+ * not turn what the call did into something else, so it is dropped here.
+ */
+function keepRow(deps: AgentToolDispatchDeps, facts: InnerCallFacts): void {
+  try {
+    deps.record?.(facts);
+  } catch {
+    // The stage that held the record has ended: nothing is left to write to.
+  }
+}
+
+/** The refusals inner dispatch makes itself, after the gates, on the arguments that would run. */
+function refuseWhatAnInnerCallCannotHonor(name: string, tool: Tool, args: unknown): void {
+  if (tool.checkIn !== undefined) {
+    throw new Error(
+      `ctx.tools.call('${name}'): that tool declares a human check-in, and an inner ` +
+        `dispatch call cannot pause — running it here would silently skip a consent ` +
+        `gate somebody declared. Call it as a top-level tool, where the check-in rail ` +
+        `holds.`,
+    );
+  }
+  if (tool.wants !== undefined) {
+    throw new Error(
+      `ctx.tools.call('${name}'): that tool declares artifact arguments (wants), and ` +
+        `inner dispatch does not resolve refs — the tool would run believing the ` +
+        `framework delivered data it did not. Call it as a top-level tool, or pass the ` +
+        `data through a tool that takes it directly.`,
+    );
+  }
+  refuseUnaccountedRuledArguments(name, tool, args);
+  const validation = validateToolArgs(args, tool.schema.inputSchema);
+  if (!validation.ok) {
+    throw new Error(formatToolArgIssues(name, validation.issues));
+  }
 }
 
 /**
