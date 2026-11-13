@@ -61,7 +61,7 @@ export interface SystemPromptPiece {
  * passage) and a model reads them as sections only when they are separated
  * like sections.
  */
-export const SYSTEM_PROMPT_SEPARATOR = '\n\n';
+const SYSTEM_PROMPT_SEPARATOR = '\n\n';
 
 /**
  * THE SYSTEM-PROMPT JOIN — the one rule turning committed injection records

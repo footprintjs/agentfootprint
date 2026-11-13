@@ -28,7 +28,7 @@ type Calls = readonly Pick<BatchCall, 'id' | 'name' | 'args'>[];
 type SettledFills = ReadonlyMap<string, { readonly fills?: ArgumentResolution['fills'] }>;
 const whole = (root: PrivateFieldRoot): Selection[] => [{ root, path: '' }];
 
-export class PrivateArgumentRecordError extends Error {
+class PrivateArgumentRecordError extends Error {
   readonly code = 'ERR_PRIVATE_ARGUMENT_RECORD';
   constructor() {
     super('A private argument question requires native private-field recording support.');

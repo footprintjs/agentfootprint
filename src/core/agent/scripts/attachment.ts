@@ -69,7 +69,7 @@ import { wrapProgram } from './wrapper.js';
 /** Scripts attached under `which: 'all'`; the rest are counted (`omitted`). Design § 4.1. */
 export const MAX_ATTACHED_SCRIPTS = 8;
 /** Default UTF-8 bytes of each program shown. Design § 4.1. */
-export const DEFAULT_ATTACHED_BYTES = 4_000;
+const DEFAULT_ATTACHED_BYTES = 4_000;
 
 const DOOR = 'AgentBuilder.scriptTravelsWithTheAnswer';
 
@@ -178,7 +178,7 @@ export function scriptLabelLine(script: ShownScript): string {
 }
 
 /** The line that stands for a script whose program is kept out of the text (`withheldFromText`). */
-export function scriptWithheldLine(script: ShownScript): string {
+function scriptWithheldLine(script: ShownScript): string {
   return (
     `${callSaid(script)} The program is not shown here: the formatting above could display ` +
     'part of it as ordinary text. It is kept on the run record.'
@@ -186,7 +186,7 @@ export function scriptWithheldLine(script: ShownScript): string {
 }
 
 /** One attached script as text: its label line, then the program in the library's fence. */
-export function shownScriptBlock(script: ShownScript): string {
+function shownScriptBlock(script: ShownScript): string {
   const body = `${scriptLabelLine(script)}\n\n${wrapProgram(script.text, script.language)}`;
   if (script.truncated === undefined) return body;
   return (
