@@ -71,6 +71,22 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
     execute: () => askHuman({ question: 'Refund $42.10 on order #4021 — approve?' }),
   });
 
+  // The one step whose tool can SAY how it went: it declares a status. Its
+  // first call reports `'failure'` (the payment service was busy), so the
+  // step HOLDS — `file_receipt` is not offered for a refund that did not
+  // happen — and the retry declares `'success'`, so the step advances as
+  // 'succeeded'. The plain tools advance as 'not-reported'.
+  let refundCalls = 0;
+  const issueRefund = defineTool<Record<string, never>, unknown>({
+    name: 'issue_refund',
+    description: 'Issue the refund.',
+    inputSchema: { type: 'object', properties: {} },
+    execute: () =>
+      ++refundCalls === 1
+        ? { content: 'payment service busy — nothing refunded', effects: [], status: 'failure' }
+        : { content: 'refund of $42.10 issued', effects: [], status: 'success' },
+  });
+
   // #region define-steps
   const refundProcedure = defineSkill({
     id: 'refund',
@@ -81,15 +97,7 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       t('check_history', 'one charge on 2026-08-01, one duplicate on 2026-08-02'),
       t('verify_identity', 'identity verified'),
       approveRefund,
-      // The one step whose tool can SAY its work was done: it declares
-      // `status: 'success'`, so its step advances as 'succeeded'. The plain
-      // tools above and below advance as 'not-reported'.
-      defineTool<Record<string, never>, unknown>({
-        name: 'issue_refund',
-        description: 'issue refund.',
-        inputSchema: { type: 'object', properties: {} },
-        execute: () => ({ content: 'refund of $42.10 issued', effects: [], status: 'success' }),
-      }),
+      issueRefund,
       t('file_receipt', 'receipt R-991 filed'),
     ] as never,
     steps: [
@@ -174,8 +182,8 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
 /**
  * Deterministic offline provider so the example runs with zero setup. The
  * script activates the skill, runs steps 1–2, SKIPS step 3 with a reason
- * (the caller already verified), pauses at the human approval, then
- * finishes 5–6 and answers.
+ * (the caller already verified), pauses at the human approval, retries
+ * step 5 after its tool declared a failure, then finishes 5–6 and answers.
  */
 function scriptedProvider(): LLMProvider {
   const script = [
@@ -184,7 +192,8 @@ function scriptedProvider(): LLMProvider {
     { name: 'check_history', args: {} },
     { name: 'skip_step', args: { reason: 'caller already passed identity verification' } },
     { name: 'approve_refund', args: {} },
-    { name: 'issue_refund', args: {} },
+    { name: 'issue_refund', args: {} }, // declares 'failure' — the step holds
+    { name: 'issue_refund', args: {} }, // declares 'success' — the step advances
     { name: 'file_receipt', args: {} },
   ];
   let i = 0;
