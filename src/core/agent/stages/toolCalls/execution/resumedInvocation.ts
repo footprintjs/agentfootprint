@@ -515,8 +515,17 @@ export function buildResumedInvocation(
       await links.endCall(scope);
       if (seen !== undefined && executed) seen.threw = true;
       if (isPauseRequest(err)) {
+        // Name the door this call actually came through (`heldTo`; the
+        // credential door passes none): an ask or a credential resume that
+        // read "an approved check-in" reported a gate nobody opened.
+        const door =
+          heldTo === 'checkIn'
+            ? 'an approved check-in'
+            : heldTo === 'ask'
+            ? 'an approved ask'
+            : 'granted credential consent';
         return {
-          result: `tool '${toolName}' requested a pause while resuming an approved check-in, which is not supported`,
+          result: `tool '${toolName}' requested a pause while resuming ${door}, which is not supported`,
           error: true,
           // It ran — a tool that asked to pause had already started work.
           executed,

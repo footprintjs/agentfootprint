@@ -13,6 +13,14 @@ see; the agent composes the request, an adapter carries it.
   (`forcedToolChoiceFor`, `nativeOutputSchemaFor`) and the one typed refusal
   each, for a model that does not take a forced tool choice or a native output
   schema.
+- `permissionDecision.ts` — `readPermissionDecision`, THE ONE READER of a
+  permission checker's answer (whether the checker is asked at all stays
+  `types.ts` · `checkerGoverns`, inside the zero-import leaf). Only `'allow'` /
+  `'gate_open'` allow; `'deny'` / `'halt'` keep their meanings; anything else
+  (`'ask'`, `{}`, `'ALLOW'`, `'deny '`) is a refusal whose rationale says the
+  answer was not recognised. The tool gate, the capability gate and the skill
+  menu all ask it, so one answer cannot allow a tool and hide a skill.
+  Example: `readPermissionDecision({ result: 'ask' }).kind` is `'unrecognised'`.
 - `requestRefusal.ts` — the narrow shared classifier for terminal
   request-contract refusals, not transport failures or arbitrary application
   errors.

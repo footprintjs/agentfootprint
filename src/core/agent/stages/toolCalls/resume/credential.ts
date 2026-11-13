@@ -10,6 +10,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
+import { outcomeField } from '../execution/callOutcome.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeCallFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
@@ -149,6 +150,12 @@ export function buildResumeCredential(
           toolName,
           ...(deps.findings === true &&
             dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+          // A blocked credential ran nothing → 'refused'; read by the check-in trail.
+          ...outcomeField({
+            ran: dispatched.executed === true,
+            clean: error !== true && dispatched.ceilingRefused !== true,
+            ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+          }),
         },
       ],
       { toolName, toolCallId },

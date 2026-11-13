@@ -43,6 +43,12 @@ export interface LLMMessage {
    */
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
   /**
+   * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
+   * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
+   * Not whether `execute` was entered. Read by `checkin.ts` · `buildTrail`, never from `content`; never sent to a provider.
+   */
+  readonly outcome?: 'refused' | 'failed';
+  /**
    * For `role: 'assistant'` only — the tool calls the LLM requested in this
    * turn. Required for providers (Anthropic, OpenAI) that need to round-trip
    * tool_use blocks across iterations: when the next `complete()` includes
@@ -971,21 +977,15 @@ export interface PermissionChecker {
 }
 
 /**
- * Does this checker ask to be consulted about `capability`? (9.11.0)
- *
- * `'tool_call'` is always true — it has been enforced since v2.4 and needs no
- * declaration. Everything else is true only when the checker named it.
- * Absence is NO.
+ * Is this checker asked about `capability`? (9.11.0) `'tool_call'`: always, enforced since v2.4, no declaration needed. Anything else: only when the checker named it in `governs`; absence is NO.
  */
 export function checkerGoverns(
   checker: PermissionChecker | undefined,
   capability: PermissionCapability,
 ): boolean {
   if (!checker) return false;
-  if (capability === 'tool_call') return true;
-  return checker.governs?.includes(capability) === true;
+  return capability === 'tool_call' || checker.governs?.includes(capability) === true;
 }
-
 // ─── Pricing Table ──────────────────────────────────────────────────
 
 export type TokenKind = 'input' | 'output' | 'cacheRead' | 'cacheWrite';
