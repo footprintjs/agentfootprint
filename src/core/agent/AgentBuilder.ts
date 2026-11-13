@@ -9,7 +9,15 @@ import { findingsContextBytes } from './findings/context.js';
  * `AgentBuilder` from `'../core/Agent.js'` continue to work.
  */
 
-import { isDevMode } from 'footprintjs';
+import type { SkillGraphOptions } from './builder/graph/options.js';
+export type { SkillGraphOptions } from './builder/graph/options.js';
+import { assertNoCollidingObserverIds } from './builder/observers/check.js';
+import { assertCheckInHasADeclaringTool } from './builder/consent/check.js';
+import { collectInnerRuns } from './builder/tools/innerRuns.js';
+import { assertReadSkillActivation } from './builder/skills/activation.js';
+import { warnInertRelevanceHint } from './builder/skills/relevance.js';
+import { warnRedundantSkillScopedTools } from './builder/skills/tools.js';
+import { resolveRetries } from './builder/output/retries.js';
 import {
   resolveAnswerValidation,
   type AnswerValidationOptions,
@@ -56,12 +64,7 @@ import {
   type EntryScoring,
   type TurnRoutingPlan,
 } from '../../injection-engine/skillGraph.js';
-import {
-  foldSkillBrains,
-  type EscalationPolicy,
-  type FoldedSkillBrains,
-  type ProviderChoice,
-} from './skillBrains.js';
+import { foldSkillBrains, type FoldedSkillBrains } from './skillBrains.js';
 import { checkThinkingSupport } from './thinkingSupport.js';
 import {
   defineMenuHint,
@@ -78,8 +81,6 @@ import { checkArtifactVocabularies } from '../../injection-engine/skillVocabular
 import { toolOnlyDeliveryRefusal } from '../../injection-engine/skillBodyDelivery.js';
 import { defineInstruction } from '../../injection-engine/factories/defineInstruction.js';
 import { messagesToolRoleRefusal } from '../../injection-engine/messagesSlotRefusal.js';
-import { READS_ENTRY_SCORES_METADATA_KEY } from '../../injection-engine/factories/defineRelevanceHint.js';
-import { skillScopedToolsTarget } from '../../tools/skillScopedTools.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
@@ -94,7 +95,6 @@ import { defaultStatusTemplates } from '../../recorders/observability/status/sta
 import type { SelfExplainOptions } from '../../trace-toolpack/selfExplain.js';
 import { requireSelfExplain } from './selfExplainPort.js';
 import { servingConversationOf } from './servingConversation.js';
-import { innerRunsOf, mergeInnerRuns, type InnerRunLookup } from '../innerRunRecords.js';
 import { TRACE_TOOL_NAMES } from '../../lib/traceToolNames.js';
 import { Agent } from '../Agent.js';
 import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
@@ -125,89 +125,6 @@ import {
 } from '../../recipes/apply.js';
 import { LOCAL_SOURCE, type RecipeSource } from '../../recipes/provenance.js';
 import type { AgentRecipe, AppliedRecipe, RecipeOptions } from '../../recipes/types.js';
-
-/**
- * Mount options for `.skillGraph(graph, options)` (SG-C, 9.17.0; brains
- * SG-D, 9.19.0). Every field is zero-cost when absent — an agent that passes
- * none is byte-identical in behavior AND events to one built before the
- * options existed.
- */
-export interface SkillGraphOptions {
-  /**
-   * How much routing authority the model has. Default `'assist'` — today,
-   * always: any REACHABLE `read_skill` pick is admitted, and a pick off an
-   * offered menu is stamped on the record (`cursorMove.declinedOffer`)
-   * rather than refused.
-   *   • `'guard'` — a routing pick is admitted only while the turn's menu is
-   *     outstanding AND names an offered id (the framework declared the
-   *     ambiguity; the model resolves exactly that). Everything else gets a
-   *     teaching refusal + `skill.rejected { posture: 'guard' }`.
-   *   • `'rails'` — the model never routes: turn starts resolve by rule or
-   *     scorer, transitions by declared routes. A menu verdict then proceeds
-   *     on the base prompt with `turn_routed { by: 'none' }` recorded — the
-   *     honest cost of rails without a resolver. OPEN skills
-   *     (`.selfExplain()`, `.skill()` beside the graph) stay admitted from
-   *     anywhere under every posture.
-   *
-   * WHAT A POSTURE GOVERNS, EXACTLY: the MODEL's routing door — a `read_skill`
-   * hop — and nothing else. It is NOT a lock on the cursor. Two other doors
-   * stay open under all three postures, deliberately:
-   *   • OPEN skills, above — the debugging door.
-   *   • A `propose-transition` tool effect. A proposal comes from a TOOL —
-   *     deterministic code you shipped, not the model's guess — so it is
-   *     framework-tier evidence: admitted under `assist`, `guard` AND
-   *     `rails`, checked only against the graph's own reachability law, and
-   *     recorded as `cursorMove.by: 'tool-proposal'` (the resolver ranks it
-   *     BETWEEN a declared edge and a model pick, for that reason).
-   * So `'rails'` means "the MODEL never routes", never "nothing but my
-   * declared edges routes": a tool of yours that proposes IS a route you
-   * declared, in code instead of in the graph. To close that door, don't
-   * ship the effect — the posture will not second-guess your own code.
-   */
-  readonly strictness?: 'assist' | 'guard' | 'rails';
-  /**
-   * What the cursor spans. Default `'turn'` — today's per-run cursor,
-   * unchanged. `'conversation'`: the turn's final cursor rides the
-   * conversation checkpoint (`agent.checkpoint()` / the crash carrier) and
-   * becomes the DEFAULT entry when that conversation is continued
-   * (`followUp()` / `run({ continueFrom })`) — a sticky default the new
-   * message can still decisively beat, never a lock. Without `continueFrom`
-   * nothing carries: a bare second `run()` starts cold exactly as today —
-   * this option changes what a CONTINUED conversation defaults to; it does
-   * not invent persistence.
-   */
-  readonly continuity?: 'turn' | 'conversation';
-  /**
-   * Per-skill BRAINS (9.19.0) — "the cursor picks the brain": while the
-   * graph's cursor is on a named skill, `callLLM` runs on its declared
-   * provider/model instead of the agent's. Keys are skill ids; an id that
-   * is not a graph node is refused at build, as is a foreign provider with
-   * no model (the agent's model id belongs to another vendor's namespace).
-   * The other declaration home is `defineSkill({ provider, model })` — the
-   * same id in both homes with different choices is refused naming both.
-   */
-  readonly providers?: Readonly<Record<string, ProviderChoice>>;
-  /**
-   * Escalate-on-evidence (9.19.0): `afterRefusals` recorded gate refusals
-   * (`skill.rejected` — reachability, posture, OR a self-call: all three
-   * refusal arms count) in ONE turn flip the rest
-   * of the turn onto this brain — `skill.escalated` goes on the record at
-   * the flip, and the next turn's seed de-escalates. Never on vibes: only
-   * real refusals count.
-   */
-  readonly escalation?: EscalationPolicy;
-  /**
-   * The tier-3 DECIDER (9.19.0): an out-of-band constrained pick over an
-   * outstanding turn-start menu ∪ {stay} (the `llmClassifier` enum
-   * machinery), resolved before the loop — `turn_routed { by: 'decider' }`.
-   * The sanctioned resolver for `'rails'` menus: constrained, off-loop, and
-   * recorded, i.e. a scorer in posture terms. Needs a graph that runs the
-   * turn-start cascade (a classifier, or `continuity: 'conversation'`) —
-   * refused at build otherwise, because no other graph ever has a menu for
-   * it to resolve.
-   */
-  readonly decider?: ProviderChoice;
-}
 
 /**
  * Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
@@ -4228,251 +4145,3 @@ export class AgentBuilder {
     return agent;
   }
 }
-
-/**
- * Refuse two DIFFERENT observers that share one id (8.13.0).
- *
- * footprintjs de-duplicates attached recorders by id — `attachScopeRecorder` and
- * `attachFlowRecorder` both `filter(r => r.id !== recorder.id)` before pushing —
- * so of two objects carrying one id, only the LAST ever fires. The first is
- * removed before the run starts and reports nothing at all, which is
- * indistinguishable from an observer whose events simply never happened.
- *
- * Keyed on OBJECT IDENTITY, not on the id alone. Handing the same reference to
- * `.watch()` twice is
- * harmless and stays one attachment — the fp dedupe is doing exactly what it is
- * for. It is two DIFFERENT observers under one name that loses a whole observer.
- *
- * Deliberately does NOT reserve the `agentfootprint.` id prefix: the factories in
- * `agentfootprint/observe` carry ids in that namespace and consumers are meant to
- * `.watch()` them.
- */
-function assertNoCollidingObserverIds(observers: readonly Watcher[]): void {
-  const byId = new Map<string, Watcher>();
-  for (const observer of observers) {
-    const id = observer.id;
-    const seen = byId.get(id);
-    if (seen === undefined) {
-      byId.set(id, observer);
-      continue;
-    }
-    if (seen === observer) continue; // same reference — one attachment, by design
-    throw new Error(
-      `AgentBuilder.watch: two different observers were given the id '${id}'. Only the LAST ` +
-        `one ever fires — footprintjs de-duplicates attached recorders by id, so the earlier ` +
-        `one is dropped before the first run and reports nothing. Rename one of them; passing ` +
-        `the SAME object twice is fine (it stays one attachment).`,
-    );
-  }
-}
-
-/**
- * Refuse `.checkIn({...})` on an agent where no tool can ever trip the gate (8.13.0).
- *
- * `.checkIn()` configures HOW the ask is assembled — the evidence preset, the
- * drivers scorer. What MAKES an ask is a tool declaring `checkIn`. Resolution
- * already defaults (standard evidence + the lexical scorer), so a declaring tool
- * works with no `.checkIn()` call at all; the reverse — `.checkIn()` with nothing
- * that declares — configures the shape of a question that is never asked.
- *
- * Scans BOTH sources the dispatch map is built from (`buildToolRegistry`): the
- * `.tool()` registry and every skill's `inject.tools`, since a skill tool with a
- * `checkIn` demand is a real gate.
- *
- * NOT refused when a `.toolProvider()` is wired. Its tools are resolved per
- * iteration and may declare `checkIn`; build time cannot know, and refusing what
- * it cannot know would break a correct agent.
- */
-function assertCheckInHasADeclaringTool(
-  configured: boolean,
-  registry: readonly ToolRegistryEntry[],
-  injections: readonly Injection[],
-  toolProvider: ToolProvider | undefined,
-): void {
-  if (!configured || toolProvider !== undefined) return;
-  const declares = (tool: { readonly checkIn?: unknown }): boolean => tool.checkIn !== undefined;
-  if (registry.some((entry) => declares(entry.tool))) return;
-  for (const injection of injections) {
-    for (const tool of injection.inject?.tools ?? []) {
-      if (declares(tool as { readonly checkIn?: unknown })) return;
-    }
-  }
-  throw new Error(
-    'AgentBuilder.checkIn: configured, but no registered tool declares `checkIn` — so the gate ' +
-      'is never consulted, this agent will never pause for consent, and the evidence settings ' +
-      'here decide nothing. `.checkIn()` configures HOW the ask is assembled; a tool declaring ' +
-      "`checkIn: 'always'` (or a predicate) is what MAKES the ask. Add it to the tool that " +
-      "needs consent — defineTool({ …, checkIn: 'always' }) — or drop `.checkIn()`.",
-  );
-}
-
-/**
- * Gather the inner-run stores of every tool that keeps one (8.17.0).
- *
- * A `flowchartAsTool({ keepRecord: true })` carries its store on the tool
- * object under a registry symbol. This finds them so `.selfExplain()` can
- * hand one merged lookup to the trace artifacts — the consumer wires
- * nothing; mounting the tool and calling `.selfExplain()` is the whole
- * configuration.
- *
- * Two sources, both known at build time: the static registry (`.tool()` /
- * `.tools()`) and skill-declared tools. A tool arriving from a
- * `.toolProvider()` is deliberately NOT collected — provider tools are
- * resolved per iteration against a live context, so there is no build-time
- * moment at which the list exists. `inspect_tool_run` then answers with the
- * honest-absence arm, which names `keepRecord`; a consumer in that position
- * should register the chart tool statically as well.
- */
-function collectInnerRuns(
-  registry: readonly ToolRegistryEntry[],
-  injections: readonly Injection[],
-): InnerRunLookup | undefined {
-  const found: InnerRunLookup[] = [];
-  const take = (candidate: unknown): void => {
-    const store = innerRunsOf(candidate);
-    if (store !== undefined && !found.includes(store)) found.push(store);
-  };
-  for (const entry of registry) take(entry.tool);
-  for (const injection of injections) {
-    for (const tool of injection.inject?.tools ?? []) take(tool);
-  }
-  return mergeInnerRuns(found);
-}
-
-/**
- * Refuse an `llm-activated` trigger whose `viaToolName` is not `'read_skill'` (8.7.0).
- *
- * `viaToolName` reads as a promise the library never kept: name a tool, and that tool
- * activates the skill. No such tool has ever been created. The one consumer of an
- * `llm-activated` trigger is the evaluator, which matches on
- * `ctx.activatedInjectionIds.includes(inj.id)` and never looks at the field
- * (`evaluator.ts`); the only writer of that array is `read_skill`. So a skill carrying
- * `viaToolName: 'open_playbook'` activated by `read_skill` exactly like every other
- * skill, and the declaration meant nothing at all — a configuration that was never
- * read is worse than one that is refused, because it looks like it worked.
- *
- * Refused HERE because `injection()` is the one funnel every flavor passes through:
- * `defineSkill`, `skillsFromDir`, `.skill()`, `.skills(registry)`, `.skillGraph()`
- * and a hand-built Injection all arrive at this line.
- *
- * 9.0.0 removed the `viaToolName` OPTION from `defineSkill` and `skillsFromDir`
- * (both now refuse it by name at the factory), but the TRIGGER field stays and so
- * does this check: a hand-built `Injection` literal can still carry an
- * `llm-activated` trigger with any string in it, and that is the one path with no
- * factory in front of it.
- */
-function assertReadSkillActivation(injection: Injection): void {
-  const trigger = injection.trigger;
-  if (trigger.kind !== 'llm-activated') return;
-  if (trigger.viaToolName === 'read_skill') return;
-  throw new Error(
-    `Agent.injection('${injection.id}'): viaToolName is '${trigger.viaToolName}', but ` +
-      `'read_skill' is the only activation tool this library builds — nothing reads the field, ` +
-      `and no tool named '${trigger.viaToolName}' is ever offered to the model. This skill would ` +
-      `have activated through read_skill like every other one, so the name was decoration on a ` +
-      `door that does not exist. Drop \`viaToolName\` (skills already share one activation tool ` +
-      `and the model picks WHICH skill by id), or gate the skill on something the engine does ` +
-      `read — a \`rule\` trigger, or a skillGraph() edge. The \`viaToolName\` OPTION on ` +
-      `defineSkill()/skillsFromDir() was removed in 9.0.0; this trigger field is all that ` +
-      `is left, and only a hand-built Injection can still set it.`,
-  );
-}
-
-/**
- * Dev-warn a `defineRelevanceHint()` mounted where no scorer can feed it (8.7.0).
- *
- * The hint's trigger reads `ctx.entryScores`, and only the PickEntry stage writes it
- * — which runs only when the graph was built with `.entryBy()` / `.entryByRelevance()`
- * / `start: { entries, scoredBy | byRelevance }`. Without one, the injection mounts,
- * evaluates false on every iteration for the life of the agent, and reports nothing:
- * a feature that is configured and inert looks exactly like a feature that is working
- * and simply has not been needed yet.
- *
- * Keyed on the `readsEntryScores` metadata marker, not on the id — the id is the
- * caller's to rename.
- */
-function warnInertRelevanceHint(injections: readonly Injection[], hasScorer: boolean): void {
-  if (hasScorer || !isDevMode()) return;
-  for (const inj of injections) {
-    const meta = inj.metadata as Record<string, unknown> | undefined;
-    if (meta?.[READS_ENTRY_SCORES_METADATA_KEY] !== true) continue;
-    // eslint-disable-next-line no-console
-    console.warn(
-      `agentfootprint Agent: injection '${inj.id}' reads ctx.entryScores, which only an ENTRY ` +
-        `SCORER produces — and this agent's skill graph has none, so the injection can never ` +
-        `activate. Build the graph with .entryBy(keywordScorer()) or .entryByRelevance(embedder) ` +
-        `(object form: start: { entries, scoredBy }), or drop the injection. Note .entryByRead() ` +
-        `does NOT score — there the model picks, so there is no near-tie to report.`,
-    );
-  }
-}
-
-/**
- * Dev-warn a `skillScopedTools(id, …)` pointed at a skill that already scopes its own
- * tools (8.7.0).
- *
- * `defineSkill({ tools, autoActivate: 'currentSkill' })` already narrows the LLM's
- * tool list to the active skill, with no provider at all — that is what
- * `skillScopedTools`' own header means by "you probably don't need this". Wiring both
- * gives one skill two tool sources keyed on two DIFFERENT signals (the graph's active
- * set vs. the last `read_skill` call), which is how a tool ends up visible on
- * iterations nobody expected — and it is the exact pairing that put a shadowed tool
- * name into a field agent.
- */
-function warnRedundantSkillScopedTools(
-  provider: ToolProvider | undefined,
-  injections: readonly Injection[],
-): void {
-  if (!isDevMode()) return;
-  const target = skillScopedToolsTarget(provider?.id);
-  if (target === undefined) return;
-  const skill = injections.find((i) => i.id === target);
-  if (!skill) return;
-  const meta = skill.metadata as { autoActivate?: string } | undefined;
-  if (meta?.autoActivate !== 'currentSkill') return;
-  if ((skill.inject?.tools ?? []).length === 0) return;
-  // eslint-disable-next-line no-console
-  console.warn(
-    `agentfootprint Agent: skillScopedTools('${target}') is wired, but skill '${target}' already ` +
-      `carries autoActivate: 'currentSkill' with its own tools:[] — which narrows the tool list ` +
-      `to that skill on its own. The two gates key on DIFFERENT signals (the provider on the ` +
-      `last read_skill call, the skill on the graph's active set), so a tool can appear on ` +
-      `iterations you did not expect, and a name declared on both sides shadows (the model ` +
-      `reads the provider's description and the skill's implementation runs). Keep one: the ` +
-      `skill's tools:[] if the tools belong to the skill, the provider if they are assembled ` +
-      `elsewhere.`,
-  );
-}
-
-/**
- * Validate `.outputSchema(…, { retries })`.
- *
- * The ceiling is stated rather than left open: a model that has missed the
- * shape ten times in a row is not going to find it on the eleventh, and the
- * run would be spending real money and real iterations discovering that. When
- * ten is not enough the answer is a different schema or a different model,
- * not a longer loop.
- */
-function resolveRetries(retries: number | undefined): number {
-  if (retries === undefined) return 0;
-  if (!Number.isInteger(retries) || retries < 0) {
-    throw new Error(
-      `AgentBuilder.outputSchema: { retries } must be a non-negative integer, got ${String(
-        retries,
-      )}. It counts corrective re-asks — 0 (the default) means the first answer is the only one.`,
-    );
-  }
-  if (retries > MAX_OUTPUT_RETRIES) {
-    throw new Error(
-      `AgentBuilder.outputSchema: { retries: ${retries} } exceeds the ceiling of ` +
-        `${MAX_OUTPUT_RETRIES}. Each retry is a real turn — a real request, real tokens, real ` +
-        `money — and a model that has missed the shape ${MAX_OUTPUT_RETRIES} times running is ` +
-        `not about to find it. If that is genuinely not enough, the fix is a simpler schema, a ` +
-        `clearer instruction, or a different model.`,
-    );
-  }
-  return retries;
-}
-
-/** The stated ceiling on corrective re-asks. See {@link resolveRetries}. */
-const MAX_OUTPUT_RETRIES = 10;
