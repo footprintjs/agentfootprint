@@ -319,8 +319,8 @@ export interface SeedStageDeps {
    * threads nothing for the default `'none'`, so an armed agent on the
    * default hands this stage exactly the deps it did before the dial and
    * commits exactly the keys it did. Seeded for the `findingsServe` reason:
-   * the rebuild appends `FINDINGS_ANSWER_ASK` to the piece the way the wire
-   * did, reading the dial from the RECORD.
+   * replay of a record made before the DATA layout appends
+   * `FINDINGS_ANSWER_ASK` to the old piece, reading the dial from the RECORD.
    */
   readonly findingsAnswerAsk?: 'quote-facts';
   /**

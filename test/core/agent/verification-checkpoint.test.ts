@@ -160,7 +160,11 @@ describe('typed findings checkpoint protocol', () => {
 
   it('refuses to silently drop a valid saved carrier when verification is unarmed', () => {
     const { checkpoint } = fixture();
-    expect(() => requireVerificationOnResume(checkpoint, false)).toThrow(/enabled/);
+    // The refusal names no option: this version has none that continues the carrier.
+    expect(() => requireVerificationOnResume(checkpoint, false)).toThrow(
+      /has no option that continues it/,
+    );
+    expect(() => requireVerificationOnResume(checkpoint, false)).not.toThrow(/enabled/);
   });
 
   it.each([undefined, null, false, {}, { version: 2 }])(
@@ -376,7 +380,7 @@ describe('native unarmed continuation refusals', () => {
         door === 'continueFrom'
           ? agent.run({ message: 'continue', continueFrom: checkpoint })
           : agent.resumeOnError(checkpoint);
-      await expect(attempt).rejects.toThrow(/verification enabled/);
+      await expect(attempt).rejects.toThrow(/has no option that continues it/);
       expect(complete).not.toHaveBeenCalled();
       await expect(agent.run({ message: 'fresh question' })).resolves.toBe('fresh');
       expect(agent.checkpoint()?.history).toEqual([
@@ -420,7 +424,7 @@ describe('native unarmed continuation refusals', () => {
       },
     };
     const before = JSON.stringify(full);
-    await expect(agent.resume(full, 'yes')).rejects.toThrow(/verification enabled/);
+    await expect(agent.resume(full, 'yes')).rejects.toThrow(/has no option that continues it/);
     expect(JSON.stringify(full)).toBe(before);
     expect(complete).not.toHaveBeenCalled();
     expect(stream).toHaveBeenCalledTimes(1);

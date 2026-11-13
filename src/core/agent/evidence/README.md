@@ -193,11 +193,11 @@ agent.on('agentfootprint.agent.evidence_checked', ({ payload }) => {
 
 What it is not: proof the arithmetic answered the question ("59.2% used" is accepted as
 a ratio of two columns whichever pool the person asked about), and not open-ended — an
-average, a product, or any chain beyond a column sum scaled by 1000^k or 1024^k and 100 − a
-ratio of two column sums is not reconstructed and is flagged (a scaled difference is
-flagged). Every derivation is a window an invented number can fall through by coincidence,
-so the set is closed and the window is the answer's precision: ±0.5 for a whole number,
-±0.05 for one decimal. Pinned by `test/core/agent/evidence/figures.test.ts`.
+average, a product, or anything beyond the listed derivations (which include a scaled
+column sum, a ratio or difference of two column sums, and 100 − such a ratio) is not
+reconstructed and is flagged, a scaled difference too. Every derivation is a window an
+invented number can fall through by coincidence, so the set is closed and the window is the
+answer's precision: ±0.5 for a whole number, ±0.05 for one decimal. Pinned by `test/core/agent/evidence/figures.test.ts`.
 
 ## Plain decimal rounding (`decimalRounding: true`) and numeric ranges
 

@@ -17,9 +17,10 @@
  * default / strict / opted in) · Integration (the CLI) · Edge.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { absent } from '../../src/index.js';
@@ -29,7 +30,11 @@ import {
   runCheckSemanticsCli,
   type SemanticsFinding,
 } from '../../src/semantics/index.js';
-import { nonExistencePhrase, wrongnessPhrase } from '../../src/semantics/overclaim.js';
+import {
+  nonExistencePhrase,
+  OVERCLAIM_PHRASES_VERSION,
+  wrongnessPhrase,
+} from '../../src/semantics/overclaim.js';
 import { expectScalesLinearly } from '../helpers/perf.js';
 
 /** The refusal the study recorded, names generalised. */
@@ -99,6 +104,40 @@ describe('unit — the non-existence and wrongness packs', () => {
   it('folds case, curly apostrophes and Unicode composition before matching', () => {
     expect(nonExistencePhrase('THAT ARRAY DOESN\u2019T EXIST')).toBeDefined();
     expect(wrongnessPhrase('WRONG IDENTIFIER')).toBeDefined();
+  });
+
+  // The version promise ("bumped whenever a list changes") is held HERE.
+  // The two lists stay module-private, so the test reads their source lines
+  // and pins a digest per version. Editing a list without a bump changes the
+  // digest under the old version and fails; a bump adds a row below.
+  // Example: adding `/\bunknown name\b/` to WRONGNESS means version 2 and
+  // one more row, `2: '<the digest this test prints>'`.
+  const PHRASE_LIST_DIGESTS: Readonly<Record<number, string>> = {
+    1: 'f93955c55afbaa77d413de35387ac3d3ca61edf59f3b1d529dcad2d2f9cf2d31',
+  };
+  it('OVERCLAIM_PHRASES_VERSION names the exact phrase lists it was bumped for', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../../src/semantics/overclaim.ts'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+    const list = (name: string): string => {
+      const match = new RegExp(
+        `const ${name}: readonly RegExp\\[\\] = \\[\\n([\\s\\S]*?)\\n\\];`,
+      ).exec(source);
+      expect(match, `${name} is declared as a readonly RegExp[] literal`).not.toBeNull();
+      return match![1]!;
+    };
+    const digest = createHash('sha256')
+      .update(`${list('NON_EXISTENCE')}\n--\n${list('WRONGNESS')}`)
+      .digest('hex');
+    expect(
+      PHRASE_LIST_DIGESTS[OVERCLAIM_PHRASES_VERSION],
+      `a phrase list changed: bump OVERCLAIM_PHRASES_VERSION and pin ${digest} under it`,
+    ).toBe(digest);
+    // Two versions never name the same lists.
+    expect(new Set(Object.values(PHRASE_LIST_DIGESTS)).size).toBe(
+      Object.keys(PHRASE_LIST_DIGESTS).length,
+    );
   });
 });
 

@@ -129,9 +129,16 @@ what `mcpServe` now sends — in MCP's own `_meta` bag, under one namespaced key
 |---|---|
 | `argumentsFrom` | the dangling-reference and unsupported-argument [integrity checks](doc:context-integrity) |
 | `resultKind` | placement's mint, so a placed result is spendable by a `wants` argument |
+| `resultColumns` | the write seam's `column-type-mismatch` and `missing-column` checks |
 | `owner` | the identity edge subject-joined checks read |
 | `resultClass` | the per-class `check:semantics` rules |
 | `resultCeiling` | the author's refusing ceiling on an oversized result |
+| `composedOf` | the receiving agent's build-time drift gate over the named ingredient tools |
+| `gates` | composition-time checks that keep a gating tool out of a fan-out branch |
+| `askOrAssume` | the per-argument rules: the client fills or asks before it sends the call, judged against the tool's `inputSchema` |
+| `period` | which arguments set the period the answer covers, judged against `inputSchema` and the kept `askOrAssume` |
+| `search` | what one call searches; rows composed from it are marked `composed: 'remote'` and establish nothing |
+| `script` | the record of which program a call submitted (the tool runs the program in its one string argument) |
 
 **The bar for this list is one sentence:** *a declaration a consumer-side check
 or rail reads; nothing that governs execution.* So `needs` (credentials),
@@ -140,9 +147,13 @@ they govern how a tool **runs**, and the tool runs on your server. A client
 holding a consent gate the only executor already held would be theatre; one
 holding a gate *nobody* is holding would be worse.
 
-**Absent means absent.** A tool that declares none of the five is listed without
+Those twelve are every field of `McpToolExtras`; the example above shows five.
+
+**Absent means absent.** A tool that declares none of these is listed without
 a `_meta` key at all — not with an empty bag — so a server whose tools carry no
-declarations puts exactly the bytes on the wire it always did.
+declarations puts exactly the bytes on the wire it always did. One declaration is
+enough for a bag: a tool that declares only `gates: true` is listed with
+`_meta: { agentfootprint: { gates: true } }`.
 
 ## Transports
 

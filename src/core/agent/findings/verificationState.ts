@@ -87,7 +87,7 @@ export function readVerificationState(
   });
 }
 
-/** Called only when opted in. No randomness is consumed at module load. */
+/** Called at a run's first reservation (a `search` tool call, an armed negative-claims call). */
 export function createVerificationState(
   runId: string,
   namespaceSource: () => string = () => globalThis.crypto.randomUUID(),

@@ -1071,24 +1071,24 @@ reserved argument carries one more part, on the calls of a RULED tool:
 ## Exact-claim protocol — partly live, the checker not mounted
 
 Live with no option set: every call to a tool that declares `search`, and every armed
-negative-claims call, reserves a result identity (`verificationState.ts · createVerificationState`
-/ `reserveResultIdentity`) and writes the `resultIdentities` carrier; the coverage row's
-`claim-result/<namespace>/<runId>/<n>` ID comes from it. Every `resume`, `continueFrom` and
-`resumeOnError` runs `verificationCheckpoint.ts · requireVerificationOnResume(…, false)`, which
-refuses a saved run holding a `claimVerification` carrier (or verification rows without one); its
-message says to continue with "findings verification enabled", an option that does not exist yet.
+negative-claims call, reserves a result identity (`verificationState.ts · createVerificationState` /
+`reserveResultIdentity`, which keep namespace-global counters without eviction) and writes the
+`resultIdentities` carrier; the coverage row's `claim-result/<namespace>/<runId>/<n>` ID comes from
+it. `core/runCheckpoint.ts` reads stored rows through `verificationRow.ts ·
+readClaimVerificationRow`, which admits a detached, bounded observation without rerunning the
+comparison. Every `resume`, `continueFrom` and `resumeOnError` runs `verificationCheckpoint.ts ·
+requireVerificationOnResume(…, false)`, which refuses a saved run holding a `claimVerification`
+carrier (or verification rows without one): no option continues it.
 
 Not mounted: no public option or model request reaches `verificationCheck.ts`,
-`verificationConfig.ts`, `reserveClaimIdentity` or `retainVerificationEvidence`; only tests do.
-`verificationCheck.ts` binds one literal claim to one authorized result occurrence and asks the
-shared comparison owner: a match is agreement with identified tool evidence under an authored
-rule, not proof of truth, arbitrary prose or an entire answer. `verificationRow.ts` admits a
-detached, bounded observation without rerunning the comparison; `verificationState.ts` retains
-exact receipts and namespace-global reservation counters without eviction; `verificationConfig.ts`
-holds authored callbacks only in configuration and requires a separate grant for original
-semantic metadata and selected executed scope. Carrier-free observations are readable history,
-not resumable evidence. `recordFindings` remains the one writer; runtime dispatch/parser wiring,
-per-declaration bounds, delivered-answer binding and offline measurement remain pending.
+`verificationConfig.ts`, `reserveClaimIdentity` or `retainVerificationEvidence` (which retains exact
+receipts); only tests do. `verificationCheck.ts` binds one literal claim to one authorized result
+occurrence and asks the shared comparison owner: a match is agreement with identified tool evidence
+under an authored rule, not proof of truth, arbitrary prose or an entire answer.
+`verificationConfig.ts` holds authored callbacks only in configuration and requires a separate grant
+for original semantic metadata and selected executed scope. Carrier-free observations are readable
+history, not resumable evidence. `recordFindings` remains the one writer; runtime dispatch/parser
+wiring, per-declaration bounds, delivered-answer binding and offline measurement remain pending.
 
 ## Files
 

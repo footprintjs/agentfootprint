@@ -191,10 +191,10 @@ export interface CallLLMStageDeps {
   /**
    * THE LEDGER IS SERVED (9.101.0, step 3) — present only under `.findings()`,
    * only ever `true`, threaded beside `findings` by `Agent.ts`. It gates
-   * EVERY read of `scope.findingsLedger` in this stage: the piece
-   * (`findings/serve.ts · findingsLedgerPiece`, joined AFTER the recovery
-   * piece — order recovery → findings, FIXED, mirrored by
-   * `servedView.ts · viewOf`) and the collapse (`collapseJudged`, applied to
+   * EVERY read of `scope.findingsLedger` in this stage: the request-only
+   * DATA message (`findings/context.ts · findingsContext`, appended after
+   * history and every other request-only line, rebuilt by
+   * `servedView/findings.ts`) and the collapse (`collapseJudged`, applied to
    * the message list BEFORE the staged-refs nudge and BEFORE the receipt
    * mint, so the receipt hashes what was sent). An unarmed agent never
    * reads the key — a tracked read of an always-absent key is the phantom
@@ -212,9 +212,9 @@ export interface CallLLMStageDeps {
   /**
    * The answer-turn ask (9.103.0) — `AgentOptions.findings.answerAsk`,
    * threaded under the same gate and ONLY when it is `'quote-facts'`; absent
-   * ⇒ `'none'`, the piece as it was. The same value seed puts on the record
-   * as the run constant `findingsAnswerAsk`, which is how the rebuild
-   * appends the ask the way the wire did.
+   * ⇒ `'none'`. This stage does not read it: the live sentence is on the
+   * findings instruction. Seed records it as the run constant
+   * `findingsAnswerAsk`, which replay reads for a record made before the DATA layout.
    */
   readonly findingsAnswerAsk?: FindingsAnswerAsk;
   /**
@@ -233,9 +233,9 @@ export interface CallLLMStageDeps {
    * then, only ever `true`. It gates the ONE read of the run constant
    * `scope.ontology` in this stage: the piece
    * (`ontology/serve.ts · ontologyPiece`, loaded through `import()` — the
-   * `judgeLanded` precedent — and joined AFTER the recovery piece and BEFORE
-   * the findings piece: injections → recovery → ontology → findings, FIXED,
-   * mirrored by `servedView.ts · viewOf`) and the `ontology.served` event.
+   * `judgeLanded` precedent — and joined AFTER the recovery piece:
+   * injections → recovery → ontology, FIXED, mirrored by
+   * `servedView.ts · viewOf`) and the `ontology.served` event.
    * An unarmed agent never reads the key — a tracked read of an always-absent
    * key is the phantom context source `window/evictedTurns.ts` names.
    */
@@ -627,8 +627,8 @@ export function buildCallLLMStage(
     const messages = collapsed === committed ? history : stripFrameworkFields(collapsed);
     // ── the declared ontology, served (9.106.0) ──────────────────────────
     // ONE gated read of the run constant seed wrote; the piece is a pure
-    // function of the spec and nothing else (no call number, no clock — the
-    // findings piece's cache law), so an unchanged map serves unchanged bytes
+    // function of the spec and nothing else (no call number, no clock — a
+    // cacheable piece's law), so an unchanged map serves unchanged bytes
     // on every call of the run. The composer is loaded through `import()` —
     // the optional-family law of docs-next's site budget (`toolCalls/evidence/judgeLanded.ts ·
     // judgeLanded`): an unarmed agent never loads the module. The event
@@ -657,13 +657,13 @@ export function buildCallLLMStage(
         });
       }
     }
-    // The join: injections, then the recovery piece, then the ontology piece,
-    // then the findings piece — a FIXED order `servedView.ts · viewOf`
-    // mirrors. Every request-only piece is composed into `systemPieces` ONLY,
-    // never pushed into `systemPromptInjections`: a piece there would be
-    // exempt from the evidence gate (`evidenceIndex.ts · exemptFromRun`
-    // indexes every injection's rawContent), and the ledger quotes the
-    // model's own words.
+    // The join: injections, then the recovery piece, then the ontology piece
+    // — a FIXED order `servedView.ts · viewOf` mirrors (the findings DATA is
+    // a message after history, not a piece). Every request-only piece is
+    // composed into `systemPieces` ONLY, never pushed into
+    // `systemPromptInjections`: a piece there would be exempt from the
+    // evidence gate (`evidenceIndex.ts · exemptFromRun` indexes every
+    // injection's rawContent), and the recovery piece quotes the model.
     const systemPieces =
       recoveryPiece === undefined && ontologyPieceRecord === undefined
         ? systemPromptInjections
@@ -1458,11 +1458,11 @@ export function buildCallLLMStage(
           })),
           {
             grounded: [
-              // The findings piece is mixed-trust for the same reason the
-              // recovery piece is: it quotes the model's OWN declarations,
-              // so a value that exists only there must not excuse an
-              // argument. Either request-only piece narrows the credited
-              // system text to the trusted injections.
+              // The recovery piece is mixed-trust: it quotes the model's
+              // OWN words, so a value that exists only there must not
+              // excuse an argument, and it narrows the credited system text
+              // to the trusted injections. The findings DATA is a user-role
+              // message, never in this system text.
               ...(recoveryPiece === undefined
                 ? llmRequest.systemPrompt === undefined
                   ? []

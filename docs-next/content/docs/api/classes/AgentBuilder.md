@@ -576,23 +576,23 @@ writer, and leaves history verbatim. Read it back with
 [Agent.findings](/docs/api/classes/Agent#findings). Nothing infers: a call with no declaration files
 no row, and a result nobody named has no standing — never 'open'.
 
-WHAT THE ANSWER TURN IS SERVED. Once the model has declared a standing,
-every later call is served a request-only system piece composed from the
-folded ledger (`findings/serve.ts · findingsLedgerPiece` — facts,
-limitations, evidenceRefs and nextSteps, each marked "declared by the
-model"; results nobody named listed as undeclared, never open), and on
-the wire only — `history` never changes — a result the model judged
+WHAT EACH CALL IS SERVED. Every call carries one request-only
+`role: 'user'` DATA message after history (`findings/context.ts ·
+findingsContext`): the folded ledger's facts, evidenceRefs, limitations,
+conflicts and advisory result ids, said to be model declarations, not
+verified facts; entries past `maxContextBytes` are counted as omitted.
+On the wire only (`history` never changes) a result the model judged
 `noise` or `ruled-out` is replaced by a ticket (`collapseJudged`).
 `serve` chooses how much of the pile stays: `'ledger-and-facts'` (the
 default) keeps fact, open and undeclared results verbatim beside the
-piece; `'ledger-only'` collapses fact results too and is BENCH-GATED —
+DATA; `'ledger-only'` collapses fact results too and is BENCH-GATED —
 shipped so `bench/findings-shuffle.mjs` can measure it on a real model,
 not a recommendation, never a default until that run shows the answer
-does not drift under shuffled evidence. `answerAsk` (9.103.0) appends
-the answer-turn ask (`findings/reserved.ts · FINDINGS_ANSWER_ASK`) to
-that piece under `'quote-facts'` — BENCH-GATED the same way, against
-the fidelity dip the real-model page's fourth run measured; `'none'`
-(the default) writes no key and serves the piece exactly as before.
+does not drift under shuffled evidence. `answerAsk: 'quote-facts'`
+(9.103.0) appends one sentence to the findings instruction
+(`findings/instruction.ts · findingsInstruction`), BENCH-GATED the same
+way; `'none'` (the default) writes no key. Live calls never send the old
+system piece or `FINDINGS_ANSWER_ASK`; replay rebuilds them for old records.
 `keepLedgerFacts` is the ceiling
 of fact turns the WINDOW holds under standing-aware eviction (9.102.0) —
 the same dial as `AgentOptions.keepLedgerFacts` (that field says why and
@@ -631,8 +631,8 @@ existed: no decoration, no peel, no key, no piece, no event.
 
 `"none"` \| `"quote-facts"`
 
-Whether the served piece ends with the answer-turn ask
- (`FINDINGS_ANSWER_ASK`): `'none'` (default) or `'quote-facts'` (bench-gated).
+Whether the findings instruction ends with the quote-facts sentence
+ (`findingsInstruction`): `'none'` (default) or `'quote-facts'` (bench-gated).
 
 ###### argumentSources?
 
@@ -679,7 +679,7 @@ Default 16384; valid integers 1024–262144.
 `"ledger-and-facts"` \| `"ledger-only"`
 
 What the model is served from the ledger: the default keeps fact results
- verbatim beside the piece; `'ledger-only'` collapses them too (bench-gated).
+ verbatim beside the DATA; `'ledger-only'` collapses them too (bench-gated).
 
 #### Returns
 

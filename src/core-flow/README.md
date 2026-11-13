@@ -42,7 +42,7 @@ core-flow/
 
 The four control-flow primitives from programming-language theory are **sequence**, **parallel**, **branch**, **iteration**, and `Sequence`, `Parallel`, `Conditional` and `Loop` are one each. Every higher-level pattern (Swarm, MapReduce, ToT, Reflection, Debate) is expressible as a nested composition of these. The folder ships two more compositions that add no new shape: `workflow()` is a sequence whose step-to-step types the compiler checks, and `graph()` is a fixed DAG run level by level (parallel within a level, levels in sequence). Adding a fifth SHAPE would be a sign we're modelling the wrong abstraction.
 
-### Decision 2: Each composition wraps ONE footprintjs primitive
+### Decision 2: Each of the four shape compositions wraps ONE footprintjs primitive
 
 | Composition | Footprintjs primitive | Why |
 |---|---|---|
@@ -51,11 +51,13 @@ The four control-flow primitives from programming-language theory are **sequence
 | `Conditional` | `.addDeciderFunction(...)` + `.addSubFlowChartBranch(...)` | decider picks one branch; `setDefault` guards fallback |
 | `Loop` | outer chart + `.loopTo(...)` + `scope.$break()` | iterate body subflow; guard breaks out |
 
+The other two use more than one mount: `workflow()` chains its steps with `addSubFlowChartNext`, and `graph()` mounts a level of several nodes as stacked `addSubFlowChart` calls (a fork) and a one-node level with `addSubFlowChartNext`, with one join stage between levels (`Graph.ts` header).
+
 Compositions do NOT reinvent control flow — they're named, typed, event-emitting adapters over footprintjs's existing primitives.
 
 ### Decision 3: Symmetric builder API
 
-Every composition follows the same shape:
+Each of the four shape compositions follows the same shape:
 
 ```typescript
 Composition.create(opts)
@@ -70,11 +72,11 @@ Members:
 - `Conditional.when(id, pred, runner)` / `.otherwise(id, runner)`
 - `Loop.repeat(runner)` / `.times(n)` / `.forAtMost(ms)` / `.until(guard)` — reads "repeat X, N times, for at most M ms, until guard"
 
-Consumers learn one pattern and apply it across all four.
+Consumers learn one pattern and apply it across all four. `workflow(...steps)` and `graph({ … })` are plain functions, not `create()` builders.
 
-### Decision 4: String-in / string-out Runner contract
+### Decision 4: String-in / string-out Runner contract (the four shapes)
 
-Each child of a composition is a `Runner<{ message: string }, string>`. Input shape and output shape are uniform — **any Runner composes into any composition**:
+Each child of `Sequence`, `Parallel`, `Conditional` and `Loop` is a `Runner<{ message: string }, string>`. Input shape and output shape are uniform — **any Runner composes into any composition**:
 
 ```typescript
 const pipeline = Sequence.create()
@@ -95,7 +97,7 @@ const pipeline = Sequence.create()
   .build();
 ```
 
-No type gymnastics needed to compose — the uniformity IS the composability.
+No type gymnastics needed to compose — the uniformity IS the composability. `workflow()` and `graph()` break this contract on purpose: a step's or node's value reaches the next one unchanged (plain data only), and `workflow()` feeds a `string` result to the next step's `{ message }` (`Workflow.ts`, `Graph.ts` headers).
 
 ### Decision 5: Output piping between steps — via `sfOutput` TraversalResult
 
@@ -256,8 +258,8 @@ All flow through the same dispatcher — consumers subscribe with `agent.on('age
 Very rarely. The four primitives cover all control-flow shapes from programming language theory; the six compositions here are those four plus `workflow()` and `graph()`, which add typing and scheduling, not a new shape. Before adding a seventh, verify the behavior can't be expressed as a nested combination of the existing ones. If you truly need one:
 
 1. Confirm it represents a control-flow shape NOT expressible via nesting of the existing four
-2. Wrap exactly ONE footprintjs builder primitive
+2. Wrap exactly ONE footprintjs builder primitive, as the four shapes do (`graph()`, a scheduler over levels, is the one exception)
 3. Emit `composition.*` events via `typedEmit`
-4. Return a `Runner<{ message: string }, string>` implementation
+4. Return a `Runner<{ message: string }, string>` implementation, as the four shapes do
 5. Attach all 4 core recorders internally in `.run()`
 6. Document the wrapped footprintjs primitive + the symmetric builder API

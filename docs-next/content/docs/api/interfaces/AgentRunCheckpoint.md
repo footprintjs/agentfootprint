@@ -62,8 +62,8 @@ Wall-clock when the checkpoint was captured. Diagnostic only.
 Defined in: [src/core/runCheckpoint.ts:196](https://github.com/footprintjs/agentfootprint/blob/main/src/core/runCheckpoint.ts#L196)
 
 Private, opt-in exact evidence and reservation counters. Unlike historical
-observations, this carrier can support later checks. A newest-version
-continuation must explicitly keep verification enabled, never discard it.
+observations, this carrier can support later checks. `resume`, `continueFrom`
+and `resumeOnError` refuse a checkpoint holding it: no option continues it yet.
 Storage ownership/authenticity remains the checkpoint caller's obligation.
 
 ***
