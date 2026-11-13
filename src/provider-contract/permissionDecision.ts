@@ -1,7 +1,8 @@
 /**
- * The two questions asked about a permission checker: will it be ASKED about a
- * capability (`checkerGoverns`), and what did its ANSWER mean
- * (`readPermissionDecision`, THE ONE READER of a checker's answer).
+ * What did a permission checker's ANSWER mean? `readPermissionDecision` is THE
+ * ONE READER of a checker's answer. (Whether the checker is asked at all is
+ * `types.ts` · `checkerGoverns`; it stays there because `types.ts` is a
+ * zero-import leaf the skill-graph fence allow-lists.)
  *
  * Why it exists: a checker is a port, and what comes back through it is not
  * always what its type says. A remote policy service's JSON cast to
@@ -22,24 +23,6 @@
  *   readPermissionDecision({ result: 'deny ' });  // { kind: 'unrecognised', rationale: "… got 'deny '" }
  *   readPermissionDecision({});                    // { kind: 'unrecognised', rationale: '… got no result' }
  */
-
-import type { PermissionCapability, PermissionChecker } from './types.js';
-
-/**
- * Does this checker ask to be consulted about `capability`? (9.11.0)
- *
- * `'tool_call'` is always true — it has been enforced since v2.4 and needs no
- * declaration. Everything else is true only when the checker named it.
- * Absence is NO.
- */
-export function checkerGoverns(
-  checker: PermissionChecker | undefined,
-  capability: PermissionCapability,
-): boolean {
-  if (!checker) return false;
-  if (capability === 'tool_call') return true;
-  return checker.governs?.includes(capability) === true;
-}
 
 /** What the library does with one checker answer. */
 export type PermissionReading =

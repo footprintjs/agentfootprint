@@ -85,4 +85,4 @@ Defined in: [src/core/pause.ts:33](https://github.com/footprintjs/agentfootprint
 
 Defined in: [src/core/pause.ts:37](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L37)
 
-Data passed to `scope.$pause()` / `pauseHere()`; an Agent tool's pause names its real call and drops its `checkIn`/`ask`/`awaitingInput` keys.
+Data passed to `scope.$pause()` / `pauseHere()`; an Agent tool's pause names its real call and drops its `checkIn`/`ask`/`awaitingInput`/`authorization` keys.

@@ -43,17 +43,9 @@ export interface LLMMessage {
    */
   readonly toolResultOrigin?: 'not-entered' | 'input-cancelled' | 'outcome-unknown';
   /**
-   * For `role: 'tool'` only — how the call settled, as the dispatch recorded it,
-   * when it did not complete: `'refused'` (it never ran — a gate, a person or a
-   * missing credential stopped it — or the tool declared `status: 'denied'`) or
-   * `'failed'` (`execute` threw, its result was withheld, or the tool declared
-   * `'failure'` / `'invalid'`). Absent on a call that completed.
-   *
-   * `content` is whatever the model reads and a tool can write anything there,
-   * "declined by human" included, so a reader asking "did that call work?"
-   * reads this field, never the words (`core/checkin.ts` · `buildTrail`).
-   * Written by `core/agent/stages/toolCalls/execution/callOutcome.ts` · `callOutcomeOf`.
-   * JSON/checkpoint safe; never reaches a provider (`stripFrameworkFields`).
+   * `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
+   * `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
+   * Not whether `execute` was entered. Read by `checkin.ts` · `buildTrail`, never from `content`; never sent to a provider.
    */
   readonly outcome?: 'refused' | 'failed';
   /**
@@ -984,8 +976,16 @@ export interface PermissionChecker {
   readonly governs?: readonly PermissionCapability[];
 }
 
-// Lives beside the one reader of a checker's answer (`readPermissionDecision`).
-export { checkerGoverns } from './permissionDecision.js';
+/**
+ * Is this checker asked about `capability`? (9.11.0) `'tool_call'`: always, enforced since v2.4, no declaration needed. Anything else: only when the checker named it in `governs`; absence is NO.
+ */
+export function checkerGoverns(
+  checker: PermissionChecker | undefined,
+  capability: PermissionCapability,
+): boolean {
+  if (!checker) return false;
+  return capability === 'tool_call' || checker.governs?.includes(capability) === true;
+}
 // ─── Pricing Table ──────────────────────────────────────────────────
 
 export type TokenKind = 'input' | 'output' | 'cacheRead' | 'cacheWrite';

@@ -9,8 +9,10 @@
  * RETURNED text starting "declined by human" showed as not ok.
  *
  * The dispatch knows how each call settled; it now writes that on the
- * committed tool message (`LLMMessage.toolOutcome`, stripped before any
- * provider sees it) and `core/checkin.ts` · `buildTrail` reads the field.
+ * committed tool message (`LLMMessage.outcome`, stripped before any provider
+ * sees it) and `core/checkin.ts` · `buildTrail` reads the field. A host's
+ * notice standing in for a result (`LLMMessage.toolResultOrigin`) is not a
+ * completed call either, so it reads not ok.
  * A tool's DECLARED status (an effects envelope with `status: 'failure'`)
  * counts; an undeclared `{"status":"failed"}` in a plain result is the tool's
  * words, which the trail does not parse.
@@ -18,9 +20,16 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { Agent, defineTool, deny, allow, isCheckInPause } from '../../../src/index.js';
+import {
+  Agent,
+  defineTool,
+  deny,
+  allow,
+  isCheckInPause,
+  standardEvidenceAssembler,
+} from '../../../src/index.js';
 import { mock } from '../../../src/llm-providers.js';
-import type { LLMRequest } from '../../../src/provider-contract/types.js';
+import type { LLMMessage, LLMRequest } from '../../../src/provider-contract/types.js';
 
 function tool(name: string, execute: () => unknown, extra: Record<string, unknown> = {}) {
   return defineTool({
@@ -33,11 +42,13 @@ function tool(name: string, execute: () => unknown, extra: Record<string, unknow
 }
 
 async function trailAndWire() {
-  const wire: LLMRequest[] = [];
+  // What each request carried AT CALL TIME, as JSON: the request's messages
+  // array is the library's live history, which goes on growing after the call.
+  const wire: string[] = [];
   const agent = Agent.create({
     provider: mock({
       respond: (req: LLMRequest) => {
-        wire.push(req);
+        wire.push(JSON.stringify(req.messages));
         return wire.length === 1
           ? {
               toolCalls: ['lookup', 'verify', 'plain', 'echo', 'blocked'].map((name, i) => ({
@@ -86,6 +97,46 @@ describe('the check-in trail', () => {
 
   it('the outcome marker never reaches the provider', async () => {
     const { wire } = await trailAndWire();
-    expect(JSON.stringify(wire[1]?.messages)).not.toContain('toolOutcome');
+    // The second request carries the five tool results, four of them not
+    // completed, so an unstripped marker would be on it.
+    expect(wire[1]).toContain('connection refused');
+    expect(wire[1]).not.toContain('"outcome"');
+  });
+
+  it("a host's notice in place of a result reads not ok", async () => {
+    const notice = (id: string, origin: LLMMessage['toolResultOrigin']): LLMMessage => ({
+      role: 'tool',
+      toolCallId: id,
+      toolName: 'lookup',
+      content: 'The result of this call is not known.',
+      toolResultOrigin: origin,
+    });
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'pay' },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'n1', name: 'lookup', args: {} },
+          { id: 'n2', name: 'lookup', args: {} },
+          { id: 'n3', name: 'lookup', args: {} },
+        ],
+      },
+      notice('n1', 'outcome-unknown'),
+      notice('n2', 'input-cancelled'),
+      { role: 'tool', toolCallId: 'n3', toolName: 'lookup', content: 'sunny' },
+    ];
+    const evidence = await standardEvidenceAssembler({
+      tool: { name: 'wire_money', description: 'send money' },
+      args: {},
+      iteration: 2,
+      history,
+      scorer: () => [],
+    });
+    expect(evidence.trail?.toolCalls).toEqual([
+      { name: 'lookup', ok: false }, // the host does not know whether it ran
+      { name: 'lookup', ok: false }, // the person cancelled the input it waited on
+      { name: 'lookup', ok: true }, // a plain result
+    ]);
   });
 });

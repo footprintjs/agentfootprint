@@ -1,10 +1,8 @@
 import type { LLMToolSchema } from '../../../../provider-contract/types.js';
 import { isDevMode } from 'footprintjs';
 import { buildReadSkillTool } from '../../../../injection-engine/skillTools.js';
-import {
-  checkerGoverns,
-  readPermissionDecision,
-} from '../../../../provider-contract/permissionDecision.js';
+import { checkerGoverns } from '../../../../provider-contract/types.js';
+import { readPermissionDecision } from '../../../../provider-contract/permissionDecision.js';
 import { skillTarget } from '../../../../security/skillTarget.js';
 import { memberIdentityIn } from '../../../memberRun.js';
 import type { AgentContext } from '../contracts.js';
@@ -141,7 +139,8 @@ export function governsSkillVisibility(this: Pick<AgentContext, 'configuration'>
  *
  * A skill is hidden when the checker returns anything other than `'allow'` /
  * `'gate_open'` (`readPermissionDecision`, the reader the tool gate uses too,
- * so `'ask'` or `{}` hides here and refuses there) — and when the checker THROWS, which is the fail-closed half:
+ * so `'ask'` or `{}` hides here and refuses there) — and when the checker
+ * THROWS, which is the fail-closed half:
  * a policy that did not answer did not say yes, and the same sentence governs
  * the tool gate.
  */

@@ -18,10 +18,20 @@ export interface SettledCall {
  * Why: the check-in trail shows a person approving a call whether each earlier
  * call worked. It used to guess from the first words of the tool message, so a
  * tool that threw ("connection refused") read as ok and a tool that returned
- * "declined by human: …" read as refused. Every door that commits a tool
- * message (the batch loop and the check-in, ask and credential resumes) asks
- * this function, so one call cannot be judged two ways by which door it came
- * through.
+ * "declined by human: …" read as refused. The dispatch doors that commit a
+ * call's result (the batch loop, `deliveredResult.ts`, and the check-in, ask
+ * and credential resumes) ask this function, so one call cannot be judged two
+ * ways by which of them it came through. Doors that commit a tool message
+ * without asking it: a plain resume (`resume/plain.ts` — the person's answer
+ * IS the result, so absent is right); a call a paused batch never dispatched
+ * (`batch/settlementOperations.ts`, marked `notDispatched`, which the trail
+ * skips); and the host's notices (`hosting/answeredPause.ts`,
+ * `hosting/standingAgent/turn/run.ts`), which read as not completed when
+ * they carry `toolResultOrigin` (always in `answeredPause.ts`; the standing
+ * agent's cancel notice only when findings admission is on).
+ *
+ * It answers "did the call complete?", not "was `execute` entered?":
+ * `'refused'` also covers a tool that ran and declared `'denied'`.
  *
  * - did not run (a gate, a person or a credential stopped it) → `'refused'`
  * - ran but threw, or its result was withheld (`clean: false`) → `'failed'`

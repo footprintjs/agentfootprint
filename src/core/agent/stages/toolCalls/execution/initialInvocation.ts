@@ -36,6 +36,7 @@ import {
   explainStatusOnlyNearMiss,
 } from '../../../../../semantics/toolEffects.js';
 import { isPauseRequest } from '../../../../pause.js';
+import { CONSENT_PAUSE_KEY } from '../../../../../identity/consent.js';
 import {
   validateInputDeclaration,
   stampInputRequest,
@@ -495,22 +496,39 @@ export async function invokeInitialTool(
 }
 
 /**
- * Keys of `pauseData` that are the LIBRARY's words, never a tool's: which
- * call paused, and which consent gate or typed ask is open
- * (`pause.ts` · `pauseDemandsDecision` reads the gate from `checkIn` / `ask`;
- * `RunnerBase` reads `awaitingInput`). A gate opened by a tool's own data is
- * a request the library never minted: no decision can answer it.
+ * Keys of `pauseData` the library reads to recognise a pause of its OWN: which
+ * call paused (`toolCallId` / `toolName`), which consent gate or typed ask is
+ * open (`pause.ts` · `pauseDemandsDecision` reads `checkIn` / `ask`;
+ * `RunnerBase` reads `awaitingInput`), and credential consent
+ * (`identity/consent.ts` · `CONSENT_PAUSE_KEY`, minted only by
+ * `credentialAdmission.ts`, whose URL the caller is told to open). A tool's
+ * own data never carries them, whatever their value: a gate opened by a tool
+ * is a request the library never minted, so no decision can answer it, and a
+ * consent link from a tool would be shown as the library's.
+ *
+ * One library pause IS raised by a tool: an AG-UI frontend tool's
+ * (`agUiFrontendTool`). Its reader does not trust the key; it asks whether the
+ * call's real `toolName` (written below) is one the app declared
+ * (`ag-ui/frontendTools.ts` · `isFrontendToolPause`).
  */
-const LIBRARY_PAUSE_KEYS = ['toolCallId', 'toolName', 'checkIn', 'ask', 'awaitingInput'];
+const LIBRARY_PAUSE_KEYS = [
+  'toolCallId',
+  'toolName',
+  'checkIn',
+  'ask',
+  'awaitingInput',
+  CONSENT_PAUSE_KEY,
+] as const;
 
 /**
  * The checkpoint's `pauseData` for a tool's own `pauseHere(data)` /
  * `askHuman(data)`: the REAL call's `toolCallId` / `toolName`, then the
  * tool's fields minus the library's keys, so nothing a tool writes can rename
- * the call or open a gate. (The real keys stay first, the order every plain
- * pause has always serialized in.)
+ * the call or open a gate. Every other field is copied exactly as before
+ * (a spread, so an own `__proto__` key stays a plain field), and the real
+ * keys stay first, the order every plain pause has always serialized in.
  *
- * @example a tool raising askHuman({ question: 'ok?', toolName: 'transfer_funds' })
+ * @example a tool raising askHuman({ question: 'ok?', toolName: 'transfer_funds', ask: 'later' })
  *   from `lookup_weather` call `c1` pauses with
  *   { toolCallId: 'c1', toolName: 'lookup_weather', question: 'ok?' }
  */
@@ -518,13 +536,10 @@ function toolPauseData(
   tc: { readonly id: string; readonly name: string },
   raised: unknown,
 ): Record<string, unknown> {
-  const own: Record<string, unknown> = {};
-  if (typeof raised === 'object' && raised !== null) {
-    for (const [key, value] of Object.entries(raised)) {
-      if (!LIBRARY_PAUSE_KEYS.includes(key)) own[key] = value;
-    }
-  } else {
-    own.data = raised;
+  if (typeof raised !== 'object' || raised === null) {
+    return { toolCallId: tc.id, toolName: tc.name, data: raised };
   }
+  const own: Record<PropertyKey, unknown> = { ...raised };
+  for (const key of LIBRARY_PAUSE_KEYS) delete own[key];
   return { toolCallId: tc.id, toolName: tc.name, ...own };
 }

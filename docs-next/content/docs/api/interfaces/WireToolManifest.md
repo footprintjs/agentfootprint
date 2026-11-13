@@ -4,7 +4,7 @@ title: WireToolManifest
 
 # Interface: WireToolManifest
 
-Defined in: [src/provider-contract/types.ts:473](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L473)
+Defined in: [src/provider-contract/types.ts:465](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L465)
 
 The structural record of what one request actually carried on the wire.
 
@@ -14,7 +14,7 @@ The structural record of what one request actually carried on the wire.
 
 > `readonly` `optional` **outputFormat?**: `"json_schema"`
 
-Defined in: [src/provider-contract/types.ts:483](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L483)
+Defined in: [src/provider-contract/types.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L475)
 
 Present only when the serialized body carried a structured-output format
 (Anthropic's `output_config.format`) — its `type`, read back from the
@@ -28,6 +28,6 @@ request went out unconstrained.
 
 > `readonly` **toolNames**: readonly `string`[]
 
-Defined in: [src/provider-contract/types.ts:475](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L475)
+Defined in: [src/provider-contract/types.ts:467](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L467)
 
 Tool names as they appear in the serialized body, in wire order.
