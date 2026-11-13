@@ -15,7 +15,8 @@ see; the agent composes the request, an adapter carries it.
   schema.
 - `permissionDecision.ts` — `readPermissionDecision`, THE ONE READER of a
   permission checker's answer (whether the checker is asked at all stays
-  `types.ts` · `checkerGoverns`, inside the zero-import leaf). Only `'allow'` /
+  `types.ts` · `checkerGoverns`, inside that allow-listed leaf of the
+  skill-graph fence, which must gain no import). Only `'allow'` /
   `'gate_open'` allow; `'deny'` / `'halt'` keep their meanings; anything else
   (`'ask'`, `{}`, `'ALLOW'`, `'deny '`) is a refusal whose rationale says the
   answer was not recognised. The tool gate, the capability gate and the skill

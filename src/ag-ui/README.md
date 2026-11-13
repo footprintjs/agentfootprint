@@ -112,9 +112,12 @@ agUi({
 - `request.ts` — the reader port (`AgUiRequestReader`), the core's read
   (`readAgUiRequest` → `readAgUiRunInput`) and the turn a request may ask for.
 - `frontendTools.ts` — the app's allow-listed frontend tools, as tools that pause
-  for the page. A pause waits on the page only when the call that raised it is
-  one of those tools (`isFrontendToolPause` reads the real call's `toolName`,
-  which the library writes): a server tool that puts `agUiFrontendTool` in its
-  own pause data still waits on a person, and the page cannot answer it.
+  for the page. A pause waits on the page only when the name of the call that
+  raised it is one of those tools (`isFrontendToolPause` reads the real call's
+  `toolName`, which the library writes): a server tool whose name is not a
+  declared frontend tool and that puts `agUiFrontendTool` in its own pause data
+  still waits on a person, and the page cannot answer it. Not covered: a server
+  tool named like a declared frontend tool that the page did not enable on this
+  request; the name is all the check sees, so its pause waits on the page.
 - `adapter.ts` — `agUi()`, the `ProtocolAdapter` the host takes: the three
   strategies, composed.

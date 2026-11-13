@@ -8,7 +8,10 @@ filters with. Trace: `cost.ts`. Support: `runInput.ts`,
 `conversation.ts`, `translator.ts`, `outputFallback.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
 may show), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
-the one input a composition hands them).
+the one input a composition hands them), `trailBeforeOutcomeMarker.ts` (the
+check-in trail's text test for a tool message with no `outcome` mark, kept so
+a history stored by an earlier version reads its refusals as it did before;
+e.g. an unmarked "[permission denied: …]" reads `ok: false`).
 Note: "Lens" in `runner.ts`, `RunnerBase.ts`, `Agent.ts`, `translator.ts` and
 `LLMCall.ts` means the VIEWER PRODUCT, not the wire-facing role.
 
