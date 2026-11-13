@@ -252,15 +252,24 @@ describe('functional: advance at the return boundary', () => {
     expect(advanced.map((a) => (a.step as { index: number }).index)).toEqual([1, 2, 3]);
     expect(advanced.map((a) => a.toolCallId)).toEqual(['t2', 't3', 't4']);
     expect(advanced[2]).toMatchObject({ completed: true, skillId: 'refund' });
+    // These tools return plain values — no declared status — so each step
+    // advanced as 'not-reported', and the words say it ran, not that it was done.
+    expect(advanced.map((a) => a.outcome)).toEqual([
+      'not-reported',
+      'not-reported',
+      'not-reported',
+    ]);
 
     // The suffix is part of the one past: history carries it.
     const hist = historyOf(agent);
     const lookupResult = hist.find((m) => m.toolName === 'lookup');
     expect(lookupResult?.content).toContain(
-      'Step 1 of 3 done. Now on step 2 of 3: refund the charge',
+      'Step 1 of 3 ran; its tool reported no outcome. Now on step 2 of 3: refund the charge',
     );
     const exportResult = hist.find((m) => m.toolName === 'export');
-    expect(exportResult?.content).toContain('All 3 steps complete.');
+    expect(exportResult?.content).toContain(
+      'Step 3 of 3 ran; its tool reported no outcome. It was the last step.',
+    );
 
     // Pointer complete on the snapshot; the post-completion offer is FULL
     // again — no narrowing, no skip_step (zero-cost once done).
@@ -569,10 +578,14 @@ describe('integration: pause/resume — the HITL step (correction 2)', () => {
     // fired for t3 specifically, then the loop finished step 3 inline.
     expect(advanced.map((a) => a.toolCallId)).toEqual(['t2', 't3', 't4']);
     expect(advanced[2]).toMatchObject({ completed: true });
+    // A person's answer is a value, never a declared status: 'not-reported'.
+    expect(advanced[1]).toMatchObject({ toolCallId: 't3', outcome: 'not-reported' });
     // The human's answer carries the step suffix in the one past.
     const askResult = historyOf(agent).find((m) => m.toolName === 'ask_first');
     expect(askResult?.content).toContain('yes — approved');
-    expect(askResult?.content).toContain('Step 2 of 3 done. Now on step 3 of 3: export it');
+    expect(askResult?.content).toContain(
+      'Step 2 of 3 ran; its tool reported no outcome. Now on step 3 of 3: export it',
+    );
   });
 });
 

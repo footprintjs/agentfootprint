@@ -103,9 +103,24 @@ export function routingShapes() {
         tool: str,
         note: str,
       }),
+      outcome: oneOf('not-reported', 'succeeded'),
       iteration: num,
       toolCallId: str,
       completed: bool,
+    }),
+
+    'agentfootprint.skill.step_held': eventShape<'agentfootprint.skill.step_held'>({
+      skillId: str,
+      step: shapeOf<At<PayloadOf<'agentfootprint.skill.step_held'>, 'step'>>({
+        index: num,
+        total: num,
+        tool: str,
+        note: str,
+      }),
+      outcome: oneOf('failed', 'not-finished'),
+      status: oneOf('denied', 'failure', 'invalid', 'partial', 'pending'),
+      iteration: num,
+      toolCallId: str,
     }),
 
     'agentfootprint.skill.steps_unfinished': eventShape<'agentfootprint.skill.steps_unfinished'>({

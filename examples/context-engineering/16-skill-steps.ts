@@ -9,7 +9,11 @@
  * sent, so the model cannot call step 5's tool from step 3 — no refusal
  * machinery, no gate. The model keeps the judgment INSIDE each step:
  *
- *   • run the tool — the result gains "Step k done. Now on step k+1…";
+ *   • run the tool — what the tool DECLARED decides the step: a declared
+ *     `status: 'success'` advances it ("Step k of n done. Now on step k+1…");
+ *     a plain value advances it and says so ("Step k of n ran; its tool
+ *     reported no outcome."); a declared failure or unfinished work holds it
+ *     (`skill.step_held`);
  *   • skip it with `skip_step(reason)` — the reason goes on the record
  *     (`skill.step_skipped`), and the declared `onSkip` policy decides
  *     whether the pointer moves or holds;
@@ -23,9 +27,9 @@
  * the pointer rides the checkpoint, and the person's answer advances the
  * step on resume — human-in-the-loop as an ordinary step.
  *
- * Every move lands on the typed event stream (`skill.step_advanced` /
- * `step_skipped` / `steps_unfinished`) — this example prints them, because
- * the record IS the feature.
+ * Every move lands on the typed event stream (`skill.step_advanced` with its
+ * `outcome` / `step_held` / `step_skipped` / `steps_unfinished`) — this
+ * example prints them, because the record IS the feature.
  */
 
 import { Agent, defineTool, isPaused, askHuman, type LLMProvider } from '../../src/index.js';
@@ -77,7 +81,15 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
       t('check_history', 'one charge on 2026-08-01, one duplicate on 2026-08-02'),
       t('verify_identity', 'identity verified'),
       approveRefund,
-      t('issue_refund', 'refund of $42.10 issued'),
+      // The one step whose tool can SAY its work was done: it declares
+      // `status: 'success'`, so its step advances as 'succeeded'. The plain
+      // tools above and below advance as 'not-reported'.
+      defineTool<Record<string, never>, unknown>({
+        name: 'issue_refund',
+        description: 'issue refund.',
+        inputSchema: { type: 'object', properties: {} },
+        execute: () => ({ content: 'refund of $42.10 issued', effects: [], status: 'success' }),
+      }),
       t('file_receipt', 'receipt R-991 filed'),
     ] as never,
     steps: [
@@ -108,9 +120,17 @@ export async function run(input: string, provider?: LLMProvider): Promise<string
         if (e.name === 'agentfootprint.skill.step_advanced') {
           const s = p.step as { index: number; total: number; tool: string };
           record.push(
-            `step_advanced   ${s.index}/${s.total} ${s.tool}${
+            `step_advanced   ${s.index}/${s.total} ${s.tool} (${String(p.outcome)})${
               p.completed ? ' — procedure complete' : ''
             }`,
+          );
+        }
+        if (e.name === 'agentfootprint.skill.step_held') {
+          const s = p.step as { index: number; total: number; tool: string };
+          record.push(
+            `step_held       ${s.index}/${s.total} ${s.tool} — its tool reported '${String(
+              p.status,
+            )}'`,
           );
         }
         if (e.name === 'agentfootprint.skill.step_skipped') {

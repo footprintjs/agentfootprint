@@ -858,7 +858,7 @@
             ]
           },
           {
-            "content": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "content": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "role": "tool",
             "toolCallId": "c1",
             "toolName": "lookup"
@@ -866,7 +866,7 @@
         ],
         "iteration": 2,
         "lastToolResult": {
-          "result": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+          "result": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
           "toolName": "lookup"
         },
         "stepPointer": [
@@ -887,7 +887,7 @@
         },
         "toolResults": [
           {
-            "result": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "result": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "toolCallId": "c1",
             "toolName": "lookup"
           }
@@ -1024,10 +1024,10 @@
           {
             "asRecency": "latest",
             "asRole": "tool",
-            "contentHash": "e965f5b8",
-            "contentSummary": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `c…",
+            "contentHash": "fa8638b8",
+            "contentSummary": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2…",
             "position": 2,
-            "rawContent": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "rawContent": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "reason": "conversation history [2]",
             "slot": "messages",
             "source": "tool-result",
@@ -1327,8 +1327,8 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 272,
-                "jsonChars": 272
+                "jsonBytes": 301,
+                "jsonChars": 301
               },
               "systemPrompt": {
                 "jsonBytes": 348,
@@ -1341,8 +1341,8 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1733,
-              "jsonChars": 1715
+              "jsonBytes": 1762,
+              "jsonChars": 1744
             }
           },
           "system": {
@@ -1555,10 +1555,10 @@
           {
             "asRecency": "earlier",
             "asRole": "tool",
-            "contentHash": "e965f5b8",
-            "contentSummary": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `c…",
+            "contentHash": "fa8638b8",
+            "contentSummary": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2…",
             "position": 2,
-            "rawContent": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+            "rawContent": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
             "reason": "conversation history [2]",
             "slot": "messages",
             "source": "tool-result",
@@ -1787,8 +1787,8 @@
             "format": "json-utf8-v1",
             "slots": {
               "messages": {
-                "jsonBytes": 529,
-                "jsonChars": 527
+                "jsonBytes": 558,
+                "jsonChars": 556
               },
               "systemPrompt": {
                 "jsonBytes": 348,
@@ -1801,8 +1801,8 @@
             },
             "status": "measured",
             "total": {
-              "jsonBytes": 1990,
-              "jsonChars": 1970
+              "jsonBytes": 2019,
+              "jsonChars": 1999
             }
           },
           "system": {
@@ -2112,7 +2112,7 @@
               ]
             },
             {
-              "content": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+              "content": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
               "role": "tool",
               "toolCallId": "c1",
               "toolName": "lookup"
@@ -2253,7 +2253,7 @@
               ]
             },
             {
-              "content": "lookup result Step 1 of 2 done. Now on step 2 of 2: refund the charge (tool: `charge`).",
+              "content": "lookup result Step 1 of 2 ran; its tool reported no outcome. Now on step 2 of 2: refund the charge (tool: `charge`).",
               "role": "tool",
               "toolCallId": "c1",
               "toolName": "lookup"

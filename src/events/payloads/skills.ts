@@ -274,26 +274,65 @@ export interface SkillRouteConflictPayload {
 }
 
 /**
- * A declared step completed: its tool returned (non-error) while it was
- * current (9.18.0). Fired at the tool-return boundary, in batch call order —
- * two adjacent steps naming the same tool advance twice in one batch, each
- * on the record. A skip is NOT a completion: a `skip_step` that moved the
- * pointer fires `step_skipped { policy: 'advance' }` alone.
+ * A declared step advanced: the call of its tool, made while it was current,
+ * ran clean and its tool did not declare a failure or unfinished work
+ * (9.18.0). Fired at the
+ * tool-return boundary, in batch call order — two adjacent steps naming the
+ * same tool advance twice in one batch, each on the record. A skip is NOT
+ * this event: a `skip_step` that moved the pointer fires
+ * `step_skipped { policy: 'advance' }` alone. A call whose tool declared a
+ * failure or unfinished work fires `step_held` instead and the pointer stays.
  */
 export interface SkillStepAdvancedPayload {
   readonly skillId: string;
-  /** The step that just completed (or was skipped past). */
+  /** The step that just advanced. */
   readonly step: {
     readonly index: number;
     readonly total: number;
     readonly tool: string;
     readonly note: string;
   };
+  /**
+   * How the step's tool reported the call that advanced it:
+   * `'succeeded'` = it declared `status: 'success'` or `'absent'` (an
+   * effects envelope); `'not-reported'` = it declared no status (a plain
+   * return value, or a person's answer to the tool's own pause), so the
+   * record shows the step ran, not that its work was done. A recording made
+   * before this field existed has no `outcome`, and its absence there says
+   * nothing either way.
+   */
+  readonly outcome: 'succeeded' | 'not-reported';
   readonly iteration: number;
-  /** The provider's tool_use id for the completing call, when known. */
+  /** The provider's tool_use id for the call that advanced the step, when known. */
   readonly toolCallId?: string;
-  /** Present on the LAST step: the procedure finished. */
+  /** Present on the LAST step: the procedure reached its end. */
   readonly completed?: true;
+}
+
+/**
+ * A declared step was HELD: the call of its tool, made while it was current,
+ * ran clean but its tool DECLARED a failure or unfinished work (an effects
+ * envelope's `status`). The pointer did not move, the next step's tool stays
+ * out of the offer, and the model read that the step was not completed and
+ * what its tool reported. One event per held call, so a tool that keeps
+ * failing leaves one row per attempt until a limit ends the turn.
+ *
+ * Not fired for a call the library itself stopped (a thrown error, a
+ * permission denial, a declined check-in or ask, a blocked credential, a
+ * result over its ceiling): those already hold the step and carry their own
+ * events, exactly as before this event existed.
+ */
+export interface SkillStepHeldPayload {
+  readonly skillId: string;
+  /** The step that stayed current. */
+  readonly step: SkillStepAdvancedPayload['step'];
+  /** `'failed'` for `failure` / `denied` / `invalid`; `'not-finished'` for `pending` / `partial`. */
+  readonly outcome: 'failed' | 'not-finished';
+  /** The status the tool declared on that call. */
+  readonly status: 'failure' | 'denied' | 'invalid' | 'pending' | 'partial';
+  readonly iteration: number;
+  /** The provider's tool_use id for the held call, when known. */
+  readonly toolCallId?: string;
 }
 
 /**

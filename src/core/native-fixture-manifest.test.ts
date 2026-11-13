@@ -30,6 +30,24 @@ const fields = new Set([
 ]);
 const slots = new Set(['System Prompt', 'Messages']);
 
+// Named delta (a step is done only when its tool says so): a step whose tool
+// declared no status now reads "Step 1 of 2 ran; its tool reported no outcome."
+// where it read "Step 1 of 2 done.". Admitted for the two stepped cases only:
+// the step sentence (from " Step k of n " to the end of the string) is cut from
+// every string on both sides, and the values computed from that text
+// (`contentHash`, `jsonBytes`, `jsonChars`) are dropped. Everything else stays exact.
+const stepSentenceCases = new Set(['agent-stepped-skill', 'agent-answer-layer']);
+const fromStepText = new Set(['contentHash', 'jsonBytes', 'jsonChars']);
+function withoutStepSentence(value: unknown): unknown {
+  if (typeof value === 'string') return value.replace(/ Step \d+ of \d+ (done\.|ran;)[\s\S]*$/, '');
+  if (Array.isArray(value)) return value.map(withoutStepSentence);
+  if (value === null || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(value))
+    if (!fromStepText.has(key)) out[key] = withoutStepSentence(inner);
+  return out;
+}
+
 /** Comparison only: canonical files and their full ordered equality stay untouched. */
 function domainCommit(input: Commit): DomainCommit {
   const { idx: _idx, ...commit } = JSON.parse(JSON.stringify(input)) as Commit;
@@ -82,6 +100,10 @@ it('manifest binds every complete capture, unchanged served content and only the
     const candidate = read(manifest.changed.includes(row) ? native : root, row.case + '.json');
     expect(digest(historical), row.case + ' historical').toBe(row.historicalSha256);
     expect(digest(candidate), row.case + ' expected').toBe(row.expectedSha256);
-    assertNamedDeltas(JSON.parse(historical) as Capture, JSON.parse(candidate) as Capture);
+    const named = stepSentenceCases.has(row.case) ? withoutStepSentence : (c: unknown) => c;
+    assertNamedDeltas(
+      named(JSON.parse(historical)) as Capture,
+      named(JSON.parse(candidate)) as Capture,
+    );
   }
 });

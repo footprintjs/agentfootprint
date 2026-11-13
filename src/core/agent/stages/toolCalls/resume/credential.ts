@@ -10,7 +10,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
-import { outcomeField } from '../execution/callOutcome.js';
+import { type SettledCall, outcomeField } from '../execution/callOutcome.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeCallFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
@@ -113,21 +113,27 @@ export function buildResumeCredential(
     const consentToolChars = consentResultStr.length;
     if (deps.negativeClaimsArmed === true)
       consentResultStr = serveNegativeHandle(scope, dispatched.negativeResultId, consentResultStr);
-    // Step boundary (9.18.0) — a step tool that waited on 3LO consent
-    // advances the moment its resumed dispatch really ran, clean. A
-    // ceiling-refused result is not clean (9.20.0): the model holds no
-    // data and was told to call again.
-    if (
-      deps.stepPlanFor &&
-      dispatched.executed === true &&
-      error !== true &&
-      dispatched.ceilingRefused !== true
-    ) {
-      consentResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
-    }
     // Typed tool effects (9.19.0) — same judge as every other path.
     const consentEnvelope =
       dispatched.executed === true && error !== true ? dispatched.envelope : undefined;
+    // How the call settled — read by the step and by the message's `outcome`.
+    const consentSettled: SettledCall = {
+      ran: dispatched.executed === true,
+      clean: error !== true && dispatched.ceilingRefused !== true,
+      ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
+    };
+    // Step boundary (9.18.0) — a step tool that waited on 3LO consent
+    // advances or holds its step on the resumed dispatch by the same rule as
+    // the batch loop (`stepOutcomeOf`). A blocked credential ran nothing, and
+    // a ceiling-refused result is not clean (9.20.0): both hold silently.
+    if (deps.stepPlanFor) {
+      consentResultStr += links.applyStepReturn(scope, {
+        toolName,
+        toolCallId,
+        iteration,
+        settled: consentSettled,
+      });
+    }
     if (consentEnvelope !== undefined) {
       const consentTransition: TransitionBatchState = { losers: [] };
       consentResultStr += links.applyToolEffects(
@@ -151,11 +157,7 @@ export function buildResumeCredential(
           ...(deps.findings === true &&
             dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
           // A blocked credential ran nothing → 'refused'; read by the check-in trail.
-          ...outcomeField({
-            ran: dispatched.executed === true,
-            clean: error !== true && dispatched.ceilingRefused !== true,
-            ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),
-          }),
+          ...outcomeField(consentSettled),
         },
       ],
       { toolName, toolCallId },

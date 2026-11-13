@@ -113,6 +113,7 @@ export type {
   SkillRejectedPayload,
   SkillRouteConflictPayload,
   SkillStepAdvancedPayload,
+  SkillStepHeldPayload,
   SkillStepSkippedPayload,
   SkillStepsUnfinishedPayload,
   SkillEscalatedPayload,

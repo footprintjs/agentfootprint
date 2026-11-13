@@ -717,10 +717,10 @@ What the model experiences, per iteration:
 
 - the current step's tool leads with the banner —
   `[Step 2 of 4 — confirm the duplicate charge] check_history.`;
-- every boundary result renews the position — `"…Step 2 of 4 done. Now on
-  step 3 of 4: refund the duplicate charge only (tool: \`issue_refund\`)."` —
-  so the guidance that matters *now* never decays out of attention (this is
-  the job the deprecated `refreshPolicy` promised and never did);
+- every boundary result renews the position, saying only what the step's tool declared — `"…Step 2 of 4 done. Now on
+  step 3 of 4: refund the duplicate charge only (tool: \`issue_refund\`)."` for a declared `status: 'success'` (or `'absent'`), `"…Step 2 of 4 ran; its tool reported no outcome. Now on step 3 of 4: …"` for a plain value;
+  a declared `'failure'` / `'denied'` / `'invalid'` / `'pending'` / `'partial'` HOLDS the step instead (`skill.step_held`; the pointer stays, the next step's tool stays held out, and the result says "Step 2 of 4 was not completed: its tool reported 'failure'.") —
+  so the guidance that matters *now* never decays out of attention (this is the job the deprecated `refreshPolicy` promised and never did);
 - `skip_step(reason)` records a decline (`skill.step_skipped`) and moves or
   holds per the declared `onSkip`;
 - the **escape hatches stay offered** under narrowing — `read_skill`,
@@ -739,9 +739,9 @@ the model reads. The pointer (`scope.stepPointer`) is strictly subordinate to
 the skill-graph cursor: the Evaluate stage re-keys it at the same stage the
 cursor truth lives (alias discipline: `stepPointer` in as a readonly input,
 the fresh value out under `nextStepPointer` — the `nextSkillCursor` pattern),
-and the tool-calls stage advances/skips it at EVERY result boundary,
+and the tool-calls stage advances, holds or skips it at EVERY result boundary by one rule (`toolCalls/routing/stepOutcome.ts` · `stepOutcomeOf`),
 including the pausable resume paths — a step whose tool called `askHuman`
-advances when the person answers. Steps are turn-scoped: a cursor move away
+advances when the person answers (a value, not a declared status: `'not-reported'`). Steps are turn-scoped: a cursor move away
 resets the pointer, and under `continuity: 'conversation'` only the CURSOR
 carries — a re-tenured skill starts at step 1. A step whose tool is not the
 skill's own, `steps: []`, an empty note, and `onSkip` without `steps` are all
@@ -752,7 +752,7 @@ alike, the tenure could never begin either) and `reactMode: 'classic'` (a
 frozen offer) are refused at `Agent.build()`. Zero-cost when unused: no stepped skill means no
 `skip_step`, no scope key, no event, no slot change — byte-identical.
 
-Events: `skill.step_advanced` · `skill.step_skipped` · `skill.steps_unfinished`.
+Events: `skill.step_advanced` (with `outcome`) · `skill.step_held` · `skill.step_skipped` · `skill.steps_unfinished`.
 Runnable end-to-end: `examples/context-engineering/16-skill-steps.ts` (a
 6-step refund with one human-approval pause and one recorded skip).
 

@@ -1,0 +1,13 @@
+---
+type: fixed
+---
+**A procedure step is done only when its tool says so; a declared failure holds the step.** A step of a skill's `steps` used to advance whenever its tool returned without throwing. A tool that returned `{ content, effects: [], status: 'failure' }` moved the procedure on, the next step's tool was offered, the model read "Step 1 of 2 done." and `skill.step_advanced` was recorded. Now what the tool declared decides, by one rule, in the tool loop and on every resume (after an `askHuman` answer, an approved check-in, an approved middleware `ask`, and granted credential consent), on agents with a skill graph and on plain agents alike:
+
+- `'success'` or `'absent'`: the step advances and the model reads "Step 1 of 2 done." as before.
+- No declared status (a plain return value, or a person's answer to a tool's own pause): the step advances, and the model reads "Step 1 of 2 ran; its tool reported no outcome." instead of "done" ("It was the last step." instead of "All 2 steps complete." on the last one).
+- `'failure'`, `'denied'` or `'invalid'`: the step holds. The pointer stays, the next step's tool is not offered, the model reads "Step 1 of 2 was not completed: its tool reported 'failure'. The procedure stayed on step 1 (tool: `lookup`).", and the new event `agentfootprint.skill.step_held` records the step, `outcome: 'failed'` and the declared `status`.
+- `'pending'` or `'partial'`: the step holds the same way; the sentence adds ", so its work was not finished" and the event says `outcome: 'not-finished'`.
+
+A thrown error or a refusal by the library (a permission denial, a declined check-in or ask, a blocked credential, a result over its ceiling) still holds the step with no extra sentence and no event, as before. A step tool that keeps failing is ended by the turn's existing limits (`maxIterations`, a cost budget), and the procedure is recorded `steps_unfinished { action: 'cut-short' }`.
+
+What changes for an app: `skill.step_advanced` now always carries `outcome` (`'succeeded'` or `'not-reported'`; `SkillStepAdvancedPayload.outcome` is a required field), and a recording made before this change has no `outcome` on that event, which proves nothing either way. An app whose step tools return plain values sees the new "ran; its tool reported no outcome" sentence in the model's tool messages; return a declared `status: 'success'` envelope where the tool can say its work was done. An app whose step tools declare a failure status no longer sees those steps advance. A listener for `skill.*` receives the new `step_held` event (`SkillStepHeldPayload`). There is no option that brings the old behaviour back. Not changed here: reading another skill in the middle of a procedure still resets the pointer without an event.

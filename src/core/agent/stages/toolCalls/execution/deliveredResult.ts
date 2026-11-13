@@ -20,7 +20,7 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { UNSCOPED_RUN } from '../helpers/unscopedRun.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
-import { outcomeField } from './callOutcome.js';
+import { type SettledCall, outcomeField } from './callOutcome.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -73,6 +73,13 @@ export function landCallResult(
       frame.delivery.resultStr,
     );
   const hasNegativeNote = frame.delivery.resultStr !== deliveredResult;
+  // How this call settled, said once: the procedure step and the committed
+  // message's `outcome` read the same facts.
+  const settled: SettledCall = {
+    ran: frame.execution.executed && !frame.execution.denied,
+    clean: !frame.outcome.error && !frame.execution.ceilingRefused,
+    ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),
+  };
 
   // ── Step boundary (9.18.0): advance decided, then decorate, THEN
   // push — the suffix must be part of the one past every reader sees
@@ -92,25 +99,20 @@ export function landCallResult(
         frame.delivery.resultStr += frame.readSkillStepIntroFor(pickedId);
       }
     }
-    // The advance: only a call that RAN clean completes a step — an
-    // error result never advances (the pointer holds; the model
-    // retries, skips with a reason, or routes around), and neither
-    // does a permission denial, a gate refusal, or a ceiling refusal
-    // (the model holds no data and was told to call again — advancing
-    // would contradict the refusal's own instruction).
-    if (
-      frame.execution.executed &&
-      !frame.outcome.error &&
-      !frame.execution.denied &&
-      !frame.skillRoute.skillRejected &&
-      !frame.execution.ceilingRefused
-    ) {
-      frame.delivery.resultStr += frame.applyStepReturn(scope, {
-        toolName: frame.tc.name,
-        toolCallId: frame.tc.id,
-        iteration: frame.iteration,
-      });
-    }
+    // The step: decided by `stepOutcomeOf` alone (inside `applyStepReturn`)
+    // from how the call settled. A call that did not run, threw, or had its
+    // result withheld (a permission denial, a gate refusal, a ceiling
+    // refusal) holds the step silently — the model holds no data and was
+    // told why. A call that ran clean holds it too when its tool DECLARED a
+    // failure or unfinished work, and advances it otherwise ("done" only for
+    // a declared success; "ran; its tool reported no outcome" for none).
+    frame.delivery.resultStr += frame.applyStepReturn(scope, {
+      toolName: frame.tc.name,
+      toolCallId: frame.tc.id,
+      iteration: frame.iteration,
+      // A refused `read_skill` pick ran no tool of the procedure.
+      settled: { ...settled, ran: settled.ran && !frame.skillRoute.skillRejected },
+    });
   }
 
   // ── Typed tool effects (9.19.0) — judged in call order ──────────
@@ -234,11 +236,7 @@ export function landCallResult(
     ...(frame.tc.argumentsFailure !== undefined && {
       toolArgumentsFailure: { ...frame.tc.argumentsFailure },
     }),
-    ...outcomeField({
-      ran: frame.execution.executed && !frame.execution.denied,
-      clean: !frame.outcome.error && !frame.execution.ceilingRefused,
-      ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),
-    }),
+    ...outcomeField(settled),
   });
 
   // ── Dynamic ReAct wiring ───────────────────────────────

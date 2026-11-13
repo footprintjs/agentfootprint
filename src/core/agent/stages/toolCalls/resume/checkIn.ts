@@ -15,7 +15,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
-import { outcomeField } from '../execution/callOutcome.js';
+import { type SettledCall, outcomeField } from '../execution/callOutcome.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
@@ -175,10 +175,22 @@ export function buildResumeCheckIn(
     const decisionToolChars = decisionResultStr.length;
     if (deps.negativeClaimsArmed === true)
       decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
-    // Step boundary (9.18.0) — an approved consequential step (a checkIn
-    // tool CAN be a step's tool) advances on the resumed dispatch.
-    if (deps.stepPlanFor && stepToolRan) {
-      decisionResultStr += links.applyStepReturn(scope, { toolName, toolCallId, iteration });
+    // How the call settled — read by the step and by the message's `outcome`.
+    const decisionSettled: SettledCall = {
+      ran: toolRan,
+      clean: stepToolRan,
+      ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+    };
+    // Step boundary (9.18.0) — a checkIn tool CAN be a step's tool: an
+    // approved call advances or holds its step here by the same rule as the
+    // batch loop (`stepOutcomeOf`); a decline ran nothing and holds silently.
+    if (deps.stepPlanFor) {
+      decisionResultStr += links.applyStepReturn(scope, {
+        toolName,
+        toolCallId,
+        iteration,
+        settled: decisionSettled,
+      });
     }
     // Typed tool effects (9.19.0) — an approved consequential call may
     // carry them too; judged exactly as inline.
@@ -204,11 +216,7 @@ export function buildResumeCheckIn(
           toolName,
           ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
           // A decline ran nothing → 'refused'; read by the check-in trail.
-          ...outcomeField({
-            ran: toolRan,
-            clean: stepToolRan,
-            ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
-          }),
+          ...outcomeField(decisionSettled),
         },
       ],
       { toolName, toolCallId },

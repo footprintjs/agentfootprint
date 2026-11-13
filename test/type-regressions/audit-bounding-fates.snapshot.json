@@ -947,7 +947,19 @@
   "agentfootprint.skill.step_advanced": {
     "completed": "kept",
     "iteration": "kept",
+    "outcome": "kept",
     "skillId": "kept",
+    "step.index": "kept",
+    "step.note": "kept",
+    "step.tool": "kept",
+    "step.total": "kept",
+    "toolCallId": "kept"
+  },
+  "agentfootprint.skill.step_held": {
+    "iteration": "kept",
+    "outcome": "kept",
+    "skillId": "kept",
+    "status": "kept",
     "step.index": "kept",
     "step.note": "kept",
     "step.tool": "kept",

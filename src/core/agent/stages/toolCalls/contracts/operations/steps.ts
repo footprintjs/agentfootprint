@@ -1,6 +1,7 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../../types.js';
 import type { StepPointer, StepPlan } from '../../../../../../injection-engine/skillSteps.js';
+import type { SettledCall } from '../../execution/callOutcome.js';
 
 /** Explicit callback contract for existing steps operations. */
 export interface ToolStepsOperations {
@@ -15,9 +16,16 @@ export interface ToolStepsOperations {
       readonly iteration: number;
     },
   ) => string;
+  /** Every door that finishes a call hands over how it settled; the step's
+   *  outcome is decided inside (`routing/stepOutcome.ts` · `stepOutcomeOf`). */
   readonly applyStepReturn: (
     scope: TypedScope<AgentState>,
-    call: { readonly toolName: string; readonly toolCallId: string; readonly iteration: number },
+    call: {
+      readonly toolName: string;
+      readonly toolCallId: string;
+      readonly iteration: number;
+      readonly settled: SettledCall;
+    },
   ) => string;
   readonly readSkillStepIntroFor: (pickedId: string) => string;
   readonly noteSkillRefusal: (scope: TypedScope<AgentState>, iteration: number) => void;

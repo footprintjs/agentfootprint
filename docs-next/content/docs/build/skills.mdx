@@ -696,9 +696,29 @@ refusal machinery at all.
 The framework owns sequence and scope; **the model owns judgment inside the
 step**:
 
-- **run the tool** — the result gains a fresh position line ("Step 2 of 6
-  done. Now on step 3 of 6: …"), so the guidance that matters *now* never
-  decays out of attention;
+- **run the tool** — the result gains a fresh position line, so the
+  guidance that matters *now* never decays out of attention. What it says,
+  and whether the step moves, depends on what the tool **declared** about
+  the call (its result envelope's `status`):
+  - `'success'` or `'absent'` — the step advances: "Step 2 of 6 done. Now on
+    step 3 of 6: …";
+  - no declared status (a plain return value) — the step advances, and the
+    line says only what is known: "Step 2 of 6 ran; its tool reported no
+    outcome. Now on step 3 of 6: …". Return `{ content, effects: [],
+    status: 'success' }` when the tool can say its work was done;
+  - `'failure'`, `'denied'` or `'invalid'` — the step **holds**: the pointer
+    stays, the next step's tool is not offered, and the line reads "Step 2
+    of 6 was not completed: its tool reported 'failure'. The procedure
+    stayed on step 2 (tool: `…`)." The model can call it again, skip it with
+    a reason, or stop and say why;
+  - `'pending'` or `'partial'` — the step holds the same way, and the line
+    adds that its work was not finished.
+
+  A call the library stopped itself (a thrown error, a permission denial, a
+  declined check-in, a result over its ceiling) holds the step too, with no
+  extra line. A tool that keeps failing does not loop forever: the turn's
+  own limits (`maxIterations`, a cost budget) end it, and the procedure is
+  recorded `steps_unfinished { action: 'cut-short' }`;
 - **skip it** — `skip_step(reason)` puts the decline on the record
   (`agentfootprint.skill.step_skipped`) and the declared `onSkip` decides:
   `'advance'` (default) moves on, `'hold'` keeps the step current;
@@ -714,7 +734,11 @@ step**:
 
 A step whose tool asks a human (`askHuman` / `pauseHere`) pauses the run
 mid-procedure; the pointer rides the checkpoint and the person's answer
-advances the step on resume — human-in-the-loop as an ordinary step:
+advances the step on resume — human-in-the-loop as an ordinary step. The
+answer is a value, not a declared status, so that step advances as "ran;
+its tool reported no outcome". A step resumed after an approved check-in,
+an approved middleware `ask` or granted credential consent is decided by
+the same rule as one that ran inline:
 
 <CodeFile path="examples/context-engineering/16-skill-steps.ts" region="hitl-step" title="examples/context-engineering/16-skill-steps.ts (region: hitl-step)" />
 
@@ -762,8 +786,12 @@ Everything steps-related imports from `agentfootprint/injection-engine`
   the auto-registered default stands down.
 
 On the event stream: `agentfootprint.skill.step_advanced` fires at every
-completed step, in batch call order (the last one carries
-`completed: true`); `agentfootprint.skill.step_skipped` records a decline
+step that advanced, in batch call order, with `outcome: 'succeeded'` (its
+tool declared success) or `outcome: 'not-reported'` (it declared nothing);
+the last one carries `completed: true`. `agentfootprint.skill.step_held`
+fires at every call that held its step because its tool declared a failure
+or unfinished work, with `outcome` (`'failed'` / `'not-finished'`) and the
+declared `status`; `agentfootprint.skill.step_skipped` records a decline
 with the model's own reason and the declared policy; and
 `agentfootprint.skill.steps_unfinished` records how a turn ended with steps
 unrun — `'nudged'`, `'accepted'`, or `'cut-short'`.

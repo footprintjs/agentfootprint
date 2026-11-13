@@ -362,20 +362,66 @@ export function readSkillStepIntro(plan: StepPlan): string {
 }
 
 // LENS · tool-result · persistent-history
-// reads: the advanced pointer and the frozen plan, both handed in
+// reads: the advanced pointer and the frozen plan, both handed in, and how the call that ran the step settled
 // known gap: ' Now on step N of M' is present tense on a surface re-read all turn; listed as unrepaired
 // in this folder's README ledger.
 // law: may omit, never deny; every clause anchored to the call it was composed on.
-/** Suffix for a completed step's tool result: done + what is next. */
-export function stepAdvanceSuffix(next: StepPointer, plan: StepPlan): string {
-  const done = next.step - 1;
+/**
+ * Suffix for a step that advanced: how it ended + what is next.
+ *
+ * `'succeeded'` — its tool declared success: "Step 1 of 2 done.".
+ * `'not-reported'` — its tool declared no status, so the library cannot say
+ * the work was done, only that the step ran: "Step 1 of 2 ran; its tool
+ * reported no outcome." (and "It was the last step." in place of "All 2
+ * steps complete."). Never "done" for a call whose tool did not say so.
+ */
+export function stepAdvanceSuffix(
+  next: StepPointer,
+  plan: StepPlan,
+  outcome: 'succeeded' | 'not-reported',
+): string {
+  const ran = next.step - 1;
+  const head =
+    outcome === 'succeeded'
+      ? ` Step ${ran} of ${next.total} done.`
+      : ` Step ${ran} of ${next.total} ran; its tool reported no outcome.`;
   if (next.step > next.total) {
-    return ` Step ${done} of ${next.total} done. All ${next.total} steps complete.`;
+    return outcome === 'succeeded'
+      ? `${head} All ${next.total} steps complete.`
+      : `${head} It was the last step.`;
   }
   const coming = plan.steps[next.step - 1]!;
   return (
-    ` Step ${done} of ${next.total} done. Now on step ${next.step} of ${next.total}: ` +
+    `${head} Now on step ${next.step} of ${next.total}: ` +
     `${coming.note} (tool: \`${coming.tool}\`).`
+  );
+}
+
+// LENS · tool-result · persistent-history
+// reads: the unmoved pointer, the frozen plan and the status the tool DECLARED on that call
+// law: may omit, never deny; every clause anchored to the call it was composed on (past tense).
+/**
+ * Suffix for a step that was HELD: its tool declared a failure (`'failed'`:
+ * `failure` / `denied` / `invalid`) or unfinished work (`'not-finished'`:
+ * `pending` / `partial`). Names the declared status and where the procedure
+ * stayed; never says "done".
+ *
+ * @example " Step 1 of 2 was not completed: its tool reported 'failure'. The procedure stayed on step 1 (tool: `lookup`)."
+ */
+export function stepHeldSuffix(
+  ptr: StepPointer,
+  plan: StepPlan,
+  outcome: 'failed' | 'not-finished',
+  status: string,
+): string {
+  const step = plan.steps[ptr.step - 1]!;
+  const reported =
+    outcome === 'not-finished'
+      ? `its tool reported '${status}', so its work was not finished`
+      : `its tool reported '${status}'`;
+  return (
+    ` Step ${ptr.step} of ${ptr.total} was not completed: ${reported}. ` +
+    `The procedure stayed on step ${ptr.step} (tool: \`${step.tool}\`).`
   );
 }
 

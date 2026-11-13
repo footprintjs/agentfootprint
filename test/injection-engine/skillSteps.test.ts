@@ -25,6 +25,7 @@ import {
   skipHoldSentence,
   stepAdvanceSuffix,
   stepBannerPrefix,
+  stepHeldSuffix,
   stepInProgress,
   SKIP_STEP_TOOL_NAME,
   type StepPlan,
@@ -187,11 +188,35 @@ describe('functional: the grammar', () => {
     expect(stepBannerPrefix(at(2), plan.steps[1]!)).toBe('[Step 2 of 3 — refund the charge] ');
   });
 
-  it('the advance suffix names what is done and what is next — and the completion', () => {
-    expect(stepAdvanceSuffix(at(2), plan)).toBe(
+  it('the advance suffix says "done" only for a declared success — and names what is next', () => {
+    expect(stepAdvanceSuffix(at(2), plan, 'succeeded')).toBe(
       ' Step 1 of 3 done. Now on step 2 of 3: refund the charge (tool: `charge`).',
     );
-    expect(stepAdvanceSuffix(at(4), plan)).toBe(' Step 3 of 3 done. All 3 steps complete.');
+    expect(stepAdvanceSuffix(at(4), plan, 'succeeded')).toBe(
+      ' Step 3 of 3 done. All 3 steps complete.',
+    );
+    expect(stepAdvanceSuffix(at(2), plan, 'not-reported')).toBe(
+      ' Step 1 of 3 ran; its tool reported no outcome. Now on step 2 of 3: refund the charge ' +
+        '(tool: `charge`).',
+    );
+    expect(stepAdvanceSuffix(at(4), plan, 'not-reported')).toBe(
+      ' Step 3 of 3 ran; its tool reported no outcome. It was the last step.',
+    );
+  });
+
+  it('the held suffix names the declared status, where the procedure stayed, and never says "done"', () => {
+    const failed = stepHeldSuffix(at(2), plan, 'failed', 'failure');
+    expect(failed).toBe(
+      " Step 2 of 3 was not completed: its tool reported 'failure'. The procedure stayed on " +
+        'step 2 (tool: `charge`).',
+    );
+    const unfinished = stepHeldSuffix(at(2), plan, 'not-finished', 'pending');
+    expect(unfinished).toBe(
+      " Step 2 of 3 was not completed: its tool reported 'pending', so its work was not " +
+        'finished. The procedure stayed on step 2 (tool: `charge`).',
+    );
+    expect(failed).not.toMatch(/\bdone\b/);
+    expect(unfinished).not.toMatch(/\bdone\b/);
   });
 
   it('the skip sentences carry the reason, on both policies', () => {
