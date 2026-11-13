@@ -36,6 +36,7 @@ import {
   explainStatusOnlyNearMiss,
 } from '../../../../../semantics/toolEffects.js';
 import { isPauseRequest } from '../../../../pause.js';
+import { bindOuterCall } from '../../../innerCallOuter.js';
 import {
   validateInputDeclaration,
   stampInputRequest,
@@ -136,6 +137,8 @@ export async function invokeInitialTool(
     // This dispatch's own slot for the runner's facts — see the
     // resume path's twin in `resolveCredentialAndExecute`.
     const codeRunSlot: CodeRunSlot = {};
+    // The outer call's hold on the inner calls its tool makes (`innerCallOuter.ts`).
+    const binding = bindOuterCall();
     const executionContext = {
       [CODE_RUN_SLOT]: codeRunSlot,
       toolCallId: frame.tc.id,
@@ -172,6 +175,7 @@ export async function invokeInitialTool(
           toolCallId: frame.tc.id,
           iteration: frame.iteration,
           history: frame.historyForCallbacks,
+          binding,
         },
         frame.env.signal,
       ),
@@ -198,7 +202,17 @@ export async function invokeInitialTool(
       frame.tool,
       frame.callArguments.callArgs,
     );
-    frame.outcome.result = await frame.tool.execute(frame.callArguments.callArgs, executionContext);
+    try {
+      frame.outcome.result = await frame.tool.execute(
+        frame.callArguments.callArgs,
+        executionContext,
+      );
+    } finally {
+      // `ctx.tools` ends with `execute`; an inner call's halt becomes this
+      // call's, run by `dispatchCall.ts` once the result has landed.
+      binding.end();
+      if (binding.halt !== undefined) frame.execution.haltContext ??= { ...binding.halt };
+    }
     if (frame.execution.negativeDispatch !== undefined)
       frame.outcome.result = captureNegativeResult(
         scope,

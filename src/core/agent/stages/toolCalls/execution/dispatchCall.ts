@@ -2,12 +2,10 @@ import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
 import { checkToolPermission } from '../access/toolPermission.js';
 import { askDeclaredCapabilities, buildCapabilityQuestion } from '../access/capabilityQuestion.js';
-import { checkerGoverns } from '../../../../../provider-contract/types.js';
+import { askSkillRead } from '../access/skillReadQuestion.js';
 import { prepareArgumentGate } from '../access/argumentGate.js';
 import { admitMiddlewareCall } from '../access/middlewareAdmission.js';
 import { changedArgKeys, shownArgsOf } from '../../../../toolShownArgs.js';
-import { atMountedCursor } from '../helpers/mountedCursor.js';
-import { skillTarget } from '../../../../../security/skillTarget.js';
 import { admitCheckInCall } from '../access/checkInAdmission.js';
 import type { CallArtifactInputs, CallCredentialInput } from '../contracts/invocationInputs.js';
 import { admitWantedArguments } from './wantedArguments.js';
@@ -183,63 +181,16 @@ export function buildCallDispatch(
         outcome.result = invalidArgs;
       }
     }
-    // ── Skill-activation gate (9.11.0) ───────────────────────────────
-    // `read_skill` activating a skill the policy hides for this role. The
-    // menu the model reads was already filtered (the Tools slot asks the
-    // same checker the same question), so this is the second half of one
-    // rule rather than a second rule: a model that guessed a hidden id, or
-    // remembered one from an earlier turn, reads the policy's own message.
-    //
-    // Ordered AFTER arg validation so the id judged is the one that will
-    // actually run — a middleware may have rewritten it — and BEFORE
-    // check-in, credentials and execute, so a refused skill's body is
-    // never even computed (`surfaceMode: 'tool-only'` returns it from
-    // `execute`). Off entirely unless the checker declares it governs
-    // `'skill_read'`.
-    if (
-      !execution.denied &&
-      !argumentGate.argsRejected &&
-      tc.name === 'read_skill' &&
-      checkerGoverns(operations.permissionChecker, 'skill_read')
-    ) {
-      const requestedSkillId = (callArguments.callArgs as { id?: unknown }).id;
-      if (typeof requestedSkillId === 'string' && requestedSkillId.length > 0) {
-        // ── A SELF-CALL AT A MOUNTED CURSOR EXERCISES NO CAPABILITY ───
-        // (9.86.0.) A MOUNTED cursor's own skill is already served: its
-        // body is in that call's system prompt and its tools are on that
-        // call's wire. Asking to read it activates nothing, moves nothing,
-        // and reveals nothing the request did not already carry — so there
-        // is no capability here for a policy to grant or deny, and denying
-        // it told the model its current skill was "not available in this
-        // context" while it was standing in it. That is the exact sentence
-        // the self-call arm exists to stop the model reading. The gate's
-        // self-call arm answers instead.
-        //
-        // A PARKED cursor is the one case where the same id is not a
-        // no-op, and the skip is scoped to exclude it (9.86.0 fix pass):
-        // parking suppressed the map's contribution, so the dispatch gate
-        // 480 lines below reads that call as a RE-ENGAGEMENT and serves the
-        // body and tools again on the next pass. That moves something, so
-        // the policy keeps the question. `atMountedCursor` is where that
-        // rule lives; the dispatch gate writes the same rule as two ordered
-        // arms over the same `parkedNow` set. Every OTHER id still goes
-        // through the policy, unchanged — this narrows nothing a role could
-        // see.
-        const stay = atMountedCursor({
-          ...(typeof scope.currentSkillId === 'string' && {
-            cursor: scope.currentSkillId,
-          }),
-          target: requestedSkillId,
-          parked: operations.parkedNow(scope),
-        });
-        if (!stay) {
-          await askCapability(
-            'skill_read',
-            skillTarget(requestedSkillId),
-            `Skill '${requestedSkillId}' is not available in this context.`,
-          );
-        }
-      }
+    // ── Skill-activation gate (9.11.0) — `access/skillReadQuestion.ts` ──
+    // After arg validation (the id judged is the one that will run) and
+    // before check-in, credentials and execute; the inner call asks it too.
+    if (!execution.denied && !argumentGate.argsRejected) {
+      await askSkillRead(askCapability, operations.permissionChecker, {
+        toolName: tc.name,
+        args: callArguments.callArgs,
+        currentSkillId: () => scope.currentSkillId,
+        parked: () => operations.parkedNow(scope),
+      });
     }
     // ── Check-in gate (evidence-carrying human consent) ──────────────
     // Ordered AFTER the permission gate + arg-validation (a call the policy

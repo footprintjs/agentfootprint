@@ -20,6 +20,7 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { UNSCOPED_RUN } from '../helpers/unscopedRun.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -233,6 +234,8 @@ export function landCallResult(
     ...(frame.tc.argumentsFailure !== undefined && {
       toolArgumentsFailure: { ...frame.tc.argumentsFailure },
     }),
+    // The inner calls its tool made that ran — read by `extractSequence`.
+    ...innerCallsFieldOf(scope, frame.tc.id, frame.iteration),
   });
 
   // ── Dynamic ReAct wiring ───────────────────────────────

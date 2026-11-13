@@ -22,6 +22,8 @@ import type { ToolSettlementOperations } from '../contracts/operations/settlemen
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
+import { innerCallsFieldOf } from '../../../innerToolCalls.js';
+import { haltResumedCall } from '../routing/policyHalt.js';
 
 interface ResumeCredentialLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -149,6 +151,7 @@ export function buildResumeCredential(
           toolName,
           ...(deps.findings === true &&
             dispatched.executed !== true && { toolResultOrigin: 'not-entered' as const }),
+          ...innerCallsFieldOf(scope, toolCallId, iteration),
         },
       ],
       { toolName, toolCallId },
@@ -219,6 +222,9 @@ export function buildResumeCredential(
     scope.pausedCredentialArgs = undefined;
     scope.pausedCredentialService = undefined;
     if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
+    // A checker halted an inner call the resumed tool made: the result has
+    // landed and the pause is cleared — now the run ends, as inline.
+    if (dispatched.halt !== undefined) haltResumedCall(scope, dispatched.halt, iteration);
     return;
   };
   return { resumeCredential };

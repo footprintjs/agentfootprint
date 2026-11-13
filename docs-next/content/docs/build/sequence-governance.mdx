@@ -35,7 +35,7 @@ interface PermissionDecision {
 }
 ```
 
-`'halt'` terminates the run via `PolicyHaltError` — the framework writes a synthetic `tool_result` (using `tellLLM`) to `scope.history` BEFORE throwing, so:
+`'halt'` terminates the run via `PolicyHaltError` — for a call a tool made through `ctx.tools.call` too, once its outer call settles (see below). The framework writes a synthetic `tool_result` (using `tellLLM`) to `scope.history` BEFORE throwing — for an inner call's halt, the outer call's own result, since the composing tool read `tellLLM` in its refusal — so:
 - Anthropic / OpenAI tool_use ↔ tool_result pairing protocol stays satisfied
 - Conversation history is consistent for `agent.resumeOnError(checkpoint)`
 - Lens / `getNarrative()` shows what the LLM was told before the halt
@@ -127,6 +127,16 @@ The framework derives `sequence` on demand from `scope.history` via the `extract
 - ✅ Survives parallel tool calls — siblings already dispatched in the same turn appear in the sequence for later siblings
 - ✅ Skips synthetic-deny tool_results — denied calls don't count as "dispatched"
 - ✅ Skips in-flight calls — proposed calls without a tool_result yet don't pollute the sequence
+- ✅ Includes the calls a tool made through `ctx.tools.call` — each one that ran rides its outer call's `tool_result` message (`LLMMessage.calls`, never sent to a provider) and follows that call in the sequence, marked `inner: true`
+
+### A tool that calls another tool
+
+A composing tool (`ctx.tools.call`, a [runbook as a tool](doc:runbook-as-tool)) takes steps for the model. A rule over "read a secret, then post it" sees those steps where they were taken:
+
+- the checker asked about an **inner** call gets the sequence so far plus the inner calls of the same outer call that already ran — the outer call itself is still in flight, so it is not listed yet, and its inner calls are read from the run's `innerToolCalls` rows, the one place they are before the outer call's result lands;
+- once the outer call's result lands, every later `tool_call` check — the model's next call, the next inner call, a later turn — sees the outer call followed by its inner calls that ran.
+
+An inner call the checker refused ran nothing, so it is not in the sequence, as a denied model call is not. An inner entry's `args` are shown through the tool's own argument view (a key the tool hides reads as its placeholder), because they are kept in history. A `'halt'` on an inner call refuses it at once and ends the run once the outer call settles: `permission.halt` fires under the inner call's id (`<outer call id>#inner-<n>`) with the inner tool as `target`, and `PolicyHaltError.proposed` names the inner call.
 
 You can use the helper directly if you need it outside a checker:
 

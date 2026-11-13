@@ -237,6 +237,8 @@ export interface LLMMessage {
    * `stripFrameworkFields` removes it with the other framework fields.
    */
   readonly foldedExempt?: readonly string[];
+  /** On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent. */
+  readonly calls?: readonly import('./innerCalls.js').InnerCallRan[];
 }
 
 /**
@@ -782,7 +784,8 @@ export interface LLMProvider {
  * One entry in the in-flight tool-call sequence delivered to
  * `PermissionChecker.check()` since v2.12. Lets sequence-aware
  * policies (exfil chain detection, idempotency limits, cost guards)
- * inspect what the agent has already dispatched this run.
+ * inspect what has already been dispatched: the model's calls, and each
+ * call a tool made through `ctx.tools.call` right after its outer call.
  *
  * Derived from `scope.history` at check time — single source of truth,
  * survives `agent.resumeOnError(checkpoint)` correctly.
@@ -790,17 +793,14 @@ export interface LLMProvider {
 export interface ToolCallEntry {
   /** Tool name dispatched. */
   readonly name: string;
-  /** Tool args passed to `tool.execute(args, ctx)`. */
+  /** Tool args passed to `tool.execute(args, ctx)`; an inner call's shown through the tool's argument view. */
   readonly args: Readonly<Record<string, unknown>> | undefined;
   /** ReAct iteration the call was dispatched on. */
   readonly iteration: number;
-  /**
-   * Optional source identifier — `'local'` for tools registered via
-   * `.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for
-   * tools resolved through a `discoveryProvider`. Lets cross-hub
-   * exfil rules match on origin, not just name.
-   */
+  /** `'local'` (`.tool(...)` / `staticTools(...)`) or the resolving `ToolProvider.id` — lets exfil rules match on origin. */
   readonly providerId?: string;
+  /** `true` on a call a tool made through `ctx.tools.call` (`provider-contract/innerCalls.ts`); absent on the model's own. */
+  readonly inner?: true;
 }
 
 /**

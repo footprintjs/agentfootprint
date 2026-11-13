@@ -1,7 +1,8 @@
 /**
  * Inner dispatch enforces the tool's declared argument schema before creating
- * an inner context, resolving credentials, or entering the handler. Existing
- * check-in, artifact, and argument-rule refusals keep their priority.
+ * an inner context, resolving credentials, or entering the handler. Its
+ * refusals come in the model call's order (`execution/dispatchCall.ts`): the
+ * argument rules, then the schema, then a check-in tool, then a `wants` tool.
  */
 import { describe, expect, it, vi } from 'vitest';
 
@@ -138,7 +139,10 @@ describe.each(['raw', 'defined'] as const)('inner argument validation — %s Too
       expect(await h.dispatch.call('weather', args, { signal })).toBe(h.result);
       expect(h.execute).toHaveBeenCalledTimes(1);
       const [received, ctx] = h.execute.mock.calls[0];
-      expect(received).toBe(args);
+      // The tool runs on the inner call's own detached copy, never the
+      // composing tool's object (`innerCallArguments.ts`).
+      expect(received).toEqual(args);
+      expect(received).not.toBe(args);
       expect(ctx).toEqual({ ...h.base, signal, credential: h.credential });
       expect(ctx.identity).toBe(h.base.identity);
       expect(ctx.credentials).toBe(h.base.credentials);
@@ -162,31 +166,39 @@ describe.each(['raw', 'defined'] as const)('inner argument validation — %s Too
   );
 });
 
-describe('inner argument validation preserves existing refusal priority', () => {
+describe('inner argument validation keeps the model call’s refusal order', () => {
   const askOrAssume = { city: { ask: 'Which city?' } } as const;
 
   it.each([
     {
-      label: 'checkIn before wants, rules, and schema',
-      declarations: { checkIn: 'always', wants: { city: 'city/name' }, askOrAssume },
+      label: 'rules before schema and check-in',
+      declarations: { checkIn: 'always', askOrAssume },
+      args: {},
+      refusal: "leaves 'city' out — inner dispatch fills nothing",
+    },
+    {
+      label: 'schema before check-in and wants',
+      declarations: { checkIn: 'always', wants: { city: 'city/name' } },
+      args: { city: 42 },
+      refusal: "Invalid arguments for tool 'weather'",
+    },
+    {
+      label: 'check-in before wants',
+      declarations: { checkIn: 'always', wants: { city: 'city/name' } },
+      args: { city: 'Reno' },
       refusal: 'that tool declares a human check-in',
     },
     {
-      label: 'wants before rules and schema',
-      declarations: { wants: { city: 'city/name' }, askOrAssume },
+      label: 'wants last',
+      declarations: { wants: { city: 'city/name' } },
+      args: { city: 'Reno' },
       refusal: 'that tool declares artifact arguments (wants)',
     },
-    {
-      label: 'rules before schema',
-      declarations: { askOrAssume },
-      refusal: "leaves 'city' out — inner dispatch fills nothing",
-    },
-  ] as const)('$label', async ({ declarations, refusal }) => {
+  ] as const)('$label', async ({ declarations, args, refusal }) => {
     const h = harness('raw', closedSchema, declarations);
-    const error = await h.dispatch.call('weather', {}).catch((caught: unknown) => caught);
+    const error = await h.dispatch.call('weather', args).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain(refusal);
-    expect((error as Error).message).not.toContain('Invalid arguments');
     expect(h.innerContext).not.toHaveBeenCalled();
     expect(h.getCredential).not.toHaveBeenCalled();
     expect(h.execute).not.toHaveBeenCalled();

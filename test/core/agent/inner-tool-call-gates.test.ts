@@ -197,7 +197,6 @@ describe('the permission checker is asked about an inner call', () => {
   });
 
   it.each([
-    ['halt', () => ({ result: 'halt', reason: 'security:exfiltration' })],
     [
       'a throw',
       () => {
@@ -231,7 +230,10 @@ describe('the permission checker is asked about an inner call', () => {
   // it by calling them. So for EVERY answer — the four known ones, an answer
   // nobody wrote down, a malformed one — the inner call runs exactly when the
   // model's own call runs. When that rule changes (an unrecognised answer
-  // refused), this test holds the inner call to the new rule with no edit.
+  // refused, pull request 343), this test holds the inner call to the new rule
+  // with no edit. It is not a parity of two empty runs: the checker must have
+  // been asked about the INNER call, under its own id, for every answer — so
+  // the test fails for every answer if the inner call skips the gate.
   it.each([
     ['allow', { result: 'allow' }],
     ['gate_open', { result: 'gate_open' }],
@@ -262,43 +264,25 @@ describe('the permission checker is asked about an inner call', () => {
         })
           .tools([secret.tool, compose.tool])
           .build();
-        return { agent, secret };
+        const seen = events(agent);
+        return { agent, secret, seen };
       };
       const direct = asked(true);
       await direct.agent.run({ message: 'go' }).catch(() => undefined);
       const inner = asked(false);
-      await inner.agent.run({ message: 'go' });
+      // A halt ends the inner run too (after the outer call settles).
+      await inner.agent.run({ message: 'go' }).catch(() => undefined);
 
+      const innerChecks = inner.seen
+        .of('permission.check')
+        .map((e) => [e.payload.toolCallId, e.payload.target]);
+      expect(innerChecks).toContainEqual(['c1#inner-1', 'secret']);
       expect(inner.secret.entered.length).toBe(direct.secret.entered.length);
       const row = rows(inner.agent)[0];
       expect(row?.entered).toBe(direct.secret.entered.length > 0);
       if (row?.entered === false) expect(row.refusedBy).toBe('permission');
     },
   );
-
-  it('a halt refuses the inner call; it does not end the run', async () => {
-    const secret = target();
-    const compose = composer('secret');
-    const seen: string[] = [];
-    const agent = Agent.create({
-      provider: mock({ replies: composeThen() }),
-      model: 'm',
-      permissionChecker: checkerOf((req) =>
-        req.target === 'secret'
-          ? { result: 'halt', reason: 'security:exfiltration' }
-          : { result: 'allow' },
-      ),
-    })
-      .tools([secret.tool, compose.tool])
-      .build();
-    agent.on('agentfootprint.permission.halt' as never, (() => seen.push('halt')) as never);
-    expect(await agent.run({ message: 'go' })).toBe('done');
-    expect(secret.entered).toEqual([]);
-    // The model's generic halt words, never the telemetry reason.
-    expect(compose.told[0]).toContain("Tool 'secret' is not available in this context.");
-    expect(compose.told[0]).not.toContain('exfiltration');
-    expect(seen).toEqual([]);
-  });
 
   it("asks about the inner tool's declared capabilities, as for a model call", async () => {
     const secret = target('secret', { capabilities: ['external_net'] } as Partial<Tool>);

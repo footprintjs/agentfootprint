@@ -8,6 +8,16 @@ Defined in: [src/provider-contract/types.ts:20](https://github.com/footprintjs/a
 
 ## Properties
 
+### calls?
+
+> `readonly` `optional` **calls?**: readonly `InnerCallRan`[]
+
+Defined in: [src/provider-contract/types.ts:241](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L241)
+
+On a `role: 'tool'` message: the calls its tool made through `ctx.tools` that ran (`./innerCalls.ts`); never sent.
+
+***
+
 ### content
 
 > `readonly` **content**: `string`

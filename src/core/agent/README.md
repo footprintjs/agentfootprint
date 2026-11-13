@@ -5,7 +5,9 @@ Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
 `skillBrains.ts`, `types.ts`, `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
 the trace toolpack registers there, since the agent may not import it).
-Walker: `assistantReplay.ts`, `toolDispatch.ts`,
+Walker: `assistantReplay.ts`, `toolDispatch.ts` (with `innerCallArguments.ts`, the
+one copy an inner call takes of its arguments, and `innerCallOuter.ts`, the outer
+call's hold on it: ended with `execute`, and a halt it carries back),
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
 Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
 Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `emptiness.ts` (which
@@ -139,10 +141,12 @@ the existing invalid-arguments event at initial and resumed admission, before
 artifact resolution and credentials. A middleware approval is not schema
 approval. In warn mode the resumed admission can emit another warning.
 `toolDispatch.ts` · `agentToolDispatch` enforces the same rules on inner calls
-after the permission and middleware gates (`stages/toolCalls/access/innerCallGates.ts`)
-and its existing unsupported-declaration checks, before allocating context
-or credentials; it throws the shared correction without inventing a model
-call or a separate validation event. Raw `Tool.execute` stays caller-governed.
+where a model call meets them — after the permission check, the argument rules
+and the middleware chain (`stages/toolCalls/access/innerCallGates.ts`), before the
+skill-read question, the check-in and `wants` refusals, context and credentials;
+it throws the shared correction without inventing a model call or a separate
+validation event. Arguments that are not an object are refused with the same
+correction before any gate is asked (`innerCallArguments.ts`). Raw `Tool.execute` stays caller-governed.
 The validator remains a documented subset, not a full JSON Schema engine.
 
 `toolSecurityEvents.ts` binds the current tool call's id and iteration once,

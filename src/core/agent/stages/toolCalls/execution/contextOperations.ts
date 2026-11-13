@@ -27,6 +27,8 @@ import type { ToolContextOperations } from '../contracts/operations/context.js';
 import type { ToolResourcesOperations } from '../contracts/operations/resources.js';
 import type { ToolCredentialsOperations } from '../contracts/operations/credentials.js';
 import type { ToolProgressOperations } from '../contracts/operations/progress.js';
+import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
+import type { OuterCallBinding } from '../../../innerCallOuter.js';
 import { recordSourceClock } from '../evidence/sourceClock.js';
 import { madeInRun } from '../evidence/madeInRun.js';
 
@@ -36,6 +38,8 @@ interface ToolContextOperationsLinks {
   readonly credentialsIn: ToolCredentialsOperations['credentialsIn'];
   readonly hasCredentials: boolean;
   readonly toolProgress: ToolProgressOperations['toolProgress'];
+  /** Read only when an inner `read_skill` is put to the skill-read question. */
+  readonly parkedNow: ToolCatalogOperations['parkedNow'];
 }
 
 /** Compose the existing context callbacks once for this handler. */
@@ -192,7 +196,9 @@ export function buildToolContextOperations(
    *
    * Each inner call passes the model call's gates (`../access/innerCallGates.ts`)
    * with the outer call's iteration and history, and leaves one row on
-   * `innerToolCalls` (`../../../innerToolCalls.ts`) — gate or no gate.
+   * `innerToolCalls` (`../../../innerToolCalls.ts`) — gate or no gate. The
+   * outer call's `binding` (`../../../innerCallOuter.ts`) ends the dispatch
+   * when the outer `execute` settles and carries a checker's halt back.
    */
   const toolDispatchCtx = (
     scope: TypedScope<AgentState>,
@@ -202,14 +208,21 @@ export function buildToolContextOperations(
       readonly iteration: number;
       /** The history the outer call's own gates were handed. */
       readonly history: () => LLMMessage[];
+      readonly binding: OuterCallBinding;
     },
     signal?: AbortSignal,
   ): Pick<ToolExecutionContext, 'tools'> => ({
     tools: agentToolDispatch({
       outerToolCallId: call.toolCallId,
       lookup: (name) => links.registryByName.get(name),
-      gates: buildInnerCallGates(scope, deps, { iteration: call.iteration, history: call.history }),
+      gates: buildInnerCallGates(scope, deps, links.parkedNow, {
+        toolCallId: call.toolCallId,
+        iteration: call.iteration,
+        history: call.history,
+        halted: (halt) => call.binding.halted(halt),
+      }),
       record: (facts) => recordInnerToolCall(scope, call, facts),
+      outer: call.binding,
       innerContext: (name, innerId) => {
         // An inner call runs inside the same run, under the same policy.
         const redact = policyInForce(scope);

@@ -170,7 +170,7 @@ The dispatch belongs to the **agent**, and it only exists at execute time — so
 
 Discipline the dispatch holds for you:
 
-- **An inner call passes the agent's own gates** — the [`permissionChecker`](doc:security) and the before-tool [middleware](doc:middleware#a-tool-that-calls-another-tool) chain are asked about it with its own arguments, under its own id (`<outer call id>#inner-<n>`). What they refuse for a model call they refuse here: the inner tool does not run, and `tools.call` throws an error naming the tool and the refusal. Each inner call leaves one row in the run's `innerToolCalls` state.
+- **An inner call passes the agent's own gates** — the [`permissionChecker`](doc:security) (with a [sequence](doc:sequence-governance) that includes the procedure's earlier inner calls) and the before-tool [middleware](doc:middleware#a-tool-that-calls-another-tool) chain are asked about it with its own arguments, under its own id (`<outer call id>#inner-<n>`), in the order a model call is. What they refuse for a model call they refuse here: the inner tool does not run, and `tools.call` throws an error naming the tool and the refusal. Each inner call leaves one row in the run's `innerToolCalls` state.
 - **Inner tools never mint competing tickets** — inner calls run with `hasArtifacts: false`, so one answer carries one walk ticket, not three chips for data nobody asked about.
 - **An inner absence short-circuits** — `absent()` from a source becomes the runbook's own answer, verbatim. A call site that can carry on without the source declares it: `tools.call(name, args, { allowAbsent: true })` — and owns stating the gap.
 - **A declared `needs` resolves on the non-interactive path** (fail-closed); a tool that requires a human — `checkIn`, or a credential needing consent — refuses **by name**, because an inner call cannot pause.
@@ -286,7 +286,7 @@ The consumer redeems it with the artifact op it already has — `{ op: 'artifact
 ## What is not here yet
 
 - **Pause**: a procedure that pauses throws with the checkpoint attached (exactly like `flowchartAsTool`). The approval-gate phase brings typed resume through the agent rail.
-- **Inner dispatch ceilings**: `checkIn` and `wants` tools refuse by name, and so does a middleware `ask` (an inner call cannot pause); a checker's `'halt'` refuses the inner call without ending the turn; composition depth stops at one (an inner tool does not get `ctx.tools`).
+- **Inner dispatch ceilings**: `checkIn` and `wants` tools refuse by name, and so does a middleware `ask` (an inner call cannot pause); a checker's `'halt'` refuses the inner call and ends the turn once the procedure's own call settles; composition depth stops at one (an inner tool does not get `ctx.tools`); a `tools` kept past the procedure's `execute` refuses every later call.
 
 ## The API surface
 

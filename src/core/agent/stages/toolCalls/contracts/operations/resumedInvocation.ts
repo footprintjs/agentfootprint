@@ -3,6 +3,7 @@ import type { AgentState } from '../../../../types.js';
 import type { Resolution, ResumedCallFacts } from '../callFacts.js';
 import type { ConsentGateKind } from '../../../../../pause.js';
 import type { ReadToolResultEnvelope } from '../../../../../../semantics/toolEffects.js';
+import type { InnerCallHalt } from '../../../../innerCallOuter.js';
 
 /** The existing resumed invocation contract; no new execution path. */
 export interface ResumedInvocation {
@@ -35,5 +36,9 @@ export interface ResumedInvocation {
     /** An approved call's arguments no longer matched its request at the
      *  last moment before `execute` (`heldTo`): the call did not run. */
     callChanged?: true;
+    /** A checker halted one of the inner calls the tool made (`innerCallOuter.ts`):
+     *  the door lands the result, then ends the run (`routing/policyHalt.ts` ·
+     *  `haltResumedCall`). */
+    halt?: InnerCallHalt;
   }>;
 }
