@@ -79,7 +79,7 @@ export function createRequestHandler({
     // ── Reading history is not a turn either ──────────────────────────
     if (identified.session !== undefined) {
       try {
-        await answerSessionOp(identified.session, verified, reply);
+        await answerSessionOp(identified.session, verified, reply, identified.userId);
       } catch (err) {
         reply.fail(err instanceof Error ? err : new Error(String(err)));
       }

@@ -33,6 +33,7 @@ import type { AgentInput } from './agent/types.js';
 import type { AgentRunOptions } from './Agent.js';
 import type { AgentRunCheckpoint } from './runCheckpoint.js';
 import type { TurnMethod } from './agent/aroundTurn/guards.js';
+import type { MemoryIdentity } from '../memory/identity/types.js';
 
 import type { AgentfootprintEvent } from '../events/registry.js';
 import type { Unsubscribe } from '../events/dispatcher.js';
@@ -54,6 +55,13 @@ export interface HostedTurn {
 export interface HostedInvocation {
   readonly view: RunView;
   runId(): string | undefined;
+  /**
+   * WHO this invocation's conversation belongs to — the identity its finished
+   * checkpoint will carry (`conversationOwner`). A host's save in the middle
+   * of the run stamps it too, so that save cannot leave a row naming nobody
+   * (r3-45-hosting-1).
+   */
+  identity(): MemoryIdentity | undefined;
 }
 
 export type BindHostedInvocation = (invocation: HostedInvocation) => CombinedRecorder | undefined;

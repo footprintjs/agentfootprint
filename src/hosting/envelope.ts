@@ -212,6 +212,18 @@ export function envelopeOwner(envelope: unknown): string | undefined {
 }
 
 /**
+ * The namespace the stored conversation ran in (`identity.conversationId`), or
+ * `undefined` when it names none. Lenient, like {@link envelopeOwner}: a
+ * store's listing uses it to recover a session id an old row did not carry, and
+ * only after checking that the id addresses that very row
+ * (`adapters/hosting/agentEngineOwner.ts · listedSessionId`).
+ */
+export function envelopeConversationId(envelope: unknown): string | undefined {
+  const id = conversationOf(envelope)?.identity?.conversationId;
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
+}
+
+/**
  * The stored conversation's messages, projected to what a person may read back
  * (9.26.0): user and assistant TEXT, in stored order.
  *
@@ -234,6 +246,12 @@ export function envelopeTranscript(envelope: unknown): readonly TranscriptMessag
   return messages;
 }
 
+/** What the lenient readers look at inside a stored conversation. */
+interface StoredConversation {
+  identity?: { principal?: unknown; conversationId?: unknown };
+  history?: unknown;
+}
+
 /**
  * The conversation inside either envelope format, WITHOUT the strict validation
  * the two readers apply.
@@ -246,20 +264,18 @@ export function envelopeTranscript(envelope: unknown): readonly TranscriptMessag
  * path that actually RESTORES a session, which is the one where a half-read
  * conversation does damage.
  */
-function conversationOf(
-  envelope: unknown,
-): { identity?: { principal?: unknown }; history?: unknown } | undefined {
+function conversationOf(envelope: unknown): StoredConversation | undefined {
   if (!envelope || typeof envelope !== 'object') return undefined;
   const { format, data } = envelope as { format?: unknown; data?: unknown };
   if (!data || typeof data !== 'object') return undefined;
   if (format === 'flowchart-v1') {
     const conversation = (data as { conversation?: unknown }).conversation;
     return conversation && typeof conversation === 'object'
-      ? (conversation as { identity?: { principal?: unknown }; history?: unknown })
+      ? (conversation as StoredConversation)
       : undefined;
   }
   if (format === 'conversation-v1') {
-    return data as { identity?: { principal?: unknown }; history?: unknown };
+    return data as StoredConversation;
   }
   return undefined;
 }

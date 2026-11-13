@@ -12,10 +12,15 @@ describe('session history admission', () => {
       identityOptions: undefined,
     });
     const fail = vi.fn();
-    await history.answerSessionOp({ op: 'transcript', sessionId: 'foreign' }, undefined, {
-      complete: vi.fn(),
-      fail,
-    });
+    await history.answerSessionOp(
+      { op: 'transcript', sessionId: 'foreign' },
+      undefined,
+      {
+        complete: vi.fn(),
+        fail,
+      },
+      undefined,
+    );
     expect(fail).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'ERR_SESSION_OP_NEEDS_IDENTITY' }),
     );

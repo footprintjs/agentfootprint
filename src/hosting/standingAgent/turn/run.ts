@@ -66,6 +66,7 @@ export function createTurnRunner({
       return lane.writer?.capture({
         sessionId,
         runId: invocation.runId,
+        identity: invocation.identity,
         state: () => invocation.view.liveState(),
       });
     };
