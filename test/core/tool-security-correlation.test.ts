@@ -342,14 +342,20 @@ describe('runtime tool security facts carry the actual call identity', () => {
         'inner_read',
         'inner_read',
       ]);
-      // Nested calls do not invent ordinary model-call brackets or permission consultations.
+      // Nested calls do not invent model-call brackets. They pass the same permission
+      // check as a model call, filed under their own derived id, right after the
+      // outer call's own.
       expect(seen.of('stream.tool_start').map(({ payload }) => payload.toolCallId)).toEqual([
         'outer-one',
         'outer-two',
       ]);
-      expectCalls(seen.of('permission.check'), [
-        { toolCallId: 'outer-one', iteration: 1 },
-        { toolCallId: 'outer-two', iteration: 1 },
+      expect(
+        seen.of('permission.check').map(({ payload }) => [payload.toolCallId, payload.target]),
+      ).toEqual([
+        ['outer-one', 'read_same'],
+        ['outer-one#inner-1', 'inner_read'],
+        ['outer-two', 'read_same'],
+        ['outer-two#inner-1', 'inner_read'],
       ]);
     });
   }

@@ -5,6 +5,7 @@ import type {
 import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { CodeRunFacts } from '../../../../codeRunnerTool.js';
 import type { NegativeDispatch } from '../../../negativeClaims/capture.js';
+import type { InnerCallHalt } from '../../../innerCallOuter.js';
 
 /** Invocation-local phase cells; never checkpoint state or a run registry. */
 
@@ -34,6 +35,8 @@ export interface CallExecution {
         reason: string;
         tellLLM: string;
         checkerId?: string;
+        /** Present when an INNER call drew the halt (`innerCallOuter.ts`): the call it names. */
+        call?: InnerCallHalt['call'];
       }
     | undefined;
 }

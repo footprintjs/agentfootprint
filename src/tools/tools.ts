@@ -825,20 +825,20 @@ export interface ToolDispatchCallOptions {
  * Tools delivered by a `ToolProvider` are NOT visible (there is no build-time
  * list), a stated caveat, not an accident.
  *
- * What an inner call gets: the outer call's own facts (credentials, signal,
- * progress) with `hasArtifacts: false` — an inner tool must not mint claim
- * tickets competing with the composed answer's own — and a derived
- * `toolCallId` naming the outer call it belongs to. A declared `needs` is
- * resolved before the inner execute (fail-closed: a service that requires
- * interactive consent refuses by name — an inner call cannot pause).
+ * What an inner call passes, in a model call's order, on ONE copy of `args`
+ * taken when it is made: the agent's `permissionChecker` (its `sequence` holds
+ * the earlier inner calls that ran; a `halt` ends the run once the outer call
+ * settles) and before-tool middleware, under its derived `toolCallId`
+ * (`<outer>#inner-<n>`); what they refuse for a model call they refuse here, by
+ * name. It gets the outer call's facts with `hasArtifacts: false` (an inner
+ * tool must not mint claim tickets competing with the composed answer's own);
+ * `needs` resolves fail-closed (an inner call cannot pause). A `ctx.tools` used after
+ * its outer `execute` settled refuses. Each call leaves an `innerToolCalls` row.
  */
 export interface ToolDispatch {
   /** Is this name in the dispatch map? Provider-delivered tools answer false. */
   has(name: string): boolean;
-  /**
-   * Execute a registered tool and return its result exactly as returned —
-   * a coverage envelope arrives as the envelope, an absence as the absence.
-   */
+  /** Run a registered tool; its result comes back exactly as returned (an absence as the absence). */
   call(name: string, args: unknown, opts?: ToolDispatchCallOptions): Promise<unknown>;
 }
 

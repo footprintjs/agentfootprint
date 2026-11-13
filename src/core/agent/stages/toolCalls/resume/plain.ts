@@ -19,6 +19,7 @@ import type { ToolStepsOperations } from '../contracts/operations/steps.js';
 import type { ToolSettlementOperations } from '../contracts/operations/settlement.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
+import { innerCallsFieldOf } from '../../../innerToolCalls.js';
 
 interface ResumePlainLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -135,6 +136,8 @@ export function buildResumePlain(
           content: resultStr,
           toolCallId,
           toolName,
+          // The inner calls its tool made before it paused, that ran.
+          ...innerCallsFieldOf(scope, toolCallId, iteration),
         },
       ],
       { toolName, toolCallId },

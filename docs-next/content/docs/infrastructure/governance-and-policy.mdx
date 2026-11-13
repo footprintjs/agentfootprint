@@ -212,7 +212,10 @@ own catalog — the gate governs its *dispatch* by tool name, not its contents.
 `deny` refuses one call and the loop continues. `halt` refuses the call **and
 ends the run**: the synthetic result lands, the halt event fires, state is
 committed, then `$break` — and `agent.run()` raises `PolicyHaltError` at the API
-boundary. Use `halt` when continuing would itself be the incident.
+boundary. Use `halt` when continuing would itself be the incident. A call one
+tool makes through `ctx.tools.call` is judged the same way: a `halt` refuses it
+at once, and the run ends once the outer call has settled and its result has
+landed, with the halt event under the inner call's id.
 
 ### Two vocabularies on one decision — `reason` and `tellLLM`
 

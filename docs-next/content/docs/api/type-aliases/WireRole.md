@@ -6,7 +6,7 @@ title: WireRole
 
 > **WireRole** = `"system"` \| `"user"` \| `"assistant"`
 
-Defined in: [src/provider-contract/types.ts:249](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L249)
+Defined in: [src/provider-contract/types.ts:251](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L251)
 
 The roles a provider can carry INSIDE the `messages` array.
 

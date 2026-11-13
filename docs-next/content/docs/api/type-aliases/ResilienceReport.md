@@ -6,7 +6,7 @@ title: ResilienceReport
 
 > **ResilienceReport** = \{ `fallback`: `string`; `kind`: `"fell-back"`; `primary`: `string`; `reason`: `string`; \} \| \{ `attempt`: `number`; `backoffMs`: `number`; `kind`: `"retried"`; `lastError`: `string`; `maxAttempts`: `number`; `reason`: `string`; `statedWaitMs?`: `number`; \} \| \{ `attempt`: `number`; `kind`: `"recovered"`; `totalDurationMs`: `number`; \} \| \{ `kind`: `"circuit-changed"`; `providerName`: `string`; `reason`: `string`; `state`: `"closed"` \| `"open"` \| `"half-open"`; \}
 
-Defined in: [src/provider-contract/types.ts:525](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L525)
+Defined in: [src/provider-contract/types.ts:527](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L527)
 
 v7.8 — what a resilience decorator DID during one provider call.
 

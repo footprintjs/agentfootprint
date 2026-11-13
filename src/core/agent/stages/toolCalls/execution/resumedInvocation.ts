@@ -41,6 +41,7 @@ import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
 import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
 import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
+import { bindOuterCall, type OuterCallBinding } from '../../../innerCallOuter.js';
 
 interface ResumedInvocationLinks {
   readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
@@ -88,7 +89,8 @@ export function buildResumedInvocation(
   // copies every app callback is handed (`lib/frozenCopy.ts`): arguments that
   // no longer re-derive the request's id (`runsAsAsked`, the one rule that
   // binds a decision to its call) do not run (`callChanged`).
-  const resolveCredentialAndExecute = async (
+  const executeResumed = async (
+    binding: OuterCallBinding,
     scope: TypedScope<AgentState>,
     resolved: Resolution,
     toolName: string,
@@ -265,7 +267,18 @@ export function buildResumedInvocation(
         ...requestEvidenceFor(scope, { toolName, toolCallId, iteration }),
         ...mcpClientUseFor(scope, { toolCallId }),
         ...links.sessionContext(scope, toolName, toolCallId),
-        ...links.toolDispatchCtx(scope, { toolName, toolCallId, iteration }, env.signal),
+        // The resume doors hand their gates the committed history; so does an inner call.
+        ...links.toolDispatchCtx(
+          scope,
+          {
+            toolName,
+            toolCallId,
+            iteration,
+            history: () => [...(scope.history ?? [])],
+            binding,
+          },
+          env.signal,
+        ),
       };
       // The last moment before the call runs, after every await that prepared
       // it — its artifacts (`wants`), its credential (`needs`), its clock, and
@@ -317,7 +330,12 @@ export function buildResumedInvocation(
         seen.proposed = links.programOfCall(tool, links.proposedArgsOf(scope, toolCallId) ?? args);
         seen.submitted = links.programOfCall(tool, args);
       }
-      let result = await tool.execute(args, executionContext);
+      let result: unknown;
+      try {
+        result = await tool.execute(args, executionContext);
+      } finally {
+        binding.end(); // `ctx.tools` ends with `execute` (`innerCallOuter.ts`)
+      }
       // The runner's facts, at this execute boundary as at the batch loop's.
       const codeRun = links.takeCodeRun(scope, tool, codeRunSlot, {
         toolName,
@@ -531,6 +549,22 @@ export function buildResumedInvocation(
         executed,
         negativeResultId: negativeDispatch?.resultId,
       };
+    }
+  };
+  /**
+   * The resumed invocation, with the outer call's hold on the inner calls its
+   * tool makes (`innerCallOuter.ts`): a halt one of them drew rides the answer
+   * as `halt`, for the door to run once the result has landed.
+   */
+  const resolveCredentialAndExecute: ResumedInvocation['resolveCredentialAndExecute'] = async (
+    ...call
+  ) => {
+    const binding = bindOuterCall();
+    try {
+      const answer = await executeResumed(binding, ...call);
+      return binding.halt === undefined ? answer : { ...answer, halt: binding.halt };
+    } finally {
+      binding.end();
     }
   };
   return { resolveCredentialAndExecute };

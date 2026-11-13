@@ -976,12 +976,12 @@ that writes its own through `.instruction()`. Meaningless without
 
 Defined in: [src/core/agent/types.ts:247](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L247)
 
-Permission adapter. When set, the Agent calls
-`permissionChecker.check({capability: 'tool_call', ...})` BEFORE every
-`tool.execute()`. Emits `agentfootprint.permission.check` with the
-decision. On `deny`, the tool is skipped and its result is a
-synthetic denial string; on `allow` / `gate_open`, execution proceeds
-normally.
+Permission adapter. When set, the Agent calls `permissionChecker.check({capability:
+'tool_call', ...})` BEFORE every `tool.execute()` — the model's calls and the calls a
+tool makes through `ctx.tools`, each under its own id. Emits `agentfootprint.permission.check`
+with the decision. On `deny`, the tool is skipped: a model call's result is a synthetic
+denial string, an inner call is refused to the tool that made it; a `halt` also ends the
+run (an inner call's, once its outer call settles). On `allow` / `gate_open`, it runs.
 
 ***
 

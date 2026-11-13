@@ -156,6 +156,9 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
     credentialsIn,
     hasCredentials,
     toolProgress,
+    get parkedNow() {
+      return parkedNow;
+    },
   });
   const { resolveWantsAtDispatch, assertComponentDeliverable, applyPresent, placeResults } =
     buildToolArtifactsOperations(deps, {

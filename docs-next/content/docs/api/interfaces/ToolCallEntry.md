@@ -4,12 +4,13 @@ title: ToolCallEntry
 
 # Interface: ToolCallEntry
 
-Defined in: [src/provider-contract/types.ts:790](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L790)
+Defined in: [src/provider-contract/types.ts:793](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L793)
 
 One entry in the in-flight tool-call sequence delivered to
 `PermissionChecker.check()` since v2.12. Lets sequence-aware
 policies (exfil chain detection, idempotency limits, cost guards)
-inspect what the agent has already dispatched this run.
+inspect what has already been dispatched: the model's calls, and each
+call a tool made through `ctx.tools.call` right after its outer call.
 
 Derived from `scope.history` at check time — single source of truth,
 survives `agent.resumeOnError(checkpoint)` correctly.
@@ -20,9 +21,19 @@ survives `agent.resumeOnError(checkpoint)` correctly.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\> \| `undefined`
 
-Defined in: [src/provider-contract/types.ts:794](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L794)
+Defined in: [src/provider-contract/types.ts:797](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L797)
 
-Tool args passed to `tool.execute(args, ctx)`.
+Tool args passed to `tool.execute(args, ctx)`; an inner call's shown through the tool's argument view.
+
+***
+
+### inner?
+
+> `readonly` `optional` **inner?**: `true`
+
+Defined in: [src/provider-contract/types.ts:803](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L803)
+
+`true` on a call a tool made through `ctx.tools.call` (`provider-contract/innerCalls.ts`); absent on the model's own.
 
 ***
 
@@ -30,7 +41,7 @@ Tool args passed to `tool.execute(args, ctx)`.
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/provider-contract/types.ts:796](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L796)
+Defined in: [src/provider-contract/types.ts:799](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L799)
 
 ReAct iteration the call was dispatched on.
 
@@ -40,7 +51,7 @@ ReAct iteration the call was dispatched on.
 
 > `readonly` **name**: `string`
 
-Defined in: [src/provider-contract/types.ts:792](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L792)
+Defined in: [src/provider-contract/types.ts:795](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L795)
 
 Tool name dispatched.
 
@@ -50,9 +61,6 @@ Tool name dispatched.
 
 > `readonly` `optional` **providerId?**: `string`
 
-Defined in: [src/provider-contract/types.ts:803](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L803)
+Defined in: [src/provider-contract/types.ts:801](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L801)
 
-Optional source identifier — `'local'` for tools registered via
-`.tool(...)` / `staticTools(...)`, or the `ToolProvider.id` for
-tools resolved through a `discoveryProvider`. Lets cross-hub
-exfil rules match on origin, not just name.
+`'local'` (`.tool(...)` / `staticTools(...)`) or the resolving `ToolProvider.id` — lets exfil rules match on origin.

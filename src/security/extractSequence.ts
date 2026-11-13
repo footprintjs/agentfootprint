@@ -49,6 +49,15 @@
  *     did run. Paired by position, each proposal is judged by its own answer.
  *
  * A history without a settled message pairs exactly as before 9.113.0.
+ *
+ * INNER CALLS. A call a tool made through `ctx.tools.call` whose function was
+ * entered rides the result message of the call the model made
+ * (`LLMMessage.calls`, `provider-contract/innerCalls.ts`). Each one
+ * follows that call in the sequence, in the order the tool made them, marked
+ * `inner: true` — so a rule over "read a secret, then post it" sees a step a
+ * composing tool took exactly where it took it. A refused inner call is not on
+ * the message, as a denied model call is not in the sequence. Read with the
+ * result the id pairs with, like the deny check above.
  */
 
 import type { LLMMessage, ToolCallEntry } from '../provider-contract/types.js';
@@ -98,8 +107,9 @@ export function extractSequence(
     if (msg.role !== 'assistant' || !msg.toolCalls || msg.toolCalls.length === 0) continue;
     for (const [callAt, tc] of msg.toolCalls.entries()) {
       if (!tc.id) continue;
-      const result = results.get(tc.id);
-      if (result === undefined) continue; // no tool_result yet → in-flight
+      const answer = results.get(tc.id);
+      if (answer === undefined) continue; // no tool_result yet → in-flight
+      const result = typeof answer.content === 'string' ? answer.content : '';
       if (result.startsWith(SYNTHETIC_DENY_PREFIX)) continue; // denied, never ran
       if (settled.has(proposalKey(turnAt, callAt))) continue; // settled on resume, never dispatched
       const entry: ToolCallEntry = {
@@ -111,6 +121,17 @@ export function extractSequence(
         }),
       };
       sequence.push(entry);
+      for (const inner of answer.calls ?? []) {
+        sequence.push({
+          name: inner.toolName,
+          args: inner.args,
+          iteration: iterCounter,
+          ...(resolveProviderId && {
+            providerId: resolveProviderId(inner.toolName) ?? 'local',
+          }),
+          inner: true,
+        });
+      }
     }
     iterCounter += 1;
   }
@@ -145,11 +166,11 @@ function proposalKey(turnAt: number, callAt: number): string {
  * call that never ran, not a result, so a settled id is not answered by it —
  * and a deny the id carried before a later settlement still reads as a deny.
  */
-function resultsById(history: readonly LLMMessage[]): Map<string, string> {
-  const results = new Map<string, string>();
+function resultsById(history: readonly LLMMessage[]): Map<string, LLMMessage> {
+  const results = new Map<string, LLMMessage>();
   for (const msg of history) {
     if (msg.role !== 'tool' || !msg.toolCallId || msg.notDispatched !== undefined) continue;
-    results.set(msg.toolCallId, typeof msg.content === 'string' ? msg.content : '');
+    results.set(msg.toolCallId, msg);
   }
   return results;
 }

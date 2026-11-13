@@ -2,10 +2,10 @@
  * tools/runChain — INTERNAL. The one place a chain is walked.
  *
  * Pattern: Chain of Responsibility driver.
- * Role:    tools/ layer. Both stages (tool dispatch, message boundary) and
- *          the MCP server call in here, so the ordering law, the
- *          throw-is-a-denial law and the ledger row shape are written once
- *          and cannot drift between the three callers.
+ * Role:    tools/ layer. Both stages (tool dispatch, message boundary), a
+ *          tool's inner call (`ctx.tools.call`) and the MCP server call in
+ *          here, so the ordering law, the throw-is-a-denial law and the
+ *          ledger row shape are written once and cannot drift between callers.
  * Emits:   N/A — it RETURNS rows; the caller commits and emits them, so a
  *          middleware still never touches scope.
  *

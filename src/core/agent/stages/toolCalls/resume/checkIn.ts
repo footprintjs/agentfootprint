@@ -26,6 +26,9 @@ import type { ToolSettlementOperations } from '../contracts/operations/settlemen
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
+import { innerCallsFieldOf } from '../../../innerToolCalls.js';
+import { haltResumedCall } from '../routing/policyHalt.js';
+import type { InnerCallHalt } from '../../../innerCallOuter.js';
 
 interface ResumeCheckInLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -110,6 +113,8 @@ export function buildResumeCheckIn(
     /** The tool ran (any outcome) — the judge's gate (9.104.0). */
     let toolRan = false;
     let negativeResultId: string | undefined;
+    /** A halt one of the resumed tool's inner calls drew (`innerCallOuter.ts`). */
+    let innerHalt: InnerCallHalt | undefined;
     /** What the approved call's `execute` saw — its script row reads it. */
     const scriptSeen: ResumedCallFacts = {};
     if (decision.approved) {
@@ -128,6 +133,7 @@ export function buildResumeCheckIn(
         'checkIn',
         scriptSeen,
       );
+      innerHalt = dispatched.halt;
       negativeResultId = dispatched.negativeResultId;
       result = dispatched.result;
       error = dispatched.error;
@@ -202,6 +208,7 @@ export function buildResumeCheckIn(
           toolCallId,
           toolName,
           ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+          ...innerCallsFieldOf(scope, toolCallId, iteration),
         },
       ],
       { toolName, toolCallId },
@@ -279,6 +286,9 @@ export function buildResumeCheckIn(
     // written back only when it was there, so an older checkpoint's resume
     // commits exactly what it always did.
     if (scope.pausedToolParty !== undefined) scope.pausedToolParty = undefined;
+    // A checker halted an inner call the resumed tool made: the result has
+    // landed and the pause is cleared — now the run ends, as inline.
+    if (innerHalt !== undefined) haltResumedCall(scope, innerHalt, iteration);
     return;
   };
   return { resumeCheckIn };

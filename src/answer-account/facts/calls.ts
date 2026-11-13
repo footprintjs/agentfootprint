@@ -305,18 +305,32 @@ function toolNameFor(
   return { name: message.toolName as string, pointer: historyAt(index, '/toolName', id) };
 }
 
-/** The permission rows between this call's start and end that name its tool. */
+/**
+ * The permission rows between this call's start and end that name its tool —
+ * and no other call. A tool that calls a tool (`ctx.tools.call`) has its inner
+ * call's checks filed in that window under the inner call's own id
+ * (`c1#inner-1`); a row that names a different call is not a verdict on this
+ * one, even when both calls name the same tool. A row that names no call (an
+ * app's own `agent.emit`) is still read by its window and tool name.
+ */
 function permissionRows(
   ctx: ReadContext,
+  id: string,
   toolName: string,
   start?: ViewEvent,
   end?: ViewEvent,
 ): ViewEvent[] {
   if (start === undefined) return [];
   const upTo = end?.index ?? Number.POSITIVE_INFINITY;
-  return ctx.view
-    .ofType('permission.check')
-    .filter((e) => e.index > start.index && e.index < upTo && e.payload.target === toolName);
+  return ctx.view.ofType('permission.check').filter((e) => {
+    const call = str(e.payload.toolCallId);
+    return (
+      e.index > start.index &&
+      e.index < upTo &&
+      e.payload.target === toolName &&
+      (call === undefined || call === id)
+    );
+  });
 }
 
 /** The permission verdicts that stop a call before it runs. */
@@ -349,7 +363,7 @@ function outcomeOf(
   );
   // Only `deny` and `halt` stop a call. `gate_open` lets it run (`core/Agent.ts`: allowed =
   // allow || gate_open), so it is never a refusal.
-  const permissionDeny = permissionRows(ctx, toolName, start, end).find((e) =>
+  const permissionDeny = permissionRows(ctx, id, toolName, start, end).find((e) =>
     PERMISSION_REFUSALS.has(e.payload.result),
   );
   const checkInDeclined = byCall('checkin.decision', id).find((e) => e.payload.approved === false);

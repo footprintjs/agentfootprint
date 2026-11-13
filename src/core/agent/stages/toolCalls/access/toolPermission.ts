@@ -2,6 +2,7 @@ import type { buildCallStart } from '../execution/callStart.js';
 import type { buildDispatchContext } from '../batch/dispatchContext.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
+import type { ToolCallEntry } from '../../../../../provider-contract/types.js';
 import type { CallExecution, CallResultCell } from '../contracts/callCells.js';
 import { extractSequence } from '../../../../../security/extractSequence.js';
 import { checkerContextOf } from './bindings.js';
@@ -25,14 +26,25 @@ interface CheckToolPermissionFrame {
   readonly emitSecurity: CallStartFacts['emitSecurity'];
   readonly execution: CallExecution;
   readonly outcome: CallResultCell;
+  /**
+   * For an inner call (`ctx.tools.call`) only: the inner calls of the same
+   * outer call that already ran, after the history's sequence. They reach
+   * history with the outer call's result; until then, this is where they are.
+   */
+  readonly innerCallsSoFar?: () => readonly ToolCallEntry[];
 }
 
 /** Existing toolPermission body; the owning handler retains its admission guard and native pause return. */
 export async function checkToolPermission(frame: CheckToolPermissionFrame) {
   try {
     // Sequence is derived from history at check time (not parallel
-    // state) — single source of truth, survives resumeOnError.
-    const sequence = extractSequence(frame.historyForCallbacks(), frame.iteration);
+    // state) — single source of truth, survives resumeOnError. An inner
+    // call adds its outer call's inner calls that already ran: they are
+    // written to history with the outer call's result, not before.
+    const sequence = [
+      ...extractSequence(frame.historyForCallbacks(), frame.iteration),
+      ...(frame.innerCallsSoFar?.() ?? []),
+    ];
     const decision = await frame.permissionChecker.check({
       capability: 'tool_call',
       actor: 'agent',
