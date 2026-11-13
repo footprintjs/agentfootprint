@@ -22,7 +22,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
-import { type SettledCall, outcomeField } from '../execution/callOutcome.js';
+import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
@@ -390,7 +390,7 @@ export function buildResumeAsk(
     if (deps.negativeClaimsArmed === true)
       askResultStr = serveNegativeHandle(scope, negativeResultId, askResultStr);
     // How the call settled — read by the step and by the message's `outcome`.
-    const askSettled: SettledCall = {
+    const askSettled: DispatchSettlement = {
       ran: toolRan,
       clean: stepToolRan,
       ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),

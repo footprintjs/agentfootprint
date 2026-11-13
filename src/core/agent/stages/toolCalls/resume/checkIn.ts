@@ -15,7 +15,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
-import { type SettledCall, outcomeField } from '../execution/callOutcome.js';
+import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
@@ -179,7 +179,7 @@ export function buildResumeCheckIn(
     if (deps.negativeClaimsArmed === true)
       decisionResultStr = serveNegativeHandle(scope, negativeResultId, decisionResultStr);
     // How the call settled — read by the step and by the message's `outcome`.
-    const decisionSettled: SettledCall = {
+    const decisionSettled: DispatchSettlement = {
       ran: toolRan,
       clean: stepToolRan,
       ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),

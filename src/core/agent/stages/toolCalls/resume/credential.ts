@@ -10,7 +10,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
-import { type SettledCall, outcomeField } from '../execution/callOutcome.js';
+import { type DispatchSettlement, outcomeField } from '../execution/callOutcome.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeCallFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
@@ -117,7 +117,7 @@ export function buildResumeCredential(
     const consentEnvelope =
       dispatched.executed === true && error !== true ? dispatched.envelope : undefined;
     // How the call settled — read by the step and by the message's `outcome`.
-    const consentSettled: SettledCall = {
+    const consentSettled: DispatchSettlement = {
       ran: dispatched.executed === true,
       clean: error !== true && dispatched.ceilingRefused !== true,
       ...(consentEnvelope?.status !== undefined && { status: consentEnvelope.status }),

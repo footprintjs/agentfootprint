@@ -786,9 +786,10 @@ describe('fail closed, and never leak the body', () => {
     expect(menus[0]).toContain('No skills are available to you');
   });
 
-  it('an answer it does not recognise hides the skill, by the reader the tool gate uses', async () => {
-    // `readPermissionDecision` is the one reader: 'ask' / 'ALLOW' refuse a
-    // tool call, so the same answers must not advertise a skill either.
+  it('an answer it does not recognise still hides the skill, as before the shared reader', async () => {
+    // Pins equal behaviour across the move to `readPermissionDecision`: the
+    // menu hid the skill for these answers before, and still does. It cannot
+    // see WHICH reader decided; the tool gate's tests hold that reader.
     for (const result of ['ask', 'ALLOW', 'deny '] as const) {
       const checker = {
         name: 'odd',

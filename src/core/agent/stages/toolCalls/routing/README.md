@@ -6,7 +6,7 @@ The existing step plan, returned effects, leases and escalation callbacks stay i
 
 ## A step is done only when its tool says so
 
-`stepOutcome.ts` · `stepOutcomeOf` is the one rule for what a finished call means to the procedure step it ran. Every door that finishes a call (the batch loop's `execution/deliveredResult.ts` and the plain, check-in, ask and credential resumes in `resume/`) hands `stepsOperations.ts` · `applyStepReturn` the facts it already holds (`execution/callOutcome.ts` · `SettledCall`: did it run, did it run clean, what status did the tool declare, and any status word it wrote that the library does not know), and the outcome is decided there, never at the door.
+`stepOutcome.ts` · `stepOutcomeOf` is the one rule for what a finished call means to the procedure step it ran. Every door that finishes a call (the batch loop's `execution/deliveredResult.ts` and the plain, check-in, ask and credential resumes in `resume/`) hands `stepsOperations.ts` · `applyStepReturn` the facts it already holds (`execution/callOutcome.ts` · `DispatchSettlement`: did it run, did it run clean, what status did the tool declare, and any status word it wrote that the library does not know), and the outcome is decided there, never at the door.
 
 A status word is read once, before it gets here (`semantics/toolOutcome.ts` · `readToolResultStatus`): another case or surrounding spaces name the same word, so `'FAILURE'` holds the step exactly as `'failure'` does.
 

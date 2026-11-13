@@ -1,4 +1,4 @@
-import type { SettledCall } from '../execution/callOutcome.js';
+import type { DispatchSettlement } from '../execution/callOutcome.js';
 
 /**
  * How a finished call bears on the procedure step it ran.
@@ -61,7 +61,7 @@ export type StepOutcome =
  * @example stepOutcomeOf({ ran: true, clean: true, unknownStatus: 'oops' }) // { outcome: 'not-reported', unknownStatus: 'oops' }
  * @example stepOutcomeOf({ ran: true, clean: false })                   // { outcome: 'stopped' }
  */
-export function stepOutcomeOf(call: SettledCall): StepOutcome {
+export function stepOutcomeOf(call: DispatchSettlement): StepOutcome {
   if (!call.ran || !call.clean) return { outcome: 'stopped' };
   const status = call.status;
   switch (status) {

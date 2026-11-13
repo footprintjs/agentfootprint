@@ -196,7 +196,7 @@ Defined in: [src/provider-contract/types.ts:50](https://github.com/footprintjs/a
 
 `role: 'tool'` only: the call did not complete, as the dispatch recorded it (`callOutcomeOf`). `'refused'`: stopped before it ran, or it ran and declared `'denied'`.
 `'failed'`: it threw, its result was withheld, or it declared `'failure'` / `'invalid'`. Absent: it completed.
-Not whether `execute` was entered. Read by `checkin.ts` · `buildTrail`, never from `content`; never sent to a provider.
+Not whether `execute` was entered. Never derived from `content`; read by `checkin.ts` · `buildTrail`; never sent to a provider.
 
 ***
 

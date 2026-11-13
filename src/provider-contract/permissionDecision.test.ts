@@ -46,6 +46,12 @@ describe('readPermissionDecision', () => {
     expect(quote(null)).toMatch(/got no decision$/);
     expect(quote({ result: null })).toMatch(/got null$/);
     expect(quote({ result: 7 })).toMatch(/got a number$/);
+    expect(quote({ result: new String('allow') })).toMatch(/got an object$/);
+    expect(quote({ result: { allow: true } })).toMatch(/got an object$/);
+    expect(quote({ result: ['allow'] })).toMatch(/got an array$/);
+    const revoked = Proxy.revocable([], {});
+    revoked.revoke();
+    expect(quote({ result: revoked.proxy })).toMatch(/got an object$/);
     expect(quote({ result: 'x'.repeat(500) }).length).toBeLessThan(200);
   });
 

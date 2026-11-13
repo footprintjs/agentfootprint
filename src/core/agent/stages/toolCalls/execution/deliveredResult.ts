@@ -20,7 +20,7 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { UNSCOPED_RUN } from '../helpers/unscopedRun.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
-import { type SettledCall, outcomeField } from './callOutcome.js';
+import { type DispatchSettlement, outcomeField } from './callOutcome.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -75,7 +75,7 @@ export function landCallResult(
   const hasNegativeNote = frame.delivery.resultStr !== deliveredResult;
   // How this call settled, said once: the procedure step and the committed
   // message's `outcome` read the same facts.
-  const settled: SettledCall = {
+  const settled: DispatchSettlement = {
     ran: frame.execution.executed && !frame.execution.denied,
     clean: !frame.outcome.error && !frame.execution.ceilingRefused,
     ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),

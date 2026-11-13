@@ -12,7 +12,12 @@
  * committed tool message (`LLMMessage.outcome`, stripped before any provider
  * sees it) and `core/checkin.ts` · `buildTrail` reads the field. A host's
  * notice standing in for a result (`LLMMessage.toolResultOrigin`) is not a
- * completed call either, so it reads not ok.
+ * completed call either, so it reads not ok. A message with no mark (a
+ * completed call, and every message of a history stored by an earlier
+ * version) is still read by the earlier text test (`core/trailBeforeOutcomeMarker.ts`), so a stored refusal
+ * reads as it did before the upgrade, and a completed result that opens with
+ * a refusal form still reads not ok, on the careful side. (A stored host
+ * notice carrying `toolResultOrigin` is the one row that reads differently.)
  * A tool's DECLARED status (an effects envelope with `status: 'failure'`)
  * counts; an undeclared `{"status":"failed"}` in a plain result is the tool's
  * words, which the trail does not parse.
@@ -83,6 +88,21 @@ async function trailAndWire() {
   return { trail: out.checkIn.evidence.trail, wire };
 }
 
+function stored(id: string, content: string): LLMMessage {
+  return { role: 'tool', toolCallId: id, toolName: 'lookup', content };
+}
+
+async function trailOf(history: LLMMessage[]) {
+  const evidence = await standardEvidenceAssembler({
+    tool: { name: 'wire_money', description: 'send money' },
+    args: {},
+    iteration: 2,
+    history,
+    scorer: () => [],
+  });
+  return evidence.trail?.toolCalls;
+}
+
 describe('the check-in trail', () => {
   it('reads ok from how each call settled, not from its first words', async () => {
     const { trail } = await trailAndWire();
@@ -90,7 +110,7 @@ describe('the check-in trail', () => {
       { name: 'lookup', ok: false }, // threw
       { name: 'verify', ok: false }, // declared status 'failure'
       { name: 'plain', ok: true }, // returned; an undeclared status is the tool's words
-      { name: 'echo', ok: true }, // returned text that only LOOKS like a refusal
+      { name: 'echo', ok: false }, // unmarked, but opens with a refusal form: the careful side
       { name: 'blocked', ok: false }, // refused by a middleware before it ran
     ]);
   });
@@ -101,6 +121,46 @@ describe('the check-in trail', () => {
     // completed, so an unstripped marker would be on it.
     expect(wire[1]).toContain('connection refused');
     expect(wire[1]).not.toContain('"outcome"');
+  });
+
+  it('a history stored before the mark reads its refusals as it did before the upgrade', async () => {
+    // The reviewer's probe: no message carries `outcome`, as in every
+    // checkpoint written by an earlier version.
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'pay' },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: ['a', 'b', 'c', 'd'].map((id) => ({ id, name: 'lookup', args: {} })),
+      },
+      stored('a', '[permission denied: needs a supervisor]'),
+      stored('b', 'declined by human: no'),
+      stored('c', "credential error: 'bank'"),
+      stored('d', "[authorization required: 'bank' — a person must consent]"),
+    ];
+    expect(await trailOf(history)).toEqual([
+      { name: 'lookup', ok: false },
+      { name: 'lookup', ok: false },
+      { name: 'lookup', ok: false },
+      { name: 'lookup', ok: true }, // the earlier reader did not match the bracket form either
+    ]);
+  });
+
+  it('a marked refusal reads not ok, an unmarked plain result reads ok', async () => {
+    const history: LLMMessage[] = [
+      { role: 'user', content: 'pay' },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: ['m', 'p'].map((id) => ({ id, name: 'lookup', args: {} })),
+      },
+      { ...stored('m', 'The call could not be authorized.'), outcome: 'refused' },
+      stored('p', 'sunny'),
+    ];
+    expect(await trailOf(history)).toEqual([
+      { name: 'lookup', ok: false }, // its words do not say so; its mark does
+      { name: 'lookup', ok: true },
+    ]);
   });
 
   it("a host's notice in place of a result reads not ok", async () => {

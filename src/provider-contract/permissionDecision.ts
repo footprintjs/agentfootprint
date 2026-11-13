@@ -1,8 +1,8 @@
 /**
  * What did a permission checker's ANSWER mean? `readPermissionDecision` is THE
  * ONE READER of a checker's answer. (Whether the checker is asked at all is
- * `types.ts` · `checkerGoverns`; it stays there because `types.ts` is a
- * zero-import leaf the skill-graph fence allow-lists.)
+ * `types.ts` · `checkerGoverns`; it stays there because `types.ts` is an
+ * allow-listed leaf of the skill-graph fence, which must gain no import.)
  *
  * Why it exists: a checker is a port, and what comes back through it is not
  * always what its type says. A remote policy service's JSON cast to
@@ -62,7 +62,18 @@ export function readPermissionDecision(decision: unknown): PermissionReading {
 function describeAnswer(decision: unknown, result: unknown): string {
   if (typeof decision !== 'object' || decision === null) return 'no decision';
   if (result === undefined) return 'no result';
-  if (typeof result !== 'string') return result === null ? 'null' : `a ${typeof result}`;
+  if (typeof result !== 'string') return kindOf(result);
   const quoted = result.length > QUOTED_MAX ? `${result.slice(0, QUOTED_MAX)}…` : result;
   return `'${quoted}'`;
+}
+
+/** A non-string answer by its kind, with its article: "an object", "an array", "a number". */
+function kindOf(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value !== 'object') return `a ${typeof value}`;
+  try {
+    return Array.isArray(value) ? 'an array' : 'an object';
+  } catch {
+    return 'an object'; // a revoked Proxy throws on `Array.isArray`; it is still an object
+  }
 }
