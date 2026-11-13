@@ -47,7 +47,7 @@ export interface LandedTypedAnswer {
 }
 
 /** What a reader hands {@link landedTypedAnswer}: a message, as history or a record holds it. */
-export interface AnswerCarrier {
+export interface TypedAnswerCandidate {
   readonly role: string;
   readonly content: unknown;
   readonly toolChars?: unknown;
@@ -69,7 +69,7 @@ export function isAnswerTo(landed: unknown, requestId: string): landed is Landed
 }
 
 /** The ask the library's mark names, or `undefined` when the message carries no well-formed mark. */
-function markedRequestOf(message: AnswerCarrier): string | undefined {
+function markedRequestOf(message: TypedAnswerCandidate): string | undefined {
   if (!own(message, 'answersAsk')) return undefined;
   const mark = message.answersAsk;
   if (!object(mark)) return undefined;
@@ -78,7 +78,7 @@ function markedRequestOf(message: AnswerCarrier): string | undefined {
 }
 
 /** `JSON.parse` of the content, or `undefined` for text that is not JSON. */
-function parsedContentOf(message: AnswerCarrier & { readonly content: string }): unknown {
+function parsedContentOf(message: TypedAnswerCandidate & { readonly content: string }): unknown {
   try {
     return JSON.parse(message.content);
   } catch {
@@ -96,7 +96,7 @@ function parsedContentOf(message: AnswerCarrier & { readonly content: string }):
  * passes it (the evidence index reads only the tool's own bytes, through its
  * bounded reader); the default is `JSON.parse` of the whole content.
  */
-export function landedTypedAnswer<M extends AnswerCarrier>(
+export function landedTypedAnswer<M extends TypedAnswerCandidate>(
   message: M,
   read: (marked: M & { readonly content: string }) => unknown = parsedContentOf,
 ): LandedTypedAnswer | undefined {

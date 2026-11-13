@@ -10,7 +10,7 @@ import {
 } from './inputRequest/response.js';
 export type { TimeAnswerContext } from './inputRequest/response.js';
 import { hasDeclaredTimeReply } from '../time/replyForm.js';
-import { landedTypedAnswer, type AnswerCarrier } from './typedAnswer.js';
+import { landedTypedAnswer, type TypedAnswerCandidate } from './typedAnswer.js';
 
 /** Typed missing-input values. Collection is distinct from permission or consent. */
 export type InputValue = string | number | boolean;
@@ -392,7 +392,7 @@ export interface AnsweredAsk {
 export function repeatOf(
   declaration: InputRequestDeclaration,
   answered: AnsweredAsk | undefined,
-  history: readonly AnswerCarrier[],
+  history: readonly TypedAnswerCandidate[],
 ): InputRepeat | undefined {
   if (answered === undefined || answered.id !== declaration.id) return undefined;
   const previousAnswer = landedAnswer(declaration.fields, answered.requestId, history);
@@ -402,7 +402,7 @@ export function repeatOf(
 function landedAnswer(
   fields: readonly InputField[],
   requestId: string,
-  history: readonly AnswerCarrier[],
+  history: readonly TypedAnswerCandidate[],
 ): Record<string, InputValue> | undefined {
   for (let i = history.length - 1; i >= 0; i--) {
     // Only an answer the library landed and marked: a tool result shaped like
