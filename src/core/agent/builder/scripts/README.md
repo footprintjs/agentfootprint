@@ -1,3 +1,5 @@
+**Map** — resolves the explicitly declared script-attachment policy.
+
 # scripts
 
 The script attachment declaration resolves exactly one submission-record policy.

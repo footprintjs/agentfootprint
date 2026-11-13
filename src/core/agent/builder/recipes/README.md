@@ -1,3 +1,5 @@
+**Map** — applies declared setup compositions with their provenance and conflict rules.
+
 # Builder recipe application
 
 `apply.ts` owns synchronous application, recursion and duplicate refusals, stack

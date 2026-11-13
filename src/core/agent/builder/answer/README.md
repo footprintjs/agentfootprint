@@ -1,3 +1,5 @@
+**Map** — declares the single answer-limit attachment arm before a run.
+
 # answer
 
 The answer-limit declaration arms exactly one record-composed coverage attachment.

@@ -33,7 +33,7 @@ export function configureOutputFallback<T>(
   return original;
 }
 
-export function assertOutputFallbackCoherent(self: OutputFallbackPort): void {
+export function assertOutputFallbackCoherent(self: Readonly<OutputFallbackPort>): void {
   const cfg = self.outputFallbackCfg;
   if (cfg === undefined) return;
   if (!self.outputSchemaParser) {
@@ -49,9 +49,6 @@ export function assertOutputFallbackCoherent(self: OutputFallbackPort): void {
   // misconfiguration that would only surface AFTER the agent loop had
   // already failed, which is the one moment it exists to survive.
   if (cfg.hasCanned) {
-    validateCannedAgainstSchema(
-      cfg.canned,
-      self.outputSchemaParser as OutputSchemaParser<unknown>,
-    );
+    validateCannedAgainstSchema(cfg.canned, self.outputSchemaParser as OutputSchemaParser<unknown>);
   }
 }

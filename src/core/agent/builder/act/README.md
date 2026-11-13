@@ -1,3 +1,5 @@
+**Map** — validates the declared posture before attaching its window and middleware.
+
 # act
 
 The posture block validates all declarations before attaching any rule through the existing builder doors.

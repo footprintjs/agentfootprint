@@ -1,3 +1,5 @@
+**Map** — admits context declarations and records their registration provenance.
+
 # injections
 
 Injection registration owns declaration checks, source attribution and registration order.

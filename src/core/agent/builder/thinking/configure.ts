@@ -14,9 +14,7 @@ export function setThinkingBudget(
   }
   if (!Number.isFinite(opts.budget) || opts.budget <= 0) {
     throw new Error(
-      `AgentBuilder.thinking: budget must be a positive finite number, got ${String(
-        opts.budget,
-      )}.`,
+      `AgentBuilder.thinking: budget must be a positive finite number, got ${String(opts.budget)}.`,
     );
   }
   self.thinkingBudgetValue = opts.budget;

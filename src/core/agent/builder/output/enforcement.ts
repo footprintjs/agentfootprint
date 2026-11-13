@@ -37,7 +37,7 @@ export interface OutputEnforcementPort {
 }
 
 export function resolveOutputEnforcement(
-  self: OutputEnforcementPort,
+  self: Readonly<OutputEnforcementPort>,
   servedSchema: Readonly<Record<string, unknown>> | undefined,
 ): ResolvedOutputEnforcement | undefined {
   const parser = self.outputSchemaParser;
@@ -56,8 +56,7 @@ export function resolveOutputEnforcement(
     if (toolNames.length > 0)
       reasons.push(`registers ${toolNames.length} tool(s) (${toolNames.join(', ')})`);
     if (self.toolProviderRef !== undefined) reasons.push('has a .toolProvider()');
-    if (skillCount > 0)
-      reasons.push(`has ${skillCount} skill(s), which reach the model as tools`);
+    if (skillCount > 0) reasons.push(`has ${skillCount} skill(s), which reach the model as tools`);
     if (self.selfExplainConfig !== undefined)
       reasons.push('has .selfExplain(), which attaches trace tools');
     if (reasons.length > 0) {

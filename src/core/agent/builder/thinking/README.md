@@ -1,3 +1,5 @@
+**Map** — validates the declared finite positive thinking budget.
+
 # Builder thinking declaration
 
 `configure.ts` validates and records one positive finite request-side thinking

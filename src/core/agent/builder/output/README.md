@@ -1,3 +1,7 @@
+**Mixed** — declares output contracts and chooses their model-facing representation.
+Map: `retries.ts`, `fallback.ts` and `schema.ts` validate the requested contract.
+Lens: `schema.ts` selects its instruction and `enforcement.ts` resolves its wire format.
+
 # Output setup
 
 Output retry validation. Preserve the zero default, integer refusal and stated ten-turn ceiling. The helper and constant are moved together; adjacent tests cover the boundaries.

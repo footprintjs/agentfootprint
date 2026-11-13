@@ -1,3 +1,5 @@
+**Map** — validates the per-run resolver and iteration-budget declarations.
+
 # Builder run settings
 
 `configure.ts` declares the single per-run configuration resolver.

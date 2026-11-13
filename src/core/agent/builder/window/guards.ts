@@ -34,7 +34,7 @@ export function assertDistinctSummarizer(
 }
 
 export function assertWindowNotSet(
-  self: WindowConflictPort,
+  self: Readonly<WindowConflictPort>,
   door: 'window' | 'compaction' | 'act',
 ): void {
   const existing = self.windowStrategyValue;

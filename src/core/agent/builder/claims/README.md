@@ -1,3 +1,5 @@
+**Map** — validates and retains the declared answer-to-evidence claim contract.
+
 # claims
 
 The claim declaration validates the exact entity-field join without normalizing or copying it.

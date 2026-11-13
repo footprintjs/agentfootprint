@@ -1,3 +1,5 @@
+**Map** — validates the one declared window strategy and its summarizer coherence.
+
 # Builder window declaration
 
 `configure.ts` installs either the explicit strategy or compaction strategy on

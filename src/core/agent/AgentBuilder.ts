@@ -1016,18 +1016,12 @@ export class AgentBuilder {
    */
   private assertNoWindowStrategy(door: 'window' | 'compaction' | 'act'): void {
     assertWindowNotSet(
-      livePort<WindowConflictPort>({
+      livePort<Readonly<WindowConflictPort>>({
         windowStrategyValue: {
           get: () => this.windowStrategyValue,
-          set: (value) => {
-            this.windowStrategyValue = value;
-          },
         },
         windowStrategyDoor: {
           get: () => this.windowStrategyDoor,
-          set: (value) => {
-            this.windowStrategyDoor = value;
-          },
         },
       }),
       door,
@@ -2578,18 +2572,12 @@ export class AgentBuilder {
    */
   private assertOutputFallbackCoherent(): void {
     assertOutputFallbackCoherent(
-      livePort<OutputFallbackPort>({
+      livePort<Readonly<OutputFallbackPort>>({
         outputFallbackCfg: {
           get: () => this.outputFallbackCfg,
-          set: (value) => {
-            this.outputFallbackCfg = value;
-          },
         },
         outputSchemaParser: {
           get: () => this.outputSchemaParser,
-          set: (value) => {
-            this.outputSchemaParser = value;
-          },
         },
       }),
     );
@@ -3088,69 +3076,39 @@ export class AgentBuilder {
     servedSchema?: Readonly<Record<string, unknown>>,
   ): ResolvedOutputEnforcement | undefined {
     return resolveOutputEnforcement(
-      livePort<OutputEnforcementPort>({
+      livePort<Readonly<OutputEnforcementPort>>({
         outputSchemaParser: {
           get: () => this.outputSchemaParser,
-          set: (value) => {
-            this.outputSchemaParser = value;
-          },
         },
         outputSchemaStrategy: {
           get: () => this.outputSchemaStrategy,
-          set: (value) => {
-            this.outputSchemaStrategy = value;
-          },
         },
         registry: { get: () => this.registry },
         injectionList: { get: () => this.injectionList },
         toolProviderRef: {
           get: () => this.toolProviderRef,
-          set: (value) => {
-            this.toolProviderRef = value;
-          },
         },
         selfExplainConfig: {
           get: () => this.selfExplainConfig,
-          set: (value) => {
-            this.selfExplainConfig = value;
-          },
         },
         outputSchemaJson: {
           get: () => this.outputSchemaJson,
-          set: (value) => {
-            this.outputSchemaJson = value;
-          },
         },
         findingsValue: {
           get: () => this.findingsValue,
-          set: (value) => {
-            this.findingsValue = value;
-          },
         },
         opts: { get: () => this.opts },
         negativeClaimsConfig: {
           get: () => this.negativeClaimsConfig,
-          set: (value) => {
-            this.negativeClaimsConfig = value;
-          },
         },
         outputSchemaRetries: {
           get: () => this.outputSchemaRetries,
-          set: (value) => {
-            this.outputSchemaRetries = value;
-          },
         },
         outputFallbackCfg: {
           get: () => this.outputFallbackCfg,
-          set: (value) => {
-            this.outputFallbackCfg = value;
-          },
         },
         answerValidationConfig: {
           get: () => this.answerValidationConfig,
-          set: (value) => {
-            this.answerValidationConfig = value;
-          },
         },
       }),
       servedSchema,

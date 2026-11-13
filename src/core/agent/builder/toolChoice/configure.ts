@@ -17,9 +17,7 @@ export function configureToolChoice(
     );
   }
   if (options === null || typeof options !== 'object') {
-    throw new Error(
-      `AgentBuilder.toolChoice: expected an options object, got ${typeof options}.`,
-    );
+    throw new Error(`AgentBuilder.toolChoice: expected an options object, got ${typeof options}.`);
   }
   const classifier = options.classifier;
   if (

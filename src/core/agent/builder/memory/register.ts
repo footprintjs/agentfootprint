@@ -20,10 +20,7 @@ export function registerMemory<TReceiver extends MemoryPort>(
   // `summarize` strategy — is held to the same separate-instance rule as
   // `.compaction()`. `defineMemory` cannot make this check: it has never
   // heard of an agent. It declares the billing, this reads it (9.14.0).
-  self.assertSummarizerIsNotTheAgentItself(
-    definition.billing,
-    `Agent.memory('${definition.id}')`,
-  );
+  self.assertSummarizerIsNotTheAgentItself(definition.billing, `Agent.memory('${definition.id}')`);
   self.memoryList.push(definition);
   return original;
 }

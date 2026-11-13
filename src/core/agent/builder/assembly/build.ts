@@ -207,9 +207,7 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
     }
   }
   const selfExplainBinding =
-    selfExplain && self.selfExplainConfig
-      ? selfExplain.binding(self.selfExplainConfig)
-      : undefined;
+    selfExplain && self.selfExplainConfig ? selfExplain.binding(self.selfExplainConfig) : undefined;
   let injections =
     selfExplain && selfExplainBinding
       ? [...self.injectionList, selfExplain.skill(self.selfExplainConfig!)]
@@ -259,11 +257,7 @@ export function assembleAgent<TAgent extends ConstructedAgent>(
   injections = checkSteps(self, injections, opts);
   const toolProvider =
     selfExplain && selfExplainBinding
-      ? selfExplain.toolProvider(
-          selfExplainBinding,
-          self.selfExplainConfig!,
-          self.toolProviderRef,
-        )
+      ? selfExplain.toolProvider(selfExplainBinding, self.selfExplainConfig!, self.toolProviderRef)
       : self.toolProviderRef;
   // A skill may claim the `read_skill` delivery channel only if `read_skill` is
   // what activates it — otherwise its body reaches the model through no channel at

@@ -1,3 +1,7 @@
+**Mixed** — assembles the configured agent and its served setup.
+Map: `contracts.ts`, `deferred.ts`, `steps.ts` and `build.ts` validate and wire declarations.
+Lens: `build.ts` and `steps.ts` select the declared instructions and model-facing guidance.
+
 # Agent assembly
 
 Runs the original whole-agent checks in order, then calls the facade constructor

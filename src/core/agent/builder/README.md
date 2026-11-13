@@ -1,3 +1,8 @@
+**Mixed** — setup declarations, model-facing setup choices and live bindings.
+Map: the configuration owners declare the agent that can be built.
+Lens: `output/`, `findings/`, `ontology/` and `assembly/` choose model-facing setup.
+Support: `livePort.ts` binds existing fields without copying their values.
+
 # AgentBuilder setup owners
 
 The public `AgentBuilder` facade keeps its constructor, fluent method signatures,

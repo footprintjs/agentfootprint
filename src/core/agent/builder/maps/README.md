@@ -1,3 +1,5 @@
+**Map** — validates the kernel declaration and its mounted graph-member plan.
+
 # maps
 
 The map kernel declaration validates its policy and resolves the plan only against the final mounted members.

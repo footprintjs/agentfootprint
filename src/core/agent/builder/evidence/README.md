@@ -1,3 +1,5 @@
+**Map** — resolves the explicitly requested evidence-gate declaration.
+
 # evidence
 
 The evidence declaration resolves and refuses a single gate at the call site.

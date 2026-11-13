@@ -1,3 +1,5 @@
+**Map** — validates memory registration and its declared summarizer pairing.
+
 # memory
 
 Memory registration owns identity and separate-summarizer checks before adding the original definition.

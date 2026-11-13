@@ -1,3 +1,5 @@
+**Map** — resolves and validates the explicitly declared clock options.
+
 # time
 
 The time declaration validates one explicit clock configuration without reading a clock.
