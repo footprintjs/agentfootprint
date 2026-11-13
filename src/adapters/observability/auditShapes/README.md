@@ -21,3 +21,14 @@ an identical duplicate and an unregistered key must both fail. The type-only
 `CheckedEventGroups` constraint in the facade restores those construction guards
 without adding runtime work. `test/architecture/layering.test.ts` pins the sealed
 import boundary and the absence of a competing `index.ts`.
+
+The same test parses the real facade and pins its spread calls, in order, to the
+checked tuple. Only spread calls may enter that object; an extra unlisted group
+or inline property fails, including when TypeScript alone accepts it. Controls
+also allow an eighth group when both lists include it. The compiler controls
+assert TS1360 and insert into the named `outcomesShapes` function.
+
+The recursive constraint currently checks seven groups; excessive expansion can
+hit TypeScript's instantiation limit and fails compilation rather than silently
+skipping groups. The boundary suite reads production `.ts` sources and pins the
+exact competing name `index.ts`; it does not claim other extensions are checked.
