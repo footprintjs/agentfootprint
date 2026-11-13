@@ -1437,8 +1437,7 @@ export const LIBRARY_WORDS: Readonly<Record<string, true>> = WORDS;
 /** The field names the library's payload types declare. */
 export const FIELD_NAMES: Readonly<Record<string, true>> = FIELDS;
 
-const has = (record: Readonly<Record<string, true>>, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(record, key);
+const has = (record: Readonly<Record<string, true>>, key: string) => Object.hasOwn(record, key);
 
 /** What one string is served as — itself when it is a library word, else the placeholder. */
 export function servedString(value: string): string {

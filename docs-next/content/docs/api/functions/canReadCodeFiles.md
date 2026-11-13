@@ -6,7 +6,7 @@ title: canReadCodeFiles
 
 > **canReadCodeFiles**(`session`): `session is CodeSession & Required<Pick<CodeSession, "readFile">>`
 
-Defined in: [src/provider-contract/types.ts:1307](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1307)
+Defined in: [src/provider-contract/types.ts:1271](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1271)
 
 Can this session read files back out? Read the member, never the adapter's name.
 

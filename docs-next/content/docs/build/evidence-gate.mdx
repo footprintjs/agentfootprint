@@ -120,12 +120,19 @@ they were not invented.
 
 So are the fields a person typed into a typed ask (`requestInput`), but only
 the answer the library itself landed through `agent.resume()`. The library
-marks that message (`LLMMessage.answersAsk`, never sent to a model). A tool
+marks that message (`LLMMessage.answersAsk`, a `TypedAnswerMark`, never sent
+to a model). A tool
 result that only looks like an answer (`{"status":"input_received", …}` from
-your own tool, a remote MCP server or a page) is an ordinary tool result. A
-conversation continued with `continueFrom` or `resumeOnError` loses the mark,
-because an earlier run asked those questions: there, its answers are checked
-as tool results.
+your own tool, a remote MCP server or a page) is an ordinary tool result.
+`agent.followUp()` keeps the mark: it continues the agent's own last run, so
+an earlier turn's answer is still the person's words in the next turn. A
+conversation you hand in loses the mark (`run({ continueFrom })`,
+`resumeOnError()`, a hosted session store), because it was in your hands, so
+its answers are checked as tool results there. Two things are trusted as
+stored: a pause checkpoint keeps the mark, and a compaction summary's stored
+`foldedExempt` stays exempt, so a typed answer that was folded away before
+you stored the conversation still counts after `continueFrom`. Keep those
+stores as safe as the run itself.
 
 Spelling differences are normalised on both sides, which is where a naive
 implementation produces its worst false positives: `41,200` in prose matches the

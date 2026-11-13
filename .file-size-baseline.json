@@ -41,7 +41,7 @@
     "src/core/agent/buildDynamicAgentChart.ts": 1086,
     "src/core/agent/buildToolRegistry.ts": 603,
     "src/core/agent/evidence/evidenceIndex.ts": 714,
-    "src/core/agent/evidence/README.md": 685,
+    "src/core/agent/evidence/README.md": 640,
     "src/core/agent/findings/answerText.ts": 918,
     "src/core/agent/findings/ledger.ts": 613,
     "src/core/agent/findings/README.md": 1173,

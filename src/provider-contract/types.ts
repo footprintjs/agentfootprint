@@ -1,19 +1,17 @@
 /**
  * provider-contract/types — the Ports of the hexagonal architecture.
  *
- * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters
- *          (Cockburn, 2005).
+ * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters (Cockburn, 2005).
  * Role:    Contracts for every external dependency the library reaches for:
  *          LLM providers, memory stores, permission checkers, pricing tables.
  * Emits:   N/A (interfaces only).
- *
- * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy,
- * ...) implement these contracts. `core/` and `core-flow/` depend only on
- * these interfaces — never on concrete adapters.
+ * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy, ...) implement
+ * these contracts. `core/` and `core-flow/` depend only on them, never on an adapter.
  */
 
 import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
+export type { TypedAnswerMark } from './typedAnswerMark.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
@@ -237,42 +235,8 @@ export interface LLMMessage {
    * `stripFrameworkFields` removes it with the other framework fields.
    */
   readonly foldedExempt?: readonly string[];
-  /**
-   * THE LIBRARY'S MARK ON A PERSON'S TYPED ANSWER — on the `role: 'tool'`
-   * message a typed ask's answer (`requestInput`) landed as, the ask it
-   * answers: `requestId` is the request `Agent.resume` checked the answer
-   * against, for the ask this run raised.
-   *
-   * Why a field and not the content's shape: any tool can return text shaped
-   * like a landed answer (`{"status":"input_received", …}`), and the values
-   * of a real answer count as the PERSON's words (the evidence gate exempts
-   * them, a compaction summary carries them in `foldedExempt`, a re-ask
-   * quotes them back). The one reader, `tools/typedAnswer.ts` ·
-   * `landedTypedAnswer`, counts a message only when it carries this mark AND
-   * its content is the answer to the ask the mark names; a result of the same
-   * shape without the mark is an ordinary tool result.
-   *
-   * Written by one door, `core/agent/stages/toolCalls/resume/plain.ts` ·
-   * `resumePlain`, and never copied from a tool's output: the library builds
-   * every tool message from named fields. A stored conversation handed back
-   * to a new run (`run({ continueFrom })`, `resumeOnError`) loses it
-   * (`tools/typedAnswer.ts` · `withoutTypedAnswerMarks`): an earlier run
-   * asked that question, so its answer reads there as a tool result. A
-   * history written before this field existed carries no mark, and its typed
-   * answers read as tool results too.
-   *
-   * **Never reaches a provider.** `core/agent/composeRequest.ts` ·
-   * `stripFrameworkFields` removes it with the other framework fields.
-   *
-   * @example
-   * ```ts
-   * // agent.resume(checkpoint, { requestId: 'r1', values: { due: '2031-05-05' } }) lands:
-   * { role: 'tool', toolCallId: 'c1', toolName: 'ask_due',
-   *   content: '{"status":"input_received","requestId":"r1",…}',
-   *   answersAsk: { requestId: 'r1' } }
-   * ```
-   */
-  readonly answersAsk?: { readonly requestId: string };
+  /** The library's mark on a person's typed answer: see {@link TypedAnswerMark}. */
+  readonly answersAsk?: import('./typedAnswerMark.js').TypedAnswerMark;
 }
 
 /**

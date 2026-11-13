@@ -19,10 +19,18 @@
  * The mark lives OUTSIDE the content, so a tool cannot write it: the library
  * builds every tool message from named fields, never from a tool's output.
  * `core/agent/composeRequest.ts` · `stripFrameworkFields` keeps it off every
- * request a provider sees, with the library's other fields. A stored
- * conversation loaded again goes through {@link withoutTypedAnswerMarks}: an
- * earlier run asked that question, so in the continued run its answer reads as
- * an ordinary tool result.
+ * request a provider sees, with the library's other fields. A conversation a
+ * caller hands to a new run (`run({ continueFrom })`, `resumeOnError`, a
+ * hosted session store) goes through {@link withoutTypedAnswerMarks}: it was in
+ * the caller's hands, so a mark in it may not be the library's. `followUp()`
+ * keeps the marks: its conversation is read from the agent's own last run and
+ * never leaves the library (`core/agent/runtime/conversation/liveConversation.ts`).
+ *
+ * Trusted as stored, today: a pause checkpoint carries the mark as stored, and
+ * a stored summary's `foldedExempt` is read as stored (including a value a
+ * lookalike put there under an earlier version). Both rest on the store being
+ * trusted; a mark only the library can have written is a planned change of
+ * its own.
  *
  * @example
  * ```ts
@@ -108,13 +116,15 @@ export function landedTypedAnswer<M extends TypedAnswerCandidate>(
 }
 
 /**
- * The same history without the library's typed-answer mark, for a stored
- * conversation handed back to a new run (`run({ continueFrom })`,
- * `resumeOnError`). The mark says THIS run asked the question and its answer
- * came back through the library; a stored conversation was asked by an
- * earlier run and has been in the caller's hands since, so its answers read
- * as ordinary tool results here. Only the mark goes: every other field and
- * every message stays. A history with no mark is returned by reference.
+ * The same history without the library's typed-answer mark, for a
+ * conversation a caller hands to a new run (`run({ continueFrom })`,
+ * `resumeOnError`, a hosted session store). The mark says the library asked
+ * the question and landed the answer; a handed-in conversation has been in
+ * the caller's hands, where anyone could have written one, so its answers
+ * read as ordinary tool results here. `followUp()` does not come through here:
+ * its conversation never left the library. Only the mark goes: every other
+ * field and every message stays. A history with no mark is returned by
+ * reference.
  *
  * @example
  * ```ts
