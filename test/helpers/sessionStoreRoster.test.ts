@@ -27,11 +27,50 @@ export function openLocal(value: string): SessionLifecycle;
 export function openLocal(value?: string): SessionLifecycle { throw new Error('not executed'); }`,
     );
     source(
+      'derived.ts',
+      `import type { SessionLifecycle as Store } from './ports.js';
+interface RemoteStore { close(): void; }
+interface RemoteStore extends Store {}
+export type RemoteAlias = RemoteStore;`,
+    );
+    source(
+      'bridge.ts',
+      "export * from './loop.js'; export type { RemoteAlias as RemotePort } from './derived.js';",
+    );
+    source('loop.ts', "export * from './bridge.js';");
+    source(
       'nested/deeper/remote.ts',
-      `import type { SessionLifecycle as Store } from '../../ports.js';
-interface RemoteStore extends Store { close(): void; }
-type RemoteAlias = RemoteStore;
-export function remoteStore(): RemoteAlias { throw new Error('not executed'); }`,
+      `import type { RemotePort as Store } from '../../bridge.js';
+export function remoteStore(): Store { throw new Error('not executed'); }`,
+    );
+    source(
+      'namespaced.ts',
+      `import type * as Ports from './ports.js';
+export function namespaceStore(): Ports.SessionLifecycle { throw new Error('not executed'); }`,
+    );
+    source(
+      'unrelated.ts',
+      `interface SessionLifecycle { send(): void; }
+export function spoofSessions(): SessionLifecycle { throw new Error('not executed'); }
+type First = Second;
+type Second = First;
+export function cyclicSessions(): First { throw new Error('not executed'); }`,
+    );
+    source(
+      'shadow.ts',
+      "export * from './ports.js'; export interface SessionLifecycle { send(): void; }",
+    );
+    source(
+      'shadow-consumer.ts',
+      `import type { SessionLifecycle } from './shadow.js';
+export function shadowSessions(): SessionLifecycle { throw new Error('not executed'); }`,
+    );
+    source(
+      'generic.ts',
+      `import type { SessionLifecycle as Result } from './ports.js';
+export function echoSessions<Result>(value: Result): Result { return value; }
+type Echo<Result> = Result;
+export function aliasShadowSessions(): Echo<number> { throw new Error('not executed'); }`,
     );
     source(
       'reply.ts',
@@ -56,7 +95,7 @@ export function commentedSessions(): SessionLifecycle { throw new Error('not exe
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
   it('finds direct and imported derived ports recursively, independent of factory names', () => {
-    expect([...factories].sort()).toEqual(['openLocal', 'remoteStore']);
+    expect([...factories].sort()).toEqual(['namespaceStore', 'openLocal', 'remoteStore']);
   });
 
   it('ignores void replies, unrelated types, unchecked returns, comments and fixture sources', () => {
@@ -68,17 +107,22 @@ export function commentedSessions(): SessionLifecycle { throw new Error('not exe
     expect(factories.has('nullableSessions')).toBe(false);
     expect(factories.has('commentedSessions')).toBe(false);
     expect(factories.has('ignoredSessions')).toBe(false);
+    expect(factories.has('spoofSessions')).toBe(false);
+    expect(factories.has('cyclicSessions')).toBe(false);
+    expect(factories.has('shadowSessions')).toBe(false);
+    expect(factories.has('echoSessions')).toBe(false);
+    expect(factories.has('aliasShadowSessions')).toBe(false);
   });
 
   it('fails when a real nested factory has no enrolled harness', () => {
-    expect(() => assertEnrolledSessionStores(factories, ['openLocal'])).toThrow(
+    expect(() => assertEnrolledSessionStores(factories, ['namespaceStore', 'openLocal'])).toThrow(
       'remoteStore ships and is not enrolled in the battery',
     );
   });
 
   it('accepts all actual factories and refuses a vacuous census', () => {
     expect(() =>
-      assertEnrolledSessionStores(factories, ['openLocal', 'remoteStore']),
+      assertEnrolledSessionStores(factories, ['namespaceStore', 'openLocal', 'remoteStore']),
     ).not.toThrow();
     expect(() => assertEnrolledSessionStores(new Set(), [])).toThrow('scan found nothing');
   });
@@ -97,6 +141,34 @@ export function openLocal(): SessionLifecycle { throw new Error('not executed');
       );
     } finally {
       rmSync(join(root, 'collision'), { recursive: true, force: true });
+    }
+  });
+  it('requires the canonical port declaration instead of passing an empty lookup', () => {
+    expect(() => sessionStoreFactories([root], join(root, 'local.ts'))).toThrow(
+      'SessionLifecycle declaration not found',
+    );
+  });
+
+  it('resolves an explicit default port without forwarding it through export-star', () => {
+    source(
+      'defaults/port.ts',
+      "import type { SessionLifecycle } from '../ports.js'; export default interface Store extends SessionLifecycle {}",
+    );
+    source('defaults/barrel.ts', "export * from './port.js';");
+    source(
+      'defaults/direct.ts',
+      "import type Store from './port.js'; export function defaultStore(): Store { throw new Error('not executed'); }",
+    );
+    source(
+      'defaults/indirect.ts',
+      "import type Store from './barrel.js'; export function absentDefault(): Store { throw new Error('not executed'); }",
+    );
+    try {
+      expect([...sessionStoreFactories([join(root, 'defaults')], join(root, 'ports.ts'))]).toEqual([
+        'defaultStore',
+      ]);
+    } finally {
+      rmSync(join(root, 'defaults'), { recursive: true, force: true });
     }
   });
 });
