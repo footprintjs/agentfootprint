@@ -15,8 +15,10 @@
  * value is hidden; the request names the hidden arguments (`hiddenArgs`), the
  * built-in sentence says they are hidden and names them, and the decision's
  * event and stored record carry the same names. No hidden value reaches any
- * of them. What is shown, what runs and the binding of the approval to the
- * exact call are unchanged.
+ * of them (the check-in surfaces). What is shown, what runs and the binding of
+ * the approval to the exact call are unchanged. The binding of the names
+ * themselves, the changed-view refusal and the chat-interface page are pinned
+ * in `check-in-hidden-view-bound.test.ts`.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -169,7 +171,7 @@ describe('the sentence the person reads says values are hidden and names them (c
       if (!isCheckInPause(paused)) throw new Error('expected a check-in pause');
       expect(paused.checkIn.evidence.willDo).toBe(
         'Wire money. — with to=REDACTED, amount=5000, memo=rent. ' +
-          'Values hidden from this view: to. The call runs with the real values.',
+          'Values hidden from this view: `to`. The call runs with the real values.',
       );
     });
   }
@@ -255,7 +257,7 @@ describe('the decision records the names (contract 3) and the call is unchanged 
   });
 });
 
-describe('no hidden value reaches the request, the sentence, an event, the record, a log or an error (contract 4)', () => {
+describe('no hidden value reaches the request, the sentence, the check-in events, the record, a log or an error (contract 4)', () => {
   it('the marker is searched in every one of them', async () => {
     const logged: string[] = [];
     for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {

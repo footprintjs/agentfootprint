@@ -32,6 +32,7 @@ import type { RedactionPolicy } from 'footprintjs';
 import { RedactionRule } from 'footprintjs/advanced';
 
 import type { ToolArgs } from '../tools/runChain.js';
+import { frozenProjectionOf, frozenView } from '../lib/frozenCopy.js';
 
 /** The registry symbol a tool carries its arguments view under. */
 export const SHOWN_ARGS: unique symbol = Symbol.for('agentfootprint.tool.shownArgs');
@@ -88,38 +89,85 @@ export function shownArgsOf(tool: unknown, args: ToolArgs): ToolArgs {
 
 /**
  * The names of the arguments `tool`'s view hides in this call, in the order
- * of `args`; empty when the tool carries no view or the view hides nothing.
- * The ONE answer to "which values can a person or a record not see here" —
- * the check-in request (`CheckInRequest.hiddenArgs`), the decision's record
- * and the private-answer marks all ask it.
+ * of `args`; empty when the tool carries no view. The library's READING of
+ * the view, asked for a check-in (`CheckInRequest.hiddenArgs`, bound into the
+ * request id), for the arguments a page is shown (`stream.tool_start` ·
+ * `hiddenArgs`) and for the private-answer marks. `stream.tool_end`'s
+ * `changedArgKeys` answers another question (what differs from the proposal).
  *
- * Read from the VIEW, never from the shown text: a value the view replaced,
- * removed or rebuilt (a nested field hidden inside it) is hidden. A value the
- * view handed back unchanged is asked once more: the view is run on a copy in
- * which each such value is a stand-in string, and a key whose stand-in did not
- * come back is hidden too. Why: a hidden value that already equals the
- * placeholder reads unchanged, and the text alone cannot tell it from an
- * argument whose real value is the string `'REDACTED'`.
+ * A name is listed when the view's output for it differs from the input
+ * (replaced, removed, or rebuilt — a nested field hidden inside it), or when
+ * the library could not decide. A string the view handed back unchanged is
+ * asked once more, ON ITS OWN: the view runs on the arguments with that one
+ * value swapped for a stand-in string, every other value real; the name is
+ * listed when the stand-in does not come back, or the view throws. Why: a
+ * hidden value that already equals the placeholder reads unchanged, and the
+ * text alone cannot tell it from a real `'REDACTED'`; one key at a time, so a
+ * view whose choice for `to` depends on `memo` still sees the real `memo`.
+ * A value that is not a string and came back unchanged is shown as it is, so
+ * it is not listed (a view that checks a number's type is not misread).
  *
  * Example — a view hiding `to`:
  *   hiddenArgNames(tool, { to: 'acct-9', memo: 'REDACTED' })  → ['to']
  *   hiddenArgNames(tool, { to: 'REDACTED', memo: 'rent' })    → ['to']
  *
+ * What the reading cannot see: a view that is not a function of its input
+ * alone (a clock, a counter, outside state) may answer the probe differently
+ * from the call; and a placeholder that is not a string (a number, an object)
+ * equal to the real value reads as shown.
+ *
+ * @param shown the view's output for `args` when the caller already has it
+ *   (`shownArgsOf`, not a copy of it), so the view is not run again for it.
+ *
  * Names only, plain strings: no value of `args` is copied into the answer.
  */
-export function hiddenArgNames(tool: unknown, args: ToolArgs): readonly string[] {
+export function hiddenArgNames(
+  tool: unknown,
+  args: ToolArgs,
+  shown: ToolArgs = shownArgsOf(tool, args),
+): readonly string[] {
   if (!carriesArgumentView(tool)) return [];
-  const keys = Object.keys(args);
+  // A view that hands back no record shows nothing a person can read.
+  if (typeof shown !== 'object' || shown === null) return Object.keys(args);
+  const view = (tool as ShowsArgs)[SHOWN_ARGS];
+  const hidden = (key: string): boolean => {
+    if (!hasOwn(shown, key) || shown[key] !== args[key]) return true;
+    if (typeof args[key] !== 'string') return false;
+    const standIn = `\u0000agentfootprint.shownArgs.standIn:${key}`;
+    try {
+      const probe = view({ ...args, [key]: standIn });
+      return !hasOwn(probe, key) || probe[key] !== standIn;
+    } catch {
+      return true; // could not decide: listed
+    }
+  };
+  return Object.keys(args).filter(hidden);
+}
+
+/**
+ * The fields `stream.tool_start` carries for a tool whose view hides
+ * something: the view's output (frozen) and the hidden names — what a page
+ * shown to a person streams in place of the real arguments (the AG-UI
+ * adapter). Empty for a tool without a view, or a call the view hides nothing
+ * of, so those events keep their bytes. `args` should be the call's frozen
+ * copy: the view is the tool author's code and must not reach what runs.
+ *
+ * Example — a view hiding `to`:
+ *   shownFieldsOf(tool, { to: 'acct-9', amount: 5 })
+ *     → { shownArgs: { to: 'REDACTED', amount: 5 }, hiddenArgs: ['to'] }
+ */
+export function shownFieldsOf(
+  tool: unknown,
+  args: ToolArgs,
+): { readonly shownArgs?: ToolArgs; readonly hiddenArgs?: readonly string[] } {
+  if (!carriesArgumentView(tool)) return {};
   const shown = shownArgsOf(tool, args);
-  const passed = (key: string) => hasOwn(shown, key) && shown[key] === args[key];
-  const unchanged = keys.filter(passed);
-  if (unchanged.length === 0) return keys;
-  const standIn = (key: string) => `\u0000agentfootprint.shownArgs.standIn:${key}`;
-  const probe = shownArgsOf(tool, {
-    ...args,
-    ...Object.fromEntries(unchanged.map((key) => [key, standIn(key)])),
-  });
-  return keys.filter((key) => !passed(key) || !hasOwn(probe, key) || probe[key] !== standIn(key));
+  const hiddenArgs = hiddenArgNames(tool, args, shown);
+  if (hiddenArgs.length === 0) return {};
+  return {
+    shownArgs: frozenView(shown) ?? frozenProjectionOf(shown),
+    hiddenArgs: Object.freeze([...hiddenArgs]),
+  };
 }
 
 const hasOwn = (record: ToolArgs, key: string): boolean =>

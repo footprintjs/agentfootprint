@@ -105,7 +105,27 @@ export interface LLMTokenPayload {
 export interface ToolStartPayload {
   readonly toolName: string;
   readonly toolCallId: string;
+  /**
+   * The arguments as the model proposed them — the REAL values, also for a
+   * tool whose argument view hides some ({@link shownArgs}). Only the run's
+   * redaction policy masks them here.
+   */
   readonly args: Readonly<Record<string, unknown>>;
+  /**
+   * The same arguments as the tool's argument view shows them
+   * (`flowchartAsTool({ redact })`, `runbookAsTool({ redact })`) — what a page
+   * shown to a person carries instead of {@link args} (the AG-UI adapter's
+   * `TOOL_CALL_ARGS`). Present only when the view hides something
+   * ({@link hiddenArgs}); absent for every other call, whose bytes are
+   * unchanged.
+   */
+  readonly shownArgs?: Readonly<Record<string, unknown>>;
+  /**
+   * The names of the arguments that view hides, in argument order — the same
+   * reading a check-in tells the person (`core/toolShownArgs.ts` ·
+   * `hiddenArgNames`). Names only. Present only with {@link shownArgs}.
+   */
+  readonly hiddenArgs?: readonly string[];
   readonly parallelCount?: number;
   readonly protocol?: ToolProtocol;
   /**

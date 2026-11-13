@@ -1,6 +1,7 @@
 import type { ToolCallsHandlerDeps } from './contracts/handlerDeps.js';
 import { processDecisionLedger } from '../../../consentRequest.js';
 import { buildHeldAnswer } from './access/heldAnswer.js';
+import { buildHeldView } from './access/heldView.js';
 import { buildArgumentRefusal } from './access/argumentValidation.js';
 import type { AuthorizationRequiredMode } from '../../../../identity/consent.js';
 import { unconfiguredCredentialProvider } from '../../../../identity/types.js';
@@ -49,6 +50,7 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
   /** Where answered consent requests are spent — the agent's, else this process's. */
   const decisionLedger = deps.decisionLedger ?? processDecisionLedger();
   const heldAnswer = buildHeldAnswer(() => deps.toolMiddleware, decisionLedger);
+  const heldView = buildHeldView(() => resolveTool);
   const argumentRefusal = buildArgumentRefusal(toolArgValidation);
   // 8.6.0 — default `'pause'`. Consent is work waiting on a person, and every
   // other place this library needs a person stops the run and asks the caller.
@@ -376,6 +378,7 @@ export function composeToolCallOperations(deps: ToolCallsHandlerDeps) {
     turnStampOf,
     emitTransitionConflict,
     heldAnswer,
+    heldView,
     peelCall,
     resumeAsk,
     resumeCheckIn,

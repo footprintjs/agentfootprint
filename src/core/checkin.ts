@@ -11,10 +11,9 @@
  * the {@link CheckInDecision} lands as a typed record.
  *
  * This is the LEAF that owns every check-in TYPE + the pure assembly logic.
- * It has one runtime import, the `lib/frozenCopy.ts` leaf (which reads only
- * footprintjs's dev-mode flag); the rest are type-only imports of the message
- * shape + the influence-core attribution unit — so it stays cheap to import
- * and trivial to unit-test. The pause plumbing lives in
+ * Its runtime imports are `lib/frozenCopy.ts` (which reads only footprintjs's
+ * dev-mode flag) and `checkInWillDo.ts` (the `willDo` claim); the rest are
+ * type-only, so it stays cheap to import. The pause plumbing lives in
  * `core/agent/stages/toolCalls/access/checkInAdmission.ts`; the events in `events/`; the store in
  * `recorders/core/CheckInRecorder.ts`.
  *
@@ -28,6 +27,7 @@
  */
 
 import { frozenView, warnFrozenWrite } from '../lib/frozenCopy.js';
+import { buildWillDo, renderArgs, truncate } from './checkInWillDo.js';
 import type { ArtifactRef } from '../artifacts/types.js';
 import type { LLMMessage } from '../provider-contract/types.js';
 import type { AskComponent } from '../tools/askComponent.js';
@@ -38,17 +38,17 @@ import type { AttributionUnit } from '../influence-core/types.js';
 /**
  * The typed pause payload for one check-in. Rides the existing pause
  * machinery: it becomes the checkpoint's `pauseData` and is surfaced on
- * surfaced on `RunnerPauseOutcome.checkIn` (`core/pause.ts`). JSON/clone-safe.
+ * `RunnerPauseOutcome.checkIn` (`core/pause.ts`). JSON/clone-safe.
  */
 export interface CheckInRequest {
   /**
    * Names this request: the id a decision quotes
    * (`checkInApproved({ request: outcome.checkIn, by })`). Minted when the run
    * paused, unique to this pause, and bound to the exact call that runs on
-   * approval — the tool, {@link args}, the call id and the served party. A
-   * decision for any other request, or for a call that changed after the ask,
-   * is refused (`ResumeDecisionError`). An opaque fingerprint: it carries no
-   * value from the run.
+   * approval — the tool, {@link args}, the call id, the served party and
+   * {@link hiddenArgs}. A decision for any other request, or for a call that
+   * changed after the ask, is refused (`ResumeDecisionError`). An opaque
+   * fingerprint: it carries no value from the run.
    */
   readonly id: string;
   /** The tool the agent wants to run (its name). */
@@ -57,28 +57,22 @@ export interface CheckInRequest {
    * The arguments of the call, SHOWN THROUGH THE TOOL'S ARGUMENT VIEW: the
    * model's proposal, with any value the inputs layer filled (a tool's
    * `askOrAssume` `assume` rule) and any before-tool middleware rewrite
-   * applied, then the tool's view (`flowchartAsTool({ redact })`,
-   * `runbookAsTool({ redact })`). A value the view hides reads `'REDACTED'`
-   * here and its argument is named in {@link hiddenArgs}. The call runs with
-   * the REAL values, and the approval is bound to them through {@link id}: a
-   * person who approves a call with hidden values approves the real call
-   * without having seen those values. A tool without a view shows every
-   * value as it will run.
-   *
-   * @example a view hiding `to`
-   *   // args: { to: 'REDACTED', amount: 5000 }, hiddenArgs: ['to']
-   *   // on approval the tool runs with { to: 'acct-9', amount: 5000 }
+   * applied, then the tool's view. With `flowchartAsTool({ redact })` /
+   * `runbookAsTool({ redact })` a hidden value reads `'REDACTED'`; a view set
+   * by hand may show another form or leave the key out. Either way the
+   * argument is named in {@link hiddenArgs}. The call runs with the REAL
+   * values, to which the approval is bound through {@link id}. A tool without
+   * a view shows every value as it will run. Example, a view hiding `to`:
+   * `{ to: 'REDACTED', amount: 5000 }`; on approval the tool gets `to: 'acct-9'`.
    */
   readonly args: Readonly<Record<string, unknown>>;
   /**
-   * The names of the arguments the tool's view hides from {@link args}, in
-   * argument order — what a screen tells the person they cannot see. Absent
-   * when nothing is hidden. Computed from the view itself
-   * (`core/toolShownArgs.ts` · `hiddenArgNames`), never from the shown text:
-   * an argument whose real value is the string `'REDACTED'` is not listed, and
-   * a hidden one always is. Names only; no hidden value travels here. The
-   * decision's record carries the same names
-   * (`CheckInDecisionPayload.hiddenArgs`).
+   * The arguments the tool's view hides from {@link args}, by name, in argument
+   * order — what a screen tells the person they cannot see; absent when none.
+   * The library's reading of the view (`toolShownArgs.ts` · `hiddenArgNames`,
+   * which says what it cannot see), never of the shown text.
+   * Bound into {@link id} and kept with the pause; the decision's record
+   * carries this same list (`CheckInDecisionPayload.hiddenArgs`).
    */
   readonly hiddenArgs?: readonly string[];
   /**
@@ -107,16 +101,15 @@ export interface CheckInRequest {
 export interface CheckInEvidence {
   /**
    * Plain-words claim of what will happen: the tool description + the
-   * arguments as {@link CheckInRequest.args} shows them, through the tool's
-   * view. When the view hides values, the built-in assemblers end it with one
-   * fixed sentence that says so and names the hidden arguments — the call
-   * still runs with the real values, to which the approval is bound. A custom
-   * assembler writes its own words; it is handed the same names
-   * (`CheckInAssemblerInput.hiddenArgs`). Always present.
+   * arguments as {@link CheckInRequest.args} shows them. When the view hides
+   * values, the built-in assemblers end it with one fixed sentence naming them
+   * (quoted) — the call still runs with the real values, to which the approval
+   * is bound. A custom assembler is handed the same names
+   * (`CheckInAssemblerInput.hiddenArgs`) and writes its own. Always present.
    *
    * @example a view hiding `to`
    *   'Wire money. — with to=REDACTED, amount=5000. Values hidden from this
-   *   view: to. The call runs with the real values.'
+   *   view: `to`. The call runs with the real values.'
    */
   readonly willDo: string;
   /** What context this run consumed so far — one frame per context piece
@@ -514,11 +507,9 @@ export const lexicalDriverScorer: CheckInScorer = ({ tool, units }) => {
 export interface CheckInAssemblerInput {
   /** The chosen tool — `name` for citations, `description` for `willDo`. */
   readonly tool: { readonly name: string; readonly description: string };
-  /** The proposed arguments, as the tool's view shows them
-   *  ({@link CheckInRequest.args}). */
+  /** The proposed arguments, as the tool's view shows them ({@link CheckInRequest.args}). */
   readonly args: Readonly<Record<string, unknown>>;
-  /** The arguments the tool's view hides from {@link args}
-   *  ({@link CheckInRequest.hiddenArgs}); absent when nothing is hidden. */
+  /** The arguments the view hides ({@link CheckInRequest.hiddenArgs}); absent when none. */
   readonly hiddenArgs?: readonly string[];
   /** The model's stated reasoning, if any (assistant-turn text). */
   readonly intent?: string;
@@ -543,45 +534,6 @@ export type CheckInAssembler = (
 
 /** Which built-in assembler to use, by name. */
 export type EvidencePreset = 'minimal' | 'standard';
-
-const MAX_SUMMARY = 160;
-
-function truncate(s: string, max = MAX_SUMMARY): string {
-  const flat = s.replace(/\s+/g, ' ').trim();
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
-}
-
-/** Render args as a compact `k=v, k=v` string (values truncated, clone-safe). */
-function renderArgs(args: Readonly<Record<string, unknown>>): string {
-  const parts = Object.entries(args).map(([k, v]) => {
-    const val =
-      typeof v === 'string' ? v : v === null || v === undefined ? String(v) : JSON.stringify(v);
-    return `${k}=${truncate(val, 60)}`;
-  });
-  return parts.join(', ');
-}
-
-/**
- * The fixed sentence a person reads when the tool's view hides values: it says
- * that they are hidden, names them, and says what runs. Names only — the
- * hidden values never reach it.
- */
-function hiddenValuesSentence(hiddenArgs: readonly string[] | undefined): string {
-  if (hiddenArgs === undefined || hiddenArgs.length === 0) return '';
-  return `. Values hidden from this view: ${hiddenArgs.join(
-    ', ',
-  )}. The call runs with the real values.`;
-}
-
-/** Plain-words "what will happen" claim. */
-function buildWillDo(input: CheckInAssemblerInput): string {
-  const { tool, args } = input;
-  const desc = tool.description.trim() || tool.name;
-  const rendered = renderArgs(args);
-  return `${rendered ? `${desc} — with ${rendered}` : desc}${hiddenValuesSentence(
-    input.hiddenArgs,
-  )}`;
-}
 
 /**
  * Derive attribution units from the run-so-far conversation: system rules

@@ -122,13 +122,19 @@ export function buildToolSettlementOperations(
           settlement: 'not-entered',
         });
       }
-      links.emitToolStart(scope, {
-        toolName: call.name,
-        toolCallId: call.id,
-        args: links.peelCall(call).args,
-        parallelCount: settlement.size,
-        notDispatched: notDispatchedMarker(settlement.paused),
-      });
+      // The tool is resolved only for its argument view: a page that streams
+      // this bracket shows what the view shows (`stream.tool_start.shownArgs`).
+      links.emitToolStart(
+        scope,
+        {
+          toolName: call.name,
+          toolCallId: call.id,
+          args: links.peelCall(call).args,
+          parallelCount: settlement.size,
+          notDispatched: notDispatchedMarker(settlement.paused),
+        },
+        links.resolveTool(call.name).tool,
+      );
       links.emitToolEnd(
         scope,
         call.name,

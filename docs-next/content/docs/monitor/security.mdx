@@ -364,8 +364,8 @@ kept answers and check-ins. Execution and raw pause checkpoints retain the real
 values; served snapshots, recordings and recorder hooks mask the selected working
 fields. Check-in approvers see the tool's explicitly chosen masked argument view,
 are told which arguments it hides (`CheckInRequest.hiddenArgs`), and consent remains
-bound to the real call; the decision's record carries the same names. Keep checkpoints
-on the trusted host.
+bound to the real call and to that list; the decision's record carries the same names.
+Keep checkpoints on the trusted host.
 
 Caller redaction policies keep their existing precedence. Private field protection
 alone does not claim that a caller policy covered the conversation: public question,

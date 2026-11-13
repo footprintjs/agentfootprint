@@ -45,6 +45,9 @@ export function streamingShapes() {
       toolName: str,
       toolCallId: str,
       args: keysMarker,
+      // The tool's argument view of the same call: keys only, like `args`.
+      shownArgs: keysMarker,
+      hiddenArgs: listOf(str),
       parallelCount: num,
       protocol: oneOf('http', 'mcp', 'native', 'python-fn'),
       notDispatched: shapeOf<At<PayloadOf<'agentfootprint.stream.tool_start'>, 'notDispatched'>>({

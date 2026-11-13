@@ -664,11 +664,9 @@ the PERFORMANCE block), and the resume adds no model call.
 - **A kept answer that reaches a check-in rides the check-in's own evidence pack.** The
   check-in shows the person the arguments the call will run with (`core/checkin.ts` ·
   `CheckInRequest`, on its `checkin.request` event and its pause) in the tool's shown argument
-  view. Its evidence assembler receives that same masked view, and the request names the
-  arguments the view hides (`CheckInRequest.hiddenArgs`, from `core/toolShownArgs.ts` ·
-  `hiddenArgNames` — the same rule `privateAnswers.ts` marks with). Approval still names the
-  operation and public context; the consent binding, raw checkpoint and actual execution
-  retain the original arguments, and the `checkin.decision` record repeats the hidden names.
+  view, and names what it hides (`hiddenArgs`, bound into the request id). Approval still
+  names the operation and public context; the consent binding, raw checkpoint and actual
+  execution retain the original arguments.
 - **A raised miss behind a refused second pause.** A tool whose own `requestInput` carries an
   `absence` in the batch that asked settles as the refusal; that miss is not filed.
 - **Numeric bounds** (`minimum`, `maximum`) are not judged on the person's answer: the one

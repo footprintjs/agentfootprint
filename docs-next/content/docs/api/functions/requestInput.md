@@ -6,7 +6,7 @@ title: requestInput
 
 > **requestInput**(`declaration`): `never`
 
-Defined in: [src/core/pause.ts:119](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L119)
+Defined in: [src/core/pause.ts:121](https://github.com/footprintjs/agentfootprint/blob/main/src/core/pause.ts#L121)
 
 Collect declared fields using a dedicated tool. The query itself runs afterwards.
 

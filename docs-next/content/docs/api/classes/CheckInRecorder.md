@@ -68,7 +68,7 @@ Defined in: [src/recorders/core/CheckInRecorder.ts:101](https://github.com/footp
 
 > **getDecisions**(): readonly [`CheckInDecisionRecord`](/docs/api/interfaces/CheckInDecisionRecord)[]
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:144](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L144)
+Defined in: [src/recorders/core/CheckInRecorder.ts:146](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L146)
 
 Every human decision captured, oldest first.
 
@@ -82,7 +82,7 @@ readonly [`CheckInDecisionRecord`](/docs/api/interfaces/CheckInDecisionRecord)[]
 
 > **getRequests**(): readonly [`CheckInRequestRecord`](/docs/api/interfaces/CheckInRequestRecord)[]
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:139](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L139)
+Defined in: [src/recorders/core/CheckInRecorder.ts:141](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L141)
 
 Every check-in ask captured, oldest first.
 
@@ -96,7 +96,7 @@ readonly [`CheckInRequestRecord`](/docs/api/interfaces/CheckInRequestRecord)[]
 
 > **getStats**(): [`CheckInStats`](/docs/api/interfaces/CheckInStats)
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L149)
+Defined in: [src/recorders/core/CheckInRecorder.ts:151](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L151)
 
 Roll-up counts. `pending` = asks still awaiting a decision.
 
@@ -141,7 +141,7 @@ EmitRecorder in `src/lib/recorder/EmitRecorder.ts`
 
 > **reset**(): `void`
 
-Defined in: [src/recorders/core/CheckInRecorder.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L162)
+Defined in: [src/recorders/core/CheckInRecorder.ts:164](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L164)
 
 Drop all captured records (e.g. between runs when reusing the recorder).
 

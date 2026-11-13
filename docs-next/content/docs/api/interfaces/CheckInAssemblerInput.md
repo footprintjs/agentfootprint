@@ -4,7 +4,7 @@ title: CheckInAssemblerInput
 
 # Interface: CheckInAssemblerInput
 
-Defined in: [src/core/checkin.ts:514](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L514)
+Defined in: [src/core/checkin.ts:507](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L507)
 
 Everything the assembler needs to build one evidence pack.
 
@@ -14,10 +14,9 @@ Everything the assembler needs to build one evidence pack.
 
 > `readonly` **args**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/core/checkin.ts:519](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L519)
+Defined in: [src/core/checkin.ts:511](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L511)
 
-The proposed arguments, as the tool's view shows them
- ([CheckInRequest.args](/docs/api/interfaces/CheckInRequest#args)).
+The proposed arguments, as the tool's view shows them ([CheckInRequest.args](/docs/api/interfaces/CheckInRequest#args)).
 
 ***
 
@@ -25,10 +24,9 @@ The proposed arguments, as the tool's view shows them
 
 > `readonly` `optional` **hiddenArgs?**: readonly `string`[]
 
-Defined in: [src/core/checkin.ts:522](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L522)
+Defined in: [src/core/checkin.ts:513](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L513)
 
-The arguments the tool's view hides from [args](/docs/api/interfaces/CheckInAssemblerInput#args)
- ([CheckInRequest.hiddenArgs](/docs/api/interfaces/CheckInRequest#hiddenargs)); absent when nothing is hidden.
+The arguments the view hides ([CheckInRequest.hiddenArgs](/docs/api/interfaces/CheckInRequest#hiddenargs)); absent when none.
 
 ***
 
@@ -36,7 +34,7 @@ The arguments the tool's view hides from [args](/docs/api/interfaces/CheckInAsse
 
 > `readonly` **history**: readonly [`LLMMessage`](/docs/api/interfaces/LLMMessage)[]
 
-Defined in: [src/core/checkin.ts:528](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L528)
+Defined in: [src/core/checkin.ts:519](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L519)
 
 The conversation so far — the raw material for `read`, `drivers`, `trail`.
 
@@ -46,7 +44,7 @@ The conversation so far — the raw material for `read`, `drivers`, `trail`.
 
 > `readonly` `optional` **intent?**: `string`
 
-Defined in: [src/core/checkin.ts:524](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L524)
+Defined in: [src/core/checkin.ts:515](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L515)
 
 The model's stated reasoning, if any (assistant-turn text).
 
@@ -56,7 +54,7 @@ The model's stated reasoning, if any (assistant-turn text).
 
 > `readonly` **iteration**: `number`
 
-Defined in: [src/core/checkin.ts:526](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L526)
+Defined in: [src/core/checkin.ts:517](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L517)
 
 The ReAct iteration this check-in fired on.
 
@@ -66,7 +64,7 @@ The ReAct iteration this check-in fired on.
 
 > `readonly` **scorer**: [`CheckInScorer`](/docs/api/type-aliases/CheckInScorer)
 
-Defined in: [src/core/checkin.ts:530](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L530)
+Defined in: [src/core/checkin.ts:521](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L521)
 
 The scorer to rank `drivers` with.
 
@@ -76,7 +74,7 @@ The scorer to rank `drivers` with.
 
 > `readonly` `optional` **signal?**: `AbortSignal`
 
-Defined in: [src/core/checkin.ts:532](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L532)
+Defined in: [src/core/checkin.ts:523](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L523)
 
 Abort signal threaded to the scorer.
 
@@ -86,7 +84,7 @@ Abort signal threaded to the scorer.
 
 > `readonly` **tool**: `object`
 
-Defined in: [src/core/checkin.ts:516](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L516)
+Defined in: [src/core/checkin.ts:509](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L509)
 
 The chosen tool — `name` for citations, `description` for `willDo`.
 

@@ -20,6 +20,8 @@ import { readAskComponent } from '../tools/askComponent.js';
 import type { FlowchartCheckpoint } from 'footprintjs';
 import type { AskComponent } from '../tools/askComponent.js';
 import type { CheckInRequest } from './checkin.js';
+import type { HiddenViewChange } from './checkInHiddenArgs.js';
+import { resumeDecisionMessage } from './resumeDecisionMessage.js';
 import { InputRequestError, validateInputDeclaration } from '../tools/inputRequest.js';
 import type { AwaitingInput, InputRequestDeclaration } from '../tools/inputRequest.js';
 
@@ -390,6 +392,14 @@ export class DecisionRequiredError extends Error {
  *     answer could reach it any more, and proved its call never ran: it spent
  *     the request in the ledger the request was minted under, so no decision
  *     can run it. The call did not run, and nothing ran now.
+ *   - `'view-changed'` — a check-in only: the decision names this request and
+ *     the call is intact, but the resumed tool's argument view would hide
+ *     other arguments than the request told the person were hidden
+ *     (`CheckInRequest.hiddenArgs`, bound into the id) — a redeploy that
+ *     changed the view. An approval covers exactly what was shown, so the
+ *     person is asked again. The message names the difference by argument
+ *     name, never by value. Raised inside execution, still before the tool:
+ *     the view lives in the tool, not in the checkpoint.
  */
 export type ResumeDecisionRefusal =
   | 'no-request'
@@ -399,7 +409,8 @@ export type ResumeDecisionRefusal =
   | 'chain-changed'
   | 'already-answered'
   | 'ledger-changed'
-  | 'closed-by-host';
+  | 'closed-by-host'
+  | 'view-changed';
 
 /**
  * Raised by a resume when the decision cannot answer the request the run is
@@ -409,15 +420,16 @@ export type ResumeDecisionRefusal =
  * A consent gate (a tool's `checkIn`, a middleware's `ask`) mints a request id
  * when it pauses (`CheckInRequest.id`, `MiddlewareAsk.id`). The id is unique to
  * that pause and bound to the exact call that runs on approval — the tool, its
- * arguments, the call id, the served party and, for an ask, where the chain
- * resumes and the names of the rules from there on. A decision names it
+ * arguments, the call id, the served party, for a check-in the arguments its
+ * view hid, and for an ask where the chain resumes and the names of the rules
+ * from there on. A decision names it
  * (`checkInApproved({ request, by })`), and a resume holds the decision to it:
  * the same request, the same call, once.
  *
  * An Agent refuses invalid decision shape and checkpoint binding before native execution.
  * Known issued-ledger replays and witnessed local closes can also refuse there.
- * Opaque-ledger refusals, spend races and nested decisions occur inside execution,
- * still before the tool. An unchanged checkpoint does not prove no execution began;
+ * Opaque-ledger refusals, spend races, nested decisions and a changed argument view
+ * occur inside execution, still before the tool. An unchanged checkpoint does not prove no execution began;
  * selected readers follow the actual leg. See {@link ResumeDecisionRefusal}.
  *
  * **It names no request id** — not in its message, not on a field — and a
@@ -434,87 +446,12 @@ export class ResumeDecisionError extends Error {
   /** Which kind of consent gate the run is paused on. */
   readonly gate: ConsentGateKind;
 
-  constructor(reason: ResumeDecisionRefusal, gate: ConsentGateKind) {
-    super(resumeDecisionMessage(reason));
+  /** @param viewChange `'view-changed'` only — the names its message states. */
+  constructor(reason: ResumeDecisionRefusal, gate: ConsentGateKind, viewChange?: HiddenViewChange) {
+    super(resumeDecisionMessage(reason, viewChange));
     this.name = 'ResumeDecisionError';
     this.reason = reason;
     this.gate = gate;
-  }
-}
-
-/**
- * What a host that keeps the pause does with one no decision can answer
- * (`hosting/answeredPause.ts`): it closes it rather than hold the session.
- */
-const CLOSED_BY_A_HOST =
-  'A host that keeps the pause (standingAgent, streamHandler) closes it: the next message ' +
-  'continues the conversation, the call recorded as not run only when proven, otherwise as ' +
-  'not known.';
-
-function resumeDecisionMessage(reason: ResumeDecisionRefusal): string {
-  switch (reason) {
-    case 'no-request':
-      return (
-        `[resume] this decision names no request. A person's decision answers ONE paused ` +
-        `request: build it with checkInApproved({ request, by }) or checkInDeclined({ request, ` +
-        `by }), passing the request the person was shown — outcome.checkIn or outcome.ask ` +
-        `(PendingAsk.checkIn / .ask on a hosted door). A decision without \`requestId\` cannot ` +
-        `say which request it answers, so it answers none. Nothing was executed.`
-      );
-    case 'request-not-recorded':
-      return (
-        `[resume] this run paused on a consent gate without a record of the request it asked — ` +
-        `a checkpoint written before requests were named, or one whose record was removed. No ` +
-        `decision can answer it. Nothing was executed; abandon this pause and ask again in a ` +
-        `new run. ${CLOSED_BY_A_HOST}`
-      );
-    case 'other-request':
-      return (
-        `[resume] this decision answers a different request than the one this run is paused ` +
-        `on. A decision answers only the request it names — not a later pause of the same run, ` +
-        `not a parallel sibling's, not another conversation's. Nothing was executed; show the ` +
-        `person the paused request and build the decision from what they were shown.`
-      );
-    case 'call-changed':
-      return (
-        `[resume] this decision names the paused request, but the paused call is no longer the ` +
-        `call the person was asked about: the checkpoint's tool, arguments, call id, served ` +
-        `party or middleware position changed after the ask. An approval binds to the exact ` +
-        `call it was shown. Nothing was executed; treat the checkpoint as altered — no ` +
-        `decision can answer it. ${CLOSED_BY_A_HOST}`
-      );
-    case 'chain-changed':
-      return (
-        `[resume] this decision names the paused request, but this agent's toolMiddleware ` +
-        `chain is not the one the request was asked under: the link that asked, or a link ` +
-        `after it, was removed, added, renamed or moved since (a redeploy). The rest of the ` +
-        `chain would not be the rules the approval was given under, so the approval is not ` +
-        `used. Nothing was executed; resume on an agent built with the same chain, or abandon ` +
-        `the pause and ask again in a new run. ${CLOSED_BY_A_HOST}`
-      );
-    case 'already-answered':
-      return (
-        `[resume] the request this decision names was already answered by an earlier resume — ` +
-        `one decision runs one call, and a request is spent the moment a resume uses its ` +
-        `decision, approved or declined. This resume ran nothing. Whether the earlier resume ` +
-        `finished, and so whether the call ran, is not known here: check the call's own ` +
-        `record (its system, the conversation) before the person is asked again.`
-      );
-    case 'ledger-changed':
-      return (
-        `[resume] this decision names the paused request, but the agent resuming it records ` +
-        `decisions in a different ledger than the one the request was asked under (a redeploy ` +
-        `or a ledger migration). An approval is spent only in the ledger its request was asked ` +
-        `under, so that ledger can say whether the call ran. Nothing was executed; the person ` +
-        `has to be asked again. ${CLOSED_BY_A_HOST}`
-      );
-    case 'closed-by-host':
-      return (
-        `[resume] the request this decision names was closed by the host that kept the ` +
-        `pause: no answer could reach it any more, so the host closed it and recorded that ` +
-        `its call did not run — and no decision can run it now. This resume ran nothing. The ` +
-        `next message continues the conversation.`
-      );
   }
 }
 

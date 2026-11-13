@@ -4,7 +4,7 @@ title: CheckInDecisionInput
 
 # Interface: CheckInDecisionInput
 
-Defined in: [src/core/checkin.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L250)
+Defined in: [src/core/checkin.ts:243](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L243)
 
 Options for [checkInApproved](/docs/api/functions/checkInApproved) / [checkInDeclined](/docs/api/functions/checkInDeclined).
 
@@ -14,7 +14,7 @@ Options for [checkInApproved](/docs/api/functions/checkInApproved) / [checkInDec
 
 > `readonly` **by**: `string`
 
-Defined in: [src/core/checkin.ts:259](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L259)
+Defined in: [src/core/checkin.ts:252](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L252)
 
 Who decided. Recorded as given — see [CheckInDecision.by](/docs/api/interfaces/CheckInDecision#by).
 
@@ -24,7 +24,7 @@ Who decided. Recorded as given — see [CheckInDecision.by](/docs/api/interfaces
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: [src/core/checkin.ts:261](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L261)
+Defined in: [src/core/checkin.ts:254](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L254)
 
 Optional free-text note.
 
@@ -34,7 +34,7 @@ Optional free-text note.
 
 > `readonly` **request**: `object`
 
-Defined in: [src/core/checkin.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L257)
+Defined in: [src/core/checkin.ts:250](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L250)
 
 The paused request being answered — the one the person was shown:
 `outcome.checkIn` or `outcome.ask` (`PendingAsk.checkIn` / `.ask` on a
@@ -51,6 +51,6 @@ no other.
 
 > `readonly` `optional` **value?**: [`DecisionValue`](/docs/api/interfaces/DecisionValue)
 
-Defined in: [src/core/checkin.ts:263](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L263)
+Defined in: [src/core/checkin.ts:256](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L256)
 
 What was chosen, for an ask that wanted a value rather than a yes.

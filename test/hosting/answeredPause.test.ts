@@ -595,7 +595,7 @@ describe('afterFailedAnswer — marked when its decision may have been used', ()
     const refusal = (reason: string) =>
       Object.assign(new Error('refused'), { code: 'ERR_RESUME_DECISION', reason });
 
-    it.each(['request-not-recorded', 'call-changed', 'chain-changed'])(
+    it.each(['request-not-recorded', 'call-changed', 'chain-changed', 'view-changed'])(
       "closed for '%s': the store holds the conversation it goes on from — every open call not known, this resume's non-use being no proof that an earlier one used nothing",
       async (reason) => {
         const { paused, written, after } = setup();

@@ -121,12 +121,16 @@ export function buildCallStart(
       if (frozenTurn === undefined || isSealed(frozenTurn)) callHistory = made;
       return made;
     };
-    emitToolStart(scope, {
-      toolName: tc.name,
-      toolCallId: tc.id,
-      args: viewOf(args) ?? args,
-      ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
-    });
+    emitToolStart(
+      scope,
+      {
+        toolName: tc.name,
+        toolCallId: tc.id,
+        args: viewOf(args) ?? args,
+        ...(toolCalls.length > 1 && { parallelCount: toolCalls.length }),
+      },
+      tool,
+    );
     const startMs = Date.now();
     const findingsRefusal = findingsRefusals[callIndex];
     const invalidateViews = (): void => {

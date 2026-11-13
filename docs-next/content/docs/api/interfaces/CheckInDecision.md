@@ -4,7 +4,7 @@ title: CheckInDecision
 
 # Interface: CheckInDecision
 
-Defined in: [src/core/checkin.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L221)
+Defined in: [src/core/checkin.ts:214](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L214)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/checkin.ts:221](https://github.com/footprintjs/agentfootpr
 
 > `readonly` **approved**: `boolean`
 
-Defined in: [src/core/checkin.ts:229](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L229)
+Defined in: [src/core/checkin.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L222)
 
 True to run the tool, false to decline it.
 
@@ -22,7 +22,7 @@ True to run the tool, false to decline it.
 
 > `readonly` **at**: `number`
 
-Defined in: [src/core/checkin.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L239)
+Defined in: [src/core/checkin.ts:232](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L232)
 
 When the decision was made (ms since epoch).
 
@@ -32,7 +32,7 @@ When the decision was made (ms since epoch).
 
 > `readonly` **by**: `string`
 
-Defined in: [src/core/checkin.ts:235](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L235)
+Defined in: [src/core/checkin.ts:228](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L228)
 
 Who decided (an operator id, an email, a queue name — your call). Recorded
 as given: a claim, not proof. Authenticate the person before you build the
@@ -44,7 +44,7 @@ decision; the library binds WHICH request and WHAT call, never who.
 
 > `readonly` `optional` **note?**: `string`
 
-Defined in: [src/core/checkin.ts:237](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L237)
+Defined in: [src/core/checkin.ts:230](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L230)
 
 Optional note. On decline it is surfaced to the model so it can adapt.
 
@@ -54,7 +54,7 @@ Optional note. On decline it is surfaced to the model so it can adapt.
 
 > `readonly` **requestId**: `string`
 
-Defined in: [src/core/checkin.ts:227](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L227)
+Defined in: [src/core/checkin.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L220)
 
 The request this decision answers — the paused request's `id`
 (`CheckInRequest.id`, `MiddlewareAsk.id`). A resume refuses a decision for
@@ -66,7 +66,7 @@ any other request, and answers each request once (`ResumeDecisionError`).
 
 > `readonly` `optional` **value?**: [`DecisionValue`](/docs/api/interfaces/DecisionValue)
 
-Defined in: [src/core/checkin.ts:246](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L246)
+Defined in: [src/core/checkin.ts:239](https://github.com/footprintjs/agentfootprint/blob/main/src/core/checkin.ts#L239)
 
 What they chose, when the answer was a value and not just a yes.
 

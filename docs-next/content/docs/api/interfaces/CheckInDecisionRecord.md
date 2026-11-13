@@ -39,14 +39,14 @@ The registered component that collected this decision (9.24.0), when the
 
 ### hiddenArgs?
 
-> `readonly` `optional` **hiddenArgs?**: readonly `string`[]
+> `readonly` `optional` **hiddenArgs?**: readonly `string`[] \| `"not-recorded"`
 
 Defined in: [src/recorders/core/CheckInRecorder.ts:68](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/core/CheckInRecorder.ts#L68)
 
 The arguments the tool's view hid from the person when they decided
  (`CheckInDecisionPayload.hiddenArgs`): this approval or decline was
  given without seeing those values. Names only. Absent when none were
- hidden.
+ hidden; `'not-recorded'` for a pause stored before the list existed.
 
 ***
 
