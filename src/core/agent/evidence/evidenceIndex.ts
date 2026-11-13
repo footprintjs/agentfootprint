@@ -118,8 +118,8 @@ import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
  * 5 MB tool result — because the cost of hitting it is not "slower", it is
  * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}). The
- * per-result source checks share the NUMBER, not the meter: read "One
- * ceiling, two meters" in this folder's README before trusting "the same".
+ * per-result source checks share the NUMBER, not the meter: read "ONE
+ * CEILING, TWO METERS" in `resultCarries.ts` before trusting "the same".
  */
 export const MAX_INDEX_TOKENS = 200_000;
 
