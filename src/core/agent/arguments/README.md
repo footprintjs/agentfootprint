@@ -68,7 +68,7 @@ person already said the value. Declared sources (next section) are what change t
 
 ## Declared sources — the model says where each value came from; the library checks it
 
-Two doors arm ONE thing (`core/Agent.ts` resolves them once into `argumentSourcesArmed`):
+Two doors arm ONE thing (`core/agent/runtime/configuration/configure.ts` resolves them once into `argumentSourcesArmed`):
 `.inputsLayer({ argumentSources: true })` — declared sources alone — and
 `.findings({ argumentSources: true })` — beside the findings ledger (`.findings()` +
 `.inputsLayer({ argumentSources: true })` serves exactly the same bytes). The findings door needs
@@ -190,7 +190,7 @@ spelling — a user name and a password in one sentence, a PIN typed "1 2 3 4" a
   lists (or is first called) AFTER a quote was filed would find that quote already on the
   record, so any provider counts, even one that never lists a hiding tool.
 
-The agent decides it ONCE, at build (`core/Agent.ts` · `buildChart`, the inputs layer's
+The agent decides it ONCE, at build (`core/agent/runtime/catalog/buildCatalog.ts` · `buildCatalog`, the inputs layer's
 `sources` → `SourcesArm.argumentViews`), over every party the layer's `toolOf` can resolve (the
 registry and the provider — `stages/toolResolver.ts` · `buildToolResolver`), so no ordering
 leaks a quote: filed before the hiding call, in an earlier iteration or turn, or before a

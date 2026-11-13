@@ -486,9 +486,11 @@ describe('publish.yml · only the verdict can skip a gate, and only a gate', () 
   });
 
   it('build requires the size gate even when verdict fallback reruns other gates, and nothing reaches npm untagged', () => {
-    expect(build).toMatch(/^ {4}needs: \[plan, verdict, file-size\]$/m);
+    // `hold` (release-hold.test.ts) is named in `needs` AND in the `if`: with
+    // `!cancelled()` a failed dependency does not skip the job by itself.
+    expect(build).toMatch(/^ {4}needs: \[hold, plan, verdict, file-size\]$/m);
     expect(build).toContain(
-      "if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc') && needs.file-size.result == 'success' }}",
+      "if: ${{ !cancelled() && needs.hold.result == 'success' && needs.plan.result == 'success' && (needs.plan.outputs.mode == 'publish' || needs.plan.outputs.mode == 'rc') && needs.file-size.result == 'success' }}",
     );
     expect(jobBlock(PUBLISH, 'release')).toContain("needs.build.result == 'success'");
     // A skipped `release` publishes only on the legacy trigger, whose tag exists.
@@ -564,6 +566,13 @@ describe('ci.yml · what the verdict trusts', () => {
   it('every job checks out the run’s own commit, so one recorded tree speaks for all of them', () => {
     for (const id of jobIds(CI)) {
       const job = jobBlock(CI, id);
+      if (id === 'hold') {
+        // The release hold check (pull-request mode) checks out its own merge
+        // commit inside the called workflow and reports a pass/fail, never a
+        // tree; test/docs/release-hold.test.ts pins its pin, mode and event.
+        expect(job).not.toMatch(/^ {6}source_sha:/m);
+        continue;
+      }
       if (/^ {4}uses:/m.test(job)) {
         // The shared checker defaults to github.sha; an override here would
         // let it report a different source tree from tested-tree.

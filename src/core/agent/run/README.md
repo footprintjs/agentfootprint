@@ -4,7 +4,7 @@ Fold: ledger validation, engine-option projection and resume-policy reading in `
 
 # Agent run support
 
-These small modules support the Agent facade in `../../Agent.ts`. Native component values own invocation state; construction and chart wiring are being decomposed into their business families. The run-options type remains beside the documented receiver so its emitted documentation keeps its canonical link binding. Agent imports these leaves; the leaves never import Agent or AgentBuilder.
+These small modules support the Agent facade in `../../Agent.ts`. Native component values own invocation state; construction and chart wiring are being decomposed into their business families. The run-options declaration and its documentation live in `../runtime/runOptions/options.ts`; the documented receiver preserves the same public type export. Agent imports these leaves; the leaves never import Agent or AgentBuilder.
 
 - `eventStageIds.ts` names events emitted outside a real stage.
 - `ledgerFacts.ts` validates and resolves the findings-window dial.

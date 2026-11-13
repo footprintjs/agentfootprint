@@ -99,7 +99,7 @@ const PROSE_RATIO = /^\d{1,2}\/\d{1,2}$/;
 const MAX_ANSWER_TOKENS = 20_000;
 
 /** True when the caller declared this token exempt. */
-export function isDeclaredExempt(token: string, gate: ResolvedEvidenceGate): boolean {
+function isDeclaredExempt(token: string, gate: ResolvedEvidenceGate): boolean {
   if (gate.exemptValues.has(token)) return true;
   for (const p of gate.exemptPatterns) if (p.test(token)) return true;
   return false;

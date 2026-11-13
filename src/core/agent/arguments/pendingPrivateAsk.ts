@@ -24,7 +24,7 @@ export interface PendingPrivateAsk {
   }[];
 }
 
-export class PendingPrivateAskError extends Error {
+class PendingPrivateAskError extends Error {
   readonly code = 'ERR_PRIVATE_ARGUMENT_RECORD';
   constructor() {
     super(

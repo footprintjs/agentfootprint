@@ -5,7 +5,7 @@ state from "nothing was wrong".
 ## What it reads / what it writes
 - Owns: the per-check disposition rows. `report()` hands out FRESH POJO rows
   (`ledger.ts` · `DispositionLedger`, "The T9 theorems, both") — detached, safe for events, snapshots and recordings.
-- Read by `src/core/Agent.ts` · `agentfootprint.integrity.disposition`, which files them as ONE
+- Read by `src/core/agent/runtime/integrity/owner.ts` · `agentfootprint.integrity.disposition`, which files them as ONE
   `agentfootprint.integrity.disposition` event; every later reader (including
   the trace toolpack's model-facing partial-coverage line) reads that EVENT,
   never this accumulator.

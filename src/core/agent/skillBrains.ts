@@ -114,7 +114,7 @@ export type BrainFor = (
  *  read off the metadata bag (the engine-ignores-unknown precedent —
  *  `projectActiveInjection` never projects it, so the live provider object
  *  stays on the closure-held list and never crosses a scope boundary). */
-export function skillBrainOf(injection: Injection): SkillBrainDecl | undefined {
+function skillBrainOf(injection: Injection): SkillBrainDecl | undefined {
   const meta = injection.metadata as { provider?: LLMProvider; model?: string } | undefined;
   if (meta?.provider === undefined && meta?.model === undefined) return undefined;
   return {

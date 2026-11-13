@@ -4,7 +4,7 @@
  *
  * An agent ends some runs on a record in its state instead of a throw — a
  * reliability fail-fast, a policy halt, a denied message, a refused answer —
- * and only its own run boundary (`Agent · finalizeResult`) turns the record
+ * and only its own run boundary (`core/agent/runtime/terminal/owner.ts · finalizeResult`) turns the record
  * into the typed error. A composition mounts the agent's CHART, so that
  * boundary never runs: the record stayed behind the mount and the composition
  * carried on as if the child had answered.
@@ -34,7 +34,7 @@ import {
 } from '../core/terminalVerdict.js';
 
 /** The key a composition carries a child's verdict under, on its own state. */
-export const CHILD_VERDICT_KEY = 'childVerdict';
+const CHILD_VERDICT_KEY = 'childVerdict';
 
 /** What a child's mount handed back, read by the child's own runner when it can. */
 export function childOutcome(runner: unknown, sfOutput: unknown): ChildOutcome {

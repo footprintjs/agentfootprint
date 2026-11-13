@@ -4,7 +4,7 @@
  *
  * Pattern: one pure function over plain JSON plus one pure hash; no I/O,
  *          no registry (the tool names in `via` are checked where the
- *          registry exists — `Agent.ts · buildChart`, beside
+ *          registry exists — `agent/runtime/catalog/buildCatalog.ts · buildCatalog`, beside
  *          `buildToolRegistry` — so `.build()` is what refuses them).
  * Role:    Map. It decides nothing about what the model sees; it decides
  *          whether a declaration is well-formed enough to be served as data.
