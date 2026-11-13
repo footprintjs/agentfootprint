@@ -813,7 +813,7 @@ value on one (a reading included).
 - There is no `ask` or `checkIn` key, so `core/pause.ts` · `pauseDemandsDecision` returns nothing,
   and `core/Agent.ts` · `resume` takes the typed-input path: `readAwaitingInput` →
   `applyInputResponse` (types and enums checked, nothing coerced; a partial answer pauses again at
-  the door, with no model call). `hosting/standingAgent.ts` renders and resumes it like any
+  the door, with no model call). `hosting/standingAgent/turn/run.ts` renders and resumes it like any
   `requestInput`.
 
 **The resume** — `Ask`'s resume half, then the `Bind` decider (§ 3.2):
@@ -854,7 +854,7 @@ uses the reserved key, or is not JSON, is refused. The host's reader then works 
 that prefers not to use the hook checkpoints its own state and recognises a library ask by the
 reserved key.
 
-**Cancel.** `hosting/standingAgent.ts` settles outstanding calls with `input_cancelled` and replies
+**Cancel.** `hosting/standingAgent/turn/run.ts` settles outstanding calls with `input_cancelled` and replies
 with a fixed sentence. For a library ask there is no outstanding call — the batch's assistant turn
 was never committed — so it writes only the reply. No chart runs, so nothing reaches the ledger and
 nothing is served; the events already fired stay in the recording. Only a later reader of the
@@ -1379,7 +1379,7 @@ verdict. "Verified" means its evidence was re-read in the code on 2026-09-26.
 | engineer: `given`, the explicit action and `solo` are not placed | SHOULD | applied | § 3.4; § 4.7 |
 | engineer: a fill must update `chainedArgs` with a fresh object | NOTE | applied | § 4.6 |
 | engineer: record whether the cited result's tool is in `argumentsFrom` | NOTE | applied: a flag | § 3.5 V3 |
-| engineer: a host cancel runs no fold | NOTE | verified (`hosting/standingAgent.ts`); applied | § 4.3 |
+| engineer: a host cancel runs no fold | NOTE | verified (`hosting/standingAgent/turn/run.ts`); applied | § 4.3 |
 | engineer: "seven frames" | NOTE | verified (six prefixes plus `injectedBy`); cited without a count | § 3.4 |
 | engineer: two doc comments change meaning | NOTE | applied | § 4.6; § 5.4 |
 | devil: any quote fragment passes the ask | MUST | applied: a reading asks; declared phrases | § 3.5 V2; § 4.1 |

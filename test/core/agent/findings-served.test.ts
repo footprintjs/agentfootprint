@@ -560,7 +560,7 @@ describe('served from the ledger — the typed surface says what ships', () => {
     // `findings.keepLedgerFacts` field (four spaces) that precedes it.
     ['src/core/agent/types.ts', '\n  readonly keepLedgerFacts?: number | false;'],
     ['src/core/agent/AgentBuilder.ts', '  findings(options?: NonNullable<'],
-    ['src/core/Agent.ts', '  private readonly findingsOptions?:'],
+    ['src/core/agent/runtime/configuration/types.ts', '  readonly findingsOptions?:'],
   ];
   it('no doc site calls `serve` or `keepLedgerFacts` inert; every one names where the hold is spent', () => {
     for (const [rel, anchor] of SITES) {

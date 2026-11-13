@@ -135,6 +135,21 @@ Repeated runs converge on one own-repository PR. After fixing a failed release o
 publish job, use **Re-run failed jobs**; tags/releases already present are skipped,
 and npm refuses a duplicate version.
 
+### Holding a release
+
+While an open issue or pull request in this repository carries the label `hold-release`, the
+Release workflow makes no tag, no GitHub release and no npm publish: the `hold` job stops a run that
+starts during a hold, and the `release` job (before it tags) and the `publish` job (before the
+publish command) each check again at their own "Refuse while a hold-release label is open" step,
+which also catches a hold set while the build ran or before a "Re-run failed jobs". A hold does
+not stop the release pull request being opened or updated, nor an ordinary merge: those stay green.
+To hold, label an issue or pull request `hold-release` and say why in its text. To lift, remove the
+label or close it. A blocked step prints "Hold check FAILED" and names the open items. A release
+pull request (one that changes the version) is red while a hold is open. After lifting a hold, use
+**Re-run failed jobs**. The label is exact apart from letter case, and nothing warns about a
+misspelt one. Details and limits: footprintjs/ci
+[`docs/HOLD.md`](https://github.com/footprintjs/ci/blob/b14f372d4c26e9f3059068b250544aa320b834aa/docs/HOLD.md).
+
 ### One-time setup: the release App
 
 A PR opened with the workflow's own `GITHUB_TOKEN` runs no CI, so its required checks would

@@ -107,7 +107,7 @@ whether conversations may share a tool list. Each is easy to get wrong.
 - **The agent's tool-session tier as the pool.** `tools/toolSessions.ts` ·
   `ToolSessionTier` is per runner and keyed per tool name. Its LRU closes the coldest
   registration whether or not a call is in flight. It also fires on instance events:
-  `hosting/standingAgent.ts` retires an evicted lane with
+  `hosting/standingAgent/lanes/pool.ts` retires an evicted lane with
   `closeToolSessions({ reason: 'evicted' })`, an eviction the person never sees. Ending a
   remote session there would drop server state the conversation still needs. The pool
   keeps the tier's laws but not its instance (§ 7).
@@ -128,7 +128,7 @@ whether conversations may share a tool list. Each is easy to get wrong.
 | The provider seam, asked every iteration; its `ctx.identity` is the run's identity, derived when no caller named one | `tools/toolProvider.ts` · `ToolProvider`, `ToolDispatchContext`; `core/slots/buildToolsSlot.ts` | `ToolDispatchContext` gains `callerIdentity`† (§ 4). |
 | A tool's `ctx.identity` is the identity the caller named, absent otherwise | `tools/tools.ts` · `ToolExecutionContext`; `core/agent/callerIdentity.ts` | The identity check every bound tool makes (§ 6.3). |
 | One session per key, opened once when calls race; facts taken by the dispatch loop after `execute` | `core/codeRunnerTool.ts` · `codeRunnerTool`, `CODE_RUNS`, `codeRunsOf` | The pattern for one open (§ 5.1) and for the record (§ 8). |
-| Verify the caller, then compose `{ tenant, principal, conversationId }` | `hosting/identityVerification.ts`; `hosting/standingAgent.ts` · `identityForRequest` | Where the key's principal must come from (§ 4). |
+| Verify the caller, then compose `{ tenant, principal, conversationId }` | `hosting/identityVerification.ts`; `hosting/standingAgent/identity/request.ts` · `identityForRequest` | Where the key's principal must come from (§ 4). |
 | Per-caller limits before a run | `hosting/admission.ts` · `AdmissionPolicy` | The layer above the pool's own caps (§ 9). |
 
 ## 3. The API
@@ -274,7 +274,7 @@ request body, or a `sessionId` alone. There is no key function to supply.
 The pool cannot tell a verified principal from a claimed one, and it takes no flag from a
 caller that claims verification. Verification is established at the host boundary:
 `hosting/identityVerification.ts` checks the badge before
-`hosting/standingAgent.ts` · `identityForRequest` composes `{ tenant, principal,
+`hosting/standingAgent/identity/request.ts` · `identityForRequest` composes `{ tenant, principal,
 conversationId }`.
 
 No identity value is ever written to an error message, an event or a report. The wire

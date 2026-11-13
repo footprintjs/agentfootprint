@@ -4,7 +4,7 @@
  * recording into `{ account, shown }`.
  *
  * The op itself — its order, its refusals, its one door fact — lives inside
- * `standingAgent.ts · answerArtifact`, beside `head` and `get`, so its
+ * `standingAgent/artifacts/wire.ts · answerArtifact`, beside `head` and `get`, so its
  * ownership path cannot drift from theirs. This file owns only what that
  * branch must not re-derive per request:
  *

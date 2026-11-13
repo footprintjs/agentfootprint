@@ -1,0 +1,500 @@
+{
+  "base": "78c11f2908515c4be1cb9a86a566f87487e736f1",
+  "exports": [
+    "boundScripts",
+    "boundAnswerCoverage",
+    "boundAnswerNegatives",
+    "boundMeta",
+    "eventShapeTable",
+    "eventShapes"
+  ],
+  "descriptors": {
+    "__esModule": {
+      "enumerable": false,
+      "configurable": false,
+      "writable": false,
+      "get": "undefined",
+      "value": "boolean"
+    },
+    "boundScripts": {
+      "enumerable": true,
+      "configurable": true,
+      "writable": true,
+      "get": "undefined",
+      "value": "function",
+      "name": "",
+      "length": 1,
+      "ownKeys": [
+        "length",
+        "name"
+      ]
+    },
+    "boundAnswerCoverage": {
+      "enumerable": true,
+      "configurable": true,
+      "writable": true,
+      "get": "undefined",
+      "value": "function",
+      "name": "",
+      "length": 1,
+      "ownKeys": [
+        "length",
+        "name"
+      ]
+    },
+    "boundAnswerNegatives": {
+      "enumerable": true,
+      "configurable": true,
+      "writable": true,
+      "get": "undefined",
+      "value": "function",
+      "name": "",
+      "length": 1,
+      "ownKeys": [
+        "length",
+        "name"
+      ]
+    },
+    "boundMeta": {
+      "enumerable": true,
+      "configurable": true,
+      "writable": true,
+      "get": "undefined",
+      "value": "function",
+      "name": "",
+      "length": 1,
+      "ownKeys": [
+        "length",
+        "name"
+      ]
+    },
+    "eventShapeTable": {
+      "enumerable": true,
+      "configurable": true,
+      "writable": true,
+      "get": "undefined",
+      "value": "function",
+      "name": "eventShapeTable",
+      "length": 1,
+      "ownKeys": [
+        "length",
+        "name",
+        "prototype"
+      ]
+    },
+    "eventShapes": {
+      "enumerable": true,
+      "configurable": true,
+      "writable": true,
+      "get": "undefined",
+      "value": "function",
+      "name": "eventShapes",
+      "length": 1,
+      "ownKeys": [
+        "length",
+        "name",
+        "prototype"
+      ]
+    }
+  },
+  "eventKeys": [
+    "agentfootprint.tools.absent",
+    "agentfootprint.tools.coverage_declared",
+    "agentfootprint.tools.semantics_declared",
+    "agentfootprint.agent.evidence_checked",
+    "agentfootprint.integrity.external_ground_used",
+    "agentfootprint.map.engaged",
+    "agentfootprint.skill.turn_routed",
+    "agentfootprint.map.parked",
+    "agentfootprint.context.evaluated",
+    "agentfootprint.validation.args_invalid",
+    "agentfootprint.agent.output_schema_validation_failed",
+    "agentfootprint.resilience.output_fallback_triggered",
+    "agentfootprint.resilience.output_canned_used",
+    "agentfootprint.stream.tool_progress",
+    "agentfootprint.checkin.request",
+    "agentfootprint.checkin.decision",
+    "agentfootprint.middleware.decision",
+    "agentfootprint.skill.step_skipped",
+    "agentfootprint.stream.llm_start",
+    "agentfootprint.credential.failed",
+    "agentfootprint.fallback.triggered",
+    "agentfootprint.memory.retrieved",
+    "agentfootprint.integrity.context_error",
+    "agentfootprint.tools.effect",
+    "agentfootprint.pause.request",
+    "agentfootprint.artifacts.minted",
+    "agentfootprint.artifacts.presented",
+    "agentfootprint.artifacts.refused",
+    "agentfootprint.reliability.fail_fast",
+    "agentfootprint.agent.handoff",
+    "agentfootprint.permission.check",
+    "agentfootprint.permission.halt",
+    "agentfootprint.composition.route_decided",
+    "agentfootprint.composition.enter",
+    "agentfootprint.composition.exit",
+    "agentfootprint.composition.fork_start",
+    "agentfootprint.composition.branch_complete",
+    "agentfootprint.composition.merge_end",
+    "agentfootprint.composition.iteration_start",
+    "agentfootprint.composition.iteration_exit",
+    "agentfootprint.agent.turn_start",
+    "agentfootprint.agent.turn_end",
+    "agentfootprint.agent.iteration_start",
+    "agentfootprint.agent.iteration_end",
+    "agentfootprint.agent.route_decided",
+    "agentfootprint.agent.output_contract_unmet",
+    "agentfootprint.agent.output_schema_retry",
+    "agentfootprint.agent.grounding_nudged",
+    "agentfootprint.agent.run_configured",
+    "agentfootprint.agent.thinking_parse_failed",
+    "agentfootprint.agent.thinking_omitted",
+    "agentfootprint.agent.around_turn_failed",
+    "agentfootprint.agent.budget_exhausted",
+    "agentfootprint.stream.llm_end",
+    "agentfootprint.stream.token",
+    "agentfootprint.stream.tool_start",
+    "agentfootprint.stream.tool_end",
+    "agentfootprint.stream.thinking_delta",
+    "agentfootprint.stream.thinking_end",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.evicted",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.budget_pressure",
+    "agentfootprint.memory.strategy_applied",
+    "agentfootprint.memory.attached",
+    "agentfootprint.memory.detached",
+    "agentfootprint.memory.written",
+    "agentfootprint.tools.offered",
+    "agentfootprint.tools.activated",
+    "agentfootprint.tools.deactivated",
+    "agentfootprint.tools.discovery_started",
+    "agentfootprint.tools.discovery_completed",
+    "agentfootprint.tools.discovery_failed",
+    "agentfootprint.tools.shadowed",
+    "agentfootprint.tools.claim_swallowed",
+    "agentfootprint.tools.answered_off_wire",
+    "agentfootprint.tools.resource_restore",
+    "agentfootprint.tools.session_started",
+    "agentfootprint.tools.session_reused",
+    "agentfootprint.tools.session_closed",
+    "agentfootprint.tools.result_refused",
+    "agentfootprint.tools.repeated_call",
+    "agentfootprint.tools.code_run",
+    "agentfootprint.tools.mcp_client",
+    "agentfootprint.tools.request_attempts",
+    "agentfootprint.tools.session_close_failed",
+    "agentfootprint.skill.activated",
+    "agentfootprint.skill.graph_declared",
+    "agentfootprint.skill.deactivated",
+    "agentfootprint.skill.rejected",
+    "agentfootprint.skill.reroute_superseded",
+    "agentfootprint.skill.route_conflict",
+    "agentfootprint.skill.step_advanced",
+    "agentfootprint.skill.steps_unfinished",
+    "agentfootprint.skill.escalated",
+    "agentfootprint.permission.gate_opened",
+    "agentfootprint.permission.gate_closed",
+    "agentfootprint.credential.requested",
+    "agentfootprint.credential.acquired",
+    "agentfootprint.credential.authorization_required",
+    "agentfootprint.cost.tick",
+    "agentfootprint.cost.limit_hit",
+    "agentfootprint.eval.score",
+    "agentfootprint.eval.threshold_crossed",
+    "agentfootprint.error.retried",
+    "agentfootprint.error.recovered",
+    "agentfootprint.error.fatal",
+    "agentfootprint.error.circuit_changed",
+    "agentfootprint.reliability.retried",
+    "agentfootprint.reliability.recovered",
+    "agentfootprint.pause.resume",
+    "agentfootprint.findings.declared",
+    "agentfootprint.findings.standing",
+    "agentfootprint.findings.judged",
+    "agentfootprint.findings.judge_failed",
+    "agentfootprint.findings.contingent",
+    "agentfootprint.findings.argument",
+    "agentfootprint.findings.period",
+    "agentfootprint.findings.negative_claim",
+    "agentfootprint.tool_choice.picked",
+    "agentfootprint.tool_choice.outcome",
+    "agentfootprint.tool_choice.failed",
+    "agentfootprint.ontology.served",
+    "agentfootprint.answer.assessed",
+    "agentfootprint.embedding.generated",
+    "agentfootprint.artifacts.resolved",
+    "agentfootprint.artifacts.expired",
+    "agentfootprint.artifacts.hand_over_failed",
+    "agentfootprint.integrity.disposition"
+  ],
+  "plainPrototype": true,
+  "eventDescriptors": true,
+  "fresh": true,
+  "shared": {
+    "scripts": true,
+    "coverage": true,
+    "negatives": true
+  },
+  "proxy": {
+    "trace": [
+      [
+        "ownKeys"
+      ],
+      [
+        "descriptor",
+        "toolName"
+      ],
+      [
+        "get",
+        "toolName"
+      ],
+      [
+        "descriptor",
+        "lookedFor"
+      ],
+      [
+        "get",
+        "lookedFor"
+      ],
+      [
+        "descriptor",
+        "checked"
+      ],
+      [
+        "get",
+        "checked"
+      ],
+      [
+        "descriptor",
+        "tryInsteadTool"
+      ],
+      [
+        "get",
+        "tryInsteadTool"
+      ],
+      [
+        "descriptor",
+        "unknown"
+      ],
+      [
+        "get",
+        "unknown"
+      ],
+      [
+        "ownKeys"
+      ],
+      [
+        "descriptor",
+        "toolName"
+      ],
+      [
+        "get",
+        "toolName"
+      ],
+      [
+        "descriptor",
+        "lookedFor"
+      ],
+      [
+        "get",
+        "lookedFor"
+      ],
+      [
+        "descriptor",
+        "checked"
+      ],
+      [
+        "get",
+        "checked"
+      ],
+      [
+        "descriptor",
+        "tryInsteadTool"
+      ],
+      [
+        "get",
+        "tryInsteadTool"
+      ],
+      [
+        "descriptor",
+        "unknown"
+      ],
+      [
+        "get",
+        "unknown"
+      ]
+    ],
+    "before": {
+      "toolName": "tool",
+      "lookedFor": "[7 chars]",
+      "checked": [
+        {
+          "what": "[7 chars]",
+          "kind": "existence"
+        }
+      ],
+      "tryInsteadTool": {
+        "tool": "[5 chars]",
+        "why": "[7 chars]"
+      },
+      "unknown": "[7 chars]"
+    },
+    "after": {
+      "toolName": "tool",
+      "lookedFor": "[7 chars]",
+      "checked": [
+        {
+          "what": "[7 chars]",
+          "kind": "existence"
+        }
+      ],
+      "tryInsteadTool": {
+        "tool": "later",
+        "why": "[7 chars]"
+      },
+      "unknown": "[7 chars]"
+    },
+    "meta": {
+      "runId": "run",
+      "sessionId": "session",
+      "unknown": "[7 chars]"
+    }
+  },
+  "mapKeys": [
+    "agentfootprint.tools.absent",
+    "agentfootprint.tools.coverage_declared",
+    "agentfootprint.tools.semantics_declared",
+    "agentfootprint.agent.evidence_checked",
+    "agentfootprint.integrity.external_ground_used",
+    "agentfootprint.map.engaged",
+    "agentfootprint.skill.turn_routed",
+    "agentfootprint.map.parked",
+    "agentfootprint.context.evaluated",
+    "agentfootprint.validation.args_invalid",
+    "agentfootprint.agent.output_schema_validation_failed",
+    "agentfootprint.resilience.output_fallback_triggered",
+    "agentfootprint.resilience.output_canned_used",
+    "agentfootprint.stream.tool_progress",
+    "agentfootprint.checkin.request",
+    "agentfootprint.checkin.decision",
+    "agentfootprint.middleware.decision",
+    "agentfootprint.skill.step_skipped",
+    "agentfootprint.stream.llm_start",
+    "agentfootprint.credential.failed",
+    "agentfootprint.fallback.triggered",
+    "agentfootprint.memory.retrieved",
+    "agentfootprint.integrity.context_error",
+    "agentfootprint.tools.effect",
+    "agentfootprint.pause.request",
+    "agentfootprint.artifacts.minted",
+    "agentfootprint.artifacts.presented",
+    "agentfootprint.artifacts.refused",
+    "agentfootprint.reliability.fail_fast",
+    "agentfootprint.agent.handoff",
+    "agentfootprint.permission.check",
+    "agentfootprint.permission.halt",
+    "agentfootprint.composition.route_decided",
+    "agentfootprint.composition.enter",
+    "agentfootprint.composition.exit",
+    "agentfootprint.composition.fork_start",
+    "agentfootprint.composition.branch_complete",
+    "agentfootprint.composition.merge_end",
+    "agentfootprint.composition.iteration_start",
+    "agentfootprint.composition.iteration_exit",
+    "agentfootprint.agent.turn_start",
+    "agentfootprint.agent.turn_end",
+    "agentfootprint.agent.iteration_start",
+    "agentfootprint.agent.iteration_end",
+    "agentfootprint.agent.route_decided",
+    "agentfootprint.agent.output_contract_unmet",
+    "agentfootprint.agent.output_schema_retry",
+    "agentfootprint.agent.grounding_nudged",
+    "agentfootprint.agent.run_configured",
+    "agentfootprint.agent.thinking_parse_failed",
+    "agentfootprint.agent.thinking_omitted",
+    "agentfootprint.agent.around_turn_failed",
+    "agentfootprint.agent.budget_exhausted",
+    "agentfootprint.stream.llm_end",
+    "agentfootprint.stream.token",
+    "agentfootprint.stream.tool_start",
+    "agentfootprint.stream.tool_end",
+    "agentfootprint.stream.thinking_delta",
+    "agentfootprint.stream.thinking_end",
+    "agentfootprint.context.injected",
+    "agentfootprint.context.evicted",
+    "agentfootprint.context.slot_composed",
+    "agentfootprint.context.budget_pressure",
+    "agentfootprint.memory.strategy_applied",
+    "agentfootprint.memory.attached",
+    "agentfootprint.memory.detached",
+    "agentfootprint.memory.written",
+    "agentfootprint.tools.offered",
+    "agentfootprint.tools.activated",
+    "agentfootprint.tools.deactivated",
+    "agentfootprint.tools.discovery_started",
+    "agentfootprint.tools.discovery_completed",
+    "agentfootprint.tools.discovery_failed",
+    "agentfootprint.tools.shadowed",
+    "agentfootprint.tools.claim_swallowed",
+    "agentfootprint.tools.answered_off_wire",
+    "agentfootprint.tools.resource_restore",
+    "agentfootprint.tools.session_started",
+    "agentfootprint.tools.session_reused",
+    "agentfootprint.tools.session_closed",
+    "agentfootprint.tools.result_refused",
+    "agentfootprint.tools.repeated_call",
+    "agentfootprint.tools.code_run",
+    "agentfootprint.tools.mcp_client",
+    "agentfootprint.tools.request_attempts",
+    "agentfootprint.tools.session_close_failed",
+    "agentfootprint.skill.activated",
+    "agentfootprint.skill.graph_declared",
+    "agentfootprint.skill.deactivated",
+    "agentfootprint.skill.rejected",
+    "agentfootprint.skill.reroute_superseded",
+    "agentfootprint.skill.route_conflict",
+    "agentfootprint.skill.step_advanced",
+    "agentfootprint.skill.steps_unfinished",
+    "agentfootprint.skill.escalated",
+    "agentfootprint.permission.gate_opened",
+    "agentfootprint.permission.gate_closed",
+    "agentfootprint.credential.requested",
+    "agentfootprint.credential.acquired",
+    "agentfootprint.credential.authorization_required",
+    "agentfootprint.cost.tick",
+    "agentfootprint.cost.limit_hit",
+    "agentfootprint.eval.score",
+    "agentfootprint.eval.threshold_crossed",
+    "agentfootprint.error.retried",
+    "agentfootprint.error.recovered",
+    "agentfootprint.error.fatal",
+    "agentfootprint.error.circuit_changed",
+    "agentfootprint.reliability.retried",
+    "agentfootprint.reliability.recovered",
+    "agentfootprint.pause.resume",
+    "agentfootprint.findings.declared",
+    "agentfootprint.findings.standing",
+    "agentfootprint.findings.judged",
+    "agentfootprint.findings.judge_failed",
+    "agentfootprint.findings.contingent",
+    "agentfootprint.findings.argument",
+    "agentfootprint.findings.period",
+    "agentfootprint.findings.negative_claim",
+    "agentfootprint.tool_choice.picked",
+    "agentfootprint.tool_choice.outcome",
+    "agentfootprint.tool_choice.failed",
+    "agentfootprint.ontology.served",
+    "agentfootprint.answer.assessed",
+    "agentfootprint.embedding.generated",
+    "agentfootprint.artifacts.resolved",
+    "agentfootprint.artifacts.expired",
+    "agentfootprint.artifacts.hand_over_failed",
+    "agentfootprint.integrity.disposition"
+  ],
+  "inheritedNames": [
+    false,
+    false,
+    false
+  ]
+}

@@ -4,7 +4,7 @@
  *
  * An agent ends some runs on a record in its state instead of a throw — a
  * reliability fail-fast, a policy halt, a denied message, a refused answer —
- * and only its own run boundary (`Agent · finalizeResult`) turns the record
+ * and only its own run boundary (`core/agent/runtime/terminal/owner.ts · finalizeResult`) turns the record
  * into the typed error. A composition mounts the agent's CHART, so that
  * boundary never runs: the record stayed behind the mount and the composition
  * carried on as if the child had answered.

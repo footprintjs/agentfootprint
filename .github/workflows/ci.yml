@@ -31,6 +31,37 @@ jobs:
     with:
       tool_sha: a8ccf97188f64adabd83cbf98677eda501a25ac2
 
+  # Release hold, pull-request mode (footprintjs/ci docs/HOLD.md): while an open
+  # issue or pull request carries the label `hold-release`, a pull request that
+  # changes the package.json version (a release or heading pull request) fails
+  # this job; every other pull request passes. Why: a release was once
+  # published while another working session held it.
+  #
+  # Its own job, and NOT a dependency of any other job: the `test` and
+  # `coverage` checks read the results of the jobs they need, and a hold must
+  # never turn an ordinary check red. It does change one thing: a red `hold`
+  # job makes this run's conclusion `failure`, and publish.yml's `verdict`
+  # accepts only `success`, so a release pull request whose last run happened
+  # during a hold makes `build` run every gate again after the hold is lifted.
+  # That is safe (it costs minutes, never a release): `verdict` can only
+  # decline to skip the gates, never accept. The `if:` is required: the mode refuses every event but
+  # `pull_request`, and this workflow also runs on pushes to main.
+  #
+  # PIN: `uses:` and `tool_sha` are one reviewed footprintjs/ci commit and move
+  # together, with the pins in publish.yml. `file-size` above pins an older
+  # commit for another check.
+  # `permissions:` is on the job, not at the top of the file.
+  hold:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    uses: footprintjs/ci/.github/workflows/hold.yml@b14f372d4c26e9f3059068b250544aa320b834aa
+    with:
+      tool_sha: b14f372d4c26e9f3059068b250544aa320b834aa
+      mode: pull-request
+
   # The test suite, split across machines: `--shard=i/N` hands each machine its
   # share of the test files, so all N together run every file exactly once.
   # Vitest splits by file count, not by time. To change N, edit the `shard` list

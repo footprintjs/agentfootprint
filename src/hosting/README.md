@@ -308,7 +308,7 @@ Direct and mounted runs cannot enter its session or reply. A refused question ca
 `answer-account` explains a served record and states what it keeps out. The caller's reply and the next turn's
 conversation instead read real values, never the served record:
 
-- the streamed reply and the spend ledger — `standingAgent.ts` reads the run
+- the streamed reply and the spend ledger — `standingAgent/lanes/pool.ts` reads the run
   through `core/runnerLive.ts` · `runnerLive`, the library's real-value path;
 - the session store — `durability.ts · durableWriter` reads the invocation's LIVE committed state through
   `core/runnerLive.ts · RunnerLive` when a commit moves `history`; commit event values are served record values.
@@ -328,7 +328,7 @@ await standingAgent({
 A request's artifact scope has ONE owner: `standingAgent`. The artifact door
 (`artifact-head` / `artifact-get`) and the turn's hand-over
 (`reply.turnArtifacts`) both take it from `sessionArtifactScope` in
-`standingAgent.ts`, so what a host files for a turn lands where the door
+`standingAgent/identity/request.ts`, so what a host files for a turn lands where the door
 redeems for the same caller. A host that re-derives the tuple itself gets the
 open door right and the signed-in door wrong; that was a real field bug.
 
@@ -649,7 +649,7 @@ recording to explain an answer. Opt in with `standingAgent({ answerAccounts })`;
 without it the op is the unknown-op refusal, before anything is read.
 
 The rule: **it is `artifact-get`, narrowed.** It is a third branch inside
-`standingAgent.ts · answerArtifact`, so it takes the same door guard, the same
+`standingAgent/artifacts/wire.ts · answerArtifact`, so it takes the same door guard, the same
 `isArtifactRef`, the same ownership check (`mayRedeemFrom`) before any lane is
 built, and it is lane-free (it never waits behind a run). Its output is a
 derivative of bytes the same caller could already `artifact-get`, so it can
