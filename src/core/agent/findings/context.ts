@@ -157,8 +157,8 @@ export function findingsContext(
   const encoder = new TextEncoder();
   // Counts start at their maximum, reserving their serialized space before
   // entries are admitted. They only decrease, so overflow cannot hide omissions.
-  if (encoder.encode(encode()).byteLength > limit)
-    throw new Error('Findings context metadata exceeds its byte budget.');
+  let size = encoder.encode(encode()).byteLength;
+  if (size > limit) throw new Error('Findings context metadata exceeds its byte budget.');
   for (const [key, entries] of Object.entries(buckets)) {
     const cap =
       key.endsWith('Ids') || key === 'noise'
@@ -171,12 +171,23 @@ export function findingsContext(
       } catch {
         continue;
       } // Unrepresentable or oversized data is counted, never coerced.
-      data[key]!.push(value);
-      omitted[key]!--;
-      if (encoder.encode(encode()).byteLength > limit) {
-        data[key]!.pop();
-        omitted[key]!++;
-      }
+      // A RUNNING total, not a re-encode of the whole frame per entry: what
+      // admitting this entry adds is its own JSON (serialized exactly as it
+      // will sit inside the frame), a comma unless it is its bucket's first,
+      // and the change in its bucket's omitted-count digits (10 → 9 saves a
+      // byte). The frame is encoded once more at the end, byte for byte what
+      // re-encoding after every entry chose (pinned by context.test.ts).
+      const bucket = data[key]!;
+      const left = omitted[key]!;
+      const grows =
+        encoder.encode(JSON.stringify(value)).byteLength +
+        (bucket.length > 0 ? 1 : 0) +
+        String(left - 1).length -
+        String(left).length;
+      if (size + grows > limit) continue;
+      bucket.push(value);
+      omitted[key] = left - 1;
+      size += grows;
     }
   }
   return encode();

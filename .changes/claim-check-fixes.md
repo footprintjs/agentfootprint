@@ -1,0 +1,4 @@
+---
+type: fixed
+---
+**Small corrections to the claim checks.** `resultColumns` now counts a column as present only when the row has it as its own key, so a declared column named `constructor` or `toString` that no row delivered is reported as `missing-column` instead of a mismatch, and under `enforce` a valid result is no longer refused for it. Restoring a checkpoint now admits every negative-prose note code and claim kind the row types allow, from one shared list. The tools slot's compose-seam backstop files its findings through the same path every other seam uses, so its dedup identity names the compose seam it reports. The findings DATA frame is measured with a running byte total instead of being re-encoded after every entry; the frame is byte-identical. The two private-argument refusals that shared the code `ERR_PRIVATE_ARGUMENT_RECORD` are now one error class with that code.

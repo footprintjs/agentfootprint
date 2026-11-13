@@ -1,6 +1,10 @@
 /** Checkpoint admission for observe-only prose findings. No prose or evidence is
  * re-judged on restore, and an unknown/malformed row cannot silently disappear. */
-import { PROSE_NOTES } from '../../../integrity/negative-claim/types.js';
+import {
+  PROSE_CLAIM_KINDS,
+  PROSE_NOTE_CODES,
+  PROSE_NOTES,
+} from '../../../integrity/negative-claim/types.js';
 import { copyJson } from '../../../lib/boundedJson.js';
 
 export function negativeProseRowIsWellFormed(value: unknown): boolean {
@@ -25,18 +29,12 @@ export function negativeProseRowIsWellFormed(value: unknown): boolean {
       return false;
     if (row.kind === 'negative-claim-note')
       return (
-        [
-          'in-code-block',
-          'language-unsupported',
-          'too-many-claims',
-          'input-limit',
-          'no-read',
-        ].includes(row.code as string) &&
+        (PROSE_NOTE_CODES as readonly string[]).includes(row.code as string) &&
         (row.phraseId === undefined || typeof row.phraseId === 'string')
       );
     if (
       row.kind !== 'negative-claim' ||
-      !['none', 'complete'].includes(row.claim as string) ||
+      !(PROSE_CLAIM_KINDS as readonly string[]).includes(row.claim as string) ||
       typeof row.phraseId !== 'string' ||
       !strings(row.notes) ||
       !(row.notes as string[]).every((note) => (PROSE_NOTES as readonly string[]).includes(note)) ||

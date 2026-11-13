@@ -21,6 +21,13 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
   `activeInjections`, `currentSkillId`, `stepPointer`, `dynamicToolSchemas`
   (`buildAgentChart.ts` · `SUBFLOW_IDS.INJECTION_ENGINE` and
   `buildAgentChart.ts` · `SUBFLOW_IDS.TOOLS`, on their `outputMapper`s).
+- `placedTickets` — one `{ toolCallId, ref }` per result the placement threshold
+  checked into the store, written by `stages/toolCalls/execution/artifactsOperations.ts` ·
+  `placeResults` and read by `stagedRefs.ts` · `findStagedRefs`. A ticket-shaped
+  tool result is named in the library's staged-data line only when this list
+  says the run minted that ref for that call: any tool can return
+  `{ placed: true, ref: "…" }`, and the line is the library speaking. In the
+  grouped chart the key crosses into `sf-llm-call` (`buildDynamicAgentChart.ts`).
 - The Lens files read only what they are handed, plus `scope.hiddenSkillIds`
   (owner: `../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`,
   published by the engine mount's `outputMapper`) where they name skill ids.

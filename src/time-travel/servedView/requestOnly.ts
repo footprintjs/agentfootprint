@@ -2,7 +2,11 @@ import type { LLMMessage, LLMToolSchema } from '../../provider-contract/types.js
 import type { toolsWithheld } from '../../core/agent/composeRequest.js';
 import { findingsContext } from '../../core/agent/findings/context.js';
 import type { FindingsLedger } from '../../core/agent/findings/types.js';
-import { findStagedRefs, stagedRefsNudgeLine } from '../../core/agent/stagedRefs.js';
+import {
+  findStagedRefs,
+  issuedTicketsOf,
+  stagedRefsNudgeLine,
+} from '../../core/agent/stagedRefs.js';
 import { evidenceConclusionLine } from '../../core/agent/evidence/recovery.js';
 import { readAtCall as foldAtCall, type EpochLocation } from '../epochs.js';
 import type { ServedRequestOnly } from '../servedView.js';
@@ -42,7 +46,14 @@ export function requestOnlyAt(
   const requestOnly: ServedRequestOnly[] = [];
   const wants = wantsMapOf(readRunConstant(location, 'toolWantsByName', served));
   if (wants !== undefined) {
-    const match = findStagedRefs(asSent, wants, new Set(registered.map((t) => t.name)));
+    // The issued tickets are committed state too (`placedTickets`), read at
+    // this call exactly as `callLLM` read them live.
+    const match = findStagedRefs(
+      asSent,
+      wants,
+      new Set(registered.map((t) => t.name)),
+      issuedTicketsOf(readAtCall(location, 'placedTickets', served)),
+    );
     if (match !== undefined) {
       requestOnly.push({
         role: 'user',

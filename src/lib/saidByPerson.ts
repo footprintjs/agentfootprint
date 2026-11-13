@@ -218,3 +218,33 @@ export function isSaidByPerson(msg: AuthoredMessage | undefined): boolean {
     !isLibraryAuthoredFrame(msg)
   );
 }
+
+/**
+ * {@link isSaidByPerson}, read off a RECORDED history entry — an `unknown`
+ * from a snapshot, a checkpoint or a hand-built history.
+ *
+ * The one reader of a record, so every reader of "where this turn begins" in
+ * a record hands the rule the WHOLE entry: the answer's standing
+ * (`core/agent/assessment/assess.ts` · `turnResults`) and the answer account
+ * (`answer-account/facts/inView.ts`, `pausedLeg.ts`). A reader that copied
+ * only `role`, `content` and `injectedBy` dropped `ephemeral`, so a retry's
+ * one-request feedback line in a restored history started a "turn" for the
+ * standing and not for the account.
+ *
+ * @example
+ * ```ts
+ * isPersonEntry({ role: 'user', content: 'find the order' });                    // true
+ * isPersonEntry({ role: 'user', content: 'Output failed.', ephemeral: true });   // false
+ * isPersonEntry('find the order');                                               // false — not an entry
+ * ```
+ */
+export function isPersonEntry(entry: unknown): boolean {
+  // The cheap test first: this runs once per history entry per witness (`inView.ts`).
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false;
+  const msg = entry as { readonly role?: unknown; readonly content?: unknown };
+  return (
+    msg.role === 'user' &&
+    typeof msg.content === 'string' &&
+    isSaidByPerson(entry as AuthoredMessage)
+  );
+}

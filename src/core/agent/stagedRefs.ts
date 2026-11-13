@@ -96,12 +96,21 @@ export function toolWantsOf(
  * A `role: 'tool'` message carrying a placed result holds the ticket as JSON
  * (`placedToolResult` is what wrote it); anything that does not parse to the
  * ticket shape is an ordinary result and is skipped without a sound.
+ *
+ * The SHAPE is not enough, because any tool can return that JSON. The line
+ * this join feeds is written by the library, so a ticket counts only when
+ * `issued` (the run's `placedTickets`, see {@link issuedTicketsOf}) says this
+ * run minted that ref for that very `toolCallId`. Example: a tool that
+ * returns `{ placed: true, ref, kind, reason }` itself is an ordinary result
+ * here, even when its `ref` is a well-formed `art_…` nobody minted.
  */
 export function findStagedRefs(
   messages: readonly LLMMessage[],
   toolWants: ReadonlyMap<string, readonly string[]>,
   servedToolNames: ReadonlySet<string>,
+  issued: ReadonlyMap<string, string>,
 ): StagedRefsMatch | undefined {
+  if (issued.size === 0) return undefined;
   const spendersByKind = new Map<string, string[]>();
   for (const [name, kinds] of toolWants) {
     if (!servedToolNames.has(name)) continue;
@@ -119,13 +128,15 @@ export function findStagedRefs(
   let refsOmitted = 0;
   for (const message of messages) {
     if (message.role !== 'tool') continue;
+    const issuedRef = message.toolCallId === undefined ? undefined : issued.get(message.toolCallId);
+    if (issuedRef === undefined) continue;
     let parsed: unknown;
     try {
       parsed = JSON.parse(message.content);
     } catch {
       continue;
     }
-    if (!isPlacedToolResult(parsed)) continue;
+    if (!isPlacedToolResult(parsed) || parsed.ref !== issuedRef) continue;
     const kind = (parsed as { kind?: unknown }).kind;
     if (typeof kind !== 'string') continue;
     const spenders = spendersByKind.get(kind);
@@ -139,9 +150,45 @@ export function findStagedRefs(
   return { refs, refsOmitted, tools: tools.slice(0, MAX_NUDGE_TOOLS) };
 }
 
+/**
+ * The run's issued tickets as the map {@link findStagedRefs} takes —
+ * `toolCallId` → ref. Read defensively because it comes from scope or from a
+ * recording: anything that is not a list of `{ toolCallId, ref }` strings
+ * issues nothing.
+ */
+export function issuedTicketsOf(value: unknown): ReadonlyMap<string, string> {
+  const issued = new Map<string, string>();
+  if (!Array.isArray(value)) return issued;
+  for (const entry of value as readonly unknown[]) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { toolCallId, ref } = entry as { toolCallId?: unknown; ref?: unknown };
+    if (typeof toolCallId === 'string' && typeof ref === 'string') issued.set(toolCallId, ref);
+  }
+  return issued;
+}
+
+/** Most characters of one ref a sentence prints. */
+const MAX_PRINTED_REF_CHARS = 64;
+
+/** A plain ref — what the library's minting makes (`art_` + base62). */
+const PLAIN_REF = /^[\w.:-]{1,64}$/;
+
+/**
+ * One ref as the sentence prints it. A plain one prints as it always did,
+ * `'art_x'`. Anything else — a custom store's ref with a quote or a newline
+ * in it, say — is JSON-quoted and cut at {@link MAX_PRINTED_REF_CHARS}, so it
+ * can neither close the sentence's quote nor run on for pages. The kind is
+ * printed as declared: it matched a `wants` the app's author wrote.
+ */
+function printedRef(ref: string): string {
+  if (PLAIN_REF.test(ref)) return `'${ref}'`;
+  const cut = ref.length > MAX_PRINTED_REF_CHARS ? `${ref.slice(0, MAX_PRINTED_REF_CHARS)}…` : ref;
+  return JSON.stringify(cut);
+}
+
 /** Render the matched refs for a sentence: `'art_x' (dataset/rows), …`. */
 function describeRefs(match: StagedRefsMatch): string {
-  const rendered = match.refs.map((r) => `'${r.ref}' (${r.kind})`).join(', ');
+  const rendered = match.refs.map((r) => `${printedRef(r.ref)} (${r.kind})`).join(', ');
   return match.refsOmitted > 0 ? `${rendered}, and ${match.refsOmitted} more` : rendered;
 }
 

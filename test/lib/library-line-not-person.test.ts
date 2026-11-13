@@ -24,7 +24,7 @@
  * `readBeforePause` (now `facts/pausedLeg.ts` · `readPausedLeg`) took the LAST `role: 'user'` entry of the recorded history
  * as "the current request", so a library frame written after a resumed leg's
  * pre-pause results (an evidence correction, a budget wrap-up) hid them. It
- * reads through the one rule now (`common.ts` · `isPersonEntry`), as does
+ * reads through the one rule now (`lib/saidByPerson.ts` · `isPersonEntry`), as does
  * `inView.ts`'s turn distance.
  *
  * Test types (Convention 3): unit (the predicate over each real writer's
@@ -56,7 +56,8 @@ import {
 import { stagedRefsNudgeLine } from '../../src/core/agent/stagedRefs.js';
 import { currentRequestIndexOf } from '../../src/core/agent/window/currentRequest.js';
 import { readPausedLeg } from '../../src/answer-account/facts/pausedLeg.js';
-import { isPersonEntry, type ReadContext } from '../../src/answer-account/facts/common.js';
+import { type ReadContext } from '../../src/answer-account/facts/common.js';
+import { isPersonEntry } from '../../src/lib/saidByPerson.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../src/lib/saidByPerson.js';
 
 const LA = 'America/Los_Angeles';

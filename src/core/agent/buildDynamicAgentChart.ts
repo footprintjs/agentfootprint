@@ -758,6 +758,12 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // one whose model declared nothing, crosses no new key. Reads only
           // inside (the writes are outside), so no outputMapper line is needed.
           ...(p.findingsLedger !== undefined && { findingsLedger: p.findingsLedger }),
+          // The placement tickets this run issued — the same lesson again:
+          // placement writes them in tool-calls on the OUTER scope, and the
+          // staged-refs nudge in CallLLM names a ref only when it is listed
+          // (`stagedRefs.ts` · `findStagedRefs`). Value-conditional: a run
+          // that placed nothing crosses no new key. Read-only inside.
+          ...(p.placedTickets !== undefined && { placedTickets: p.placedTickets }),
           // The declared ontology (9.106.0) — the same lesson: `callLLM`
           // composes the ontology piece from the run constant `ontology`,
           // which seed wrote on the OUTER scope, and `callLLM` lives INSIDE

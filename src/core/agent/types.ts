@@ -2051,6 +2051,19 @@ export interface AgentState {
    * write to scope is JSON-round-tripped and a `Map` round-trips to `{}`.
    */
   toolWantsByName?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * The placement tickets THIS run issued — one `{ toolCallId, ref }` per
+   * result the placement threshold checked into the store
+   * (`artifactsOperations.ts` · `placeResults`). Absent until the first one.
+   *
+   * Why it exists: a ticket is only JSON on a `role: 'tool'` message, and any
+   * tool can return JSON of that shape. The staged-refs nudge is a line the
+   * LIBRARY writes, so it names a ref only when this list says the run minted
+   * it for that very call (`stagedRefs.ts` · `findStagedRefs`). A tool that
+   * returns `{ placed: true, ref: "…", kind, reason }` itself stays an
+   * ordinary result: the library names only refs it minted.
+   */
+  placedTickets?: readonly { readonly toolCallId: string; readonly ref: string }[];
   /** Which skill ids the caller's role may NOT see this iteration (9.86.0),
    *  resolved ONCE by the tools slot and published here so every model-facing
    *  composer applies the same filter. Read by the `read_skill` gate before it

@@ -36,7 +36,10 @@ stronger and true) and made the boundary something the index can actually measur
 
 1. **which values the index could ground** — the gate computes that already, for every armed agent;
 2. **which turn each was last served in** — one number, stamped during the walk that was already
-   happening. A turn starts at each `role: 'user'` message the library did not author.
+   happening. A turn starts at each `role: 'user'` message the library did not author — the one
+   authorship rule, `lib/saidByPerson.ts` · `isSaidByPerson`. So a budget wrap-up frame, a drop
+   notice or a compaction summary that lands after this turn's result never starts a new turn,
+   and an answer read from that result is not filed as prior-turn evidence.
 
 When every grounded value's newest source is older than the turn being answered, the answer was
 assembled from the conversation rather than from anything this turn went and looked at.

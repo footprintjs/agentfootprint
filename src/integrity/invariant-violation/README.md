@@ -1,6 +1,7 @@
 **Mixed** — one decidable claim over recorded context, and the sentences that
 claim is served as.
-Fold: `check.ts` · `invariantViolationsOf` and `wire.ts` · `wireViolationsOf` —
+Fold: `check.ts` · `invariantViolationsOf` (and its compose-seam backstop
+`composeViolationsOf`) and `wire.ts` · `wireViolationsOf` —
 two recorded facts about one subject that cannot both be true. They derive from
 the record, state their own evidence, and file a disposition even when they find
 nothing.
@@ -34,6 +35,12 @@ wrongly is the SAME iteration's compose. So the check runs as the brief's own co
 backstop, one comparison per parked map against the final merged wire list, and still names the
 guilty write: the park that minted `parkedToolNames` this very iteration. One finding per defect
 per run (identity dedup threaded across passes), however many calls would have re-detected it.
+
+The backstop itself is `check.ts` · `composeViolationsOf`: it returns the findings already at seam
+`'compose'`, and the tools slot files them on the one rail (`core/agent/integrityFindings.ts` ·
+`fileIntegrityFindings`). That matters for the dedup: the slot once kept its own copy of the loop
+and took the identity from the write-seam finding before relabelling it, so it stored
+`invariant-violation @write […]` beside an event that said `compose`.
 
 **What it caught on day one — a live defect, not just regression insurance.** The park hold-out
 filters the registry and skill lists, but PROVIDER schemas merge unfiltered: a `.toolProvider()`

@@ -315,6 +315,14 @@ export function buildToolArtifactsOperations(
       return values;
     }
     const substitute = placedToolResult(call.toolName, meta, text.length, placement.maxInlineChars);
+    // The run's own receipt for this ticket: the staged-refs nudge names a
+    // ref only when it is listed here for this call (`stagedRefs.ts`), so a
+    // tool returning ticket-shaped JSON cannot have its ref repeated in a
+    // line the library writes.
+    scope.placedTickets = [
+      ...(scope.placedTickets ?? []),
+      { toolCallId: call.toolCallId, ref: meta.ref },
+    ];
     return {
       // One ticket when the two channels carry one value — the capResults
       // law. A value that differs from what the model reads ONLY by the

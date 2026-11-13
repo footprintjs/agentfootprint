@@ -5,6 +5,7 @@ import { carriesArgumentView } from '../../toolShownArgs.js';
 import type { ArgumentAskState } from './ask.js';
 import type { ToolOf } from './resolve.js';
 import type { AwaitingInput } from '../../../tools/inputRequest.js';
+import { PrivateArgumentRecordError } from './privateAnswers.js';
 
 export interface AskWaiting {
   readonly requestId: string;
@@ -24,17 +25,10 @@ export interface PendingPrivateAsk {
   }[];
 }
 
-export class PendingPrivateAskError extends Error {
-  readonly code = 'ERR_PRIVATE_ARGUMENT_RECORD';
-  constructor() {
-    super(
-      'A private argument question requires its saved declaration and argument-view capability.',
-    );
-    this.name = 'PendingPrivateAskError';
-  }
-}
 const refuse = (): never => {
-  throw new PendingPrivateAskError();
+  throw new PrivateArgumentRecordError(
+    'A private argument question requires its saved declaration and argument-view capability.',
+  );
 };
 const indexFits = (value: unknown, length: number): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value < length;
