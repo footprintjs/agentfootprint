@@ -304,9 +304,10 @@ possible p (2 / 2^k for k base tasks). No interval uses a normal approximation.
 
 ## 9. Task packs from outside the repository
 
-`--pack <folder>` loads `pack.mjs` from that folder: `export const baseTasks = [...]` in the
-shape of `tasks/base-tasks.mjs`, optional `export const trapKinds = [...]` in the shape of
-`tasks/trap-kinds.mjs`, and a `traps` table giving each base task its trap kinds.
+`--pack <folder>` loads `pack.json` from that folder: `baseTasks` in the shape of
+`tasks/base-tasks.mjs`, optional `trapKinds` in the shape of `tasks/trap-kinds.mjs`, and a
+`traps` table giving each base task its trap kinds. A pack is data only: the harness never runs
+code a pack wrote.
 `--seed-file <file>` gives the pack's seed (`{ "seed": <integer> }`). The pack's digest (every
 file's bytes) is recorded with every run. A pack is validated before any run: every trap kind
 must have a twin, and every instance's goal must be unreachable in the trap and reachable in the
@@ -360,3 +361,16 @@ another library build and that build's warning table: S2 is read again from the 
 by that build's `accountForAnswer`. S1 cannot be read again (it is what that run delivered) and
 is reported as such. The paired counts on identical runs say what each version would have told
 the reader for the very same run.
+
+## Changed while building, before any paid run
+
+The rule above was committed before any harness or scoring code. These changes were made while
+building, before any run with a real model; each is marked in the text above as it now reads.
+
+- **§ 9: a pack is `pack.json`, not `pack.mjs`.** A module would run its author's code inside the
+  harness; a JSON file cannot. A trap kind is therefore a declaration chosen from a closed set
+  of things the fake back end can do (`tasks/trap-kinds.mjs` · `OVERRIDES`), not code. So that a
+  closed set can still hold a trap kind that appears in no file of this repository, one override,
+  `returns`, answers the critical call with a result the pack itself gives (any JSON), succeeds,
+  changes nothing and hands out no id: a stale reading, a wrong unit or a warning inside a
+  success can be written as data. No open-set kind uses it.
