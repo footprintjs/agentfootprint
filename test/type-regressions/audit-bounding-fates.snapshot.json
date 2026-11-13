@@ -304,6 +304,7 @@
     "approved": "kept",
     "by": "kept",
     "componentId": "kept",
+    "hiddenArgs[]": "kept",
     "iteration": "kept",
     "note": "chars",
     "requestId": "kept",
