@@ -134,7 +134,7 @@ export function buildDispatchContext(
     // arguments) and only when the fold holds a set-aside standing at
     // all. The history is the list this call was served — the same one
     // `knownResults` read one screen up — and the exempt set comes from the
-    // route decider's own builder and arm (`route.ts` · `exemptForTurn`), so
+    // route decider's own builder and arm (`turnExempt.ts` · `exemptForTurn`), so
     // a value the person or the app supplied is never a tower at either moment.
     const towers = towersFor(
       scope,

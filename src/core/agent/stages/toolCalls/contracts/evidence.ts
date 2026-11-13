@@ -146,7 +146,7 @@ export interface ToolEvidencePort {
    * the route decider judges the answer with (`runtime/routing/exemptArm.ts`),
    * so a value the person gave the batch ask, a declared default this turn
    * assumed, or a time the person said is exempt at both moments
-   * (`route.ts` · `exemptForTurn`). Present only beside `evidenceGate` with
+   * (`turnExempt.ts` · `exemptForTurn`). Present only beside `evidenceGate` with
    * the inputs layer armed.
    */
   readonly evidenceExempt?: InputsRouteArm;

@@ -8,7 +8,7 @@
  * declared defaults this turn assumed. So a value the person had answered,
  * repeated in the next call and carried only by a result the model set
  * aside, filed a contingent row at dispatch and nothing at the answer. Both
- * now ask `route.ts` · `exemptForTurn`, handed the one arm
+ * now ask `stages/turnExempt.ts` · `exemptForTurn`, handed the one arm
  * `runtime/routing/exemptArm.ts` builds.
  *
  * Test type (Convention 3): regression.

@@ -4,7 +4,7 @@
  * at: the answer (the route decider, `routeFactory.ts`) and the dispatch
  * moment of the contingent check (the tool-calls stage, `toolCalls/factory.ts`
  * → `stages/toolCalls/evidence/towers.ts`). Both hand it to the one builder of
- * the set, `stages/route.ts` · `exemptForTurn`.
+ * the set, `stages/turnExempt.ts` · `exemptForTurn`.
  *
  * Why one builder: the two moments used to build two different sets. The
  * dispatch moment knew only the person's message and the app's text, so a

@@ -7,5 +7,5 @@ message and the app's text — this turn's declared defaults, the batch ask's an
 `.time()`, the time the person said. It is the ONE builder for both moments the gate judges at:
 `routeFactory.ts` hands it to the route decider (the answer) and `../toolCalls/factory.ts` to the
 tool-calls stage (the dispatch moment of the contingent check), and both pass it to
-`stages/route.ts` · `exemptForTurn`. Example: a value the person gave the batch ask is exempt at
+`stages/turnExempt.ts` · `exemptForTurn`. Example: a value the person gave the batch ask is exempt at
 the answer and at the next call alike (`test/core/agent/findings/dispatch-exempt.test.ts`).

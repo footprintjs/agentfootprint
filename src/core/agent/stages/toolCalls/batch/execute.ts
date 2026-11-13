@@ -8,7 +8,7 @@ import type { AgentState } from '../../../types.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import { readBatchResolutions } from './inputResolutions.js';
 import { completeToolBatch } from './completion.js';
-import { loadTimeLineage } from '../../route.js';
+import { loadTimeLineage } from '../../turnExempt.js';
 import type { ToolCallOperations } from '../compose.js';
 import type { DispatchBatchFrame } from '../contracts/dispatchBatch.js';
 import type { DispatchCallRunner } from '../contracts/dispatchCall.js';

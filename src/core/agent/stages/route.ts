@@ -61,7 +61,8 @@ import { copyScriptsVerdict } from '../scripts/match.js';
 import { scriptRecoveryClause } from '../scripts/recovery.js';
 import { noteAnswerEvidence } from './answerEvidence.js';
 import { answerCarriersOf } from '../evidence/answerCarriers.js';
-import { derivedFormsOf, evidenceFromHistory, exemptFromRun } from '../evidence/evidenceIndex.js';
+import { derivedFormsOf, evidenceFromHistory } from '../evidence/evidenceIndex.js';
+import { exemptForTurn, loadTimeLineage } from './turnExempt.js';
 import { timeDerivedRow } from '../../../time/rows.js';
 import type { EvidenceVerdict, ResolvedEvidenceGate } from '../evidence/types.js';
 import { priorTurnEvidenceOf } from '../../../integrity/prior-turn-evidence/check.js';
@@ -76,7 +77,6 @@ import {
 } from '../assessment/witness.js';
 import type { DispositionLedger } from '../../../integrity/disposition/ledger.js';
 import type { Disposition } from '../../../integrity/disposition/types.js';
-import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { runKeepsOut } from '../../../redaction/runRedaction.js';
 import type { FixedRouteRationale } from '../../../events/payloads.js';
 
@@ -167,11 +167,6 @@ export type TimeLineage = (scope: TypedScope<AgentState>) => {
   readonly derived: readonly string[];
 };
 
-/**
- * The lineage reader for an armed gate (`InputsRouteArm.timeLineage`), loaded
- * through `import()` — `undefined` when `.time()` is not armed. Reads no scope,
- * so loading it before the judges moves no read in the trace.
- */
 /** The figures dial's module (`evidence/figures.ts`), loaded through `import()`
  *  only when the gate is armed with it — off, a plain agent's graph never carries it. */
 type FiguresModule = typeof import('../evidence/figures.js');
@@ -181,41 +176,6 @@ async function loadFigures(
   return gate?.figures === true || gate?.decimalRounding === true
     ? import('../evidence/figures.js')
     : undefined;
-}
-
-export async function loadTimeLineage(
-  inputs: InputsRouteArm | undefined,
-): Promise<TimeLineage | undefined> {
-  if (inputs?.timeLineage !== true) return undefined;
-  return (await import('./timeLineage.js')).timeLineageOf;
-}
-
-/**
- * THE exempt set of this turn — what the person, the app and the library's
- * own ask supplied, which no evidence check may flag. ONE builder for both
- * moments of the gate: the answer (`judgeEvidence`) and the dispatch moment
- * of the contingent check (`toolCalls/evidence/towers.ts` · `towersFor`),
- * handed the same arm by `runtime/routing/exemptArm.ts`. Example: a value the
- * person gave the batch ask is exempt at the answer AND at the next call.
- */
-export function exemptForTurn(
-  scope: TypedScope<AgentState>,
-  history: readonly LLMMessage[],
-  inputs: InputsRouteArm | undefined,
-  timeSaid: readonly string[] | undefined,
-): ReadonlySet<string> {
-  return exemptFromRun({
-    userMessage: scope.userMessage as string | undefined,
-    history,
-    systemPromptInjections: scope.systemPromptInjections as readonly InjectionRecord[] | undefined,
-    ...(inputs?.declaredDefaults !== undefined && {
-      declaredDefaults: inputs.declaredDefaults(scope),
-    }),
-    ...(inputs?.answeredValues !== undefined && {
-      answeredValues: inputs.answeredValues(scope),
-    }),
-    ...(timeSaid !== undefined && { timeSaid }),
-  });
 }
 
 /**
