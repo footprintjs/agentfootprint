@@ -52,7 +52,8 @@
  * The EXEMPT index is built from a different corpus with the same machinery:
  * the user's own message, the conversation's user/system turns, the values
  * the person typed into a typed ask (`requestInput` — its `input_received`
- * result is a `role: 'tool'` message carrying THEIR words), and the
+ * result is a `role: 'tool'` message carrying THEIR words, counted only when
+ * the library landed it and marked it `answersAsk`), and the
  * system-prompt content this turn was built from — each text with the other
  * spellings of the dates and clock times in it (`time/forms.ts` ·
  * `timeFormsOf`'s `said` list: `8 Am` is also `8:00`, `2026-10-09` also
@@ -108,6 +109,7 @@ import { absenceEvidenceProjection } from '../../../semantics/coverage/index.js'
 import { isTruncatedToolResult } from '../toolResultCap.js';
 import { isCompactedSummary } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
+import { landedTypedAnswer } from '../../../tools/typedAnswer.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
 import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
 import { scientificDecimalOf } from './numberPrecision.js';
@@ -486,16 +488,21 @@ function addExempt(sink: Sink, text: string): void {
  * ran on the answer before it landed, so a hidden field reads as its
  * placeholder and exempts nothing, exactly as a redacted person turn does.
  * A result with no `origins` exempts nothing: no field can be proven theirs.
+ *
+ * Only a message the LIBRARY landed counts (`tools/typedAnswer.ts` ·
+ * `landedTypedAnswer`: the `LLMMessage.answersAsk` mark, naming the ask its
+ * content answers). The content's shape alone never does: any tool can return
+ * `{"status":"input_received", …}`, and that result stays the tool's.
  */
 function typedAskAnswerOf(msg: LLMMessage): readonly string[] | undefined {
-  if (msg.role !== 'tool' || typeof msg.content !== 'string') return undefined;
   // Every other tool result is read by the evidence index already; this
-  // corpus parses only the ones that can be an answer.
-  if (!msg.content.includes('"input_received"')) return undefined;
-  const read = readResult(toolBytesOf(msg));
-  if (!('parsed' in read)) return undefined;
-  const landed = read.parsed;
-  if (!isRecord(landed) || landed.status !== 'input_received') return undefined;
+  // corpus parses only the ones the library marked, through the tool-bytes
+  // cut and with this index's own reader.
+  const landed = landedTypedAnswer(msg, (marked) => {
+    const read = readResult(toolBytesOf(marked));
+    return 'parsed' in read ? read.parsed : undefined;
+  });
+  if (landed === undefined) return undefined;
   const { values, origins } = landed;
   if (!isRecord(values) || !isRecord(origins)) return undefined;
   const given: string[] = [];
@@ -530,7 +537,8 @@ function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
     // The person's answer to a typed ask (`requestInput`) lands as a
     // `role: 'tool'` message, but it is their words, not an observation:
     // exempt like a value in their message — and, being read here, carried
-    // by a fold's lineage exactly as their message is.
+    // by a fold's lineage exactly as their message is. Only the answer the
+    // library marked (`typedAskAnswerOf`); a lookalike is a tool's result.
     const answered = typedAskAnswerOf(msg);
     if (answered !== undefined) {
       for (const value of answered) {
@@ -567,8 +575,9 @@ function addHistoryExempt(sink: Sink, history: readonly LLMMessage[]): void {
  * The exemption lineage of a span about to be folded: every lookup form the
  * exempt corpus holds for these messages, in first-seen order — the person's
  * and the app's turns by the corpus's own rule, a nested summary by the
- * lineage IT carried, and a typed-ask answer by the values the person typed
- * into it (its `input_received` result is their words). Every other tool
+ * lineage IT carried, and a typed-ask answer the library landed by the
+ * values the person typed into it (its marked `input_received` result is
+ * their words; an unmarked one of the same shape is a tool's). Every other tool
  * result contributes nothing here: a summarized tool value keeps its tool
  * source and is judged against the tool results still in the window, exactly
  * like a value whose result a drop removed.

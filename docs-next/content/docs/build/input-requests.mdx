@@ -99,7 +99,13 @@ values. A complete answer becomes the collecting tool's result:
 ```
 
 The existing result middleware, placement, redaction and size limits still
-process that result. The collection tool is not executed again. A complete
+process that result. The collection tool is not executed again. The history
+message the answer lands as carries the library's mark,
+`answersAsk: { requestId }`, outside its content and never sent to a model.
+Only a marked message counts as the person's words (the evidence gate and a
+re-ask read the mark, never the shape): a tool that returns the same JSON
+itself is an ordinary result. A conversation continued with `continueFrom`
+loses the mark, because an earlier run asked those questions. A complete
 FlowchartCheckpoint retains the selected skill, history and step position
 across a process restart; the resuming agent must mount the same chart.
 Invalid or stale replies leave the checkpoint available for correction.

@@ -1,4 +1,5 @@
 import { withNativeResourceObservation } from '../../helpers/nativeResourceObservation.js';
+import { withTypedAnswerMark } from '../../helpers/typedAnswerMark.js';
 /**
  * A lookup that pauses still declares what it looked at (9.114.0).
  *
@@ -829,8 +830,10 @@ describe('regression: a raise WITHOUT `absence` records what 9.113.0 recorded', 
       }
       expect(existsSync(REFERENCE), 'no reference — capture it on the pre-change tree').toBe(true);
       const legacy = JSON.parse(readFileSync(REFERENCE, 'utf8'));
+      // A typed ask's landed answer now carries the library's mark; the
+      // requests and everything else stay as recorded.
       expect(record).toEqual({
-        ...withNativeResourceObservation(legacy),
+        ...withTypedAnswerMark(withNativeResourceObservation(legacy)),
         keysAtPause: nativeOwnershipKeys(legacy.keysAtPause, true),
         keysAfterResume: nativeOwnershipKeys(legacy.keysAfterResume, true),
       });

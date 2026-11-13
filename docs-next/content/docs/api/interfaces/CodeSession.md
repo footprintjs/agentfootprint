@@ -4,7 +4,7 @@ title: CodeSession
 
 # Interface: CodeSession
 
-Defined in: [src/provider-contract/types.ts:1178](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1178)
+Defined in: [src/provider-contract/types.ts:1214](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1214)
 
 One live session. `stop()` is idempotent and tolerates "already gone".
 
@@ -14,7 +14,7 @@ One live session. `stop()` is idempotent and tolerates "already gone".
 
 > `readonly` **id**: `string`
 
-Defined in: [src/provider-contract/types.ts:1180](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1180)
+Defined in: [src/provider-contract/types.ts:1216](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1216)
 
 The backend's own id for this session, when it has one.
 
@@ -24,7 +24,7 @@ The backend's own id for this session, when it has one.
 
 > **execute**(`req`): `Promise`\<[`CodeResult`](/docs/api/interfaces/CodeResult)\>
 
-Defined in: [src/provider-contract/types.ts:1181](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1181)
+Defined in: [src/provider-contract/types.ts:1217](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1217)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/provider-contract/types.ts:1181](https://github.com/footprintjs
 
 > `optional` **readFile**(`path`, `options`): `Promise`\<[`CodeFile`](/docs/api/interfaces/CodeFile)\>
 
-Defined in: [src/provider-contract/types.ts:1236](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1236)
+Defined in: [src/provider-contract/types.ts:1272](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1272)
 
 OPTIONAL — read ONE file back out of the session, whole or not at all.
 
@@ -97,7 +97,7 @@ Feature-detect with `canReadCodeFiles(session)`.
 
 > `optional` **runCommand**(`command`, `options?`): `Promise`\<[`CodeCommandResult`](/docs/api/interfaces/CodeCommandResult)\>
 
-Defined in: [src/provider-contract/types.ts:1251](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1251)
+Defined in: [src/provider-contract/types.ts:1287](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1287)
 
 OPTIONAL — run ONE shell command in the session.
 
@@ -132,7 +132,7 @@ stdout and stderr are bounded, and a cut is stated on `truncated`.
 
 > `optional` **stageInputs**(`inputs`): `Promise`\<readonly [`StagedCodeInput`](/docs/api/interfaces/StagedCodeInput)[]\>
 
-Defined in: [src/provider-contract/types.ts:1215](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1215)
+Defined in: [src/provider-contract/types.ts:1251](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1251)
 
 OPTIONAL (9.26.0) — put payloads INTO the session, so code can read data
 that never travelled through the context window.
@@ -177,7 +177,7 @@ readonly [`CodeInput`](/docs/api/interfaces/CodeInput)[]
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [src/provider-contract/types.ts:1259](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1259)
+Defined in: [src/provider-contract/types.ts:1295](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L1295)
 
 Release the session.
 

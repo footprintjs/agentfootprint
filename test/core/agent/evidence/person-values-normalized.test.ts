@@ -48,7 +48,11 @@ const GATE = resolveEvidenceGate();
 
 const QUESTION = 'what clients connected to SHISOLPLPAP006 during 10/09/26 8 Am to 8:40 AM PST';
 
-/** The landed answer of a typed ask, as `Agent.resume` puts it in history. */
+/**
+ * The landed answer of a typed ask, as `Agent.resume` puts it in history: with
+ * the library's mark (`answersAsk`), without which the same content is a
+ * tool's result (`test/core/agent/evidence/typed-answer-mark.test.ts`).
+ */
 const landed = (
   values: Record<string, string | number | boolean>,
   origins: Record<string, 'response' | 'declaration'>,
@@ -63,6 +67,7 @@ const landed = (
     origins,
     origin: { originalRequest: QUESTION, toolCallId: 'c1' },
   }),
+  answersAsk: { requestId: 'r1' },
 });
 
 const clients: LLMMessage = {

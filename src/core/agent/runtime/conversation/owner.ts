@@ -15,6 +15,7 @@ import {
 import { requireVerificationOnResume } from '../../findings/verificationCheckpoint.js';
 import { PendingQuestionError } from '../../../conversation.js';
 import { type TimeAnswerContext } from '../../../../tools/inputRequest.js';
+import { withoutTypedAnswerMarks } from '../../../../tools/typedAnswer.js';
 import { type ClockDraft, type ReadRunTime } from '../../../../time/clock.js';
 import type { AgentOutput, AgentState } from '../../types.js';
 import { negativeCheckpointOf } from '../../negativeClaims/checkpoint.js';
@@ -281,7 +282,10 @@ export function applyContinuation(
       'Continuation requires the negative-claims setting used by the recording agent.',
     );
   values.pendingResumeHistory = {
-    history: cp.history as readonly LLMMessage[],
+    // Without the library's typed-answer mark: an earlier run asked those
+    // questions, so in this run their answers read as tool results
+    // (`tools/typedAnswer.ts` · `withoutTypedAnswerMarks`).
+    history: withoutTypedAnswerMarks(cp.history as readonly LLMMessage[]),
     appendsUserTurn,
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.
