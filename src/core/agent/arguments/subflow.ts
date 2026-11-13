@@ -33,6 +33,7 @@
  * staging a second copy of the model's quotes.
  */
 
+import type { PlacedTicket } from '../placedTickets.js';
 import type { TypedScope } from 'footprintjs';
 
 import { turnWindowsOf } from '../../../time/bind.js';
@@ -79,6 +80,8 @@ export interface SourceInputs {
   }[];
   /** The run's message came from a composition, not a person (`AgentInput.messageFrom`). */
   readonly composed?: true;
+  /** The tickets the library placed (`AgentState.placedTickets`) — who placed a result. */
+  readonly placedTickets?: readonly PlacedTicket[];
 }
 
 /**
@@ -328,6 +331,7 @@ function detached(inputs: SourceInputs): SourceInputs {
     ...(inputs.ledger !== undefined && { ledger: [...inputs.ledger] }),
     ...(inputs.previousBatch !== undefined && { previousBatch: [...inputs.previousBatch] }),
     ...(inputs.composed === true && { composed: true as const }),
+    ...(inputs.placedTickets !== undefined && { placedTickets: [...inputs.placedTickets] }),
   });
 }
 

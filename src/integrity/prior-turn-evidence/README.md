@@ -26,7 +26,7 @@ notion of WHEN a value was grounded.
 
 **And the gate said otherwise — the half of this that is a bug, not a feature.** Both of the gate's
 user-facing sentences — the correction it sends the model and the warning it prints an operator —
-said the flagged values *"appear in NO tool result **from this turn**"*. The index behind them has
+said the flagged values _"appear in NO tool result **from this turn**"_. The index behind them has
 never been turn-scoped: it walks every `role: 'tool'` turn in the history. The library was
 **asserting a boundary it did not measure**, in the two places that assertion is read. 9.83.0
 narrowed the sentences to the check's real reach ("no tool result this run read" — which is also
@@ -63,13 +63,13 @@ Three bounds, all load-bearing:
 - **The live window.** The corpus is `scope.history` as it stands at judgement, and `.window()` /
   `.compaction()` / `tokenBudget` rewrite that in place. So the ordinals count the turns the run can
   still SEE — "turn 2 of 4" may be the conversation's turn 9 of 13 — and the distance is a **floor**.
-  The *boundary* is exact regardless: the current request is un-droppable by every window strategy.
+  The _boundary_ is exact regardless: the current request is un-droppable by every window strategy.
 - **Exempt values are invisible.** A value that reached the model through `.memory()` recall or RAG
   is exempt from grounding, so it is counted in neither bucket. This check can under-report and can
   never over-report.
 
-**Not `unsupported-claim`, and the names must not blur.** That one means *the answer says something
-the record contradicts*. This is the opposite fact: every value **is** in the record, and the only
+**Not `unsupported-claim`, and the names must not blur.** That one means _the answer says something
+the record contradicts_. This is the opposite fact: every value **is** in the record, and the only
 question is when it got there.
 
 **What keeps an honest follow-up quiet.** ONE grounded value from this turn's own results is enough
@@ -79,7 +79,7 @@ gets this for free: a lookup keyed on an earlier identifier echoes that identifi
 result, so the value is re-served this turn and re-stamped.
 
 **The corpus is deliberately NOT narrowed.** Restricting the index to this turn would have made the
-gate's old sentence true and been the wrong fix: *"and what about that disk?"* leans on the previous
+gate's old sentence true and been the wrong fix: _"and what about that disk?"_ leans on the previous
 turn's rows legitimately, and a check that cries wolf is a check somebody turns off.
 
 **Where it checks.** The **claim seam** — beside `unsupported-claim`, at the moment the answer is
@@ -89,14 +89,14 @@ chooses a branch: the revise / refuse / flag decision is byte-for-byte the one e
 
 **The dispositions:**
 
-| State | Disposition |
-| --- | --- |
-| at least one grounded value came from this turn's own results | `checked-pass` |
-| every grounded value is older, and this turn contributed none | `checked-fail` (one advisory) |
-| the answer names no value the index could ground | `unreachable` — nothing to attribute |
-| the history carries no user turn, so there is no boundary | `unreachable` |
-| the evidence index hit its ceiling and is incomplete | `not-applicable` |
-| the answer was empty — nothing to attribute | `unreachable` |
+| State                                                                           | Disposition                                                 |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| at least one grounded value came from this turn's own results                   | `checked-pass`                                              |
+| every grounded value is older, and this turn contributed none                   | `checked-fail` (one advisory)                               |
+| the answer names no value the index could ground                                | `unreachable` — nothing to attribute                        |
+| the history carries no user turn, so there is no boundary                       | `unreachable`                                               |
+| the evidence index hit its ceiling and is incomplete                            | `not-applicable`                                            |
+| the answer was empty — nothing to attribute                                     | `unreachable`                                               |
 | the answer was denied by a message middleware, or rejected by the output schema | `not-applicable` — the gate deliberately does not run there |
 
 The last two rows are not bookkeeping. An **armed row nobody noted** is what
@@ -112,10 +112,21 @@ nothing on the wire changes. The one visible difference is the registered `prior
 filed `not-applicable`, which is the family's law rather than an exception to it.
 
 **The strong tell is the same finding, not a second kind.** A turn that served no tool results at
-all sourced every value from history *by construction* — no index required. That is a cheaper PROOF
+all sourced every value from history _by construction_ — no index required. That is a cheaper PROOF
 of the identical fact, not a different defect, so it rides as its own witness and as a clause in the
 message ("This turn called no tool and served no result…") rather than fragmenting one class by how
 easily it was noticed.
+
+**Not covered: a person's message that opens like one of the library's own lines.** Where this
+turn begins is read by `lib/saidByPerson.ts` · `isSaidByPerson`, and for a message with no
+structural mark that rule still reads who wrote it from the LOOK of its text: a `role: 'user'`
+message opening with one of the library's registered prefixes (`[staged data`, `[compacted
+history]`, …) is taken for the library's. So a person who writes `[staged data] how is array
+performance?` does not start a turn, and a stale answer to it files nothing — the check fails
+toward silence. Tool results cannot do this (they are `role: 'tool'`), and a message an Injection
+delivers carries `injectedBy`, which is structural. The fix is a structural mark on every library
+frame, so authorship is read from where a message came from for every reader at once; it is a
+separate change.
 
 **Runnable example.**
 

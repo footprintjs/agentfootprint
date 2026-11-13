@@ -183,11 +183,39 @@ async function loadFigures(
     : undefined;
 }
 
-async function loadTimeLineage(
+export async function loadTimeLineage(
   inputs: InputsRouteArm | undefined,
 ): Promise<TimeLineage | undefined> {
   if (inputs?.timeLineage !== true) return undefined;
   return (await import('./timeLineage.js')).timeLineageOf;
+}
+
+/**
+ * THE exempt set of this turn — what the person, the app and the library's
+ * own ask supplied, which no evidence check may flag. ONE builder for both
+ * moments of the gate: the answer (`judgeEvidence`) and the dispatch moment
+ * of the contingent check (`toolCalls/evidence/towers.ts` · `towersFor`),
+ * handed the same arm by `runtime/routing/exemptArm.ts`. Example: a value the
+ * person gave the batch ask is exempt at the answer AND at the next call.
+ */
+export function exemptForTurn(
+  scope: TypedScope<AgentState>,
+  history: readonly LLMMessage[],
+  inputs: InputsRouteArm | undefined,
+  timeSaid: readonly string[] | undefined,
+): ReadonlySet<string> {
+  return exemptFromRun({
+    userMessage: scope.userMessage as string | undefined,
+    history,
+    systemPromptInjections: scope.systemPromptInjections as readonly InjectionRecord[] | undefined,
+    ...(inputs?.declaredDefaults !== undefined && {
+      declaredDefaults: inputs.declaredDefaults(scope),
+    }),
+    ...(inputs?.answeredValues !== undefined && {
+      answeredValues: inputs.answeredValues(scope),
+    }),
+    ...(timeSaid !== undefined && { timeSaid }),
+  });
 }
 
 /**
@@ -829,18 +857,7 @@ function judgeEvidence(
   // Under `.time()` (step T7): the turn's time spellings by lineage.
   const time = timeLineage?.(scope);
   const derived = time !== undefined ? derivedFormsOf(time.derived) : undefined;
-  const exempt = exemptFromRun({
-    userMessage: scope.userMessage as string | undefined,
-    history,
-    systemPromptInjections: scope.systemPromptInjections as readonly InjectionRecord[] | undefined,
-    ...(inputs?.declaredDefaults !== undefined && {
-      declaredDefaults: inputs.declaredDefaults(scope),
-    }),
-    ...(inputs?.answeredValues !== undefined && {
-      answeredValues: inputs.answeredValues(scope),
-    }),
-    ...(time !== undefined && { timeSaid: time.said }),
-  });
+  const exempt = exemptForTurn(scope, history, inputs, time?.said);
   // THE ONE JUDGE of this run's evidence, bound to what the run read: asked
   // here of the draft, and by answer validation of the exact candidate it
   // delivers (`answerEvidence.ts`) — never a verdict carried across forms.

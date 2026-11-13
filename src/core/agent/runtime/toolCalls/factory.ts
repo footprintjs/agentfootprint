@@ -10,6 +10,8 @@ import { memberIdentityIn, memberRequestIn } from '../../../memberRun.js';
 import { buildToolRegistry } from '../../buildToolRegistry.js';
 import type { AgentConfiguration } from '../configuration/types.js';
 import type { StepPlanFor } from '../../../../injection-engine/skillSteps.js';
+import type { buildToolResolver } from '../../stages/toolResolver.js';
+import { evidenceExemptArm } from '../routing/exemptArm.js';
 
 /** Build-time declarations and live native ports for this one stage factory. */
 export interface ToolCallsEnvironment {
@@ -40,6 +42,21 @@ export interface ToolCallsEnvironment {
     run: RunnerScopeValues<AgentRunValues>,
   ): ReturnType<NonNullable<Parameters<typeof buildToolCallsHandler>[0]['currentRun']>>;
   readonly emitLateFact: NonNullable<Parameters<typeof buildToolCallsHandler>[0]['emitForRun']>;
+  /** The run's dispatch resolver — the one the route decider reads declared defaults through. */
+  readonly resolverForValues: (values: AgentRunValues) => ReturnType<typeof buildToolResolver>;
+}
+
+/** The exempt arm, as a deps fragment: absent unless the inputs layer and the gate are armed. */
+function evidenceExemptOf(
+  environment: ToolCallsEnvironment,
+  run: RunnerScopeValues<AgentRunValues>,
+): { evidenceExempt?: NonNullable<ReturnType<typeof evidenceExemptArm>> } {
+  const arm = evidenceExemptArm(
+    environment.configuration,
+    environment.inputsArmed,
+    environment.resolverForValues(run.value),
+  );
+  return arm === undefined ? {} : { evidenceExempt: arm };
 }
 
 /** Keep per-invocation stage creation inside the native component's existing memo. */
@@ -97,6 +114,11 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
         environment.configuration.evidenceGate !== undefined && {
           evidenceGate: environment.configuration.evidenceGate,
         }),
+      // …and what it exempts beside the gate: the route decider's own arm,
+      // from the one builder (`routing/exemptArm.ts`), so the two moments of
+      // the contingent check exempt the same values.
+      ...(environment.configuration.findingsOptions !== undefined &&
+        evidenceExemptOf(environment, run)),
       // THE WRITE SEAM (9.77.0) — `empty-lookup`. Handed the SAME harvested
       // map callLLM reads at the choice seam, so the two stages agree by
       // construction about which calls are armed. Value-conditional on both

@@ -165,6 +165,7 @@ function sourceInputsOf(parent: Record<string, unknown>): SourceInputs {
     ...(ledger.length > 0 && { ledger }),
     ...(previous.length > 0 && { previousBatch: previous }),
     ...(parent.userMessageFrom === 'composed' && { composed: true as const }),
+    ...(Array.isArray(parent.placedTickets) && { placedTickets: [...parent.placedTickets] }),
   };
 }
 

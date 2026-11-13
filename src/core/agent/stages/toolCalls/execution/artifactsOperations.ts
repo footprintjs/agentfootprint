@@ -315,10 +315,9 @@ export function buildToolArtifactsOperations(
       return values;
     }
     const substitute = placedToolResult(call.toolName, meta, text.length, placement.maxInlineChars);
-    // The run's own receipt for this ticket: the staged-refs nudge names a
-    // ref only when it is listed here for this call (`stagedRefs.ts`), so a
-    // tool returning ticket-shaped JSON cannot have its ref repeated in a
-    // line the library writes.
+    // The library's own receipt for this ticket (`placedTickets.ts`): every
+    // reader that speaks of a ticket as the library's asks it, so a tool
+    // returning ticket-shaped JSON is never taken for a placement.
     scope.placedTickets = [
       ...(scope.placedTickets ?? []),
       { toolCallId: call.toolCallId, ref: meta.ref },

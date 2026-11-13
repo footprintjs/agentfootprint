@@ -17,17 +17,23 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
 `toolResultCap.ts`.
 
 ## What it reads / what it writes
+
 - The chart builders own the outputMappers that publish the loop's shared facts:
   `activeInjections`, `currentSkillId`, `stepPointer`, `dynamicToolSchemas`
   (`buildAgentChart.ts` · `SUBFLOW_IDS.INJECTION_ENGINE` and
   `buildAgentChart.ts` · `SUBFLOW_IDS.TOOLS`, on their `outputMapper`s).
-- `placedTickets` — one `{ toolCallId, ref }` per result the placement threshold
-  checked into the store, written by `stages/toolCalls/execution/artifactsOperations.ts` ·
-  `placeResults` and read by `stagedRefs.ts` · `findStagedRefs`. A ticket-shaped
-  tool result is named in the library's staged-data line only when this list
-  says the run minted that ref for that call: any tool can return
-  `{ placed: true, ref: "…" }`, and the line is the library speaking. In the
-  grouped chart the key crosses into `sf-llm-call` (`buildDynamicAgentChart.ts`).
+- `placedTickets` — the receipt of the placement tickets the library issued in
+  this conversation, one `{ toolCallId, ref }` each. Written by
+  `stages/toolCalls/execution/artifactsOperations.ts` · `placeResults` (and by
+  seed: `[]` beside `toolWantsByName`, plus the tickets a continued
+  conversation carries as `AgentRunCheckpoint.placedTickets`). Its one reader
+  is `placedTickets.ts` · `isIssuedTicket`, asked by `stagedRefs.ts` ·
+  `findStagedRefs` (whose callers `stages/callLLM.ts`,
+  `stages/evidenceRecheck.ts` and `time-travel/servedView/requestOnly.ts`
+  hand it the committed value) and by the declared-sources check
+  (`arguments/checks.ts`). Any tool can return `{ placed: true, ref: "…" }`, so
+  the shape never says the library placed it. In the grouped chart the key
+  crosses into `sf-llm-call` (`buildDynamicAgentChart.ts`).
 - The Lens files read only what they are handed, plus `scope.hiddenSkillIds`
   (owner: `../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`,
   published by the engine mount's `outputMapper`) where they name skill ids.
@@ -44,6 +50,7 @@ was secured, beside `answerValidation`, which is about its content.
 Automatic output uses `supportsAutoNativeOutputSchema(model)` as positive model knowledge. Unknown Anthropic names, opaque aliases, older unsupported models and custom providers without that declaration use instructions plus local validation. Explicit `strategy: 'native'` retains its forward-compatible capability policy; `strategy: 'instruct'` opts out of the changed default. No API error causes an automatic format downgrade.
 
 ## The one law here
+
 A builder declares; it must not decide. Anything that has to be true AT a
 moment is composed in `stages/`, where the moment is.
 
@@ -67,6 +74,7 @@ recomposed for every request — the tool list and the `read_skill` description
 — so the two cannot disagree.
 
 **How.** Three checks, each one a reader can make:
+
 1. every clause is past tense about one finished event;
 2. that event is NAMED — "that call", bound by the opening clause, or "call
    'c2' to 'collect_input'" — never pointed at ("this call", "the call you just

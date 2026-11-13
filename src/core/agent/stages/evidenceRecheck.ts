@@ -31,7 +31,7 @@ import { MAX_REPORTED_VALUES } from '../evidence/gate.js';
 import { buildEvidenceRecovery } from '../evidence/recovery.js';
 import { copyScriptsVerdict } from '../scripts/match.js';
 import type { ResolvedEvidenceGate, UnsupportedValue } from '../evidence/types.js';
-import { findStagedRefs, issuedTicketsOf } from '../stagedRefs.js';
+import { findStagedRefs } from '../stagedRefs.js';
 import type { AgentState } from '../types.js';
 
 /**
@@ -96,7 +96,7 @@ export function buildEvidenceRecheckStage(
                 ) ?? stagedRefs.staticToolNames()
               ).values(),
             ),
-            issuedTicketsOf(scope.placedTickets),
+            scope.placedTickets,
           );
     scope.evidenceRecovery = buildEvidenceRecovery(
       {

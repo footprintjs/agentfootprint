@@ -37,7 +37,12 @@
 
 import type { LLMMessage } from '../../provider-contract/types.js';
 import { STAGED_DATA_FRAME_PREFIX } from '../../lib/saidByPerson.js';
-import { isPlacedToolResult } from '../../artifacts/placement.js';
+import {
+  isIssuedTicket,
+  issuedTicketsOf,
+  RECORDED_BEFORE_RECEIPT,
+  type IssuedTickets,
+} from './placedTickets.js';
 import type { Tool } from '../../tools/tools.js';
 
 /** One staged parcel a spender tool could be handed. */
@@ -99,18 +104,22 @@ export function toolWantsOf(
  *
  * The SHAPE is not enough, because any tool can return that JSON. The line
  * this join feeds is written by the library, so a ticket counts only when
- * `issued` (the run's `placedTickets`, see {@link issuedTicketsOf}) says this
- * run minted that ref for that very `toolCallId`. Example: a tool that
- * returns `{ placed: true, ref, kind, reason }` itself is an ordinary result
- * here, even when its `ref` is a well-formed `art_…` nobody minted.
+ * `receipt` (the committed `placedTickets` of this conversation) says the
+ * library minted that ref for that very `toolCallId` (`placedTickets.ts` ·
+ * `isIssuedTicket`). Example: a tool that returns `{ placed: true, ref, kind,
+ * reason }` itself is an ordinary result here, even when its `ref` is a
+ * well-formed `art_…` nobody minted. Only the rebuild of a recording older
+ * than the receipt passes `RECORDED_BEFORE_RECEIPT`, the rule it was sent by.
  */
 export function findStagedRefs(
   messages: readonly LLMMessage[],
   toolWants: ReadonlyMap<string, readonly string[]>,
   servedToolNames: ReadonlySet<string>,
-  issued: ReadonlyMap<string, string>,
+  receipt: unknown,
 ): StagedRefsMatch | undefined {
-  if (issued.size === 0) return undefined;
+  const issued: IssuedTickets =
+    receipt === RECORDED_BEFORE_RECEIPT ? receipt : issuedTicketsOf(receipt);
+  if (issued !== RECORDED_BEFORE_RECEIPT && issued.size === 0) return undefined;
   const spendersByKind = new Map<string, string[]>();
   for (const [name, kinds] of toolWants) {
     if (!servedToolNames.has(name)) continue;
@@ -128,15 +137,13 @@ export function findStagedRefs(
   let refsOmitted = 0;
   for (const message of messages) {
     if (message.role !== 'tool') continue;
-    const issuedRef = message.toolCallId === undefined ? undefined : issued.get(message.toolCallId);
-    if (issuedRef === undefined) continue;
     let parsed: unknown;
     try {
       parsed = JSON.parse(message.content);
     } catch {
       continue;
     }
-    if (!isPlacedToolResult(parsed) || parsed.ref !== issuedRef) continue;
+    if (!isIssuedTicket(message.toolCallId, parsed, issued)) continue;
     const kind = (parsed as { kind?: unknown }).kind;
     if (typeof kind !== 'string') continue;
     const spenders = spendersByKind.get(kind);
@@ -148,23 +155,6 @@ export function findStagedRefs(
   }
   if (refs.length === 0) return undefined;
   return { refs, refsOmitted, tools: tools.slice(0, MAX_NUDGE_TOOLS) };
-}
-
-/**
- * The run's issued tickets as the map {@link findStagedRefs} takes —
- * `toolCallId` → ref. Read defensively because it comes from scope or from a
- * recording: anything that is not a list of `{ toolCallId, ref }` strings
- * issues nothing.
- */
-export function issuedTicketsOf(value: unknown): ReadonlyMap<string, string> {
-  const issued = new Map<string, string>();
-  if (!Array.isArray(value)) return issued;
-  for (const entry of value as readonly unknown[]) {
-    if (typeof entry !== 'object' || entry === null) continue;
-    const { toolCallId, ref } = entry as { toolCallId?: unknown; ref?: unknown };
-    if (typeof toolCallId === 'string' && typeof ref === 'string') issued.set(toolCallId, ref);
-  }
-  return issued;
 }
 
 /** Most characters of one ref a sentence prints. */

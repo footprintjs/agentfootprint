@@ -486,9 +486,9 @@ function emitArgumentRow(scope: FindingsScope, row: ArgumentRow): void {
 // ─── Row builders ──────────────────────────────────────────────────────
 
 /**
- * The ref a placed result lives at, or nothing. A guarded parse of a string
- * the library itself minted (`artifacts/placement.ts · placedToolResult`),
- * judged by `isPlacedToolResult` — a predicate, not inference.
+ * The ref a ticket-SHAPED result names — shape alone, no receipt. Reached only
+ * without `request`; both live callers pass one, and there the ref comes from
+ * `admission.ts`, which proves a ticket by where it came from, not by its look.
  */
 function placedRefOf(result: string): string | undefined {
   if (typeof result !== 'string' || result.trimStart()[0] !== '{') return undefined;

@@ -2,11 +2,8 @@ import type { LLMMessage, LLMToolSchema } from '../../provider-contract/types.js
 import type { toolsWithheld } from '../../core/agent/composeRequest.js';
 import { findingsContext } from '../../core/agent/findings/context.js';
 import type { FindingsLedger } from '../../core/agent/findings/types.js';
-import {
-  findStagedRefs,
-  issuedTicketsOf,
-  stagedRefsNudgeLine,
-} from '../../core/agent/stagedRefs.js';
+import { findStagedRefs, stagedRefsNudgeLine } from '../../core/agent/stagedRefs.js';
+import { RECORDED_BEFORE_RECEIPT } from '../../core/agent/placedTickets.js';
 import { evidenceConclusionLine } from '../../core/agent/evidence/recovery.js';
 import { readAtCall as foldAtCall, type EpochLocation } from '../epochs.js';
 import type { ServedRequestOnly } from '../servedView.js';
@@ -41,18 +38,23 @@ export function requestOnlyAt(
 ): readonly [requestOnly: ServedRequestOnly[], layoutUnknown: boolean] {
   // ── the request-only lines ─────────────────────────────────────────────
   // The staged-refs nudge is a pure function of committed state: the
-  // conversation, the tools really served this call, and the `wants`
-  // declarations `seed` put on the record for exactly this reason.
+  // conversation, the tools really served this call, the `wants` declarations
+  // `seed` put on the record for exactly this reason, and the receipt of the
+  // tickets the library placed (`placedTickets`, which seed writes beside
+  // `wants`). A record with `wants` and no receipt was made before the
+  // receipt existed; its run named any ticket-shaped result, so it is rebuilt
+  // by that rule (`RECORDED_BEFORE_RECEIPT`) — the line it really sent. Read
+  // raw, because a receipt the record keeps out is not an absent one: the
+  // placeholder is not a list, so it issues nothing.
   const requestOnly: ServedRequestOnly[] = [];
   const wants = wantsMapOf(readRunConstant(location, 'toolWantsByName', served));
   if (wants !== undefined) {
-    // The issued tickets are committed state too (`placedTickets`), read at
-    // this call exactly as `callLLM` read them live.
+    const receipt = foldAtCall(location, 'placedTickets');
     const match = findStagedRefs(
       asSent,
       wants,
       new Set(registered.map((t) => t.name)),
-      issuedTicketsOf(readAtCall(location, 'placedTickets', served)),
+      receipt === undefined ? RECORDED_BEFORE_RECEIPT : receipt,
     );
     if (match !== undefined) {
       requestOnly.push({

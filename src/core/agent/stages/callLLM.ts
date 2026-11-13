@@ -61,7 +61,7 @@ import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
 import type { ReceiptDigests } from '../receipt/receiptDigests.js';
 import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
-import { findStagedRefs, issuedTicketsOf, stagedRefsNudgeLine } from '../stagedRefs.js';
+import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
@@ -729,7 +729,7 @@ export function buildCallLLMStage(
         messages,
         deps.toolWants,
         new Set(registeredToolSchemas.map((t) => t.name)),
-        issuedTicketsOf(scope.placedTickets),
+        scope.placedTickets,
       );
       if (match !== undefined) {
         const nudge: LLMMessage = { role: 'user', content: stagedRefsNudgeLine(match) };

@@ -1,4 +1,5 @@
 import { withoutEarlierScriptText } from '../scripts/rows.js';
+import { seededTickets, type PlacedTicket } from '../placedTickets.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
 import type { NegativeCheckpoint } from '../negativeClaims/checkpoint.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
@@ -76,6 +77,8 @@ export interface PendingResumeHistory {
    */
   readonly turn?: number;
   readonly negatives?: NegativeCheckpoint;
+  /** The tickets the library placed earlier in the conversation (`placedTickets.ts`). */
+  readonly placedTickets?: readonly PlacedTicket[];
 }
 
 export interface SeedStageDeps {
@@ -897,6 +900,9 @@ function seedFrom(
   if (deps.toolWantsByName !== undefined) {
     scope.toolWantsByName = deps.toolWantsByName;
   }
+  // …and the receipt of the tickets the library placed (`placedTickets.ts`).
+  const tickets = seededTickets(resume?.placedTickets, deps.toolWantsByName !== undefined);
+  if (tickets !== undefined) scope.placedTickets = tickets;
   // Messages-slot delivery ledger (7.21) — empty at the start of every run.
   // A resumed run rebuilds it from the markers in the restored window rather
   // than trusting this, so an empty ledger never means "deliver it again".
