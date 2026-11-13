@@ -959,7 +959,10 @@ A `:` inside a conversation id (the `RedisStore` key seam) or a `#` (the
 key. Escaping them in the encoder would close it and would also re-key every
 `urn:`- or `sub:`-style id, breaking the byte-preservation property above. Named
 here rather than buried: if your ids carry those characters, choose the
-composition yourself.
+composition yourself. For `s3VectorsStore` the seam is narrowed to writes:
+`list` and `forget` select rows by their stored namespace, so conversation `c`
+never lists or erases the memory of conversation `c#x`; two writes whose keys
+compose the same (`c` + `x#y`, `c#x` + `y`) still replace one another.
 
 Separately, `AgentCoreStore`'s `actorId` slugs non-alphanumerics and joins
 tenant + principal with `_`, so `a_b` + `c` collides with `a` + `b_c`. It is left

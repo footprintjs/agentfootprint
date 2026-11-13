@@ -1202,7 +1202,9 @@ person has told us nothing".
 
 `MemoryScope` is the map type. An empty scope is refused — `{}` is not "no
 scoping", it is a real scope matching every other empty-scoped memory in the bank
-whoever wrote it.
+whoever wrote it. So is a part that is not text or has an empty key (a numeric
+tenant id, say): the error names the key, and the part is never dropped, because
+dropping it would put every tenant that differs only there into one scope.
 </Callout>
 
 **It never ranks the vectors you wrote.** The store declares
