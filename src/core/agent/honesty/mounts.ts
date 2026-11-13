@@ -40,9 +40,11 @@ import { ownsReservedArgument, splitFindings } from '../findings/reserved.js';
  * Under the arm the mount also hands the layer the RAW pieces its checks read
  * (`sourceInputs`): the served history, the composed system prompt's records,
  * the ledger's standing rows and `answered` argument rows (never the whole
- * ledger), the previous batch's result ids and the run's `userMessageFrom`
- * constant — and two closures, both from `honesty/sourceCorpus.ts` (loaded on
- * the first armed batch): the calls' `from` entries through the ONE reader of
+ * ledger), the previous batch's result ids, the run's `userMessageFrom`
+ * constant and the receipt of the tickets the library placed (all read by
+ * `sourceInputs.ts` · `sourceInputsOf`) — and two closures, both from
+ * `honesty/sourceCorpus.ts` (loaded on the first armed batch): the calls'
+ * `from` entries through the ONE reader of
  * `_findings` (`sourceCorpus.ts` · `declaredSourcesOf`, over
  * `findings/reserved.ts` · `readDeclaration`), and the corpora
  * (`sourceCorpus.ts` · `sourceCorpusOf`).
@@ -102,6 +104,7 @@ import {
 } from '../../../semantics/coverage/period.js';
 import { appendRows, emitRow, type FindingsScope } from '../findings/ledger.js';
 import type { FindingsRow } from '../findings/types.js';
+import { sourceInputsOf } from './sourceInputs.js';
 import type {
   RanCall,
   CallPeriod,
@@ -139,34 +142,6 @@ let corpusModule: Promise<CorpusModule> | undefined;
 function loadCorpus(): Promise<CorpusModule> {
   corpusModule ??= import('./sourceCorpus.js');
   return corpusModule;
-}
-
-/**
- * The raw pieces the declared-sources corpora are built from — read off the
- * parent's committed state by the input mapping, only under the arm and only
- * for a batch with calls. Never the whole ledger: its standing rows (the
- * model's current reading of each result) and its `answered` argument rows
- * (the person's earlier answers).
- */
-function sourceInputsOf(parent: Record<string, unknown>): SourceInputs {
-  const ledger = ((parent.findingsLedger as readonly FindingsRow[] | undefined) ?? []).filter(
-    (row) => row.kind === 'standing' || (row.kind === 'argument' && row.source === 'answered'),
-  );
-  const injections = (parent.systemPromptInjections as readonly unknown[] | undefined) ?? [];
-  const previous = ((parent.toolResults as readonly Record<string, unknown>[] | undefined) ?? [])
-    .filter((r) => typeof r?.toolCallId === 'string')
-    .map((r) => ({
-      toolCallId: r.toolCallId as string,
-      ...(typeof r.toolName === 'string' && { toolName: r.toolName }),
-    }));
-  return {
-    history: [...((parent.history as readonly unknown[] | undefined) ?? [])],
-    ...(injections.length > 0 && { systemPromptInjections: [...injections] }),
-    ...(ledger.length > 0 && { ledger }),
-    ...(previous.length > 0 && { previousBatch: previous }),
-    ...(parent.userMessageFrom === 'composed' && { composed: true as const }),
-    ...(Array.isArray(parent.placedTickets) && { placedTickets: [...parent.placedTickets] }),
-  };
 }
 
 let stageModule: Promise<StageModule> | undefined;

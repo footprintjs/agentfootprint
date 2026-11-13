@@ -28,15 +28,15 @@ const answer = await agent.run({ message: 'which array port is affected?' });
 It is a **fabrication detector, not a correctness judge.**
 
 It catches invented values. It **cannot** catch a false claim assembled from
-real values: _"fc1/3 is healthy"_ when the data says the port is down uses
+real values: *"fc1/3 is healthy"* when the data says the port is down uses
 entirely grounded tokens — `fc1/3` is in the evidence, "healthy" is a word — and
-the check passes it without a murmur. So does _"the outage started at 08:15"_
+the check passes it without a murmur. So does *"the outage started at 08:15"*
 when 08:15 is a timestamp belonging to a different port. If you read this as a
 hallucination check you will trust it for the one thing it cannot do.
 
 It cannot catch **mis-referral** either — an answer whose every sentence is true
-_of the wrong thing_. The gate judges values against evidence, so _"that machine
-has no backup record"_ passes with every value grounded even when the machine
+*of the wrong thing*. The gate judges values against evidence, so *"that machine
+has no backup record"* passes with every value grounded even when the machine
 the sentence is about was never the one you asked about. That is a recorded
 failure: a model resolved "that machine" out of its own earlier answer, called
 the lookup tool with a truncated job name, and got a genuine "nothing found"
@@ -59,7 +59,7 @@ No second model, no embedding, no LLM judge. The check is set membership over
 normalized tokens: it costs microseconds and answers identically on every run.
 
 That constraint is the point. This library's thesis is that structure lets a
-smaller model perform like a bigger one — so a guard that needed a _bigger_
+smaller model perform like a bigger one — so a guard that needed a *bigger*
 model to police the small one would invert the whole value proposition, and
 would fail precisely where the small model is deployed: offline, cheap, fast.
 
@@ -69,16 +69,16 @@ Same three words as [`.skillGraph({ strictness })`](doc:skill-graph-quickstart)
 and a **separate** option, because routing authority and evidence discipline are
 different decisions.
 
-| `posture`              | What happens                                                                                                                                          |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `'assist'` _(default)_ | Record and flag. The answer goes out unchanged — you learn how often it happens before you act on it.                                                 |
-| `'guard'`              | The unsupported values are named back to the model, which gets **one** more ordinary turn. Survivors ship flagged. **Recommended for weaker models.** |
-| `'rails'`              | The same one revision, then `run()` raises `UnsupportedValuesError` rather than return an answer that still carries them.                             |
+| `posture` | What happens |
+|---|---|
+| `'assist'` *(default)* | Record and flag. The answer goes out unchanged — you learn how often it happens before you act on it. |
+| `'guard'` | The unsupported values are named back to the model, which gets **one** more ordinary turn. Survivors ship flagged. **Recommended for weaker models.** |
+| `'rails'` | The same one revision, then `run()` raises `UnsupportedValuesError` rather than return an answer that still carries them. |
 
 `guard` is a branch of the ReAct loop, not a special mode: the correction is one
 more ordinary turn, with its own `iteration_start` / `llm_start` bracket and its
 own `cost.tick` — and the tools are still on the wire, so the model can go and
-_fetch_ the value it guessed at. One revision per turn, latched: a model that
+*fetch* the value it guessed at. One revision per turn, latched: a model that
 cannot ground a value on its second try will not on its fifth. The one
 exception is an ENFORCING answer validation (below): there the answer may yet
 be withheld, so the revision and every later call of the run are served no
@@ -104,14 +104,14 @@ schema page.
 
 ## What counts as evidence
 
-- **Tool results** — the `role: 'tool'` turns of the conversation. That is the
+* **Tool results** — the `role: 'tool'` turns of the conversation. That is the
   whole corpus. Results that are JSON are walked **structurally** (every key,
   every leaf) rather than searched as text, so a value that merely appears
   inside an unrelated field does not read as grounded.
-- **Tool call arguments do not count.** The model typed those; grounding a value
+* **Tool call arguments do not count.** The model typed those; grounding a value
   because the model passed it to a tool would let any invention launder itself
   through one failed lookup.
-- **The model's own earlier answers do not count**, for the same reason.
+* **The model's own earlier answers do not count**, for the same reason.
 
 Values the **user** supplied are exempt without being declared: this turn's
 message, the conversation's user and system turns, and the composed system
@@ -134,99 +134,95 @@ program says so (`script: { argument: 'code', language }` on `defineTool`;
 `codeRunnerTool` declares it). Each call of such a tool records the program it
 was handed and what its runner reported.
 
-- **`.scriptTravelsWithTheAnswer()`** — the library attaches the recorded
+* **`.scriptTravelsWithTheAnswer()`** — the library attaches the recorded
   program itself, under the answer, labelled from the run record. The model
   never retypes it, so there is nothing to check. A prose answer gets it as text
   after the `---` separator; every answer gets it as data on
   `turn_end.scripts`; a typed answer gets the data only.
-- **`code: 'match'`** — a fenced block the model wrote anyway is compared, byte
+* **`code: 'match'`** — a fenced block the model wrote anyway is compared, byte
   for byte after removing only the Markdown wrapper, with the programs this
   turn's calls submitted. A match is script content: it yields no values to
   check and is labelled with that call's outcome. Anything else stays prose,
   checked as before, labelled `unmatched`.
 
-<CodeFile
-  path="examples/features/121-script-artifact.ts"
-  region="script-artifact"
-  title="The script travels with the answer (local runner, mock model)"
-/>
+<CodeFile path="examples/features/121-script-artifact.ts" region="script-artifact" title="The script travels with the answer (local runner, mock model)" />
 
 The label says only what the record proves:
 
-| Label                                         | Means                                                                                            |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `completed, exit 0`                           | the runner reported exit code 0                                                                  |
-| `completed with failure, exit 7`              | the runner reported that non-zero exit code                                                      |
-| `runner reported success; no exit code`       | a bare verdict, no exit code — not proof the program ran to an exit                              |
-| `runner reported failure; no exit code`       | the same, for failure (a stopped process included)                                               |
-| `outcome unknown`                             | a timeout, a cancellation or an error with no runner facts, or a service error with no exit code |
-| `tool call returned; execution not confirmed` | the tool returned, and no runner said how the program ended                                      |
-| `submitted`                                   | the call never reached the tool (refused, never dispatched, or still open)                       |
+| Label | Means |
+|---|---|
+| `completed, exit 0` | the runner reported exit code 0 |
+| `completed with failure, exit 7` | the runner reported that non-zero exit code |
+| `runner reported success; no exit code` | a bare verdict, no exit code — not proof the program ran to an exit |
+| `runner reported failure; no exit code` | the same, for failure (a stopped process included) |
+| `outcome unknown` | a timeout, a cancellation or an error with no runner facts, or a service error with no exit code |
+| `tool call returned; execution not confirmed` | the tool returned, and no runner said how the program ended |
+| `submitted` | the call never reached the tool (refused, never dispatched, or still open) |
 
 What the record holds, by type:
 
-- A tool declares its program argument with a `ToolScript`
+* A tool declares its program argument with a `ToolScript`
   (`{ argument, language? }`). The argument must be a declared string property.
-- Each call of a declaring tool files one `ScriptRow` on the findings ledger:
+* Each call of a declaring tool files one `ScriptRow` on the findings ledger:
   the program the tool was handed, its UTF-8 `bytes` and `lines`, its
   `ScriptLabel`, and `exitCode` only when the runner gave one. A row belongs to
   a `dispatch`: the call's order within the turn. A provider that reuses a call
   id still makes two calls, and a pause and its resume are one.
-- `evidence_checked.scripts` is a `ScriptsVerdict`, with one
+* `evidence_checked.scripts` is a `ScriptsVerdict`, with one
   `ScriptBlockVerdict` per fenced block. Each verdict holds either the matched
   call with its label, or `unmatched` with an `UnmatchedReason`:
   `no-submission-this-turn`, `over-size`, or `kept-out`. Only a reader of a
   redacted record produces `kept-out`; a live run never does.
-- `turn_end.scripts` is a `TurnEndScripts`: one `ShownScript` per attached
+* `turn_end.scripts` is a `TurnEndScripts`: one `ShownScript` per attached
   program, plus how many were left out. `closedFence` says the library closed a
   fence the text above left open before attaching; `withheldFromText` says the
   programs are in the data only (see the gotchas).
-- `.scriptTravelsWithTheAnswer()` takes `ScriptTravelOptions`. `which` is
+* `.scriptTravelsWithTheAnswer()` takes `ScriptTravelOptions`. `which` is
   `'last'` (the default) or `'all'`; `maxBytes` defaults to 4,000.
-- The answer that stands files one `ScriptShownRow` per block, for the
+* The answer that stands files one `ScriptShownRow` per block, for the
   standing record.
 
 Gotchas:
 
-- **Code is never evidence.** A matched script grounds nothing: a value in the
+* **Code is never evidence.** A matched script grounds nothing: a value in the
   prose that also sits in the script still needs a tool result, and a script
   that printed `99999` proves it printed `99999`, not that revenue was `99999`.
-- **Nothing is normalized.** A copy that differs by one byte — a trailing space,
+* **Nothing is normalized.** A copy that differs by one byte — a trailing space,
   CRLF for LF, a combining accent — is a different program, so it is a miss.
-- **Formatting exempts nothing.** Inline code, indented code, a fence with
+* **Formatting exempts nothing.** Inline code, indented code, a fence with
   leading spaces and a fence that never closes are prose.
-- **A block ends where a renderer ends it.** A block closes at a fence of its
+* **A block ends where a renderer ends it.** A block closes at a fence of its
   own character at least as long as its opening, indented by up to three
   spaces, as in CommonMark. Text after that point is prose, even if the
   program submitted to the tool went on.
-- **Reading stops where a renderer could disagree.** From these lines on, no
+* **Reading stops where a renderer could disagree.** From these lines on, no
   block is read:
   - a fence indented inside a list;
   - an HTML block;
   - a `$$` math line;
   - a closing fence with a trailing tab;
   - a block whose program holds a fence run as long as its own fence.
-    Everything after the stop is checked as prose. To show a program that holds
-    three backticks, use a longer fence, as the attached copy always does.
-- **Only this turn.** A block is compared with this turn's calls only; a
+  Everything after the stop is checked as prose. To show a program that holds
+  three backticks, use a longer fence, as the attached copy always does.
+* **Only this turn.** A block is compared with this turn's calls only; a
   program from an earlier turn is a miss.
-- **Bounded.** A program over 32,768 UTF-8 bytes keeps its facts but no text
+* **Bounded.** A program over 32,768 UTF-8 bytes keeps its facts but no text
   (never matched, never attached); 16 calls a turn keep a row; 32 blocks an
   answer are read; an attached program over `maxBytes` (default 4,000 bytes) is
   cut and says it is incomplete.
-- **The attachment never renders inside an unfinished block.** If the answer
+* **The attachment never renders inside an unfinished block.** If the answer
   ends inside a fence the model never closed, the library closes it before the
   attached program. If the answer holds a line after which a renderer could pair
   fences another way (an indented fence, raw HTML, `$$`), the text names each
   script and says it is not shown here; the program rides `turn_end.scripts`.
-- **Names and ids are shown as code.** A tool's name and a call id appear as
+* **Names and ids are shown as code.** A tool's name and a call id appear as
   inline code, with line breaks and invisible characters written as escapes:
   a provider's id can never start a paragraph of its own.
-- **The record attests the exact call.** The program on a row is the one read
+* **The record attests the exact call.** The program on a row is the one read
   just before the tool ran; a tool that edits its arguments afterwards does not
   change it. A runner's exit code reaches only the call that ran the program,
   even when two agents share one tool and their providers reuse an id.
-- **A redaction policy** keeps the program out of every record; the label and
+* **A redaction policy** keeps the program out of every record; the label and
   the counts stay. The attached text is part of the answer `run()` returns,
   which no policy covers — an app that attaches scripts shows what its own tool
   was handed.
@@ -242,11 +238,7 @@ Original normalized decimal spellings are compared exactly: a source of `1`
 does not justify invented low-order digits such as `1.000000000001`. Source
 spellings above 256 characters are not eligible for rounding.
 
-<CodeFile
-  path="examples/features/103-evidence-rounding-ranges.ts"
-  region="numeric-evidence"
-  title="Decimal rounding and numeric ranges (mock only)"
-/>
+<CodeFile path="examples/features/103-evidence-rounding-ranges.ts" region="numeric-evidence" title="Decimal rounding and numeric ranges (mock only)" />
 
 The evidence event reports the accepted rounding under `computed`, with
 `derivation: 'rounded'` and `from` naming the carried value and its result
@@ -336,12 +328,12 @@ tokens.
 A recorded failure, and the reason this dial has a second half: four tool
 results carried real numbers, a compute tool that could sum them was
 registered, and the app's own prompt said to use it — yet the model summed the
-numbers in its head and stated the total. The gate recorded _"appears in no
-tool result"_ and the answer shipped, because the posture only observed. The
+numbers in its head and stated the total. The gate recorded *"appears in no
+tool result"* and the answer shipped, because the posture only observed. The
 instruction sat at the **top** of a long context; the numbers sat at the
 **bottom**. Recency won.
 
-`nudge: true` puts the instruction where recency works _for_ it. When an
+`nudge: true` puts the instruction where recency works *for* it. When an
 iteration's context holds a tool result the library staged by reference (an
 [`artifacts.placement`](doc:artifacts) ticket placed in this conversation —
 this turn or an earlier one) **and** a tool the model can currently call
@@ -361,7 +353,9 @@ placement mint (`Tool.resultKind`), the spender from `Tool.wants`, matched by
 the same exact-string law dispatch uses, never by tool name. There is no prose
 surface to write. A tool that returns JSON shaped like a ticket is not a
 ticket: the line names only refs the library minted, which it keeps a receipt
-of and carries with a stored conversation (`checkpoint().placedTickets`). The line is request-only (it never enters the conversation
+of and carries with a stored conversation (`checkpoint().placedTickets`). A
+conversation stored or paused by an earlier version has no receipt, so its
+tickets are not named. The line is request-only (it never enters the conversation
 history) and recomposed per iteration, so it exists exactly while both
 conditions hold; each firing lands as `agentfootprint.agent.grounding_nudged`
 with the refs and tools as data.
@@ -372,9 +366,9 @@ with the refs and tools as data.
 
 The nudge is advisory — the postures stay the guarantee. And under `guard` /
 `rails` the two meet: when the flagged turn holds staged refs a served spender
-can consume, the correction itself names them (_"pass 'art_h7Kq…'
+can consume, the correction itself names them (*"pass 'art_h7Kq…'
 (dataset/rows) to `compute` — compute the number there and answer with what it
-returns"_), so the revision is handed the route, not just the demand. That
+returns"*), so the revision is handed the route, not just the demand. That
 clause appears whenever a `wants` tool exists, with or without `nudge`.
 
 ## Reading the record
@@ -405,7 +399,7 @@ was grounded.
 Under `'rails'` the run raises `UnsupportedValuesError` (an
 `UnsupportedValuesContext`: the values, the candidate count, `revised`). The
 error names the values and says what would satisfy the check; the refused
-_answer_ is not carried on it and stays in the commit log under whatever
+*answer* is not carried on it and stays in the commit log under whatever
 redaction the run configured.
 
 ```ts
@@ -424,7 +418,7 @@ test) can recognise it without matching on prose.
 
 ## Composition
 
-- With [`.outputSchema()`](doc:output-schema): the schema is judged **first** —
+* With [`.outputSchema()`](doc:output-schema): the schema is judged **first** —
   an answer with the wrong shape is about to be replaced wholesale, so grounding
   it would pay for the same turn twice. The evidence gate judges what the schema
   let stand, and an answer that exhausted its schema retries is not judged at
@@ -434,17 +428,17 @@ test) can recognise it without matching on prose.
   name like `p95LatencyMs` or `sha256` is never flagged. The price: an answer
   keyed by data (an order id as a key) is not checked on its keys — keep such
   ids in values.
-- With `.answerValidation({ agentChecks: ['names-and-numbers'] })`: the gate is
+* With `.answerValidation({ agentChecks: ['names-and-numbers'] })`: the gate is
   asked again of the exact JSON that validation delivers, after any output
   transform, and its verdict becomes a row of that report. A value no tool
   result carried fails it; a clean pass is `not-applicable`, because finding a
   value clears an answer without verifying it. The gate reads the first 20,000
   words and numbers of an answer; an answer longer than that makes the row
   `unreachable`, with the reason naming how many more were never looked up.
-- With [`.reliability()`](doc:reliability): no collision. Reliability governs
-  what one _call_ does before a response is committed; this governs an answer
+* With [`.reliability()`](doc:reliability): no collision. Reliability governs
+  what one *call* does before a response is committed; this governs an answer
   that **was** committed.
-- Unused, it costs nothing: an agent without the option mounts no branch, writes
+* Unused, it costs nothing: an agent without the option mounts no branch, writes
   no state, and emits no event.
 
 ## When to reach for it

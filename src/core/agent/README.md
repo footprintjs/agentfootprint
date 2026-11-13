@@ -1,14 +1,15 @@
 **Mixed** — the Agent's chart builders sitting beside the composers and folds
 the walk calls from inside its stages.
-Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
-`buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
+Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts` (with `llmCallReads.ts`,
+the records that cross into its `sf-llm-call` boundary), `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
 `skillBrains.ts`, `types.ts`, `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
 the trace toolpack registers there, since the agent may not import it).
 Walker: `assistantReplay.ts`, `toolDispatch.ts`,
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
 Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
-Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `emptiness.ts` (which
+Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `placedTickets.ts` (did the
+library place this result), `emptiness.ts` (which
 artifact-placed results hold no rows — the coverage primitives it reads are
 `semantics/coverage/`; the tool-result envelope grammar is `semantics/toolEffects.ts`).
 Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
@@ -23,17 +24,22 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
   (`buildAgentChart.ts` · `SUBFLOW_IDS.INJECTION_ENGINE` and
   `buildAgentChart.ts` · `SUBFLOW_IDS.TOOLS`, on their `outputMapper`s).
 - `placedTickets` — the receipt of the placement tickets the library issued in
-  this conversation, one `{ toolCallId, ref }` each. Written by
+  this conversation, one `{ toolCallId, ref }` each; a call id a provider
+  reuses keeps every ref minted under it. Written by
   `stages/toolCalls/execution/artifactsOperations.ts` · `placeResults` (and by
-  seed: `[]` beside `toolWantsByName`, plus the tickets a continued
-  conversation carries as `AgentRunCheckpoint.placedTickets`). Its one reader
-  is `placedTickets.ts` · `isIssuedTicket`, asked by `stagedRefs.ts` ·
-  `findStagedRefs` (whose callers `stages/callLLM.ts`,
+  seed, `stages/stagedRefsNudge.ts` · `seedStagedRefs`: `[]` beside
+  `toolWantsByName`, plus the tickets a continued conversation carries as
+  `AgentRunCheckpoint.placedTickets`). Its one reader is `placedTickets.ts` ·
+  `isIssuedTicket`, asked by `stagedRefs.ts` · `findStagedRefs` (whose callers
+  `stages/stagedRefsNudge.ts` · `stagedRefsNudgeFor`,
   `stages/evidenceRecheck.ts` and `time-travel/servedView/requestOnly.ts`
-  hand it the committed value) and by the declared-sources check
-  (`arguments/checks.ts`). Any tool can return `{ placed: true, ref: "…" }`, so
-  the shape never says the library placed it. In the grouped chart the key
-  crosses into `sf-llm-call` (`buildDynamicAgentChart.ts`).
+  hand it the committed value) and by the declared-sources check, through
+  `honesty/sourceCorpus.ts` · `placedByLibrary` (handed the receipt by
+  `honesty/sourceInputs.ts` · `sourceInputsOf`). Any tool can return
+  `{ placed: true, ref: "…" }`, so the shape never says the library placed it.
+  A conversation stored or paused by an earlier version has no receipt and
+  none of its tickets is named. In the grouped chart the key crosses into
+  `sf-llm-call` (`llmCallReads.ts` · `llmCallReadsInto`).
 - The Lens files read only what they are handed, plus `scope.hiddenSkillIds`
   (owner: `../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`,
   published by the engine mount's `outputMapper`) where they name skill ids.

@@ -49,14 +49,16 @@ verbatim copy of the old implementation over every recorded fixture and
 requires agreement on every stop and every fold.
 
 <Callout type="warn" title="What `'start'` means on this axis">
-  On footprintjs's own per-stage axis, `'start'` is the fold *base*: the state before any stage ran.
-  Here it also absorbs every stage that ran before the first milestone — and an agent seeds a couple
-  of dozen keys in `seed` first. Measured on a two-turn run: `commitStops`' start folds no commits
-  and 0 keys; this one folds the first commit and 32. So `stateAt(startStop)` is **the state the
-  first milestone read**, not the run's raw base. Right for an axis whose stops must still partition
-  the log; wrong to assume from `kind === 'start'` alone — so the start says it:
-  `cursor.stops[0].prologue === true` whenever it absorbed a stage (footprintjs 9.18's flag). A
-  renderer that means "before anything ran" checks `kind === 'start' && !prologue`.
+On footprintjs's own per-stage axis, `'start'` is the fold *base*: the state
+before any stage ran. Here it also absorbs every stage that ran before the first
+milestone — and an agent seeds a couple of dozen keys in `seed` first. Measured
+on a two-turn run: `commitStops`' start folds no commits and 0 keys; this one
+folds the first commit and 32. So `stateAt(startStop)` is **the state the first
+milestone read**, not the run's raw base. Right for an axis whose stops must
+still partition the log; wrong to assume from `kind === 'start'` alone — so the
+start says it: `cursor.stops[0].prologue === true` whenever it absorbed a stage
+(footprintjs 9.18's flag). A renderer that means "before anything ran" checks
+`kind === 'start' && !prologue`.
 </Callout>
 
 ## Why this and not "one stop per stage"
@@ -76,9 +78,9 @@ The cursor answers what a reader actually wants to know. One position, always:
 const turns = cursor.stops.filter((s) => milestoneOf(s)?.kind === 'llm-turn');
 
 cursor.jumpTo(turns[1]!.step);
-cursor.stateAt().state.currentSkillId; // 'beta'  — where the run stood at turn 2
-cursor.changedSince(turns[0]!); // ['currentSkillId', 'history', …]
-cursor.mark('the turn that went wrong'); // the READER's note — never written into the run
+cursor.stateAt().state.currentSkillId;    // 'beta'  — where the run stood at turn 2
+cursor.changedSince(turns[0]!);           // ['currentSkillId', 'history', …]
+cursor.mark('the turn that went wrong');  // the READER's note — never written into the run
 ```
 
 A refused move never moves. `jumpTo('seed#0')` — a stage that really ran and
@@ -89,8 +91,8 @@ what it was showing.
 ## Where the LLM turn lives depends on the chart shape
 
 <Callout type="info" title="One strategy, both shapes">
-  `milestoneStops` classifies the LOCAL segment of a stage id, so it never needs to be told whether
-  it was handed a run's log or a subflow's. Hand it either.
+`milestoneStops` classifies the LOCAL segment of a stage id, so it never needs
+to be told whether it was handed a run's log or a subflow's. Hand it either.
 </Callout>
 
 **`reactMode: 'dynamic'`** — the turn is a commit on the run's own log, so the
@@ -99,7 +101,7 @@ what it was showing.
 ```ts
 const cursor = timeTravel(agent.getSnapshot()!, { strategy: milestoneStopsStrategy });
 const turn = cursor.stops.find((s) => milestoneOf(s)?.kind === 'llm-turn')!;
-cursor.stateAt(turn).state; // the state that turn left behind
+cursor.stateAt(turn).state;   // the state that turn left behind
 ```
 
 **`reactMode: 'dynamic-grouped'`** — each turn is an `sf-llm-call` subflow with
@@ -110,7 +112,7 @@ the same strategy reads it.
 ```ts
 const iterations = cursor.stops.filter((s) => milestoneOf(s)?.kind === 'iteration');
 
-const inner = cursor.drill(iterations[1]!.runtimeStageId)!; // its own log, its own base
+const inner = cursor.drill(iterations[1]!.runtimeStageId)!;   // its own log, its own base
 const turn = inner.stops.find((s) => milestoneOf(s)?.kind === 'llm-turn')!;
 inner.stateAt(turn).state;
 ```
@@ -120,11 +122,12 @@ and every iteration shares one path, so `sf-llm-call#1` and `sf-llm-call#26` are
 two different turns and two different logs.
 
 <Callout type="warn" title="Which keys are visible where">
-  In the grouped shape the **settled** skill cursor for turn *k* is on the OUTER axis, at iteration
-  *k* (`currentSkillId`). Inside the drill, `currentSkillId` is the value the turn *started from* —
-  it crosses the mount as a read-only input — and the move this turn made is `nextSkillCursor`,
-  which the outputMapper merges back out. Both logs are truthful about different questions; scrub
-  the outer axis for what settled, drill for what happened.
+In the grouped shape the **settled** skill cursor for turn *k* is on the OUTER
+axis, at iteration *k* (`currentSkillId`). Inside the drill, `currentSkillId` is
+the value the turn *started from* — it crosses the mount as a read-only input —
+and the move this turn made is `nextSkillCursor`, which the outputMapper merges
+back out. Both logs are truthful about different questions; scrub the outer axis
+for what settled, drill for what happened.
 </Callout>
 
 ## The recording carries its own milestones
@@ -134,10 +137,10 @@ time, and footprintjs 9.21 stamps them on the stage's first commit bundle
 (`CommitBundle.tags`). Two tags per stage, one vocabulary, owned by
 `conventions.ts`:
 
-| tag                       | what it is                    | example                    |
-| ------------------------- | ----------------------------- | -------------------------- |
-| `milestone:<kind>`        | the kind — what you filter on | `milestone:llm-turn`       |
-| `milestone-label:<label>` | the human word                | `milestone-label:LLM turn` |
+| tag | what it is | example |
+|---|---|---|
+| `milestone:<kind>` | the kind — what you filter on | `milestone:llm-turn` |
+| `milestone-label:<label>` | the human word | `milestone-label:LLM turn` |
 
 **The tag is the fact; the id is the fallback.** `milestoneStops` reads the
 bundle first and classifies from the stage id only for a bundle with no tags —
@@ -155,9 +158,9 @@ import { tagStops, timeTravel } from 'foottrace';
 import { milestoneTag } from 'agentfootprint';
 
 const turns = timeTravel(agent.getSnapshot()!, { strategy: tagStops([milestoneTag('llm-turn')]) });
-turns.stops.map((s) => s.label); // ['Run start', 'CallLLM', 'CallLLM', 'Run end']
-turns.stops[1].meta; // ['milestone:llm-turn', 'milestone-label:LLM turn']
-turns.stops[0].prologue; // true — seeding and context assembly ran before the first turn
+turns.stops.map((s) => s.label);   // ['Run start', 'CallLLM', 'CallLLM', 'Run end']
+turns.stops[1].meta;               // ['milestone:llm-turn', 'milestone-label:LLM turn']
+turns.stops[0].prologue;           // true — seeding and context assembly ran before the first turn
 ```
 
 And the Map advertises the vocabulary before any run — `buildTimeStructure`
@@ -188,7 +191,7 @@ An `llm-turn` stop is where a person actually stands when they ask the question
 this library exists for: **what did the model read, right here?**
 
 Until 9.88.0 the honest answer was "most of it". The request a provider receives
-is assembled from committed pieces and is _itself_ never committed — the
+is assembled from committed pieces and is *itself* never committed — the
 `call-llm` bundle holds the response, not the ask. The pieces are all on the
 record (`systemPromptInjections`, `history`, `dynamicToolSchemas`,
 `cacheMarkers`, `wrapUpAsked`), but the rules that turn them into a request
@@ -204,22 +207,22 @@ const snapshot = agent.getSnapshot()!;
 
 // SERVED — the request, rebuilt from the committed pieces.
 const view = servedAt(snapshot, 1)!;
-view.system.text; // the joined system prompt, as sent
-view.messages.asSent; // the conversation that went out
-view.messages.requestOnly; // lines written to no history (the nudge)
-view.tools.names; // ['read_skill', 'lookup', 'skip_step']
-view.tools.withheld; // 'wrap-up' on the out-of-budget call
-view.basis?.model; // which model saw this
-view.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults'] — an agent; an LLMCall reads ['provider-defaults']
+view.system.text;                // the joined system prompt, as sent
+view.messages.asSent;            // the conversation that went out
+view.messages.requestOnly;       // lines written to no history (the nudge)
+view.tools.names;                // ['read_skill', 'lookup', 'skip_step']
+view.tools.withheld;             // 'wrap-up' on the out-of-budget call
+view.basis?.model;               // which model saw this
+view.gaps.map((g) => g.gap);     // ['cache-transform', 'provider-defaults'] — an agent; an LLMCall reads ['provider-defaults']
 
 // RECEIPT — hashes and references, written by the call itself.
 const receipt = receiptAt(snapshot, 1)!;
-receipt.basis.model; // the model that answered
-receipt.messages.count; // how many turns went out
-receipt.tools.forced; // the forced answer tool, or null
-receipt.params.temperature; // the dial this turn went out on
-receipt.cache.markersApplied; // which cache breakpoints the strategy applied
-receipt.cache.transform; // 'unchanged' | 'rewritten' | 'unknown'
+receipt.basis.model;             // the model that answered
+receipt.messages.count;          // how many turns went out
+receipt.tools.forced;            // the forced answer tool, or null
+receipt.params.temperature;      // the dial this turn went out on
+receipt.cache.markersApplied;    // which cache breakpoints the strategy applied
+receipt.cache.transform;         // 'unchanged' | 'rewritten' | 'unknown'
 
 // THE LAW
 receiptHash(receipt.basis.runId, view.system.text) === receipt.system.hash; // true
@@ -227,7 +230,7 @@ receiptHash(receipt.basis.runId, view.system.text) === receipt.system.hash; // t
 
 The second argument is the **epoch** — the run's own iteration number, 1-based,
 the same number on `iteration_start`. `servedViews(snapshot)` gives every epoch
-in one pass, and `epochAt` / `epochLocations` are the one owner of _where_ an
+in one pass, and `epochAt` / `epochLocations` are the one owner of *where* an
 epoch's pieces live: the run's own log under `reactMode: 'dynamic'`, the turn's
 inner `sf-llm-call` history under `'dynamic-grouped'`. Everything above works
 unchanged in both shapes because everything above asks them.
@@ -278,19 +281,13 @@ remain unchanged, and the measurement enforces no request limit.
 Every chart that hands a model a request mints one (9.91.0). `Agent` and
 `LLMCall` own their executor and salt each run's hashes with that run's own id;
 both take `recordReceipt: false` to decline the mint on a run that does not want
-to pay for it. The two messageAPI charts are chart _builders_ handed to an
+to pay for it. The two messageAPI charts are chart *builders* handed to an
 executor **you** own, and nothing in a stage's scope carries that executor's run
 id — so they take the salt as a dep:
 
 ```ts
 const runId = `run-${Date.now()}`;
-const chart = buildAgentMessageApiChart({
-  provider,
-  model,
-  systemPrompt,
-  tools,
-  getRunId: () => runId,
-});
+const chart = buildAgentMessageApiChart({ provider, model, systemPrompt, tools, getRunId: () => runId });
 await new FlowChartExecutor(chart).run({ input: { message: 'weather in paris?' } });
 ```
 
@@ -314,7 +311,7 @@ of quoted.
 
 `receiptHash(runId, content)` is the digest rule both sides use, and
 `messageDigestInput(message)` is what a message's hash covers — role, text, the
-join keys that pair a tool result to its call (`toolCallId` _and_ `toolName`:
+join keys that pair a tool result to its call (`toolCallId` *and* `toolName`:
 two shipped providers join on the name), any signed thinking blocks, and, for an
 assistant turn, the calls it asked for. `toolDigestInput(tool)` is what a tool
 schema's hash covers — the whole `LLMToolSchema` as sorted-key JSON, with a
@@ -329,28 +326,20 @@ that shows a receipt can mark every row Verified without reaching into this
 package:
 
 ```ts
-import {
-  receiptAt,
-  receiptHash,
-  servedAt,
-  messageDigestInput,
-  toolDigestInput,
-} from 'agentfootprint';
+import { receiptAt, receiptHash, servedAt, messageDigestInput, toolDigestInput } from 'agentfootprint';
 
 const view = servedAt(snapshot, 1)!;
 const receipt = receiptAt(snapshot, 1)!;
 const hash = (input: string) => receiptHash(receipt.basis.runId, input);
 
-hash(view.system.text) === receipt.system.hash; // system
+hash(view.system.text) === receipt.system.hash;                                  // system
 view.system.pieces.every((p, i) => hash(p.text) === receipt.system.pieces[i].hash); // pieces
-view.messages.asSent.every(
-  (m, i) => hash(messageDigestInput(m)) === receipt.messages.entries[i].hash,
-); // messages
-view.tools.schemas.every((t) => hash(toolDigestInput(t)) === receipt.tools.schemaHashes[t.name]); // schemas
+view.messages.asSent.every((m, i) => hash(messageDigestInput(m)) === receipt.messages.entries[i].hash); // messages
+view.tools.schemas.every((t) => hash(toolDigestInput(t)) === receipt.tools.schemaHashes[t.name]);       // schemas
 ```
 
 The last line is new in 9.89.0. Until then a consumer could prove everything
-the model was served _except_ the tools' schemas: the receipt hashed each one
+the model was served *except* the tools' schemas: the receipt hashed each one
 through a serializer the package did not export, so a schema row could never
 read Verified without copying the rule — and a copy is a second owner that
 drifts the day the digest changes. `toolDigestInput` is the only spelling of
@@ -385,7 +374,7 @@ carried as data: `cause` is a `ServedGapCause`, set by the read that failed. A
 renderer prints the sentence and, if it wants, the cause.
 
 That rule keeps the sentences short; it does not make them true. A sentence that
-tells you something useful _is_ a claim about how the rebuild behaves, and the
+tells you something useful *is* a claim about how the rebuild behaves, and the
 rebuild is code — so every claim each sentence makes is asserted against a real
 view in `test/time-travel/gap-sentences.test.ts`, one run per entry, with
 the clauses required to partition the sentence so no printed word goes
@@ -407,8 +396,8 @@ when there is no receipt, and it is deliberately not part of the law.
 `receipt.params` is a `ReceiptParams` — the sampling dials the call went out on
 (`temperature`, `maxTokens`, `thinkingBudget`, `stop`, `toolChoice`), read off
 the request the **port** was handed and each present only when the library
-actually sent it, so an absent key means _none was sent_ rather than _the model
-ran without one_. `receipt.cache.markersApplied` is
+actually sent it, so an absent key means *none was sent* rather than *the model
+ran without one*. `receipt.cache.markersApplied` is
 a list of `ReceiptCacheMarker` — `{ field, boundaryIndex, ttl }` per
 `cache_control` breakpoint the strategy really applied, which is what makes two
 turns comparable when you need to know whether the cached prefix moved.
@@ -422,9 +411,9 @@ above is decided from. Use it when you want one key rather than a whole request:
 import { keyedFold } from 'agentfootprint';
 
 const fold = keyedFold(agent.getSnapshot());
-fold.basis; // 'initial+log' — the base travelled
-fold.valueAt('history', 12); // the conversation after the 13th commit
-fold.valueAt('history', -1); // …and what the run STARTED from
+fold.basis;                     // 'initial+log' — the base travelled
+fold.valueAt('history', 12);    // the conversation after the 13th commit
+fold.valueAt('history', -1);    // …and what the run STARTED from
 ```
 
 That base is why a **resumed** run reads correctly. A resume is a fresh executor
@@ -441,10 +430,10 @@ with both.
    this, redaction scrubs the committed mirror, a window strategy decides what
    survives — and a receipt carrying content would quietly reopen all three.
 2. **Run-salted digests.** `sha256(runId + '\u001f' + content)`, first 16 hex
-   characters. Hashes are _not_ redacted, and the salt is what limits them: an
+   characters. Hashes are *not* redacted, and the salt is what limits them: an
    unsalted hash of a one-line prompt or a two-word user turn is a dictionary
    lookup away from being read back, and receipts travel inside recordings.
-   Salted per run, a hash answers "is this the same as _that_ piece of _this_
+   Salted per run, a hash answers "is this the same as *that* piece of *this*
    run?" — the only question the law asks — and cannot be matched across runs
    or against a precomputed table. It does not keep a GUESSABLE value secret
    from someone holding the recording, which carries the `runId` too: a short
@@ -463,10 +452,10 @@ mint writes every container it knows — but what a mint knows has grown (`cache
 came with the receipt in 9.88.0; `cache.strategy` in 9.93.0), and a receipt you
 already hold was written by the release that wrote it. So `receiptAt` hands back
 a **`StoredReceipt`**: the same shape with the containers the narrowing does not
-check declared optional, returned _as stored_ — nothing repaired, no `cache: {}`
-fabricated, the record never written to. Absence reads as _cannot say_:
+check declared optional, returned *as stored* — nothing repaired, no `cache: {}`
+fabricated, the record never written to. Absence reads as *cannot say*:
 `servedAt` raises `cache-transform` on a receipt with no `cache.strategy` exactly
-as on one with no `cache` and on no receipt at all; only a receipt that _says_
+as on one with no `cache` and on no receipt at all; only a receipt that *says*
 `null` lifts it. The basis is the one container every vintage carries, so every
 hash row a receipt has still verifies.
 
@@ -480,9 +469,9 @@ import { receiptAt, servedAt, type StoredReceipt } from 'agentfootprint';
 
 // a recording minted by 9.92, opened by this release
 const receipt: StoredReceipt = receiptAt(olderRecording, 1)!;
-receipt.cache?.strategy; // undefined — the mint predates the key; not null, not repaired
-receipt.basis.runId; // the one container every vintage carries
-servedAt(olderRecording, 1)!.gaps.map((g) => g.gap); // ['cache-transform', 'provider-defaults'] — it cannot say, and says so
+receipt.cache?.strategy;                              // undefined — the mint predates the key; not null, not repaired
+receipt.basis.runId;                                  // the one container every vintage carries
+servedAt(olderRecording, 1)!.gaps.map((g) => g.gap);  // ['cache-transform', 'provider-defaults'] — it cannot say, and says so
 ```
 
 <Callout type="warn" title="Gaps: what the view cannot prove, said out loud">
@@ -496,18 +485,18 @@ exist is a named gap, never a missing view and never a confident empty one.
 renderer prints — `gap.why` — names no mechanism at all: not a module, not a
 function, not a key, not a version, not a chart, not a strategy, not an option.
 It says which fields it covers, what they mean on this view, and what to do
-differently. Five review rounds tried to write _true_ mechanism sentences into
+differently. Five review rounds tried to write *true* mechanism sentences into
 that frozen constant and the rate of new falsehoods held constant, so the sixth
 stopped writing them. The mechanism did not disappear — it is in the comment
-beside each entry in the source, the _cause_ is a value on the gap
+beside each entry in the source, the *cause* is a value on the gap
 (`ServedGap.cause`), and it is spelled out here, because a doc is versioned with
 the code and you can open the file.
 
 **That rule keeps the sentences short; it does not make them true.** The sixth
 round said a sentence with no code claim in it cannot go false, and a seventh
 round measured that and found otherwise: ten of the eleven printed sentences
-still claim something the rebuild decides — _may be short_, _empty means
-unknown_, _the list is complete and the schemas are one short_ — because a
+still claim something the rebuild decides — *may be short*, *empty means
+unknown*, *the list is complete and the schemas are one short* — because a
 sentence that claims nothing cannot inform. So every claim a printed sentence
 makes is asserted against a real run in a test beside it,
 `test/time-travel/gap-sentences.test.ts`: each sentence is cut into quoted
@@ -522,39 +511,39 @@ person reading the two together sees the difference.
 - **`no-fold-base`** → fields: `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.schemaHashes`, `tools.names`, `tools.forced`, `tools.withheld`, `epoch`
   The recording travelled without `initialState`, so anything the run inherited
   rather than set reads as absent. On a resumed run that is most of it.
-  **Either** base counts: the log holding this epoch's call, or the _run_ log
+  **Either** base counts: the log holding this epoch's call, or the *run* log
   holding its build-time constants. Under `'dynamic-grouped'` those are separate
   logs, so a grouped recording can lose the run base by itself. The counts move
   with the things they count, and so does **this view's** `epoch`: a fold that
-  cannot read `iteration` numbers the turn by its _position_ instead. The
-  _receipt's_ `basis.epoch` is not on the list — it was minted live and rides in
+  cannot read `iteration` numbers the turn by its *position* instead. The
+  *receipt's* `basis.epoch` is not on the list — it was minted live and rides in
   the call's own bundle, whatever the base. Re-read the run from a snapshot that
   carries `initialState` and the gap goes away. The printed clause used to say
   the view's number "may differ from the one the receipt for this turn carries"
   — a sentence about a receipt, printed on views that have none. It now says
-  what the _number_ means: it may be the turn's place in run order rather than
+  what the *number* means: it may be the turn's place in run order rather than
   the count the run kept.
 - **`no-conversation-on-record`** → fields: `messages.count`, `messages.entries`, `messages.requestOnly`
   The call committed neither `history` nor `messagesInjections`, so the turns
-  that went out are _unknown_, not empty: an empty `asSent` is the absence of a
+  that went out are *unknown*, not empty: an empty `asSent` is the absence of a
   record, never a record of absence. The request-only lines are recomposed
-  _from_ the conversation, so they are unproved with it.
+  *from* the conversation, so they are unproved with it.
 - **`no-receipt-on-chart`** → fields: `basis.model`, `basis.provider`, `basis.runId`, `basis.epoch`, `params`, `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `omittedForAttention`, `requestMeasurement`, `replayPreparations`
-  No _usable_ receipt was read for this epoch, so nothing on the view has been
+  No *usable* receipt was read for this epoch, so nothing on the view has been
   checked against what went out. Not "none was written": the causes below differ
   on exactly that point, and the printed sentence used to get it wrong — it
   opened "No receipt was found" and closed "absent here means unrecorded", both
-  false when a receipt _was_ written and was refused. The fields listed are
+  false when a receipt *was* written and was refused. The fields listed are
   carried only by a receipt; everything else is rebuilt from the log alone,
-  _unverified_. Why there is none is data rather than prose — the gap carries a
+  *unverified*. Why there is none is data rather than prose — the gap carries a
   `cause`.
   `'no-receipt-committed'` means nothing was written under the receipt key: a
   pre-9.88 recording, a run with `recordReceipt: false`, or a chart whose
   `call-llm` stage mints none (`LLMCall` and the message-API charts run a
   `call-llm` of their own that does not mint; `LLMCall` has a run id and could,
-  the two exported message-API chart _builders_ run on a consumer's executor
+  the two exported message-API chart *builders* run on a consumer's executor
   and have none to salt hashes with). Those leave the same record, and the read
-  does not separate them. `'receipt-shape-rejected'` means something _was_
+  does not separate them. `'receipt-shape-rejected'` means something *was*
   written there and carries no basis, so it was refused — that one says the
   recording is damaged. `omittedForAttention` and `cache.strategy` are on the
   list since 9.93.0: both are receipt-only facts — what the window dropped
@@ -562,10 +551,10 @@ person reading the two together sees the difference.
   with the receipt. (`omittedForAttention` was a key of
   `UNGAPPED_FIELDS` until then, on a measurement that no chart supplied it; the
   agent's window stage does, on every run whose strategy evicts.) The sentence also used to close
-  _"their absence here is a gap in the record, never a call made without them"_,
+  *"their absence here is a gap in the record, never a call made without them"*,
   which holds for each field as a whole and fails one level down: a receipt
   always carries `params` and always carries a `cache.transform` verdict, and an
-  absence _inside_ `params` — `{}` on an agent that set no dials — really is a
+  absence *inside* `params` — `{}` on an agent that set no dials — really is a
   call made without one. It now claims nothing about what is inside a field it
   cannot see.
 - **`findings-layout`** → fields: `system.pieces`, `system.chars`, `messages.requestOnly`, `messages.count`, `messages.entries`
@@ -576,13 +565,13 @@ person reading the two together sees the difference.
 
 - **`no-run-log`** → fields: `tools.names`, `tools.forced`, `tools.schemaHashes`, `messages.requestOnly`
   A subtree was handed in on its own, and run constants live in the run log and
-  only there — the forced output tool's _name_, and the tool `wants` the
+  only there — the forced output tool's *name*, and the tool `wants` the
   staged-refs nudge is composed from. Losing the name also loses the
   `schemaHashes` row the receipt keeps under it. Pass the whole snapshot to read
   them. **May, never did:** measured on a `'dynamic-grouped'` agent with one
   plain tool and its `commitLog` emptied, the damaged rebuild is byte-identical
   to the intact one — that run has no constant to lose, so the gap costs it
-  nothing. The condition is not narrowed to the runs where it _does_ cost
+  nothing. The condition is not narrowed to the runs where it *does* cost
   something, because whether the run had one is recorded in the log whose
   absence raises the gap.
 - **`cache-transform`** → fields: `cache.transform`, `cache.transformHash`, `cache.markersApplied`, `cache.strategy`, `system.hash`, `system.chars`, `system.pieces`, `messages.count`, `messages.entries`, `messages.requestOnly`, `tools.names`, `tools.schemaHashes`, `tools.forced`, `tools.withheld`
@@ -599,7 +588,7 @@ person reading the two together sees the difference.
   own decision and never from the prepared request. Where a strategy did
   run, its `prepareRequest` rewrites the request after assembly, and the
   strategy is **code**: the commit log holds the request it was handed and never
-  the one it handed back. What the _receipt_ holds of the output — and the
+  the one it handed back. What the *receipt* holds of the output — and the
   printed sentence used to deny, saying "only its INPUTS are on the record" —
   is three fields: `cache.transform` (the verdict of comparing the two),
   `cache.transformHash` (the digest of what came back, when it differed) and
@@ -633,7 +622,7 @@ person reading the two together sees the difference.
   Under a `'tool-forced'` output strategy the synthetic answer tool is added at
   assembly from a build-time schema. Its name is on the record; its schema body
   is not.
-  </Callout>
+</Callout>
 
 <Callout title="What you are handed is detached">
 A fold's answers are memoized: `keyedFold` gives the same object back for the
@@ -646,14 +635,13 @@ what you were handed would otherwise rewrite what a *later* epoch reports was
 served, silently and only for the readers who came after you.
 `structuredClone` (or a spread) before you change anything.
 
-Two of a view's containers are also _copies_ — `messages.asSent` and
+Two of a view's containers are also *copies* — `messages.asSent` and
 `tools.schemas` — because those two alone would alias the memoized answers. The
 other four alias nothing and are frozen anyway, so that `ServedView`'s
 `readonly` is true throughout rather than true of two containers out of six.
 
-What is _not_ frozen is the recording you handed in: `EpochLocation.log`,
+What is *not* frozen is the recording you handed in: `EpochLocation.log`,
 `.source` and `.runSource` point at your own snapshot.
-
 </Callout>
 
 <Callout type="warn" title="Where the record stops">
@@ -664,7 +652,7 @@ What is _not_ frozen is the recording you handed in: `EpochLocation.log`,
 > prove what was sent or accepted.
 
 It is PRINTED, so it obeys the same rule as the gap sentences and names no
-module, function or call. Where "last saw it" _is_, for a reader who can open
+module, function or call. Where "last saw it" *is*, for a reader who can open
 the file: `buildReceipt` is called from the `call-llm` stage with the request
 about to be passed to `LLMProvider.complete` — the provider **port**. Downstream
 of that call sit a provider the consumer decorated (a `complete()` wrapping a
@@ -672,10 +660,9 @@ of that call sit a provider the consumer decorated (a `complete()` wrapping a
 defaults; none is on the record. A decorator that appends a system suffix and an
 unregistered tool leaves `cache.transform` reading `'unchanged'` — correctly,
 and uselessly, unless you know where the record stops.
-
 </Callout>
 
-Four other things that _looked_ like gaps are not, because 9.88.0 closed them
+Four other things that *looked* like gaps are not, because 9.88.0 closed them
 instead: the system-prompt join is one exported function both sides call, the
 wrap-up call's withholding is rebuilt from the committed `wrapUpAsked`, the
 forced tool's name is committed at seed, and the staged-refs nudge — the one
@@ -702,12 +689,11 @@ recording's own `runId`.
 
 Redaction is the **executor's**: an agent's `redact`, and
 `flowchartAsTool({ redact })` / `runbookAsTool({ redact })`, scrub the run's
-_commit log_ at write time and serve everything else from the same redacted
+*commit log* at write time and serve everything else from the same redacted
 view. A snapshot served under a policy omits `initialState`, so folding it
 reports `basis: 'log-only'` and `servedAt` raises `no-fold-base` rather than
 quietly rebuilding a short view — the gap that already says a value it could not
 recover reads as empty rather than as unknown.
-
 </Callout>
 
 <Callout title="Turning the receipt off">

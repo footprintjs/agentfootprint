@@ -1,5 +1,6 @@
 import { withoutEarlierScriptText } from '../scripts/rows.js';
-import { seededTickets, type PlacedTicket } from '../placedTickets.js';
+import type { PlacedTicket } from '../placedTickets.js';
+import { seedStagedRefs } from './stagedRefsNudge.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
 import type { NegativeCheckpoint } from '../negativeClaims/checkpoint.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
@@ -894,15 +895,8 @@ function seedFrom(
       ...(tools !== undefined && { tools }),
     };
   }
-  // The `wants` declarations (9.88.0) — the third input to the staged-refs
-  // nudge, and the only one that was build-time-only. Value-conditional in the
-  // same way, and under the same condition request assembly uses.
-  if (deps.toolWantsByName !== undefined) {
-    scope.toolWantsByName = deps.toolWantsByName;
-  }
-  // …and the receipt of the tickets the library placed (`placedTickets.ts`).
-  const tickets = seededTickets(resume?.placedTickets, deps.toolWantsByName !== undefined);
-  if (tickets !== undefined) scope.placedTickets = tickets;
+  // The staged-refs nudge's record inputs: `wants` and the ticket receipt.
+  seedStagedRefs(scope, deps.toolWantsByName, resume?.placedTickets);
   // Messages-slot delivery ledger (7.21) — empty at the start of every run.
   // A resumed run rebuilds it from the markers in the restored window rather
   // than trusting this, so an empty ledger never means "deliver it again".

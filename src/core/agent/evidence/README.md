@@ -456,6 +456,20 @@ answer-moment input of the contingent check; at dispatch
 `groundedArgumentValues` reads the same rule over a call's string leaves. The
 exempt corpus never files a carrier — an exemption names no result.
 
+### One ceiling, two meters
+
+`evidenceIndex.ts` · `MAX_INDEX_TOKENS` is one number read by two meters. The
+index counts DISTINCT forms across the WHOLE history (a repeated form is free).
+The per-result readers that share the number — the declared-sources check
+(`resultCarries.ts` · `leavesOf`) and the argument-sources check
+(`arguments/checks.ts` · `contains`) — count EVERY token, repeats included,
+of ONE result, because they match token SEQUENCES and need the positions. So
+past the number they can disagree: a result of one token repeated more times
+than the ceiling is complete for the index and `uncheckable` for those checks,
+and a history the index marks truncated can still be read in full, result by
+result, by them. Each says `uncheckable` / `truncated` honestly by its own
+meter; neither borrows the other's verdict.
+
 ## Which results the answer cited — `carriedBy` (the answer's own carriers)
 
 **The law: a host shows an answer's data from what the answer cites, and the

@@ -18,6 +18,15 @@
  * `followUp`, `run({ continueFrom })` and `resumeOnError` all restore it
  * through seed.
  *
+ * A conversation stored or paused by an EARLIER version has no receipt, and
+ * it is read as it is: none of its tickets is named, and the declared-sources
+ * check reads each as an ordinary result. A record written before a mark
+ * existed is read in the direction that refuses or flags more; reading it by
+ * shape would hand a tool's ticket-shaped text the library's voice again.
+ * Example: a run paused on the previous version, resumed after the upgrade,
+ * gets no staged-refs line for the ticket it placed before the pause. So
+ * finish paused runs before upgrading.
+ *
  * @example
  * ```ts
  * const issued = issuedTicketsOf(scope.placedTickets);
@@ -35,11 +44,20 @@ export interface PlacedTicket {
 }
 
 /**
- * What a reader is handed about the receipt: the issued tickets by
- * `toolCallId`, or {@link RECORDED_BEFORE_RECEIPT} for a recording older than
- * the receipt itself.
+ * The issued tickets as `(toolCallId, ref)` PAIRS: each call id maps to every
+ * ref minted under it. A pair, not a key, because a provider may reuse a call
+ * id across turns (`security/extractSequence.ts` says so): turn one places
+ * `art_a` under `t1`, turn two places `art_b` under `t1` again, and both are
+ * still the library's.
  */
-export type IssuedTickets = ReadonlyMap<string, string> | typeof RECORDED_BEFORE_RECEIPT;
+export type IssuedPairs = ReadonlyMap<string, ReadonlySet<string>>;
+
+/**
+ * What a reader is handed about the receipt: the issued pairs, or
+ * {@link RECORDED_BEFORE_RECEIPT} for a recording older than the receipt
+ * itself.
+ */
+export type IssuedTickets = IssuedPairs | typeof RECORDED_BEFORE_RECEIPT;
 
 /**
  * A recording made before the library kept its receipt. Only the time-travel
@@ -51,17 +69,19 @@ export type IssuedTickets = ReadonlyMap<string, string> | typeof RECORDED_BEFORE
 export const RECORDED_BEFORE_RECEIPT = 'recorded-before-receipt' as const;
 
 /**
- * The issued tickets as a map, `toolCallId` → ref. Read defensively because
- * the value comes from scope, a recording or a stored conversation: anything
- * that is not a list of `{ toolCallId, ref }` strings issues nothing.
+ * The issued pairs, read defensively because the value comes from scope, a
+ * recording or a stored conversation: anything that is not a list of
+ * `{ toolCallId, ref }` strings issues nothing.
  */
-export function issuedTicketsOf(value: unknown): ReadonlyMap<string, string> {
-  const issued = new Map<string, string>();
+export function issuedTicketsOf(value: unknown): IssuedPairs {
+  const issued = new Map<string, Set<string>>();
   if (!Array.isArray(value)) return issued;
   for (const entry of value as readonly unknown[]) {
     if (typeof entry !== 'object' || entry === null) continue;
     const { toolCallId, ref } = entry as { toolCallId?: unknown; ref?: unknown };
-    if (typeof toolCallId === 'string' && typeof ref === 'string') issued.set(toolCallId, ref);
+    if (typeof toolCallId !== 'string' || typeof ref !== 'string') continue;
+    const refs = issued.get(toolCallId) ?? new Set<string>();
+    issued.set(toolCallId, refs.add(ref));
   }
   return issued;
 }
@@ -80,14 +100,16 @@ export function isIssuedTicket(
 ): parsed is PlacedToolResult {
   if (!isPlacedToolResult(parsed)) return false;
   if (issued === RECORDED_BEFORE_RECEIPT) return true;
-  return toolCallId !== undefined && issued.get(toolCallId) === parsed.ref;
+  return toolCallId !== undefined && issued.get(toolCallId)?.has(parsed.ref) === true;
 }
 
 /**
  * The tickets a stored conversation keeps: only those whose call is still a
  * `role: 'tool'` message of the stored `history`, so the list is bounded by
  * the history it stands beside (a ticket whose message a window or a fold
- * removed can never be read again). `undefined` when none is left, so a
+ * removed can never be read again). A reused call id keeps every pair minted
+ * under it while any message under that id remains, because the id alone
+ * cannot say which of them is gone. `undefined` when none is left, so a
  * conversation that placed nothing stores no key.
  */
 export function ticketsStillServed(
@@ -96,13 +118,14 @@ export function ticketsStillServed(
 ): readonly PlacedTicket[] | undefined {
   const issued = issuedTicketsOf(tickets);
   if (issued.size === 0) return undefined;
-  const kept: PlacedTicket[] = [];
+  const served = new Set<string>();
   for (const { role, toolCallId } of history) {
-    if (role !== 'tool' || toolCallId === undefined) continue;
-    const ref = issued.get(toolCallId);
-    if (ref !== undefined && !kept.some((t) => t.toolCallId === toolCallId)) {
-      kept.push({ toolCallId, ref });
-    }
+    if (role === 'tool' && toolCallId !== undefined) served.add(toolCallId);
+  }
+  const kept: PlacedTicket[] = [];
+  for (const [toolCallId, refs] of issued) {
+    if (!served.has(toolCallId)) continue;
+    for (const ref of refs) kept.push({ toolCallId, ref });
   }
   return kept.length > 0 ? kept : undefined;
 }
@@ -127,7 +150,8 @@ export function carriedTicketsOf(value: unknown): readonly PlacedTicket[] {
   if (!ok) {
     throw new TypeError(
       '[resumeOnError] checkpoint `placedTickets` must be a list of { toolCallId, ref } strings ' +
-        'when present. It is the receipt of the placement tickets this conversation issued.',
+        'when present. It is the receipt of the placement tickets the library issued for the ' +
+        "stored history's calls.",
     );
   }
   return (value as readonly PlacedTicket[]).map(({ toolCallId, ref }) => ({ toolCallId, ref }));

@@ -78,21 +78,15 @@
  * stays whole and every indexed form carries the TURN it was last served in
  * — one number, stamped during the walk that was happening anyway.
  *
- * A TURN starts at each message a PERSON said — the one authorship rule,
- * `lib/saidByPerson.ts` · `isSaidByPerson`, which every reader of "where this
- * turn begins" asks (the window's current request, the answer's standing, the
- * honesty source corpus). A frame the library wrote is not a person asking
- * something new, and excluding EVERY such frame is load-bearing rather than
- * tidy: the evidence recheck and the budget wrap-up append a `role: 'user'`
- * line MID-RUN, and a compaction summary can land after a result this turn
- * fetched, so counting any of them as a boundary would push this turn's own
- * tool results into the "earlier" bucket and file a notice against an answer
- * read from them. Example: request → tool result → `[budget exhausted …]` →
- * answer is ONE turn, and the answer's values are this turn's.
- *
- * `isLibraryAuthoredTurn` (frames.ts) is a different, narrower question —
- * which user-role lines must stay out of the EXEMPT corpus — and is not asked
- * here.
+ * A TURN starts at each message a PERSON said: `lib/saidByPerson.ts` ·
+ * `isSaidByPerson`, the one authorship rule every reader of "where this turn
+ * begins" asks. Excluding EVERY library frame is load-bearing: the evidence
+ * recheck and the budget wrap-up append a `role: 'user'` line MID-RUN, and a
+ * compaction summary can land after a result this turn fetched; counting one
+ * as a boundary would file a notice against an answer read from this turn's
+ * own results. Example: request → tool result → `[budget exhausted …]` →
+ * answer is ONE turn. (`isLibraryAuthoredTurn`, frames.ts, is a narrower
+ * question: which user-role lines stay out of the EXEMPT corpus.)
  *
  * Turn 1 is the first user message still in the window; anything indexed
  * before one (a history with no user turn at all) is turn 0, which is also
@@ -123,20 +117,9 @@ import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
 /**
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
  * 5 MB tool result — because the cost of hitting it is not "slower", it is
- * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}).
- *
- * ONE NUMBER, TWO METERS — read this before trusting "the same ceiling". The
- * index counts DISTINCT forms across the WHOLE history (a repeated form is
- * free). The per-result readers that share the number — the declared-sources
- * check (`evidence/resultCarries.ts` · `leavesOf`) and the argument-sources
- * check (`arguments/checks.ts` · `contains`) — count EVERY token, repeats
- * included, of ONE result, because they match token SEQUENCES and need the
- * positions. So past the number they can disagree: a result of one token
- * repeated more times than the ceiling is complete for the index and
- * `uncheckable` for those checks, and a history the index marks truncated
- * can still be read in full, result by result, by them. Each says
- * `uncheckable` / `truncated` honestly by its own meter; neither borrows the
- * other's verdict.
+ * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}). The
+ * per-result source checks share the NUMBER, not the meter: read "One
+ * ceiling, two meters" in this folder's README before trusting "the same".
  */
 export const MAX_INDEX_TOKENS = 200_000;
 
@@ -450,9 +433,8 @@ export function evidenceFromHistory(
   let toolResultsThisTurn = 0;
   for (const msg of history) {
     // A turn boundary — the person asked something new. The library's own
-    // `role: 'user'` lines (corrections, the wrap-up, a drop notice, a
-    // summary, a delivered injection) are NOT boundaries; see the header for
-    // the bug that distinction prevents.
+    // `role: 'user'` lines (corrections, the wrap-up, a drop notice, a summary,
+    // a delivered injection) are NOT boundaries; see the header for why.
     if (isSaidByPerson(msg)) {
       sink.turn += 1;
       toolResultsThisTurn = 0;

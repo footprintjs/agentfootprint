@@ -63,6 +63,7 @@ import { memoryInjectionKey, retrievalEvidenceKey } from '../../memory/define.ty
 import { unwrapMemoryFlowChart } from '../../memory/define.js';
 import { mountMemoryRead, mountMemoryWrite } from '../../memory/wire/mountMemoryPipeline.js';
 import { integrityRail, integrityRailInto } from './integrityFindings.js';
+import { llmCallReadsInto } from './llmCallReads.js';
 import { withMemoryRecall } from './memoryRecallInjections.js';
 import {
   breakFinalStage,
@@ -740,26 +741,9 @@ export function buildDynamicAgentChart(deps: AgentChartDeps): FlowChart {
           // sf-llm-call so the tools slot's compose backstop files one
           // finding per defect per RUN, not per pass. Value-conditional.
           ...integrityRailInto(p),
-          // The window ledger (9.60.0) — CallLLM's dangling-reference check
-          // reads which grounds left the window, and CallLLM lives INSIDE
-          // this boundary in the grouped chart. Without this line the check
-          // sees an empty ledger every pass and reports a healthy run, which
-          // is worse than not running it at all. Value-conditional: an agent
-          // with no window strategy crosses no new key.
-          ...(p.compactions !== undefined && { compactions: p.compactions }),
-          // The findings ledger (9.101.0, step 3) — the `compactions` lesson
-          // one line up, again: CallLLM composes the ledger piece and the
-          // wire-only collapse from `findingsLedger`, and CallLLM lives INSIDE
-          // this boundary in the grouped chart, while the key is written by
-          // tool-calls and the Route decider on the OUTER scope. Without this
-          // line the piece is silently empty and nothing collapses — the same
-          // agent, same declarations, served less because of a chart shape it
-          // did not choose. Value-conditional: an unarmed agent, and an armed
-          // one whose model declared nothing, crosses no new key. Reads only
-          // inside (the writes are outside), so no outputMapper line is needed.
-          ...(p.findingsLedger !== undefined && { findingsLedger: p.findingsLedger }),
-          // The ticket receipt (`placedTickets.ts`), the same lesson; read-only inside.
-          ...(p.placedTickets !== undefined && { placedTickets: p.placedTickets }),
+          // The run records CallLLM reads inside this boundary, written outside
+          // it: the window ledger, the findings ledger and the ticket receipt.
+          ...llmCallReadsInto(p),
           // The declared ontology (9.106.0) — the same lesson: `callLLM`
           // composes the ontology piece from the run constant `ontology`,
           // which seed wrote on the OUTER scope, and `callLLM` lives INSIDE

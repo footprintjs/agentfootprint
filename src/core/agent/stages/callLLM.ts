@@ -61,7 +61,7 @@ import { buildReceipt, receiptPieces } from '../receipt/receipt.js';
 import { RECEIPT_KEY } from '../../../lib/conventions.js';
 import type { ReceiptDigests } from '../receipt/receiptDigests.js';
 import type { EvictedTurnsHandle } from '../window/evictedTurns.js';
-import { findStagedRefs, stagedRefsNudgeLine } from '../stagedRefs.js';
+import { stagedRefsNudgeFor } from './stagedRefsNudge.js';
 import { fileIntegrityFindings } from '../integrityFindings.js';
 import { resilienceHooks } from '../../../recorders/core/resilienceHooks.js';
 import { replayAttempts } from '../../../resilience/replayAttempt.js';
@@ -724,24 +724,13 @@ export function buildCallLLMStage(
     // the mechanism that composed it, so the receipt can say a line existed
     // without saying what it said.
     const requestOnly: { readonly message: LLMMessage; readonly reason: string }[] = [];
-    if (deps.toolWants !== undefined) {
-      const match = findStagedRefs(
-        messages,
-        deps.toolWants,
-        new Set(registeredToolSchemas.map((t) => t.name)),
-        scope.placedTickets,
-      );
-      if (match !== undefined) {
-        const nudge: LLMMessage = { role: 'user', content: stagedRefsNudgeLine(match) };
-        requestOnly.push({ message: nudge, reason: 'staged-refs-nudge' });
-        wireMessages = [...messages, nudge];
-        typedEmit(scope, 'agentfootprint.agent.grounding_nudged', {
-          iteration,
-          refs: match.refs.map((r) => ({ ref: r.ref, kind: r.kind })),
-          ...(match.refsOmitted > 0 && { refsOmitted: match.refsOmitted }),
-          tools: [...match.tools],
-        });
-      }
+    const nudge =
+      deps.toolWants === undefined
+        ? undefined
+        : stagedRefsNudgeFor(scope, messages, deps.toolWants, registeredToolSchemas, iteration);
+    if (nudge !== undefined) {
+      requestOnly.push({ message: nudge, reason: 'staged-refs-nudge' });
+      wireMessages = [...messages, nudge];
     }
     // THE TIME LINE (step T6b, `.time({ reader })` only) — the library's conclusion about the
     // person's time words, LAST, at the decision point: a settled window with its source and each

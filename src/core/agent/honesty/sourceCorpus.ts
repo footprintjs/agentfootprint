@@ -44,7 +44,7 @@ import type { ExternalGround } from '../../../integrity/unsupported-argument/che
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { leadingJsonValues } from '../evidence/servedJson.js';
-import { isIssuedTicket, issuedTicketsOf } from '../placedTickets.js';
+import { isIssuedTicket, issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
 import { ONTOLOGY_INSTRUCTION_ID } from '../../../ontology/instruction.js';
 import type {
   AppWords,
@@ -147,7 +147,7 @@ function standingsOf(
  * `isIssuedTicket`). A tool that returns ticket-shaped JSON itself is an
  * ordinary result, read for the value like any other.
  */
-function placedByLibrary(id: string, text: string, issued: ReadonlyMap<string, string>): boolean {
+function placedByLibrary(id: string, text: string, issued: IssuedPairs): boolean {
   const trimmed = text.trimStart();
   if (issued.size === 0 || !trimmed.startsWith('{')) return false;
   return isIssuedTicket(id, leadingJsonValues(trimmed).values[0], issued);
@@ -158,7 +158,7 @@ function servedResultsOf(
   current: number,
   standings: ReadonlyMap<string, Standing>,
   previousBatch: SourceInputs['previousBatch'],
-  issued: ReadonlyMap<string, string>,
+  issued: IssuedPairs,
 ): ServedResult[] {
   const out: ServedResult[] = [];
   const seen = new Set<string>();

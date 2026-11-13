@@ -24,6 +24,21 @@ describe('isIssuedTicket — who placed it, read from the receipt', () => {
     expect(isIssuedTicket('c1', ticket, issuedTicketsOf(undefined))).toBe(false);
   });
 
+  it('a call id reused across turns keeps every ref minted under it, as pairs', () => {
+    const receipt = [
+      { toolCallId: 't1', ref: 'art_1' },
+      { toolCallId: 't1', ref: 'art_2' },
+    ];
+    const reused = issuedTicketsOf(receipt);
+    expect(isIssuedTicket('t1', ticket, reused)).toBe(true);
+    expect(isIssuedTicket('t1', { ...ticket, ref: 'art_2' }, reused)).toBe(true);
+    expect(isIssuedTicket('t1', { ...ticket, ref: 'art_3' }, reused)).toBe(false);
+    expect(ticketsStillServed(receipt, [{ role: 'tool', toolCallId: 't1' }])).toEqual([
+      { toolCallId: 't1', ref: 'art_1' },
+      { toolCallId: 't1', ref: 'art_2' },
+    ]);
+  });
+
   it('a recording older than the receipt answers by shape, as it was sent', () => {
     expect(isIssuedTicket('c9', ticket, RECORDED_BEFORE_RECEIPT)).toBe(true);
     expect(isIssuedTicket('c9', { placed: true }, RECORDED_BEFORE_RECEIPT)).toBe(false);

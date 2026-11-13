@@ -69,8 +69,12 @@ function scopeWith(source: 'answered' | 'default'): TypedScope<AgentState> {
 }
 
 /** The rows the dispatch moment files for a call carrying `account: 'ARR-2291'`. */
-function rowsAtDispatch(scope: TypedScope<AgentState>, arm?: Parameters<typeof towersFor>[3]) {
-  const towers = towersFor(scope, true, gate, arm);
+function rowsAtDispatch(
+  scope: TypedScope<AgentState>,
+  arm?: Parameters<typeof towersFor>[3],
+  timeLineage?: Parameters<typeof towersFor>[4],
+) {
+  const towers = towersFor(scope, true, gate, arm, timeLineage);
   if (towers === undefined) throw new Error('expected towers');
   const values = groundedArgumentValues(
     { account: 'ARR-2291' },
@@ -96,6 +100,15 @@ describe('regression: the dispatch moment exempts what the answer moment exempts
     );
     expect(rowsAtDispatch(scope)).toHaveLength(1);
     expect(rowsAtDispatch(scope, { declaredDefaults })).toEqual([]);
+  });
+
+  it('a time the person said files none either', () => {
+    // `.time()` hands the dispatch moment the same lineage reader the answer
+    // moment reads (`turnExempt.ts` · `loadTimeLineage`); its `said` half is exempt.
+    const scope = scopeWith('answered');
+    const said = () => ({ said: ['ARR-2291'], derived: [] });
+    expect(rowsAtDispatch(scope, {}, () => ({ said: [], derived: [] }))).toHaveLength(1);
+    expect(rowsAtDispatch(scope, {}, said)).toEqual([]);
   });
 });
 
