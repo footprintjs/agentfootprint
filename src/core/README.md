@@ -62,8 +62,9 @@ about the answer they gave — a silent loop any app can fall into.
   answered it this turn; it crosses checkpoints on the awaiting-input shape
   itself (`Agent.resume` reads `repeat.count` and adds one). `previousAnswer` is
   READ FROM THE RECORD — the `input_received` result that landed, after the
-  tool-result rules (redaction first) ran — and keeps only the fields the
-  person supplied; when a rule replaced that result, only the count travels.
+  tool-result rules (redaction first) ran, and only off a message carrying the
+  library's `answersAsk` mark (`../tools/typedAnswer.ts` · `landedTypedAnswer`)
+  — and keeps only the fields the person supplied; when a rule replaced that result, only the count travels.
   A new `run()` starts from nothing, so a pooled agent never marks one
   session's ask as another's re-ask.
 

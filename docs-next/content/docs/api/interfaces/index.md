@@ -2,7 +2,7 @@
 title: Interfaces
 ---
 
-392 exported from `agentfootprint`.
+393 exported from `agentfootprint`.
 
 [Scope event payloads](/docs/api/interfaces/scope-events) · [Flow event payloads](/docs/api/interfaces/flow-events)
 
@@ -380,6 +380,7 @@ title: Interfaces
 - [`Turn`](/docs/api/interfaces/Turn)
 - [`TurnChanges`](/docs/api/interfaces/TurnChanges)
 - [`TurnEndScripts`](/docs/api/interfaces/TurnEndScripts)
+- [`TypedAnswerMark`](/docs/api/interfaces/TypedAnswerMark)
 - [`UnsettledByAbsenceRow`](/docs/api/interfaces/UnsettledByAbsenceRow)
 - [`UnsupportedValue`](/docs/api/interfaces/UnsupportedValue)
 - [`UnsupportedValuesContext`](/docs/api/interfaces/UnsupportedValuesContext)

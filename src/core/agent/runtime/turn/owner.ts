@@ -29,6 +29,7 @@ import { requestOf } from '../../../requestOfRun.js';
 import { AROUND_TURN_STAGE_ID } from '../../run/eventStageIds.js';
 import { withoutTime } from '../../run/withoutTime.js';
 import type { AgentContext } from '../contracts.js';
+import { isLiveConversation } from '../conversation/liveConversation.js';
 
 export async function runTyped<T = unknown>(
   this: Pick<AgentContext, 'configuration' | 'native' | 'runLeg' | 'runTurn' | 'typedOutcome'>,
@@ -170,8 +171,17 @@ export async function runLeg(
   // input middleware chain, so the entry is the chain's verdict (9.112.2).
   let continued: AgentRunCheckpoint | undefined;
   if (runInput.continueFrom !== undefined) {
+    // `followUp()`'s own conversation keeps a typed answer's mark; one handed
+    // in by a caller loses it (`../conversation/liveConversation.ts`).
+    const fromLive = isLiveConversation(runInput.continueFrom);
     continued = validateCheckpoint(runInput.continueFrom);
-    this.applyContinuation(invocation.value, continued, 'Agent.run({ continueFrom })', true);
+    this.applyContinuation(
+      invocation.value,
+      continued,
+      'Agent.run({ continueFrom })',
+      true,
+      fromLive,
+    );
   }
   // Only an EXPLICIT identity is remembered for `checkpoint()`; see the
   // field's note. `input.identity` wins over `options.identity` because the

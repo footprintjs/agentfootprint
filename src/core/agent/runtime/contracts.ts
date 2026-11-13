@@ -140,6 +140,7 @@ export interface AgentMethods {
     cp: AgentRunCheckpoint,
     door: string,
     appendsUserTurn: boolean,
+    fromLive: boolean,
   ): void;
   assertNoPendingQuestion(door: string, values: AgentRunValues | undefined): void;
   recordPendingQuestion(values: AgentRunValues, outcome: AgentOutput | RunnerPauseOutcome): void;

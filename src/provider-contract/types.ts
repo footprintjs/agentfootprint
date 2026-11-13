@@ -1,19 +1,17 @@
 /**
  * provider-contract/types — the Ports of the hexagonal architecture.
  *
- * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters
- *          (Cockburn, 2005).
+ * Pattern: Adapter (GoF, Design Patterns ch. 4) + Ports-and-Adapters (Cockburn, 2005).
  * Role:    Contracts for every external dependency the library reaches for:
  *          LLM providers, memory stores, permission checkers, pricing tables.
  * Emits:   N/A (interfaces only).
- *
- * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy,
- * ...) implement these contracts. `core/` and `core-flow/` depend only on
- * these interfaces — never on concrete adapters.
+ * Concrete adapters (AnthropicProvider, PineconeStore, PermissionPolicy, ...) implement
+ * these contracts. `core/` and `core-flow/` depend only on them, never on an adapter.
  */
 
 import type { ContextRole, ContextSource } from '../events/types.js';
 import type { ThinkingBlock } from '../thinking/types.js';
+export type { TypedAnswerMark } from './typedAnswerMark.js';
 
 // ─── LLM Provider ────────────────────────────────────────────────────
 
@@ -237,6 +235,8 @@ export interface LLMMessage {
    * `stripFrameworkFields` removes it with the other framework fields.
    */
   readonly foldedExempt?: readonly string[];
+  /** The library's mark on a person's typed answer: see {@link TypedAnswerMark}. */
+  readonly answersAsk?: import('./typedAnswerMark.js').TypedAnswerMark;
 }
 
 /**

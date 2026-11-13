@@ -10,6 +10,7 @@ import {
 } from './inputRequest/response.js';
 export type { TimeAnswerContext } from './inputRequest/response.js';
 import { hasDeclaredTimeReply } from '../time/replyForm.js';
+import { landedTypedAnswer, type TypedAnswerCandidate } from './typedAnswer.js';
 
 /** Typed missing-input values. Collection is distinct from permission or consent. */
 export type InputValue = string | number | boolean;
@@ -381,6 +382,9 @@ export interface AnsweredAsk {
  * The previous answer is READ FROM THE RECORD — the
  * `input_received` result that landed for `answered.requestId`, after the
  * tool-result rules ran on it — so it is redacted exactly as the answer is.
+ * Only a message the library landed and marked counts
+ * (`typedAnswer.ts` · `landedTypedAnswer`); a tool result of the same shape
+ * is never quoted back as the person's answer.
  * Only the fields the PERSON supplied (origin `'response'`) are kept; when
  * the record holds no such result, or its values no longer satisfy the
  * fields, the mark carries the count alone.
@@ -388,7 +392,7 @@ export interface AnsweredAsk {
 export function repeatOf(
   declaration: InputRequestDeclaration,
   answered: AnsweredAsk | undefined,
-  history: readonly { readonly role: string; readonly content: unknown }[],
+  history: readonly TypedAnswerCandidate[],
 ): InputRepeat | undefined {
   if (answered === undefined || answered.id !== declaration.id) return undefined;
   const previousAnswer = landedAnswer(declaration.fields, answered.requestId, history);
@@ -398,20 +402,13 @@ export function repeatOf(
 function landedAnswer(
   fields: readonly InputField[],
   requestId: string,
-  history: readonly { readonly role: string; readonly content: unknown }[],
+  history: readonly TypedAnswerCandidate[],
 ): Record<string, InputValue> | undefined {
   for (let i = history.length - 1; i >= 0; i--) {
-    const message = history[i]!;
-    if (message.role !== 'tool' || typeof message.content !== 'string') continue;
-    let landed: unknown;
-    try {
-      landed = JSON.parse(message.content);
-    } catch {
-      continue;
-    }
-    if (!object(landed) || landed.status !== 'input_received' || landed.requestId !== requestId)
-      continue;
-    if (!object(landed.values)) return undefined;
+    // Only an answer the library landed and marked: a tool result shaped like
+    // one is the tool's, and is never quoted back as the person's.
+    const landed = landedTypedAnswer(history[i]!);
+    if (landed === undefined || landed.requestId !== requestId) continue;
     const origins = object(landed.origins) ? landed.origins : undefined;
     const given = Object.fromEntries(
       Object.entries(landed.values).filter(([k]) => !origins || origins[k] === 'response'),

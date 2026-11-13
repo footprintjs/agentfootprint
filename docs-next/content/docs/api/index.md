@@ -438,6 +438,7 @@ title: agentfootprint
 - [Turn](/docs/api/interfaces/Turn)
 - [TurnChanges](/docs/api/interfaces/TurnChanges)
 - [TurnEndScripts](/docs/api/interfaces/TurnEndScripts)
+- [TypedAnswerMark](/docs/api/interfaces/TypedAnswerMark)
 - [UnsettledByAbsenceRow](/docs/api/interfaces/UnsettledByAbsenceRow)
 - [UnsupportedValue](/docs/api/interfaces/UnsupportedValue)
 - [UnsupportedValuesContext](/docs/api/interfaces/UnsupportedValuesContext)
