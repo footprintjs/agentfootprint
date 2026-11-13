@@ -137,13 +137,13 @@ export interface ArgumentRow {
 export type ArgumentMatched = 'quote' | 'phrase' | 'spelling' | 'mention';
 
 /** The closed vocabularies, for the checkpoint door and the event. */
-export const ARGUMENT_MATCHED: readonly ArgumentMatched[] = Object.freeze([
+const ARGUMENT_MATCHED: readonly ArgumentMatched[] = Object.freeze([
   'quote',
   'phrase',
   'spelling',
   'mention',
 ]);
-export const ARGUMENT_SOURCES: readonly ArgumentSource[] = Object.freeze([
+const ARGUMENT_SOURCES: readonly ArgumentSource[] = Object.freeze([
   'said',
   'answered',
   'result',
@@ -151,12 +151,12 @@ export const ARGUMENT_SOURCES: readonly ArgumentSource[] = Object.freeze([
   'default',
   'model',
 ]);
-export const ARGUMENT_ASKED: readonly ArgumentAsked[] = Object.freeze([
+const ARGUMENT_ASKED: readonly ArgumentAsked[] = Object.freeze([
   'missing',
   'unverified',
   'invalid-answer',
 ]);
-export const ARGUMENT_CLAIMS: readonly ArgumentClaim[] = Object.freeze([
+const ARGUMENT_CLAIMS: readonly ArgumentClaim[] = Object.freeze([
   'user',
   'result',
   'turn',
@@ -164,7 +164,7 @@ export const ARGUMENT_CLAIMS: readonly ArgumentClaim[] = Object.freeze([
   'assumed',
   'none',
 ]);
-export const ARGUMENT_CHECKS_FAILED: readonly ArgumentCheckFailed[] = Object.freeze([
+const ARGUMENT_CHECKS_FAILED: readonly ArgumentCheckFailed[] = Object.freeze([
   'quote-not-found',
   'composed-message',
   'unknown-result',

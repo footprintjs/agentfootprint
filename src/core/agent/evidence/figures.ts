@@ -96,9 +96,9 @@ const FIGURE_RE = new RegExp(
 );
 
 /** How many carried numbers the basis keeps. */
-export const MAX_BASIS_NUMBERS = 50_000;
+const MAX_BASIS_NUMBERS = 50_000;
 /** How many column-derived values (sums, ratios, differences, complements) the basis keeps. */
-export const MAX_DERIVED = 50_000;
+const MAX_DERIVED = 50_000;
 /** Rows per list, fields per list and groups per text field the basis reads. */
 const MAX_ROWS = 5_000;
 const MAX_FIELDS = 64;
@@ -440,7 +440,7 @@ export function figureCheckOf(
 }
 
 /** A plain decimal may round ONE carried number, never a column derivation. */
-export function explainRoundedDecimal(
+function explainRoundedDecimal(
   value: string,
   basis: FigureBasis,
 ): { readonly derivation: 'rounded'; readonly from: string } | undefined {
