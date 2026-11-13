@@ -8,6 +8,7 @@ import type { AgentState } from '../../../types.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 import { readBatchResolutions } from './inputResolutions.js';
 import { completeToolBatch } from './completion.js';
+import { loadTimeLineage } from '../../turnExempt.js';
 import type { ToolCallOperations } from '../compose.js';
 import type { DispatchBatchFrame } from '../contracts/dispatchBatch.js';
 import type { DispatchCallRunner } from '../contracts/dispatchCall.js';
@@ -119,7 +120,15 @@ export function buildToolBatchExecution(
       transitionState,
       runIdentity,
       env,
-    } = operations.prepareDispatchContext(scope, toolCalls, iteration);
+    } = operations.prepareDispatchContext(
+      scope,
+      toolCalls,
+      iteration,
+      // Under `.time()`, the time the person said is exempt at dispatch as at the answer.
+      deps.evidenceExempt?.timeLineage === true
+        ? await loadTimeLineage(deps.evidenceExempt)
+        : undefined,
+    );
     const batch: DispatchBatchFrame = {
       toolCalls,
       iteration,

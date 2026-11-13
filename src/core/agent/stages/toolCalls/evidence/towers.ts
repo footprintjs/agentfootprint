@@ -1,16 +1,13 @@
 import type { TypedScope } from 'footprintjs';
 import type { AgentState } from '../../../types.js';
 import type { ResolvedEvidenceGate } from '../../../evidence/types.js';
-import {
-  type EvidenceCorpus,
-  evidenceFromHistory,
-  exemptFromRun,
-} from '../../../evidence/evidenceIndex.js';
+import { type EvidenceCorpus, evidenceFromHistory } from '../../../evidence/evidenceIndex.js';
+import type { InputsRouteArm, TimeLineage } from '../../route.js';
+import { exemptForTurn } from '../../turnExempt.js';
 import type { StandingRow, FindingsLedger } from '../../../findings/types.js';
 import { foldLedger } from '../../../findings/ledger.js';
 import { hasSetAsideStanding } from '../../../findings/contingent.js';
 import type { LLMMessage } from '../../../../../provider-contract/types.js';
-import type { InjectionRecord } from '../../../../../recorders/core/types.js';
 
 /**
  * What the dispatch moment of the contingent check needs for one batch
@@ -23,6 +20,8 @@ export function towersFor(
   scope: TypedScope<AgentState>,
   findings: true | undefined,
   gate: ResolvedEvidenceGate | undefined,
+  exemptArm?: InputsRouteArm,
+  timeLineage?: TimeLineage,
 ):
   | {
       readonly gate: ResolvedEvidenceGate;
@@ -46,13 +45,11 @@ export function towersFor(
   return {
     gate,
     corpus,
-    exempt: exemptFromRun({
-      userMessage: scope.userMessage as string | undefined,
-      history,
-      systemPromptInjections: scope.systemPromptInjections as
-        | readonly InjectionRecord[]
-        | undefined,
-    }),
+    // The answer moment's exempt set, from its one builder and the same arm
+    // (`runtime/routing/exemptArm.ts`): a value the person gave the batch
+    // ask, a declared default this turn assumed, or a time the person said is
+    // exempt here too.
+    exempt: exemptForTurn(scope, history, exemptArm, timeLineage?.(scope).said),
     standingOf,
   };
 }

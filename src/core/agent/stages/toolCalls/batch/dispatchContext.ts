@@ -9,6 +9,7 @@ import { isSealed } from '../../../../../lib/frozenCopy.js';
 import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { ToolResultStatus } from '../../../../../semantics/toolEffects.js';
 import { towersFor } from '../evidence/towers.js';
+import type { TimeLineage } from '../../route.js';
 import type { TransitionBatchState } from '../contracts/callFacts.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 
@@ -16,13 +17,19 @@ import type { DispatchCall } from '../contracts/batchCall.js';
 export function buildDispatchContext(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'allowedSkillIds' | 'engagementPlan' | 'resultsLayer' | 'findings' | 'evidenceGate'
+    | 'allowedSkillIds'
+    | 'engagementPlan'
+    | 'resultsLayer'
+    | 'findings'
+    | 'evidenceGate'
+    | 'evidenceExempt'
   >,
 ) {
   const prepareDispatchContext = (
     scope: TypedScope<AgentState>,
     toolCalls: readonly DispatchCall[],
     iteration: number,
+    timeLineage?: TimeLineage,
   ) => {
     const newHistory: LLMMessage[] = [...(scope.history as readonly LLMMessage[])];
     // ALWAYS push the assistant turn when there are tool calls — even
@@ -126,10 +133,16 @@ export function buildDispatchContext(
     // model declared on THIS batch's calls counts for this batch's
     // arguments) and only when the fold holds a set-aside standing at
     // all. The history is the list this call was served — the same one
-    // `knownResults` read one screen up — and `exemptFromRun` reads what
-    // the route decider reads at the answer, so a value the person or the
-    // app supplied is never a tower at either moment.
-    const towers = towersFor(scope, deps.findings, deps.evidenceGate);
+    // `knownResults` read one screen up — and the exempt set comes from the
+    // route decider's own builder and arm (`turnExempt.ts` · `exemptForTurn`), so
+    // a value the person or the app supplied is never a tower at either moment.
+    const towers = towersFor(
+      scope,
+      deps.findings,
+      deps.evidenceGate,
+      deps.evidenceExempt,
+      timeLineage,
+    );
 
     // ── The batch's transition bookkeeping (9.19.0) ───────────────────
     // First ACCEPTED `propose-transition` wins (committed at acceptance);

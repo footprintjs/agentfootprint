@@ -312,6 +312,8 @@ export async function runLeg(
         this.configuration.negativeClaimsConfig === undefined
           ? undefined
           : negativeCheckpointOf(this.native.liveSnapshot()?.sharedState ?? {}),
+        // …and the receipt of the tickets the library placed, as `checkpoint()` keeps it.
+        (this.native.liveSnapshot()?.sharedState as Partial<AgentState> | undefined)?.placedTickets,
       );
       throw new RunCheckpointError(cause, checkpoint);
     }

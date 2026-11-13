@@ -43,6 +43,8 @@ import type { LLMMessage, LLMToolSchema } from '../../../provider-contract/types
 import type { ExternalGround } from '../../../integrity/unsupported-argument/check.js';
 import { isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
+import { leadingJsonValues } from '../evidence/servedJson.js';
+import { isIssuedTicket, issuedTicketsOf, type IssuedPairs } from '../placedTickets.js';
 import { ONTOLOGY_INSTRUCTION_ID } from '../../../ontology/instruction.js';
 import type {
   AppWords,
@@ -138,11 +140,25 @@ function standingsOf(
   return standings;
 }
 
+/**
+ * Whether the library placed this result: its LEADING JSON value (a ticket a
+ * framework note follows is still a ticket, `evidence/servedJson.ts`) is a
+ * ticket the receipt lists for this call (`placedTickets.ts` ·
+ * `isIssuedTicket`). A tool that returns ticket-shaped JSON itself is an
+ * ordinary result, read for the value like any other.
+ */
+function placedByLibrary(id: string, text: string, issued: IssuedPairs): boolean {
+  const trimmed = text.trimStart();
+  if (issued.size === 0 || !trimmed.startsWith('{')) return false;
+  return isIssuedTicket(id, leadingJsonValues(trimmed).values[0], issued);
+}
+
 function servedResultsOf(
   history: readonly LLMMessage[],
   current: number,
   standings: ReadonlyMap<string, Standing>,
   previousBatch: SourceInputs['previousBatch'],
+  issued: IssuedPairs,
 ): ServedResult[] {
   const out: ServedResult[] = [];
   const seen = new Set<string>();
@@ -151,12 +167,14 @@ function servedResultsOf(
     if (!isResultMessage(m) || id === undefined || id.length === 0 || seen.has(id)) return;
     seen.add(id);
     const standing = standings.get(id);
+    const text = toolBytesOf(m);
     out.push({
       toolCallId: id,
       ...(m.toolName !== undefined && { toolName: m.toolName }),
-      text: toolBytesOf(m),
+      text,
       ...(i < current && { earlier: true as const }),
       ...(standing !== undefined && { standing }),
+      ...(placedByLibrary(id, text, issued) && { placed: true as const }),
     });
   });
   // An id the previous batch landed but the served window no longer holds: known, with
@@ -306,6 +324,7 @@ export function sourceCorpusOf(
       current,
       standingsOf(inputs.ledger, calls, deps.toolOf),
       inputs.previousBatch,
+      issuedTicketsOf(inputs.placedTickets),
     ),
     assistant: history
       .filter((m) => m.role === 'assistant' && m.content.trim() !== '')

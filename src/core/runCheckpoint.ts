@@ -92,6 +92,8 @@ import {
 } from './agent/negativeClaims/checkpoint.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import { ownConfigArray } from '../integrity/claim-binding/scope.js';
+import { carriedTicketsOf, ticketsStillServed, type PlacedTicket } from './agent/placedTickets.js';
+import { admitStoredHistory } from './checkpointHistory.js';
 
 // ─── Public types ────────────────────────────────────────────────────
 
@@ -214,6 +216,13 @@ export interface AgentRunCheckpoint {
    * runtime that has never heard of it continues the conversation correctly.
    */
   readonly turnNumber?: number;
+  /**
+   * The placement tickets the library issued whose `role: 'tool'` messages the
+   * stored `history` still holds — so a continued conversation still knows
+   * which ticket-shaped results are the library's own (`placedTickets.ts`).
+   * Absent when there are none. Version 1 still, by the {@link folded} rule.
+   */
+  readonly placedTickets?: readonly PlacedTicket[];
   /**
    * WHO this conversation belongs to — the `identity` the stored run was
    * given, carried so that continuing it lands in the same namespace it
@@ -645,15 +654,19 @@ export function buildCheckpoint(
   /** Private evidence beside the same committed ledger; absent unless explicitly opted in. */
   claimVerification?: ClaimVerificationState,
   negativeClaims?: NegativeCheckpoint,
+  /** The run's `placedTickets`, kept only for messages the history still holds. */
+  placed?: unknown,
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
       ? undefined
       : verificationCheckpointOf({ claimVerification, findingsLedger: findingsLedger ?? [] });
+  const history = checkpointReplayHistory(tracker.history, tracker);
+  const placedTickets = ticketsStillServed(placed, history);
   return {
     version: 1,
     runId: tracker.runId,
-    history: checkpointReplayHistory(tracker.history, tracker),
+    history,
     lastCompletedIteration: tracker.lastCompletedIteration,
     originalInput: tracker.originalInput,
     checkpointedAt: Date.now(),
@@ -665,6 +678,7 @@ export function buildCheckpoint(
     ...(evidenceRecovery !== undefined && { evidenceRecovery }),
     ...(findingsLedger !== undefined && findingsLedger.length > 0 && { findingsLedger }),
     ...(turnNumber !== undefined && { turnNumber }),
+    ...(placedTickets !== undefined && { placedTickets }),
     ...(verification !== undefined && { claimVerification: verification }),
     ...(negativeClaims === undefined ? {} : negativeCheckpointOf(negativeClaims)),
   };
@@ -966,34 +980,9 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
         `turn the stored history ends on, written while an honesty layer is armed.`,
     );
   }
-  // The conversation itself, message by message (8.18.0). `Array.isArray` was
-  // the whole check, one field away from `originalInput.message` — which HAS
-  // been string-checked since this function was written. A checkpoint that
-  // round-tripped through a store, a hand edit, or an older writer could carry
-  // a turn with no `content`, deserialize cleanly, and take the run down on
-  // its first composition with a TypeError naming neither the checkpoint nor
-  // the turn. A persisted artifact is checked at the door it comes in.
-  for (const [i, msg] of (c.history as readonly unknown[]).entries()) {
-    if (!msg || typeof msg !== 'object') {
-      throw new TypeError(
-        `[resumeOnError] checkpoint history[${i}] is not a message (got ${
-          msg === null ? 'null' : typeof msg
-        }). Each entry must be { role, content }.`,
-      );
-    }
-    const m = msg as { role?: unknown; content?: unknown };
-    if (typeof m.role !== 'string' || typeof m.content !== 'string') {
-      throw new TypeError(
-        `[resumeOnError] checkpoint history[${i}] is missing text: \`role\` is ${typeof m.role}, ` +
-          `\`content\` is ${
-            m.content === undefined ? 'missing' : typeof m.content
-          }. Every turn in a stored conversation must carry { role: string, content: string } — ` +
-          `a turn without content cannot be composed into the next request, and the failure ` +
-          `would otherwise surface deep inside the run rather than here.`,
-      );
-    }
-  }
+  admitStoredHistory(c.history as readonly unknown[]);
   negativeCheckpointOf(c);
+  if (c.placedTickets !== undefined) carriedTicketsOf(c.placedTickets);
   const hasVerificationRows = c.findingsLedger?.some((row) => row.kind === 'claim-verification');
   return claimVerification === undefined && !hasVerificationRows
     ? (c as AgentRunCheckpoint)

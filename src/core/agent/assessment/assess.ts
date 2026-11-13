@@ -52,7 +52,7 @@
  * `undefined`; the answer account says the record shows no answer).
  */
 
-import { isSaidByPerson } from '../../../lib/saidByPerson.js';
+import { isPersonEntry } from '../../../lib/saidByPerson.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import {
   declaredByValue,
@@ -168,17 +168,12 @@ function turnResults(history: readonly unknown[]): {
 } {
   let start = -1;
   for (let i = history.length - 1; i >= 0; i--) {
-    const m = history[i];
-    if (isRecord(m) && typeof m.content === 'string' && typeof m.role === 'string') {
-      const said = isSaidByPerson({
-        role: m.role,
-        content: m.content,
-        ...(m.injectedBy !== undefined && { injectedBy: m.injectedBy }),
-      });
-      if (said) {
-        start = i;
-        break;
-      }
+    // The WHOLE entry goes to the rule (`lib/saidByPerson.ts` · `isPersonEntry`),
+    // the answer account's reader too: a copy of three fields dropped
+    // `ephemeral`, and the two disagreed on where this turn begins.
+    if (isPersonEntry(history[i])) {
+      start = i;
+      break;
     }
   }
   const results: TurnResult[] = [];

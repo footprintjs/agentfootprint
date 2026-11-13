@@ -667,7 +667,10 @@ instead: the system-prompt join is one exported function both sides call, the
 wrap-up call's withholding is rebuilt from the committed `wrapUpAsked`, the
 forced tool's name is committed at seed, and the staged-refs nudge — the one
 model-facing line written to no history — is recomposed by the same pure
-function from the same three committed inputs.
+function from the same committed inputs: the conversation, the tools served,
+the `wants` declarations and the receipt of the tickets the library placed. A
+recording made before that receipt existed is rebuilt by the rule its run used
+then, so the view gives back the line that was really sent.
 
 <Callout type="warn" title="What a recording actually contains">
 **An agent run is recorded as it ran unless you name what to keep out.**

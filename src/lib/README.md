@@ -57,7 +57,8 @@ the library's note is the LAST message of every request, so a reader that
 took the last user-role message of what the model was sent — the mock's
 default echo, the window's `currentRequestIndexOf`, a host finding "this
 turn" — anchored on the library's line (G17). Readers of the recorded history
-ask the same rule (`answer-account/facts/common.ts` · `isPersonEntry`), so a
+ask the same rule through one record reader (`saidByPerson.ts` · `isPersonEntry`,
+used by the answer account and the answer's standing alike), so a
 correction frame after a turn's results never becomes "the current request".
 
 ```ts

@@ -1,5 +1,6 @@
 import type { AgentRunOptions } from '../runOptions/options.js';
 import { evidenceRecoveryOf, foldedSpansOf, findingsLedgerOf } from './checkpointParts.js';
+import { ticketsStillServed } from '../../placedTickets.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerInvocation, type RunnerSelection } from '../../../runnerExecution.js';
@@ -103,10 +104,14 @@ export function checkpointFor(
   const evidenceRecovery = evidenceRecoveryOf(state);
   const findingsLedger = findingsLedgerOf(state);
   const turnNumber = this.turnNumberOf(state);
+  const stored = structuredClone(
+    checkpointReplayHistory(history, selected!.value.checkpointTracker),
+  );
+  const placedTickets = ticketsStillServed(state?.placedTickets, stored);
   return {
     version: 1,
     runId: selected!.context.runId,
-    history: structuredClone(checkpointReplayHistory(history, selected!.value.checkpointTracker)),
+    history: stored,
     lastCompletedIteration: typeof state?.iteration === 'number' ? state.iteration : 0,
     originalInput: { message: typeof state?.userMessage === 'string' ? state.userMessage : '' },
     checkpointedAt: Date.now(),
@@ -128,6 +133,8 @@ export function checkpointFor(
     // The turn this history ends on (honesty layers) — absent unless a
     // layer is armed, so every other checkpoint keeps its byte shape.
     ...(turnNumber !== undefined && { turnNumber }),
+    // The tickets the library placed whose messages the history still holds.
+    ...(placedTickets !== undefined && { placedTickets }),
     ...(this.configuration.negativeClaimsConfig === undefined || state === undefined
       ? {}
       : negativeCheckpointOf(state)),
@@ -286,6 +293,9 @@ export function applyContinuation(
     // The turn the stored history ends on (honesty layers) — seed continues
     // the turn stamp from it only while a layer is armed.
     ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
+    // The tickets the library placed in earlier turns (`placedTickets.ts`):
+    // still the library's, so the staged-refs nudge still names them.
+    ...(cp.placedTickets !== undefined && { placedTickets: cp.placedTickets }),
     ...(this.configuration.negativeClaimsConfig === undefined
       ? {}
       : { negatives: negativeCheckpointOf(cp) }),

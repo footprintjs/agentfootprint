@@ -171,6 +171,20 @@ export interface ColumnTypesEncounter {
 const MAX_NAMED_IN_REFUSAL = 5;
 
 /**
+ * Whether a row carries this column — as its OWN key, never one inherited.
+ *
+ * A tool's rows are plain objects, so every one of them inherits
+ * `constructor`, `toString`, `valueOf` and `hasOwnProperty`. With `name in
+ * row`, a declared `constructor` column that no row delivered read as present
+ * in every row and "holding a function": a `column-type-mismatch` where the
+ * truth is `missing-column`, and under `enforce` a refused result whenever
+ * such a column was `nullable` and absent from some rows.
+ */
+function hasColumn(row: Readonly<Record<string, unknown>>, name: string): boolean {
+  return Object.hasOwn(row, name);
+}
+
+/**
  * Judge one finished call to a tool that declared its result's columns.
  *
  * @param call the call, the declaration, and what the library could read of
@@ -195,7 +209,7 @@ export function columnTypesOf(call: ColumnTypesCall, epoch: number): ColumnTypes
     // column nobody delivered can never also be reported as mistyped. The
     // two would be counting the same silence twice, and a reader chasing
     // both would find one bug.
-    if (rows.every((row) => !(column.name in row))) {
+    if (rows.every((row) => !hasColumn(row, column.name))) {
       missing.push(column.name);
       findings.push({
         kind: 'missing-column',
@@ -305,7 +319,7 @@ function judgeColumn(
   let sample: string | undefined;
   let got = '';
   for (const row of rows) {
-    const present = name in row;
+    const present = hasColumn(row, name);
     const value = present ? row[name] : undefined;
     // "No value" is one idea with three spellings, and they are judged
     // identically: an absent key, a `null` and an `undefined` all say the

@@ -50,10 +50,8 @@
  * through `app` or `result` than the same default declared as `assume`.
  */
 
-import { isPlacedToolResult } from '../../../artifacts/placement.js';
 import { MAX_INDEX_TOKENS } from '../evidence/evidenceIndex.js';
 import { canonicalTokens, occursIn, resultReader } from '../evidence/resultCarries.js';
-import { leadingJsonValues } from '../evidence/servedJson.js';
 import {
   convertSpelling,
   sameArgumentValue,
@@ -93,6 +91,8 @@ export interface ServedResult {
   readonly earlier?: true;
   /** The model's current standing on it — the ledger's fold plus this batch's own `previous[]`. */
   readonly standing?: 'fact' | 'open' | 'noise' | 'ruled-out';
+  /** The library placed it: the model was served the ticket, not the value (`placedTickets.ts`). */
+  readonly placed?: true;
 }
 
 /** One piece of the app's own text. `label` names an `externalGrounds` entry's source. */
@@ -246,18 +246,6 @@ function sameTokens(a: readonly string[], b: readonly string[]): boolean {
 /** A row value the clip cut (`integrity/argumentLeaves.ts` · `clipValue`) — nothing to compare. */
 const isClipped = (value: string): boolean => value.length >= 80 && value.endsWith('…');
 
-/**
- * A placement ticket — the model was served the ticket, not the value. Read
- * as the result's LEADING JSON value (`evidence/servedJson.ts`), so a ticket a
- * framework note follows is still a ticket.
- */
-function isPlaced(text: string): boolean {
-  const trimmed = text.trimStart();
-  if (!trimmed.startsWith('{')) return false;
-  const [first] = leadingJsonValues(trimmed).values;
-  return first !== undefined && isPlacedToolResult(first);
-}
-
 // ─── The hint ───────────────────────────────────────────────────────────
 
 /**
@@ -337,7 +325,7 @@ function checkResult(
   const served = corpus.results.find((r) => r.toolCallId === id);
   if (served === undefined) return failedWith(corpus, value, 'unknown-result');
   if (!hasText(served)) return failedWith(corpus, value, 'uncheckable');
-  if (isPlaced(served.text)) return failedWith(corpus, value, 'placed-result');
+  if (served.placed === true) return failedWith(corpus, value, 'placed-result');
   const carried = carries(corpus, served, value);
   if (carried === 'uncheckable') return failedWith(corpus, value, 'uncheckable');
   if (carried === 'not-found') return failedWith(corpus, value, 'not-in-result');

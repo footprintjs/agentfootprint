@@ -66,6 +66,10 @@ import {
   evidenceRefusalSentence,
 } from '../../src/core/agent/evidence/gate.js';
 import { Agent, allow, defineTool, deny } from '../../src/index.js';
+import { WRAP_UP_INSTRUCTION } from '../../src/core/agent/stages/wrapUp.js';
+import { buildDropNotice } from '../../src/core/agent/window/notice.js';
+import { buildSummaryMessage } from '../../src/core/agent/window/summarize.js';
+import { STEP_NUDGE_FRAME_PREFIX } from '../../src/lib/saidByPerson.js';
 import { mock } from '../../src/llm-providers.js';
 import type { LLMMessage } from '../../src/provider-contract/types.js';
 import type { CheckReport } from '../../src/integrity/disposition/types.js';
@@ -227,6 +231,59 @@ describe('unit: the index stamps the turn that served each form', () => {
     expect(corpus.currentTurn).toBe(1);
     expect(corpus.values.get(String(CAPACITY))).toBe(1);
   });
+
+  // Every `role: 'user'` message the library writes is excluded by the one
+  // authorship rule (`lib/saidByPerson.ts` · `isSaidByPerson`), so the turn
+  // walk asks that rule rather than a shorter list of its own. Each frame
+  // below lands AFTER this turn's own result, where a boundary would move
+  // that result into the "earlier" bucket.
+  const sameTurn: readonly LLMMessage[] = [
+    { role: 'user', content: 'what arrays are there?' },
+    {
+      role: 'assistant',
+      content: '',
+      toolCalls: [{ id: 'c1', name: 'array_inventory', args: {} }],
+    },
+    { role: 'tool', content: INVENTORY, toolCallId: 'c1' },
+  ];
+  const frames: readonly (readonly [string, LLMMessage])[] = [
+    ['the budget wrap-up instruction', { role: 'user', content: WRAP_UP_INSTRUCTION }],
+    ['the stepped-skill nudge', { role: 'user', content: `${STEP_NUDGE_FRAME_PREFIX} — x]` }],
+    [
+      'a drop notice',
+      buildDropNotice({ droppedMessageCount: 2, iteration: 3, strategy: 'slidingWindow' }),
+    ],
+    [
+      'a compaction summary',
+      buildSummaryMessage('the person asked about arrays', {
+        foldedMessageCount: 4,
+        iteration: 3,
+        model: 'mock',
+        retain: 'conversation',
+      }),
+    ],
+    [
+      'a message an Injection delivered',
+      {
+        role: 'user',
+        content: 'reminder',
+        injectedBy: { injectionId: 'i', flavor: 'instructions', iteration: 1 },
+      } as LLMMessage,
+    ],
+  ];
+  for (const [what, frame] of frames) {
+    it(`${what} is not a turn boundary — this turn's result stays this turn's`, () => {
+      const corpus = evidenceFromHistory([
+        ...sameTurn,
+        frame,
+        { role: 'tool', content: JSON.stringify({ iops: IOPS }), toolCallId: 'c2' },
+      ]);
+      expect(corpus.currentTurn).toBe(1);
+      expect(corpus.toolResultsThisTurn).toBe(2);
+      expect(corpus.values.get(String(CAPACITY))).toBe(1);
+      expect(corpus.carriers.get(String(CAPACITY))?.toolCallIds).toEqual(['c1']);
+    });
+  }
 
   it('a history with no user turn has no boundary — turn 0, and nothing can be earlier', () => {
     const corpus = evidenceFromHistory([{ role: 'tool', content: INVENTORY }]);
@@ -399,6 +456,48 @@ describe('functional: the field case, through the real loop', () => {
     });
     const out = await agent.run('what arrays are there?');
     expect(String(out)).toBe(TURN_1_ANSWER);
+    expect(mine(findings)).toEqual([]);
+    expect(recencyRow(rows)).toMatchObject({ checked: 1, findings: 0 });
+  });
+});
+
+describe("functional: a wrap-up answer from this turn's own result", () => {
+  it('the out-of-budget wrap-up answer files nothing — the wrap-up frame is not a new turn', async () => {
+    const findings: ContextError[] = [];
+    let rows: CheckReport[] = [];
+    let asked = 0;
+    const agent = Agent.create({
+      // The model keeps calling the tool while it has one; only the wrap-up
+      // call (tools withheld, after the library's `[budget exhausted` frame)
+      // gets the answer, read from this turn's own result.
+      provider: mock({
+        respond: (req) => {
+          if ((req.tools?.length ?? 0) === 0) return TURN_1_ANSWER;
+          asked += 1;
+          return {
+            content: '',
+            toolCalls: [{ id: `c${asked}`, name: 'array_inventory', args: {} }],
+          };
+        },
+      }),
+      model: 'mock',
+      maxIterations: 2,
+      noticePriorTurnEvidence: true,
+    })
+      .system('s')
+      .tool(inventory())
+      .namesAndNumbersFromEvidence()
+      .build();
+    agent.on('agentfootprint.integrity.context_error', (e) => {
+      findings.push(e.payload as unknown as ContextError);
+    });
+    agent.on('agentfootprint.integrity.disposition', (e) => {
+      rows = e.payload.rows as CheckReport[];
+    });
+    const out = await agent.run('what arrays are there?');
+    expect(String(out)).toBe(TURN_1_ANSWER);
+    const history = (agent.getLastSnapshot()?.sharedState as { history: LLMMessage[] }).history;
+    expect(history.some((m) => m.role === 'user' && m.content === WRAP_UP_INSTRUCTION)).toBe(true);
     expect(mine(findings)).toEqual([]);
     expect(recencyRow(rows)).toMatchObject({ checked: 1, findings: 0 });
   });

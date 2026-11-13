@@ -182,11 +182,30 @@ export const PROSE_NOTES = [
 ] as const;
 export type ProseNote = (typeof PROSE_NOTES)[number];
 
+/**
+ * The claim kinds a prose claim row may carry, and (below) the codes a note
+ * row may carry. Constants, not bare unions, because two places must agree:
+ * the row types here and checkpoint admission
+ * (`core/agent/findings/negativeProse.ts` · `negativeProseRowIsWellFormed`).
+ * A member added to a union alone compiled, and then every saved checkpoint
+ * holding a row with it refused to resume.
+ */
+export const PROSE_CLAIM_KINDS = ['none', 'complete'] as const;
+
+/** The codes a prose note row may carry — see {@link PROSE_CLAIM_KINDS}. */
+export const PROSE_NOTE_CODES = [
+  'in-code-block',
+  'language-unsupported',
+  'too-many-claims',
+  'input-limit',
+  'no-read',
+] as const;
+
 /** One prose claim, noted. Observe-only: nothing withholds; a claim may carry no note. */
 export interface ProseClaimRow {
   readonly kind: 'negative-claim';
   readonly field: string;
-  readonly claim: 'none' | 'complete';
+  readonly claim: (typeof PROSE_CLAIM_KINDS)[number];
   readonly span: TextSpan;
   readonly phraseId: string;
   readonly packVersion: string;
@@ -202,12 +221,7 @@ export interface ProseClaimRow {
 export interface ProseNoteRow {
   readonly kind: 'negative-claim-note';
   readonly field: string;
-  readonly code:
-    | 'in-code-block'
-    | 'language-unsupported'
-    | 'too-many-claims'
-    | 'input-limit'
-    | 'no-read';
+  readonly code: (typeof PROSE_NOTE_CODES)[number];
   readonly span: TextSpan;
   readonly packVersion: string;
   readonly phraseId?: string;

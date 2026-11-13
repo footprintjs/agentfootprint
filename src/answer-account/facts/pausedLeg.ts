@@ -55,12 +55,12 @@ import {
   FACT_TEXT_CHARS,
   historyAt,
   historyOf,
-  isPersonEntry,
   readEmptiness,
   rowsAtOf,
   type EmptinessReading,
   type ReadContext,
 } from './common.js';
+import { isPersonEntry } from '../../lib/saidByPerson.js';
 
 /** One call answered before the pause, as the committed state keeps it. */
 export interface BeforePauseCall {

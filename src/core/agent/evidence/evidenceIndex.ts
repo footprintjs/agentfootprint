@@ -78,15 +78,15 @@
  * stays whole and every indexed form carries the TURN it was last served in
  * — one number, stamped during the walk that was happening anyway.
  *
- * A TURN starts at each `role: 'user'` message the library did NOT author.
- * `isLibraryAuthoredTurn` (frames.ts) is a statement about AUTHORSHIP, not
- * about time — it exists to keep the exempt corpus from swallowing the gate's
- * own corrections — and it is reused here for a different reason that happens
- * to need the same predicate: a frame the library wrote is not a person asking
- * something new. Excluding them is load-bearing rather than tidy. The evidence
- * recheck appends a `role: 'user'` turn MID-RUN, so counting it as a boundary
- * would push this turn's own tool results into the "earlier" bucket and file a
- * notice against every revised answer.
+ * A TURN starts at each message a PERSON said: `lib/saidByPerson.ts` ·
+ * `isSaidByPerson`, the one authorship rule every reader of "where this turn
+ * begins" asks. Excluding EVERY library frame is load-bearing: the evidence
+ * recheck and the budget wrap-up append a `role: 'user'` line MID-RUN, and a
+ * compaction summary can land after a result this turn fetched; counting one
+ * as a boundary would file a notice against an answer read from this turn's
+ * own results. Example: request → tool result → `[budget exhausted …]` →
+ * answer is ONE turn. (`isLibraryAuthoredTurn`, frames.ts, is a narrower
+ * question: which user-role lines stay out of the EXEMPT corpus.)
  *
  * Turn 1 is the first user message still in the window; anything indexed
  * before one (a history with no user turn at all) is turn 0, which is also
@@ -106,7 +106,7 @@ import type { InjectionRecord } from '../../../recorders/core/types.js';
 import { toolBytesOf } from '../../../lib/toolBytes.js';
 import { absenceEvidenceProjection } from '../../../semantics/coverage/index.js';
 import { isTruncatedToolResult } from '../toolResultCap.js';
-import { isCompactedSummary } from '../../../lib/saidByPerson.js';
+import { isCompactedSummary, isSaidByPerson } from '../../../lib/saidByPerson.js';
 import { isLibraryAuthoredTurn } from './frames.js';
 import { timeFormsOfText } from '../../../time/textForms.js';
 import { lookupForms, normalizeToken, tokenize } from '../../../lib/normalize.js';
@@ -118,8 +118,8 @@ import type { EvidenceShape, ResolvedEvidenceGate } from './types.js';
  * Ceiling on indexed tokens. Generous — a 200 000-token corpus is roughly a
  * 5 MB tool result — because the cost of hitting it is not "slower", it is
  * "the gate stops accusing" (see {@link EvidenceCorpus.truncated}). The
- * declared-sources check reads a haystack to the same ceiling and says
- * `uncheckable` past it (`evidence/resultCarries.ts` · `resultReader`).
+ * per-result source checks share the NUMBER, not the meter: read "ONE
+ * CEILING, TWO METERS" in `resultCarries.ts` before trusting "the same".
  */
 export const MAX_INDEX_TOKENS = 200_000;
 
@@ -433,9 +433,9 @@ export function evidenceFromHistory(
   let toolResultsThisTurn = 0;
   for (const msg of history) {
     // A turn boundary — the person asked something new. The library's own
-    // corrections are `role: 'user'` too and are NOT boundaries; see the
-    // header for the bug that distinction prevents.
-    if (msg.role === 'user' && !isLibraryAuthoredTurn(msg.content)) {
+    // `role: 'user'` lines (corrections, the wrap-up, a drop notice, a summary,
+    // a delivered injection) are NOT boundaries; see the header for why.
+    if (isSaidByPerson(msg)) {
       sink.turn += 1;
       toolResultsThisTurn = 0;
       // The carriers are THIS turn's: an earlier turn's results keep their

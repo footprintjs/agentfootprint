@@ -472,6 +472,7 @@ export function buildChart(
     openSkillIds: () => this.openSkillIds(),
     toolRunFacts: (run) => this.toolRunFacts(run),
     emitLateFact: (type, payload, context) => this.emitLateFact(type, payload, context),
+    resolverForValues,
   });
 
   // v2.14 — Build the NormalizeThinking sub-subflow only when a

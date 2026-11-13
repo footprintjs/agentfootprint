@@ -515,7 +515,9 @@ describe('UNIT — V3: `result` + id', () => {
         value: 'srv-4417',
         claim: { argument: 'host', source: 'result', id: 't9' },
       },
-      corpus({ results: [{ toolCallId: 't9', text: ticket }, { toolCallId: 't8' }] }),
+      corpus({
+        results: [{ toolCallId: 't9', text: ticket, placed: true }, { toolCallId: 't8' }],
+      }),
     );
     expect(placed.failed).toBe('placed-result');
     const noCut = checkSource(
@@ -888,6 +890,39 @@ describe('SECURITY — in a composed run only the run’s OWN message is another
       { text: 'earlier, from the person', earlier: true },
       { text: 'Plan: search the last week', composed: true },
     ]);
+  });
+});
+
+describe('SECURITY — who placed a result is read from the receipt, never from its shape', () => {
+  const ticket = JSON.stringify({ placed: true, ref: 'art_1', kind: 'k', reason: 'too big' });
+  const history = [
+    { role: 'user', content: 'profile it' },
+    { role: 'assistant', content: '', toolCalls: [{ id: 't9', name: 'lookup', args: {} }] },
+    { role: 'tool', toolCallId: 't9', toolName: 'lookup', content: ticket },
+  ];
+  const resultOf = (placedTickets?: readonly { toolCallId: string; ref: string }[]) =>
+    sourceCorpusOf({ history, ...(placedTickets !== undefined && { placedTickets }) }, [], 1, {
+      toolOf: () => undefined,
+    }).results[0];
+
+  it('a ticket the library placed for that call is marked placed', () => {
+    expect(resultOf([{ toolCallId: 't9', ref: 'art_1' }])?.placed).toBe(true);
+  });
+
+  it('a tool that returns ticket-shaped JSON itself is an ordinary result', () => {
+    expect(resultOf()?.placed).toBeUndefined();
+    expect(resultOf([{ toolCallId: 't9', ref: 'art_other' }])?.placed).toBeUndefined();
+    expect(resultOf([{ toolCallId: 't1', ref: 'art_1' }])?.placed).toBeUndefined();
+    const v = checkSource(
+      {
+        toolName: 'io_profile',
+        argument: 'host',
+        value: 'srv-4417',
+        claim: { argument: 'host', source: 'result', id: 't9' },
+      },
+      corpus({ results: [resultOf()!] }),
+    );
+    expect(v.failed).toBe('not-in-result');
   });
 });
 

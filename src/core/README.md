@@ -1,7 +1,7 @@
 **Mixed** — the two primitives that build a map, and the wiring that runs one.
 Map: `LLMCall.ts`, `agent/runtime/chart/owner.ts`'s `buildChart`.
-Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
-`durabilityBarrier.ts`.
+Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts` (its stored history
+admitted by `checkpointHistory.ts`), `pause.ts`, `durabilityBarrier.ts`.
 Fold-feeding: `agent/runtime/skills/owner.ts` · `readSkillOfferFor` and `agent/runtime/skills/owner.ts` ·
 `hiddenSkillIdsNow` — the two resolvers every model-facing composer downstream
 filters with. Trace: `cost.ts`. Support: `runInput.ts`,
@@ -310,8 +310,9 @@ call; what the model read — the check-in's `read` frames and `drivers`
 served text (`integrity/unsupported-argument/check.ts` ·
 `unsupportedArgumentsOf`, handed the frame's non-assistant messages by
 `core/agent/stages/callLLM.ts`); and `core/agent/stagedRefs.ts` ·
-`findStagedRefs`, which takes only a placed-result ticket, and the sentence
-never parses as one.
+`findStagedRefs`, which takes only a ticket the library placed for that very
+call (`core/agent/placedTickets.ts` · `isIssuedTicket`), and the sentence never
+parses as one.
 
 **Not readers yet — five history readers that go by the role.** They see a
 settled message as a tool's served result, and each is a named follow-up

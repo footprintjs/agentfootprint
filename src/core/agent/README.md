@@ -1,14 +1,15 @@
 **Mixed** — the Agent's chart builders sitting beside the composers and folds
 the walk calls from inside its stages.
-Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts`,
-`buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
+Map: `buildAgentChart.ts`, `buildDynamicAgentChart.ts` (with `llmCallReads.ts`,
+the records that cross into its `sf-llm-call` boundary), `buildAgentMessageApiChart.ts`, `buildMessageApiChart.ts`, `buildCacheSubflow.ts`,
 `buildToolRegistry.ts`, `AgentBuilder.ts`, `skillGraphDeclared.ts`,
 `skillBrains.ts`, `types.ts`, `selfExplainPort.ts` (the seam `.selfExplain()` plugs into:
 the trace toolpack registers there, since the agent may not import it).
 Walker: `assistantReplay.ts`, `toolDispatch.ts`,
 `validators.ts`, `act.ts` (the five moments it is keyed on are `lib/moments.ts`).
 Trace: `runManifest.ts`, `integrityFindings.ts`, `watch.ts`, `toolSecurityEvents.ts`.
-Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `emptiness.ts` (which
+Fold: `memoryRecallInjections.ts`, `toolsFromActiveSkill.ts`, `placedTickets.ts` (did the
+library place this result), `emptiness.ts` (which
 artifact-placed results hold no rows — the coverage primitives it reads are
 `semantics/coverage/`; the tool-result envelope grammar is `semantics/toolEffects.ts`).
 Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
@@ -17,10 +18,28 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
 `toolResultCap.ts`.
 
 ## What it reads / what it writes
+
 - The chart builders own the outputMappers that publish the loop's shared facts:
   `activeInjections`, `currentSkillId`, `stepPointer`, `dynamicToolSchemas`
   (`buildAgentChart.ts` · `SUBFLOW_IDS.INJECTION_ENGINE` and
   `buildAgentChart.ts` · `SUBFLOW_IDS.TOOLS`, on their `outputMapper`s).
+- `placedTickets` — the receipt of the placement tickets the library issued in
+  this conversation, one `{ toolCallId, ref }` each; a call id a provider
+  reuses keeps every ref minted under it. Written by
+  `stages/toolCalls/execution/artifactsOperations.ts` · `placeResults` (and by
+  seed, `stages/stagedRefsNudge.ts` · `seedStagedRefs`: `[]` beside
+  `toolWantsByName`, plus the tickets a continued conversation carries as
+  `AgentRunCheckpoint.placedTickets`). Its one reader is `placedTickets.ts` ·
+  `isIssuedTicket`, asked by `stagedRefs.ts` · `findStagedRefs` (whose callers
+  `stages/stagedRefsNudge.ts` · `stagedRefsNudgeFor`,
+  `stages/evidenceRecheck.ts` and `time-travel/servedView/requestOnly.ts`
+  hand it the committed value) and by the declared-sources check, through
+  `honesty/sourceCorpus.ts` · `placedByLibrary` (handed the receipt by
+  `honesty/sourceInputs.ts` · `sourceInputsOf`). Any tool can return
+  `{ placed: true, ref: "…" }`, so the shape never says the library placed it.
+  A conversation stored or paused by an earlier version has no receipt and
+  none of its tickets is named. In the grouped chart the key crosses into
+  `sf-llm-call` (`llmCallReads.ts` · `llmCallReadsInto`).
 - The Lens files read only what they are handed, plus `scope.hiddenSkillIds`
   (owner: `../../injection-engine/buildInjectionEngineSubflow.ts` · `hiddenSkillIdsOf`,
   published by the engine mount's `outputMapper`) where they name skill ids.
@@ -37,6 +56,7 @@ was secured, beside `answerValidation`, which is about its content.
 Automatic output uses `supportsAutoNativeOutputSchema(model)` as positive model knowledge. Unknown Anthropic names, opaque aliases, older unsupported models and custom providers without that declaration use instructions plus local validation. Explicit `strategy: 'native'` retains its forward-compatible capability policy; `strategy: 'instruct'` opts out of the changed default. No API error causes an automatic format downgrade.
 
 ## The one law here
+
 A builder declares; it must not decide. Anything that has to be true AT a
 moment is composed in `stages/`, where the moment is.
 
@@ -60,6 +80,7 @@ recomposed for every request — the tool list and the `read_skill` description
 — so the two cannot disagree.
 
 **How.** Three checks, each one a reader can make:
+
 1. every clause is past tense about one finished event;
 2. that event is NAMED — "that call", bound by the opening clause, or "call
    'c2' to 'collect_input'" — never pointed at ("this call", "the call you just

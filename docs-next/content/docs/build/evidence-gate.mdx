@@ -334,10 +334,11 @@ instruction sat at the **top** of a long context; the numbers sat at the
 **bottom**. Recency won.
 
 `nudge: true` puts the instruction where recency works *for* it. When an
-iteration's context holds a tool result staged by reference (an
-[`artifacts.placement`](doc:artifacts) ticket) **and** a tool the model can
-currently call declares [`wants`](doc:artifacts) over that ticket's kind, the
-library appends **one** short line at the very end of that request:
+iteration's context holds a tool result the library staged by reference (an
+[`artifacts.placement`](doc:artifacts) ticket placed in this conversation —
+this turn or an earlier one) **and** a tool the model can currently call
+declares [`wants`](doc:artifacts) over that ticket's kind, the library appends
+**one** short line at the very end of that request:
 
 ```text
 [staged data — this turn's tool results include data staged by reference:
@@ -350,7 +351,11 @@ it returns.]
 Everything in it is composed from **declarations** — the ref and kind from the
 placement mint (`Tool.resultKind`), the spender from `Tool.wants`, matched by
 the same exact-string law dispatch uses, never by tool name. There is no prose
-surface to write. The line is request-only (it never enters the conversation
+surface to write. A tool that returns JSON shaped like a ticket is not a
+ticket: the line names only refs the library minted, which it keeps a receipt
+of and carries with a stored conversation (`checkpoint().placedTickets`). A
+conversation stored or paused by an earlier version has no receipt, so its
+tickets are not named. The line is request-only (it never enters the conversation
 history) and recomposed per iteration, so it exists exactly while both
 conditions hold; each firing lands as `agentfootprint.agent.grounding_nudged`
 with the refs and tools as data.
