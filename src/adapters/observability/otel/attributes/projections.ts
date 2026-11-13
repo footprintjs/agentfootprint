@@ -95,7 +95,10 @@ const countOf = (list: unknown): number => (Array.isArray(list) ? list.length : 
  * carries no roster (that would change every `absent()` event's bytes), so
  * this may omit a real name — never export text that is not one.
  */
-export function coverageAttrs(p: Partial<ToolAbsentPayload>, knownTool: (name: string) => boolean): Attrs {
+export function coverageAttrs(
+  p: Partial<ToolAbsentPayload>,
+  knownTool: (name: string) => boolean,
+): Attrs {
   const suggested = typeof p.tryInsteadTool?.tool === 'string';
   return {
     ...(typeof p.toolName === 'string' && { 'gen_ai.tool.name': p.toolName }),
@@ -113,7 +116,10 @@ export function coverageAttrs(p: Partial<ToolAbsentPayload>, knownTool: (name: s
 
 /** `agent.evidence_checked` — the verdict and a COUNT; the unsupported
  *  values themselves only under `captureContent`. */
-export function evidenceVerdictAttrs(p: Partial<AgentEvidenceCheckedPayload>, content: boolean): Attrs {
+export function evidenceVerdictAttrs(
+  p: Partial<AgentEvidenceCheckedPayload>,
+  content: boolean,
+): Attrs {
   const unsupported = Array.isArray(p.unsupported) ? p.unsupported : [];
   return {
     ...(typeof p.action === 'string' && { 'agentfootprint.evidence.action': p.action }),
@@ -193,7 +199,9 @@ export function dispositionSpanAttrs(p: Partial<IntegrityDispositionPayload>): A
 }
 
 /** One registered (check, seam) row — the check's name and its outcomes. */
-export function dispositionRowAttrs(row: Partial<IntegrityDispositionPayload['rows'][number]>): Attrs {
+export function dispositionRowAttrs(
+  row: Partial<IntegrityDispositionPayload['rows'][number]>,
+): Attrs {
   const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
   return {
     'agentfootprint.integrity.check.name': bound(row.check),
@@ -217,7 +225,11 @@ export function dispositionRowAttrs(row: Partial<IntegrityDispositionPayload['ro
  * `captureContent` only, and omitted — its size stated — over `maxChars`.
  * `evidence` is a free-form record and is never exported.
  */
-export function evaluationAttrs(p: Partial<EvalScorePayload>, content: boolean, maxChars: number): Attrs {
+export function evaluationAttrs(
+  p: Partial<EvalScorePayload>,
+  content: boolean,
+  maxChars: number,
+): Attrs {
   const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
   const explanation = content && typeof p.explanation === 'string' ? p.explanation : undefined;
   return {
@@ -244,4 +256,3 @@ export function evaluationAttrs(p: Partial<EvalScorePayload>, content: boolean, 
 /** `EvalScorePayload`'s closed vocabularies, checked at run time. */
 const EVAL_TARGETS: ReadonlySet<string> = new Set(['iteration', 'turn', 'run', 'toolCall']);
 const EVALUATORS: ReadonlySet<string> = new Set(['llm', 'fn', 'heuristic']);
-

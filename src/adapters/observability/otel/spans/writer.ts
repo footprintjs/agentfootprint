@@ -159,7 +159,16 @@ export function createSpanWriter(opts: OtelObservabilityOptions, scopeName: stri
     return t?.stack[t.stack.length - 1]?.span;
   }
 
-  return { startSpanUnder, pushSpan, recordOnChildSpan, popSpan, endSpan, setAttrs, recordSpanEvent, topSpan };
+  return {
+    startSpanUnder,
+    pushSpan,
+    recordOnChildSpan,
+    popSpan,
+    endSpan,
+    setAttrs,
+    recordSpanEvent,
+    topSpan,
+  };
 }
 
 export type SpanWriter = ReturnType<typeof createSpanWriter>;

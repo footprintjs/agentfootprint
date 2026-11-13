@@ -18,7 +18,7 @@ export function createOtelStrategy(opts: OtelObservabilityOptions): OtelObservab
   if (!opts.serviceName) {
     throw new TypeError(
       `[otelObservability] \`serviceName\` is required. ` +
-      `Pass an identifier visible in your OTel backend's service map, e.g. 'my-agent-prod'.`,
+        `Pass an identifier visible in your OTel backend's service map, e.g. 'my-agent-prod'.`,
     );
   }
 
@@ -56,7 +56,15 @@ export function createOtelStrategy(opts: OtelObservabilityOptions): OtelObservab
   const content = createToolContent(maxContentChars, turns.codeRunners);
   const explanation = createExplainability(captureContent, explainability, turns.ranTools, spans);
   const { flushStandings } = explanation;
-  const late = createLateEvents({ opts, captureContent, maxContentChars, allCheckRows, turns, spans, report });
+  const late = createLateEvents({
+    opts,
+    captureContent,
+    maxContentChars,
+    allCheckRows,
+    turns,
+    spans,
+    report,
+  });
   const handleEvent = createEventDispatcher({
     opts,
     sampleRate,
@@ -107,7 +115,13 @@ export function createOtelStrategy(opts: OtelObservabilityOptions): OtelObservab
     },
 
     decisionEvidenceRecorder(): OtelDecisionEvidenceRecorder {
-      return decisionEvidenceRecorder({ lifecycle, explainability, soleActiveTurn, topSpan, recordSpanEvent });
+      return decisionEvidenceRecorder({
+        lifecycle,
+        explainability,
+        soleActiveTurn,
+        topSpan,
+        recordSpanEvent,
+      });
     },
   };
   return strategy;

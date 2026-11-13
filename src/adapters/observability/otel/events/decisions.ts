@@ -51,10 +51,7 @@ export function decisionEvidenceRecorder({
       // Internal agent plumbing (the cache-gate decider) is not
       // domain decision evidence. `includes` (not startsWith): in
       // reactMode 'dynamic-grouped' names are double-prefixed.
-      if (
-        String(event.chosen ?? '').includes('sf-cache/') ||
-        String(stageId).includes('sf-cache')
-      )
+      if (String(event.chosen ?? '').includes('sf-cache/') || String(stageId).includes('sf-cache'))
         return;
       forward(
         String(stageId),
@@ -66,10 +63,7 @@ export function decisionEvidenceRecorder({
       const stageId = event.traversalContext?.stageId ?? event.parent;
       if (String(stageId).includes('sf-cache')) return;
       // The agent's own Context slot-fork is a selector — plumbing.
-      if (
-        String(stageId).includes('context') &&
-        event.selected.every((s) => s.startsWith('sf-'))
-      )
+      if (String(stageId).includes('context') && event.selected.every((s) => s.startsWith('sf-')))
         return;
       forward(
         String(stageId),

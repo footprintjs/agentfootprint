@@ -69,7 +69,9 @@ const CONTENT_KEYS: ReadonlySet<string> = new Set([
  * caller-sized session id, a principal, a label. Returns the SAME object
  * when nothing needed a cap, so an unaffected span is byte-identical.
  */
-export function capAttrs(attrs: Record<string, OtelAttributeValue>): Record<string, OtelAttributeValue> {
+export function capAttrs(
+  attrs: Record<string, OtelAttributeValue>,
+): Record<string, OtelAttributeValue> {
   let out: Record<string, OtelAttributeValue> | undefined;
   for (const [key, value] of Object.entries(attrs)) {
     if (CONTENT_KEYS.has(key)) continue;
@@ -87,4 +89,3 @@ export function capAttrs(attrs: Record<string, OtelAttributeValue>): Record<stri
   }
   return out ?? attrs;
 }
-

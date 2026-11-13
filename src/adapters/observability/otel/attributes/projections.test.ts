@@ -21,9 +21,7 @@ describe('OTel attribute boundaries', () => {
       names: Array.from({ length: 22 }, (_, i) => String(i)),
       'gen_ai.tool.call.result': content,
     });
-    expect(capped.names).toEqual([
-      ...Array.from({ length: 20 }, (_, i) => String(i)), '…+2 more',
-    ]);
+    expect(capped.names).toEqual([...Array.from({ length: 20 }, (_, i) => String(i)), '…+2 more']);
     expect(capped['gen_ai.tool.call.result']).toBe(content);
   });
 
@@ -41,12 +39,18 @@ describe('OTel attribute boundaries', () => {
   });
 
   it('never exports an unrecognized suggestion or the coverage author’s sentences', () => {
-    const attrs = coverageAttrs({
-      toolName: 'lookup', toolCallId: 'call', checked: [{ what: 'private' }],
-      tryInsteadTool: { tool: 'private tool sentence', why: 'private reason' },
-    }, () => false);
+    const attrs = coverageAttrs(
+      {
+        toolName: 'lookup',
+        toolCallId: 'call',
+        checked: [{ what: 'private' }],
+        tryInsteadTool: { tool: 'private tool sentence', why: 'private reason' },
+      },
+      () => false,
+    );
     expect(attrs).toEqual({
-      'gen_ai.tool.name': 'lookup', 'gen_ai.tool.call.id': 'call',
+      'gen_ai.tool.name': 'lookup',
+      'gen_ai.tool.call.id': 'call',
       'agentfootprint.coverage.checked.count': 1,
       'agentfootprint.coverage.not_checked.count': 0,
       'agentfootprint.coverage.cannot_cover.count': 0,
@@ -57,10 +61,12 @@ describe('OTel attribute boundaries', () => {
   it('exports an evaluation explanation only when enabled, complete, and within its ceiling', () => {
     const score = { metricId: 'quality', value: 0, explanation: 'private reason' };
     expect(evaluationAttrs(score, false, 3)).toEqual({
-      'gen_ai.evaluation.name': 'quality', 'gen_ai.evaluation.score.value': 0,
+      'gen_ai.evaluation.name': 'quality',
+      'gen_ai.evaluation.score.value': 0,
     });
     expect(evaluationAttrs(score, true, 3)).toEqual({
-      'gen_ai.evaluation.name': 'quality', 'gen_ai.evaluation.score.value': 0,
+      'gen_ai.evaluation.name': 'quality',
+      'gen_ai.evaluation.score.value': 0,
       'agentfootprint.eval.explanation.omitted_chars': 14,
     });
   });

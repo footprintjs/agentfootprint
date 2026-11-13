@@ -52,7 +52,9 @@ function renderConditions(rule: RuleEvidenceLike): readonly string[] {
 }
 
 /** Flatten decide()/select() evidence into span-event attributes. */
-export function renderEvidenceAttrs(evidence: DecisionEvidenceLike): Record<string, OtelAttributeValue> {
+export function renderEvidenceAttrs(
+  evidence: DecisionEvidenceLike,
+): Record<string, OtelAttributeValue> {
   const attrs: Record<string, OtelAttributeValue> = {};
   if (evidence.chosen !== undefined)
     attrs['agentfootprint.decision.chosen'] = bound(evidence.chosen);
@@ -84,4 +86,3 @@ export function looksLikeDecideEvidence(value: unknown): value is DecisionEviden
     Array.isArray((value as DecisionEvidenceLike).rules)
   );
 }
-

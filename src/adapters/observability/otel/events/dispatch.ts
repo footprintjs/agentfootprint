@@ -31,8 +31,20 @@ interface DispatchOptions {
   readonly maxContentChars: number;
   readonly rawConversationId: boolean;
   readonly lifecycle: { stopped: boolean };
-  readonly turns: Pick<TurnStore, 'activeTurns' | 'closedTurns' | 'forgottenRuns' | 'ranTools' | 'codeRunners' | 'remember' | 'rememberClosed'>;
-  readonly spans: Pick<SpanWriter, 'pushSpan' | 'popSpan' | 'endSpan' | 'setAttrs' | 'recordSpanEvent' | 'topSpan'>;
+  readonly turns: Pick<
+    TurnStore,
+    | 'activeTurns'
+    | 'closedTurns'
+    | 'forgottenRuns'
+    | 'ranTools'
+    | 'codeRunners'
+    | 'remember'
+    | 'rememberClosed'
+  >;
+  readonly spans: Pick<
+    SpanWriter,
+    'pushSpan' | 'popSpan' | 'endSpan' | 'setAttrs' | 'recordSpanEvent' | 'topSpan'
+  >;
   readonly content: ToolContent;
   readonly explanation: Explainability;
   readonly late: LateEvents;

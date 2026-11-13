@@ -231,7 +231,6 @@
  * ```
  */
 
-
 import type { OtelObservabilityOptions, OtelObservabilityStrategy } from './otel/types.js';
 import { createOtelStrategy } from './otel/strategy.js';
 

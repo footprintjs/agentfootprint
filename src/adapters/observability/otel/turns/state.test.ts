@@ -4,8 +4,13 @@ import { makeCapture } from '../../../../../test/helpers/otelCapture.js';
 
 export function turn(): TurnState {
   return {
-    stack: [], sampled: true, toolSpans: new Map(), toolNames: new Map(),
-    standingEvents: 0, standingOmitted: 0, proposedArgs: new Map()
+    stack: [],
+    sampled: true,
+    toolSpans: new Map(),
+    toolNames: new Map(),
+    standingEvents: 0,
+    standingOmitted: 0,
+    proposedArgs: new Map(),
   };
 }
 
@@ -13,7 +18,8 @@ describe('OTel turn window', () => {
   it('keeps exactly 32 closed turns and remembers whether an evicted run had a span', () => {
     const store = createTurnStore();
     const capture = makeCapture();
-    const t = turn(); t.root = capture.tracer.startSpan('root');
+    const t = turn();
+    t.root = capture.tracer.startSpan('root');
     store.rememberClosed('sampled', t);
     store.rememberClosed('unsampled', { ...turn(), sampled: false });
     for (let i = 0; i < 32; i++) store.rememberClosed(String(i), turn());
@@ -27,7 +33,8 @@ describe('OTel turn window', () => {
 
   it('a flow decision has no implicit run when turns interleave', () => {
     const store = createTurnStore();
-    const a = turn(); store.activeTurns.set('a', a);
+    const a = turn();
+    store.activeTurns.set('a', a);
     expect(store.soleActiveTurn()).toBe(a);
     store.activeTurns.set('b', turn());
     expect(store.soleActiveTurn()).toBeUndefined();

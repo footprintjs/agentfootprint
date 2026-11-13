@@ -21,11 +21,22 @@ interface LateOptions {
   readonly maxContentChars: number;
   readonly allCheckRows: boolean;
   readonly turns: Pick<TurnStore, 'rootOf' | 'heldRun' | 'forgottenRuns'>;
-  readonly spans: Pick<SpanWriter, 'recordOnChildSpan' | 'recordSpanEvent' | 'startSpanUnder' | 'endSpan'>;
+  readonly spans: Pick<
+    SpanWriter,
+    'recordOnChildSpan' | 'recordSpanEvent' | 'startSpanUnder' | 'endSpan'
+  >;
   readonly report: (error: Error, event?: AgentfootprintEvent) => void;
 }
 
-export function createLateEvents({ opts, captureContent, maxContentChars, allCheckRows, turns, spans, report }: LateOptions) {
+export function createLateEvents({
+  opts,
+  captureContent,
+  maxContentChars,
+  allCheckRows,
+  turns,
+  spans,
+  report,
+}: LateOptions) {
   const { rootOf, heldRun, forgottenRuns } = turns;
   const { recordOnChildSpan, recordSpanEvent, startSpanUnder, endSpan } = spans;
   /**

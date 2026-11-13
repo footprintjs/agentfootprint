@@ -152,7 +152,18 @@ export function createTurnStore() {
     return t;
   }
 
-  return { activeTurns, ranTools, codeRunners, closedTurns, forgottenRuns, remember, rememberClosed, rootOf, heldRun, soleActiveTurn };
+  return {
+    activeTurns,
+    ranTools,
+    codeRunners,
+    closedTurns,
+    forgottenRuns,
+    remember,
+    rememberClosed,
+    rootOf,
+    heldRun,
+    soleActiveTurn,
+  };
 }
 
 export type TurnStore = ReturnType<typeof createTurnStore>;
