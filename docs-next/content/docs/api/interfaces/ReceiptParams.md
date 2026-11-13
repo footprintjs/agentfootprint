@@ -4,7 +4,7 @@ title: ReceiptParams
 
 # Interface: ReceiptParams
 
-Defined in: [src/core/agent/receipt/receipt.ts:292](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L292)
+Defined in: [src/core/agent/receipt/receipt.ts:305](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L305)
 
 The sampling knobs the call went out with — scalars and short strings, no
 bytes, no privacy change.
@@ -46,7 +46,7 @@ receiptAt(snapshot, 1)?.params.stop;        // undefined: none was sent
 
 > `readonly` `optional` **maxTokens?**: `number`
 
-Defined in: [src/core/agent/receipt/receipt.ts:294](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L294)
+Defined in: [src/core/agent/receipt/receipt.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L307)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:294](https://github.com/footprint
 
 > `readonly` `optional` **outputFormat?**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:307](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L307)
+Defined in: [src/core/agent/receipt/receipt.ts:320](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L320)
 
 The structured-output format the port carried (`LLMRequest.outputFormat`,
 `.outputSchema(s, { strategy: 'native' })`): its `type`, and the
@@ -76,7 +76,7 @@ Absent when the request carried none.
 
 > `readonly` `optional` **stop?**: readonly `string`[]
 
-Defined in: [src/core/agent/receipt/receipt.ts:297](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L297)
+Defined in: [src/core/agent/receipt/receipt.ts:310](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L310)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:297](https://github.com/footprint
 
 > `readonly` `optional` **temperature?**: `number`
 
-Defined in: [src/core/agent/receipt/receipt.ts:293](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L293)
+Defined in: [src/core/agent/receipt/receipt.ts:306](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L306)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:293](https://github.com/footprint
 
 > `readonly` `optional` **thinkingBudget?**: `number`
 
-Defined in: [src/core/agent/receipt/receipt.ts:296](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L296)
+Defined in: [src/core/agent/receipt/receipt.ts:309](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L309)
 
 `LLMRequest.thinking.budget` — the reasoning-token ceiling asked for.
 
@@ -102,7 +102,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:296](https://github.com/footprint
 
 > `readonly` `optional` **toolChoice?**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:299](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L299)
+Defined in: [src/core/agent/receipt/receipt.ts:312](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L312)
 
 The forced tool choice, as the port carried it.
 

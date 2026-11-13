@@ -3,11 +3,15 @@
 /**
  * One detected context error, filed as a finding: two channels asserted
  * things that cannot both be true, an argument nothing served, an offered
- * action whose inputs left scope, a settled action re-executed, or a claim
- * the record does not support. The payload IS the finding — uniform across
- * seams so findings are a corpus; deduplicated by identity upstream, so
- * one defect is one event however many passes re-detect it. Synthetic
- * (canary) findings carry `synthetic` and are quarantined from real counts.
+ * action whose inputs left scope, or a claim the record does not support.
+ * (The kind `duplicate-execution` — a settled action re-executed — is named
+ * in the finding type, but no check in this build files it, so this event
+ * never carries it.) The payload IS the finding — uniform across seams so
+ * findings are a corpus; deduplicated by identity upstream, so one defect is
+ * one event however many passes re-detect it. Dev-posture canary results
+ * never arrive as this event: they are counted only as `synthetic` on the
+ * `agentfootprint.integrity.disposition` rows
+ * ({@link IntegrityDispositionPayload}), kept apart from the real numbers.
  */
 export type IntegrityContextErrorPayload = import('./dependencyTypes.js').ContextError & {
   /** The iteration the finding was filed on, when filed mid-loop. */

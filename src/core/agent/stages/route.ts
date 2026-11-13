@@ -2,12 +2,25 @@ import { referenceRefusalRow } from '../findings/refusal.js';
 import { findingsReferenceRefusal } from '../findings/admission.js';
 import { assertAnswerReferences, withFindingsAdmission } from '../findings/answerAdmission.js';
 /**
- * route — decider that branches the ReAct loop into 'tool-calls' or 'final'.
+ * route — the decider after CallLLM: which of the seven `RouteBranch` values
+ * the ReAct loop takes next.
  *
- * Runs after CallLLM. If the LLM returned tool calls AND we haven't hit
- * `maxIterations`, route to the tool execution branch (which loops back
- * to PromptBuilder). Otherwise route to the final-branch subflow which
- * persists memory writes and breaks the loop.
+ * The base choice: the LLM returned tool calls AND no limit stops them
+ * (`willDispatch` — the iteration cap, a halting cost budget, tools off after
+ * a revision) → 'tool-calls', which loops back to the injection engine.
+ * Otherwise 'final', the subflow that persists memory writes and breaks the
+ * loop — except that pending tool calls at `maxIterations` go to 'wrap-up'
+ * when that branch is mounted (`wantsWrapUp`; the default on an agent that
+ * can call tools), one more call with the tools withheld.
+ *
+ * A would-be-final answer can still be sent round once more by an armed
+ * judge: 'output-retry' (`.outputSchema()` retries), 'step-nudge' (skill
+ * steps unfinished), 'evidence-recheck' (the evidence gate), and
+ * 'negative-recheck' (typed `.negativeClaims()`, decided in
+ * `answerValidation.ts`). Under `.findings()` the findings-reference
+ * admission (`findings/answerAdmission.ts` · `withFindingsAdmission`) can
+ * also turn a final answer into 'output-retry' or a denied 'final'. A
+ * decider never names a branch the chart did not mount.
  *
  * Emits `agentfootprint.agent.route_decided` with the chosen branch +
  * a human-readable rationale (visible in narrative + observability).

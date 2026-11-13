@@ -15,9 +15,15 @@ provider counted, what should the window become.
 ## The one law here
 A strategy decides; it does not compose the words and it does not record. The
 sentences belong to `../notice.ts`. Where a strategy chooses BETWEEN notices —
-`drop.ts` only — it is making an attention-omission decision, and the note's law
-says an attention omission must be VISIBLE: the drop count is the rung that is
-never traded away, the tool names are the rung that is.
+`drop.ts` only — it is making an attention-omission decision. The window's law
+(`../README.md`) is that every omission is on the RECORD; whether the MODEL is
+told is decided here, and it is not always yes. `drop.ts` · `dropOldestSpan`
+offers a notice only when the removal reaches the front of what may leave;
+`fittingNotice` then tries the notice that names the dropped tools, falls back
+to the plain one, and serves neither when neither is shorter than the span. If
+nothing fits and the new head is already a user turn, the drop is silent toward
+the model; a removal that does not reach the front (a drop from the middle of
+the window) is always silent toward the model. In every case the record still names what left.
 
 ## A strategy never reads the ledger; the stage hands it what it may know
 

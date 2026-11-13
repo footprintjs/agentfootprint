@@ -1,11 +1,11 @@
 ---
 title: Flowchart as tool
-description: Wrap a footprintjs FlowChart as one Agent tool. Compose existing multi-step procedures (decision evidence, branches, loops, pause/resume) into the LLM's tool surface — no flatten/restructure required.
+description: Wrap a footprintjs FlowChart as one Agent tool. Compose existing multi-step procedures (decision evidence, branches, loops) into the LLM's tool surface — no flatten/restructure required.
 ---
 
 > **Deprecated for new procedures** — [`runbookAsTool`](doc:runbook-as-tool) is the standard bridge now: same chart-as-tool idea, but every answer carries the honesty envelope (coverage folded from inner tools, rule provenance, the recorded walk as an artifact ticket). `flowchartAsTool` stays supported for compatibility; `resultMapper` users stay put, and nothing here changes.
 
-> A team has a working footprintjs flowchart for refund processing — `validate → look-up-order → decide-eligibility → process-refund → notify`, with `decide()` evidence captured at the eligibility step. The agent that needs to expose this as a tool **shouldn't have to flatten it into 5 separate tools**. `flowchartAsTool` wraps the existing chart as ONE tool the LLM can call. The flowchart's recorders, narrative, and pause/resume continue to work exactly as outside the agent.
+> A team has a working footprintjs flowchart for refund processing — `validate → look-up-order → decide-eligibility → process-refund → notify`, with `decide()` evidence captured at the eligibility step. The agent that needs to expose this as a tool **shouldn't have to flatten it into 5 separate tools**. `flowchartAsTool` wraps the existing chart as ONE tool the LLM can call. The flowchart's recorders and narrative continue to work as outside the agent; a pause inside it does not reach the agent (see [Pause inside a flowchart](#pause-inside-a-flowchart)).
 
 ## What it does
 
@@ -83,22 +83,24 @@ If the mapper throws, the tool result is enveloped as `[mapper-error: <reason>]`
 
 ## Pause inside a flowchart
 
-If a stage uses `addPausableFunction` and pauses (waiting for a human approval, e.g.), the wrapped tool throws an Error with the checkpoint attached:
+A pause inside the wrapped chart is **not bridged** to the agent. If a stage uses `addPausableFunction` and pauses (an approval step, say), the Agent run does not pause and no person is asked: the tool call settles as a tool error, the model reads its message and carries on, and `agent.run()` returns the model's next answer. No agent event or outcome carries the inner checkpoint, so the inner chart cannot be resumed through the agent.
+
+The checkpoint is attached to the thrown Error (`err.checkpoint`) only for code that calls the tool's `execute` itself, outside an agent:
 
 ```ts
 try {
-  await agent.run({ message: 'refund O-100' });
+  await tool.execute({ orderId: 'O-100' }, ctx);
 } catch (e) {
   const err = e as Error & { checkpoint?: unknown };
   if (err.checkpoint) {
-    // Persist the checkpoint; resume the inner flowchart later.
-    // (Reconstruct the inner FlowChartExecutor and call
-    //  executor.resume(checkpoint, humanInput) to continue.)
+    // Persist the checkpoint; resume the inner flowchart later by
+    // reconstructing its FlowChartExecutor and calling
+    // executor.resume(checkpoint, humanInput).
   }
 }
 ```
 
-Today: the pause surfaces as a thrown error so the consumer can persist the inner chart's checkpoint manually. An integrated path — where the agent's outer run pauses cleanly with the inner checkpoint folded into the agent's own checkpoint envelope — is not yet wired into `flowchartAsTool`. For agent-native human-in-the-loop, use `askHuman` / `pauseHere` inside a stage and the `Agent`'s own pause/resume (`RunCheckpointError` + `agent.resumeOnError(checkpoint)`).
+So do not put a step that must wait for a person inside a chart you hand to an agent through `flowchartAsTool` (or `runbookAsTool`, which behaves the same). For agent-native human-in-the-loop, use `askHuman` / `pauseHere` inside a tool and the `Agent`'s own pause/resume.
 
 ## Why this matters
 

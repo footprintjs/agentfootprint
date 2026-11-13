@@ -396,9 +396,11 @@ export interface FoldedSpan {
    * key back to the message sitting in `history`.
    *
    * It is a hash of the message's full content (authored frame included), so
-   * it costs no extra bytes on the wire and cannot be forged by a summary that
-   * merely copies the frame's opening words: different content, different
-   * fingerprint, no match.
+   * it costs no extra bytes on the wire, and a summary that merely copies the
+   * frame's opening words does not match it by accident. It is a 32-bit
+   * non-cryptographic join key (FNV-1a), not proof against a CRAFTED message:
+   * a different text with the same fingerprint can be found quickly, and
+   * {@link foldedSpanFor} would join it to this span.
    */
   readonly summaryFingerprint: string;
   /**

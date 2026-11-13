@@ -49,8 +49,13 @@ export { RunInFlightError } from 'footprintjs';
  *
  * The pause is not a failure and not a stale flag — it is unfinished work with
  * a person on the other end. Answer it with `resume(checkpoint, decision)`, or
- * say plainly that it is being dropped with `abandonPause()`; both are visible
- * in the record, and silently starting a fresh run was not.
+ * say plainly that it is being dropped with `abandonPause()`. Either way the
+ * choice is explicit, where silently starting a fresh run was not. Only the
+ * answer is recorded by the library: `resume()` runs a leg on the record, while
+ * `abandonPause()` emits no event and writes nothing to any run record — it
+ * returns the dropped question to the caller, so the app must log it if an
+ * audit needs it. The paused run's record keeps its pause request with no
+ * matching resume.
  */
 export class PendingQuestionError extends Error {
   readonly code = 'ERR_PENDING_QUESTION' as const;

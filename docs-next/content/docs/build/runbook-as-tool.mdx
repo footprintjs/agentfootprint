@@ -284,7 +284,7 @@ The consumer redeems it with the artifact op it already has — `{ op: 'artifact
 
 ## What is not here yet
 
-- **Pause**: a procedure that pauses throws with the checkpoint attached (exactly like `flowchartAsTool`). The approval-gate phase brings typed resume through the agent rail.
+- **Pause**: not bridged. A procedure that pauses throws with the checkpoint attached (exactly like `flowchartAsTool`); inside an Agent that throw becomes a tool error the model reads, so no person is asked and the checkpoint reaches only code that calls `execute` directly. The approval-gate phase is planned to bring typed resume through the agent rail.
 - **Inner dispatch ceilings**: `checkIn` and `wants` tools refuse by name; composition depth stops at one (an inner tool does not get `ctx.tools`).
 
 ## The API surface

@@ -6,7 +6,7 @@ title: NoConversationReason
 
 > **NoConversationReason** = `"never-run"` \| `"last-run-unfinished"` \| `"last-input-refused"`
 
-Defined in: [src/core/conversation.ts:184](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L184)
+Defined in: [src/core/conversation.ts:189](https://github.com/footprintjs/agentfootprint/blob/main/src/core/conversation.ts#L189)
 
 Why `followUp()` found no conversation to continue.
 

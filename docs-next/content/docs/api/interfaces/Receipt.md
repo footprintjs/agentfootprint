@@ -4,7 +4,7 @@ title: Receipt
 
 # Interface: Receipt
 
-Defined in: [src/core/agent/receipt/receipt.ts:334](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L334)
+Defined in: [src/core/agent/receipt/receipt.ts:347](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L347)
 
 THE RECEIPT. One per composed request, committed at the call-llm stop.
 
@@ -26,7 +26,7 @@ receipt?.params.temperature;    // the dial this turn went out on
 
 > `readonly` **basis**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:433](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L433)
+Defined in: [src/core/agent/receipt/receipt.ts:446](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L446)
 
 #### epoch
 
@@ -50,7 +50,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:433](https://github.com/footprint
 
 > `readonly` **cache**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:366](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L366)
+Defined in: [src/core/agent/receipt/receipt.ts:379](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L379)
 
 #### markersApplied
 
@@ -116,7 +116,7 @@ minted before the prefix existed, which verifies as
 
 > `readonly` **messages**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:353](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L353)
+Defined in: [src/core/agent/receipt/receipt.ts:366](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L366)
 
 #### count
 
@@ -136,7 +136,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:353](https://github.com/footprint
 
 > `readonly` `optional` **omittedForAttention?**: `ReceiptAttentionOmission`
 
-Defined in: [src/core/agent/receipt/receipt.ts:432](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L432)
+Defined in: [src/core/agent/receipt/receipt.ts:445](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L445)
 
 What left the window for budget at this iteration's head, before this
 request was composed — one hash per evicted turn, each the turn's own
@@ -157,7 +157,7 @@ meant only that nobody had recorded a drop.
 
 > `readonly` **params**: [`ReceiptParams`](/docs/api/interfaces/ReceiptParams)
 
-Defined in: [src/core/agent/receipt/receipt.ts:417](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L417)
+Defined in: [src/core/agent/receipt/receipt.ts:430](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L430)
 
 The sampling knobs the call went out with — see [ReceiptParams](/docs/api/interfaces/ReceiptParams).
 
@@ -167,7 +167,7 @@ The sampling knobs the call went out with — see [ReceiptParams](/docs/api/inte
 
 > `readonly` `optional` **replayPreparations?**: readonly `object`[]
 
-Defined in: [src/core/agent/receipt/receipt.ts:340](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L340)
+Defined in: [src/core/agent/receipt/receipt.ts:353](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L353)
 
 Actual leaf-provider preparation omitted thinking after this port receipt
 was minted. Original hashes/measurement/cache verdict remain port-level;
@@ -179,7 +179,7 @@ this is an explicit downstream gap, not proof of what a server accepted.
 
 > `readonly` `optional` **requestMeasurement?**: [`RequestMeasurement`](/docs/api/type-aliases/RequestMeasurement)
 
-Defined in: [src/core/agent/receipt/receipt.ts:347](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L347)
+Defined in: [src/core/agent/receipt/receipt.ts:360](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L360)
 
 Counts of the initial prepared canonical request, including full schemas.
 Older recordings have no measurement. No payload, tokens or retry totals.
@@ -190,7 +190,7 @@ Older recordings have no measurement. No payload, tokens or retry totals.
 
 > `readonly` **system**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:348](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L348)
+Defined in: [src/core/agent/receipt/receipt.ts:361](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L361)
 
 #### chars
 
@@ -210,7 +210,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:348](https://github.com/footprint
 
 > `readonly` **tools**: `object`
 
-Defined in: [src/core/agent/receipt/receipt.ts:358](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L358)
+Defined in: [src/core/agent/receipt/receipt.ts:371](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L371)
 
 #### forced
 

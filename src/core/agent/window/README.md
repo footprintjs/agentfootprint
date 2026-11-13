@@ -14,9 +14,17 @@ Support: `turns.ts`, `toolNames.ts`, `options.ts`, `strategy.ts`, `errors.ts`,
   edits the WINDOW, never the LEDGER.
 
 ## The one law here
-An attention omission must be VISIBLE: what left the window is said out loud,
-in past tense, bound to the fold that removed it. What a role may not be told
-about is a different question and is not decided here.
+An attention omission must be on the RECORD: every removal is named in the
+window stage's record (`WindowRecord.removedStageIds`) and on the receipt
+(`omittedForAttention`), bound to the fold that removed it. The record, not the
+wire, is the guarantee. The MODEL is told only sometimes: a drop
+(`slidingWindow`, `tokenBudget`) inserts a past-tense notice only when the
+removal reaches the front of what may leave AND either a notice is shorter than
+the span it replaces or the wire needs a message at the head. A drop in the
+middle of the window, or at the front when no notice fits and the new head is
+already a user turn, is silent toward the model (`strategies/drop.ts` ·
+`dropOldestSpan`). What a role may not be told about is a different question
+and is not decided here.
 
 ## The fact hold (9.102.0): a declared fact stays, noise leaves first
 

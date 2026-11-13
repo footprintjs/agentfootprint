@@ -4,7 +4,7 @@ title: ReceiptPiece
 
 # Interface: ReceiptPiece
 
-Defined in: [src/core/agent/receipt/receipt.ts:207](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L207)
+Defined in: [src/core/agent/receipt/receipt.ts:220](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L220)
 
 One piece of the composed system string.
 
@@ -14,7 +14,7 @@ One piece of the composed system string.
 
 > `readonly` **hash**: `string`
 
-Defined in: [src/core/agent/receipt/receipt.ts:208](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L208)
+Defined in: [src/core/agent/receipt/receipt.ts:221](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L221)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [src/core/agent/receipt/receipt.ts:208](https://github.com/footprint
 
 > `readonly` **slot**: `ContextSlot`
 
-Defined in: [src/core/agent/receipt/receipt.ts:209](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L209)
+Defined in: [src/core/agent/receipt/receipt.ts:222](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L222)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [src/core/agent/receipt/receipt.ts:209](https://github.com/footprint
 
 > `readonly` **source**: `ContextSource`
 
-Defined in: [src/core/agent/receipt/receipt.ts:210](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L210)
+Defined in: [src/core/agent/receipt/receipt.ts:223](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L223)
