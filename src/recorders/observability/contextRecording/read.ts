@@ -1,3 +1,4 @@
+import { toWireJson } from '../../../lib/wireJson.js';
 import { applyContextChange, contextOwner } from './changes.js';
 import { jsonBudget } from './json.js';
 import { contextMeta } from './meta.js';
@@ -70,11 +71,11 @@ export async function readContextRecording(
     for (const path of admitted.referencePaths) {
       if (!Array.isArray(path) || path.length === 0 || path.length > 100)
         throw new ContextRecordingError('invalid-record');
-      const spelling = JSON.stringify(path);
+      const spelling = toWireJson(path);
       if (leaves.has(spelling) || ancestors.has(spelling))
         throw new ContextRecordingError('invalid-record');
       for (let i = 0; i < path.length; i++) {
-        const prefix = JSON.stringify(path.slice(0, i));
+        const prefix = toWireJson(path.slice(0, i));
         if (leaves.has(prefix)) throw new ContextRecordingError('invalid-record');
         ancestors.add(prefix);
       }

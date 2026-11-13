@@ -56,3 +56,19 @@ it('refuses unsupported capture without getters, thrown text or input mutation',
     pieces: [],
   });
 });
+
+it('owns and freezes a complete schema without freezing the caller object', () => {
+  capture.enabled = true;
+  const emit = vi.fn();
+  const inputSchema = { properties: { id: { type: 'string' } }, required: ['id'] };
+  recordModelContext({ $emit: emit }, () => ({
+    iteration: 1,
+    systemPieces: [],
+    tools: [{ name: 'lookup', description: 'lookup', inputSchema }],
+  }));
+  inputSchema.required.push('later');
+  const payload = emit.mock.calls[0][1];
+  expect(payload.pieces[0].schema.inputSchema.required).toEqual(['id']);
+  expect(Object.isFrozen(payload.pieces[0].schema.inputSchema.required)).toBe(true);
+  expect(Object.isFrozen(inputSchema.required)).toBe(false);
+});

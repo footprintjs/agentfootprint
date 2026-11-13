@@ -1,3 +1,6 @@
+**Mixed** — context-record encoding and reading.
+Fold derives exact call deltas; Lens serves the bounded saved record and its sentences.
+
 # Context recording
 
 This library captures the context assembled at each logical model call, then

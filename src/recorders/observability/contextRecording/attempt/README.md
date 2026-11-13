@@ -1,3 +1,5 @@
+**Walker** — execute one encoding attempt and record its disposition.
+
 # Attempt export
 
 Run the private encoder operation. Keep its record outside scope. Copy only a

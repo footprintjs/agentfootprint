@@ -1,3 +1,5 @@
+**Map** — the closed event-name vocabulary.
+
 # Event registry names
 
 `names.ts` owns the public domain/name constants, moved as one whole unit.

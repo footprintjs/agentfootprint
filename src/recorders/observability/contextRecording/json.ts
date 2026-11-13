@@ -1,3 +1,4 @@
+import { toWireJson } from '../../../lib/wireJson.js';
 import { ContextRecordingError } from './types.js';
 
 /** Work/expansion bounds, shared by the reader and its explicit resolutions. */
@@ -17,7 +18,7 @@ export function jsonBudget(maxBytes = 64 * 1024 * 1024, maxNodes = 200_000) {
       return value;
     }
     if (typeof value === 'string') {
-      charge(JSON.stringify(value));
+      charge(toWireJson(value));
       return value;
     }
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -42,7 +43,7 @@ export function jsonBudget(maxBytes = 64 * 1024 * 1024, maxNodes = 200_000) {
         throw new ContextRecordingError('invalid-record');
       if (Array.isArray(value) && key !== String(items))
         throw new ContextRecordingError('invalid-record');
-      charge(`${JSON.stringify(key)}:,`);
+      charge(`${toWireJson(key)}:,`);
       Object.defineProperty(result, key, {
         value: copy(descriptor.value, depth + 1),
         enumerable: true,

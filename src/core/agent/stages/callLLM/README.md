@@ -1,3 +1,5 @@
+**Support** — call-stage dependency declarations and capture probes.
+
 # Model-call dependencies
 
 Step 1: the complete `CallLLMStageDeps` declaration moved here unchanged, with

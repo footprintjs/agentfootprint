@@ -7,19 +7,14 @@
  * Pinned by reading the source: the only `.$emit(` call in `src/` is the one
  * inside `runRedaction.ts`, and `typedEmit` delegates to `emitServed`.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const SRC = resolve(__dirname, '../../src');
+import { productionSources } from '../helpers/productionSources.js';
 
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) return sourceFiles(path);
-    return /\.ts$/.test(name) && !/\.d\.ts$/.test(name) ? [path] : [];
-  });
-}
+const sourceFiles = productionSources;
+const SRC = resolve(__dirname, '../../src');
 
 /** A file's code with its comments taken out. */
 const codeOf = (path: string): string =>

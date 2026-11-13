@@ -19,7 +19,7 @@ export function streamingShapes() {
   return {
     'agentfootprint.context.recorded': eventShape<'agentfootprint.context.recorded'>({
       iteration: num,
-      omission: str,
+      omission: oneOf('not-json'),
       pieces: listOf(
         shapeOf<ItemOf<PayloadOf<'agentfootprint.context.recorded'>['pieces']>>({
           source: str,

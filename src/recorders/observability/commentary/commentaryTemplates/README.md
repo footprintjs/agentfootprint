@@ -1,3 +1,5 @@
+**Lens** — sentences served to a reader watching the run.
+
 # Commentary engine
 
 The parent facade retains the existing exports and override keys. Whole units

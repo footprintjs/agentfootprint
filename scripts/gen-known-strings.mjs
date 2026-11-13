@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * gen-known-strings — writes the two literals of `src/redaction/knownStrings.ts`
+ * gen-known-strings — writes the bounded literals behind `src/redaction/knownStrings.ts`
  * (the library's own words, and its payloads' field names) from the TYPES that
  * file declares (`LibraryWord`, `FieldName`), so the closed sets are the code's
  * own unions. The compiler then checks the literals exactly against the types:

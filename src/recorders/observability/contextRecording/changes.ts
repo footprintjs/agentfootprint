@@ -1,8 +1,9 @@
+import { toWireJson } from '../../../lib/wireJson.js';
 import { ContextRecordingError, type ContextCallChange } from './types.js';
 
 /** Native address tuple; sibling mounts share a run id but never this path. */
 export const contextOwner = (meta: ContextCallChange['meta']): string =>
-  JSON.stringify([meta.runId, meta.compositionPath, meta.subflowPath]);
+  toWireJson([meta.runId, meta.compositionPath, meta.subflowPath]);
 
 /** Exact multiset delta. A permutation is carried only when order changed. */
 export function contextChange(previous: readonly string[], current: readonly string[]) {

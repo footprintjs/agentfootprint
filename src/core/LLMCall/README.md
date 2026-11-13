@@ -1,3 +1,5 @@
+**Map** — the single-call builder and its declared contracts.
+
 # Single-call authoring
 
 `../LLMCall.ts` owns the runtime and chart wiring. This sealed folder owns the

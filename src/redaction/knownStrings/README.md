@@ -1,3 +1,5 @@
+**Map** — the generated closed redaction vocabulary.
+
 # Generated redaction vocabulary
 
 The parent facade owns the vocabulary's types and serving rule. The generator

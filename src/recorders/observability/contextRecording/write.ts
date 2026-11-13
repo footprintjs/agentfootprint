@@ -12,7 +12,7 @@ import {
 } from './types.js';
 
 /** A deterministic lookup key, NOT a digest or a claim of canonical JSON. */
-const lookup = (value: unknown): string => JSON.stringify(value);
+const lookup = (value: unknown): string => toWireJson(value);
 
 /**
  * Format a captured run. The only call facts read are complete source-time
@@ -46,7 +46,7 @@ async function encodeContext(
   const previous = new Map<string, { ids: string[]; call: number }>();
   const captured = new Map<string, number>();
   const callAddress = (event: Recording['events'][number], iteration: number): string =>
-    JSON.stringify([event.meta.runId, event.meta.runtimeStageId, iteration]);
+    toWireJson([event.meta.runId, event.meta.runtimeStageId, iteration]);
   for (const [eventIndex, event] of recording.events.entries()) {
     if (event.type !== 'agentfootprint.context.recorded') continue;
     if (
