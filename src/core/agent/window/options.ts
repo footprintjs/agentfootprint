@@ -23,7 +23,7 @@ import type {
 } from './types.js';
 
 /** Default depth of the "never touch this" recent window. */
-export const DEFAULT_KEEP_RECENT_TURNS = 6;
+const DEFAULT_KEEP_RECENT_TURNS = 6;
 
 /**
  * How many tools' most recent results the window holds beyond
@@ -62,7 +62,7 @@ export function requireKeepLastToolResults(value: unknown, label: string): void 
  * the conversation: losing them has to be a choice somebody typed, not a
  * default they inherited.
  */
-export const DEFAULT_RETENTION: CompactionRetention = 'conversation';
+const DEFAULT_RETENTION: CompactionRetention = 'conversation';
 
 const RETENTIONS: readonly CompactionRetention[] = ['conversation', 'discard'];
 

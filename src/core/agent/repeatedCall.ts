@@ -211,7 +211,7 @@ function fingerprint(text: string): string {
  * mode still gets a truthful digest on the record, it just isn't part of
  * what decides "is this the same call".
  */
-export function repeatedCallKey(
+function repeatedCallKey(
   toolName: string,
   args: unknown,
   result: string,

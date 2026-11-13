@@ -173,7 +173,7 @@ export function copyScriptsVerdict(verdict: ScriptsVerdict): ScriptsVerdict {
 // exactly what no writer of this library files.
 
 /** Every reason a block can be unmatched for. */
-export const UNMATCHED_REASONS: readonly UnmatchedReason[] = Object.freeze([
+const UNMATCHED_REASONS: readonly UnmatchedReason[] = Object.freeze([
   'no-submission-this-turn',
   'over-size',
   'kept-out',

@@ -49,7 +49,7 @@ const TRANSCRIPT_CLOSE = '<<<END TRANSCRIPT>>>';
  * from run content — the only variable part of the summarizer's prompt is
  * the transcript, and that arrives between delimiters this text names.
  */
-export const SUMMARIZER_SYSTEM_PROMPT = [
+const SUMMARIZER_SYSTEM_PROMPT = [
   'You compress the earliest part of an AI agent transcript so the agent can keep working',
   'inside a smaller context window.',
   '',
