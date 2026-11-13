@@ -20,7 +20,6 @@
     "src/adapters/memory/sqliteVector.ts": 1135,
     "src/adapters/observability/audit.ts": 774,
     "src/adapters/observability/githubBugReporter.ts": 682,
-    "src/adapters/observability/otel.ts": 2342,
     "src/adapters/observability/xray.ts": 660,
     "src/ag-ui/request.ts": 606,
     "src/ag-ui/serializer.ts": 1112,
