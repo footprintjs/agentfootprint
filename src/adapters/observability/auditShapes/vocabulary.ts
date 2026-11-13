@@ -24,9 +24,9 @@ type InvalidEventKeys<
   Seen extends PropertyKey = never,
 > = Groups extends readonly [infer First extends object, ...infer Rest extends readonly object[]]
   ?
-      | Extract<keyof First, Seen>
-      | Exclude<keyof First, EventType>
-      | InvalidEventKeys<Rest, Seen | keyof First>
+      | Extract<AnyKeyOf<First>, Seen>
+      | Exclude<AnyKeyOf<First>, EventType>
+      | InvalidEventKeys<Rest, Seen | AnyKeyOf<First>>
   : never;
 
 /** Type-only composition guard: each registered event is present exactly once. */

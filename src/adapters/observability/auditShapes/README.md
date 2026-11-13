@@ -32,3 +32,7 @@ The recursive constraint currently checks seven groups; excessive expansion can
 hit TypeScript's instantiation limit and fails compilation rather than silently
 skipping groups. The boundary suite reads production `.ts` sources and pins the
 exact competing name `index.ts`; it does not claim other extensions are checked.
+
+Group keys use the existing distributive `AnyKeyOf` vocabulary: every member of a
+union return type is checked, including keys absent from another member. The
+compiler controls pin a duplicate and an unknown key hidden in that union shape.

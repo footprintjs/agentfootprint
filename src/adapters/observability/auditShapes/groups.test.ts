@@ -90,6 +90,51 @@ describe('the real audit facade refuses conflicting event groups at compile time
   });
 });
 
+describe('every variant of a group return type is checked', () => {
+  it('remembers keys from every earlier union member when checking later groups', () => {
+    const content = resolve(__dirname, 'events/content.ts');
+    const source = readFileSync(content, 'utf8');
+    const mutated =
+      source.replace('export function contentShapes', 'function originalContentShapes') +
+      `\nexport function contentShapes(toolRan: (name: string) => boolean):
+        ReturnType<typeof originalContentShapes> |
+        (ReturnType<typeof originalContentShapes> & { 'agentfootprint.cost.tick': typeof charsMarker }) {
+          return { ...originalContentShapes(toolRan), 'agentfootprint.cost.tick': charsMarker };
+        }\n`;
+    replacements.set(content, ts.createSourceFile(content, mutated, ts.ScriptTarget.ES2022, true));
+    try {
+      expect(errors(ts.createProgram([facade], options, host, cleanProgram))).toEqual([
+        expect.objectContaining({ code: 1360 }),
+      ]);
+    } finally {
+      replacements.delete(content);
+    }
+  });
+
+  it.each(['agentfootprint.stream.token', 'agentfootprint.not.registered'])(
+    'rejects %s when only one union member declares it',
+    (key) => {
+      const mutated =
+        original.replace('export function outcomesShapes()', 'function originalOutcomesShapes()') +
+        `\nexport function outcomesShapes(): ReturnType<typeof originalOutcomesShapes> |
+        (ReturnType<typeof originalOutcomesShapes> & { '${key}': typeof charsMarker }) {
+          return { ...originalOutcomesShapes(), '${key}': charsMarker };
+        }\n`;
+      replacements.set(
+        outcomes,
+        ts.createSourceFile(outcomes, mutated, ts.ScriptTarget.ES2022, true),
+      );
+      try {
+        expect(errors(ts.createProgram([facade], options, host, cleanProgram))).toEqual([
+          expect.objectContaining({ code: 1360 }),
+        ]);
+      } finally {
+        replacements.delete(outcomes);
+      }
+    },
+  );
+});
+
 const facadeText = readFileSync(facade, 'utf8');
 function compositionOf(text: string) {
   const source = ts.createSourceFile(facade, text, ts.ScriptTarget.ES2022, true);
