@@ -1067,10 +1067,12 @@
   },
   "agentfootprint.stream.tool_start": {
     "args": "keys",
+    "hiddenArgs[]": "kept",
     "notDispatched.pausedCall.toolCallId": "kept",
     "notDispatched.pausedCall.toolName": "kept",
     "parallelCount": "kept",
     "protocol": "kept",
+    "shownArgs": "keys",
     "toolCallId": "kept",
     "toolName": "kept"
   },
