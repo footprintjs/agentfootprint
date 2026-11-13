@@ -22,6 +22,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
+import { outcomeField } from '../execution/callOutcome.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
@@ -415,6 +416,12 @@ export function buildResumeAsk(
           toolCallId,
           toolName,
           ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+          // A declined ask ran nothing → 'refused'; read by the check-in trail.
+          ...outcomeField({
+            ran: toolRan,
+            clean: stepToolRan,
+            ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+          }),
         },
       ],
       { toolName, toolCallId },

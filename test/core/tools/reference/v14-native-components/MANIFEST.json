@@ -105,7 +105,7 @@
     {
       "case": "agent-scoped-provider",
       "historicalSha256": "6add5c7952b5d4130f231a28be057e195a53d0b27be1530694f24968471163a4",
-      "expectedSha256": "056ac30a7d92dfeab31654593acb258e755f245598e18488313965977d0bbbd3"
+      "expectedSha256": "96b5e3ea17371dc7da1b7a7495bafa4acb0d73e443c07c41f1ef8ccfd96b3d80"
     },
     {
       "case": "agent-script-artifact",

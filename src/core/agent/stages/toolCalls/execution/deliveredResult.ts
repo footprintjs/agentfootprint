@@ -20,6 +20,7 @@ import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { UNSCOPED_RUN } from '../helpers/unscopedRun.js';
 import { typedEmit } from '../../../../../recorders/core/typedEmit.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { outcomeField } from './callOutcome.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -232,6 +233,11 @@ export function landCallResult(
     ...((layerNote !== '' || hasNegativeNote) && { toolChars: deliveredResult.length }),
     ...(frame.tc.argumentsFailure !== undefined && {
       toolArgumentsFailure: { ...frame.tc.argumentsFailure },
+    }),
+    ...outcomeField({
+      ran: frame.execution.executed && !frame.execution.denied,
+      clean: !frame.outcome.error && !frame.execution.ceilingRefused,
+      ...(frame.outcome.toolStatus !== undefined && { status: frame.outcome.toolStatus }),
     }),
   });
 

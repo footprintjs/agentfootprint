@@ -631,6 +631,7 @@
           },
           {
             "content": "Unknown tool 'refund_tool' on that call. Tool names that resolved to an implementation on that call: read_skill.",
+            "outcome": "refused",
             "role": "tool",
             "toolCallId": "c1",
             "toolName": "refund_tool"

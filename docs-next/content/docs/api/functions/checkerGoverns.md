@@ -6,13 +6,9 @@ title: checkerGoverns
 
 > **checkerGoverns**(`checker`, `capability`): `boolean`
 
-Defined in: [src/provider-contract/types.ts:980](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L980)
+Defined in: [src/provider-contract/types.ts:982](https://github.com/footprintjs/agentfootprint/blob/main/src/provider-contract/types.ts#L982)
 
-Does this checker ask to be consulted about `capability`? (9.11.0)
-
-`'tool_call'` is always true — it has been enforced since v2.4 and needs no
-declaration. Everything else is true only when the checker named it.
-Absence is NO.
+Is this checker asked about `capability`? (9.11.0) `'tool_call'`: always, enforced since v2.4, no declaration needed. Anything else: only when the checker named it in `governs`; absence is NO.
 
 ## Parameters
 

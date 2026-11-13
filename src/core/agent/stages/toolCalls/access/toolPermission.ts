@@ -5,6 +5,7 @@ import type { ToolArgs } from '../../../../../tools/runChain.js';
 import type { CallExecution, CallResultCell } from '../contracts/callCells.js';
 import { extractSequence } from '../../../../../security/extractSequence.js';
 import { checkerContextOf } from './bindings.js';
+import { readPermissionDecision } from '../../../../../provider-contract/permissionDecision.js';
 import { warnFrozenWrite } from '../../../../../lib/frozenCopy.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
 
@@ -29,6 +30,23 @@ interface CheckToolPermissionFrame {
 
 /** Existing toolPermission body; the owning handler retains its admission guard and native pause return. */
 export async function checkToolPermission(frame: CheckToolPermissionFrame) {
+  // The ONE fail-closed refusal: a checker that threw and a checker whose
+  // answer is not recognised both did not say yes, so both are told and
+  // recorded the same way. Only `rationale` differs.
+  const refuseUnanswered = (rationale: string): void => {
+    frame.execution.denied = true;
+    frame.emitSecurity('agentfootprint.permission.check', {
+      capability: 'tool_call',
+      actor: 'agent',
+      target: frame.tc.name,
+      result: 'deny',
+      rationale,
+    });
+    frame.outcome.result =
+      `[permission denied: Tool '${frame.tc.name}' could not be authorized. This will not ` +
+      `change during this run — do not call it again. Continue without it, or say ` +
+      `what you are unable to do.]`;
+  };
   try {
     // Sequence is derived from history at check time (not parallel
     // state) — single source of truth, survives resumeOnError.
@@ -45,11 +63,19 @@ export async function checkToolPermission(frame: CheckToolPermissionFrame) {
       ...(frame.runIdentity && { identity: frame.runIdentity }),
       ...(frame.env.signal && { signal: frame.env.signal }),
     });
+    // Read ONCE, by the one reader: only 'allow' / 'gate_open' allow. Any
+    // other answer ('ask', {}, 'ALLOW', 'deny ') is refused fail-closed and
+    // recorded as a refusal that says the answer was not recognised.
+    const reading = readPermissionDecision(decision);
+    if (reading.kind === 'unrecognised') {
+      refuseUnanswered(reading.rationale);
+      return;
+    }
     frame.emitSecurity('agentfootprint.permission.check', {
       capability: 'tool_call',
       actor: 'agent',
       target: frame.tc.name,
-      result: decision.result,
+      result: reading.kind === 'allow' ? reading.result : reading.kind,
       ...(decision.policyRuleId !== undefined && { policyRuleId: decision.policyRuleId }),
       ...(decision.rationale !== undefined && { rationale: decision.rationale }),
       ...(decision.reason !== undefined && { reason: decision.reason }),
@@ -60,14 +86,14 @@ export async function checkToolPermission(frame: CheckToolPermissionFrame) {
     // unrepaired in test/modelFacingScan.test.ts · `LEDGER`, under this file's own key.
     // Do not widen it here without that test.
     // law: may omit, never deny; every clause anchored to the call it was composed on.
-    if (decision.result === 'deny') {
+    if (reading.kind === 'deny') {
       frame.execution.denied = true;
       // Deny default keeps the existing v2.4 shape (carries
       // rationale text — historically intentional, since deny
       // lets the LLM recover and rationale is consumer-supplied).
       const tellLLM = decision.tellLLM ?? `[permission denied: ${decision.rationale ?? 'policy'}]`;
       frame.outcome.result = tellLLM;
-    } else if (decision.result === 'halt') {
+    } else if (reading.kind === 'halt') {
       frame.execution.denied = true;
       // Halt default is DELIBERATELY GENERIC — never falls back
       // to `reason` (which is telemetry, e.g. 'security:exfiltration'
@@ -106,18 +132,7 @@ export async function checkToolPermission(frame: CheckToolPermissionFrame) {
     // where it was already going: an outage is not something a model
     // should be invited to argue with, and infrastructure text does
     // not belong in a transcript.
-    frame.execution.denied = true;
     const msg = permErr instanceof Error ? permErr.message : String(permErr);
-    frame.emitSecurity('agentfootprint.permission.check', {
-      capability: 'tool_call',
-      actor: 'agent',
-      target: frame.tc.name,
-      result: 'deny',
-      rationale: `permission-checker threw: ${msg}`,
-    });
-    frame.outcome.result =
-      `[permission denied: Tool '${frame.tc.name}' could not be authorized. This will not ` +
-      `change during this run — do not call it again. Continue without it, or say ` +
-      `what you are unable to do.]`;
+    refuseUnanswered(`permission-checker threw: ${msg}`);
   }
 }

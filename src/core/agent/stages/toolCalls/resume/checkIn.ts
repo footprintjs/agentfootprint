@@ -15,6 +15,7 @@ import { safeStringify } from '../../../validators.js';
 import { serveNegativeHandle } from '../../../negativeClaims/capture.js';
 import { appendBatchResult } from '../batch/settle.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
+import { outcomeField } from '../execution/callOutcome.js';
 import type { ResumeConsentFrame } from '../contracts/resumeFrames.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
 import type { ToolMiddlewareOperations } from '../contracts/operations/middleware.js';
@@ -202,6 +203,12 @@ export function buildResumeCheckIn(
           toolCallId,
           toolName,
           ...(deps.findings === true && !toolRan && { toolResultOrigin: 'not-entered' as const }),
+          // A decline ran nothing → 'refused'; read by the check-in trail.
+          ...outcomeField({
+            ran: toolRan,
+            clean: stepToolRan,
+            ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+          }),
         },
       ],
       { toolName, toolCallId },

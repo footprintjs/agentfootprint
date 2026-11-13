@@ -32,6 +32,8 @@ export function prepareCallState(
   //   • 'halt'                → synthetic tool_result lands; run terminates
   //                             via scope.$break + Agent.run throws
   //                             PolicyHaltError at the API boundary
+  //   • anything else         → refused like a checker that threw
+  //                             (`readPermissionDecision`, fail-closed)
   //
   // Strict ordering on halt: synthetic tool_result → halt event →
   // commit (newHistory written to scope) → $break. This guarantees

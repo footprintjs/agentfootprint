@@ -9,6 +9,13 @@
  * The following notes describe earlier fixture migrations, not current proof
  * of whole-record equality with pre14 releases.
  *
+ * TOOL OUTCOME MARKER: a committed tool message whose call did not complete
+ * now carries `outcome` (`execution/callOutcome.ts` · `callOutcomeOf`), the
+ * fact the check-in trail reads instead of the result's first words. Only
+ * `agent-scoped-provider` has such a call (an unknown tool name, `'refused'`);
+ * it was recaptured with AF_TOOLS_REFERENCE_CASES=agent-scoped-provider and
+ * its diff is that one added line. Every other reference is unchanged.
+ *
  * THINKING REPLAY: the `provider-defaults` reader gap's boundary sentence now
  * says that later preparation notes do not prove what was sent or accepted.
  * Exactly 79 `served[n].view.gaps[n].why` values across 30 references were

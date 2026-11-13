@@ -102,7 +102,7 @@ The schema parser accepted and its output is a lossless canonical JSON value.
 
 ### status
 
-> `readonly` **status**: `"unverified"` \| `"passed"` \| `"failed"`
+> `readonly` **status**: `"failed"` \| `"unverified"` \| `"passed"`
 
 Defined in: [src/answer-validation/types.ts:271](https://github.com/footprintjs/agentfootprint/blob/main/src/answer-validation/types.ts#L271)
 
