@@ -2,14 +2,17 @@
 
 One collection, one document per session. The public index keeps the existing
 names; backend, address, retention and error helpers are whole-unit moves.
-The pilot charts will keep save/load/list/delete validation, transaction
-ownership, size and cursor rules in the recorded path, with no new public API.
+The pilot charts run save/load/list/delete validation, transaction ownership,
+size and cursor rules, with no new public API. The public factory does not
+attach an observer or retain a debug record. A private test observer can capture
+a snapshot; its limits are described below.
 
 The synchronous prefix of save remains one first stage: validate, serialize,
 refuse size, derive the row and start the SDK transaction before returning.
 Firestore owns transaction retry. Each callback runs the ownership chart anew;
 there is no extra retry policy. Inputs, SDK objects and errors stay outside
-recorded state; only bounded facts and decision reasons belong in the record.
+recorded state. The private snapshot contains bounded facts and reason codes;
+decision labels do not reach it, and the branch rationale only names the branch.
 
 The existing SDK-double and session conformance assertions remain the behavior
 contract. Explicit private `.js` imports need `/index.js` after a folder move;
@@ -128,8 +131,21 @@ complete["Closed"]
 ```
 <!-- charts:end -->
 
-The refused-save example is the real native run in
-`bench/results/firestore-refused-save.json`. It records bytes and the ceiling,
-not the envelope. The error retains its original class, fields and sentence.
-The capability input is deliberately untracked; this is a bounded explanation,
-not a complete causal recording of caller data or a public diagnostics API.
+The refused-save artifact in `bench/results/firestore-refused-save.json` is a
+private test demonstration, not a debug record retained by the public store.
+`chart.test.ts` attaches an observer to the private `buildStore` factory to
+capture an actual native snapshot. The public `firestoreSessions` factory
+supplies no observer, so it neither retains nor exposes that snapshot.
+
+The snapshot contains bytes, the ceiling and the `envelope-too-large` reason
+code, not the envelope. The size-rule label is absent; the recorded decision
+rationale is only `returned branchId: refuse`. The artifact's `sentence` is
+constructed by the test from the thrown error and the observed absence of a
+transaction call; it is not generated from the run record. The error retains
+its original class, fields and sentence. The capability input is deliberately
+untracked, so this is not a complete causal recording of caller data.
+
+Pilot requirement 4 (a saved run record that explains the refused save) remains
+unmet for the public store. The chart pattern and record design remain on hold
+for the owner's decision; this demonstration does not establish a production
+debug log or authorize a new recording API.

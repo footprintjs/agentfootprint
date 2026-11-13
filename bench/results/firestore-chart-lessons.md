@@ -35,9 +35,18 @@ cost is negligible for a hot local store.
 - Firestore owns transaction retry. Each callback gets its own ownership chart;
   the adapter does not add a second retry loop.
 - Native scope args are frozen copies for plain data. A frozen capability
-  wrapper borrows the private call instead; the record contains bounded facts,
-  never the envelope, SDK handles, raw SDK errors or caller identity. Its args
-  are explicitly untracked, so the record is not claimed as a full causal slice.
+  wrapper borrows the private call instead. The private test observer captures
+  bounded facts, never the envelope, SDK handles, raw SDK errors or caller
+  identity. Its args are explicitly untracked, so this is not a full causal
+  slice. The public factory supplies no observer and retains no debug record.
+- The refused-save artifact is a private demonstration, not a production debug
+  log. Its snapshot contains the byte count, ceiling and `envelope-too-large`
+  reason code, but no size-rule label; the decision rationale only says
+  `returned branchId: refuse`. The test builds the artifact's `sentence` from
+  the thrown error and its assertion that no transaction started, not from the
+  snapshot. Pilot requirement 4 therefore remains unmet for the public store.
+  The chart pattern and record design stay on hold for the owner's decision;
+  attaching a recorder or adding a public diagnostics API is outside this fix.
 - A folder move does not make an explicit `.js` source import resolve to an
   `index.js` in Node ESM. Private imports and path-based inventories need a real
   rebase, with no forwarding shim; the package hosting door remains the same.
