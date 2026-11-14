@@ -1,3 +1,6 @@
+import { recordModelContext } from '../recorders/core/recordModelContext.js';
+import { LLMCallBuilder } from './LLMCall/builder.js';
+import type { LLMCallOptions, LLMCallInput, LLMCallOutput, LLMCallState } from './LLMCall/types.js';
 /**
  * LLMCall — the leaf primitive for a single LLM invocation (no tools).
  *
@@ -57,6 +60,7 @@ import { callUnder } from '../lib/abort.js';
 import type { RunnerInvocation } from './runnerExecution.js';
 import type { RunRedaction } from '../redaction/runRedaction.js';
 import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
+import { contextRecordedRecorder } from '../recorders/core/ContextRecordedRecorder.js';
 import { streamRecorder } from '../recorders/core/StreamRecorder.js';
 import { errorBridge } from '../recorders/core/ErrorBridge.js';
 import { costRecorder } from '../recorders/core/CostRecorder.js';
@@ -68,7 +72,7 @@ import { resilienceHooks } from '../recorders/core/resilienceHooks.js';
 import { resilienceRecorder } from '../recorders/core/ResilienceRecorder.js';
 import type { InjectionRecord } from '../recorders/core/types.js';
 import type { LLMProvider, LLMRequest, PricingTable } from '../provider-contract/types.js';
-import { buildReceipt, receiptPieces, type Receipt } from './agent/receipt/receipt.js';
+import { buildReceipt, receiptPieces } from './agent/receipt/receipt.js';
 import {
   assertCostBudgetHasPricing,
   emitCostTick,
@@ -81,143 +85,12 @@ import { buildSystemPromptSlot } from './slots/buildSystemPromptSlot.js';
 import { buildMessagesSlot } from './slots/buildMessagesSlot.js';
 import { buildThinkingSubflow } from './slots/buildThinkingSubflow.js';
 import { thinkingHandlerFor } from '../thinking/thinkingHandlerFor.js';
-import type { ThinkingBlock, ThinkingHandler } from '../thinking/types.js';
+import type { ThinkingHandler } from '../thinking/types.js';
 import {
   joinSystemPrompt,
   messagesFromInjections,
   stripFrameworkFields,
 } from './agent/composeRequest.js';
-
-export interface LLMCallOptions {
-  readonly provider: LLMProvider;
-  /** Human-friendly name shown in events/metrics. Default: 'LLMCall'. */
-  readonly name?: string;
-  /** Stable id used for topology + events. Default: 'llm-call'. */
-  readonly id?: string;
-  /** Model to request from the provider. */
-  readonly model: string;
-  /** Optional sampling temperature. */
-  readonly temperature?: number;
-  /** Optional max output tokens. */
-  readonly maxTokens?: number;
-  /**
-   * Per-slot context budgets, in characters (8.11.0). The LLMCall twin of
-   * `AgentOptions.contextBudget` — two slots here, since an LLMCall has no
-   * tools slot.
-   *
-   * Each slot warns (and emits `agentfootprint.context.budget_pressure`) when
-   * it composes over its budget. **Nothing is truncated** — the full content
-   * still reaches the LLM; the budget is a signal, not a limiter. Defaults:
-   * `systemPrompt` 4000, `messages` 10000.
-   */
-  readonly contextBudget?: {
-    readonly systemPrompt?: number;
-    readonly messages?: number;
-  };
-  /**
-   * Record the ASSEMBLED system prompt on the LLM call (9.50.0). The LLMCall
-   * twin of `AgentOptions.recordSystemPrompt` — same field, same contract,
-   * same default. **Opt-in, default OFF**: when `true`,
-   * `agentfootprint.stream.llm_start` carries `systemPromptText`, the joined
-   * prompt verbatim as sent. PRIVACY: with the dial on, the full prompt rides
-   * into every recorder, sink and persisted recording — off, only
-   * `systemPromptChars` (the length) is on the record.
-   */
-  readonly recordSystemPrompt?: boolean;
-  /**
-   * Mint a receipt on the call (9.91.0). Default ON — the LLMCall twin of
-   * `AgentOptions.recordReceipt`, same field, same contract, same default.
-   *
-   * A receipt is the fingerprint of what the model was actually handed,
-   * committed at the call so a reader can check the rebuilt view against it.
-   * `false` declines it, for the reason the agent's switch exists: the mint is
-   * a SHA-256 per system piece, per message and per tool schema, plus one
-   * commit-log value. Declining does not make the log unreadable — `servedAt`
-   * still rebuilds the view; what is gone is the witness, and `servedAt` says
-   * so with the same gap a pre-9.88 recording raises.
-   *
-   * @example decline the receipt in a bulk eval loop
-   *   new LLMCall({ provider, model, recordReceipt: false })
-   */
-  readonly recordReceipt?: boolean;
-  /**
-   * Pricing adapter. When set, LLMCall emits `agentfootprint.cost.tick`
-   * after every LLM response with per-call and cumulative USD. Run-scoped
-   * — the cumulative resets on each `.run()`.
-   */
-  readonly pricingTable?: PricingTable;
-  /**
-   * Cumulative USD budget per run. When provided along with `pricingTable`,
-   * LLMCall emits `agentfootprint.cost.limit_hit` with `action: 'warn'`
-   * the first time cumulative USD crosses the budget. Execution continues
-   * — consumers choose whether to abort by listening to the event.
-   *
-   * The object form `{ usd, onExceed }` is accepted for symmetry with `Agent`,
-   * but `onExceed` must be `'warn'` here: halting means "stop at the next
-   * iteration boundary", and one call has no next boundary. `'halt'` is
-   * refused at build rather than silently ignored.
-   */
-  readonly costBudget?: number | { readonly usd: number; readonly onExceed: 'warn' | 'halt' };
-  /**
-   * Optional build-time recorders threaded into footprintjs's
-   * `flowChart()` factory. Each recorder observes per-node build
-   * events (`onStageAdded` / `onSubflowMounted` / etc.) for this
-   * LLMCall's internal chart (Initialize + slot mounts + CallLLM). When
-   * omitted, no build-time observation is wired up.
-   */
-  readonly structureRecorders?: readonly StructureRecorder[];
-  /**
-   * Optional per-COMPOSITION translator (UI-agnostic). See
-   * `core/translator.ts`. When attached, `runner.getUIGroup()` invokes
-   * it with the LLMCall's `GroupMetadata` (kind `'LLMCall'`, id, name,
-   * empty `members[]`, plus `extra.slots` with the three slot ids —
-   * `system-prompt`, `messages`, `tools` — so Lens can render the slot
-   * cards inside an LLMCall card without inspecting `buildTimeStructure`).
-   * Returns `undefined` when omitted.
-   */
-  readonly groupTranslator?: GroupTranslator;
-}
-
-export interface LLMCallInput {
-  readonly message: string;
-}
-
-export type LLMCallOutput = string;
-
-/**
- * Internal state shape — what flows through the scope during execution.
- * Not exported; all observation is via events.
- *
- * Note: the OUTER `client` stage carries a subset of these (userMessage,
- * answer, cumulative cost counters). The INNER `sf-llm-call` subflow
- * carries the per-call working fields (injection arrays, rawThinking,
- * thinkingBlocks). inputMapper/outputMapper bridge the two scopes —
- * see `buildChart()` for the exact contract.
- */
-interface LLMCallState {
-  userMessage: string;
-  /** Set by extract-final once the LLM has responded. Bubbled to the
-   *  outer Client scope via outputMapper; Client's break path returns
-   *  it as the chart's TraversalResult. */
-  answer?: string;
-  systemPromptInjections: readonly InjectionRecord[];
-  messagesInjections: readonly InjectionRecord[];
-  iteration: number;
-  /** Raw provider-specific thinking payload set by callLLM, consumed
-   *  by sf-thinking when a ThinkingHandler is configured. */
-  rawThinking?: unknown;
-  /** Normalized thinking blocks written by sf-thinking (when mounted). */
-  thinkingBlocks?: readonly ThinkingBlock[];
-  /** The receipt minted at the call (9.91.0) — the same key, the same shape
-   *  and the same mint the agent's `call-llm` commits, so `receiptAt` reads
-   *  one chart's record exactly as it reads the other's. */
-  receipt?: Receipt;
-  // Cost accounting (only populated when pricingTable is set).
-  cumTokensInput: number;
-  cumTokensOutput: number;
-  cumEstimatedUsd: number;
-  costBudgetHit: boolean;
-}
 
 export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   readonly name: string;
@@ -367,6 +240,7 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
     const dispatcher = this.getDispatcher();
     const recorders: CombinedRecorder[] = [
       ...redaction.recorders,
+      contextRecordedRecorder({ dispatcher, getRunContext: getRunCtx }),
       new ContextRecorder({ dispatcher, getRunContext: getRunCtx, realWrites: redaction }),
       streamRecorder({ dispatcher, getRunContext: getRunCtx }),
       errorBridge({ dispatcher, getRunContext: getRunCtx }),
@@ -522,6 +396,12 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
         ...(temperature !== undefined && { temperature }),
         ...(maxTokens !== undefined && { maxTokens }),
       };
+
+      recordModelContext(scope, () => ({
+        iteration,
+        systemPieces: systemPromptInjections,
+        tools: [],
+      }));
 
       // ── THE RECEIPT (9.91.0) ─────────────────────────────────────────
       // Written immediately before the provider is called, so it is committed
@@ -709,46 +589,10 @@ export class LLMCall extends RunnerBase<LLMCallInput, LLMCallOutput> {
   }
 }
 
-/**
- * Tiny fluent builder. Validates required fields at build() time.
- */
-export class LLMCallBuilder {
-  private readonly opts: LLMCallOptions;
-  private systemPromptValue = '';
-  /** Whether `.system()` has been called — see the refusal below for why the
-   *  flag exists separately from the value. */
-  private systemPromptSet = false;
-
-  constructor(opts: LLMCallOptions) {
-    this.opts = opts;
-  }
-
-  /**
-   * Set the system prompt. Once per call — a second `.system()` used to
-   * REPLACE the first in silence, so the instructions written first were
-   * never sent and nothing said so. Join the parts yourself and pass one
-   * string.
-   */
-  system(prompt: string): this {
-    if (this.systemPromptSet) {
-      throw new Error(
-        'LLMCallBuilder.system: already set. An LLMCall has one system prompt — a second call ' +
-          'used to REPLACE the first silently, so the instructions you wrote first were never ' +
-          'sent. Join the parts into one string and pass it once. (An Agent has richer options ' +
-          'here: .steering(...) for a second always-on block, .configure(...) for a per-run ' +
-          'prompt.)',
-      );
-    }
-    this.systemPromptSet = true;
-    this.systemPromptValue = prompt;
-    return this;
-  }
-
-  build(): LLMCall {
-    return new LLMCall(this.opts, this.systemPromptValue);
-  }
-}
-
 // (Helpers previously inlined are now in ./slots/helpers.ts — the slot
 // builders import them directly. LLMCall stays thin: Builder + chart
 // assembly + internal recorder wiring.)
+
+export type { LLMCallOptions, LLMCallInput, LLMCallOutput } from './LLMCall/types.js';
+
+export { LLMCallBuilder } from './LLMCall/builder.js';

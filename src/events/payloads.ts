@@ -47,6 +47,7 @@ export type {
   SkillGuardEvaluationRecord,
   ContextEvaluatedPayload,
 } from './payloads/context.js';
+export type { ContextRecordedPayload, ContextRecordedPiece } from './payloads/contextRecorded.js';
 export type {
   ErrorFatalPayload,
   PauseRequestPayload,

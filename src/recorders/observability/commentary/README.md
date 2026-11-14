@@ -11,7 +11,7 @@ everywhere and a consumer's voice or locale is one merged map away.
 
 | file | one job |
 | --- | --- |
-| `commentaryTemplates.ts` | the `key → sentence` map, the per-event key router (`selectCommentaryKey`), the var extractor, and the flat non-recursive renderer |
+| `commentaryTemplates.ts` + `commentaryTemplates/` | facade, stable override keys, and one module per prose-engine responsibility |
 | `artifactPhrases.ts` | plain-English words for the artifact unions (`ArtifactOp`, `ArtifactRefusalReason`, `ArtifactSweepReason`) + the two size humanizers |
 
 ## The rules a new template has to keep
@@ -32,9 +32,10 @@ everywhere and a consumer's voice or locale is one merged map away.
 5. **Add keys, never move them.** Consumers override BY KEY. Branch inside a
    pre-rendered clause rather than splitting a shipped key in two, or every
    existing override goes silently unconsulted (the `cost.limit_hit` lesson).
-6. **Unknown events fall through.** `selectCommentaryKey` returns `undefined`
-   for anything without a template, and the caller renders it raw — nothing is
-   ever dropped on the floor. `null` is the separate, deliberate "skip this".
+6. **Every registered kind has a disposition.** A sentence or an explicit
+   internal exclusion replaces bare labels. Unknown custom kinds use the
+   fixed `event.unknown` sentence, without copying payloads or errors. `null`
+   remains the deliberate "skip this". Existing override keys stay stable.
 
 Tests live in `test/recorders/observability/commentary/`: each family gets
 fixture → exact sentence, plus an absent-field omission case, plus the

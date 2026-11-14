@@ -977,7 +977,7 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a commentary phrase rendered for PEOPLE watching a run',
     },
   ],
-  'src/recorders/observability/commentary/commentaryTemplates.ts': [
+  'src/recorders/observability/commentary/commentaryTemplates/templates.ts': [
     {
       kind: 'not-model-facing',
       count: 2,

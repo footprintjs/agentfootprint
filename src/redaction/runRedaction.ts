@@ -114,6 +114,8 @@ export interface RunRedaction {
  * @internal
  */
 export interface ScopeRun {
+  /** Exact opt-in only: ordinary wildcard sinks never request extra content. */
+  wantsRecordedContext?(): boolean;
   /** What the run is covered by — `unknown` only for a runner whose declaration is unknown. */
   readonly coverage: RedactionCoverage;
   readonly serving: EventServing;
@@ -222,6 +224,7 @@ export function createRunRedaction(args: {
   const slot = (runtimeStageId: string, key: string): string => `${runtimeStageId}\u001f${key}`;
   const coverage = coverageOfOpenedRun(policy);
   const run: ScopeRun = {
+    wantsRecordedContext: () => dispatcher.listenerCount('agentfootprint.context.recorded') > 0,
     coverage,
     serving,
     real(type, payload, stageId) {
@@ -488,6 +491,11 @@ export function markPrivateFields(scope: object, selections: readonly PrivateSel
 /** A scope that can emit — structurally footprintjs's `TypedScope` `$emit`. */
 export interface EmitScope {
   $emit(name: string, payload?: unknown): void;
+}
+
+/** Whether this actual native component has an explicit recording subscriber. */
+export function wantsRecordedContext(scope: object): boolean {
+  return scopeRuns.get(scope)?.serving?.run.wantsRecordedContext?.() ?? false;
 }
 
 /**

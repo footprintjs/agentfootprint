@@ -235,8 +235,10 @@ describe('commentary — skill.rejected posture refusals', () => {
     );
   });
 
-  it('no posture (plain reachability refusal) keeps the pre-9.17 fall-through — raw render, never dropped', () => {
-    expect(selectCommentaryKey(event('agentfootprint.skill.rejected', base))).toBeUndefined();
+  it('plain reachability refusal gets a fixed sentence', () => {
+    expect(selectCommentaryKey(event('agentfootprint.skill.rejected', base))).toBe(
+      'skill.rejected',
+    );
   });
 });
 
@@ -303,10 +305,10 @@ describe('commentary — model-pick decorations on context.evaluated.cursorMove'
   });
 });
 
-describe('commentary — unknown events fall through, never dropped', () => {
-  it('an event type the templates do not know returns undefined (raw render downstream)', () => {
-    expect(
-      selectCommentaryKey(event('agentfootprint.skill.some_future_event', {})),
-    ).toBeUndefined();
+describe('commentary — unknown events get fixed prose', () => {
+  it('an unknown event does not dump its payload', () => {
+    expect(selectCommentaryKey(event('agentfootprint.skill.some_future_event', {}))).toBe(
+      'event.unknown',
+    );
   });
 });

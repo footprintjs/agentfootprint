@@ -48,6 +48,8 @@ it('runs through a transparent Proxy and retains the original native run view', 
     await expect(proxy.run('hello')).resolves.toBe('ok');
     expect(proxy.getLastSnapshot()).toEqual(agent.getLastSnapshot());
     expect(proxy.getLastNarrativeEntries()).toEqual(agent.getLastNarrativeEntries());
+    // checkpoint() stamps the instant of EACH request. Compare equal-time
+    // requests, then prove a later request changes only that instant.
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {
       const direct = agent.checkpoint();

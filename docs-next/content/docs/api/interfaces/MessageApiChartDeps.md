@@ -4,7 +4,7 @@ title: MessageApiChartDeps
 
 # Interface: MessageApiChartDeps
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:71](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L71)
+Defined in: [src/core/agent/buildMessageApiChart.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L72)
 
 ## Properties
 
@@ -12,7 +12,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:71](https://github.com/footp
 
 > `readonly` `optional` **getRunId?**: () => `string` \| `undefined`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:107](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L107)
+Defined in: [src/core/agent/buildMessageApiChart.ts:108](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L108)
 
 The id of the run this chart is about to make (9.91.0) — supply it and
 Call-LLM mints a receipt, the fingerprint of what the model was handed,
@@ -57,7 +57,7 @@ receiptAt(executor.getSnapshot(), 1)?.basis.runId; // runId
 
 > `readonly` **model**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L73)
+Defined in: [src/core/agent/buildMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L74)
 
 ***
 
@@ -65,7 +65,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:73](https://github.com/footp
 
 > `readonly` **provider**: [`LLMProvider`](/docs/api/interfaces/LLMProvider)
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:72](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L72)
+Defined in: [src/core/agent/buildMessageApiChart.ts:73](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L73)
 
 ***
 
@@ -73,7 +73,7 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:72](https://github.com/footp
 
 > `readonly` `optional` **structureRecorders?**: readonly `StructureRecorder`[]
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L75)
+Defined in: [src/core/agent/buildMessageApiChart.ts:76](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L76)
 
 ***
 
@@ -81,4 +81,4 @@ Defined in: [src/core/agent/buildMessageApiChart.ts:75](https://github.com/footp
 
 > `readonly` **systemPrompt**: `string`
 
-Defined in: [src/core/agent/buildMessageApiChart.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L74)
+Defined in: [src/core/agent/buildMessageApiChart.ts:75](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/buildMessageApiChart.ts#L75)
