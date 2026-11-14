@@ -3,7 +3,7 @@
  *
  * A collision would hand one entity's events to another: an AG-UI client finds
  * a tool call by its id across the whole conversation. So the law ships with
- * its check (CLAUDE.md, "Before changing anything"): a seeded property
+ * its check (CLAUDE.md, "One law before you add a mapping"): a seeded property
  * over the strings most likely to fold — separators, escapes, the absence
  * marker, empty segments — plus the minter's per-(kind, address) counting.
  */

@@ -1,5 +1,5 @@
 /**
- * DOCUMENTED DOORS — the entry guide and door README against package.json.
+ * DOCUMENTED DOORS — the door list in CLAUDE.md against the one in package.json.
  *
  * `package.json` `exports` is EXHAUSTIVE: a subpath that is not in the map does
  * not resolve, in any bundler, at all. So a doc that names a door the map does
@@ -14,11 +14,11 @@
  *
  * ── What is pinned ────────────────────────────────────────────────────
  *
- *   1. The doors the entry guide and src/doors/README.md name === the subpaths `package.json` publishes.
+ *   1. The doors CLAUDE.md names === the subpaths `package.json` publishes.
  *      Set equality in BOTH directions: a documented-but-unpublished door is
  *      the import that fails; a published-but-undocumented one is the door
  *      nobody finds.
- *   2. Every path src/doors/README.md lists as REMOVED is in fact absent from `exports`.
+ *   2. Every path CLAUDE.md lists as REMOVED is in fact absent from `exports`.
  *      The same sentence that corrects the list also claims sixteen paths are
  *      gone; an unchecked claim about absence is how the first list went wrong.
  *
@@ -45,10 +45,9 @@ const REPO_ROOT = join(__dirname, '../..');
 /** The sentence that separates "what exists now" from "what 9.0.0 removed". */
 const REMOVED_MARKER = '9.0.0 removed sixteen older paths';
 const DOORS_MARKER = 'Entry points';
-const DOORS_DOC = 'src/doors/README.md';
 
-function doorReadme(): string {
-  return readFileSync(join(REPO_ROOT, DOORS_DOC), 'utf-8');
+function claudeMd(): string {
+  return readFileSync(join(REPO_ROOT, 'CLAUDE.md'), 'utf-8');
 }
 
 /**
@@ -74,12 +73,12 @@ function publishedSubpaths(): string[] {
 
 /** The Module-map line that lists the doors, split at the removed-paths clause. */
 function entryPointsLine(): { readonly current: string; readonly removed: string } {
-  const line = doorReadme()
+  const line = claudeMd()
     .split('\n')
     .find((l) => l.startsWith(DOORS_MARKER));
   expect(
     line,
-    `${DOORS_DOC} has no line starting "${DOORS_MARKER}" — if the door list moved, ` +
+    `CLAUDE.md has no line starting "${DOORS_MARKER}" — if the door list moved, ` +
       `re-point this test at it rather than deleting it`,
   ).toBeDefined();
   const at = line!.indexOf(REMOVED_MARKER);
@@ -107,14 +106,7 @@ function documentedPaths(segment: string): string[] {
   return [...found].sort();
 }
 
-it('the entry guide compact door list also matches the manifest', () => {
-  const guide = readFileSync(join(REPO_ROOT, 'CLAUDE.md'), 'utf8');
-  const section = guide.split('## Layering and public doors\n')[1]?.split('## Module map\n')[0];
-  expect(section, 'the guide must retain its public-door entry section').toBeDefined();
-  expect(documentedPaths(section ?? '')).toEqual(publishedSubpaths());
-});
-
-describe('the detailed door README documents exactly the doors package.json publishes', () => {
+describe('CLAUDE.md documents exactly the doors package.json publishes', () => {
   it('the extractor finds a plausible list at all (a silent scrape passes everything)', () => {
     const { current, removed } = entryPointsLine();
     expect(documentedPaths(current).length, 'no doors extracted from the doc line').toBeGreaterThan(
@@ -131,7 +123,9 @@ describe('the detailed door README documents exactly the doors package.json publ
     const published = publishedSubpaths();
     // One assertion, both directions: the diff in the failure output names the
     // door that was invented and the door that was forgotten in one read.
-    expect(documented, 'door README has drifted from package.json exports').toEqual(published);
+    expect(documented, 'CLAUDE.md door list has drifted from package.json exports').toEqual(
+      published,
+    );
   });
 
   it('the count it claims out loud matches the count it lists', () => {
@@ -145,7 +139,7 @@ describe('the detailed door README documents exactly the doors package.json publ
   });
 });
 
-describe('the paths the door README calls removed really are gone', () => {
+describe('the paths CLAUDE.md calls removed really are gone', () => {
   const removedPaths = documentedPaths(entryPointsLine().removed);
 
   it('the removed list is the sixteen it says it is', () => {
@@ -156,7 +150,7 @@ describe('the paths the door README calls removed really are gone', () => {
     it(`${path} is absent from package.json exports`, () => {
       expect(
         publishedSubpaths(),
-        `door README says ${path} was removed in 9.0.0, but exports publishes it`,
+        `CLAUDE.md says ${path} was removed in 9.0.0, but exports publishes it`,
       ).not.toContain(path);
     });
   }
