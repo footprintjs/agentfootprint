@@ -1,3 +1,5 @@
+**Support** — erased internal state shapes; the stages own every read, write and model-facing decision.
+
 # Internal stage state
 
 These interfaces own disjoint fields of the internal `AgentState` contract.

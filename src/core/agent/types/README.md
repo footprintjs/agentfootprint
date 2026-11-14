@@ -1,3 +1,5 @@
+**Support** — erased Agent contract declarations; runtime owners choose what the model sees.
+
 # Agent contracts
 
 This library owns the Agent's type declarations. `../types.ts` keeps the existing
