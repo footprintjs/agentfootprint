@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.5.0] - 2026-11-14
+
+### Added
+
+- **Optional backward dependency output for recorded root questions.** A host can set `TraceCauseOptions.includeBackward: true` to include the existing bounded backward nodes, edges and proof references in `root_cause`. Omitted or `false` keeps the current output; `impact` and `attention_list` do not request it. The same single Foottrace query, work limits, deadline, cancellation and character ceiling apply. Oversize output is withheld with a truncated gap, and missing evidence stays uncertain. This display option does not establish semantic derivation or a physical cause.
+
+- **Save repeated model context once and record each call as a change list.**
+  Opt-in context recording uses a value-table port, preserves served text and
+  schema values, and keeps provider requests unchanged. Expansion refuses
+  missing values and malformed references; ordinary recordings still read as
+  before. Commentary now gives every registered event a sentence or an explicit
+  internal exclusion instead of a bare event label.
+
+  Migration: unknown custom events now use the `event.unknown` prose key instead
+  of falling through to a raw payload renderer. Existing template override keys
+  keep their meanings.
+
 ## [14.4.0] - 2026-11-12
 
 ### Added
