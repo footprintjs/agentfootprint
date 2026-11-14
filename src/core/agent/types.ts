@@ -22,8 +22,7 @@ import type { ToolArgValidationMode } from '../../tools/toolArgsValidation.js';
 import type { TimeOptions } from '../../time/clock.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk } from '../../ontology/types.js';
-import type { ObserverDeliveryOptions } from './types/observation.js';
-import type { WriteProvenanceMode } from './types/observation.js';
+import type { ObserverDeliveryOptions, WriteProvenanceMode } from './types/observation.js';
 import type { ExternalGroundsProvider } from './types/grounds.js';
 import type { AgentArtifactsOptions } from './types/artifacts.js';
 import type { InvocationState } from './types/state/invocation.js';
@@ -47,7 +46,7 @@ export type { ObserverDeliveryOptions, WriteProvenanceMode } from './types/obser
 export type { ExternalGroundsProvider } from './types/grounds.js';
 export type { AgentArtifactsOptions, AgentRecordingsOptions } from './types/artifacts.js';
 export type { RunConfig, RunConfigContext, RunConfigFn } from './types/configuration.js';
-export type { AgentInput } from './types/input.js';
+export type { AgentInput, AgentOutput } from './types/input.js';
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -1180,8 +1179,6 @@ export interface AgentOptions {
    */
   readonly observerDeliveryOptions?: ObserverDeliveryOptions;
 }
-
-export type AgentOutput = string;
 
 // ─── INTERNAL state (stage functions) ──────────────────────────────
 

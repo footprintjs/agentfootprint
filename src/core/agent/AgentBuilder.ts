@@ -1,3 +1,15 @@
+import {
+  setAnswerPolicy,
+  setNegativePolicy,
+  setSourceEvidence,
+  sourceOptions,
+  type AnswerValidationOptions,
+  type NegativeClaimsOptions,
+  type SourceEvidenceOptions,
+  type OutputSchemaOptions,
+  type OutputSchemaParser,
+  type OutputSchemaStrategy,
+} from './builder/answer/policies.js';
 import { livePort } from './builder/livePort.js';
 import { setSystem, type PromptPort } from './builder/prompt/system.js';
 import {
@@ -66,23 +78,9 @@ import { assembleAgent, type AssemblyPort } from './builder/assembly/build.js';
 
 import type { SkillGraphOptions } from './builder/graph/options.js';
 export type { SkillGraphOptions } from './builder/graph/options.js';
-import {
-  resolveAnswerValidation,
-  type AnswerValidationOptions,
-  type ResolvedAnswerValidation,
-} from '../../answer-validation/index.js';
 
-import {
-  type OutputSchemaOptions,
-  type OutputSchemaParser,
-  type OutputSchemaStrategy,
-} from '../../answer-validation/outputSchema.js';
 import { type ResolvedOutputEnforcement } from './outputEnforcement.js';
-import {
-  resolveNegativeClaims,
-  type NegativeClaimsOptions,
-  type ResolvedNegativeClaims,
-} from './negativeClaims/config.js';
+
 import type { NamesAndNumbersOptions, ResolvedEvidenceGate } from './evidence/types.js';
 import { type OutputFallbackOptions, type ResolvedOutputFallback } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
@@ -116,10 +114,6 @@ import { type ActOptions } from './act.js';
 import type { ResolvedScriptTravel, ScriptTravelOptions } from './scripts/types.js';
 import { type RecipeSource } from '../../recipes/provenance.js';
 import type { AgentRecipe, AppliedRecipe, RecipeOptions } from '../../recipes/types.js';
-import {
-  resolveSourceEvidenceOptions,
-  type SourceEvidenceOptions,
-} from '../../tools/sourceEvidence.js';
 
 /**
  * Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
@@ -242,8 +236,8 @@ export class AgentBuilder {
    * builder, propagated to the Agent at `.build()` time.
    */
   private outputSchemaParser?: OutputSchemaParser<unknown>;
-  private answerValidationConfig?: ResolvedAnswerValidation;
-  private negativeClaimsConfig?: ResolvedNegativeClaims;
+  private answerValidationConfig?: ReturnType<typeof setAnswerPolicy>;
+  private negativeClaimsConfig?: ReturnType<typeof setNegativePolicy>;
   /** Corrective re-asks the loop may spend. `0` (the default) means the
    *  schema is judged once, at the caller's boundary, exactly as it always
    *  was — and no enforcement is mounted in the chart at all. */
@@ -3039,18 +3033,13 @@ export class AgentBuilder {
    * than only recorded (see {@link AnswerValidationOptions.agentChecks}).
    */
   answerValidation<T>(options: AnswerValidationOptions<T>): this {
-    if (this.answerValidationConfig !== undefined) {
-      throw new Error('AgentBuilder.answerValidation: already configured.');
-    }
-    this.answerValidationConfig = resolveAnswerValidation(options);
+    this.answerValidationConfig = setAnswerPolicy(this.answerValidationConfig, options);
     return this;
   }
 
   /** Retain exact governed source observations in native artifacts, with fresh read admission. */
   sourceEvidence(options: SourceEvidenceOptions): this {
-    if (this.sourceEvidenceValue !== undefined)
-      throw new Error('Agent.sourceEvidence: already configured.');
-    this.sourceEvidenceValue = resolveSourceEvidenceOptions(options);
+    this.sourceEvidenceValue = setSourceEvidence(this.sourceEvidenceValue, options);
     return this;
   }
 
@@ -3078,10 +3067,7 @@ export class AgentBuilder {
    * ```
    */
   negativeClaims(options: NegativeClaimsOptions): this {
-    if (this.negativeClaimsConfig !== undefined) {
-      throw new Error('Agent.negativeClaims: already configured.');
-    }
-    this.negativeClaimsConfig = resolveNegativeClaims(options);
+    this.negativeClaimsConfig = setNegativePolicy(this.negativeClaimsConfig, options);
     return this;
   }
 
@@ -3197,9 +3183,7 @@ export class AgentBuilder {
         negativeClaims,
       }) =>
         new Agent(
-          this.sourceEvidenceValue === undefined
-            ? opts
-            : { ...opts, sourceEvidence: this.sourceEvidenceValue },
+          sourceOptions(opts, this.sourceEvidenceValue),
           this.systemPromptValue,
           this.registry,
           voice,

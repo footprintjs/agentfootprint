@@ -1,6 +1,5 @@
 import { withoutEarlierScriptText } from '../scripts/rows.js';
 import { createNegativeRuntimeState } from '../negativeClaims/capture.js';
-import type { NegativeCheckpoint } from '../negativeClaims/checkpoint.js';
 import { FINDINGS_LAYOUT, findingsContextBytes } from '../findings/context.js';
 /**
  * seed — initial stage of the agent's chart. Initializes every mutable
@@ -46,39 +45,11 @@ import { commitRunRedaction } from '../run/commitRunRedaction.js';
 import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../memberRun.js';
 import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
 import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/types.js';
-import { sourceEvidenceIndex } from '../../../artifacts/sourceEvidence/guards.js';
+import { seedSourceEvidence } from '../sourceEvidence/seedIndex.js';
+import { historyForTurn } from '../runtime/conversation/seedHistory.js';
+import type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
-/**
- * A stored conversation handed to the next run — what
- * `runtime/conversation/owner.ts · applyContinuation` stashes and `seedFrom` consumes.
- *
- * It carries the history EXACTLY as stored and a flag, never a pre-built
- * user entry: the entry this turn adds is written in ONE place,
- * `historyForTurn`, from the message the `'input'` chain let through. A
- * continuation that appended the caller's raw message before the chain ran
- * would put the unrewritten text in front of the model while the record
- * (`userMessage`, `middlewareDecisions`) said the rewrite happened — the
- * bug fixed in 9.112.2.
- */
-export interface PendingResumeHistory {
-  /** The conversation as stored — no entry for this turn in it. */
-  readonly history: readonly LLMMessage[];
-  /**
-   * `true` for `run({ continueFrom })` (and so `followUp()` and every stored
-   * session behind `standingAgent`): continuing a conversation ADDS this
-   * turn's user message. `false` for `resumeOnError`, whose failing turn's
-   * message is already the last user entry in `history`.
-   */
-  readonly appendsUserTurn: boolean;
-  /**
-   * The turn the stored history ends on — `AgentRunCheckpoint.turnNumber`,
-   * which a checkpoint carries only while an honesty layer is armed. Seed
-   * continues the turn stamp from it (`turnNumberFor`); absent → the stored
-   * history's count, and the restored ledger's stamps, are all it has.
-   */
-  readonly turn?: number;
-  readonly negatives?: NegativeCheckpoint;
-}
+export type { PendingResumeHistory } from '../runtime/conversation/seedHistory.js';
 
 export interface SeedStageDeps {
   readonly sourceEvidenceMaxReceipts?: number;
@@ -565,34 +536,6 @@ function fileTime(scope: TypedScope<AgentState>, deps: SeedStageDeps): void | Pr
 }
 
 /**
- * The conversation this run starts from, ending in this turn's user entry —
- * the ONE place that entry is written (9.112.2).
- *
- * `message` is what the `'input'` chain let through (the caller's message
- * when there is no chain). A refusal never calls this writer. A rewrite —
- * a scrub, a stated quote — is the entry the model
- * reads on a continued turn exactly as on a first one.
- *
- *   • fresh run → `[{ user: message }]`
- *   • `run({ continueFrom })` → the stored conversation + `{ user: message }`
- *   • `resumeOnError` → the stored conversation as-is: its last user entry
- *     IS the failing turn's message, and adding it again would ask twice.
- *     An empty stored history falls back to the fresh-run entry, as it
- *     always did.
- *
- * With no chain, every arm yields the bytes the earlier releases committed.
- */
-function historyForTurn(
-  resume: PendingResumeHistory | undefined,
-  message: string,
-): readonly LLMMessage[] {
-  const entry: LLMMessage = { role: 'user', content: message };
-  if (resume === undefined) return [entry];
-  if (resume.appendsUserTurn) return [...resume.history, entry];
-  return resume.history.length > 0 ? [...resume.history] : [entry];
-}
-
-/**
  * Initialise every mutable field of `AgentState` from `message` + the run
  * args. Split out so the message the run proceeds with can come either
  * straight from the caller or from the `'input'` middleware chain — one
@@ -629,19 +572,7 @@ function seedFrom(
   const resume = mounted ? undefined : deps.consumePendingResumeHistory();
   const history = historyForTurn(resume, message);
   scope.history = history;
-  if (deps.sourceEvidenceMaxReceipts !== undefined) {
-    const inherited = mounted ? undefined : deps.consumePendingResumeSourceEvidence?.();
-    const prior =
-      inherited === undefined
-        ? { version: 1 as const, refs: [], omitted: 0 }
-        : sourceEvidenceIndex(inherited);
-    const refs = prior.refs.slice(0, deps.sourceEvidenceMaxReceipts);
-    const dropped = prior.refs.length - refs.length;
-    if (prior.omitted > Number.MAX_SAFE_INTEGER - dropped)
-      throw new TypeError('Source evidence omission counter overflow.');
-    const omitted = prior.omitted + dropped;
-    scope.sourceEvidence = { version: 1, refs, omitted };
-  }
+  seedSourceEvidence(scope, deps, mounted);
   // Every run that keeps a ledger starts one, so a missing key always means
   // "not observed" (a checkpoint from before) and the view fails closed.
   if (deps.toolCallLedger === true) {

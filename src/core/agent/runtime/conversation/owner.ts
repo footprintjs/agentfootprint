@@ -265,7 +265,7 @@ export function conversationOwner(
  * would ask the same question twice.
  *
  * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
- * by `seed.ts · historyForTurn` from the message the `'input'` middleware
+ * by `runtime/conversation/seedHistory.ts · historyForTurn` from the message the `'input'` middleware
  * chain let through; an entry built here, before that chain has run, is the
  * caller's raw text — which is what a continued turn served the model
  * through 9.112.1, while the record said the rewrite had happened.

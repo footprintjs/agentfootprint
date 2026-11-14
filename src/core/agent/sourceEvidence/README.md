@@ -31,7 +31,9 @@ relationship: the trusted producer owns that mapping.
 The small checkpoint index carries references and an omission count only.
 Existing host-kept checkpoints are structurally validated, not signed; accepting
 an attacker-supplied checkpoint is outside this trust contract. Normal and crash
-writers share `sourceEvidenceOf`; seed consumes inherited state once. An
+writers share `sourceEvidenceOf`; `seedIndex.ts` consumes inherited state once.
+`checkpointValidation.ts` detaches the already-validated checkpoint carriers
+while retaining the original legacy checkpoint object when none are present. An
 unmounted Agent refuses an imported carrier. Native pause refuses an absent or
 over-cap carrier rather than modifying its engine memento.
 
@@ -48,6 +50,15 @@ execution policy and tool middleware are not replayed from old arguments. The
 host admission callback owns current source-scope and privacy authority. Its
 projection may only narrow facts/fields and must preserve status, coverage and
 period. Receipt integrity/availability is checked again after that callback.
+
+`findingsRecovery.ts` changes only mounted batch-refusal teaching. Admission still
+requires unique executed tool-result IDs in the actual accepted request; neither
+old IDs nor receipt refs become witnesses. Fixed recovery data permits omitting
+unsupported previous entries. It names find/read only when the native current
+offer holds both registry readers, with no access/existence claim, subject lookup
+or source refresh. Unknown optional operation/scope filters are omitted rather
+than guessed. Unmounted refusal bytes and answer/resume terminal decisions
+remain unchanged. No domain values or untrusted IDs enter the recovery metadata.
 
 Find cursors contain bounded observation counts/positions, never withheld refs.
 New insertions adjust the position without skipping the old page. A byte-filled
