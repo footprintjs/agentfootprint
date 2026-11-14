@@ -192,13 +192,3 @@ each regex's worst case (`test/helpers/workCount.ts`, never a timer).
 - `linearText.ts` — `trimLeading` / `trimTrailing` / `trimBoth` over a
   `CharTest` (`isSlash`, `isHyphen`, `isRegExpWhitespace`, `anyOf`, `either`):
   the regex's answer in one pass.
-
-
-## Module contract: lib/
-
-the leaves every layer agrees on (layer L0): loose zero- or near-zero-import files + `claim/` + `context-contract/`; imports nothing in `src/` outside itself at run time. No feature sub-libraries — each one left for the top-level folder at its own layer (the retriever into `rag/retriever/`)
-
-
-## Module contract: lib/conventions.ts
-
-THE builder↔recorder protocol: SUBFLOW_IDS/STAGE_IDS (internal), INJECTION_KEYS/stageRole/milestoneFor (exported, Lens-facing)

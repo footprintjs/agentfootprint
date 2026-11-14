@@ -350,7 +350,7 @@ describe('.selfExplain() — inline mode', () => {
   it('EVERY name the pack can mount is reserved — count-asserted, so a new tool cannot be forgotten', () => {
     // 11 tools; the count is pinned deliberately. Adding one to the pack
     // without adding it here fails HERE, which is the reminder that a new
-    // toolpack tool also needs a change fragment and a scoped-rule/README update.
+    // toolpack tool also needs a CHANGELOG line and a CLAUDE.md update.
     expect(TRACE_TOOL_NAMES).toHaveLength(15);
     for (const reserved of TRACE_TOOL_NAMES) {
       const shadow = defineTool<{ x: string }, string>({
