@@ -271,6 +271,8 @@ The example checks a unique root and its impact, then checks two marked ancestor
 
 Read the result fields separately. Missing backward evidence can prevent a supported root. A gap confined to forward impact can leave an established recorded root intact while limiting what is known about its effects; report both facts rather than discarding the root or calling the impact complete.
 
+The host can set `cause: { includeBackward: true }` on `traceToolpack`, or pass `{ includeBackward: true }` to `traceCauseTools`, to include `finding.backward` in `root_cause`. It contains the public reader's already visited nodes, dependent-to-parent edges, proof references, confidence and gaps. Omitted or `false` preserves the existing response shape. `impact` and `attention_list` do not request this output. The flag grants no extra traversal, work allowance or deadline, and the existing character limit withholds the entire finding if it is too large. A displayed dependency does not establish semantic derivation or a physical cause. Incomplete evidence remains incomplete; a model cannot choose this host setting.
+
 Cause IDs are opaque, graph-scoped references. They are not the `runtimeStageId` accepted by `trace_node`. To descend, first call `inspect_tool_run({ toolCallId, cause: 'attention_list' })` or `inspect_subflow({ mount, cause: 'attention_list' })`; then send that child's returned ID back through the same entry point with `cause: 'root_cause'` or `'impact'` and `nodeId`. A child uses its own captured record, and does not inherit the parent's graph capability. Existing inner overview, key and variable questions keep their behavior when `cause` is omitted.
 
 ### Keep the query bounded
