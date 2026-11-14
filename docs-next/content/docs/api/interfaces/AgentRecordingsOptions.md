@@ -4,7 +4,7 @@ title: AgentRecordingsOptions
 
 # Interface: AgentRecordingsOptions
 
-Defined in: [src/core/agent/types.ts:140](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L140)
+Defined in: [src/core/agent/types/artifacts.ts:65](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L65)
 
 The object form of [AgentArtifactsOptions.recordings](/docs/api/interfaces/AgentArtifactsOptions#recordings).
 
@@ -14,7 +14,7 @@ The object form of [AgentArtifactsOptions.recordings](/docs/api/interfaces/Agent
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: [src/core/agent/types.ts:149](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L149)
+Defined in: [src/core/agent/types/artifacts.ts:74](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L74)
 
 The label every minted recording carries, verbatim.
 
@@ -29,7 +29,7 @@ would be overruling the name you chose.
 
 > `readonly` `optional` **packed?**: `boolean`
 
-Defined in: [src/core/agent/types.ts:162](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types.ts#L162)
+Defined in: [src/core/agent/types/artifacts.ts:87](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/types/artifacts.ts#L87)
 
 Mint the recording PACKED: every value it holds in more than one place is
 written once (`packRecording`, format `agentfootprint.recording.packed.v1`).
