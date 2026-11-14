@@ -1,5 +1,60 @@
-import { findingsInstruction } from './findings/instruction.js';
-import { findingsContextBytes } from './findings/context.js';
+import { livePort } from './builder/livePort.js';
+import { setSystem, type PromptPort } from './builder/prompt/system.js';
+import {
+  currentRecipeSource,
+  type RecipeSourcePort,
+  type DuplicateRegistrationPort,
+} from './builder/recipes/source.js';
+import { duplicateRegistration } from './builder/recipes/source.js';
+import { applyRecipe, type RecipePort } from './builder/recipes/apply.js';
+import { setRunConfiguration, type RunConfigurationPort } from './builder/settings/configure.js';
+import { setMaxIterations, type IterationLimitPort } from './builder/settings/iterations.js';
+import { setWindowStrategy, type WindowConfigurationPort } from './builder/window/configure.js';
+import { setCompaction } from './builder/window/configure.js';
+import {
+  assertDistinctSummarizer,
+  type SummarizerIdentityPort,
+  type WindowConflictPort,
+} from './builder/window/guards.js';
+import { assertWindowNotSet } from './builder/window/guards.js';
+import { setThinkingBudget, type ThinkingBudgetPort } from './builder/thinking/configure.js';
+import { registerTool, type ToolRegistrationPort } from './builder/tools/register.js';
+import { setToolProvider, type ToolProviderPort } from './builder/tools/provider.js';
+import { configureAct, type ActPort } from './builder/act/configure.js';
+import { registerInjection, type InjectionPort } from './builder/injections/register.js';
+import { mountSkillGraph, type GraphMountPort } from './builder/graph/mount.js';
+import { configureMaps, type MapsPort, type MapsPlanPort } from './builder/maps/configure.js';
+import { resolveMapsPlan } from './builder/maps/configure.js';
+import { configureClaims, type ClaimsPort } from './builder/claims/configure.js';
+import { registerMemory, type MemoryPort } from './builder/memory/register.js';
+import { configureEvidence, type EvidencePort } from './builder/evidence/configure.js';
+import { configureAnswerLimits, type AnswerLimitsPort } from './builder/answer/limits.js';
+import { configureScriptTravel, type ScriptTravelPort } from './builder/scripts/configure.js';
+import {
+  configureInputsLayer,
+  type InputsLayerPort,
+  type ResultsLayerPort,
+  type AnswerLayerPort,
+} from './builder/honesty/layers.js';
+import { configureResultsLayer } from './builder/honesty/layers.js';
+import { configureAnswerLayer } from './builder/honesty/layers.js';
+import { configureTime, type TimePort } from './builder/time/configure.js';
+import { configureSkillToolScope, type SkillToolScopePort } from './builder/skills/scope.js';
+import { configureOutputSchema, type OutputSchemaPort } from './builder/output/schema.js';
+import { configureOutputFallback, type OutputFallbackPort } from './builder/output/fallback.js';
+import { assertOutputFallbackCoherent } from './builder/output/fallback.js';
+import {
+  resolveOutputEnforcement,
+  type OutputEnforcementPort,
+} from './builder/output/enforcement.js';
+import { configureFindings, type FindingsPort } from './builder/findings/configure.js';
+import { configureToolChoice, type ToolChoicePort } from './builder/toolChoice/configure.js';
+import { configureOntology, type OntologyPort } from './builder/ontology/configure.js';
+import { assertToolMiddleware } from './builder/middleware/guards.js';
+import { assertMiddleware } from './builder/middleware/guards.js';
+import { configureCheckIn, type CheckInPort } from './builder/consent/configure.js';
+import { configureSelfExplain, type SelfExplainPort } from './builder/selfExplain/configure.js';
+import { assembleAgent, type AssemblyPort } from './builder/assembly/build.js';
 /**
  * AgentBuilder — fluent builder for Agent. Extracted from Agent.ts in
  * v2.11.2 as part of the core/agent decomposition. Same surface, same
@@ -9,7 +64,8 @@ import { findingsContextBytes } from './findings/context.js';
  * `AgentBuilder` from `'../core/Agent.js'` continue to work.
  */
 
-import { isDevMode } from 'footprintjs';
+import type { SkillGraphOptions } from './builder/graph/options.js';
+export type { SkillGraphOptions } from './builder/graph/options.js';
 import {
   resolveAnswerValidation,
   type AnswerValidationOptions,
@@ -17,197 +73,49 @@ import {
 } from '../../answer-validation/index.js';
 
 import {
-  buildDefaultInstruction,
   type OutputSchemaOptions,
   type OutputSchemaParser,
   type OutputSchemaStrategy,
 } from '../../answer-validation/outputSchema.js';
-import {
-  buildSchemaTool,
-  resolveJsonSchema,
-  SCHEMA_TOOL_NAME,
-  type ResolvedOutputEnforcement,
-} from './outputEnforcement.js';
-import { nativeOutputFormat, NativeOutputSchemaError } from './nativeOutputFormat.js';
+import { type ResolvedOutputEnforcement } from './outputEnforcement.js';
 import {
   resolveNegativeClaims,
-  assertNegativeClaimsTools,
-  negativeClaimsSchema,
-  negativeClaimsInstruction,
   type NegativeClaimsOptions,
   type ResolvedNegativeClaims,
 } from './negativeClaims/config.js';
-import { resolveEvidenceGate } from './evidence/gate.js';
-import { scopeToolsToActiveSkill } from './toolsFromActiveSkill.js';
 import type { NamesAndNumbersOptions, ResolvedEvidenceGate } from './evidence/types.js';
-import {
-  validateCannedAgainstSchema,
-  type OutputFallbackFn,
-  type OutputFallbackOptions,
-  type ResolvedOutputFallback,
-} from '../outputFallback.js';
+import { type OutputFallbackOptions, type ResolvedOutputFallback } from '../outputFallback.js';
 import type { CachePolicy, CacheStrategy } from '../../cache/types.js';
 import type { EngagementPlan, MapsOptions } from '../../maps/engagement/types.js';
 import type { Injection, InjectionContext } from '../../injection-engine/types.js';
 import {
-  SKILL_GRAPH_DEFERRED_CONTRACT_KEY,
   type CursorMove,
-  type DeferredBodyContract,
   type EntryScoring,
   type TurnRoutingPlan,
 } from '../../injection-engine/skillGraph.js';
-import {
-  foldSkillBrains,
-  type EscalationPolicy,
-  type FoldedSkillBrains,
-  type ProviderChoice,
-} from './skillBrains.js';
-import { checkThinkingSupport } from './thinkingSupport.js';
-import {
-  defineMenuHint,
-  MENU_HINT_METADATA_KEY,
-} from '../../injection-engine/factories/defineMenuHint.js';
-import {
-  defineStepsHint,
-  STEPS_HINT_METADATA_KEY,
-} from '../../injection-engine/factories/defineStepsHint.js';
-import { foldStepPlans } from '../../injection-engine/skillSteps.js';
-import { checkSkillContracts, skillToolNames } from '../../injection-engine/skillContract.js';
-import { formatCheckup } from '../../injection-engine/skillGraphCheckup.js';
-import { checkArtifactVocabularies } from '../../injection-engine/skillVocabulary.js';
-import { toolOnlyDeliveryRefusal } from '../../injection-engine/skillBodyDelivery.js';
-import { defineInstruction } from '../../injection-engine/factories/defineInstruction.js';
-import { messagesToolRoleRefusal } from '../../injection-engine/messagesSlotRefusal.js';
-import { READS_ENTRY_SCORES_METADATA_KEY } from '../../injection-engine/factories/defineRelevanceHint.js';
-import { skillScopedToolsTarget } from '../../tools/skillScopedTools.js';
 import type { MemoryDefinition } from '../../memory/define.types.js';
 import type { ReliabilityConfig } from '../../reliability/types.js';
 import type { ThinkingHandler } from '../../thinking/types.js';
 import type { Tool, ToolRegistryEntry } from '../../tools/tools.js';
-import { answerLayerArm, answerLayerFromOptions } from './assessment/answerLayerOptions.js';
 import type { StandingLineWhen } from './assessment/compose.js';
 import type { CheckInBuilderOptions } from '../checkin.js';
 import type { ToolProvider } from '../../tools/toolProvider.js';
 import type { Watcher } from './watch.js';
-import { defaultCommentaryTemplates } from '../../recorders/observability/commentary/commentaryTemplates.js';
-import { defaultStatusTemplates } from '../../recorders/observability/status/statusTemplates.js';
 import type { SelfExplainOptions } from '../../trace-toolpack/selfExplain.js';
-import { requireSelfExplain } from './selfExplainPort.js';
-import { servingConversationOf } from './servingConversation.js';
-import { innerRunsOf, mergeInnerRuns, type InnerRunLookup } from '../innerRunRecords.js';
-import { TRACE_TOOL_NAMES } from '../../lib/traceToolNames.js';
 import { Agent } from '../Agent.js';
-import { buildSkillGraphDeclared, type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
+import { type SkillGraphDeclaredMap } from './skillGraphDeclared.js';
 import type { AgentOptions, RunConfigFn } from './types.js';
-import { FINDINGS_INSTRUCTION_ID } from './findings/reserved.js';
-import { readInputsLayerOption } from './honesty/armed.js';
-import { readTimeOptions, type TimeOptions } from '../../time/clock.js';
-import { ONTOLOGY_INSTRUCTION, ONTOLOGY_INSTRUCTION_ID } from '../../ontology/instruction.js';
+import { type TimeOptions } from '../../time/clock.js';
 import type { CompactionOptions } from './window/types.js';
 import type { WindowStrategy } from './window/strategy.js';
 import type { LLMProvider } from '../../provider-contract/types.js';
 import type { MessageMiddleware, ToolMiddleware } from './middleware/types.js';
 import { admitAroundTurn } from './aroundTurn/guards.js';
 import type { AroundTurn } from './aroundTurn/types.js';
-import { resolveAct, type ActOptions } from './act.js';
-import { resolveCompactionOptions } from './window/options.js';
-import { summarizeOldest } from './window/strategies/summarizeOldest.js';
-import { assertAgentRecipe } from '../../recipes/defineAgentRecipe.js';
-import { resolveScriptTravel } from './scripts/attachment.js';
+import { type ActOptions } from './act.js';
 import type { ResolvedScriptTravel, ScriptTravelOptions } from './scripts/types.js';
-import { scriptOf } from '../../tools/script.js';
-import {
-  asyncConfigureRefusal,
-  duplicateRecipeRefusal,
-  duplicateRegistrationRefusal,
-  recursiveRecipeRefusal,
-  resolveRecipeConflictPolicy,
-} from '../../recipes/apply.js';
-import { LOCAL_SOURCE, type RecipeSource } from '../../recipes/provenance.js';
+import { type RecipeSource } from '../../recipes/provenance.js';
 import type { AgentRecipe, AppliedRecipe, RecipeOptions } from '../../recipes/types.js';
-
-/**
- * Mount options for `.skillGraph(graph, options)` (SG-C, 9.17.0; brains
- * SG-D, 9.19.0). Every field is zero-cost when absent — an agent that passes
- * none is byte-identical in behavior AND events to one built before the
- * options existed.
- */
-export interface SkillGraphOptions {
-  /**
-   * How much routing authority the model has. Default `'assist'` — today,
-   * always: any REACHABLE `read_skill` pick is admitted, and a pick off an
-   * offered menu is stamped on the record (`cursorMove.declinedOffer`)
-   * rather than refused.
-   *   • `'guard'` — a routing pick is admitted only while the turn's menu is
-   *     outstanding AND names an offered id (the framework declared the
-   *     ambiguity; the model resolves exactly that). Everything else gets a
-   *     teaching refusal + `skill.rejected { posture: 'guard' }`.
-   *   • `'rails'` — the model never routes: turn starts resolve by rule or
-   *     scorer, transitions by declared routes. A menu verdict then proceeds
-   *     on the base prompt with `turn_routed { by: 'none' }` recorded — the
-   *     honest cost of rails without a resolver. OPEN skills
-   *     (`.selfExplain()`, `.skill()` beside the graph) stay admitted from
-   *     anywhere under every posture.
-   *
-   * WHAT A POSTURE GOVERNS, EXACTLY: the MODEL's routing door — a `read_skill`
-   * hop — and nothing else. It is NOT a lock on the cursor. Two other doors
-   * stay open under all three postures, deliberately:
-   *   • OPEN skills, above — the debugging door.
-   *   • A `propose-transition` tool effect. A proposal comes from a TOOL —
-   *     deterministic code you shipped, not the model's guess — so it is
-   *     framework-tier evidence: admitted under `assist`, `guard` AND
-   *     `rails`, checked only against the graph's own reachability law, and
-   *     recorded as `cursorMove.by: 'tool-proposal'` (the resolver ranks it
-   *     BETWEEN a declared edge and a model pick, for that reason).
-   * So `'rails'` means "the MODEL never routes", never "nothing but my
-   * declared edges routes": a tool of yours that proposes IS a route you
-   * declared, in code instead of in the graph. To close that door, don't
-   * ship the effect — the posture will not second-guess your own code.
-   */
-  readonly strictness?: 'assist' | 'guard' | 'rails';
-  /**
-   * What the cursor spans. Default `'turn'` — today's per-run cursor,
-   * unchanged. `'conversation'`: the turn's final cursor rides the
-   * conversation checkpoint (`agent.checkpoint()` / the crash carrier) and
-   * becomes the DEFAULT entry when that conversation is continued
-   * (`followUp()` / `run({ continueFrom })`) — a sticky default the new
-   * message can still decisively beat, never a lock. Without `continueFrom`
-   * nothing carries: a bare second `run()` starts cold exactly as today —
-   * this option changes what a CONTINUED conversation defaults to; it does
-   * not invent persistence.
-   */
-  readonly continuity?: 'turn' | 'conversation';
-  /**
-   * Per-skill BRAINS (9.19.0) — "the cursor picks the brain": while the
-   * graph's cursor is on a named skill, `callLLM` runs on its declared
-   * provider/model instead of the agent's. Keys are skill ids; an id that
-   * is not a graph node is refused at build, as is a foreign provider with
-   * no model (the agent's model id belongs to another vendor's namespace).
-   * The other declaration home is `defineSkill({ provider, model })` — the
-   * same id in both homes with different choices is refused naming both.
-   */
-  readonly providers?: Readonly<Record<string, ProviderChoice>>;
-  /**
-   * Escalate-on-evidence (9.19.0): `afterRefusals` recorded gate refusals
-   * (`skill.rejected` — reachability, posture, OR a self-call: all three
-   * refusal arms count) in ONE turn flip the rest
-   * of the turn onto this brain — `skill.escalated` goes on the record at
-   * the flip, and the next turn's seed de-escalates. Never on vibes: only
-   * real refusals count.
-   */
-  readonly escalation?: EscalationPolicy;
-  /**
-   * The tier-3 DECIDER (9.19.0): an out-of-band constrained pick over an
-   * outstanding turn-start menu ∪ {stay} (the `llmClassifier` enum
-   * machinery), resolved before the loop — `turn_routed { by: 'decider' }`.
-   * The sanctioned resolver for `'rails'` menus: constrained, off-loop, and
-   * recorded, i.e. a scorer in posture terms. Needs a graph that runs the
-   * turn-start cascade (a classifier, or `continuity: 'conversation'`) —
-   * refused at build otherwise, because no other graph ever has a menu for
-   * it to resolve.
-   */
-  readonly decider?: ProviderChoice;
-}
 
 /**
  * Fluent builder. `tool()` accepts any Tool<TArgs, TResult> and registers
@@ -530,35 +438,62 @@ export class AgentBuilder {
    *   - `{ until }` — conditional invalidation (e.g., flush after iter 5).
    */
   system(prompt: string, options?: { readonly cache?: CachePolicy }): this {
-    if (this.systemPromptSet) {
-      throw new Error(
-        'AgentBuilder.system: already set. Each agent has one base system prompt — a second ' +
-          'call used to REPLACE the first silently, so the instructions you wrote first were ' +
-          'never sent and nothing said so. For a second block of always-on system content, ' +
-          'add it as an injection: .steering(defineSteering({ id, content })) composes into ' +
-          'the same slot, is visible in the trace as its own entry, and can be cached ' +
-          'separately. To decide the prompt PER RUN, use .configure(({ defaults }) => ' +
-          '({ instructions: … })). To build one string from parts, join them yourself and ' +
-          'pass the result once.',
-      );
-    }
-    this.systemPromptSet = true;
-    this.systemPromptValue = prompt;
-    if (options?.cache !== undefined) {
-      this.systemPromptCachePolicy = options.cache;
-      this.systemPromptCacheExplicit = true;
-    }
-    return this;
+    return setSystem(
+      livePort<PromptPort>({
+        systemPromptSet: {
+          get: () => this.systemPromptSet,
+          set: (value) => {
+            this.systemPromptSet = value;
+          },
+        },
+        systemPromptValue: {
+          get: () => this.systemPromptValue,
+          set: (value) => {
+            this.systemPromptValue = value;
+          },
+        },
+        systemPromptCachePolicy: {
+          get: () => this.systemPromptCachePolicy,
+          set: (value) => {
+            this.systemPromptCachePolicy = value;
+          },
+        },
+        systemPromptCacheExplicit: {
+          get: () => this.systemPromptCacheExplicit,
+          set: (value) => {
+            this.systemPromptCacheExplicit = value;
+          },
+        },
+      }),
+      prompt,
+      options,
+      this,
+    ) as this;
   }
 
   tool<TArgs, TResult>(tool: Tool<TArgs, TResult>): this {
-    const name = tool.schema.name;
-    if (this.registry.some((e) => e.name === name)) {
-      throw new Error(this.duplicateRefusal('tool name', name, this.toolSources, 'Agent.tool()'));
-    }
-    this.registry.push({ name, tool: tool as unknown as Tool });
-    this.toolSources.set(name, this.currentSource());
-    return this;
+    return registerTool(
+      livePort<ToolRegistrationPort>({
+        registry: { get: () => this.registry },
+        duplicateRefusal: {
+          get: () => {
+            const method = this.duplicateRefusal;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        toolSources: { get: () => this.toolSources },
+        currentSource: {
+          get: () => {
+            const method = this.currentSource;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+      }),
+      tool,
+      this,
+    ) as this;
   }
 
   /**
@@ -567,9 +502,9 @@ export class AgentBuilder {
    * the stack cannot rewrite what an earlier registration recorded.
    */
   private currentSource(): RecipeSource {
-    return this.recipeStack.length === 0
-      ? LOCAL_SOURCE
-      : { kind: 'recipe', stack: [...this.recipeStack] };
+    return currentRecipeSource(
+      livePort<RecipeSourcePort>({ recipeStack: { get: () => this.recipeStack } }),
+    );
   }
 
   /**
@@ -587,14 +522,21 @@ export class AgentBuilder {
     sources: ReadonlyMap<string, RecipeSource>,
     callSite: string,
   ): string {
-    const existing = sources.get(name);
-    const incoming = this.currentSource();
-    if (existing?.kind === 'local' && incoming.kind === 'local') {
-      return what === 'tool name'
-        ? `Agent.tool(): duplicate tool name '${name}'`
-        : `Agent.injection(): duplicate id '${name}'`;
-    }
-    return duplicateRegistrationRefusal({ what, name, existing, incoming, callSite });
+    return duplicateRegistration(
+      livePort<DuplicateRegistrationPort>({
+        currentSource: {
+          get: () => {
+            const method = this.currentSource;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+      }),
+      what,
+      name,
+      sources,
+      callSite,
+    );
   }
 
   /**
@@ -631,56 +573,16 @@ export class AgentBuilder {
    * ```
    */
   recipe(recipe: AgentRecipe, options?: RecipeOptions): this {
-    assertAgentRecipe(recipe, 'AgentBuilder.recipe');
-    // Resolved before anything is applied: a policy this library does not have
-    // must not half-apply a composition before it says so.
-    resolveRecipeConflictPolicy(options?.conflict, 'AgentBuilder.recipe');
-    const applied: AppliedRecipe = { id: recipe.id, version: recipe.version };
-    // TWO different facts, two different refusals. On the STACK means the
-    // composition is its own ancestor and `configure` would recurse forever; on
-    // the LIST means the chain simply names one composition twice. Telling an
-    // author their recursion is a duplicate sends them to the wrong line.
-    const applying = this.recipeStack.find((r) => r.id === applied.id);
-    if (applying) {
-      throw new Error(
-        recursiveRecipeRefusal({
-          stack: [...this.recipeStack],
-          incoming: applied,
-          callSite: 'AgentBuilder.recipe',
-        }),
-      );
-    }
-    const already = this.appliedRecipeList.find((r) => r.id === applied.id);
-    if (already) {
-      throw new Error(
-        duplicateRecipeRefusal({
-          existing: already,
-          incoming: applied,
-          callSite: 'AgentBuilder.recipe',
-        }),
-      );
-    }
-    this.recipeStack.push(applied);
-    try {
-      const returned: unknown = recipe.configure(this);
-      // `build()` is synchronous, so nothing would ever await this. Refused by
-      // name rather than left to land on an agent that is already built.
-      if (typeof (returned as { then?: unknown } | undefined)?.then === 'function') {
-        throw new Error(asyncConfigureRefusal(applied, 'AgentBuilder.recipe'));
-      }
-    } finally {
-      // `finally`, not the happy path: a refusal raised inside `configure`
-      // (a duplicate tool, say) must not leave the stack claiming a recipe is
-      // still applying — the next registration would be attributed to it.
-      this.recipeStack.pop();
-    }
-    // The manifest row is recorded only once `configure` has run CLEANLY. A
-    // recipe whose application was refused half-way has not produced this
-    // agent, and a row claiming it did would be the manifest asserting
-    // something that did not happen. (Recursion is caught by the stack above,
-    // so nothing depends on the row being written early.)
-    this.appliedRecipeList.push(applied);
-    return this;
+    return applyRecipe(
+      livePort<RecipePort>({
+        recipeStack: { get: () => this.recipeStack },
+        appliedRecipeList: { get: () => this.appliedRecipeList },
+      }),
+      recipe,
+      options,
+      () => recipe.configure(this),
+      this,
+    ) as this;
   }
 
   /**
@@ -729,13 +631,18 @@ export class AgentBuilder {
    *     .build();
    */
   toolProvider(provider: ToolProvider): this {
-    if (this.toolProviderRef) {
-      throw new Error(
-        'AgentBuilder.toolProvider: already set. Each agent has at most one external ToolProvider.',
-      );
-    }
-    this.toolProviderRef = provider;
-    return this;
+    return setToolProvider(
+      livePort<ToolProviderPort>({
+        toolProviderRef: {
+          get: () => this.toolProviderRef,
+          set: (value) => {
+            this.toolProviderRef = value;
+          },
+        },
+      }),
+      provider,
+      this,
+    ) as this;
   }
 
   /**
@@ -782,20 +689,18 @@ export class AgentBuilder {
    *     .build();
    */
   configure(fn: RunConfigFn): this {
-    if (this.runConfigFn) {
-      throw new Error(
-        'AgentBuilder.configure: already set. One resolver per agent — a second one would ' +
-          'silently override the first.',
-      );
-    }
-    if (typeof fn !== 'function') {
-      throw new Error(
-        `AgentBuilder.configure: expected a function (ctx) => ({ model?, instructions? }), got ` +
-          `${typeof fn}.`,
-      );
-    }
-    this.runConfigFn = fn;
-    return this;
+    return setRunConfiguration(
+      livePort<RunConfigurationPort>({
+        runConfigFn: {
+          get: () => this.runConfigFn,
+          set: (value) => {
+            this.runConfigFn = value;
+          },
+        },
+      }),
+      fn,
+      this,
+    ) as this;
   }
 
   /**
@@ -849,33 +754,53 @@ export class AgentBuilder {
    *   takes a `WindowStrategy`. Unknown keys throw.
    */
   act(options: ActOptions): this {
-    if (this.actCalled) {
-      throw new Error(
-        'AgentBuilder.act: already called. One posture block per agent — a second would put ' +
-          'the answer to "what does this agent do at each moment of its loop?" in two places, ' +
-          'with the later one silently winning. To ADD one rule to an agent that already has ' +
-          'a posture, use the individual door for that moment (.toolMiddleware(), ' +
-          '.messageMiddleware(), .window()); they compose incrementally by design.',
-      );
-    }
-    // Resolved BEFORE anything is attached: a bundle with a bad key must
-    // leave the builder exactly as it found it, not half-configured. Every
-    // entry is validated inside `resolveAct`, and the window — the one key
-    // whose validation lives on its own door — goes first for the same
-    // reason.
-    const resolved = resolveAct(options);
-    if (resolved.window !== undefined) {
-      this.assertNoWindowStrategy('act');
-      // Noted BEFORE delegating: `.window()` is the setter both doors share,
-      // and the refusal a later call meets should name the door this caller
-      // actually wrote.
-      this.noteWindowStrategyDoor('.act({ window })');
-      this.window(resolved.window);
-    }
-    this.actCalled = true;
-    if (resolved.message.length > 0) this.messageMiddleware(...resolved.message);
-    if (resolved.tool.length > 0) this.toolMiddleware(...resolved.tool);
-    return this;
+    return configureAct(
+      livePort<ActPort>({
+        actCalled: {
+          get: () => this.actCalled,
+          set: (value) => {
+            this.actCalled = value;
+          },
+        },
+        assertNoWindowStrategy: {
+          get: () => {
+            const method = this.assertNoWindowStrategy;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        noteWindowStrategyDoor: {
+          get: () => {
+            const method = this.noteWindowStrategyDoor;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        window: {
+          get: () => {
+            const method = this.window;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        messageMiddleware: {
+          get: () => {
+            const method = this.messageMiddleware;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        toolMiddleware: {
+          get: () => {
+            const method = this.toolMiddleware;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -922,27 +847,45 @@ export class AgentBuilder {
    * ```
    */
   window(strategy: WindowStrategy): this {
-    this.assertNoWindowStrategy('window');
-    if (
-      strategy === null ||
-      typeof strategy !== 'object' ||
-      typeof strategy.plan !== 'function' ||
-      typeof strategy.name !== 'string' ||
-      strategy.name.length === 0
-    ) {
-      throw new Error(
-        `AgentBuilder.window: expected a WindowStrategy — an object with a non-empty \`name\` ` +
-          `and a \`plan(input)\` method — got ${typeof strategy}. The shipped ones are ` +
-          `summarizeOldest({ ... }), slidingWindow({ ... }) and tokenBudget({ ... }); call the ` +
-          `factory, do not pass it.`,
-      );
-    }
-    this.assertSummarizerIsNotTheAgentItself(strategy.billing, 'AgentBuilder.window');
-    this.windowStrategyValue = strategy;
-    // `.act({ window })` delegates here, and its own door was noted first —
-    // do not overwrite a more specific attribution with this generic one.
-    this.noteWindowStrategyDoor(this.windowStrategyDoor ?? '.window()');
-    return this;
+    return setWindowStrategy(
+      livePort<WindowConfigurationPort>({
+        assertNoWindowStrategy: {
+          get: () => {
+            const method = this.assertNoWindowStrategy;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        assertSummarizerIsNotTheAgentItself: {
+          get: () => {
+            const method = this.assertSummarizerIsNotTheAgentItself;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        windowStrategyValue: {
+          get: () => this.windowStrategyValue,
+          set: (value) => {
+            this.windowStrategyValue = value;
+          },
+        },
+        noteWindowStrategyDoor: {
+          get: () => {
+            const method = this.noteWindowStrategyDoor;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        windowStrategyDoor: {
+          get: () => this.windowStrategyDoor,
+          set: (value) => {
+            this.windowStrategyDoor = value;
+          },
+        },
+      }),
+      strategy,
+      this,
+    ) as this;
   }
 
   /**
@@ -972,20 +915,10 @@ export class AgentBuilder {
     billing: { readonly provider: LLMProvider; readonly model: string } | undefined,
     label: string,
   ): void {
-    if (billing === undefined) return;
-    if (billing.provider !== this.opts.provider) return;
-    if (billing.model !== this.opts.model) return;
-    throw new Error(
-      `${label}: the summarizer is the agent's own provider INSTANCE and the agent's own model ` +
-        `('${billing.model}'). Those two calls now look identical and are not: the agent's call ` +
-        `runs through reliability retries, any withRetry/withFallback/withCircuitBreaker ` +
-        `decorator and the cache; the summarizer's call runs through none of them — one ` +
-        `attempt, no fallback, no cache. A difference nobody typed is the kind this library ` +
-        `refuses.\n` +
-        `Fix, one word: give the summarizer its OWN instance — \`anthropic()\` written again ` +
-        `(as \`summarizer\` on a window strategy, as \`llm\` on a summarize memory) rather than ` +
-        `the variable you passed to Agent.create. That also stops the two roles sharing ` +
-        `per-instance state. Or name a different (usually cheaper) model.`,
+    assertDistinctSummarizer(
+      livePort<SummarizerIdentityPort>({ opts: { get: () => this.opts } }),
+      billing,
+      label,
     );
   }
 
@@ -1032,18 +965,39 @@ export class AgentBuilder {
    * ```
    */
   compaction(options: CompactionOptions): this {
-    this.assertNoWindowStrategy('compaction');
-    // Validated here so the error names the door the caller actually used;
-    // `summarizeOldest` re-runs the SAME validator under its own label, so the
-    // two doors can never drift into accepting different things.
-    const resolved = resolveCompactionOptions(options, 'AgentBuilder.compaction');
-    this.assertSummarizerIsNotTheAgentItself(
-      { provider: resolved.summarizer, model: resolved.model },
-      'AgentBuilder.compaction',
-    );
-    this.windowStrategyValue = summarizeOldest(options);
-    this.noteWindowStrategyDoor('.compaction()');
-    return this;
+    return setCompaction(
+      livePort<WindowConfigurationPort>({
+        assertNoWindowStrategy: {
+          get: () => {
+            const method = this.assertNoWindowStrategy;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        assertSummarizerIsNotTheAgentItself: {
+          get: () => {
+            const method = this.assertSummarizerIsNotTheAgentItself;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        windowStrategyValue: {
+          get: () => this.windowStrategyValue,
+          set: (value) => {
+            this.windowStrategyValue = value;
+          },
+        },
+        noteWindowStrategyDoor: {
+          get: () => {
+            const method = this.noteWindowStrategyDoor;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -1061,30 +1015,16 @@ export class AgentBuilder {
    * moment it becomes true, and all three sentences read it.
    */
   private assertNoWindowStrategy(door: 'window' | 'compaction' | 'act'): void {
-    const existing = this.windowStrategyValue;
-    if (existing === undefined) return;
-    const setBy = this.windowStrategyDoor ?? '.window()';
-    const law =
-      'One window strategy per agent, whichever door set it — a second would silently ' +
-      'override the first, and a window policy that quietly changed is a policy you cannot ' +
-      'audit.';
-    if (door === 'act') {
-      throw new Error(
-        `AgentBuilder.act: this agent already has a window strategy ('${existing.name}'), set ` +
-          `by ${setBy}. ${law} Drop the \`window\` key here, or remove the ${setBy} call.`,
-      );
-    }
-    if (door === 'compaction') {
-      throw new Error(
-        `AgentBuilder.compaction: this agent already has a window strategy ` +
-          `('${existing.name}'), set by ${setBy}. ${law} \`.compaction()\`, \`.window()\` and ` +
-          '`.act({ window })` are three doors into the same setting.',
-      );
-    }
-    throw new Error(
-      `AgentBuilder.window: this agent already has a window strategy ('${existing.name}'), set ` +
-        `by ${setBy}. ${law} \`.compaction()\` is this same door with summarizeOldest already ` +
-        'in it, and `.act({ window })` is it again inside the posture block.',
+    assertWindowNotSet(
+      livePort<Readonly<WindowConflictPort>>({
+        windowStrategyValue: {
+          get: () => this.windowStrategyValue,
+        },
+        windowStrategyDoor: {
+          get: () => this.windowStrategyDoor,
+        },
+      }),
+      door,
     );
   }
 
@@ -1102,11 +1042,18 @@ export class AgentBuilder {
    * (`clampIterations`'s upper bound).
    */
   maxIterations(n: number): this {
-    if (!Number.isInteger(n) || n <= 0) {
-      throw new Error(`AgentBuilder.maxIterations: expected a positive integer, got ${n}.`);
-    }
-    this.maxIterationsOverride = n;
-    return this;
+    return setMaxIterations(
+      livePort<IterationLimitPort>({
+        maxIterationsOverride: {
+          get: () => this.maxIterationsOverride,
+          set: (value) => {
+            this.maxIterationsOverride = value;
+          },
+        },
+      }),
+      n,
+      this,
+    ) as this;
   }
 
   /**
@@ -1200,25 +1147,28 @@ export class AgentBuilder {
    * checks the named factories make.
    */
   injection(injection: Injection): this {
-    if (this.injectionList.some((i) => i.id === injection.id)) {
-      throw new Error(
-        this.duplicateRefusal(
-          'injection id',
-          injection.id,
-          this.injectionSources,
-          'Agent.injection()',
-        ),
-      );
-    }
-    for (const msg of injection.inject?.messages ?? []) {
-      if (msg.role === 'tool') {
-        throw new Error(messagesToolRoleRefusal(`Agent.injection('${injection.id}')`));
-      }
-    }
-    assertReadSkillActivation(injection);
-    this.injectionList.push(injection);
-    this.injectionSources.set(injection.id, this.currentSource());
-    return this;
+    return registerInjection(
+      livePort<InjectionPort>({
+        injectionList: { get: () => this.injectionList },
+        duplicateRefusal: {
+          get: () => {
+            const method = this.duplicateRefusal;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        injectionSources: { get: () => this.injectionSources },
+        currentSource: {
+          get: () => {
+            const method = this.currentSource;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+      }),
+      injection,
+      this,
+    ) as this;
   }
 
   /**
@@ -1334,164 +1284,93 @@ export class AgentBuilder {
     },
     options?: SkillGraphOptions,
   ): this {
-    // Classic ReAct caches the system-prompt and tools slots after turn 1 (the
-    // Context selector's `includeStatic`), while the injection engine — the loop
-    // target — keeps running every iteration. A graph mounted on that mode
-    // ADVANCES: routes fire, the cursor moves, `context.evaluated` honestly
-    // reports skills activating — and none of it ever reaches the model,
-    // because the slots that would carry the activated body and unlocked tools
-    // were composed once and never again. Config that lies. Refused at build
-    // (9.16.0), like `.selfExplain()` under classic and for the same caching
-    // reason; `reactMode` is fixed at `Agent.create`, so this check is
-    // order-safe wherever `.skillGraph()` appears in the chain.
-    if (this.opts.reactMode === 'classic') {
-      throw new Error(
-        "AgentBuilder.skillGraph: reactMode 'classic' cannot honor a skill graph. " +
-          'Classic caches the system-prompt and tools slots after turn 1, so a route-driven ' +
-          "activation moves the cursor and shows up in the trace but the activated skill's " +
-          'body and tools never reach the model — the run would record routing that the wire ' +
-          "never saw. Use the default 'dynamic' mode (or 'dynamic-grouped'), which recomposes " +
-          'the slots every iteration. Classic remains fine WITHOUT a graph: a fixed system ' +
-          'prompt, fixed tools, and always-on steering all compose on turn 1 and stay valid.',
-      );
-    }
-    // One agent routes with ONE graph. The second call used to replace the cursor,
-    // the reachable set and the entry scorer while the FIRST graph's skills stayed
-    // registered and active — so graph 1's route targets could never activate again
-    // (their ids are absent from graph 2's reachable set, so even a model pick is
-    // refused) and only its unconditional entries survived, as always-on bodies with
-    // dead wiring. Nothing about that is recoverable at runtime, so it is refused
-    // here (8.4.0).
-    if (this.skillGraphNextSkill !== undefined) {
-      throw new Error(
-        'Agent.skillGraph(): a skill graph is already mounted, and one agent routes with ' +
-          'ONE graph. The second call replaces the cursor, the reachable set and the entry ' +
-          "scorer — the first graph's skills stay registered and active, so its own routes " +
-          'could never fire again. Merge the two graphs into one skillGraph(...) ' +
-          'declaration, or build one agent per graph.',
-      );
-    }
-    for (const skill of graph.skills) this.injection(skill);
-    // Capture the cursor resolver so the Injection Engine can `from`-gate route
-    // triggers against the persisted `currentSkillId`. `nextSkill` is REQUIRED
-    // (every `skillGraph().build()` supplies it). Pass the full `build()` result
-    // here; for a bare skill list use `.skills({ list })` instead.
-    this.skillGraphNextSkill = graph.nextSkill;
-    // The reachable-set resolver gates read_skill to in-graph jumps (optional for
-    // forward-compat with graphs built before reachableSkills existed).
-    this.skillGraphReachable = graph.reachableSkills;
-    // The relevance entry scorer (present only with `.entryByRelevance()`).
-    this.skillGraphScoreEntries = graph.scoreEntries;
-    // Which skills the graph WIRES (any declared incoming edge, deterministic or
-    // bare). The gate uses it to leave a bare model edge `A → M` from-gated while
-    // opening skills the graph never mentions.
-    this.skillGraphEdgeTargets = (graph.edges ?? []).map((e) => e.to);
-    // The clause-reporting resolver (8.5.0) and the one fact the gate's refusal
-    // needs beyond the reachable set: is this a tree?
-    this.skillGraphExplainNextSkill = graph.explainNextSkill;
-    // The suppression reporter (8.15.0) — what the cursor law kept off the wire.
-    this.skillGraphSupersededEntries = graph.supersededEntries;
-    this.skillGraphIsTree = (graph.nodes ?? []).some((n) => n.kind === 'predicate');
-    // The node-id set (9.19.0) — the brains check-up's map. Captured on every
-    // mount; undefined when the graph object carries no `nodes` (a
-    // structurally-typed graph), in which case declaring brains is refused
-    // at build rather than validated against a map that does not exist.
-    if (graph.nodes !== undefined) {
-      this.skillGraphNodeIds = new Set(
-        graph.nodes.flatMap((n) => (typeof n.id === 'string' ? [n.id] : [])),
-      );
-    }
-    // The DECLARED map (9.50.0) — nodes + edges verbatim, descriptions from the
-    // compiled skills. Projected ONCE here (the graph object is in hand only at
-    // mount) so `createExecutor` can file it per run without holding the graph.
-    this.skillGraphDeclared = buildSkillGraphDeclared(graph, graph.skills);
-    // The brains options (9.19.0) — captured verbatim; folded + validated at
-    // build(), where the final injection list (the other home) exists.
-    if (
-      options?.providers !== undefined ||
-      options?.escalation !== undefined ||
-      options?.decider !== undefined
-    ) {
-      this.skillGraphBrainOptions = {
-        ...(options.providers !== undefined && { providers: options.providers }),
-        ...(options.escalation !== undefined && { escalation: options.escalation }),
-        ...(options.decider !== undefined && { decider: options.decider }),
-      };
-    }
-    // ── The mount options (SG-C): posture + cursor span ────────────────────
-    const strictness = options?.strictness ?? 'assist';
-    const continuity = options?.continuity ?? 'turn';
-    if (!['assist', 'guard', 'rails'].includes(strictness)) {
-      throw new Error(
-        `Agent.skillGraph: strictness '${String(strictness)}' is not a posture this library ` +
-          `has. The three are 'assist' (today's gate — reachable picks admitted, divergence ` +
-          `recorded), 'guard' (picks only from an offered menu) and 'rails' (the model never ` +
-          `routes; rules/scorer/routes do).`,
-      );
-    }
-    if (!['turn', 'conversation'].includes(continuity)) {
-      throw new Error(
-        `Agent.skillGraph: continuity '${String(continuity)}' is not a span this library ` +
-          `has. 'turn' (default) — the cursor is per-run, exactly as always; ` +
-          `'conversation' — the turn's final cursor rides the conversation checkpoint and ` +
-          `becomes the default entry when that conversation is continued.`,
-      );
-    }
-    if (continuity === 'conversation' && this.skillGraphIsTree) {
-      throw new Error(
-        "Agent.skillGraph: continuity: 'conversation' cannot be honored by a decision " +
-          '.tree() — a tree routes by predicate on every iteration and has no cursor to ' +
-          "carry between turns. Use the flat entry/route form, or keep continuity: 'turn'.",
-      );
-    }
-    if (strictness === 'rails' && graph.entrySelection === 'model-read') {
-      throw new Error(
-        "Agent.skillGraph: strictness: 'rails' cannot honor .entryByRead() — that mode's " +
-          'entire entry mechanism IS a model pick, and rails refuses model routing. Rank the ' +
-          'entries with .entryBy(keywordScorer()) / .classify(...), declare start rules, or ' +
-          "drop to strictness: 'guard' (the model picks only from an offered menu).",
-      );
-    }
-    // The cascade needs the graph's turn-routing plan — a graph built by this
-    // version always carries one. A structurally-typed graph without it cannot
-    // be judged, and accepting the option while wiring nothing would be config
-    // that lies, so it is refused by name.
-    const needsPlan = graph.entrySelection === 'classify' || continuity === 'conversation';
-    if (needsPlan && graph.turnRouting === undefined) {
-      throw new Error(
-        `Agent.skillGraph: ${
-          graph.entrySelection === 'classify'
-            ? 'this graph declares a classifier'
-            : "continuity: 'conversation' was declared"
-        }, but the graph object carries no \`turnRouting\` plan — the turn-start cascade ` +
-          `cannot run without it. Build the graph with this version's skillGraph() (every ` +
-          `flat graph it builds carries the plan), or drop the option.`,
-      );
-    }
-    if (strictness !== 'assist' || continuity !== 'turn' || graph.entrySelection === 'classify') {
-      // Wired only when something NEW was asked for — a bare `.skillGraph(g)`
-      // on a scorer/read/plain graph stores nothing and changes nothing.
-      this.skillGraphCascade = {
-        ...(graph.turnRouting !== undefined && { turnRouting: graph.turnRouting }),
-        strictness,
-        continuity,
-        nodeIds: new Set(
-          (graph.nodes ?? []).flatMap((n) => (typeof n.id === 'string' ? [n.id] : [])),
-        ),
-      };
-    }
-    // The deferred body-contract note: the graph built without `knownTools`, so its
-    // typo-vs-baseline-tool checks wait for `build()`, where the registry is real.
-    // Library-built graphs also stamp the note on each skill's metadata (that is
-    // what serves the `.skills({ list })` door); this capture is the fallback for
-    // a structurally-typed graph without the stamps — `build()` dedupes by id.
-    if (graph.deferredBodyContract) {
-      this.skillGraphDeferredBodyContract = {
-        mode: graph.deferredBodyContract.mode,
-        skills: graph.skills,
-      };
-    }
-    return this;
+    return mountSkillGraph(
+      livePort<GraphMountPort>({
+        opts: { get: () => this.opts },
+        skillGraphNextSkill: {
+          get: () => this.skillGraphNextSkill,
+          set: (value) => {
+            this.skillGraphNextSkill = value;
+          },
+        },
+        injection: {
+          get: () => {
+            const method = this.injection;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        skillGraphReachable: {
+          get: () => this.skillGraphReachable,
+          set: (value) => {
+            this.skillGraphReachable = value;
+          },
+        },
+        skillGraphScoreEntries: {
+          get: () => this.skillGraphScoreEntries,
+          set: (value) => {
+            this.skillGraphScoreEntries = value;
+          },
+        },
+        skillGraphEdgeTargets: {
+          get: () => this.skillGraphEdgeTargets,
+          set: (value) => {
+            this.skillGraphEdgeTargets = value;
+          },
+        },
+        skillGraphExplainNextSkill: {
+          get: () => this.skillGraphExplainNextSkill,
+          set: (value) => {
+            this.skillGraphExplainNextSkill = value;
+          },
+        },
+        skillGraphSupersededEntries: {
+          get: () => this.skillGraphSupersededEntries,
+          set: (value) => {
+            this.skillGraphSupersededEntries = value;
+          },
+        },
+        skillGraphIsTree: {
+          get: () => this.skillGraphIsTree,
+          set: (value) => {
+            this.skillGraphIsTree = value;
+          },
+        },
+        skillGraphNodeIds: {
+          get: () => this.skillGraphNodeIds,
+          set: (value) => {
+            this.skillGraphNodeIds = value;
+          },
+        },
+        skillGraphDeclared: {
+          get: () => this.skillGraphDeclared,
+          set: (value) => {
+            this.skillGraphDeclared = value;
+          },
+        },
+        skillGraphBrainOptions: {
+          get: () => this.skillGraphBrainOptions,
+          set: (value) => {
+            this.skillGraphBrainOptions = value;
+          },
+        },
+        skillGraphCascade: {
+          get: () => this.skillGraphCascade,
+          set: (value) => {
+            this.skillGraphCascade = value;
+          },
+        },
+        skillGraphDeferredBodyContract: {
+          get: () => this.skillGraphDeferredBodyContract,
+          set: (value) => {
+            this.skillGraphDeferredBodyContract = value;
+          },
+        },
+      }),
+      graph,
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -1527,23 +1406,18 @@ export class AgentBuilder {
    *     .build();
    */
   maps(options: MapsOptions = {}): this {
-    if (this.mapsOptions !== undefined) {
-      throw new Error(
-        `Agent.maps(): the kernel is already configured. One kernel per agent — a second ` +
-          `call would silently replace the first's policy. Merge the options into one call.`,
-      );
-    }
-    if (options.renewalGrace !== undefined) {
-      if (!Number.isInteger(options.renewalGrace) || options.renewalGrace < 1) {
-        throw new Error(
-          `Agent.maps(): renewalGrace must be an integer >= 1, got ` +
-            `${String(options.renewalGrace)}. It is the number of corroboration-free ` +
-            `passes a guessed engagement survives before parking.`,
-        );
-      }
-    }
-    this.mapsOptions = options;
-    return this;
+    return configureMaps(
+      livePort<MapsPort>({
+        mapsOptions: {
+          get: () => this.mapsOptions,
+          set: (value) => {
+            this.mapsOptions = value;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -1580,39 +1454,18 @@ export class AgentBuilder {
    *     .build();
    */
   claims(contract: Readonly<Record<string, { entity: string; field: string }>>): this {
-    if (this.claimsContract !== undefined) {
-      throw new Error(
-        `Agent.claims(): the claim contract is already declared. One contract per agent — a ` +
-          `second call would silently replace the first. Merge the fields into one call.`,
-      );
-    }
-    const entries = Object.entries(contract);
-    if (entries.length === 0) {
-      throw new Error(
-        `Agent.claims(): the contract names no fields — omitting the call is how "this agent ` +
-          `claims nothing checkable" is said.`,
-      );
-    }
-    for (const [answerField, fact] of entries) {
-      // An identity edge with a blank half joins the wrong subjects — the
-      // same refusal `defineTool({ owner })` makes, for the same reason.
-      if (
-        fact === null ||
-        typeof fact !== 'object' ||
-        typeof fact.entity !== 'string' ||
-        fact.entity.length === 0 ||
-        typeof fact.field !== 'string' ||
-        fact.field.length === 0
-      ) {
-        throw new Error(
-          `Agent.claims(): '${answerField}' must name a non-empty entity and field — it is the ` +
-            `edge the claim check joins on, and a blank half joins the wrong subjects. Got ` +
-            `${JSON.stringify(fact)}.`,
-        );
-      }
-    }
-    this.claimsContract = contract;
-    return this;
+    return configureClaims(
+      livePort<ClaimsPort>({
+        claimsContract: {
+          get: () => this.claimsContract,
+          set: (value) => {
+            this.claimsContract = value;
+          },
+        },
+      }),
+      contract,
+      this,
+    ) as this;
   }
 
   /**
@@ -1678,22 +1531,20 @@ export class AgentBuilder {
    * `memoryInjection_${id}` scope key for the slot subflows to consume.
    */
   memory(definition: MemoryDefinition): this {
-    if (this.memoryList.some((m) => m.id === definition.id)) {
-      throw new Error(
-        `Agent.memory(): duplicate id '${definition.id}' — each memory needs a unique id ` +
-          'to keep its scope key (`memoryInjection_${id}`) collision-free.',
-      );
-    }
-    // A memory that calls a model on your behalf — today that is the
-    // `summarize` strategy — is held to the same separate-instance rule as
-    // `.compaction()`. `defineMemory` cannot make this check: it has never
-    // heard of an agent. It declares the billing, this reads it (9.14.0).
-    this.assertSummarizerIsNotTheAgentItself(
-      definition.billing,
-      `Agent.memory('${definition.id}')`,
-    );
-    this.memoryList.push(definition);
-    return this;
+    return registerMemory(
+      livePort<MemoryPort>({
+        memoryList: { get: () => this.memoryList },
+        assertSummarizerIsNotTheAgentItself: {
+          get: () => {
+            const method = this.assertSummarizerIsNotTheAgentItself;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+      }),
+      definition,
+      this,
+    ) as this;
   }
 
   /**
@@ -1851,16 +1702,18 @@ export class AgentBuilder {
    *     .build();
    */
   namesAndNumbersFromEvidence(opts?: NamesAndNumbersOptions): this {
-    if (this.evidenceGate) {
-      throw new Error(
-        'AgentBuilder.namesAndNumbersFromEvidence: already set. Each agent has at most one ' +
-          'evidence gate — pass every shape and exemption in the one call.',
-      );
-    }
-    // Resolved (and refused) HERE rather than at build: a posture typo is a
-    // mistake in the line you just wrote, and the stack should say so.
-    this.evidenceGate = resolveEvidenceGate(opts);
-    return this;
+    return configureEvidence(
+      livePort<EvidencePort>({
+        evidenceGate: {
+          get: () => this.evidenceGate,
+          set: (value) => {
+            this.evidenceGate = value;
+          },
+        },
+      }),
+      opts,
+      this,
+    ) as this;
   }
 
   /**
@@ -1922,19 +1775,17 @@ export class AgentBuilder {
    * ```
    */
   limitsTravelWithTheAnswer(): this {
-    // Refused rather than shrugged at, like every other one-per-agent policy
-    // (`toolsFromActiveSkill` verbatim): a second call means the author
-    // believes there are two of these to set, and the honest answer is that
-    // there is one boundary block per answer.
-    if (this.limitsTravelValue) {
-      throw new Error(
-        'AgentBuilder.limitsTravelWithTheAnswer: already set. One agent appends one coverage ' +
-          'block to one answer, folded from every declaration its tools made — so a second ' +
-          'call has nothing left to say. Drop it.',
-      );
-    }
-    this.limitsTravelValue = true;
-    return this;
+    return configureAnswerLimits(
+      livePort<AnswerLimitsPort>({
+        limitsTravelValue: {
+          get: () => this.limitsTravelValue,
+          set: (value) => {
+            this.limitsTravelValue = value;
+          },
+        },
+      }),
+      this,
+    ) as this;
   }
 
   /**
@@ -1985,14 +1836,18 @@ export class AgentBuilder {
    * ```
    */
   scriptTravelsWithTheAnswer(opts?: ScriptTravelOptions): this {
-    if (this.scriptTravelValue !== undefined) {
-      throw new Error(
-        'AgentBuilder.scriptTravelsWithTheAnswer: already set. One agent attaches its scripts ' +
-          'one way — pass `which` and `maxBytes` in the one call.',
-      );
-    }
-    this.scriptTravelValue = resolveScriptTravel(opts);
-    return this;
+    return configureScriptTravel(
+      livePort<ScriptTravelPort>({
+        scriptTravelValue: {
+          get: () => this.scriptTravelValue,
+          set: (value) => {
+            this.scriptTravelValue = value;
+          },
+        },
+      }),
+      opts,
+      this,
+    ) as this;
   }
 
   /**
@@ -2038,27 +1893,24 @@ export class AgentBuilder {
    *     .build();
    */
   inputsLayer(options?: { readonly argumentSources?: boolean }): this {
-    if (this.inputsLayerValue) {
-      throw new Error(
-        'AgentBuilder.inputsLayer: already set. One agent mounts one inputs layer, over every ' +
-          'ruled tool it can call — a second call has nothing left to add. Drop it.',
-      );
-    }
-    if (options !== undefined && (options === null || typeof options !== 'object')) {
-      throw new Error(
-        `AgentBuilder.inputsLayer: expected an options object or nothing, got ${typeof options}.`,
-      );
-    }
-    const argumentSources = options?.argumentSources;
-    if (argumentSources !== undefined && typeof argumentSources !== 'boolean') {
-      throw new Error(
-        `AgentBuilder.inputsLayer: argumentSources must be true or false, got ` +
-          `${JSON.stringify(argumentSources)}.`,
-      );
-    }
-    this.inputsLayerValue = true;
-    this.inputsLayerSourcesValue = argumentSources === true;
-    return this;
+    return configureInputsLayer(
+      livePort<InputsLayerPort>({
+        inputsLayerValue: {
+          get: () => this.inputsLayerValue,
+          set: (value) => {
+            this.inputsLayerValue = value;
+          },
+        },
+        inputsLayerSourcesValue: {
+          get: () => this.inputsLayerSourcesValue,
+          set: (value) => {
+            this.inputsLayerSourcesValue = value;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -2094,14 +1946,17 @@ export class AgentBuilder {
    *   (await agent.assessment())?.reasons; // [{ reason: 'period-not-held', layer: 3, … }]
    */
   resultsLayer(): this {
-    if (this.resultsLayerValue) {
-      throw new Error(
-        'AgentBuilder.resultsLayer: already set. One agent mounts one results layer, over every ' +
-          'call it runs — a second call has nothing left to add. Drop it.',
-      );
-    }
-    this.resultsLayerValue = true;
-    return this;
+    return configureResultsLayer(
+      livePort<ResultsLayerPort>({
+        resultsLayerValue: {
+          get: () => this.resultsLayerValue,
+          set: (value) => {
+            this.resultsLayerValue = value;
+          },
+        },
+      }),
+      this,
+    ) as this;
   }
 
   /**
@@ -2181,21 +2036,18 @@ export class AgentBuilder {
       | boolean
       | { readonly when: 'always' | 'unless-consistent' | 'not-sure-or-ask' };
   }): this {
-    if (this.answerLayerValue !== undefined) {
-      throw new Error(
-        'AgentBuilder.answerLayer: already set. One agent folds one standing per answer — ' +
-          'a second call has nothing left to add. Drop it (pass { standingLine: true } once).',
-      );
-    }
-    if (options !== undefined && (typeof options !== 'object' || options === null)) {
-      throw new Error(
-        'AgentBuilder.answerLayer: options must be an object — ' +
-          "{ standingLine?: boolean | { when: 'always' | 'unless-consistent' | 'not-sure-or-ask' } } " +
-          '— or omitted.',
-      );
-    }
-    this.answerLayerValue = answerLayerArm(options ?? {}, 'AgentBuilder.answerLayer');
-    return this;
+    return configureAnswerLayer(
+      livePort<AnswerLayerPort>({
+        answerLayerValue: {
+          get: () => this.answerLayerValue,
+          set: (value) => {
+            this.answerLayerValue = value;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -2259,16 +2111,18 @@ export class AgentBuilder {
    *   Agent.create({ provider, model }).time({ reader: myReader, policy: { dateOrder: 'MDY' } });
    */
   time(options?: TimeOptions): this {
-    if (this.timeValue !== undefined) {
-      throw new Error(
-        'AgentBuilder.time: already set. One agent has one clock configuration — pass the ' +
-          'fallback zone, the reader and its policy once.',
-      );
-    }
-    const read = readTimeOptions(options);
-    if ('problem' in read) throw new Error(`AgentBuilder.time: ${read.problem}.`);
-    this.timeValue = read.value;
-    return this;
+    return configureTime(
+      livePort<TimePort>({
+        timeValue: {
+          get: () => this.timeValue,
+          set: (value) => {
+            this.timeValue = value;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -2328,47 +2182,60 @@ export class AgentBuilder {
    *     .build();
    */
   toolsFromActiveSkill(): this {
-    // Refused rather than shrugged at, like every other one-per-agent policy:
-    // a second call means the author believes there are two of these to set,
-    // and the honest answer is that there is one.
-    if (this.toolsFromActiveSkillValue) {
-      throw new Error(
-        'AgentBuilder.toolsFromActiveSkill: already set. It is one posture for the whole ' +
-          "agent — every skill's tools follow that skill's activation — so a second call " +
-          'has nothing left to say. Drop it.',
-      );
-    }
-    this.toolsFromActiveSkillValue = true;
-    return this;
+    return configureSkillToolScope(
+      livePort<SkillToolScopePort>({
+        toolsFromActiveSkillValue: {
+          get: () => this.toolsFromActiveSkillValue,
+          set: (value) => {
+            this.toolsFromActiveSkillValue = value;
+          },
+        },
+      }),
+      this,
+    ) as this;
   }
 
   outputSchema<T>(parser: OutputSchemaParser<T>, opts?: OutputSchemaOptions): this {
-    if (this.outputSchemaParser) {
-      throw new Error(
-        'AgentBuilder.outputSchema: already set. Each agent has at most one terminal contract.',
-      );
-    }
-    this.outputSchemaParser = parser as OutputSchemaParser<unknown>;
-    this.outputSchemaRetries = resolveRetries(opts?.retries);
-    this.outputSchemaStrategy = opts?.strategy ?? 'auto';
-    if (opts?.jsonSchema !== undefined) this.outputSchemaJson = opts.jsonSchema;
-    const instructionText = opts?.instruction ?? buildDefaultInstruction(parser);
-    const id = opts?.name ?? 'output-schema';
-    // Always-on system-slot instruction. Activates every iteration so
-    // long runs keep the contract present (recency-first redundancy).
-    this.injectionList.push(
-      defineInstruction({
-        id,
-        activeWhen: () => true,
-        prompt: instructionText,
+    return configureOutputSchema(
+      livePort<OutputSchemaPort>({
+        outputSchemaParser: {
+          get: () => this.outputSchemaParser,
+          set: (value) => {
+            this.outputSchemaParser = value;
+          },
+        },
+        outputSchemaRetries: {
+          get: () => this.outputSchemaRetries,
+          set: (value) => {
+            this.outputSchemaRetries = value;
+          },
+        },
+        outputSchemaStrategy: {
+          get: () => this.outputSchemaStrategy,
+          set: (value) => {
+            this.outputSchemaStrategy = value;
+          },
+        },
+        outputSchemaJson: {
+          get: () => this.outputSchemaJson,
+          set: (value) => {
+            this.outputSchemaJson = value;
+          },
+        },
+        injectionList: { get: () => this.injectionList },
+        injectionSources: { get: () => this.injectionSources },
+        currentSource: {
+          get: () => {
+            const method = this.currentSource;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
       }),
-    );
-    // The SECOND door into the injection list (`.injection()` is the other), so
-    // it records provenance too: without this the id would read as
-    // "unattributed" in a later collision — an honest answer, but a worse one
-    // than the true "the recipe/app that called .outputSchema() mounted it".
-    this.injectionSources.set(id, this.currentSource());
-    return this;
+      parser,
+      opts,
+      this,
+    ) as this;
   }
 
   /**
@@ -2451,87 +2318,27 @@ export class AgentBuilder {
    * ```
    */
   findings(options?: NonNullable<AgentOptions['findings']>): this {
-    if (this.findingsValue !== undefined) {
-      throw new Error(
-        'AgentBuilder.findings: already set. One findings ledger per agent — a second call ' +
-          'would register the ask twice and leave two option sets with the later one silently ' +
-          'winning. Pass every option in the one call.',
-      );
-    }
-    if (options !== undefined && (options === null || typeof options !== 'object')) {
-      throw new Error(
-        `AgentBuilder.findings: expected an options object or nothing, got ${typeof options}.`,
-      );
-    }
-    const maxContextBytes = findingsContextBytes(options?.maxContextBytes);
-    const serve = options?.serve ?? 'ledger-and-facts';
-    if (serve !== 'ledger-and-facts' && serve !== 'ledger-only') {
-      throw new Error(
-        `AgentBuilder.findings: serve must be 'ledger-and-facts' or 'ledger-only', got ` +
-          `${JSON.stringify(serve)}.`,
-      );
-    }
-    const answerAsk = options?.answerAsk;
-    if (answerAsk !== undefined && answerAsk !== 'none' && answerAsk !== 'quote-facts') {
-      throw new Error(
-        `AgentBuilder.findings: answerAsk must be 'none' or 'quote-facts', got ` +
-          `${JSON.stringify(answerAsk)}.`,
-      );
-    }
-    const keep = options?.keepLedgerFacts;
-    if (keep !== undefined && keep !== false && !(Number.isInteger(keep) && keep >= 0)) {
-      throw new Error(
-        `AgentBuilder.findings: keepLedgerFacts must be a non-negative integer or false, got ` +
-          `${JSON.stringify(keep)}.`,
-      );
-    }
-    // The judge (9.104.0) is a port: refused at build unless it has the
-    // port's two members, so a misconfigured classifier fails here rather
-    // than as an error row on every tool result.
-    const judge = options?.judge;
-    if (
-      judge !== undefined &&
-      (judge === null ||
-        typeof judge !== 'object' ||
-        typeof judge.name !== 'string' ||
-        judge.name === '' ||
-        typeof judge.classify !== 'function')
-    ) {
-      throw new Error(
-        'AgentBuilder.findings: judge must be a Classifier — `{ name: string; classify(request, ' +
-          'signal?) }` from agentfootprint/classify (`typesafe()`, `mockClassifier()`, or your own).',
-      );
-    }
-    // Declared sources (honesty layer 2): a boolean, or nothing. It needs the
-    // inputs layer, which only the whole agent can say is armed — `Agent`
-    // refuses it at build when no ruled tool and no `.inputsLayer()` arm one.
-    // (`.inputsLayer({ argumentSources: true })` arms the same thing without
-    // this ledger.)
-    const argumentSources = options?.argumentSources;
-    if (argumentSources !== undefined && typeof argumentSources !== 'boolean') {
-      throw new Error(
-        `AgentBuilder.findings: argumentSources must be true or false, got ` +
-          `${JSON.stringify(argumentSources)}.`,
-      );
-    }
-    // `answerAsk` is stored as given, never normalised: `'none'` is the
-    // default and `Agent.ts` threads the dial only under `'quote-facts'`, so
-    // an explicit `'none'` and an absent one reach the run as the same thing.
-    this.findingsValue = {
-      serve,
-      maxContextBytes,
-      ...(answerAsk !== undefined && { answerAsk }),
-      ...(keep !== undefined && { keepLedgerFacts: keep }),
-      ...(judge !== undefined && { judge }),
-      ...(argumentSources === true && { argumentSources: true }),
-    };
-    // The always-on ask — the `outputSchema()` twin: a system-slot instruction
-    // that activates every iteration, so a long run keeps the vocabulary
-    // present, and a system PIECE on the receipt (never an injected turn, so
-    // nothing in it is exempt from the evidence gate and nothing persists).
-    this.injectionList.push(findingsInstruction(false, answerAsk === 'quote-facts'));
-    this.injectionSources.set(FINDINGS_INSTRUCTION_ID, this.currentSource());
-    return this;
+    return configureFindings(
+      livePort<FindingsPort>({
+        findingsValue: {
+          get: () => this.findingsValue,
+          set: (value) => {
+            this.findingsValue = value;
+          },
+        },
+        injectionList: { get: () => this.injectionList },
+        injectionSources: { get: () => this.injectionSources },
+        currentSource: {
+          get: () => {
+            const method = this.currentSource;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -2579,58 +2386,18 @@ export class AgentBuilder {
    * ```
    */
   toolChoice(options: NonNullable<AgentOptions['toolChoice']>): this {
-    if (this.toolChoiceValue !== undefined) {
-      throw new Error(
-        'AgentBuilder.toolChoice: already set. One classifier per agent — a second call would ' +
-          'leave two option sets with the later one silently winning. Pass every option in the ' +
-          'one call.',
-      );
-    }
-    if (options === null || typeof options !== 'object') {
-      throw new Error(
-        `AgentBuilder.toolChoice: expected an options object, got ${typeof options}.`,
-      );
-    }
-    const classifier = options.classifier;
-    if (
-      classifier === null ||
-      typeof classifier !== 'object' ||
-      typeof classifier.name !== 'string' ||
-      classifier.name === '' ||
-      typeof classifier.classify !== 'function'
-    ) {
-      throw new Error(
-        'AgentBuilder.toolChoice: classifier must be a Classifier — `{ name: string; ' +
-          'classify(request, signal?) }` from agentfootprint/classify (`typesafe()`, ' +
-          '`mockClassifier()`, or your own).',
-      );
-    }
-    const serve = options.serve ?? 'all';
-    if (serve !== 'all') {
-      const top = serve !== null && typeof serve === 'object' ? serve.top : undefined;
-      if (!(Number.isInteger(top) && (top as number) >= 1)) {
-        throw new Error(
-          `AgentBuilder.toolChoice: serve must be 'all' or { top: <integer ≥ 1> }, got ` +
-            `${JSON.stringify(serve)}.`,
-        );
-      }
-    }
-    const alwaysServe = options.alwaysServe;
-    if (
-      alwaysServe !== undefined &&
-      (!Array.isArray(alwaysServe) || alwaysServe.some((n) => typeof n !== 'string' || n === ''))
-    ) {
-      throw new Error(
-        'AgentBuilder.toolChoice: alwaysServe must be an array of non-empty tool names, got ' +
-          `${JSON.stringify(alwaysServe)}.`,
-      );
-    }
-    this.toolChoiceValue = {
-      classifier,
-      serve,
-      ...(alwaysServe !== undefined && { alwaysServe: [...alwaysServe] }),
-    };
-    return this;
+    return configureToolChoice(
+      livePort<ToolChoicePort>({
+        toolChoiceValue: {
+          get: () => this.toolChoiceValue,
+          set: (value) => {
+            this.toolChoiceValue = value;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -2700,55 +2467,28 @@ export class AgentBuilder {
     ontology: NonNullable<AgentOptions['ontology']>,
     options?: { readonly ask?: NonNullable<AgentOptions['ontologyAsk']> },
   ): this {
-    const ask = options?.ask;
-    if (ask !== undefined && ask !== 'none' && ask !== 'use-the-map') {
-      throw new Error(
-        `AgentBuilder.ontology: ask must be 'none' or 'use-the-map', got ${JSON.stringify(ask)}.`,
-      );
-    }
-    if (this.ontologyValue !== undefined) {
-      throw new Error(
-        'AgentBuilder.ontology: already set. One map per agent — a second call would register ' +
-          'the ask twice and leave two maps with the later one silently winning. Compose one ' +
-          'declaration and pass it once.',
-      );
-    }
-    if (
-      ontology === null ||
-      typeof ontology !== 'object' ||
-      typeof ontology.id !== 'string' ||
-      typeof ontology.version !== 'string' ||
-      typeof ontology.hash !== 'string' ||
-      ontology.hash.length === 0 ||
-      !Object.isFrozen(ontology) ||
-      ontology.nodes === null ||
-      typeof ontology.nodes !== 'object' ||
-      ontology.sources === null ||
-      typeof ontology.sources !== 'object' ||
-      !Array.isArray(ontology.edges)
-    ) {
-      throw new Error(
-        'AgentBuilder.ontology: expected the frozen Ontology `defineOntology(spec)` returns ' +
-          '(agentfootprint/ontology), not a bare spec — the definition is where the declaration ' +
-          'is validated and fingerprinted.',
-      );
-    }
-    this.ontologyValue = ontology;
-    // `'none'`: the map as data, no ask of the library's — the application
-    // registers its own through `.instruction()`. Nothing else differs.
-    if (ask === 'none') return this;
-    // The always-on ask — the `outputSchema()` twin: a system-slot instruction
-    // that activates every iteration, so a long run keeps the vocabulary
-    // present, and a system PIECE on the receipt (never an injected turn).
-    this.injectionList.push(
-      defineInstruction({
-        id: ONTOLOGY_INSTRUCTION_ID,
-        activeWhen: () => true,
-        prompt: ONTOLOGY_INSTRUCTION,
+    return configureOntology(
+      livePort<OntologyPort>({
+        ontologyValue: {
+          get: () => this.ontologyValue,
+          set: (value) => {
+            this.ontologyValue = value;
+          },
+        },
+        injectionList: { get: () => this.injectionList },
+        injectionSources: { get: () => this.injectionSources },
+        currentSource: {
+          get: () => {
+            const method = this.currentSource;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
       }),
-    );
-    this.injectionSources.set(ONTOLOGY_INSTRUCTION_ID, this.currentSource());
-    return this;
+      ontology,
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -2802,21 +2542,18 @@ export class AgentBuilder {
    * ```
    */
   outputFallback<T>(options: OutputFallbackOptions<T>): this {
-    if (this.outputFallbackCfg) {
-      throw new Error(
-        'AgentBuilder.outputFallback: already set. Each agent has at most one fallback chain.',
-      );
-    }
-    this.outputFallbackCfg = {
-      fallback: options.fallback as OutputFallbackFn<unknown>,
-      ...(options.canned !== undefined && { canned: options.canned as unknown }),
-      hasCanned: options.canned !== undefined,
-    };
-    // The coherence check moved to `build()` in 8.18.0 — see
-    // `assertOutputFallbackCoherent`. What it needs (a parser) is a fact about
-    // the FINISHED agent, and the builder is a bag of settings in whatever
-    // order they were written.
-    return this;
+    return configureOutputFallback(
+      livePort<OutputFallbackPort>({
+        outputFallbackCfg: {
+          get: () => this.outputFallbackCfg,
+          set: (value) => {
+            this.outputFallbackCfg = value;
+          },
+        },
+      }),
+      options,
+      this,
+    ) as this;
   }
 
   /**
@@ -2834,26 +2571,16 @@ export class AgentBuilder {
    * needs the parser, so it belongs wherever the parser is guaranteed.
    */
   private assertOutputFallbackCoherent(): void {
-    const cfg = this.outputFallbackCfg;
-    if (cfg === undefined) return;
-    if (!this.outputSchemaParser) {
-      throw new Error(
-        'AgentBuilder.build: .outputFallback() is configured but .outputSchema(parser) is not. ' +
-          'A fallback is what happens when the terminal contract is not met, so without a ' +
-          'contract there is nothing for it to catch and its tiers can never run. Add ' +
-          '.outputSchema(parser) — in either order, they are one setting made of two calls — ' +
-          'or drop the fallback.',
-      );
-    }
-    // The safety net must always validate; a `canned` value that does not is a
-    // misconfiguration that would only surface AFTER the agent loop had
-    // already failed, which is the one moment it exists to survive.
-    if (cfg.hasCanned) {
-      validateCannedAgainstSchema(
-        cfg.canned,
-        this.outputSchemaParser as OutputSchemaParser<unknown>,
-      );
-    }
+    assertOutputFallbackCoherent(
+      livePort<Readonly<OutputFallbackPort>>({
+        outputFallbackCfg: {
+          get: () => this.outputFallbackCfg,
+        },
+        outputSchemaParser: {
+          get: () => this.outputSchemaParser,
+        },
+      }),
+    );
   }
 
   /**
@@ -2997,20 +2724,18 @@ export class AgentBuilder {
    *     .build();
    */
   thinking(opts: { budget: number }): this {
-    if (this.thinkingBudgetValue !== undefined) {
-      throw new Error(
-        'AgentBuilder.thinking: already set. Each agent has at most one thinking-budget choice.',
-      );
-    }
-    if (!Number.isFinite(opts.budget) || opts.budget <= 0) {
-      throw new Error(
-        `AgentBuilder.thinking: budget must be a positive finite number, got ${String(
-          opts.budget,
-        )}.`,
-      );
-    }
-    this.thinkingBudgetValue = opts.budget;
-    return this;
+    return setThinkingBudget(
+      livePort<ThinkingBudgetPort>({
+        thinkingBudgetValue: {
+          get: () => this.thinkingBudgetValue,
+          set: (value) => {
+            this.thinkingBudgetValue = value;
+          },
+        },
+      }),
+      opts,
+      this,
+    ) as this;
   }
 
   /**
@@ -3129,24 +2854,7 @@ export class AgentBuilder {
    * that out from a quiet run rather than from `build()` is the whole disease.
    */
   private assertToolMiddleware(mw: unknown): void {
-    const shaped =
-      mw !== null &&
-      typeof mw === 'object' &&
-      typeof (mw as { name?: unknown }).name === 'string' &&
-      (mw as { name: string }).name.length > 0;
-    const record = mw as Record<string, unknown> | null;
-    const hooks =
-      shaped &&
-      (typeof record?.onToolCall === 'function' || typeof record?.onToolResult === 'function');
-    if (!hooks) {
-      throw new Error(
-        `AgentBuilder.toolMiddleware: expected an object with a non-empty \`name\` and at ` +
-          `least one of \`onToolCall(call)\` (decides about the call) or ` +
-          `\`onToolResult(call)\` ` +
-          `(decides about the result), got ${typeof mw}. The name is what every ledger row ` +
-          `and event says decided the call, so it cannot be blank.`,
-      );
-    }
+    assertToolMiddleware(mw);
   }
 
   /**
@@ -3231,46 +2939,38 @@ export class AgentBuilder {
   /** Shared shape check — a chain built from a typo fails at build time, not
    *  as a silent no-op on the one call that needed governing. */
   private assertMiddleware(mw: unknown, method: string, hook: string): void {
-    if (
-      mw === null ||
-      typeof mw !== 'object' ||
-      typeof (mw as { name?: unknown }).name !== 'string' ||
-      (mw as { name: string }).name.length === 0 ||
-      typeof (mw as Record<string, unknown>)[hook] !== 'function'
-    ) {
-      throw new Error(
-        `AgentBuilder.${method}: expected an object with a non-empty \`name\` and a ` +
-          `\`${hook}(...)\` method, got ${typeof mw}. The name is what every ledger row and ` +
-          `event says decided the call, so it cannot be blank.`,
-      );
-    }
+    assertMiddleware(mw, method, hook);
   }
 
   checkIn(opts: CheckInBuilderOptions = {}): this {
-    if (this.checkInConfig !== undefined) {
-      throw new Error('AgentBuilder.checkIn: already configured. Call it at most once.');
-    }
-    this.checkInConfig = opts;
-    return this;
+    return configureCheckIn(
+      livePort<CheckInPort>({
+        checkInConfig: {
+          get: () => this.checkInConfig,
+          set: (value) => {
+            this.checkInConfig = value;
+          },
+        },
+      }),
+      opts,
+      this,
+    ) as this;
   }
 
   selfExplain(opts: SelfExplainOptions = {}): this {
-    if (this.selfExplainConfig !== undefined) {
-      throw new Error('AgentBuilder.selfExplain: already enabled.');
-    }
-    if (this.opts.reactMode === 'classic') {
-      // Classic ReAct caches the tools slot on turn 1 — a mid-turn skill
-      // activation could never surface the trace tools. Fail loud at
-      // build-time rather than silently never answering why-questions.
-      throw new Error(
-        'AgentBuilder.selfExplain: requires per-iteration slot recomposition — ' +
-          "reactMode 'classic' caches the tools slot, so the activated trace tools " +
-          "would never reach the model. Use the default 'dynamic' mode (or " +
-          "'dynamic-grouped'), or use traceDebugAgent() as a separate session instead.",
-      );
-    }
-    this.selfExplainConfig = opts;
-    return this;
+    return configureSelfExplain(
+      livePort<SelfExplainPort>({
+        selfExplainConfig: {
+          get: () => this.selfExplainConfig,
+          set: (value) => {
+            this.selfExplainConfig = value;
+          },
+        },
+        opts: { get: () => this.opts },
+      }),
+      opts,
+      this,
+    ) as this;
   }
 
   /**
@@ -3288,74 +2988,35 @@ export class AgentBuilder {
    * mounted there is nothing to engage or park.
    */
   private resolveMapsPlan(injections: readonly Injection[]): EngagementPlan | undefined {
-    if (this.mapsOptions === undefined) return undefined;
-    if (this.skillGraphNextSkill === undefined) {
-      throw new Error(
-        `Agent.maps(): nothing is mounted that the kernel could manage — mount a skill ` +
-          `map first (.skillGraph(defineSkillMap(...).build())). The kernel owns ` +
-          `ENGAGEMENT (whether a map's prompt and tools ride the next call); with no ` +
-          `map mounted there is nothing to engage or park.`,
-      );
-    }
-    if (this.skillGraphNodeIds === undefined || this.skillGraphNodeIds.size === 0) {
-      throw new Error(
-        `Agent.maps(): the mounted graph carries no node ids (a structurally-typed ` +
-          `graph). The kernel needs the member list to know exactly which contributions ` +
-          `parking suppresses — mount the full defineSkillMap(...).build() result.`,
-      );
-    }
-    // ── A graph that cannot explain its moves (9.59.0) ─────────────────
-    // The kernel judges an engagement by WHY the cursor is where it is. With
-    // no `explainNextSkill` no clause ever arrives, so every pass founds
-    // `assumed` — nobody said why — and the kernel is reduced to a timer over
-    // a fact it never learns. Before the `assumed` rung existed this was
-    // worse and silent: an absent clause was written down as `structural`,
-    // the strongest NON-DECAYING category, so such a graph could never park
-    // anything at all, with no event and no warning.
-    //
-    // Refused rather than warned. Mounting a kernel whose whole job is to
-    // weigh evidence, onto a map that produces none, is decoration — and the
-    // refusal is reachable only for a hand-written structurally-typed graph
-    // (every `skillGraph().build()` supplies the hook), so nothing that works
-    // today starts failing.
-    if (this.skillGraphExplainNextSkill === undefined) {
-      throw new Error(
-        `Agent.maps(): the mounted graph cannot explain its cursor moves — it carries no ` +
-          `\`explainNextSkill\`. The kernel decides engagement by WHY the cursor is where ` +
-          `it is (a declared route is system evidence; a keyword match is a guess), so ` +
-          `without that clause every pass reads "nobody said why" and the kernel is a ` +
-          `timer over a fact it never learns. Build the map with this version's ` +
-          `skillGraph() (every graph it builds supplies the clause), or drop .maps().`,
-      );
-    }
-    const memberIds = [...this.skillGraphNodeIds];
-    const memberSet = new Set(memberIds);
-    // The renewal feed's join key: tool NAMES contributed by this map's
-    // members. Names, not references — the feed joins against the previous
-    // batch's tool results, which carry names.
-    const toolNames = [
-      ...new Set(
-        injections
-          .filter((inj) => memberSet.has(inj.id))
-          .flatMap((inj) => (inj.inject.tools ?? []).map((t) => t.schema.name)),
-      ),
-    ];
-    return {
-      maps: [
-        {
-          id: 'skill-map',
-          memberIds,
-          toolNames,
-          // MANDATORY mount (9.59.0) — documented as shipped since the kernel
-          // landed and, until now, unreachable through the mount path: the
-          // kernel's data model carried `nonParkable` per map and no builder
-          // option ever set it. Value-conditional, so an agent that does not
-          // ask for it hands the kernel the exact object it always did.
-          ...(this.mapsOptions.nonParkable === true && { nonParkable: true }),
+    return resolveMapsPlan(
+      livePort<MapsPlanPort>({
+        mapsOptions: {
+          get: () => this.mapsOptions,
+          set: (value) => {
+            this.mapsOptions = value;
+          },
         },
-      ],
-      renewalGrace: this.mapsOptions.renewalGrace ?? 3,
-    };
+        skillGraphNextSkill: {
+          get: () => this.skillGraphNextSkill,
+          set: (value) => {
+            this.skillGraphNextSkill = value;
+          },
+        },
+        skillGraphNodeIds: {
+          get: () => this.skillGraphNodeIds,
+          set: (value) => {
+            this.skillGraphNodeIds = value;
+          },
+        },
+        skillGraphExplainNextSkill: {
+          get: () => this.skillGraphExplainNextSkill,
+          set: (value) => {
+            this.skillGraphExplainNextSkill = value;
+          },
+        },
+      }),
+      injections,
+    );
   }
 
   /**
@@ -3414,1065 +3075,162 @@ export class AgentBuilder {
   private resolveOutputEnforcement(
     servedSchema?: Readonly<Record<string, unknown>>,
   ): ResolvedOutputEnforcement | undefined {
-    const parser = this.outputSchemaParser;
-    if (!parser) return undefined;
-
-    let schemaTool;
-    if (this.outputSchemaStrategy === 'tool-forced') {
-      // Refusal 1 — the strategy and the agent's tools cannot both be true.
-      // Forcing the choice BY NAME is what makes the shape a guarantee, and
-      // it also means no other tool can be called on any turn: a tool-using
-      // agent would quietly become single-shot. That is config that lies in
-      // the other direction, so it is refused rather than allowed to happen.
-      const toolNames = this.registry.map((entry) => entry.name);
-      const skillCount = this.injectionList.filter((i) => i.flavor === 'skill').length;
-      const reasons: string[] = [];
-      if (toolNames.length > 0)
-        reasons.push(`registers ${toolNames.length} tool(s) (${toolNames.join(', ')})`);
-      if (this.toolProviderRef !== undefined) reasons.push('has a .toolProvider()');
-      if (skillCount > 0)
-        reasons.push(`has ${skillCount} skill(s), which reach the model as tools`);
-      if (this.selfExplainConfig !== undefined)
-        reasons.push('has .selfExplain(), which attaches trace tools');
-      if (reasons.length > 0) {
-        throw new Error(
-          `AgentBuilder.outputSchema: strategy 'tool-forced' forces every answer through ` +
-            `the '${SCHEMA_TOOL_NAME}' tool by name, so NO other tool can be called on any ` +
-            `turn — and this agent ${reasons.join('; ')}. Rather than let those tools go ` +
-            `silently unusable, two honest paths: drop the tools and keep the forced shape, ` +
-            `or keep the tools and use { strategy: 'instruct', retries: N } — the corrective ` +
-            `loop works on every provider and leaves the agent an agent.`,
-        );
-      }
-
-      // Refusal 2 — a tool needs its shape, and the library will not invent one.
-      const jsonSchema = resolveJsonSchema(parser, servedSchema ?? this.outputSchemaJson);
-      if (jsonSchema === undefined) {
-        throw new Error(
-          `AgentBuilder.outputSchema: strategy 'tool-forced' puts the schema on the wire as ` +
-            `a tool, and a tool carries its shape as JSON Schema. This parser does not offer ` +
-            `one (no \`toJsonSchema()\` method), and a \`parse()\` function is not something ` +
-            `the library gets to guess a shape from. Pass it: .outputSchema(parser, ` +
-            `{ strategy: 'tool-forced', jsonSchema: { type: 'object', properties: { … } } }).`,
-        );
-      }
-      schemaTool = buildSchemaTool(jsonSchema, parser.description);
-    }
-
-    // `'native'` — the provider's structured output. No tools refusal: the
-    // format constrains the TEXT answer only, so the model may still call a
-    // tool first and the agent stays an agent. The shape comes from the same
-    // place, and is refused the same way when there is none; what the API
-    // cannot express is refused by `nativeOutputFormat`, naming the node.
-    let outputFormat;
-    if (this.outputSchemaStrategy === 'native' || this.outputSchemaStrategy === 'auto') {
-      const jsonSchema = resolveJsonSchema(parser, servedSchema ?? this.outputSchemaJson);
-      if (jsonSchema === undefined && this.outputSchemaStrategy === 'native') {
-        throw new Error(
-          `AgentBuilder.outputSchema: strategy 'native' sends the schema to the provider as ` +
-            `JSON Schema (Anthropic's output_config.format). This parser does not offer one (no ` +
-            `\`toJsonSchema()\` method), and a \`parse()\` function is not something the library ` +
-            `gets to guess a shape from. Pass it: .outputSchema(parser, { strategy: 'native', ` +
-            `jsonSchema: { type: 'object', properties: { … } } }).`,
-        );
-      }
-      // The answer may carry `_findings` when the ledger is armed — from
-      // either door, the same test `Agent` arms it by.
-      const findingsArmed =
-        this.findingsValue !== undefined ||
-        (this.opts as { readonly findings?: unknown }).findings !== undefined;
-      if (jsonSchema !== undefined) {
-        try {
-          outputFormat = nativeOutputFormat(jsonSchema, { findings: findingsArmed });
-        } catch (error) {
-          // Auto is best available transport, not a stricter schema contract.
-          // Known wire-subset refusals retain instruction + local parsing.
-          // Explicit native and unexpected lowering failures still fail.
-          if (this.outputSchemaStrategy !== 'auto' || !(error instanceof NativeOutputSchemaError))
-            throw error;
-        }
-      }
-    }
-
-    // Mounted whenever a parser exists (8.18.0). Until then, `retries: 0` —
-    // the DEFAULT, and what `.outputSchema(parser)` means on its own — returned
-    // `undefined` here: no judging in the loop, no `outputAttempts` row, no
-    // event, a chart byte-identical to an agent with no contract at all. The
-    // declaration bought a prompt sentence and a `runTyped()` parse, and a
-    // caller on `run()` could not tell from the record that a contract had ever
-    // been declared, let alone missed.
-    //
-    // `0` still mounts no retry BRANCH (see buildAgentChart) and still spends
-    // no extra turn. It means judge, do not re-ask.
-    return {
-      parser,
-      retries:
-        this.negativeClaimsConfig?.mode !== 'typed'
-          ? this.outputSchemaRetries
-          : Math.min(this.outputSchemaRetries, 1),
-      ...(schemaTool !== undefined && { schemaTool }),
-      ...(outputFormat !== undefined && {
-        outputFormat,
-        ...(this.outputSchemaStrategy === 'auto' && { nativeOutputAuto: true as const }),
+    return resolveOutputEnforcement(
+      livePort<Readonly<OutputEnforcementPort>>({
+        outputSchemaParser: {
+          get: () => this.outputSchemaParser,
+        },
+        outputSchemaStrategy: {
+          get: () => this.outputSchemaStrategy,
+        },
+        registry: { get: () => this.registry },
+        injectionList: { get: () => this.injectionList },
+        toolProviderRef: {
+          get: () => this.toolProviderRef,
+        },
+        selfExplainConfig: {
+          get: () => this.selfExplainConfig,
+        },
+        outputSchemaJson: {
+          get: () => this.outputSchemaJson,
+        },
+        findingsValue: {
+          get: () => this.findingsValue,
+        },
+        opts: { get: () => this.opts },
+        negativeClaimsConfig: {
+          get: () => this.negativeClaimsConfig,
+        },
+        outputSchemaRetries: {
+          get: () => this.outputSchemaRetries,
+        },
+        outputFallbackCfg: {
+          get: () => this.outputFallbackCfg,
+        },
+        answerValidationConfig: {
+          get: () => this.answerValidationConfig,
+        },
       }),
-      hasFallback: this.outputFallbackCfg !== undefined,
-      ...(this.negativeClaimsConfig?.mode === 'typed' && { negativeClaimsEnforced: true as const }),
-      ...((this.answerValidationConfig?.mode === 'enforce' ||
-        this.negativeClaimsConfig?.mode === 'typed') && {
-        answerValidationEnforced: true,
-      }),
-    };
+      servedSchema,
+    );
   }
 
   build(): Agent {
-    // Settings that are only coherent (or not) once the whole agent exists.
-    this.assertOutputFallbackCoherent();
-    const negativeClaims = this.negativeClaimsConfig;
-    let negativeSchema: Readonly<Record<string, unknown>> | undefined;
-    if (negativeClaims?.mode === 'prose' && this.outputFallbackCfg !== undefined) {
-      throw new Error(
-        'Agent.negativeClaims({ prose: true }) does not support .outputFallback(): a fallback runs after the observed answer.',
-      );
-    }
-    if (negativeClaims?.mode === 'typed') {
-      if (this.outputSchemaParser === undefined) {
-        throw new Error('Agent.negativeClaims requires .outputSchema(parser, { jsonSchema }).');
-      }
-      if (this.outputFallbackCfg !== undefined || this.limitsTravelValue) {
-        throw new Error(
-          'Agent.negativeClaims does not support .outputFallback() or .limitsTravelWithTheAnswer(): the library must own the exact delivered answer.',
-        );
-      }
-      negativeSchema = negativeClaimsSchema(
+    return assembleAgent(
+      livePort<AssemblyPort>({
+        appNameValue: { get: () => this.appNameValue },
+        commentaryOverrides: { get: () => this.commentaryOverrides },
+        thinkingOverrides: { get: () => this.thinkingOverrides },
+        maxIterationsOverride: { get: () => this.maxIterationsOverride },
+        findingsValue: { get: () => this.findingsValue },
+        toolChoiceValue: { get: () => this.toolChoiceValue },
+        ontologyValue: { get: () => this.ontologyValue },
+        inputsLayerValue: { get: () => this.inputsLayerValue },
+        resultsLayerValue: { get: () => this.resultsLayerValue },
+        timeValue: { get: () => this.timeValue },
+        opts: { get: () => this.opts },
+        inputsLayerSourcesValue: { get: () => this.inputsLayerSourcesValue },
+        selfExplainConfig: { get: () => this.selfExplainConfig },
+        registry: { get: () => this.registry },
+        evidenceGate: { get: () => this.evidenceGate },
+        injectionList: { get: () => this.injectionList },
+        skillGraphCascade: { get: () => this.skillGraphCascade },
+        toolsFromActiveSkillValue: { get: () => this.toolsFromActiveSkillValue },
+        toolProviderRef: { get: () => this.toolProviderRef },
+        recorderList: { get: () => this.recorderList },
+        checkInConfig: { get: () => this.checkInConfig },
+        skillGraphScoreEntries: { get: () => this.skillGraphScoreEntries },
+        skillGraphBrainOptions: { get: () => this.skillGraphBrainOptions },
+        skillGraphNextSkill: { get: () => this.skillGraphNextSkill },
+        skillGraphNodeIds: { get: () => this.skillGraphNodeIds },
+        thinkingBudgetValue: { get: () => this.thinkingBudgetValue },
+        reliabilityConfig: { get: () => this.reliabilityConfig },
+        resolveMapsPlan: {
+          get: () => {
+            const method = this.resolveMapsPlan;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        scriptTravelValue: { get: () => this.scriptTravelValue },
+        claimsContract: { get: () => this.claimsContract },
+        outputSchemaParser: { get: () => this.outputSchemaParser },
+        assertOutputFallbackCoherent: {
+          get: () => {
+            const method = this.assertOutputFallbackCoherent;
+            return (...args: Parameters<typeof method>): ReturnType<typeof method> =>
+              Reflect.apply(method, this, args) as ReturnType<typeof method>;
+          },
+        },
+        negativeClaimsConfig: { get: () => this.negativeClaimsConfig },
+        outputFallbackCfg: { get: () => this.outputFallbackCfg },
+        limitsTravelValue: { get: () => this.limitsTravelValue },
+        outputSchemaJson: { get: () => this.outputSchemaJson },
+        answerValidationConfig: { get: () => this.answerValidationConfig },
+        answerLayerValue: { get: () => this.answerLayerValue },
+        skillGraphIsTree: { get: () => this.skillGraphIsTree },
+        skillGraphEdgeTargets: { get: () => this.skillGraphEdgeTargets },
+        skillGraphDeferredBodyContract: { get: () => this.skillGraphDeferredBodyContract },
+      }),
+      ({
+        opts,
+        voice,
+        injections,
+        toolProvider,
+        negativeSchema,
+        skillBrains,
+        mapsPlan,
+        claimContract,
         negativeClaims,
-        resolveJsonSchema(this.outputSchemaParser, this.outputSchemaJson),
-      );
-    }
-    if (this.answerValidationConfig !== undefined) {
-      if (this.outputSchemaParser === undefined) {
-        throw new Error('AgentBuilder.answerValidation requires .outputSchema(parser).');
-      }
-      if (this.outputFallbackCfg !== undefined || this.limitsTravelValue) {
-        throw new Error(
-          'AgentBuilder.answerValidation does not support .outputFallback() or .limitsTravelWithTheAnswer(): a fallback can replace the checked answer after validation, and the validated delivery has no place for the declared limits.',
-        );
-      }
-      // A listed check with nothing to judge is refused, never left to pass.
-      const listed = this.answerValidationConfig.agentChecks;
-      if (listed.includes('negative-claims') && negativeClaims?.mode !== 'typed') {
-        throw new Error(
-          "AgentBuilder.answerValidation({ agentChecks: ['negative-claims'] }) requires typed .negativeClaims({ field, tools }).",
-        );
-      }
-      if (listed.includes('claims') && this.claimsContract === undefined) {
-        throw new Error(
-          "AgentBuilder.answerValidation({ agentChecks: ['claims'] }) needs a .claims() contract: " +
-            'it names which answer field claims which fact, and without one the claim check has ' +
-            "nothing to judge. Declare the contract, or drop 'claims' from agentChecks.",
-        );
-      }
-      if (listed.includes('names-and-numbers') && this.evidenceGate === undefined) {
-        throw new Error(
-          "AgentBuilder.answerValidation({ agentChecks: ['names-and-numbers'] }) needs " +
-            '.namesAndNumbersFromEvidence(): its verdict is what the row reads. Add the gate, or ' +
-            "drop 'names-and-numbers' from agentChecks.",
-        );
-      }
-    }
-    // The answer layer (honesty layer 4), resolved ONCE from both doors — the
-    // builder's `.answerLayer()` wins; otherwise `AgentOptions.answerLayer`,
-    // checked by the same rules — so the refusals below and the arm `Agent`
-    // receives can never read two different values.
-    const answerLayer =
-      this.answerLayerValue ?? answerLayerFromOptions(this.opts.answerLayer as unknown);
-    // The answer layer's line appends prose to the answer — refused where the
-    // answer's bytes are judged or must parse. The standing itself still
-    // travels as data on both (`turn_end.answerAssessment`).
-    if (answerLayer?.standingLine !== undefined) {
-      if (this.answerValidationConfig !== undefined) {
-        throw new Error(
-          'AgentBuilder.answerLayer({ standingLine: true }) cannot be combined with ' +
-            '.answerValidation(): the answer checks judge the exact bytes delivered, and the line ' +
-            'would change them. Keep .answerLayer() without the line — the standing still travels ' +
-            'as data, on turn_end.answerAssessment and agentfootprint.answer.assessed.',
-        );
-      }
-      if (this.outputSchemaParser !== undefined) {
-        throw new Error(
-          'AgentBuilder.answerLayer({ standingLine: true }) cannot be combined with ' +
-            '.outputSchema(): a typed answer is JSON, and JSON followed by a line of prose is not. ' +
-            'Keep .answerLayer() without the line — the standing still travels as data, on ' +
-            'turn_end.answerAssessment and agentfootprint.answer.assessed.',
-        );
-      }
-    }
-    // Resolve the voice config: bundled defaults + consumer overrides.
-    // Templates flow through the same barrel exports the rest of the
-    // library uses, so a future locale-pack swap is a single import.
-    const voice = {
-      appName: this.appNameValue,
-      commentaryTemplates: { ...defaultCommentaryTemplates, ...this.commentaryOverrides },
-      thinkingTemplates: { ...defaultStatusTemplates, ...this.thinkingOverrides },
-    };
-    // The SAME options object the builder was given unless a door overrode
-    // something — `maxIterations`, or the findings ledger (9.101.0), whose
-    // normalised value lands as `AgentOptions.findings`. An agent with neither
-    // hands `Agent` its options by reference, exactly as before.
-    const opts =
-      this.maxIterationsOverride !== undefined ||
-      this.findingsValue !== undefined ||
-      this.toolChoiceValue !== undefined ||
-      this.ontologyValue !== undefined ||
-      this.inputsLayerValue ||
-      this.resultsLayerValue ||
-      answerLayer !== undefined ||
-      this.timeValue !== undefined
-        ? {
-            ...this.opts,
-            ...(this.maxIterationsOverride !== undefined && {
-              maxIterations: this.maxIterationsOverride,
-            }),
-            ...(this.findingsValue !== undefined && { findings: this.findingsValue }),
-            // Tool choice by classifier (9.105.0), the same door grammar.
-            ...(this.toolChoiceValue !== undefined && { toolChoice: this.toolChoiceValue }),
-            // The declared ontology (9.106.0), the same door grammar.
-            ...(this.ontologyValue !== undefined && { ontology: this.ontologyValue }),
-            // The inputs layer (honesty layer 2), the same door grammar — its
-            // object form only when it also arms declared sources. The door
-            // MERGES with an `inputsLayer` option given to `Agent.create`: sources
-            // armed by either stay armed, and a malformed option is still refused
-            // by the one reader rather than silently replaced by the door's value.
-            ...(this.inputsLayerValue && {
-              inputsLayer:
-                this.inputsLayerSourcesValue ||
-                readInputsLayerOption(this.opts.inputsLayer)?.argumentSources === true
-                  ? { argumentSources: true }
-                  : true,
-            }),
-            // The results layer (honesty layer 3), the same door grammar.
-            ...(this.resultsLayerValue && { resultsLayer: true }),
-            // The answer layer (honesty layer 4), the same door grammar — the
-            // value resolved above, whichever door set it.
-            ...(answerLayer !== undefined && {
-              answerLayer:
-                answerLayer.standingLine === undefined
-                  ? true
-                  : answerLayer.standingLine === 'always'
-                  ? { standingLine: true }
-                  : { standingLine: { when: answerLayer.standingLine } },
-            }),
-            // The time layer, the same door grammar — the builder's value wins
-            // over an `AgentOptions.time` given to `Agent.create`.
-            ...(this.timeValue !== undefined && { time: this.timeValue }),
-          }
-        : this.opts;
-    // .selfExplain(): a fresh binding per build() — two built agents never
-    // share evidence. One mounted skill (methodology body only) + the trace
-    // tools on a skill-scoped ToolProvider composed with the consumer's own,
-    // so the catalog gains them ONLY on the activated iteration.
-    //
-    // Name reservation (mirrors the read_skill rule): the tools slot dedupes
-    // by name with first-occurrence-wins and the static registry merges
-    // FIRST — a consumer tool named like a trace tool would silently shadow
-    // it, and the skill body would instruct the model into the wrong tool.
-    //
-    // The pieces come through the port (`selfExplainPort.ts`): the trace
-    // toolpack sits above the agent, so it registers itself and this line
-    // only asks — refusing with one sentence when nothing registered.
-    const selfExplain = this.selfExplainConfig ? requireSelfExplain() : undefined;
-    if (this.selfExplainConfig) {
-      // Inline mode reserves whatever the pack can mount — read from
-      // `TRACE_TOOL_NAMES` rather than retyped here, so a tool added to the
-      // pack is reserved the same day it ships. Delegate mode mounts one
-      // tool and reserves one name.
-      const reserved: readonly string[] = this.selfExplainConfig.delegate
-        ? ['explain_run']
-        : TRACE_TOOL_NAMES;
-      const clash = this.registry.find((entry) => reserved.includes(entry.name));
-      if (clash) {
-        throw new Error(
-          `AgentBuilder.selfExplain: tool name '${clash.name}' is reserved by .selfExplain() ` +
-            `(${this.selfExplainConfig.delegate ? 'delegate' : 'inline'} mode). The tools slot ` +
-            `dedupes by name (first wins), so your tool would silently shadow the trace tool. ` +
-            `Rename it, or reserved names: ${reserved.join(', ')}.`,
-        );
-      }
-    }
-    // THE CONTINGENT LINE (9.110.0) — the findings instruction gains one
-    // line when the evidence gate is armed beside the ledger, and only then:
-    // `findings/contingent.ts` runs under both doors, so the sentence that
-    // names what it records is registered under both doors. Composed HERE
-    // because the two doors may be called in either order; the injection
-    // registered by `.findings()` is rebuilt in place, same id, same
-    // activation, so an agent with the ledger alone keeps the exact bytes
-    // `.findings()` registered.
-    // Declared sources (honesty layer 2) add NO line: `from` is explained
-    // once, in its own property on the ruled tools that carry it.
-    if (this.findingsValue !== undefined && this.evidenceGate !== undefined) {
-      const at = this.injectionList.findIndex((i) => i.id === FINDINGS_INSTRUCTION_ID);
-      if (at >= 0) {
-        this.injectionList[at] = findingsInstruction(
-          true,
-          this.findingsValue.answerAsk === 'quote-facts',
-        );
-      }
-    }
-    const selfExplainBinding =
-      selfExplain && this.selfExplainConfig
-        ? selfExplain.binding(this.selfExplainConfig)
-        : undefined;
-    let injections =
-      selfExplain && selfExplainBinding
-        ? [...this.injectionList, selfExplain.skill(this.selfExplainConfig!)]
-        : this.injectionList;
-    if (negativeClaims?.mode === 'typed' && negativeSchema !== undefined) {
-      injections = [
-        ...injections,
-        defineInstruction({
-          id: 'negative-claims',
-          activeWhen: () => true,
-          prompt: negativeClaimsInstruction(negativeClaims, negativeSchema),
-        }),
-      ];
-    }
-    // The tier-3 menu envelope's system-prompt half (SG-C): auto-registered
-    // whenever the mounted graph can produce a MENU verdict — a menu with no
-    // envelope would be a decision the model was never told about, the
-    // accepted-and-silently-wrong kind. Not under `'rails'` (the model may
-    // not act on a menu there), and not when the consumer registered their
-    // own (the metadata marker, never the id — a renamed hint still counts).
-    // Zero cost when the trigger is false: it reads `ctx.turnRoute`, which
-    // only cascade graphs ever write.
-    const cascadeForHint = this.skillGraphCascade;
-    if (
-      cascadeForHint !== undefined &&
-      cascadeForHint.strictness !== 'rails' &&
-      cascadeForHint.turnRouting !== undefined &&
-      (cascadeForHint.turnRouting.scorer !== undefined ||
-        cascadeForHint.continuity === 'conversation') &&
-      !injections.some(
-        (i) => (i.metadata as Record<string, unknown> | undefined)?.[MENU_HINT_METADATA_KEY],
-      )
-    ) {
-      injections = [...injections, defineMenuHint()];
-    }
-    // ── The tool posture (9.36.0) — `.toolsFromActiveSkill()` ──────────
-    // Applied to the FINAL injection list, for the reason every fold on this
-    // line uses: skills arrive through `.skill()`, `.skills()`, `.injection()`,
-    // `.skillGraph()` and `.selfExplain()`, and only here is the whole agent
-    // visible. From this point on there is exactly ONE list, so the registry,
-    // the slots, the projection and every recorder read the same stamp.
-    // Untouched when the posture was never asked for — the `false` branch does
-    // not even walk the list.
-    if (this.toolsFromActiveSkillValue) {
-      injections = scopeToolsToActiveSkill(injections);
-    }
-    // ── Steps-as-data check-up + advisory (9.18.0) ─────────────────────
-    // Judged on the FINAL injection list (the delivery-refusal reasoning:
-    // skills arrive through `.skill()`, `.skillGraph()`, `.skills()` and
-    // `.selfExplain()`, and only this line sees all of them). Nothing here
-    // runs for an agent without a stepped skill.
-    const stepPlans = foldStepPlans(injections);
-    if (stepPlans.size > 0) {
-      // Classic caches the tools slot after turn 1, so the per-step
-      // narrowing and the banner would FREEZE at whatever step was current —
-      // sequence enforcement that stops tracking the sequence. Refused, the
-      // classic+graph sentence pattern (9.16.0).
-      if (this.opts.reactMode === 'classic') {
-        const ids = [...stepPlans.keys()].join("', '");
-        throw new Error(
-          `Agent.build(): reactMode 'classic' cannot honor \`steps\` (declared by '${ids}'). ` +
-            `Classic composes the tools slot once on turn 1, so the per-step narrowing and ` +
-            `the step banner would freeze at the first step while the procedure moved on — ` +
-            `the offer would enforce a sequence it stopped tracking. Use the default ` +
-            `'dynamic' mode (or 'dynamic-grouped'), which recomposes the slots every ` +
-            `iteration, or drop \`steps\`.`,
-        );
-      }
-      // A decision .tree() never writes a cursor (per-iteration predicate
-      // routing — skillGraph's resolver stays the no-op there), and a step
-      // procedure's tenure begins only under the cursor. A stepped tree
-      // LEAF would slip past the wiring check below — its compiled trigger
-      // is 'rule' and it has a predicate edge, so the open-skill clause
-      // never fires — and then activate with its FULL toolset: no pointer,
-      // no narrowing, no banner, no skip_step, no step event, nothing
-      // saying why (accepted-and-silently-wrong, the cardinal sin). Same
-      // fate for a stepped skill registered BESIDE the tree: no cursor
-      // exists anywhere on a tree agent. Refused for all of them, the
-      // continuity×tree sentence pattern (9.17.0).
-      if (this.skillGraphIsTree) {
-        const ids = [...stepPlans.keys()].join("', '");
-        throw new Error(
-          `Agent.build(): a decision .tree() cannot honor \`steps\` (declared by '${ids}'). ` +
-            `A tree routes by predicate on every iteration and never writes a cursor, and ` +
-            `a step procedure's tenure begins only under the cursor — the steps would ` +
-            `never engage: no pointer, no narrowing, no banner, no step event. Use the ` +
-            `flat entry/route form, register the skill on an agent without a graph, or ` +
-            `drop \`steps\`.`,
-        );
-      }
-      const edgeTargets = new Set(this.skillGraphEdgeTargets ?? []);
-      for (const [skillId] of stepPlans) {
-        const skill = injections.find((i) => i.id === skillId);
-        if (!skill) continue;
-        if (this.skillGraphNextSkill !== undefined) {
-          // A graph is mounted: the tenant is the CURSOR, and the cursor
-          // never lands on an OPEN skill (llm-activated + no incoming edge —
-          // `Agent.openSkillIds`'s two clauses). Steps on one would activate
-          // a body whose procedure never engages: no pointer, no narrowing,
-          // no banner, no event, nothing saying why. Refused instead
-          // (accepted-and-silently-wrong is the cardinal sin).
-          const isOpen = skill.trigger.kind === 'llm-activated' && !edgeTargets.has(skillId);
-          if (isOpen) {
-            throw new Error(
-              `Agent.build(): skill '${skillId}' declares \`steps\`, but the mounted skill ` +
-                `graph does not wire it (no entry, no route edge) — it is an OPEN skill, ` +
-                `activated by read_skill without ever receiving the cursor, and a step ` +
-                `procedure's tenure begins only under the cursor. Its steps would never ` +
-                `engage. Wire it into the graph (an entry or a route), register it on an ` +
-                `agent without a graph, or drop \`steps\`.`,
-            );
-          }
-        } else if (skill.trigger.kind !== 'llm-activated') {
-          // No graph: the tenant is the most recent read_skill activation
-          // (the tail of activatedInjectionIds), and ONLY read_skill writes
-          // that array — a rule/always-triggered skill would never tenure.
-          throw new Error(
-            `Agent.build(): skill '${skillId}' declares \`steps\`, but its trigger is ` +
-              `'${skill.trigger.kind}' and this agent mounts no skill graph — without a ` +
-              `cursor, a procedure's tenure begins at a read_skill activation, which only ` +
-              `an 'llm-activated' skill ever gets. Use defineSkill (its trigger is ` +
-              `llm-activated), mount a graph that routes to it, or drop \`steps\`.`,
-          );
-        }
-      }
-      // Warn about an iteration budget too small for the declared procedure.
-      if (isDevMode()) {
-        const effectiveMax = opts.maxIterations ?? 10;
-        for (const plan of stepPlans.values()) {
-          // Warn, not refuse: adjacent same-tool steps can advance twice in
-          // one batch, so a tight budget CAN still complete a procedure.
-          if (plan.steps.length + 1 > effectiveMax) {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `agentfootprint Agent: skill '${plan.skillId}' declares ${plan.steps.length} ` +
-                `steps but maxIterations is ${effectiveMax} — the procedure cannot complete ` +
-                `in one turn unless steps share a batch. Raise maxIterations, or expect ` +
-                `steps_unfinished { action: 'cut-short' } on the record.`,
-            );
-          }
-        }
-      }
-      // The steps advisory (the menu-hint pattern, one block up): a narrowed
-      // offer with no explanation would be sequence enforcement the model was
-      // never told about. Marker-detected, so a consumer's own hint (any id)
-      // stands the default down.
-      if (
-        !injections.some(
-          (i) => (i.metadata as Record<string, unknown> | undefined)?.[STEPS_HINT_METADATA_KEY],
-        )
-      ) {
-        injections = [...injections, defineStepsHint()];
-      }
-    }
-    const toolProvider =
-      selfExplain && selfExplainBinding
-        ? selfExplain.toolProvider(
-            selfExplainBinding,
-            this.selfExplainConfig!,
-            this.toolProviderRef,
-          )
-        : this.toolProviderRef;
-    // A skill may claim the `read_skill` delivery channel only if `read_skill` is
-    // what activates it — otherwise its body reaches the model through no channel at
-    // all (8.5.0). Checked HERE, on the final list, for the same reason
-    // `resolveOutputEnforcement` lives here: the answer depends on the WHOLE agent.
-    // `.skillGraph()` compiles the triggers, `.skill()` may add more after it, and
-    // `.selfExplain()` adds one right above — only this line sees all of them.
-    const deliveryRefusal = toolOnlyDeliveryRefusal(injections);
-    if (deliveryRefusal) throw new Error(deliveryRefusal);
-    // Two governance refusals that need the WHOLE agent (8.13.0), for the same
-    // reason `resolveOutputEnforcement` and the delivery refusal live here:
-    // observers arrive across many `.watch()` calls, and a `checkIn` demand can
-    // come from `.tool()` OR from a skill's own tools, which only this line sees
-    // assembled.
-    assertNoCollidingObserverIds(this.recorderList);
-    assertCheckInHasADeclaringTool(
-      this.checkInConfig !== undefined,
-      this.registry,
-      injections,
-      toolProvider,
-    );
-    // Two dev-mode warnings about wiring that is inert rather than wrong (8.7.0).
-    // Both need the WHOLE agent — one asks whether a scorer exists, the other pairs a
-    // provider against an injection — so both live here, beside the refusal above.
-    warnInertRelevanceHint(injections, this.skillGraphScoreEntries !== undefined);
-    warnRedundantSkillScopedTools(this.toolProviderRef, injections);
-    // The skill graph's DEFERRED body-contract checks run HERE — the one build point
-    // that can see the full tool registry. At graph build (without `knownTools`) a
-    // body's `lookup_order(id)` is indistinguishable from a typo, because `.tool()`
-    // has not run yet; the graph said nothing it could not prove and left its note.
-    // The note is collected from the FINAL injection list (each deferred graph skill
-    // carries it in its metadata), so the checks run whichever door the skills came
-    // through — `.skillGraph(graph)` or `.skills({ list: () => graph.skills })`.
-    // The `.skillGraph()` capture is folded in as a fallback for a structurally-typed
-    // graph without per-skill stamps; skills found by both are deduped by id, so one
-    // problem is reported once. The known set checked now: the agent's registered
-    // tool names ∪ `read_skill` (auto-attached whenever a skill exists, so a hand-off
-    // hint naming it is not a typo) ∪ every NON-deferred skill's tool names (they
-    // exist on this agent; calling them nonexistent would be false) — plus, inside
-    // checkSkillContracts, the checked skills' own tools. Runs at most once per built
-    // agent, and never when the graph already ran its checks with an explicit
-    // `knownTools`: one problem, one report. Baseline `ToolProvider` tools are
-    // per-iteration and cannot be enumerated at build time — bodies naming only
-    // provider-delivered tools should pass the names via the graph's `knownTools`.
-    const deferredByMode = new Map<'throw' | 'warn', Injection[]>();
-    const deferredIds = new Set<string>();
-    const collectDeferred = (skill: Injection, mode: 'throw' | 'warn'): void => {
-      if (deferredIds.has(skill.id)) return; // metadata + graph note = ONE check
-      deferredIds.add(skill.id);
-      const group = deferredByMode.get(mode);
-      if (group) group.push(skill);
-      else deferredByMode.set(mode, [skill]);
-    };
-    for (const i of injections) {
-      const note = (i.metadata as { [SKILL_GRAPH_DEFERRED_CONTRACT_KEY]?: DeferredBodyContract })?.[
-        SKILL_GRAPH_DEFERRED_CONTRACT_KEY
-      ];
-      if (note?.mode === 'throw' || note?.mode === 'warn') collectDeferred(i, note.mode);
-    }
-    if (this.skillGraphDeferredBodyContract) {
-      const { mode, skills: graphSkills } = this.skillGraphDeferredBodyContract;
-      for (const s of graphSkills) collectDeferred(s, mode);
-    }
-    if (deferredByMode.size > 0) {
-      // Tools on skills OUTSIDE the deferred set exist on this agent — baseline,
-      // not typos. Tools on deferred skills are added per group by
-      // checkSkillContracts itself (own vs known matters for body-foreign-tool).
-      const baseKnownTools = [
-        ...this.registry.map((entry) => entry.name),
-        'read_skill',
-        ...injections
-          .filter((i) => i.flavor === 'skill' && !deferredIds.has(i.id))
-          .flatMap((s) => skillToolNames(s)),
-      ];
-      // One group per deferring graph's `check` mode — two graphs fed via
-      // `.skills()` may disagree, and each is judged by its OWN declared severity.
-      for (const [mode, group] of deferredByMode) {
-        const groupIds = new Set(group.map((s) => s.id));
-        const knownTools = [
-          ...baseKnownTools,
-          ...[...deferredByMode.values()]
-            .flat()
-            .filter((s) => !groupIds.has(s.id))
-            .flatMap((s) => skillToolNames(s)),
-        ];
-        const problems = checkSkillContracts(group, { knownTools });
-        if (problems.length === 0) continue;
-        const report = { ok: !problems.some((p) => p.kind === 'error'), problems };
-        // Severity per the GRAPH's own check mode. Both contract checks are
-        // warnings today, so `'throw'` and `'warn'` both surface as a dev-mode
-        // warning — but an error-kind problem, should one ever exist, honors
-        // `'throw'` here exactly as it would have at graph build.
-        if (mode === 'throw' && !report.ok) {
-          throw new Error(
-            `Agent.build(): skill-body ↔ tool-contract check-up failed ` +
-              `(deferred from graph build; checked against this agent's full tool ` +
-              `registry):\n${formatCheckup(report)}`,
-          );
-        }
-        if (isDevMode()) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `agentfootprint Agent: skill-graph body-contract check-up (deferred from ` +
-              `graph build; checked here against the agent's full tool registry — pass ` +
-              `knownTools to skillGraph to run it at graph build instead):\n` +
-              formatCheckup(report),
-          );
-        }
-      }
-    }
-    // ── The artifact vocabularies (SG-F, 9.25.0) ──────────────────────
-    // Runs on the FINAL injection list, for the reason every check on this
-    // line does: skills arrive through `.skill()`, `.skills()` AND
-    // `.skillGraph()`, and only here is the whole agent visible — which is
-    // exactly what the satisfiability rule needs ("does ANYTHING on this
-    // agent declare it produces this kind?"). A graph that already ran its
-    // own checkup re-reports here only if a producer outside the graph was
-    // what silenced it, which is the answer the author wants either way.
-    //
-    // Always a dev-mode WARNING, never a throw, on ANY check mode: the rule
-    // reads declarations only and cannot see a store seeded by another agent
-    // or an earlier run (`skillVocabulary.ts` states the whole boundary), so
-    // failing a build on it would be claiming more than it knows.
-    const vocabularyProblems = checkArtifactVocabularies(injections);
-    if (vocabularyProblems.length > 0 && isDevMode()) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `agentfootprint Agent: artifact-vocabulary check-up:\n` +
-          formatCheckup({ ok: true, problems: vocabularyProblems }),
-      );
-    }
-    // ── The brains fold (9.19.0) — both declaration homes, one check-up ──
-    // Runs on the FINAL injection list for the same reason the delivery
-    // refusal does: `defineSkill({ provider })` can arrive through
-    // `.skill()`, `.skills()` or `.skillGraph()`, and only this line sees
-    // all of them. Undefined — nothing declared anywhere — and the Agent
-    // wires nothing new.
-    const skillBrains: FoldedSkillBrains | undefined = foldSkillBrains({
-      injections,
-      ...(this.skillGraphBrainOptions?.providers !== undefined && {
-        providers: this.skillGraphBrainOptions.providers,
-      }),
-      ...(this.skillGraphBrainOptions?.escalation !== undefined && {
-        escalation: this.skillGraphBrainOptions.escalation,
-      }),
-      ...(this.skillGraphBrainOptions?.decider !== undefined && {
-        decider: this.skillGraphBrainOptions.decider,
-      }),
-      graphMounted: this.skillGraphNextSkill !== undefined,
-      ...(this.skillGraphNodeIds !== undefined && { nodeIds: this.skillGraphNodeIds }),
-      agentProviderName: opts.provider.name,
-    });
-    // ── Thinking, against what each provider DECLARES for its model ──
-    // After the brains fold, because a brain's model is a model the thinking
-    // request reaches too. A model that cannot think is refused HERE, by name
-    // (`thinkingSupport.ts`), not as a vendor 400 on the first call.
-    if (this.thinkingBudgetValue !== undefined) {
-      checkThinkingSupport({
-        budget: this.thinkingBudgetValue,
-        provider: opts.provider,
-        model: opts.model,
-        ...(skillBrains !== undefined && { brains: skillBrains }),
-        ...(this.reliabilityConfig?.providers !== undefined && {
-          reliabilityProviders: this.reliabilityConfig.providers,
-        }),
-      });
-    }
-    // A decider with no menu to resolve: only a graph that RUNS the
-    // turn-start cascade (a classifier, or `continuity: 'conversation'`)
-    // ever produces an outstanding menu, so a decider on any other mount
-    // would be config that never runs — refused rather than silently inert.
-    if (skillBrains?.decider !== undefined) {
-      const cascade = this.skillGraphCascade;
-      const runsCascade =
-        cascade !== undefined &&
-        cascade.turnRouting !== undefined &&
-        (cascade.turnRouting.scorer !== undefined || cascade.continuity === 'conversation');
-      if (!runsCascade) {
-        throw new Error(
-          `Agent.build(): a routing decider is declared, but this mount never runs the ` +
-            `turn-start cascade — no menu can ever be outstanding, so the decider would ` +
-            `never be consulted. Give the graph a classifier (.classify(...) / start rules ` +
-            `with intents) or mount with continuity: 'conversation', or drop \`decider\`.`,
-        );
-      }
-    }
-    // The maps kernel's plan (9.58.0) — resolved HERE because it needs both
-    // the mounted graph (member ids) and the final injection list (each
-    // member's contributed tool names). Refusals live in the resolver.
-    const mapsPlan = this.resolveMapsPlan(injections);
-    // The script record (`.scriptTravelsWithTheAnswer()`, `code: 'match'`) needs
-    // a tool that DECLARES it runs a program — never inferred from a name.
-    const declaresScript = [
-      ...this.registry.map((entry) => entry.tool),
-      ...injections.flatMap((injection) => injection.inject?.tools ?? []),
-    ].some((tool) => scriptOf(tool) !== undefined);
-    if (
-      this.scriptTravelValue !== undefined &&
-      !declaresScript &&
-      this.toolProviderRef === undefined
-    ) {
-      throw new Error(
-        'AgentBuilder.scriptTravelsWithTheAnswer: no registered tool declares `script`, so no ' +
-          'call of this agent can ever file a program to attach. Register a code-running tool ' +
-          "that declares one (`codeRunnerTool` does; a hand-built tool declares `script: { argument: 'code' }`), " +
-          'or drop this option.',
-      );
-    }
-    if (
-      this.evidenceGate?.code === 'match' &&
-      !declaresScript &&
-      this.toolProviderRef === undefined &&
-      isDevMode()
-    ) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "agentfootprint: .namesAndNumbersFromEvidence({ code: 'match' }) on an agent where no " +
-          'registered tool declares `script` — every fenced block the model shows is then a miss, ' +
-          'read as prose. Register a code-running tool that declares `script` (codeRunnerTool ' +
-          "does), or drop `code: 'match'`.",
-      );
-    }
-    // The claim contract (9.61.0) — refused here rather than at `.claims()`,
-    // because `.outputSchema()` may legitimately be declared after it.
-    // A contract with no typed stratum to read would check nothing, and a
-    // check that silently checks nothing is the decay this family exists
-    // to prevent.
-    if (this.claimsContract !== undefined && this.outputSchemaParser === undefined) {
-      throw new Error(
-        `Agent.claims(): a claim contract needs a validated answer to read — add ` +
-          `.outputSchema(schema). The claim seam compares TYPED fields; prose is never ` +
-          `checked, so without a schema this contract would check nothing.`,
-      );
-    }
-    const claimContract =
-      this.claimsContract === undefined
-        ? undefined
-        : Object.entries(this.claimsContract).map(([answerField, fact]) => ({
-            answerField,
-            entity: fact.entity,
-            field: fact.field,
-          }));
-    if (negativeClaims?.mode === 'typed') {
-      assertNegativeClaimsTools(negativeClaims, [
-        ...this.registry.map((entry) => entry.tool),
-        ...injections.flatMap((injection) => injection.inject?.tools ?? []),
-      ]);
-    }
-    const agent = new Agent(
-      opts,
-      this.systemPromptValue,
-      this.registry,
-      voice,
-      injections,
-      this.memoryList,
-      this.outputSchemaParser,
-      toolProvider,
-      this.systemPromptCachePolicy,
-      this.cachingDisabledValue,
-      this.cacheStrategyOverride,
-      this.outputFallbackCfg,
-      this.reliabilityConfig,
-      this.thinkingHandlerValue,
-      this.thinkingBudgetValue,
-      this.skillGraphNextSkill,
-      this.skillGraphReachable,
-      this.skillGraphScoreEntries,
-      this.checkInConfig,
-      this.runConfigFn,
-      this.windowStrategyValue,
-      this.toolMiddlewareList,
-      this.messageMiddlewareList,
-      this.resolveOutputEnforcement(negativeSchema),
-      this.skillGraphEdgeTargets,
-      this.skillGraphExplainNextSkill,
-      this.skillGraphIsTree,
-      this.skillGraphSupersededEntries,
-      this.skillGraphCascade,
-      skillBrains,
-      this.evidenceGate,
-      this.limitsTravelValue,
-      // Declaration order, and a COPY: the manifest reports what this build
-      // applied, and a later `.recipe()` on the same builder (a second
-      // `build()`) must not retroactively edit the agent already handed out.
-      // Undefined rather than `[]` when none — the manifest's "absent means not
-      // configured" law, and what keeps an agent with no recipes byte-identical.
-      this.appliedRecipeList.length > 0 ? [...this.appliedRecipeList] : undefined,
-      this.skillGraphDeclared,
-      mapsPlan,
-      claimContract,
-      this.answerValidationConfig,
-      this.systemPromptCacheExplicit,
-      negativeClaims,
-      this.scriptTravelValue,
-      this.aroundTurnPort,
-    );
-    // Attach the observers collected by `.watch()` so they receive events
-    // from the very first run. Mirrors what consumers would do post-build
-    // via `agent.attach(rec)`; the builder method is purely sugar over it,
-    // which is what makes `.watch()` provably the same attachment.
-    for (const observer of this.recorderList) {
-      agent.attach(observer);
-    }
-    if (selfExplainBinding) {
-      // Late binding: capture fires at each run's terminal flush, when
-      // getLastSnapshot() IS the just-completed run (never in-flight).
-      //
-      // All THREE sources in one call, because a turn's evidence is three
-      // things that a snapshot alone does not carry: what happened
-      // (snapshot), how it read in English (narrative), and when each tool
-      // call started and ended (events — the commit log has no clock).
-      //
-      // …plus a FOURTH when any mounted tool keeps a record of its own run
-      // (`flowchartAsTool({ keepRecord: true })`). Collected here rather
-      // than resolved per call because the store is a LIVE object owned by
-      // the tool: the binding holds the lookup, and every record the tool
-      // files after this point is visible through it.
-      const innerRuns = collectInnerRuns(this.registry, injections);
-      selfExplainBinding.bindTo({
-        getSnapshot: () => agent.getLastSnapshot(),
-        getNarrative: () => agent.getLastNarrativeEntries(),
-        // Only the explained run's own events (`Agent.ownsEvent`): on an
-        // instance serving several sessions the hosting door emits facts for
-        // OTHER sessions while this run is in flight.
-        on: (type, listener) =>
-          agent.on(type, (event) => {
-            if (agent.ownsEvent(event)) listener(event);
-          }),
-        ...(innerRuns !== undefined && { getInnerRuns: () => innerRuns }),
-        // …and the evidence as a whole is kept PER CONVERSATION (R2-11): on a
-        // shared `standingAgent({ agent })` the previous completed run of the
-        // INSTANCE is whoever ran last, so the binding files each finished
-        // turn under its conversation and serves the asking run's only —
-        // snapshot, narrative, events and the tools' inner runs alike
-        // (`agent/servingConversation.ts` says what the key is).
-        getServing: () => servingConversationOf(agent),
-      });
-      agent.attach(selfExplainBinding.recorder());
-      // …and the agent holds the binding, so `agent.canExplain()` answers
-      // from the SAME fact the trace tools answer from rather than from a
-      // second guess about whether a turn has completed.
-      agent.bindSelfExplain(selfExplainBinding);
-    }
-    return agent;
-  }
-}
-
-/**
- * Refuse two DIFFERENT observers that share one id (8.13.0).
- *
- * footprintjs de-duplicates attached recorders by id — `attachScopeRecorder` and
- * `attachFlowRecorder` both `filter(r => r.id !== recorder.id)` before pushing —
- * so of two objects carrying one id, only the LAST ever fires. The first is
- * removed before the run starts and reports nothing at all, which is
- * indistinguishable from an observer whose events simply never happened.
- *
- * Keyed on OBJECT IDENTITY, not on the id alone. Handing the same reference to
- * `.watch()` twice is
- * harmless and stays one attachment — the fp dedupe is doing exactly what it is
- * for. It is two DIFFERENT observers under one name that loses a whole observer.
- *
- * Deliberately does NOT reserve the `agentfootprint.` id prefix: the factories in
- * `agentfootprint/observe` carry ids in that namespace and consumers are meant to
- * `.watch()` them.
- */
-function assertNoCollidingObserverIds(observers: readonly Watcher[]): void {
-  const byId = new Map<string, Watcher>();
-  for (const observer of observers) {
-    const id = observer.id;
-    const seen = byId.get(id);
-    if (seen === undefined) {
-      byId.set(id, observer);
-      continue;
-    }
-    if (seen === observer) continue; // same reference — one attachment, by design
-    throw new Error(
-      `AgentBuilder.watch: two different observers were given the id '${id}'. Only the LAST ` +
-        `one ever fires — footprintjs de-duplicates attached recorders by id, so the earlier ` +
-        `one is dropped before the first run and reports nothing. Rename one of them; passing ` +
-        `the SAME object twice is fine (it stays one attachment).`,
+      }) =>
+        new Agent(
+          opts,
+          this.systemPromptValue,
+          this.registry,
+          voice,
+          injections,
+          this.memoryList,
+          this.outputSchemaParser,
+          toolProvider,
+          this.systemPromptCachePolicy,
+          this.cachingDisabledValue,
+          this.cacheStrategyOverride,
+          this.outputFallbackCfg,
+          this.reliabilityConfig,
+          this.thinkingHandlerValue,
+          this.thinkingBudgetValue,
+          this.skillGraphNextSkill,
+          this.skillGraphReachable,
+          this.skillGraphScoreEntries,
+          this.checkInConfig,
+          this.runConfigFn,
+          this.windowStrategyValue,
+          this.toolMiddlewareList,
+          this.messageMiddlewareList,
+          this.resolveOutputEnforcement(negativeSchema),
+          this.skillGraphEdgeTargets,
+          this.skillGraphExplainNextSkill,
+          this.skillGraphIsTree,
+          this.skillGraphSupersededEntries,
+          this.skillGraphCascade,
+          skillBrains,
+          this.evidenceGate,
+          this.limitsTravelValue,
+          // Declaration order, and a COPY: the manifest reports what this build
+          // applied, and a later `.recipe()` on the same builder (a second
+          // `build()`) must not retroactively edit the agent already handed out.
+          // Undefined rather than `[]` when none — the manifest's "absent means not
+          // configured" law, and what keeps an agent with no recipes byte-identical.
+          this.appliedRecipeList.length > 0 ? [...this.appliedRecipeList] : undefined,
+          this.skillGraphDeclared,
+          mapsPlan,
+          claimContract,
+          this.answerValidationConfig,
+          this.systemPromptCacheExplicit,
+          negativeClaims,
+          this.scriptTravelValue,
+          this.aroundTurnPort,
+        ),
     );
   }
 }
-
-/**
- * Refuse `.checkIn({...})` on an agent where no tool can ever trip the gate (8.13.0).
- *
- * `.checkIn()` configures HOW the ask is assembled — the evidence preset, the
- * drivers scorer. What MAKES an ask is a tool declaring `checkIn`. Resolution
- * already defaults (standard evidence + the lexical scorer), so a declaring tool
- * works with no `.checkIn()` call at all; the reverse — `.checkIn()` with nothing
- * that declares — configures the shape of a question that is never asked.
- *
- * Scans BOTH sources the dispatch map is built from (`buildToolRegistry`): the
- * `.tool()` registry and every skill's `inject.tools`, since a skill tool with a
- * `checkIn` demand is a real gate.
- *
- * NOT refused when a `.toolProvider()` is wired. Its tools are resolved per
- * iteration and may declare `checkIn`; build time cannot know, and refusing what
- * it cannot know would break a correct agent.
- */
-function assertCheckInHasADeclaringTool(
-  configured: boolean,
-  registry: readonly ToolRegistryEntry[],
-  injections: readonly Injection[],
-  toolProvider: ToolProvider | undefined,
-): void {
-  if (!configured || toolProvider !== undefined) return;
-  const declares = (tool: { readonly checkIn?: unknown }): boolean => tool.checkIn !== undefined;
-  if (registry.some((entry) => declares(entry.tool))) return;
-  for (const injection of injections) {
-    for (const tool of injection.inject?.tools ?? []) {
-      if (declares(tool as { readonly checkIn?: unknown })) return;
-    }
-  }
-  throw new Error(
-    'AgentBuilder.checkIn: configured, but no registered tool declares `checkIn` — so the gate ' +
-      'is never consulted, this agent will never pause for consent, and the evidence settings ' +
-      'here decide nothing. `.checkIn()` configures HOW the ask is assembled; a tool declaring ' +
-      "`checkIn: 'always'` (or a predicate) is what MAKES the ask. Add it to the tool that " +
-      "needs consent — defineTool({ …, checkIn: 'always' }) — or drop `.checkIn()`.",
-  );
-}
-
-/**
- * Gather the inner-run stores of every tool that keeps one (8.17.0).
- *
- * A `flowchartAsTool({ keepRecord: true })` carries its store on the tool
- * object under a registry symbol. This finds them so `.selfExplain()` can
- * hand one merged lookup to the trace artifacts — the consumer wires
- * nothing; mounting the tool and calling `.selfExplain()` is the whole
- * configuration.
- *
- * Two sources, both known at build time: the static registry (`.tool()` /
- * `.tools()`) and skill-declared tools. A tool arriving from a
- * `.toolProvider()` is deliberately NOT collected — provider tools are
- * resolved per iteration against a live context, so there is no build-time
- * moment at which the list exists. `inspect_tool_run` then answers with the
- * honest-absence arm, which names `keepRecord`; a consumer in that position
- * should register the chart tool statically as well.
- */
-function collectInnerRuns(
-  registry: readonly ToolRegistryEntry[],
-  injections: readonly Injection[],
-): InnerRunLookup | undefined {
-  const found: InnerRunLookup[] = [];
-  const take = (candidate: unknown): void => {
-    const store = innerRunsOf(candidate);
-    if (store !== undefined && !found.includes(store)) found.push(store);
-  };
-  for (const entry of registry) take(entry.tool);
-  for (const injection of injections) {
-    for (const tool of injection.inject?.tools ?? []) take(tool);
-  }
-  return mergeInnerRuns(found);
-}
-
-/**
- * Refuse an `llm-activated` trigger whose `viaToolName` is not `'read_skill'` (8.7.0).
- *
- * `viaToolName` reads as a promise the library never kept: name a tool, and that tool
- * activates the skill. No such tool has ever been created. The one consumer of an
- * `llm-activated` trigger is the evaluator, which matches on
- * `ctx.activatedInjectionIds.includes(inj.id)` and never looks at the field
- * (`evaluator.ts`); the only writer of that array is `read_skill`. So a skill carrying
- * `viaToolName: 'open_playbook'` activated by `read_skill` exactly like every other
- * skill, and the declaration meant nothing at all — a configuration that was never
- * read is worse than one that is refused, because it looks like it worked.
- *
- * Refused HERE because `injection()` is the one funnel every flavor passes through:
- * `defineSkill`, `skillsFromDir`, `.skill()`, `.skills(registry)`, `.skillGraph()`
- * and a hand-built Injection all arrive at this line.
- *
- * 9.0.0 removed the `viaToolName` OPTION from `defineSkill` and `skillsFromDir`
- * (both now refuse it by name at the factory), but the TRIGGER field stays and so
- * does this check: a hand-built `Injection` literal can still carry an
- * `llm-activated` trigger with any string in it, and that is the one path with no
- * factory in front of it.
- */
-function assertReadSkillActivation(injection: Injection): void {
-  const trigger = injection.trigger;
-  if (trigger.kind !== 'llm-activated') return;
-  if (trigger.viaToolName === 'read_skill') return;
-  throw new Error(
-    `Agent.injection('${injection.id}'): viaToolName is '${trigger.viaToolName}', but ` +
-      `'read_skill' is the only activation tool this library builds — nothing reads the field, ` +
-      `and no tool named '${trigger.viaToolName}' is ever offered to the model. This skill would ` +
-      `have activated through read_skill like every other one, so the name was decoration on a ` +
-      `door that does not exist. Drop \`viaToolName\` (skills already share one activation tool ` +
-      `and the model picks WHICH skill by id), or gate the skill on something the engine does ` +
-      `read — a \`rule\` trigger, or a skillGraph() edge. The \`viaToolName\` OPTION on ` +
-      `defineSkill()/skillsFromDir() was removed in 9.0.0; this trigger field is all that ` +
-      `is left, and only a hand-built Injection can still set it.`,
-  );
-}
-
-/**
- * Dev-warn a `defineRelevanceHint()` mounted where no scorer can feed it (8.7.0).
- *
- * The hint's trigger reads `ctx.entryScores`, and only the PickEntry stage writes it
- * — which runs only when the graph was built with `.entryBy()` / `.entryByRelevance()`
- * / `start: { entries, scoredBy | byRelevance }`. Without one, the injection mounts,
- * evaluates false on every iteration for the life of the agent, and reports nothing:
- * a feature that is configured and inert looks exactly like a feature that is working
- * and simply has not been needed yet.
- *
- * Keyed on the `readsEntryScores` metadata marker, not on the id — the id is the
- * caller's to rename.
- */
-function warnInertRelevanceHint(injections: readonly Injection[], hasScorer: boolean): void {
-  if (hasScorer || !isDevMode()) return;
-  for (const inj of injections) {
-    const meta = inj.metadata as Record<string, unknown> | undefined;
-    if (meta?.[READS_ENTRY_SCORES_METADATA_KEY] !== true) continue;
-    // eslint-disable-next-line no-console
-    console.warn(
-      `agentfootprint Agent: injection '${inj.id}' reads ctx.entryScores, which only an ENTRY ` +
-        `SCORER produces — and this agent's skill graph has none, so the injection can never ` +
-        `activate. Build the graph with .entryBy(keywordScorer()) or .entryByRelevance(embedder) ` +
-        `(object form: start: { entries, scoredBy }), or drop the injection. Note .entryByRead() ` +
-        `does NOT score — there the model picks, so there is no near-tie to report.`,
-    );
-  }
-}
-
-/**
- * Dev-warn a `skillScopedTools(id, …)` pointed at a skill that already scopes its own
- * tools (8.7.0).
- *
- * `defineSkill({ tools, autoActivate: 'currentSkill' })` already narrows the LLM's
- * tool list to the active skill, with no provider at all — that is what
- * `skillScopedTools`' own header means by "you probably don't need this". Wiring both
- * gives one skill two tool sources keyed on two DIFFERENT signals (the graph's active
- * set vs. the last `read_skill` call), which is how a tool ends up visible on
- * iterations nobody expected — and it is the exact pairing that put a shadowed tool
- * name into a field agent.
- */
-function warnRedundantSkillScopedTools(
-  provider: ToolProvider | undefined,
-  injections: readonly Injection[],
-): void {
-  if (!isDevMode()) return;
-  const target = skillScopedToolsTarget(provider?.id);
-  if (target === undefined) return;
-  const skill = injections.find((i) => i.id === target);
-  if (!skill) return;
-  const meta = skill.metadata as { autoActivate?: string } | undefined;
-  if (meta?.autoActivate !== 'currentSkill') return;
-  if ((skill.inject?.tools ?? []).length === 0) return;
-  // eslint-disable-next-line no-console
-  console.warn(
-    `agentfootprint Agent: skillScopedTools('${target}') is wired, but skill '${target}' already ` +
-      `carries autoActivate: 'currentSkill' with its own tools:[] — which narrows the tool list ` +
-      `to that skill on its own. The two gates key on DIFFERENT signals (the provider on the ` +
-      `last read_skill call, the skill on the graph's active set), so a tool can appear on ` +
-      `iterations you did not expect, and a name declared on both sides shadows (the model ` +
-      `reads the provider's description and the skill's implementation runs). Keep one: the ` +
-      `skill's tools:[] if the tools belong to the skill, the provider if they are assembled ` +
-      `elsewhere.`,
-  );
-}
-
-/**
- * Validate `.outputSchema(…, { retries })`.
- *
- * The ceiling is stated rather than left open: a model that has missed the
- * shape ten times in a row is not going to find it on the eleventh, and the
- * run would be spending real money and real iterations discovering that. When
- * ten is not enough the answer is a different schema or a different model,
- * not a longer loop.
- */
-function resolveRetries(retries: number | undefined): number {
-  if (retries === undefined) return 0;
-  if (!Number.isInteger(retries) || retries < 0) {
-    throw new Error(
-      `AgentBuilder.outputSchema: { retries } must be a non-negative integer, got ${String(
-        retries,
-      )}. It counts corrective re-asks — 0 (the default) means the first answer is the only one.`,
-    );
-  }
-  if (retries > MAX_OUTPUT_RETRIES) {
-    throw new Error(
-      `AgentBuilder.outputSchema: { retries: ${retries} } exceeds the ceiling of ` +
-        `${MAX_OUTPUT_RETRIES}. Each retry is a real turn — a real request, real tokens, real ` +
-        `money — and a model that has missed the shape ${MAX_OUTPUT_RETRIES} times running is ` +
-        `not about to find it. If that is genuinely not enough, the fix is a simpler schema, a ` +
-        `clearer instruction, or a different model.`,
-    );
-  }
-  return retries;
-}
-
-/** The stated ceiling on corrective re-asks. See {@link resolveRetries}. */
-const MAX_OUTPUT_RETRIES = 10;
