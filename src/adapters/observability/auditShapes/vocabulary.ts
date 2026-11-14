@@ -17,3 +17,21 @@ export type ItemOf<T> = T extends readonly (infer E)[] ? E : never;
 export const eventShape = <T extends EventType>(rules: {
   readonly [K in AnyKeyOf<PayloadOf<T>>]-?: BoundRule;
 }): BoundRule => shapeOf<PayloadOf<T>>(rules);
+
+/** The keys that a group repeats from an earlier group, or the registry never declared. */
+type InvalidEventKeys<
+  Groups extends readonly object[],
+  Seen extends PropertyKey = never,
+> = Groups extends readonly [infer First extends object, ...infer Rest extends readonly object[]]
+  ?
+      | Extract<AnyKeyOf<First>, Seen>
+      | Exclude<AnyKeyOf<First>, EventType>
+      | InvalidEventKeys<Rest, Seen | AnyKeyOf<First>>
+  : never;
+
+/** Type-only composition guard: each registered event is present exactly once. */
+export type CheckedEventGroups<Groups extends readonly object[]> = [
+  InvalidEventKeys<Groups>,
+] extends [never]
+  ? { readonly [T in EventType]-?: BoundRule }
+  : never;
