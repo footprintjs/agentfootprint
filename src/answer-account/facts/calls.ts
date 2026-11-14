@@ -260,7 +260,7 @@ export const COVERAGE_STATE_KEY = 'coverageDeclared';
 /**
  * A call's declaration as the committed state keeps it — its rows of
  * `coverageDeclared` (tracked state: a limit is a fact about the answer, so it
- * rides every recording, `core/agent/types.ts` · `coverageDeclared`).
+ * rides every recording, `core/agent/types/state/records.ts` · `coverageDeclared`).
  * What a call BEFORE a pause declared is read here: its events are in the
  * earlier leg, its rows are in this record's state.
  */
