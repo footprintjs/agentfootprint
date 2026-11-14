@@ -20,6 +20,7 @@ import type { RunnerCoreValues } from '../RunnerBase.js';
 import type { ProviderToolCache, ServedToolParties } from '../slots/buildToolsSlot.js';
 import type { buildToolCallsHandler } from './stages/toolCalls/index.js';
 import type { buildRouteDeciderStage } from './stages/route.js';
+import type { SourceEvidenceIndex } from '../../artifacts/sourceEvidence/types.js';
 
 /** Private domain values in the native component bank; never chart state or a run owner. */
 export interface AgentRunValues extends RunnerCoreValues {
@@ -44,6 +45,7 @@ export interface AgentRunValues extends RunnerCoreValues {
   resumePassedTime?: ReadRunTime;
   answeredAsk?: AnsweredAsk;
   pendingResumeHistory?: PendingResumeHistory;
+  pendingResumeSourceEvidence?: SourceEvidenceIndex;
   pendingEvidenceRecovery?: EvidenceRecoveryCheckpoint;
   pendingResumeFolded?: readonly FoldedSpan[];
   pendingResumeFindingsLedger?: FindingsLedger;

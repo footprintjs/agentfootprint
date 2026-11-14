@@ -34,6 +34,7 @@ import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
 import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
+import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import type { InputsDispatch } from '../contracts/inputsDispatch.js';
 
 interface ResumeAskLinks {
@@ -357,6 +358,9 @@ export function buildResumeAsk(
               args: runArgs,
               result,
               negativeResultId,
+              ...(scriptSeen.sourceCapture && {
+                onSourceWithheld: scriptSeen.sourceCapture.withheld,
+              }),
               ...(error === true && { error: true }),
               history: [...(scope.history as readonly LLMMessage[])],
               ...(scope.runIdentity && { identity: scope.runIdentity }),
@@ -381,6 +385,13 @@ export function buildResumeAsk(
     );
     const askCapped = links.capResults(toolName, askPlaced);
     modelResult = askCapped.modelResult;
+    if (scriptSeen.sourceCapture)
+      await scriptSeen.sourceCapture(modelResult, {
+        eligible: stepToolRan && modelResult === askPlaced.modelResult,
+        ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+      });
+    const sourceHalt = sourceEvidenceHaltOf(scope);
+    if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
     let askResultStr = typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
     const askToolChars = askResultStr.length;
     if (deps.negativeClaimsArmed === true)

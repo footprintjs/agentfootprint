@@ -1,0 +1,89 @@
+---
+title: Retained source evidence
+description: Keep exact historical source associations across native continuation, with fresh access checks and bounded stored-value reads.
+---
+
+A later question may need a source result that conversation trimming has removed.
+Mount retained source evidence when your producer can declare the exact subject,
+operation, scope and permitted fields. Payloads stay in your existing artifact
+store; the native checkpoint carries only a bounded list of receipt references.
+
+## Declare the producer's association
+
+`withSourceEvidence` accepts a `SourceEvidenceDescriptor` and annotates a tool
+without wrapping its execution. Its `SourceEvidenceDeclaration` names a typed
+`SourceEvidenceSubject`, operation and `SourceEvidenceScope`; a scope contains
+only governed `SourceEvidenceScalar` values. Native delivery
+considers the final governed model result after placement and size limits. A
+denied, failed, pending or truncated result does not become a retained source.
+Direct execution outside the native Agent cannot mint an accepted observation.
+
+<CodeFile path="examples/artifacts/retained-source-evidence.ts" region="declare-source" title="Explicit synthetic source and permitted fields" />
+
+Static dataset declarations are explicit authorization to inspect selected stored
+fields at capture; a served artifact reference alone grants nothing. Invalid
+static configuration throws when the tool is declared. Returned dataset fields
+must be an exact subset of a successful static declaration. The trusted producer
+owns domain relationships: matching bytes does not certify that an association
+is correct.
+
+A `SourceEvidenceDatasetDeclaration` governs the capture-time selected fields.
+Its detached `SourceEvidenceSource` contains only those fields and retained-rowset
+limits. A returned `SourceEvidenceDataset` binds a permitted subset to the exact
+native publication.
+
+## Mount fresh admission and continue
+
+The mount's `SourceEvidenceOptions` requires an artifact store and a trusted host
+`admit` callback. Every
+find, receipt read and dataset page repeats current native capability checks and
+host admission. The callback may withhold an observation or narrow its scalars
+and dataset fields; it cannot change the subject, scope, operation or native
+status/coverage/period. Check current source permissions and privacy here, rather
+than relying on a same-conversation artifact scope. The library does not replay
+the original argument-dependent execution policy or tool middleware.
+
+The callback receives a `SourceEvidenceCandidate` and returns its permitted
+`SourceEvidenceProjection`. A native `SourceEvidenceIndex` stores references and
+an omission count in the host-owned checkpoint, with no copied rows or subjects.
+
+<CodeFile path="examples/artifacts/retained-source-evidence.ts" region="mount-and-continue" title="Fresh authorization on every historical read" />
+
+The mount adds `find_source_evidence` and `read_source_evidence`. Find uses exact
+typed subject and optional exact operation/scope filters; separate observations
+remain separate. Read accepts an issued receipt reference and an optional named
+dataset, JSON-pointer path and page. A dataset reference is not a receipt.
+Array pages return exact values with `offset`, `shown`, `total` and optional
+`nextOffset`; oversized rows are unavailable rather than silently shortened.
+`SourceEvidenceFindArgs` and `SourceEvidenceReadArgs` describe those requests;
+`SourceEvidenceLimits` bounds their resource use and retention.
+
+## Keep the limits with the evidence
+
+All results are marked historical. `recordedAt` is the native store's retention
+time, not source collection time. Source period is separate. Partial status and
+visible coverage survive; record-only coverage fields do not become model data.
+Missing status or coverage remains undeclared. A governed rewrite cannot restore
+metadata that governance removed.
+
+`find.complete` means only that this bounded index scan reached its end with no
+known index omissions. Failed capture, expiry, denial or an unretained earlier
+call can still leave historical gaps. `detail.complete` means this response
+contains the entire retained rowset; it does not prove complete source inventory
+or a complete answer. Apply your domain coverage rules to the receipt and rows.
+
+Defaults are 32 retained references, 8 KiB per receipt, 32 candidates scanned,
+12 KiB per whole response and a 5-second asynchronous deadline per operation.
+Hard maxima are 128 references/scans, 32 KiB per receipt/response and 30 seconds.
+Static capture accepts at most 8 datasets, 24 named fields and 1000 rows per dataset,
+under at most 1 MiB of admitted materialized JSON; default capture is 20 rows/64 KiB.
+Array pages contain at most 20 rows. Each page rereads the existing scoped store;
+there is no payload cache or automatic source query/refresh. Expired, foreign,
+revoked, missing or oversized reads return the same unavailable result.
+
+Deadlines stop asynchronous waiting and prevent late index appends; they cannot
+preempt synchronous JavaScript or roll back an already accepted artifact write.
+Keep native checkpoints host-owned: structural validation does not authenticate
+an arbitrary imported checkpoint. This feature neither selects a question's
+target nor certifies a model answer. The deterministic runnable example uses
+synthetic local rows and a scripted provider; it makes no live model call.

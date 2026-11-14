@@ -1,6 +1,9 @@
 import type { PendingEvidenceRecovery, UnsupportedValue } from '../../evidence/types.js';
+import type { SourceEvidenceIndex } from '../../../../artifacts/sourceEvidence/types.js';
 
 export interface EvidenceState {
+  /** Native admitted source refs only; payloads and domain identities stay in scoped artifacts. */
+  sourceEvidence?: SourceEvidenceIndex;
   // ── The evidence gate (`.namesAndNumbersFromEvidence()`, 9.35.0) ────────
   /** In-flight hand-off from the Route decider (which finds the values and
    *  picks the branch) to the recheck stage (which writes the correction).

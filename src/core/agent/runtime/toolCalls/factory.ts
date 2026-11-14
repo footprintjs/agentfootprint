@@ -147,6 +147,9 @@ export function toolCallsFactory(environment: ToolCallsEnvironment) {
       // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
       // event can fire (zero-cost-when-unused).
       ...(environment.artifactStore && { artifactStore: environment.artifactStore }),
+      ...(environment.configuration.sourceEvidenceConfig !== undefined && {
+        sourceEvidenceConfig: environment.configuration.sourceEvidenceConfig,
+      }),
       // The placement threshold (9.22.0) — only ever set beside a store (the
       // option's own shape enforces it). Absent → results are never measured
       // against it and never placed.

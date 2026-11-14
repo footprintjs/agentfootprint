@@ -16,6 +16,7 @@ import type {
 import type { CacheStrategy } from '../../cache/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
 import type { ArtifactStore } from '../../artifacts/types.js';
+import type { SourceEvidenceOptions } from '../../tools/sourceEvidence.js';
 import type { AuthorizationRequiredMode } from '../../identity/consent.js';
 import type { ToolArgValidationMode } from '../../tools/toolArgsValidation.js';
 import type { TimeOptions } from '../../time/clock.js';
@@ -658,6 +659,8 @@ export interface AgentOptions {
    * naming this option (`ctx.hasArtifacts` is the fact to branch on).
    */
   readonly artifacts?: ArtifactStore | AgentArtifactsOptions;
+  /** Retain declared historical sources in the native store; every later read requires fresh admission. */
+  readonly sourceEvidence?: SourceEvidenceOptions;
   /**
    * Tell the model when it has already made this exact call and already got
    * this exact answer (9.26.0). **On by default.**

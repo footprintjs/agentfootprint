@@ -1420,3 +1420,20 @@ export {
   type ClaimRequirementPolicy,
   type ClaimRequirementAssessment,
 } from './answer-validation/index.js';
+export { withSourceEvidence } from './tools/sourceEvidence.js';
+export type { SourceEvidenceOptions, SourceEvidenceDescriptor } from './tools/sourceEvidence.js';
+export type {
+  SourceEvidenceSubject,
+  SourceEvidenceScalar,
+  SourceEvidenceScope,
+  SourceEvidenceDataset,
+  SourceEvidenceDeclaration,
+  SourceEvidenceProjection,
+  SourceEvidenceCandidate,
+  SourceEvidenceIndex,
+  SourceEvidenceLimits,
+  SourceEvidenceFindArgs,
+  SourceEvidenceReadArgs,
+  SourceEvidenceDatasetDeclaration,
+  SourceEvidenceSource,
+} from './artifacts/sourceEvidence/types.js';

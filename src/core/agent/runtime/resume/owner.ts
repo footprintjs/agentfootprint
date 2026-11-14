@@ -38,6 +38,7 @@ import { requestOf } from '../../../requestOfRun.js';
 import { withoutTime } from '../../run/withoutTime.js';
 import { resumeRedactionOf } from '../../run/resumeRedaction.js';
 import type { AgentContext } from '../contracts.js';
+import { sourceEvidenceOf } from '../conversation/checkpointParts.js';
 
 export async function resume(
   this: Pick<AgentContext, 'native' | 'resumeOwned'>,
@@ -97,6 +98,16 @@ export async function resumeLeg(
   // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
   // without reaching it, refused or aborted, used nothing.
   resumeStateOf(checkpoint);
+  const sourceEvidence = sourceEvidenceOf(checkpoint.sharedState);
+  const sourceEvidenceConfig = this.configuration.sourceEvidenceConfig;
+  if (sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
+    throw new TypeError('Resume requires the source evidence setting used by the paused agent.');
+  if (
+    sourceEvidenceConfig !== undefined &&
+    (sourceEvidence === undefined ||
+      sourceEvidence.refs.length > sourceEvidenceConfig.limits.maxReceipts)
+  )
+    throw new TypeError('Source evidence pause checkpoint is missing its bounded native carrier.');
   // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
   // Refused HERE, before the engine is handed the checkpoint, so nothing
   // executes and the checkpoint is unchanged — the caller can answer the same

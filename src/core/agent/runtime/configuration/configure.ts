@@ -51,6 +51,7 @@ import type { ThinkingHandler } from '../../../../thinking/types.js';
 import { requireKeepLedgerFacts, resolveKeepLedgerFacts } from '../../run/ledgerFacts.js';
 import type { Runner } from '../../../runner.js';
 import type { AgentConfigurationValues } from './values.js';
+import { resolveSourceEvidenceOptions } from '../../../../tools/sourceEvidence.js';
 
 /** Public identity remains on the original runner, at its existing construction points. */
 interface AgentIdentity {
@@ -498,6 +499,10 @@ export function configureAgent(
     } else {
       config.artifactStore = opts.artifacts;
     }
+  }
+  if (opts.sourceEvidence !== undefined) {
+    if (!config.artifactStore) throw new Error('Agent.sourceEvidence requires an artifact store.');
+    config.sourceEvidenceConfig = resolveSourceEvidenceOptions(opts.sourceEvidence);
   }
   // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
   // read at exactly one place — the tool-dispatch loop, AFTER
