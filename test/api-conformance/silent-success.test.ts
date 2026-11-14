@@ -195,7 +195,7 @@ describe('silent success — the conversation', () => {
     // Same key, still two conversations — the behavior a caller must know.
     expect(userTurns(seen[1])).toEqual(['two']);
 
-    const src = read('core/agent/types.ts');
+    const src = read('core/agent/types/input.ts');
     expect(src).toContain('`conversationId` is a namespace key, not a conversation');
     expect(src).toContain('does NOT continue the first');
   });

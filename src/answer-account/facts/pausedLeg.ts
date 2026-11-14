@@ -8,7 +8,7 @@
  * committed state after it, which carries the part before the pause forward:
  * `sharedState.history` keeps each call answered before the pause with what
  * came back, and the tracked `coverageDeclared` rows keep what each of those
- * tools declared (`core/agent/types.ts` · `coverageDeclared` — a
+ * tools declared (`core/agent/types/state/records.ts` · `coverageDeclared` — a
  * limit is a fact about the answer, so it rides every recording).
  *
  * The boundary is the paused state itself: a call before the pause is a tool
