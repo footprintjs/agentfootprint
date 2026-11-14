@@ -1,7 +1,18 @@
+import { livePort } from './builder/livePort.js';
+import { checkAnswerContract } from './builder/answer/policies.js';
 import {
-  resolveSourceEvidenceOptions,
+  setAnswerPolicy,
+  setNegativePolicy,
+  setSourceEvidence,
+  sourceOptions,
+  type AnswerValidationOptions,
+  type NegativeClaimsOptions,
   type SourceEvidenceOptions,
-} from '../../tools/sourceEvidence.js';
+  type OutputSchemaOptions,
+  type OutputSchemaParser,
+  type OutputSchemaStrategy,
+} from './builder/answer/policies.js';
+
 import { findingsInstruction } from './findings/instruction.js';
 import { findingsContextBytes } from './findings/context.js';
 /**
@@ -14,18 +25,8 @@ import { findingsContextBytes } from './findings/context.js';
  */
 
 import { isDevMode } from 'footprintjs';
-import {
-  resolveAnswerValidation,
-  type AnswerValidationOptions,
-  type ResolvedAnswerValidation,
-} from '../../answer-validation/index.js';
 
-import {
-  buildDefaultInstruction,
-  type OutputSchemaOptions,
-  type OutputSchemaParser,
-  type OutputSchemaStrategy,
-} from '../../answer-validation/outputSchema.js';
+import { buildDefaultInstruction } from '../../answer-validation/outputSchema.js';
 import {
   buildSchemaTool,
   resolveJsonSchema,
@@ -34,12 +35,9 @@ import {
 } from './outputEnforcement.js';
 import { nativeOutputFormat, NativeOutputSchemaError } from './nativeOutputFormat.js';
 import {
-  resolveNegativeClaims,
   assertNegativeClaimsTools,
   negativeClaimsSchema,
   negativeClaimsInstruction,
-  type NegativeClaimsOptions,
-  type ResolvedNegativeClaims,
 } from './negativeClaims/config.js';
 import { resolveEvidenceGate } from './evidence/gate.js';
 import { scopeToolsToActiveSkill } from './toolsFromActiveSkill.js';
@@ -334,8 +332,8 @@ export class AgentBuilder {
    * builder, propagated to the Agent at `.build()` time.
    */
   private outputSchemaParser?: OutputSchemaParser<unknown>;
-  private answerValidationConfig?: ResolvedAnswerValidation;
-  private negativeClaimsConfig?: ResolvedNegativeClaims;
+  private answerValidationConfig?: ReturnType<typeof setAnswerPolicy>;
+  private negativeClaimsConfig?: ReturnType<typeof setNegativePolicy>;
   /** Corrective re-asks the loop may spend. `0` (the default) means the
    *  schema is judged once, at the caller's boundary, exactly as it always
    *  was — and no enforcement is mounted in the chart at all. */
@@ -3378,18 +3376,13 @@ export class AgentBuilder {
    * than only recorded (see {@link AnswerValidationOptions.agentChecks}).
    */
   answerValidation<T>(options: AnswerValidationOptions<T>): this {
-    if (this.answerValidationConfig !== undefined) {
-      throw new Error('AgentBuilder.answerValidation: already configured.');
-    }
-    this.answerValidationConfig = resolveAnswerValidation(options);
+    this.answerValidationConfig = setAnswerPolicy(this.answerValidationConfig, options);
     return this;
   }
 
   /** Retain exact governed source observations with fresh read admission. */
   sourceEvidence(options: SourceEvidenceOptions): this {
-    if (this.sourceEvidenceValue !== undefined)
-      throw new Error('Agent.sourceEvidence: already configured.');
-    this.sourceEvidenceValue = resolveSourceEvidenceOptions(options);
+    this.sourceEvidenceValue = setSourceEvidence(this.sourceEvidenceValue, options);
     return this;
   }
 
@@ -3417,10 +3410,7 @@ export class AgentBuilder {
    * ```
    */
   negativeClaims(options: NegativeClaimsOptions): this {
-    if (this.negativeClaimsConfig !== undefined) {
-      throw new Error('Agent.negativeClaims: already configured.');
-    }
-    this.negativeClaimsConfig = resolveNegativeClaims(options);
+    this.negativeClaimsConfig = setNegativePolicy(this.negativeClaimsConfig, options);
     return this;
   }
 
@@ -3561,37 +3551,17 @@ export class AgentBuilder {
         resolveJsonSchema(this.outputSchemaParser, this.outputSchemaJson),
       );
     }
-    if (this.answerValidationConfig !== undefined) {
-      if (this.outputSchemaParser === undefined) {
-        throw new Error('AgentBuilder.answerValidation requires .outputSchema(parser).');
-      }
-      if (this.outputFallbackCfg !== undefined || this.limitsTravelValue) {
-        throw new Error(
-          'AgentBuilder.answerValidation does not support .outputFallback() or .limitsTravelWithTheAnswer(): a fallback can replace the checked answer after validation, and the validated delivery has no place for the declared limits.',
-        );
-      }
-      // A listed check with nothing to judge is refused, never left to pass.
-      const listed = this.answerValidationConfig.agentChecks;
-      if (listed.includes('negative-claims') && negativeClaims?.mode !== 'typed') {
-        throw new Error(
-          "AgentBuilder.answerValidation({ agentChecks: ['negative-claims'] }) requires typed .negativeClaims({ field, tools }).",
-        );
-      }
-      if (listed.includes('claims') && this.claimsContract === undefined) {
-        throw new Error(
-          "AgentBuilder.answerValidation({ agentChecks: ['claims'] }) needs a .claims() contract: " +
-            'it names which answer field claims which fact, and without one the claim check has ' +
-            "nothing to judge. Declare the contract, or drop 'claims' from agentChecks.",
-        );
-      }
-      if (listed.includes('names-and-numbers') && this.evidenceGate === undefined) {
-        throw new Error(
-          "AgentBuilder.answerValidation({ agentChecks: ['names-and-numbers'] }) needs " +
-            '.namesAndNumbersFromEvidence(): its verdict is what the row reads. Add the gate, or ' +
-            "drop 'names-and-numbers' from agentChecks.",
-        );
-      }
-    }
+    checkAnswerContract(
+      livePort({
+        answerValidationConfig: { get: () => this.answerValidationConfig },
+        outputSchemaParser: { get: () => this.outputSchemaParser },
+        outputFallbackCfg: { get: () => this.outputFallbackCfg },
+        limitsTravelValue: { get: () => this.limitsTravelValue },
+        claimsContract: { get: () => this.claimsContract },
+        evidenceGate: { get: () => this.evidenceGate },
+      }),
+      negativeClaims,
+    );
     // The answer layer (honesty layer 4), resolved ONCE from both doors — the
     // builder's `.answerLayer()` wins; otherwise `AgentOptions.answerLayer`,
     // checked by the same rules — so the refusals below and the arm `Agent`
@@ -4144,9 +4114,7 @@ export class AgentBuilder {
       ]);
     }
     const agent = new Agent(
-      this.sourceEvidenceValue === undefined
-        ? opts
-        : { ...opts, sourceEvidence: this.sourceEvidenceValue },
+      sourceOptions(opts, this.sourceEvidenceValue),
       this.systemPromptValue,
       this.registry,
       voice,

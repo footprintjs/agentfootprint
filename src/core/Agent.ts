@@ -1,3 +1,4 @@
+import { applyLegacyContinuation } from './agent/runtime/conversation/continuation.js';
 import { sourceEvidenceTools } from '../tools/sourceEvidenceTools.js';
 import {
   refuseFollowUpIdentity,
@@ -218,7 +219,6 @@ import {
   type OutputFallbackEmit,
 } from './outputFallback.js';
 import {
-  assertContinuable,
   buildCheckpoint,
   checkpointReplayHistory,
   retainReplayRetirements,
@@ -3130,76 +3130,22 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     };
   }
 
-  /**
-   * Restore a stored conversation onto the side channel `seed` reads.
-   *
-   * THE one restoration path — `run({ continueFrom })` and `resumeOnError()`
-   * both come through here, so the conversation door and the error door cannot
-   * disagree about what continuing means. It checks the agent fingerprint,
-   * restores history + folded spans, and adopts the conversation's identity so
-   * the continued turn writes its memory where the earlier turns are.
-   *
-   * `appendsUserTurn` is the difference between the two callers, and it is the
-   * whole difference. Continuing a conversation ADDS this turn's user message
-   * to the stored history; resuming after an error does NOT, because there the
-   * message is already the last user turn in that history and appending it
-   * would ask the same question twice.
-   *
-   * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
-   * by `seed.ts · historyForTurn` from the message the `'input'` middleware
-   * chain let through; an entry built here, before that chain has run, is the
-   * caller's raw text — which is what a continued turn served the model
-   * through 9.112.1, while the record said the rewrite had happened.
-   *
-   * @internal
-   */
+  /** Restore through the one legacy continuation owner, retaining this private entry point. */
   private applyContinuation(
     values: AgentRunValues,
     cp: AgentRunCheckpoint,
     door: string,
     appendsUserTurn: boolean,
   ): void {
-    assertContinuable(cp, this.explicitId, door);
-    requireVerificationOnResume(cp, false);
-    const sourceEvidence = sourceEvidenceOf(cp);
-    if (this.sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
-      throw new TypeError(
-        'Continuation requires the source evidence setting used by the recording agent.',
-      );
-    values.pendingResumeSourceEvidence = sourceEvidence;
-    if (this.negativeClaimsConfig === undefined && negativeCheckpointOf(cp) !== undefined)
-      throw new TypeError(
-        'Continuation requires the negative-claims setting used by the recording agent.',
-      );
-    values.pendingResumeHistory = {
-      history: cp.history as readonly LLMMessage[],
+    applyLegacyContinuation(
+      values,
+      cp,
+      door,
       appendsUserTurn,
-      // The turn the stored history ends on (honesty layers) — seed continues
-      // the turn stamp from it only while a layer is armed.
-      ...(cp.turnNumber !== undefined && { turn: cp.turnNumber }),
-      ...(this.negativeClaimsConfig === undefined ? {} : { negatives: negativeCheckpointOf(cp) }),
-    };
-    // The folded spans beside it. A conversation stored before 8.2 has none,
-    // and `undefined` is the right answer there — it means "this conversation
-    // recorded no folds", which is exactly true.
-    values.pendingResumeFolded = cp.folded;
-    // The findings ledger beside it (9.101.0). Stashed whether or not THIS
-    // agent is armed: seed restores it only under `.findings()` (the deps
-    // gate), and an unarmed continuation consumes and ignores it — exactly
-    // like a `folded` field on an agent that never folds.
-    values.pendingResumeFindingsLedger = cp.findingsLedger;
-    // The conversation's skill cursor (SG-C). Stashed unconditionally —
-    // whether it is HONORED is seed's `restoreSkillCursor` gate, which reads
-    // the mounted graph's `continuity` declaration; a checkpoint written by a
-    // continuity graph and continued on a `'turn'` one is consumed and
-    // ignored, exactly like a `folded` field on an agent that never folds.
-    values.pendingResumeSkillCursor = cp.skillCursor;
-    // Same failed request retains its single repair budget. A new user turn
-    // receives neither the rejected draft nor a spent retry allowance.
-    values.pendingEvidenceRecovery =
-      !appendsUserTurn && cp.evidenceRecovery !== undefined
-        ? structuredClone(cp.evidenceRecovery)
-        : undefined;
+      this.explicitId,
+      this.sourceEvidenceConfig !== undefined,
+      this.negativeClaimsConfig !== undefined,
+    );
   }
 
   /** A person's unanswered question outranks a new message — see

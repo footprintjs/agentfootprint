@@ -58,6 +58,18 @@ Array pages return exact values with `offset`, `shown`, `total` and optional
 `SourceEvidenceFindArgs` and `SourceEvidenceReadArgs` describe those requests;
 `SourceEvidenceLimits` bounds their resource use and retention.
 
+With `.findings()` mounted, an unavailable `_findings.previous` ID still refuses
+the entire proposed tool call before execution. Retained-source mounts add fixed
+`recovery` data to that batch refusal: omit unavailable previous entries, and use
+only unique executed `tool_result` IDs from the current request. Artifact receipt
+references are different identities. When both native readers were offered,
+`recovery.retainedSource` names their find/read route; read references come only
+from `find_source_evidence.candidates[].ref`. Its fixed `unknownFilters: "omit"`
+policy keeps unknown optional operation/scope filters out of the request rather
+than guessing them. This offers a recovery path, not a
+grant of access or a promise that evidence exists. It never triggers a fresh
+source query. Answer and native-resume refusal/terminal decisions stay unchanged.
+
 ## Keep the limits with the evidence
 
 All results are marked historical. `recordedAt` is the native store's retention

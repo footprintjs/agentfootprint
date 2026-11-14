@@ -1,3 +1,4 @@
+import { sourceLanding } from '../../../sourceEvidence/landing.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
 import { checkToolPermission } from '../access/toolPermission.js';
@@ -523,15 +524,10 @@ export function buildCallDispatch(
     const capped = operations.capResults(tc.name, placedValues);
     const modelResult = capped.modelResult;
     if (execution.sourceCapture)
-      await execution.sourceCapture(modelResult, {
-        eligible:
-          execution.executed &&
-          !outcome.error &&
-          !execution.denied &&
-          !execution.ceilingRefused &&
-          capped.modelResult === placedValues.modelResult,
-        ...(outcome.toolStatus !== undefined && { status: outcome.toolStatus }),
-      });
+      await execution.sourceCapture(
+        modelResult,
+        sourceLanding(execution, outcome, capped.modelResult === placedValues.modelResult),
+      );
 
     const durationMs = Date.now() - startMs;
     recordCallSettlement(scope, {

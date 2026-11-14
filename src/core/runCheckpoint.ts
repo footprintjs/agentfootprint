@@ -81,10 +81,8 @@ import {
   type FindingsLedger,
 } from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
-import {
-  isClaimVerificationRow,
-  readClaimVerificationRow,
-} from './agent/findings/verificationRow.js';
+import { isClaimVerificationRow } from './agent/findings/verificationRow.js';
+import { checkpointWithCarriers } from './agent/sourceEvidence/checkpointValidation.js';
 import { verificationCheckpointOf } from './agent/findings/verificationCheckpoint.js';
 import {
   negativeCheckpointOf,
@@ -1003,19 +1001,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
     }
   }
   negativeCheckpointOf(c);
-  const hasVerificationRows = c.findingsLedger?.some((row) => row.kind === 'claim-verification');
-  return claimVerification === undefined && !hasVerificationRows && sourceEvidence === undefined
-    ? (c as AgentRunCheckpoint)
-    : ({
-        ...c,
-        ...(claimVerification !== undefined && { claimVerification }),
-        ...(sourceEvidence === undefined ? {} : { sourceEvidence }),
-        ...(hasVerificationRows && {
-          findingsLedger: c.findingsLedger?.map((row) =>
-            row.kind === 'claim-verification' ? readClaimVerificationRow(row) : row,
-          ),
-        }),
-      } as AgentRunCheckpoint);
+  return checkpointWithCarriers(c, claimVerification, sourceEvidence);
 }
 
 /**
