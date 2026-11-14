@@ -1,144 +1,165 @@
-<!-- analyzed-at: d9afbaa @ 2026-07-02 | model: fable-5 -->
-# agentfootprint — feature-work map
+# agentfootprint — contributor guide
 
-Agent framework layered on footprintjs: every runner (Agent, LLMCall, compositions, patterns) is a footprintjs chart built ONCE at construction and executed through one native footprintjs run lifecycle per chart. Engine seams (stage kinds, $-methods, engine handlers) live UPSTREAM in footprintjs and are closed here. This file maps this repo's seams and blast radius — **trust the code** where any doc disagrees.
+AgentFootprint builds agents from footprintjs charts. Each runner builds its chart once
+and executes through one native footprintjs lifecycle. Stage kinds, `$` methods and
+engine handlers belong upstream; they are closed extension seams here. Trust current code.
 
-## Definition of done — every change, every session
+## Before changing anything
 
-This repo is built mostly by coding agents. The rules below are what keep docs,
-examples and releases honest without anyone remembering anything.
+- Search [CAPABILITIES.md](CAPABILITIES.md), rather than reading the whole index; then
+  check the nearest export in `src/index.ts`.
+- Read the relevant README and scoped rule below before choosing an extension point.
+- Keep identifiers injective: use `encodeIdentityField`, with a collision check in the
+  same change. The alternative is an explicit domain refusal; never silently rewrite keys.
+- Preserve existing source, failures and unrelated work. Use an ordinary branch and PR.
 
-1. **Before designing, grep [CAPABILITIES.md](CAPABILITIES.md)** — the thing may
-   already exist (it has happened repeatedly). Then the nearest noun in `src/index.ts`.
-2. **Code + tests.** Run the area's tests while working (`npx vitest run test/<area>`);
-   the full suite (`npm test`, ~5 min) before you finish.
-3. **One change fragment** in `.changes/<slug>.md` for anything touching `src/`
-   (`type: fixed|added|changed|breaking|internal|…` — see [.changes/README.md](.changes/README.md)).
-   **Never** edit `CHANGELOG.md`, bump `package.json`'s version, or write a version
-   number anywhere — the release computes and writes it.
-4. **A new public capability** adds one row to CAPABILITIES.md with Since `unreleased`.
-5. **A user-visible feature** updates its page under `docs-next/content/docs/` and has a
-   runnable example under `examples/` (`npm run example -- examples/<dir>/<file>.ts`).
-   Docs pull code from the example (`<CodeFile region>`) rather than pasting it.
-6. **`npm run docs:regen`**, then commit everything it changed. CI's `generated` job
-   fails when a generated file (API mirror, docs-truth report, examples README,
-   AI-instruction copies) is stale.
-7. **Fast gate:** `npm run lint && npm run format && npx tsc --noEmit`.
-8. **Releasing is not part of a change — merging is.** A fragment reaching `main` makes
-   the Release workflow (`.github/workflows/publish.yml`) open or update the release PR
-   (`release/next`: version, CHANGELOG, regenerated docs). Merging THAT PR publishes the
-   tree its CI passed — the gates run again only when the workflow cannot show CI passed
-   them on that exact tree — then tags, publishes to npm with provenance and starts the docs
-   site deploy, which never holds up npm. A red gate releases nothing. Never edit
-   `release/next` by hand — the workflow rebuilds it.
+## Definition of done
 
-**Three kinds of docs — keep them apart:**
+1. Add behavior tests and run the affected area while working. The full suite must pass
+   before completion; send heavy suites, coverage, builds and installs to hosted CI first.
+2. Anything touching `src/` needs a fragment in [.changes/](.changes/README.md).
+   Never edit `CHANGELOG.md`, bump the package version, or write version numbers; release computes them.
+3. A new public capability gets a CAPABILITIES row with Since `unreleased`.
+4. A user-visible feature gets a published how-to page and a runnable `examples/` program.
+   Feature pages use `<CodeFile region>` to include example code rather than duplicate it.
+5. Regenerate with `npm run docs:regen` and commit its output. The `generated` job checks
+   the API mirror, docs-truth report, examples index, instruction copies and canonical notes.
+6. Fast checks: `npm run lint`, `npm run format`, and `npx tsc --noEmit`.
+7. Keep docs separate: API reference is generated from export TSDoc; feature pages explain
+   use, one example and gotchas; READMEs, scoped rules, designs and proposals hold internals.
+   Never hand-write API signature tables or put design history in a feature page.
+   Never link internal guidance from a feature page or ship it in the npm package.
+8. Deliver the exact pushed head and proof for independent review. A changed head needs
+   a fresh verdict and applicable green gates. Authors do not approve their own changes.
 
-| Kind | Where | Written how |
-|---|---|---|
-| API reference | `docs-next/content/docs/api/` | GENERATED from TSDoc on exports — write good TSDoc, never a signature table |
-| Features (how do I…) | `docs-next/content/docs/{getting-started,build,debug,monitor,infrastructure}` | Plain words: what it is, when to use it, one example, gotchas. No design history |
-| Internals (why / blast radius) | this file, `.claude/rules/`, `docs/design/`, `docs/proposals/` | Never linked from a feature page, never shipped to npm |
+## Release and review
 
-## Before you design it: it may already exist
+- Lanes author, test, push and open draft PRs. The owner handles final review, normal
+  merges, draft readiness, branch updates, release and settings decisions.
+- Never use force, `--admin`, `--no-verify` or manual publication.
+- A fragment on main makes `.github/workflows/publish.yml` rebuild `release/next`.
+  Never edit that branch by hand. Merging its reviewed PR publishes the tested tree.
+- Release gates rerun unless `verdict` proves CI passed that exact tree. Red releases nothing.
+  Publication tags the release, publishes with provenance, then deploys docs; docs do not hold npm.
 
-The capability index lives in **[CAPABILITIES.md](CAPABILITIES.md)** (≈120 rows, keyed by
-what you would call the thing). Grep it; do not read it whole.
+## Layering and public doors
 
-**One law before you add a mapping.** Any function turning caller data into a KEY,
-a namespace, a filename or an index entry must be injective, and its collision
-check ships in the SAME change — not the release that discovers it. Six defects of
-that exact shape were fixed between 9.37.0 and 9.46.0. Use `encodeIdentityField`
-rather than writing a seventh. The ONE acceptable alternative is refuse-by-domain —
-assert a safe charset and refuse everything else by name, as `fileRecordingSink`
-does for internal runIds — because a refusal cannot collide. What is never
-acceptable is a third thing: a fold that quietly rewrites.
+- [scripts/layering.config.cjs](scripts/layering.config.cjs) owns `LAYERS` and every fence.
+  A top-level source folder occupies exactly one layer, registered before its first file.
+- Imports go to the same layer or lower. `UPWARD_ALLOWANCES` stays empty; the named,
+  justified `TYPE_ONLY_ALLOWANCES` may only shrink. Do not invent an exception.
+- L0 contains leaves such as `lib/`, `events/` and `time/`; core is L9. Root barrels
+  and `doors/` are L15 and contain re-exports only, with no registration or other logic.
+- `npm run check:layering`, ESLint restricted paths and the architecture test share that table.
+- `package.json` exports is exhaustive. The nineteen doors are `.`, `/providers`, `/memory`,
+  `/rag`, `/cache`, `/observe`, `/events`, `/context`, `/resilience`, `/hosting`, `/security`,
+  `/reliability`, `/skill-graph`, `/recipes`, `/maps`, `/classify`, `/ontology`, `/time`, `/ag-ui`.
+- Import providers, context declarations and memory stores from their own doors, not main.
+  The complete door and removed-path contract is in [src/doors/README.md](src/doors/README.md).
+- Cache strategy follows declared `promptCaching`, never a vendor name; nothing registers at load.
 
 ## Module map
-**Layers.** Every top-level folder of `src/` sits at exactly ONE layer of the table in [`scripts/layering.config.cjs`](scripts/layering.config.cjs) · `LAYERS`: L0 leaves (`lib/`, `events/`, `time/` …) up to L9 `core/` and L15 the `src/*.ts` barrels and `doors/`, which hold `export … from` and nothing else. A file imports only its own layer or below. The only upward imports are the type-only ones named, each with its reason, in `TYPE_ONLY_ALLOWANCES`, a list that only shrinks; `UPWARD_ALLOWANCES` must stay empty. `npm run check:layering`, the ESLint `import/no-restricted-paths` zones and test/architecture/layering.test.ts all read that one table, so a new top-level folder gets its row there before its first file lands.
 
-Entry points — NINETEEN doors, and `package.json` `exports` is exhaustive, so a path not on this list does not resolve at all: `.` core API · `/providers` everything you plug a backend into (mock/anthropic/openai/bedrock/browser*, embedders, staticTools/gatedTools/skillScopedTools/mcpClient, thinking handlers, code runners) · `/memory` (defineMemory, MEMORY_TYPES, InMemoryStore, mockEmbedder, redis/agentcore/bedrockAgentMemory stores) · `/rag` index-time loaders/splitters/indexCorpus · `/cache` prompt caching (+ cacheStrategyFor — the strategy is chosen from the provider's DECLARED `promptCaching`, never its name; nothing registers at load) · `/observe` the whole watching story (recorders, recordRun, strategies + attach*, vendor sinks, run-autopsy finders, toSSE, status, locales) · `/events` typed event system · `/context` the injection engine (defineInjection/Skill/Fact/Instruction/Steering, decideSkill) · `/resilience` provider decorators + the reliability RULES · `/hosting` nodeHost/httpHost/standingAgent + session stores · `/security` permissions + tool credentials (it absorbed the old identity door) · `/reliability` the retained alias, kept ONLY because it is the sole home of the gate's `CircuitOpenError` · `/skill-graph` the framework-neutral routing layer · `/recipes` the declared unit of agent CONFIGURATION (defineAgentRecipe → `.recipe()`; authoring-time vocabulary, so it stays off the main barrel) · `/maps` the mount kernel's vocabulary (9.58.0: Claim<T> + the engagement lease machine + its renewal feed — pure data and pure functions, no run entry point; mounted via `.maps()`) · `/classify` the calibrated-classifier port (9.104.0: `Classifier`, `typesafe`, `mockClassifier`, `ClassifierError` — a backend that SCORES declared candidates; spent by `.findings({ judge })` and by `classifierScorer` on `/skill-graph`) · `/ontology` the declared map (9.106.0: `defineOntology`, `ontologyHash`, `ontologyPiece`, `ONTOLOGY_INSTRUCTION`, the shapes — what each term IS, how terms RELATE, which SOURCE holds a term and which registered TOOL reads it; pure data and pure functions, no run entry point, no fetch path; mounted via `.ontology()`, served as one request-only system piece per call; 9.112.0 `fromSkos`/`readSkos`/`toSkos` — the SKOS JSON-LD adapter onto the same spec, no second validation path) · `/time` the time layer's conversions for an app outside a run (`convertForTool` — the run's own question of a tool, over its `period` via `sugarForms`/`granularityMsOf` — plus the steps `convertExact`, `convertWidened`, `periodFactProblem`; pure functions over a clock the caller passes; a door of its own because they are the layer's RUN-TIME half, which the main barrel keeps off the default graph, pinned by test/trace-toolpack/browserGraph.test.ts; also `timeReplyPairs`, the reader of a time ask's range and correction pair for a host's front end, which is why the same test pins this door's graph free of Node) · `/ag-ui` the AG-UI protocol adapter over the run's served event stream (`agUi()` — the adapter `streamHandler` on `/hosting` serves runs in; `agUiSerializer` — one run's events → AG-UI events, sub-agents by mount, ids minted from the record's address; `agUiSse` — the second SSE framing strategy, through the optional peer `@ag-ui/encoder`, loaded only when a framing is built). 9.0.0 removed sixteen older paths (`/llm-providers`, `/injection-engine`, `/tool-providers`, `/strategies`, `/observability-providers`, `/identity`, `/stream`, `/thinking`, `/status`, `/locales`, `/debug`, `/debug/finders`, `/memory-providers`, `/embedders`, `/hosting-providers`, `/observability/contextError/finders`) — it removed PATHS, not code; each name still ships through the door that absorbed it. This list is pinned against `package.json` by test/api-conformance/documented-doors.test.ts, and the removed sixteen by subpath-exports.test.ts. **Main barrel does NOT export** mock/browser*/defineMemory/defineSkill/skillGraph/mcpClient/InMemoryStore — import from the doors above.
+One area, one responsibility, then its local contract. Detailed integration history lives
+in the scoped rule's `Module contract` sections; this table is the starting point.
 
-| src/ | one job |
-|---|---|
-| answer-validation/ | optional final-answer contract, scoped bounded artifact reads, canonical JSON and explicit check dispositions; the Agent route owns invocation and final capture owns delivery |
-| core/ | primitives: Agent.ts (ReAct runner), LLMCall.ts, RunnerBase.ts (dispatcher + attach + enable.*), pause.ts, runCheckpoint.ts |
-| tools/ | what a tool is, before any agent runs it (layer L7, below the injection engine and the agent): tools.ts (`Tool`, defineTool), declare.ts (argument rules), toolArgsValidation.ts, inputRequest.ts + askComponent.ts (the typed ask), toolSessions.ts, toolContract.ts, runChain.ts (the one middleware-chain walker), toolProvider.ts (`ToolProvider`) + skillScopedTools.ts (re-exported by tool-providers/) |
-| core/agent/aroundTurn/ | `.aroundTurn()` and the one private funnel (`throughAroundTurn`) every top-level turn passes: `runOwned`/`runTurn` → `runLeg`, `resumeOwned` → `resumeLeg`, inside the lease and `preservePendingQuestion`. The wrapper cannot change how the turn ended. A mount is refused by `componentSetup`; `standingAgent` refuses a replaced `run`/`resume` |
-| core/agent/evidence/ | (9.35.0) the evidence gate — `.namesAndNumbersFromEvidence()`. Pure + deterministic BY LAW (no model, no embedding: a guard that needed a bigger model to police a smaller one inverts the library's thesis). normalize (one spelling per value, both sides) → extract (which tokens are DATA — conservative, justified clause by clause) → evidenceIndex (STRUCTURAL walk of `role:'tool'` results; the exempt corpus is user message + user/system turns + `systemPromptInjections`, MINUS the library's own frames — see frames.ts, the laundering bug) → gate (resolve/judge/sentences) → errors (`UnsupportedValuesError`). Fabrication detector, NOT a correctness judge: a false claim built from real values passes |
-| semantics/coverage/ | the two FIELD-INVENTED result primitives. `absent()` = an absence that names its own coverage (checked / not checked / cannot cover) and says a retry returns the same; `coverage(result, …)` = the ledger of what a clean verdict does NOT rule out. Both RECOGNIZED (reserved `af_absent`/`af_coverage` keys, the effects-envelope strictness law), not conventions. Pure; the moving parts are `declareCoverage` in stages/toolCalls.ts, the whitelist in evidence/evidenceIndex.ts, and `prepareFinalWithLimitsStage` |
-| core/agent/ | chart assembly: buildAgentChart / buildDynamicAgentChart (picked by reactMode, Agent.ts:1145-1147), buildToolRegistry, stages/ (seed, callLLM, route, toolCalls, prepareFinal, breakFinal, reliabilityExecution), window/ (the `.window()` strategy family), middleware/ (the `.toolMiddleware()` / `.messageMiddleware()` chains — outcomes are a CLOSED union with no `result` arm; three call sites walk it via tools/runChain.ts: toolCalls dispatch, seed `'input'`, route `'output'`, plus mcpServe) |
-| core/slots/ | the 3 context-slot subflow builders + thinking subflow — intentionally NOT exported |
-| core-flow/ | Sequence/Parallel/Conditional/Loop — RunnerBase subclasses with own charts |
-| patterns/ | Debate/MapReduce/Reflection/SelfConsistency/Swarm/ToT — pure composition of runners, no new control flow |
-| provider-contract/ | the provider PORT: `types.ts` = ALL port interfaces (one exception: `RecordingSink` lives beside `recordRun` in recorders/observability/, per "anything that saves a run goes through it"), the capability readers `forcedToolChoice.ts` / `nativeOutputSchema.ts`, `requestRefusal.ts`, `contextWindow.ts`. Layer L2: the agent, decorators, security and memory read it; nothing below `adapters/` imports `adapters/` |
-| adapters/ | vendor implementations of the provider-contract ports (llm/, memory/, identity/, observability/, hosting/, mcp/, code/, browser/, google/). memory/sqliteVector.ts (8.9.0) = the only FULL MemoryStore we ship with `search` besides InMemoryStore — exact cosine over a resident Float32Array matrix, hydrated per namespace on first search and dropped on any write to it |
-| recorders/core/ | bridges footprintjs events → typed EventDispatcher (ContextRecorder, EmitBridge, typedEmit) — attached by admitted Agent run setup; most factories also exported via `/observe` for manual wiring (EmitBridge itself stays internal) |
-| recorders/observability/ | consumer recorders over the typed stream (RunStepRecorder, FlowchartRecorder, Status, Trace replay) + `recordRun` — THE producer of a recording `{snapshot, events, structure}` (the shape lens's `observeRecording` consumes; `structure` = `getSpec().buildTimeStructure`, which no snapshot carries). Anything that saves a run goes through it |
-| rag/ | (8.10.0, door `/rag`) index-TIME: `DocumentLoader` adapters (text/markdown/html zero-dep, pdf via lazy `unpdf`) + `Splitter` factories + `indexCorpus` — a REAL footprintjs chart whose commit log IS the indexing report. `defineRAG` + `indexDocuments` live in `rag/retriever/` and deliberately stay on the MAIN barrel (run-time wiring) — `rag/index.ts` does not re-export them; this door is the half that runs once, before any agent exists |
-| ontology/ | (9.106.0) the declared map — `defineOntology` (validate, detach, freeze, `ontologyHash` through `lib/stableJson.ts`) + `serve.ts · ontologyPiece` (the ONE composer, called by `callLLM` and by `servedView.viewOf`; every line quotes the declaration under a constant header that quotes the context contract's three meanings) + `instruction.ts` (the always-on ask). Behind the `/ontology` door; `Agent.buildChart` checks every `via` tool name against `registryByName` at build; `seed` writes `AgentState.ontology` once; the grouped chart crosses the key into `sf-llm-call` under `hasOntology`. 9.112.0 `fromSkos.ts`/`toSkos.ts`/`skosJsonLd.ts` = the SKOS adapter (a customer's concept scheme → `OntologySpec` → `defineOntology`, and back); `define.ts`/`serve.ts`/`instruction.ts`/`score.ts`/`types.ts` untouched by it, pinned by test/ontology/fromSkos.test.ts |
-| lib/ | the leaves every layer agrees on (layer L0): loose zero- or near-zero-import files + `claim/` + `context-contract/`; imports nothing in `src/` outside itself at run time. No feature sub-libraries — each one left for the top-level folder at its own layer (the retriever into `rag/retriever/`) |
-| context-bisect/ | localizeContextBug, toBacktrackTrace + sliceToBacktrackTrace — the atui board serializers |
-| context-ledger/ | which pieces EARNED their tokens — post-run offers/uses/outcomes bookkeeping + demote-never-starve gates `ledgerToolGate`/`ledgerEntryScorer`/`ledgerGated`; grouped-mode folds sf-llm-call inner logs, unmeterable runs → undefined; /observe |
-| influence-core/ | the ONE embedding-based scoring engine (`scoreInfluence`, `scoreMargin`, `scoreContrastiveInfluence`, the shared embedding cache): every score a deterministic PROXY, never causal attribution; read by the finders, ToolChoiceRecorder and context-bisect |
-| tool-lint/ | the build-time tool-catalog confusability lint (`analyzeToolCatalog`, `/observe`); `bin/agentfootprint-lint-tools.mjs` loads `dist/esm/tool-lint/cli.js` |
-| trust-boundaries/ | the opt-in trust-boundary capture (`trustBoundaryRecorder`, `/observe`): selected typed events admitted live into a bounded window; `recordRun` can own one |
-| injection-engine/ | the context engine behind `/context` (re-exported by the root barrel `src/injection-engine.ts`): `Injection` + the evaluator, `buildInjectionEngineSubflow`, the `define*` factories, SkillRegistry and skill tools, the skill-graph compiler (`skillGraph.ts`) and its pure-core fence (test/injection-engine/skill-graph-fence.test.ts); layer L8, below the agent |
-| trace-toolpack/ | selfExplain — reached by the builder only through core/agent/selfExplainPort.ts, registered by selfExplainHost.ts (listed in package.json `sideEffects`), the module the root door takes `Agent` from (and traceDebugAgent builds from, for /observe); 6 tools incl. variable-first `backtrack(variable, element?)` |
-| time-travel/ | where a reader of a finished run may stop (`milestoneStops`, main barrel) and what the model was handed there (`servedView.ts`), both from the recorded commit log only — the reader half of the receipt law (the writer is core/agent/receipt/) |
-| answer-account/ | "Explain this answer": `accountForAnswer` (/observe) reads one answer's recording back as vouched sentences, each fact with who vouches for it and where it lives in the record |
-| mcp/ | the two-directional MCP transport: `mcpClient` pulls someone else's tools in (door `/providers`), `mcpServe` pushes ours out; `toolExtras.ts` carries a tool's declaration across the wire, `elicitation.ts` a typed ask |
-| ag-ui/ | (door `/ag-ui`) the AG-UI protocol adapter, a Lens over ONE run: `serializer.ts` turns the run's SERVED events into AG-UI 1.0 events (never live values — a redaction policy holds at every depth; a nested agent turn is a sub-agent scoped by its subflow path, so parallel branches never cross), `ids.ts` mints every id as `<runId>/<kind>/<n>/<runtimeStageId>` (injective, pinned), `framing.ts` frames through the optional peer `@ag-ui/encoder` (loaded only when a framing is built). What leaves for a browser is a decision, not a pass-through: `CUSTOM` is an allow-list with per-type field projections (`AG_UI_CUSTOM_EVENTS`), reasoning only with `reasoning: true`, `RUN_ERROR` and a failed `TOOL_CALL_RESULT` in fixed words (a failed `RunSettlement` carries no thrown value; `toolErrors: 'served'` opts a tool's own failure text in), the record's process-wide run id never written; pinned by `test/ag-ui/redaction.property.test.ts`. It implements the hosting port `hosting/protocolAdapter.ts`; `hosting/stream.ts · SseFraming` is the framing strategy seam. A paused translation's `suspension()` (ids, step names, every scope's open calls — never a run value) passed as `resume` makes the continuation the same invocation. `agUi()` = three replaceable strategies around one core (unreleased): `reader` (a body → `AgUiTurnRequest`; a gateway's own body), `translation` (default `agUiSerializer`), `framing` (a gateway's envelope; the HOST hands each frame its per-stream `sequence` — `SseFramePosition` — so no framing keeps a counter); `request.ts · readAgUiRequest` copies a CUSTOM reader's output as plain JSON (the default reader's parsed body is read as is) then runs the same checks for every reader; the default wire is pinned byte for byte by test/ag-ui/gateway.test.ts against `fixtures/default-wire.golden.json`. `request.ts` reads a `RunAgentInput` as UNTRUSTED input: only the newest user message is conversation, an answer is matched to the pause the SERVER keeps, frontend tools only by the app's allow-list (`frontendTools.ts` — the app's contract, a pause the page answers), `state`/`context` only through the app's validators; `adapter.ts` · `agUi()` is the `ProtocolAdapter` that `hosting/streamHandler.ts` takes (fresh runner per request, `ThreadBinder` + session store, one turn per thread) |
-| memory/ | store/ (MemoryStore port) + pipeline presets + stages + beats/facts + causal/ (dev-only, TOP_K+search()-only) + wire/mountMemoryPipeline + retrieval/ (8.8.0: the `RetrievalStrategy` seam + `RetrievalEvidence`, the record a retrieval leaves — `topK()` is what every earlier release did unnamed) |
-| maps/ | (9.58.0, door `/maps`) the mount kernel: claim/ (`Claim<T>` honesty primitive) + engagement/ (lease machine `advanceEngagement` + renewal feed `renewalEvidenceOf` + vocabulary). Pure data/functions; the ONE framework hook is `ctx.parkedIds` in the evaluator (the `leaseActiveIds` mirror), fed by the Evaluate stage; state rides `AgentState.mapEngagement` as a TOP-LEVEL array (the StepPointerCarrier law) |
-| events/ | EventDispatcher (wildcard subs), registry (EVENT_NAMES, AgentfootprintEventMap), payloads |
-| recipes/ | (9.48.0, door `/recipes`) the declared unit of agent CONFIGURATION — `defineAgentRecipe` + `AgentBuilder.recipe()`. PURE and tiny: id/version validators, the provenance value, the refusal sentences. The mutation lives in `AgentBuilder.recipe()` (application stack + two provenance maps); the manifest rows ride `RunManifestSources.recipes`. The door publishes the AUTHORING vocabulary only (`defineAgentRecipe`, `InvalidAgentRecipeError`, 4 types) — every validator and refusal formatter is internal, imported by module path |
-| lib/conventions.ts | THE builder↔recorder protocol: SUBFLOW_IDS/STAGE_IDS (internal), INJECTION_KEYS/stageRole/milestoneFor (exported, Lens-facing) |
+| Area | Responsibility and entry to detail |
+| --- | --- |
+| `core/` | Public runners and native lifecycle — [README](src/core/README.md) |
+| `core/agent/` | ReAct chart assembly and stages — [README](src/core/agent/README.md) |
+| `core/agent/aroundTurn/` | One invocation wrapper funnel — [README](src/core/agent/aroundTurn/README.md) |
+| `core/agent/evidence/` | Pure deterministic evidence gate — [README](src/core/agent/evidence/README.md) |
+| `core/slots/` | Three context-slot subflows and thinking — [README](src/core/slots/README.md) |
+| `core-flow/` | Native composition charts — [README](src/core-flow/README.md) |
+| `patterns/` | Composition recipes, no new control flow — [README](src/patterns/README.md) |
+| `tools/` | Tool declarations, dispatch contracts and chains — [README](src/tools/README.md) |
+| `answer-validation/` | Exact-candidate validation before delivery — [README](src/answer-validation/README.md) |
+| `semantics/coverage/` | Declared absence and coverage envelopes — [README](src/semantics/coverage/README.md) |
+| `provider-contract/` | Vendor-independent ports — [README](src/provider-contract/README.md) |
+| `adapters/` | Vendor implementations of those ports — [README](src/adapters/README.md) |
+| `recorders/core/` | Native signals to served typed events — [README](src/recorders/core/README.md) |
+| `recorders/observability/` | Recorders and the one recording producer — [README](src/recorders/observability/README.md) |
+| `events/` | Closed event vocabulary and dispatcher — [README](src/events/README.md) |
+| `rag/` | Index-time loading and splitting — [README](src/rag/README.md) |
+| `memory/` | Stores, retrieval and pipeline mounts — [README](src/memory/README.md) |
+| `ontology/` | Declared concepts and their served projection — [README](src/ontology/README.md) |
+| `injection-engine/` | Context evaluation, skills and routing — [README](src/injection-engine/README.md) |
+| `maps/` | Claim and engagement vocabulary — [README](src/maps/README.md) |
+| `recipes/` | Named agent configuration — [README](src/recipes/README.md) |
+| `context-bisect/` | Ablations and backtrack views — [README](src/context-bisect/README.md) |
+| `context-ledger/` | Recorded offers, uses and outcomes — [README](src/context-ledger/README.md) |
+| `influence-core/` | Deterministic scoring proxies, never causality — [README](src/influence-core/README.md) |
+| `tool-lint/` | Build-time catalog confusability checks — [README](src/tool-lint/README.md) |
+| `trust-boundaries/` | Bounded opt-in boundary evidence — [README](src/trust-boundaries/README.md) |
+| `trace-toolpack/` | Record-based self-explanation tools — [README](src/trace-toolpack/README.md) |
+| `time-travel/` | Recorded stops and served-view reads — [README](src/time-travel/README.md) |
+| `answer-account/` | Vouched answer explanations — [README](src/answer-account/README.md) |
+| `mcp/` | Tool transport in both directions — [README](src/mcp/README.md) |
+| `ag-ui/` | One served run translated to a frontend — [README](src/ag-ui/README.md) |
+| `lib/` | L0 leaves, not feature libraries — [README](src/lib/README.md) |
+| `lib/conventions.ts` | Builder/recorder protocol — `INJECTION_KEYS`, `stageRole`, `milestoneFor` |
 
-Traps: `src/observability/` holds the finder IMPLEMENTATIONS (canonical home; `debug/finders.ts` re-exports them — only the old subpath is deprecated), while real recorders live in `recorders/observability/`; `identity` appears twice (src/identity.ts = tool credentials; memory/identity/ = tenant scoping — unrelated); `resilience` (provider decorators) ≠ `reliability` (in-loop rules gate).
+## Native run invariants
 
-## Core state & flow
-- `AgentState` (core/agent/types.ts:287) — THE chart state; every stage gets `TypedScope<AgentState>`. Mutability conventions documented ON the type (:276-286). Everything in scope must survive structuredClone → functions stay in closures, errors stringified, injections projected to POJOs.
-- **Native run identity**: typed events use the admitted native run ID. Preserve actual component/stage coordinates for siblings and distinguish a resumed leg from its retained log identity; never guess identity from ID spelling or the selected run.
-- **Event path**: stage `typedEmit` → `scope.$emit` → footprintjs emit channel → `EmitBridge.onEmit` (drops if no dispatcher listener! EmitBridge.ts:44) → `buildEventMeta` → dispatcher → `agent.on()` listeners. Fires MID-STAGE, **before that stage's commit** — correlate events↔commits by runtimeStageId, never arrival order.
-- Executor defaults DIVERGE from footprintjs: `readTracking:'summary'`, `commitValues:'delta'` (Agent.ts:779-782) — read commit values via `commitValueAt`, never `bundle.overwrite[key]`.
-- Recorders never read AgentState directly; slot subflows write `INJECTION_KEYS` convention keys, `ContextRecorder.onWrite` resolves the slot from the write's own runtimeStageId (parallel-safe).
-- $break is the only clean-stop channel; structured fail context rides scope fields (`policyHalt*`, `reliabilityFail*`), decoded post-run by `Agent.finalizeResult` (Agent.ts:884) into typed errors.
+- One invocation owns each runner instance. Native `ERR_RUN_IN_FLIGHT` runs before callbacks.
+  Context, continuation, checkpoint tracking, causal evidence, meter and resources belong
+  to the actual native component; independent mounts never share these values.
+- Build charts once. Close over per-run accessor lambdas; captured fields go stale on run two.
+- Scope state must survive `structuredClone`: closures hold functions; scope carries plain data.
+  `core/agent/types.ts · AgentState` owns its mutability and mapper contracts.
+- Use admitted native identity and actual component/stage coordinates. Distinguish a resumed
+  leg from retained log identity; never parse ID spelling or borrow a selected/latest run.
+- Subscribe before `run()`: listener gating drops events rather than queuing them for later.
+- Event payloads are detached plain data. Private reducers and the native scoped recorder
+  stay inline when public observers are deferred; memory writers use their native mapper.
+- Events fire before the emitting stage commits. Join them to commits by `runtimeStageId`,
+  never arrival order. `EmitBridge.ts · onEmit` delegates metadata construction to `buildEventMeta`.
+- `configureAgent` in `core/agent/runtime/configuration/configure.ts` defaults to summary
+  reads and delta commits. Read values with `commitValueAt`, never `bundle.overwrite[key]`.
+- Recorders do not read AgentState. `ContextRecorder.onWrite` attributes convention-key writes
+  to that write's own `runtimeStageId`, including parallel slot subflows.
+- `$break` is the clean stop. Structured failure fields reach the native terminal owner's
+  `finalizeResult`; do not turn a policy/reliability failure into a successful answer.
+- Keep `ArrayMergeMode.Replace` on every loop-crossed mount in `buildAgentChart` and
+  `buildDynamicAgentChart`; default concatenation duplicates injections on each iteration.
+- Keep the required context selector `failFast: true`; all-settled would allow a half-built call.
+- Keep tool names and memory IDs unique at construction. Dispatch is by name; renaming changes behavior.
+- Every saved run goes through `recordRun`, with `snapshot`, `events` AND build-time `structure`.
+  Wire all three BoundaryRecorder connections; a finished run cannot reconstruct missing evidence.
 
-## Seams and blast radius, by area
+## Silent-bug landmines
 
-Each file loads **only when you work on its paths** (`.claude/rules/*.md`, `paths:` frontmatter):
+- The executable provider catalog belongs to the native component. Discover refreshes it
+  each iteration; both resume strategies reacquire it before dispatch. Never copy an old cache.
+- Classic ReAct caches by skipping re-selection after turn one. Changing its selector turns
+  it dynamic; classic with skills cannot activate a later skill correctly. Use dynamic mode.
+- Branch IDs are bare `final` / `tool-calls`, not prefixed subflow IDs. `stageRole` and
+  `milestoneFor` deliberately recognize both forms; matchers must not erase that distinction.
+- `src/observability/` implements finders; `recorders/observability/` contains recorders.
+  Tool credentials in `src/identity.ts` differ from tenant scoping in `memory/identity/`.
+  Resilience decorators differ from the reliability rule gate.
+- Evidence gates detect unsupported claims, not truth. Scores in influence-core are proxies.
+  Backtrack cards are correlational bounds; causal claims require the scoped ablation proof.
 
-| Rule file | Loads for | Holds |
-|---|---|---|
-| [agent-loop](.claude/rules/agent-loop.md) | `src/core/**`, core-flow, patterns, integrity, answer-validation, classify, ontology, recipes | Tool/ToolProvider, run input, output contract, evidence gate, coverage, wrap-up, window refusal, closed seams; AgentState / chart shape / RunnerBase impact; the end-to-end trace |
-| [events-and-observability](.claude/rules/events-and-observability.md) | events, recorders, observability, strategies, bridge, conventions.ts | recorder layers, adding a typed event, vendor strategies, finders; conventions / BoundaryRecorder / EventMeta impact |
-| [providers-and-adapters](.claude/rules/providers-and-adapters.md) | adapters, cache, thinking, mcp, resilience, reliability, tool-providers | LLM provider, MCP gateway fetch, ports table; LLMMessage / cache / AWS-adapter impact |
-| [memory-and-rag](.claude/rules/memory-and-rag.md) | memory, rag | memory store, loaders, splitters, durable store, retrieval |
-| [injection-and-skills](.claude/rules/injection-and-skills.md) | injection-engine, maps, `src/core/agent/**` | injections, skill graph, read_skill gate, cursor, per-skill brains |
-| [hosting-and-security](.claude/rules/hosting-and-security.md) | hosting, security, identity | identity verifier, admission, session ops, ingress record, permissions |
-| [artifacts-and-semantics](.claude/rules/artifacts-and-semantics.md) | artifacts, semantics, code runners | recordings as artifacts, code staging-in, semantic results |
-| [backtracking](.claude/rules/backtracking.md) | pause / checkpoint / Agent / RunnerBase / toolCalls | the six backtracking mechanisms in depth |
+## Scoped rules: read the area you change
 
-## Backtracking
-Six mechanisms layered on footprintjs (whose transaction/checkpoint machinery lives upstream): **M1** pause/resume — `pauseHere/askHuman` throw PauseRequest inside tool.execute; toolCalls commits history + pausedTool* to scope BEFORE returning the pause payload; scope is the ONLY carrier across the checkpoint. **M2** `resumeOnError` — history-only `AgentRunCheckpoint` (a DIFFERENT type from FlowchartCheckpoint) built from iteration_end events; resume REPLAYS from restored history via the admitted component's private continuation value. **M3** inline reliability retry — up to 50 attempts inside ONE stage; retry state closure-local, never scope. **M4** chart-level reliability gate — built but UNMOUNTED (buildReliabilityGateChart; editing it changes nothing at runtime). **M5** ReAct loopTo re-entry with `ArrayMergeMode.Replace` guards. **M6** counterfactual replay (context-bisect ablation probes; causal claims only from majority-flip over ≥2 seeded reruns). **M7 (triage surface)** variable-first tools over fp's slice layer: toolpack `backtrack(variable, element?)` (element mode = per-iteration history attribution, exact under the delta default) + `sliceToBacktrackTrace` (structural slice on the atui board — always correlational, every card an upper bound). Deep dive: [.claude/rules/backtracking.md](.claude/rules/backtracking.md).
+These files carry the complete contracts and blast-radius notes for their declared paths.
 
-## Invariants (assumed, not stated)
-- ONE owned invocation per runner instance, enforced before callbacks by native `ERR_RUN_IN_FLIGHT`. Context, continuation, checkpoint tracker, causal evidence, meter and tool-resource view belong to the actual native component; independent mounts do not share those values.
-- Chart built once, reference-stable; closures over per-run state must be accessor lambdas (seed.ts:42-49) — direct field capture goes stale on run #2.
-- Subscribe BEFORE run() — listener-presence gating drops (not queues) events at ContextRecorder/EmitBridge/RunnerBase.emit.
-- `arrayMerge: Replace` on EVERY loop-crossed subflow mount (buildAgentChart.ts:284,345,358,382,431,455) — footprintjs default concatenates; omission = injections grow 8→16→24 per iteration.
-- Context selector must stay `failFast: true` (buildAgentChart.ts:329) — default allSettled would swallow a throwing required slot and call the LLM half-built.
-- Event payloads must be DETACHED plain data (typedEmit dev-guard) — a live TypedScope proxy breaks deferred-delivery capture and checkpoint serialization.
-- Private component reducers and the native scoped recorder stay inline under deferred public observers. Memory writers require their actual native mapper binding and never use the selected/latest run as evidence.
-- Tool names + memory ids unique at construction; LLM dispatches by name — a rename is a behavioral change.
+| Area | Contract |
+| --- | --- |
+| Core, tools, compositions, gates, ontology, recipes | [agent-loop](.claude/rules/agent-loop.md) |
+| Events, recorders, finders and bridges | [events and observability](.claude/rules/events-and-observability.md) |
+| Provider ports, adapters, MCP and resilience | [providers and adapters](.claude/rules/providers-and-adapters.md) |
+| Memory stores, retrieval and RAG | [memory and RAG](.claude/rules/memory-and-rag.md) |
+| Injections, skills, cursor and mounts | [injection and skills](.claude/rules/injection-and-skills.md) |
+| Hosting, identity, ingress and frontend trust | [hosting and security](.claude/rules/hosting-and-security.md) |
+| Artifacts, semantic results and code runners | [artifacts and semantics](.claude/rules/artifacts-and-semantics.md) |
+| Pause/resume, retries and counterfactual replay | [backtracking](.claude/rules/backtracking.md) |
 
-## Landmines
-1. Charts are built once. The executable provider catalog belongs to the actual native component; normal Discover refreshes it per iteration, and both native resume strategies reacquire it before dispatch. Never copy a previous component's executable cache.
-2. `'classic'` reactMode "caching" is the ABSENCE of re-selection (Context stops picking static slots after turn 1) — "fixing" the selector converts classic into dynamic; classic + skills is broken by design (mid-run activation never reaches cached slots).
-3. Branch stage ids are BARE (`'final'`, `'tool-calls'`), not the SUBFLOW_IDS prefixed forms — matchers written against SUBFLOW_IDS alone miss real runs (stageRole/milestoneFor deliberately match both).
+## Working references
 
-## Pointers
-- [CAPABILITIES.md](CAPABILITIES.md) — what already ships · [.changes/README.md](.changes/README.md) — how a change is recorded
-- [examples/](examples/) — canonical imports (the authority on which subpath exports what) · [src/lib/conventions.ts](src/lib/conventions.ts) — the builder↔recorder protocol
-- Build/test: `npm run build`, `npm test` · docs: `npm run docs:regen` · release: Actions → Release
+- [examples/](examples/) owns canonical consumer imports; `package.json` owns exported paths.
+- [src/lib/conventions.ts](src/lib/conventions.ts) owns internal stage/subflow names and recorder keys.
+- `.claude/rules/backtracking.md` retains M1–M7 and the full native continuation contract.
+- Source tests guard the fences. `test/docs/claude-guide.test.ts` caps this guide at 200 lines.
+- The PR's rule-location table accounts for every contract moved out of the previous guide.

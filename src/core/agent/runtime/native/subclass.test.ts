@@ -48,15 +48,16 @@ it('runs through a transparent Proxy and retains the original native run view', 
     await expect(proxy.run('hello')).resolves.toBe('ok');
     expect(proxy.getLastSnapshot()).toEqual(agent.getLastSnapshot());
     expect(proxy.getLastNarrativeEntries()).toEqual(agent.getLastNarrativeEntries());
-    // Each checkpoint reads the clock afresh; compare both receivers at one instant.
-    const checkpointedAt = Date.now();
-    const wallClock = vi.spyOn(Date, 'now').mockReturnValue(checkpointedAt);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {
-      const fromProxy = proxy.checkpoint();
-      expect(fromProxy).toEqual(agent.checkpoint());
-      expect(fromProxy?.checkpointedAt).toBe(checkpointedAt);
+      const direct = agent.checkpoint();
+      if (direct === undefined) throw new Error('Expected a checkpoint after the completed turn.');
+      expect(proxy.checkpoint()).toEqual(direct);
+      expect(direct.checkpointedAt).toBe(1_800_000_000_000);
+      clock.mockReturnValue(1_800_000_000_001);
+      expect(proxy.checkpoint()).toEqual({ ...direct, checkpointedAt: 1_800_000_000_001 });
     } finally {
-      wallClock.mockRestore();
+      clock.mockRestore();
     }
     await expect(proxy.followUp('again')).resolves.toBe('ok');
     expect(proxy.getLastSnapshot()).toEqual(agent.getLastSnapshot());

@@ -113,7 +113,7 @@ export async function run(input: string | null = meta.defaultInput) {
   const fixture = authorizedFixture('supported');
   // #region recorded-questions
   const tools = traceToolpack(fixture.artifacts, {
-    cause: { maxNodes: 25, maxEdges: 100, maxCalls: 100, timeoutMs: 1000 },
+    cause: { includeBackward: true, maxNodes: 25, maxEdges: 100, maxCalls: 100, timeoutMs: 1000 },
   });
   const root = JSON.parse(
     await callTraceTool(tools, 'root_cause', { nodeId: fixture.target }),
@@ -132,6 +132,8 @@ export async function run(input: string | null = meta.defaultInput) {
   // #endregion recorded-questions
   if (root.finding.rootCause !== fixture.root || !impact.finding.nodes.includes(fixture.affected))
     throw new Error('Expected the synthetic recorded root and downstream write.');
+  if (!root.finding.backward?.edges.some((edge) => edge.to === fixture.root))
+    throw new Error('Expected the existing backward dependency proof in the host-enabled output.');
   if (
     alternatives.finding.rootCause !== undefined ||
     alternatives.finding.alternatives.length !== 2
