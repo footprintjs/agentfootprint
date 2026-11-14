@@ -6,7 +6,7 @@ title: extractAgentName
 
 > **extractAgentName**(`event`, `ctx`): `string`
 
-Defined in: [src/recorders/observability/commentary/commentaryTemplates.ts:1165](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates.ts#L1165)
+Defined in: [src/recorders/observability/commentary/commentaryTemplates/agentName.ts:44](https://github.com/footprintjs/agentfootprint/blob/main/src/recorders/observability/commentary/commentaryTemplates/agentName.ts#L44)
 
 Resolve the agent name from an event's `meta.subflowPath`.
 

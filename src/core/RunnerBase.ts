@@ -1,5 +1,6 @@
 /** Shared native execution adapter, serving, recorders and subscriptions for runners. */
 
+import { compositionRecorders } from './runRecorders.js';
 import type {
   CombinedRecorder,
   FlowChart,
@@ -44,10 +45,6 @@ import {
   type RunnerInvocation,
   type RunnerComponentInstaller,
 } from './runnerExecution.js';
-import { ContextRecorder } from '../recorders/core/ContextRecorder.js';
-import { streamRecorder } from '../recorders/core/StreamRecorder.js';
-import { agentRecorder } from '../recorders/core/AgentRecorder.js';
-import { compositionRecorder } from '../recorders/core/CompositionRecorder.js';
 import {
   adoptParentRun,
   closeParentRun,
@@ -252,15 +249,13 @@ export abstract class RunnerBase<
     const redaction = this.prepareRunRedaction(invocation, resumeLeg);
     const getRunContext = () => invocation.context();
     const dispatcher = this.dispatcher;
-    const recorders: readonly CombinedRecorder[] = [
-      ...redaction.recorders,
-      new ContextRecorder({ dispatcher, getRunContext, realWrites: redaction }),
-      streamRecorder({ dispatcher, getRunContext }),
-      agentRecorder({ dispatcher, getRunContext }),
-      compositionRecorder({ dispatcher, getRunContext }),
-      ...extra,
-      ...this.attachedRecorders,
-    ];
+    const recorders = compositionRecorders(
+      dispatcher,
+      getRunContext,
+      redaction,
+      extra,
+      this.attachedRecorders,
+    );
     return {
       setup: {
         redaction: redaction.recordPolicy,

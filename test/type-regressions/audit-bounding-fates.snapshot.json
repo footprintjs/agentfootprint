@@ -447,6 +447,14 @@
     "threshold": "kept",
     "upstreamRef": "kept"
   },
+  "agentfootprint.context.recorded": {
+    "iteration": "kept",
+    "omission": "kept",
+    "pieces[].rawContent": "chars",
+    "pieces[].schema": "type",
+    "pieces[].source": "kept",
+    "pieces[].sourceId": "kept"
+  },
   "agentfootprint.context.slot_composed": {
     "budget.cap": "kept",
     "budget.headroomChars": "kept",

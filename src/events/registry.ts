@@ -21,6 +21,7 @@ import type {
   ContextEvaluatedPayload,
   ContextEvictedPayload,
   ContextInjectedPayload,
+  ContextRecordedPayload,
   ContextSlotComposedPayload,
   CostLimitHitPayload,
   CostTickPayload,
@@ -136,195 +137,7 @@ import type {
   IntegrityExternalGroundUsedPayload,
 } from './payloads.js';
 
-// ─── Every event name, once: `agentfootprint.<domain>.<action>` ─────────
-export const EVENT_NAMES = {
-  composition: {
-    enter: 'agentfootprint.composition.enter',
-    exit: 'agentfootprint.composition.exit',
-    forkStart: 'agentfootprint.composition.fork_start',
-    branchComplete: 'agentfootprint.composition.branch_complete',
-    mergeEnd: 'agentfootprint.composition.merge_end',
-    routeDecided: 'agentfootprint.composition.route_decided',
-    iterationStart: 'agentfootprint.composition.iteration_start',
-    iterationExit: 'agentfootprint.composition.iteration_exit',
-  },
-  agent: {
-    turnStart: 'agentfootprint.agent.turn_start',
-    turnEnd: 'agentfootprint.agent.turn_end',
-    iterationStart: 'agentfootprint.agent.iteration_start',
-    iterationEnd: 'agentfootprint.agent.iteration_end',
-    routeDecided: 'agentfootprint.agent.route_decided',
-    handoff: 'agentfootprint.agent.handoff',
-    outputSchemaValidationFailed: 'agentfootprint.agent.output_schema_validation_failed',
-    outputSchemaRetry: 'agentfootprint.agent.output_schema_retry',
-    outputContractUnmet: 'agentfootprint.agent.output_contract_unmet',
-    evidenceChecked: 'agentfootprint.agent.evidence_checked',
-    groundingNudged: 'agentfootprint.agent.grounding_nudged',
-    runConfigured: 'agentfootprint.agent.run_configured',
-    thinkingParseFailed: 'agentfootprint.agent.thinking_parse_failed',
-    thinkingOmitted: 'agentfootprint.agent.thinking_omitted',
-    budgetExhausted: 'agentfootprint.agent.budget_exhausted',
-    aroundTurnFailed: 'agentfootprint.agent.around_turn_failed',
-  },
-  stream: {
-    llmStart: 'agentfootprint.stream.llm_start',
-    llmEnd: 'agentfootprint.stream.llm_end',
-    token: 'agentfootprint.stream.token',
-    toolStart: 'agentfootprint.stream.tool_start',
-    toolProgress: 'agentfootprint.stream.tool_progress',
-    toolEnd: 'agentfootprint.stream.tool_end',
-    thinkingDelta: 'agentfootprint.stream.thinking_delta',
-    thinkingEnd: 'agentfootprint.stream.thinking_end',
-  },
-  context: {
-    injected: 'agentfootprint.context.injected',
-    evicted: 'agentfootprint.context.evicted',
-    slotComposed: 'agentfootprint.context.slot_composed',
-    budgetPressure: 'agentfootprint.context.budget_pressure',
-    evaluated: 'agentfootprint.context.evaluated',
-  },
-  memory: {
-    strategyApplied: 'agentfootprint.memory.strategy_applied',
-    attached: 'agentfootprint.memory.attached',
-    retrieved: 'agentfootprint.memory.retrieved',
-    detached: 'agentfootprint.memory.detached',
-    written: 'agentfootprint.memory.written',
-  },
-  tools: {
-    offered: 'agentfootprint.tools.offered',
-    activated: 'agentfootprint.tools.activated',
-    deactivated: 'agentfootprint.tools.deactivated',
-    discoveryStarted: 'agentfootprint.tools.discovery_started',
-    discoveryCompleted: 'agentfootprint.tools.discovery_completed',
-    discoveryFailed: 'agentfootprint.tools.discovery_failed',
-    shadowed: 'agentfootprint.tools.shadowed',
-    claimSwallowed: 'agentfootprint.tools.claim_swallowed',
-    answeredOffWire: 'agentfootprint.tools.answered_off_wire',
-    resourceRestore: 'agentfootprint.tools.resource_restore',
-    sessionStarted: 'agentfootprint.tools.session_started',
-    sessionReused: 'agentfootprint.tools.session_reused',
-    sessionClosed: 'agentfootprint.tools.session_closed',
-    sessionCloseFailed: 'agentfootprint.tools.session_close_failed',
-    effect: 'agentfootprint.tools.effect',
-    resultRefused: 'agentfootprint.tools.result_refused',
-    repeatedCall: 'agentfootprint.tools.repeated_call',
-    absent: 'agentfootprint.tools.absent',
-    coverageDeclared: 'agentfootprint.tools.coverage_declared',
-    semanticsDeclared: 'agentfootprint.tools.semantics_declared',
-    codeRun: 'agentfootprint.tools.code_run',
-    requestAttempts: 'agentfootprint.tools.request_attempts',
-    mcpClient: 'agentfootprint.tools.mcp_client',
-  },
-  skill: {
-    activated: 'agentfootprint.skill.activated',
-    graphDeclared: 'agentfootprint.skill.graph_declared',
-    deactivated: 'agentfootprint.skill.deactivated',
-    rejected: 'agentfootprint.skill.rejected',
-    rerouteSuperseded: 'agentfootprint.skill.reroute_superseded',
-    routeConflict: 'agentfootprint.skill.route_conflict',
-    turnRouted: 'agentfootprint.skill.turn_routed',
-    stepAdvanced: 'agentfootprint.skill.step_advanced',
-    stepSkipped: 'agentfootprint.skill.step_skipped',
-    stepsUnfinished: 'agentfootprint.skill.steps_unfinished',
-    escalated: 'agentfootprint.skill.escalated',
-  },
-  map: {
-    engaged: 'agentfootprint.map.engaged',
-    parked: 'agentfootprint.map.parked',
-  },
-  integrity: {
-    contextError: 'agentfootprint.integrity.context_error',
-    disposition: 'agentfootprint.integrity.disposition',
-    externalGroundUsed: 'agentfootprint.integrity.external_ground_used',
-  },
-  validation: {
-    argsInvalid: 'agentfootprint.validation.args_invalid',
-  },
-  permission: {
-    check: 'agentfootprint.permission.check',
-    gateOpened: 'agentfootprint.permission.gate_opened',
-    gateClosed: 'agentfootprint.permission.gate_closed',
-    halt: 'agentfootprint.permission.halt',
-  },
-  credential: {
-    requested: 'agentfootprint.credential.requested',
-    acquired: 'agentfootprint.credential.acquired',
-    authorizationRequired: 'agentfootprint.credential.authorization_required',
-    failed: 'agentfootprint.credential.failed',
-  },
-  fallback: {
-    triggered: 'agentfootprint.fallback.triggered',
-  },
-  cost: {
-    tick: 'agentfootprint.cost.tick',
-    limitHit: 'agentfootprint.cost.limit_hit',
-  },
-  eval: {
-    score: 'agentfootprint.eval.score',
-    thresholdCrossed: 'agentfootprint.eval.threshold_crossed',
-  },
-  error: {
-    retried: 'agentfootprint.error.retried',
-    recovered: 'agentfootprint.error.recovered',
-    fatal: 'agentfootprint.error.fatal',
-    circuitChanged: 'agentfootprint.error.circuit_changed',
-  },
-  reliability: {
-    failFast: 'agentfootprint.reliability.fail_fast',
-    retried: 'agentfootprint.reliability.retried',
-    recovered: 'agentfootprint.reliability.recovered',
-  },
-  resilience: {
-    outputFallbackTriggered: 'agentfootprint.resilience.output_fallback_triggered',
-    outputCannedUsed: 'agentfootprint.resilience.output_canned_used',
-  },
-  pause: {
-    request: 'agentfootprint.pause.request',
-    resume: 'agentfootprint.pause.resume',
-  },
-  checkin: {
-    request: 'agentfootprint.checkin.request',
-    decision: 'agentfootprint.checkin.decision',
-  },
-  middleware: {
-    decision: 'agentfootprint.middleware.decision',
-  },
-  findings: {
-    declared: 'agentfootprint.findings.declared',
-    standing: 'agentfootprint.findings.standing',
-    judged: 'agentfootprint.findings.judged',
-    judge_failed: 'agentfootprint.findings.judge_failed',
-    contingent: 'agentfootprint.findings.contingent',
-    // The inputs layer's verdict on one ruled argument of one call (honesty layer 2).
-    argument: 'agentfootprint.findings.argument',
-    // The results layer's verdict on one call's period (honesty layer 3, step 7b).
-    period: 'agentfootprint.findings.period',
-    negative_claim: 'agentfootprint.findings.negative_claim',
-  },
-  tool_choice: {
-    picked: 'agentfootprint.tool_choice.picked',
-    outcome: 'agentfootprint.tool_choice.outcome',
-    failed: 'agentfootprint.tool_choice.failed',
-  },
-  ontology: {
-    served: 'agentfootprint.ontology.served',
-  },
-  // The answer layer (honesty layer 4): the answer's standing, as data.
-  answer: {
-    assessed: 'agentfootprint.answer.assessed',
-  },
-  embedding: {
-    generated: 'agentfootprint.embedding.generated',
-  },
-  artifacts: {
-    minted: 'agentfootprint.artifacts.minted',
-    resolved: 'agentfootprint.artifacts.resolved',
-    expired: 'agentfootprint.artifacts.expired',
-    refused: 'agentfootprint.artifacts.refused',
-    presented: 'agentfootprint.artifacts.presented',
-    handOverFailed: 'agentfootprint.artifacts.hand_over_failed',
-  },
-} as const;
+export { EVENT_NAMES } from './registry/names.js';
 
 // ─── Event type → payload: the key table typed `.on(type, ...)` reads ───
 export interface AgentfootprintEventMap {
@@ -460,6 +273,10 @@ export interface AgentfootprintEventMap {
     StreamThinkingEndPayload
   >;
   // context (THE CORE)
+  'agentfootprint.context.recorded': AgentfootprintEventEnvelope<
+    'agentfootprint.context.recorded',
+    ContextRecordedPayload
+  >;
   'agentfootprint.context.injected': AgentfootprintEventEnvelope<
     'agentfootprint.context.injected',
     ContextInjectedPayload
@@ -914,6 +731,7 @@ export const ALL_EVENT_TYPES: readonly AgentfootprintEventType[] = [
   'agentfootprint.stream.tool_end',
   'agentfootprint.stream.thinking_delta',
   'agentfootprint.stream.thinking_end',
+  'agentfootprint.context.recorded',
   'agentfootprint.context.injected',
   'agentfootprint.context.evicted',
   'agentfootprint.context.slot_composed',

@@ -230,7 +230,7 @@ and that the answer account says the question and the answer are kept out.
    keep footprintjs's rule, by name, so they stay useful. For full
    observability, run with no policy. Pinned, generated for every event type
    in the registry under random policies — name-only ones included — and
-   adversarial strings (`value-rule.test.ts`, and the public-surface
+   adversarial strings (`knownStrings/value-rule.test.ts`, and the public-surface
    property): no string but a library word survives, and every library word
    does; every copy the library derives from a selected value (a validation
    issue's quote, a check-in's `willDo`, a parser's message, a coverage
