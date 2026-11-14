@@ -1,3 +1,7 @@
+import {
+  resolveSourceEvidenceOptions,
+  type SourceEvidenceOptions,
+} from '../../tools/sourceEvidence.js';
 import { findingsInstruction } from './findings/instruction.js';
 import { findingsContextBytes } from './findings/context.js';
 /**
@@ -243,6 +247,7 @@ export class AgentBuilder {
    */
   private cacheStrategyOverride?: CacheStrategy;
   private readonly registry: ToolRegistryEntry[] = [];
+  private declare sourceEvidenceValue?: SourceEvidenceOptions;
   private readonly injectionList: Injection[] = [];
   /** Captured from `.skillGraph(graph)` — the cursor resolver the Injection
    *  Engine uses to `from`-gate route triggers. Undefined unless a graph with
@@ -3380,6 +3385,14 @@ export class AgentBuilder {
     return this;
   }
 
+  /** Retain exact governed source observations with fresh read admission. */
+  sourceEvidence(options: SourceEvidenceOptions): this {
+    if (this.sourceEvidenceValue !== undefined)
+      throw new Error('Agent.sourceEvidence: already configured.');
+    this.sourceEvidenceValue = resolveSourceEvidenceOptions(options);
+    return this;
+  }
+
   /**
    * Observe ordinary prose with `{ prose: true }`, preserving the answer and live
    * streaming. Warnings never confirm or block a claim. No schema or tool list is
@@ -4131,7 +4144,9 @@ export class AgentBuilder {
       ]);
     }
     const agent = new Agent(
-      opts,
+      this.sourceEvidenceValue === undefined
+        ? opts
+        : { ...opts, sourceEvidence: this.sourceEvidenceValue },
       this.systemPromptValue,
       this.registry,
       voice,

@@ -160,6 +160,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'one citation-correction system frame through evidenceRecoveryPiece in callLLM; the repair budget is spent and tools withheld, and the instruction never enters conversation history or tool evidence',
     },
   ],
+  'src/tools/sourceEvidenceTools.ts': [
+    {
+      kind: 'ephemeral',
+      count: 1,
+      why: 'the retained-source reader description is rebuilt in each request tools array; it teaches issued-receipt navigation, never reports current access or a result in persistent history',
+    },
+  ],
   'src/tools/artifactDetailTool.ts': [
     {
       kind: 'ephemeral',
@@ -1351,10 +1358,10 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // conversation.ts, files115→116, total206→207, notModelFacing137→138.
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
-        files: 118,
-        total: 208,
+        files: 119,
+        total: 209,
         registry: 8,
-        ephemeral: 26,
+        ephemeral: 27,
         unrepaired: 35,
         notModelFacing: 139,
         unrepairedEntries: 21,

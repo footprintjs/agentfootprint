@@ -8,7 +8,7 @@ title: TRANSFORM_HASH_PREFIX
 
 Defined in: [src/core/agent/receipt/receipt.ts:748](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/receipt.ts#L748)
 
-The prefix a chained [Receipt.cache.transformHash](/docs/api/interfaces/Receipt#cache) carries — the NAME of
+The prefix a chained Receipt.cache.transformHash carries — the NAME of
 the scheme that produced it, inside the value, so a verifier can tell the two
 schemes apart without a second field:
 

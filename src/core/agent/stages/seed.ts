@@ -45,6 +45,8 @@ import type { TimePolicy } from '../../../time/resolve.js';
 import { commitRunRedaction } from '../run/commitRunRedaction.js';
 import { MemberIdentityError, memberIdentityOf, resolveParentRun } from '../../memberRun.js';
 import { incompleteToolCalls } from '../../../answer-validation/toolLedger.js';
+import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/types.js';
+import { sourceEvidenceIndex } from '../../../artifacts/sourceEvidence/guards.js';
 
 /**
  * A stored conversation handed to the next run — what
@@ -79,6 +81,8 @@ export interface PendingResumeHistory {
 }
 
 export interface SeedStageDeps {
+  readonly sourceEvidenceMaxReceipts?: number;
+  readonly consumePendingResumeSourceEvidence?: () => SourceEvidenceIndex | undefined;
   readonly negativeClaimsArmed?: boolean;
   /** Resolved `clampIterations(opts.maxIterations ?? 10)`. Frozen at
    *  chart-build time. */
@@ -625,6 +629,19 @@ function seedFrom(
   const resume = mounted ? undefined : deps.consumePendingResumeHistory();
   const history = historyForTurn(resume, message);
   scope.history = history;
+  if (deps.sourceEvidenceMaxReceipts !== undefined) {
+    const inherited = mounted ? undefined : deps.consumePendingResumeSourceEvidence?.();
+    const prior =
+      inherited === undefined
+        ? { version: 1 as const, refs: [], omitted: 0 }
+        : sourceEvidenceIndex(inherited);
+    const refs = prior.refs.slice(0, deps.sourceEvidenceMaxReceipts);
+    const dropped = prior.refs.length - refs.length;
+    if (prior.omitted > Number.MAX_SAFE_INTEGER - dropped)
+      throw new TypeError('Source evidence omission counter overflow.');
+    const omitted = prior.omitted + dropped;
+    scope.sourceEvidence = { version: 1, refs, omitted };
+  }
   // Every run that keeps a ledger starts one, so a missing key always means
   // "not observed" (a checkpoint from before) and the view fails closed.
   if (deps.toolCallLedger === true) {

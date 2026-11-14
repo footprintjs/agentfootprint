@@ -158,7 +158,7 @@ whatever is left.
 
 ##### options?
 
-\{ `reason?`: [`TeardownReason`](/docs/api/type-aliases/TeardownReason); `scope?`: `"session"`; `sessionId?`: `string`; \} \| \{ `scope`: `"run"`; `sessionId`: `string`; \}
+\{ `reason?`: [`TeardownReason`](/docs/api/type-aliases/TeardownReason); `scope?`: `"session"`; `sessionId?`: `string`; \} \| \{ `scope`: `"run"`; `sessionId`: `string`; \} = `{}`
 
 #### Returns
 
@@ -284,7 +284,7 @@ what it computes on is the live run (`liveSnapshot`).
 
 ### getLevels()
 
-> **getLevels**(): readonly readonly `string`[][]
+> **getLevels**(): readonly (readonly `string`[])[]
 
 Defined in: [src/core-flow/Graph.ts:463](https://github.com/footprintjs/agentfootprint/blob/main/src/core-flow/Graph.ts#L463)
 
@@ -292,7 +292,7 @@ How the graph was levelized — level 0 first. Stable post-construction.
 
 #### Returns
 
-readonly readonly `string`[][]
+readonly (readonly `string`[])[]
 
 ***
 

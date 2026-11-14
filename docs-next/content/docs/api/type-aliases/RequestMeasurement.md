@@ -4,7 +4,7 @@ title: RequestMeasurement
 
 # Type Alias: RequestMeasurement
 
-> **RequestMeasurement** = `MeasurementBoundary` & \{ `slots`: \{ `messages?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); `systemPrompt?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); `tools?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); \}; `status`: `"measured"`; `total`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); \} \| \{ `reason`: `"unsupported-value"` \| `"cyclic-value"` \| `"measurement-limit"`; `status`: `"unavailable"`; \}
+> **RequestMeasurement** = `MeasurementBoundary` & (\{ `slots`: \{ `messages?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); `systemPrompt?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); `tools?`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); \}; `status`: `"measured"`; `total`: [`RequestJsonSize`](/docs/api/interfaces/RequestJsonSize); \} \| \{ `reason`: `"unsupported-value"` \| `"cyclic-value"` \| `"measurement-limit"`; `status`: `"unavailable"`; \})
 
 Defined in: [src/core/agent/receipt/requestMeasurement.ts:18](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/receipt/requestMeasurement.ts#L18)
 

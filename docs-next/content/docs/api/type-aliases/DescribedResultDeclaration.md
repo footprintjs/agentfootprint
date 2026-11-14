@@ -4,7 +4,7 @@ title: DescribedResultDeclaration
 
 # Type Alias: DescribedResultDeclaration
 
-> **DescribedResultDeclaration** = `object` & \{ `provenance`: \{ `ageSeconds?`: `number`; `measuredAt`: `string`; `source`: `string`; `sourceExportDate?`: `string`; \}; \} \| \{ `facts?`: `undefined`; `series?`: `undefined`; \}
+> **DescribedResultDeclaration** = `object` & (\{ `provenance`: \{ `ageSeconds?`: `number`; `measuredAt`: `string`; `source`: `string`; `sourceExportDate?`: `string`; \}; \} \| \{ `facts?`: `undefined`; `series?`: `undefined`; \})
 
 Defined in: [src/semantics/types.ts:257](https://github.com/footprintjs/agentfootprint/blob/main/src/semantics/types.ts#L257)
 

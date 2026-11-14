@@ -183,7 +183,7 @@ whatever is left.
 
 ##### options?
 
-\{ `reason?`: [`TeardownReason`](/docs/api/type-aliases/TeardownReason); `scope?`: `"session"`; `sessionId?`: `string`; \} \| \{ `scope`: `"run"`; `sessionId`: `string`; \}
+\{ `reason?`: [`TeardownReason`](/docs/api/type-aliases/TeardownReason); `scope?`: `"session"`; `sessionId?`: `string`; \} \| \{ `scope`: `"run"`; `sessionId`: `string`; \} = `{}`
 
 #### Returns
 

@@ -45,7 +45,7 @@ Defined in: [src/core/conversation.ts:112](https://github.com/footprintjs/agentf
 
 ##### operation?
 
-`"session"` \| `"resume"` \| `"followUp"`
+`"session"` \| `"resume"` \| `"followUp"` = `'resume'`
 
 #### Returns
 

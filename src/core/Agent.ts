@@ -1,3 +1,4 @@
+import { sourceEvidenceTools } from '../tools/sourceEvidenceTools.js';
 import {
   refuseFollowUpIdentity,
   refuseKnownSpentAnswer,
@@ -282,6 +283,11 @@ import type {
 } from './agent/types.js';
 import { buildRouteDeciderStage } from './agent/stages/route.js';
 import { negativeCheckpointOf } from './agent/negativeClaims/checkpoint.js';
+import { sourceEvidenceOf } from './agent/sourceEvidence/checkpoint.js';
+import {
+  resolveSourceEvidenceOptions,
+  type ResolvedSourceEvidenceOptions,
+} from '../tools/sourceEvidence.js';
 import type {
   ResolvedNegativeClaims,
   ResolvedTypedNegativeClaims,
@@ -989,6 +995,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   private readonly recordReceiptValue: boolean = true;
   private readonly answerValidationConfig?: ResolvedAnswerValidation;
   private readonly negativeClaimsConfig?: ResolvedNegativeClaims;
+  private declare readonly sourceEvidenceConfig?: ResolvedSourceEvidenceOptions;
   private readonly typedNegativeClaimsConfig?: ResolvedTypedNegativeClaims;
   private readonly applicationAnswerValidation: boolean;
 
@@ -1439,6 +1446,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       } else {
         this.artifactStore = opts.artifacts;
       }
+    }
+    if (opts.sourceEvidence !== undefined) {
+      if (this.artifactStore === undefined)
+        throw new TypeError('Retained source evidence requires an artifact store.');
+      this.sourceEvidenceConfig = resolveSourceEvidenceOptions(opts.sourceEvidence);
     }
     // The third dial-without-its-switch (8.13.0). `onAuthorizationRequired` is
     // read at exactly one place — the tool-dispatch loop, AFTER
@@ -2290,6 +2302,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
           this.negativeClaimsConfig === undefined
             ? undefined
             : negativeCheckpointOf(this.liveSnapshot()?.sharedState ?? {}),
+          this.sourceEvidenceConfig === undefined
+            ? undefined
+            : sourceEvidenceOf(this.liveSnapshot()?.sharedState as Partial<AgentState>),
         );
         throw new RunCheckpointError(cause, checkpoint);
       }
@@ -2317,6 +2332,7 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       invocation.value.pendingResumeFindingsLedger = undefined;
       invocation.value.pendingResumeSkillCursor = undefined;
       invocation.value.pendingEvidenceRecovery = undefined;
+      invocation.value.pendingResumeSourceEvidence = undefined;
     }
   }
 
@@ -2602,6 +2618,18 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // (`consentRequest.ts` · `watchDecisionUse`) — so a resume that fails
     // without reaching it, refused or aborted, used nothing.
     resumeStateOf(checkpoint);
+    const sourceEvidence = sourceEvidenceOf(checkpoint.sharedState);
+    const sourceEvidenceConfig = this.sourceEvidenceConfig;
+    if (sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
+      throw new TypeError('Resume requires the source evidence setting used by the paused agent.');
+    if (
+      sourceEvidenceConfig !== undefined &&
+      (sourceEvidence === undefined ||
+        sourceEvidence.refs.length > sourceEvidenceConfig.limits.maxReceipts)
+    )
+      throw new TypeError(
+        'Source evidence pause checkpoint is missing its bounded native carrier.',
+      );
     // ── A consent gate is answered with a DECISION (8.13.0) ─────────────
     // Refused HERE, before the engine is handed the checkpoint, so nothing
     // executes and the checkpoint is unchanged — the caller can answer the same
@@ -2959,6 +2987,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
       ...(this.negativeClaimsConfig === undefined || state === undefined
         ? {}
         : negativeCheckpointOf(state)),
+      ...(this.sourceEvidenceConfig === undefined
+        ? {}
+        : { sourceEvidence: sourceEvidenceOf(state) }),
     };
   }
 
@@ -3130,6 +3161,12 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
   ): void {
     assertContinuable(cp, this.explicitId, door);
     requireVerificationOnResume(cp, false);
+    const sourceEvidence = sourceEvidenceOf(cp);
+    if (this.sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
+      throw new TypeError(
+        'Continuation requires the source evidence setting used by the recording agent.',
+      );
+    values.pendingResumeSourceEvidence = sourceEvidence;
     if (this.negativeClaimsConfig === undefined && negativeCheckpointOf(cp) !== undefined)
       throw new TypeError(
         'Continuation requires the negative-claims setting used by the recording agent.',
@@ -4575,6 +4612,14 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         return l;
       };
       return buildSeedStage({
+        ...(this.sourceEvidenceConfig !== undefined && {
+          sourceEvidenceMaxReceipts: this.sourceEvidenceConfig.limits.maxReceipts,
+          consumePendingResumeSourceEvidence: () => {
+            const sourceEvidence = run.value.pendingResumeSourceEvidence;
+            run.value.pendingResumeSourceEvidence = undefined;
+            return sourceEvidence;
+          },
+        }),
         maxIterations,
         // The forced-output tool's name (9.88.0) — a build-time constant, put on
         // the record once so a rebuild can name it without reading a receipt.
@@ -4751,7 +4796,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     // skill-supplied tools (with autoActivate scoping); validates
     // name uniqueness; produces the dispatch map.
     const { registryByName, toolSchemas, toolDeclaringSkills, toolClaimants } = buildToolRegistry(
-      registry,
+      this.sourceEvidenceConfig === undefined
+        ? registry
+        : [...registry, ...sourceEvidenceTools().map((tool) => ({ name: tool.schema.name, tool }))],
       this.injections,
       {
         hasArtifactStore: artifactStore !== undefined,
@@ -5613,6 +5660,9 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
         // dispatch: `ctx.artifacts` is the fail-closed teacher and no artifact
         // event can fire (zero-cost-when-unused).
         ...(artifactStore && { artifactStore }),
+        ...(this.sourceEvidenceConfig !== undefined && {
+          sourceEvidenceConfig: this.sourceEvidenceConfig,
+        }),
         // The placement threshold (9.22.0) — only ever set beside a store (the
         // option's own shape enforces it). Absent → results are never measured
         // against it and never placed.

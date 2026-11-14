@@ -674,6 +674,8 @@ const REFUSES_A_SECOND_CALL = [
   // One wrapper per agent: a second would silently decide which work a turn skips.
   'aroundTurn',
   'answerValidation',
+  // A retained-source policy has one host admission authority per Agent.
+  'sourceEvidence',
   // One negative-citation contract per agent; replacing it would silently change the guarantee.
   'negativeClaims',
   'checkIn',
@@ -838,6 +840,10 @@ describe('silent success — the doctrine sweep', () => {
         base()
           .answerValidation({ id: 'first', version: '1', validate: () => ({ checks: [] }) })
           .answerValidation({ id: 'second', version: '1', validate: () => ({ checks: [] }) }),
+      sourceEvidence: () =>
+        base()
+          .sourceEvidence({ admit: (candidate) => candidate })
+          .sourceEvidence({ admit: (candidate) => candidate }),
       negativeClaims: () =>
         base()
           .negativeClaims({ field: 'negatives', tools: ['lookup'] })

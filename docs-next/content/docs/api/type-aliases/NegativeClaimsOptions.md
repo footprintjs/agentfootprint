@@ -4,7 +4,7 @@ title: NegativeClaimsOptions
 
 # Type Alias: NegativeClaimsOptions
 
-> **NegativeClaimsOptions** = \{ `field`: `string`; `prose?`: `never`; `tools`: readonly `string`[]; `unestablished?`: `"withhold"` \| `"state-searched"`; \} \| \{ `field?`: `never`; `prose`: `true`; `tools?`: `never`; `unestablished?`: `never`; \} & `object`
+> **NegativeClaimsOptions** = (\{ `field`: `string`; `prose?`: `never`; `tools`: readonly `string`[]; `unestablished?`: `"withhold"` \| `"state-searched"`; \} \| \{ `field?`: `never`; `prose`: `true`; `tools?`: `never`; `unestablished?`: `never`; \}) & `object`
 
 Defined in: [src/core/agent/negativeClaims/config.ts:26](https://github.com/footprintjs/agentfootprint/blob/main/src/core/agent/negativeClaims/config.ts#L26)
 
