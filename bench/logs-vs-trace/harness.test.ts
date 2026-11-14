@@ -48,6 +48,26 @@ describe('logs/trace deterministic harness boundaries', () => {
     expect(grade.status).toBe('checked-pass');
   });
 
+  it.each([
+    { debt: 3996, ratio: 0.3996, decision: 'approve', holdout: 'just-below-boundary' },
+    { debt: 4000, ratio: 0.4, decision: 'approve', holdout: 'at-boundary' },
+    { debt: 4004, ratio: 0.4004, decision: 'decline', holdout: 'just-above-boundary' },
+  ])(
+    'applies the unrounded monthly ceiling at $ratio',
+    async ({ debt, ratio, decision, holdout }) => {
+      const native = await captureCase(
+        { variant: 'monthly', capture: 'complete' },
+        { annualIncome: 120000, monthlyDebt: debt, creditScore: 800 },
+      );
+      expect(native.dti).toBe(ratio);
+      expect(native.decision).toBe(decision);
+      const grade = gradeFix({ operation: 'keep' }, { originalField: 'monthlyIncome' });
+      const boundary = grade.checks.find((check) => check.id === holdout);
+      expect(boundary.expected).toEqual({ dti: ratio, decision });
+      expect(boundary.actual).toEqual({ dti: ratio, decision });
+    },
+  );
+
   it('keeps returned candidate and task data detached from future runs', async () => {
     const first = await runValidation({ loadDoors: localDoors });
     first.rows[0].scriptedChecks[0].candidate.field = 'annualIncome';

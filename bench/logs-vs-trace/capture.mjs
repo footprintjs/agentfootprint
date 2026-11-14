@@ -19,7 +19,7 @@ export const TASK = Object.freeze({
   question:
     'Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.',
   policy:
-    'Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.',
+    'Use the unrounded monthly debt/income ratio. Decline below credit score 620 or above ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.',
   responseShape: {
     operation: 'keep | denominator',
     field: 'annualIncome | monthlyIncome (denominator only)',
@@ -50,7 +50,7 @@ export function chartFor(variant, logs) {
     .addFunction(
       'Normalize',
       (scope) => {
-        scope.dti = Math.round((scope.monthlyDebt / scope[field]) * 1000) / 1000;
+        scope.dti = scope.monthlyDebt / scope[field];
         log('normalize', { dti: scope.dti });
       },
       'normalize',

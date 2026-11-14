@@ -13,18 +13,22 @@ denominator. A third deliberately withholds the completed trace capture. Both
 arms refer to the same completed execution for each case, rather than rerunning
 different inputs under different arms.
 
+The synthetic policy compares the unrounded ratio with `0.4`. Native fixture and
+private replay tests independently pin `0.3996` and `0.4` as within the ceiling,
+and `0.4004` as above it. No display rounding changes a decision.
+
 ## Owners and boundaries
 
-| File | One responsibility |
-| --- | --- |
-| `cases.mjs` | Frozen synthetic case descriptors and visible input values |
-| `capture.mjs` | Native test chart, ordinary application logs and completed artifacts |
+| File           | One responsibility                                                           |
+| -------------- | ---------------------------------------------------------------------------- |
+| `cases.mjs`    | Frozen synthetic case descriptors and visible input values                   |
+| `capture.mjs`  | Native test chart, ordinary application logs and completed artifacts         |
 | `evidence.mjs` | Logs or public trace-tool responses; exact response bytes and framed digests |
-| `grade.mjs` | Private held-out replay oracle; strict structured candidate grammar |
-| `harness.mjs` | Seeded paired plan and explicitly scripted validation attempts |
-| `run.mjs` | Local CLI; only seed and new output-file options |
-| `*.test.ts` | Adjacent behavior, negative, replay and no-model checks |
-| `PLAN.md` | Boundaries and decisions required before a future empirical run |
+| `grade.mjs`    | Private held-out replay oracle; strict structured candidate grammar          |
+| `harness.mjs`  | Seeded paired plan and explicitly scripted validation attempts               |
+| `run.mjs`      | Local CLI; only seed and new output-file options                             |
+| `*.test.ts`    | Adjacent behavior, negative, replay and no-model checks                      |
+| `PLAN.md`      | Boundaries and decisions required before a future empirical run              |
 
 The grader and case labels are not part of either arm's served task or evidence
 frame. The output keeps grading separately for audit. Never feed the whole

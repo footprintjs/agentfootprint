@@ -41,13 +41,13 @@
     {
       "caseId": "annual-denominator",
       "arm": "trace",
-      "captureDigest": "b79d2f881bf2b1248f4aac7278ec987bfdd2dfac418791d7cd9eb0c5f4ff8978",
+      "captureDigest": "30a091b83bf4bb5f2be1ce073bbfe9239fd7fd9e7e962e30d280a27c5efbfbd2",
       "evidence": {
         "arm": "trace",
         "status": "available",
         "task": {
           "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
-          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "policy": "Use the unrounded monthly debt/income ratio. Decline below credit score 620 or above ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
           "responseShape": {
             "operation": "keep | denominator",
             "field": "annualIncome | monthlyIncome (denominator only)"
@@ -192,6 +192,30 @@
                 "pass": true
               },
               {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
                 "id": "credit-floor",
                 "expected": {
                   "dti": 0.1,
@@ -271,7 +295,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.035,
+                  "dti": 0.035083333333333334,
                   "decision": "approve"
                 },
                 "pass": false
@@ -283,7 +307,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -295,7 +319,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03325,
                   "decision": "approve"
                 },
                 "pass": false
@@ -307,7 +331,31 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.033416666666666664,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.03336666666666667,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.0333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -319,7 +367,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "decline"
                 },
                 "pass": false
@@ -331,7 +379,7 @@
                   "decision": "refer"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "refer"
                 },
                 "pass": false
@@ -343,7 +391,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -391,7 +439,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.035,
+                  "dti": 0.035083333333333334,
                   "decision": "approve"
                 },
                 "pass": false
@@ -403,7 +451,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -415,7 +463,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03325,
                   "decision": "approve"
                 },
                 "pass": false
@@ -427,7 +475,31 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.033416666666666664,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.03336666666666667,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.0333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -439,7 +511,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "decline"
                 },
                 "pass": false
@@ -451,7 +523,7 @@
                   "decision": "refer"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "refer"
                 },
                 "pass": false
@@ -463,7 +535,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -488,13 +560,13 @@
     {
       "caseId": "monthly-control",
       "arm": "trace",
-      "captureDigest": "11505492b24f2499ecbd9089857156a7db67b14930a3d1fdda434c7c99391fb0",
+      "captureDigest": "2d1d55d2366b8ed92e7495ab380c82b61d53f69902a5c98fdb5127fd9cf2baa8",
       "evidence": {
         "arm": "trace",
         "status": "available",
         "task": {
           "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
-          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "policy": "Use the unrounded monthly debt/income ratio. Decline below credit score 620 or above ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
           "responseShape": {
             "operation": "keep | denominator",
             "field": "annualIncome | monthlyIncome (denominator only)"
@@ -639,6 +711,30 @@
                 "pass": true
               },
               {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
                 "id": "credit-floor",
                 "expected": {
                   "dti": 0.1,
@@ -718,7 +814,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.035,
+                  "dti": 0.035083333333333334,
                   "decision": "approve"
                 },
                 "pass": false
@@ -730,7 +826,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -742,7 +838,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03325,
                   "decision": "approve"
                 },
                 "pass": false
@@ -754,7 +850,31 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.033416666666666664,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.03336666666666667,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.0333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -766,7 +886,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "decline"
                 },
                 "pass": false
@@ -778,7 +898,7 @@
                   "decision": "refer"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "refer"
                 },
                 "pass": false
@@ -790,7 +910,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -880,6 +1000,30 @@
                 "pass": true
               },
               {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
                 "id": "credit-floor",
                 "expected": {
                   "dti": 0.1,
@@ -935,13 +1079,13 @@
     {
       "caseId": "missing-record",
       "arm": "logs",
-      "captureDigest": "ce576f3f3c2cad6f410b2155ce15712238cb1785943d38edd874ea0f94544c4d",
+      "captureDigest": "72d3d4fd6fcc4b7436a3537d5f73511ca27bbdda1e8ff60396abda2bcad6cec4",
       "evidence": {
         "arm": "logs",
         "status": "available",
         "task": {
           "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
-          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "policy": "Use the unrounded monthly debt/income ratio. Decline below credit score 620 or above ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
           "responseShape": {
             "operation": "keep | denominator",
             "field": "annualIncome | monthlyIncome (denominator only)"
@@ -1001,13 +1145,13 @@
     {
       "caseId": "monthly-control",
       "arm": "logs",
-      "captureDigest": "11505492b24f2499ecbd9089857156a7db67b14930a3d1fdda434c7c99391fb0",
+      "captureDigest": "2d1d55d2366b8ed92e7495ab380c82b61d53f69902a5c98fdb5127fd9cf2baa8",
       "evidence": {
         "arm": "logs",
         "status": "available",
         "task": {
           "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
-          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "policy": "Use the unrounded monthly debt/income ratio. Decline below credit score 620 or above ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
           "responseShape": {
             "operation": "keep | denominator",
             "field": "annualIncome | monthlyIncome (denominator only)"
@@ -1098,6 +1242,30 @@
                 "pass": true
               },
               {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
                 "id": "credit-floor",
                 "expected": {
                   "dti": 0.1,
@@ -1177,7 +1345,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.035,
+                  "dti": 0.035083333333333334,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1189,7 +1357,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1201,7 +1369,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03325,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1213,7 +1381,31 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.033416666666666664,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.03336666666666667,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.0333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1225,7 +1417,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "decline"
                 },
                 "pass": false
@@ -1237,7 +1429,7 @@
                   "decision": "refer"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "refer"
                 },
                 "pass": false
@@ -1249,7 +1441,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1339,6 +1531,30 @@
                 "pass": true
               },
               {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
                 "id": "credit-floor",
                 "expected": {
                   "dti": 0.1,
@@ -1394,13 +1610,13 @@
     {
       "caseId": "missing-record",
       "arm": "trace",
-      "captureDigest": "ce576f3f3c2cad6f410b2155ce15712238cb1785943d38edd874ea0f94544c4d",
+      "captureDigest": "72d3d4fd6fcc4b7436a3537d5f73511ca27bbdda1e8ff60396abda2bcad6cec4",
       "evidence": {
         "arm": "trace",
         "status": "missing",
         "task": {
           "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
-          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "policy": "Use the unrounded monthly debt/income ratio. Decline below credit score 620 or above ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
           "responseShape": {
             "operation": "keep | denominator",
             "field": "annualIncome | monthlyIncome (denominator only)"
@@ -1456,13 +1672,13 @@
     {
       "caseId": "annual-denominator",
       "arm": "logs",
-      "captureDigest": "b79d2f881bf2b1248f4aac7278ec987bfdd2dfac418791d7cd9eb0c5f4ff8978",
+      "captureDigest": "30a091b83bf4bb5f2be1ce073bbfe9239fd7fd9e7e962e30d280a27c5efbfbd2",
       "evidence": {
         "arm": "logs",
         "status": "available",
         "task": {
           "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
-          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "policy": "Use the unrounded monthly debt/income ratio. Decline below credit score 620 or above ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
           "responseShape": {
             "operation": "keep | denominator",
             "field": "annualIncome | monthlyIncome (denominator only)"
@@ -1553,6 +1769,30 @@
                 "pass": true
               },
               {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
                 "id": "credit-floor",
                 "expected": {
                   "dti": 0.1,
@@ -1632,7 +1872,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.035,
+                  "dti": 0.035083333333333334,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1644,7 +1884,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1656,7 +1896,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03325,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1668,7 +1908,31 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.033416666666666664,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.03336666666666667,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.0333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1680,7 +1944,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "decline"
                 },
                 "pass": false
@@ -1692,7 +1956,7 @@
                   "decision": "refer"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "refer"
                 },
                 "pass": false
@@ -1704,7 +1968,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1752,7 +2016,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.035,
+                  "dti": 0.035083333333333334,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1764,7 +2028,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03333333333333333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1776,7 +2040,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.03325,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1788,7 +2052,31 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.033,
+                  "dti": 0.033416666666666664,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-above-boundary",
+                "expected": {
+                  "dti": 0.4004,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.03336666666666667,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "just-below-boundary",
+                "expected": {
+                  "dti": 0.3996,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.0333,
                   "decision": "approve"
                 },
                 "pass": false
@@ -1800,7 +2088,7 @@
                   "decision": "decline"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "decline"
                 },
                 "pass": false
@@ -1812,7 +2100,7 @@
                   "decision": "refer"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "refer"
                 },
                 "pass": false
@@ -1824,7 +2112,7 @@
                   "decision": "approve"
                 },
                 "actual": {
-                  "dti": 0.008,
+                  "dti": 0.008333333333333333,
                   "decision": "approve"
                 },
                 "pass": false

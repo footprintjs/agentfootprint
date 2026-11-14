@@ -25,6 +25,8 @@ correct code is a passing control; it is not counted as a repaired defect.
 Malformed candidates and missing evidence have explicit dispositions. Tests
 cross-check the native fixture and the independent replay policy so two copied
 implementations cannot silently agree on a wrong fallback.
+The policy uses the unrounded monthly ratio: independent expectations below,
+at and just above `0.4` guard against rounding changing the threshold decision.
 
 Both arms have identical task wording, policy, input, candidate grammar and
 completed run. Case labels, the planted defect and grading outcomes are excluded

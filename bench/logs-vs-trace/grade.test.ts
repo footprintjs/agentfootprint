@@ -36,7 +36,7 @@ describe('structured fix grading by independent replay', () => {
   it('repairs the planted annual-denominator bug and checks every holdout', () => {
     const result = gradeFix(monthly);
     expect(result.status).toBe('checked-pass');
-    expect(result.checks.length).toBeGreaterThan(3);
+    expect(result.checks).toHaveLength(11);
     expect(result.checks.every((check) => check.pass)).toBe(true);
     expect(result.checks.find((check) => check.id === 'recorded-bug')).toMatchObject({
       expected: { dti: 0.42, decision: 'decline' },
@@ -55,9 +55,12 @@ describe('structured fix grading by independent replay', () => {
     });
     expect(result.checks.find((check) => check.id === 'higher-income')).toMatchObject({
       expected: { dti: 0.421, decision: 'decline' },
-      actual: { dti: 0.035, decision: 'approve' },
+      actual: { decision: 'approve' },
       pass: false,
     });
+    expect(result.checks.find((check) => check.id === 'higher-income')?.actual.dti).toBe(
+      2947 / 84000,
+    );
   });
 
   it('allows keeping an already-correct implementation and rejects keeping the bug', () => {
@@ -100,6 +103,19 @@ describe('structured fix grading by independent replay', () => {
     expect(result.checks.find((check) => check.id === 'below-prime')).toMatchObject({
       expected: { dti: 0.1, decision: 'refer' },
       actual: { dti: 0.1, decision: 'refer' },
+      pass: true,
+    });
+  });
+
+  it.each([
+    ['just-above-boundary', 0.4004, 'decline'],
+    ['just-below-boundary', 0.3996, 'approve'],
+    ['at-boundary', 0.4, 'approve'],
+  ])('uses the unrounded policy ratio for %s', (id, dti, decision) => {
+    const result = gradeFix(monthly);
+    expect(result.checks.find((check) => check.id === id)).toMatchObject({
+      expected: { dti, decision },
+      actual: { dti, decision },
       pass: true,
     });
   });

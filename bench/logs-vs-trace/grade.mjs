@@ -9,6 +9,8 @@ const HOLDOUTS = [
   ['at-boundary', 96000, 3200, 700, 0.4, 'approve'],
   ['below-boundary', 12000, 399, 680, 0.399, 'approve'],
   ['above-boundary', 120000, 4010, 800, 0.401, 'decline'],
+  ['just-above-boundary', 120000, 4004, 800, 0.4004, 'decline'],
+  ['just-below-boundary', 120000, 3996, 800, 0.3996, 'approve'],
   ['credit-floor', 60000, 500, 619, 0.1, 'decline'],
   ['below-prime', 60000, 500, 679, 0.1, 'refer'],
   ['prime-floor', 60000, 500, 680, 0.1, 'approve'],
@@ -49,7 +51,7 @@ function validCandidate(candidate) {
 
 function replay(input, field) {
   const denominator = field === 'monthlyIncome' ? input.annualIncome / 12 : input.annualIncome;
-  const dti = Math.round((input.monthlyDebt / denominator) * 1000) / 1000;
+  const dti = input.monthlyDebt / denominator;
   const decision =
     POLICY.find((rule) => rule.when({ creditScore: input.creditScore, dti }))?.then ?? 'refer';
   return { dti, decision };
