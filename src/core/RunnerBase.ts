@@ -148,11 +148,13 @@ export abstract class RunnerBase<
    * handed down), this is footprintjs's REDACTED view —
    * `getSnapshot({ redact: true })`, through `servableSnapshot`, the one owner
    * of what a run may show: `sharedState` and every subflow's state from the
-   * redacted mirror, the commit log as scrubbed at write time, and no
-   * `initialState` (the raw pre-run base never passed the policy, so a fold of
-   * it reports `basis: 'log-only'`). Private argument selectors use the same
-   * native view; without either arm the snapshot is unchanged. The library's own logic never reads this
-   * getter — what it computes on is the live run (`liveSnapshot`).
+   * redacted mirror and the commit log as scrubbed at write time. The native
+   * engine also serves its original `initialState` through the current state
+   * rule, so replay retains its base without exposing selected seed values.
+   * Legacy snapshots that omit the base fold as `basis: 'log-only'`. Private
+   * argument selectors use the same native view; without either arm the
+   * snapshot is unchanged. The library's own logic never reads this getter —
+   * what it computes on is the live run (`liveSnapshot`).
    */
   getLastSnapshot(): ReturnType<FlowChartExecutor['getSnapshot']> | undefined {
     const selected = this.execution?.selected();

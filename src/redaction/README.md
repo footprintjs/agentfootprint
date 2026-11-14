@@ -26,16 +26,16 @@ An agent's `redact` (`Agent.create({ redact })`) is a footprintjs
 **everything the library retains or serves** about those runs and **never what
 the agent computes on or hands back to its caller**.
 
-| Covered — the placeholder where a selected value was | Never covered — real values |
-|---|---|
-| the commit log (scrubbed at write, by footprintjs) | the model's input |
-| `getLastSnapshot()` — footprintjs's redacted view | the answer `run()` returns; a host's streamed reply; `toSSE({ format: 'text' })` |
-| the narrative (`getLastNarrativeEntries()`) | the conversation it continues: `checkpoint()`, `followUp`, `continueFrom`, a host's session store |
-| every typed event — `agent.on`, recorders on the executor, the deferred tier | the resume checkpoints: a pause's `checkpoint`, `RunCheckpointError.checkpoint` |
+| Covered — the placeholder where a selected value was                                                                     | Never covered — real values                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the commit log (scrubbed at write, by footprintjs)                                                                       | the model's input                                                                                                                                |
+| `getLastSnapshot()` — footprintjs's redacted view                                                                        | the answer `run()` returns; a host's streamed reply; `toSSE({ format: 'text' })`                                                                 |
+| the narrative (`getLastNarrativeEntries()`)                                                                              | the conversation it continues: `checkpoint()`, `followUp`, `continueFrom`, a host's session store                                                |
+| every typed event — `agent.on`, recorders on the executor, the deferred tier                                             | the resume checkpoints: a pause's `checkpoint`, `RunCheckpointError.checkpoint`                                                                  |
 | recordings (`recordRun`, packed or plain), traces, strategies (otel, file, audit, console, CloudWatch, X-Ray, AgentCore) | memory — what a later run recalls, a causal snapshot's tool calls included (`defineMemory({ redact })` is refused; `../memory/redactRefusal.ts`) |
-| bug reports, answer accounts, the self-explain tools, recordings a host files | the run's verdict accessors (`stoppedEarly()`, `findings()`, `answerCoverage()`, …) and `agent.assessment()` |
-| the record a chart-backed tool keeps (`flowchartAsTool` / `runbookAsTool`) — under the calling run's policy too | what that tool hands the MODEL, when the calling run keeps its conversation out (below) |
-| | the context ledger's counts, whose gates decide what later runs are offered (below) |
+| bug reports, answer accounts, the self-explain tools, recordings a host files                                            | the run's verdict accessors (`stoppedEarly()`, `findings()`, `answerCoverage()`, …) and `agent.assessment()`                                     |
+| the record a chart-backed tool keeps (`flowchartAsTool` / `runbookAsTool`) — under the calling run's policy too          | what that tool hands the MODEL, when the calling run keeps its conversation out (below)                                                          |
+|                                                                                                                          | the context ledger's counts, whose gates decide what later runs are offered (below)                                                              |
 
 **It selects by NAME, never by content** (footprintjs's law). A key or a pattern
 masks a STATE key of that name and everything under it; in every record handed
@@ -153,6 +153,7 @@ and that the answer account says the question and the answer are kept out.
   tool's RESULT, which the calling run keeps in its own conversation — so the
   model's view is decided by where that result lands
   (`core/servableSnapshot.ts` · `modelFacingState`, the one owner):
+
   - the calling run keeps its WHOLE conversation out of its records
     (`conversation.ts` · `keepsConversationOut` — `conversationRedaction()` or
     more): the model reads the run's live state under the TOOL's own `redact`
@@ -169,6 +170,7 @@ and that the answer account says the question and the answer are kept out.
 
   Pinned end to end, with every artifact of the calling agent searched, by
   `test/redaction/agent-redaction.tool-boundary.test.ts`.
+
 - **The union only adds.** A run covered by several declarations masks every name
   any of them selects (`unionRedactionPolicies`).
 
@@ -186,7 +188,7 @@ and that the answer account says the question and the answer are kept out.
    event name only; a typed event is a record handed out whole, so it is served
    the way footprintjs serves those (`served.ts`). A runner's chart mounted into
    an executor the APP built (`parent.addSubFlowChartNext('sf-agent',
-   agent.getSpec(), …)`) runs its stages in that executor's scopes, which no
+agent.getSpec(), …)`) runs its stages in that executor's scopes, which no
    run of this library made: every stage of a runner's chart is bound to its
    runner when the chart is built (`chartBinding.ts` · `bindChartStages`), and a
    stage that starts in a scope no run tied serves its events under the
@@ -203,6 +205,7 @@ and that the answer account says the question and the answer are kept out.
    wherever it sits — no field is trusted by its position, so there is no
    list of fields, or of the copies the library derives from a value, to keep
    complete:
+
    - numbers, booleans and null pass;
    - a string passes only when it is one of the library's own WORDS — an event
      type, a status, verdict or stop word, a fixed sentence
@@ -235,6 +238,7 @@ and that the answer account says the question and the answer are kept out.
    does; every copy the library derives from a selected value (a validation
    issue's quote, a check-in's `willDo`, a parser's message, a coverage
    declaration's words) is kept out under a name-only policy.
+
 5. **Not in this release: ids, declared names and the host's identity.** A
    run's own ids (its stage ids, its run id, the ids of the calls it took),
    the names an app declared (its tools and their argument paths, its
@@ -310,24 +314,25 @@ and that the answer account says the question and the answer are kept out.
    (`'unknown-pattern'`). Names (keys, fields) carry as they are. Pinned by
    `test/redaction/agent-redaction.run-state.test.ts` and
    `agent-redaction.executor-registry.test.ts`.
+
 10. **Component computation precedes record serving.** Native component setup
-   installs a private port in the existing scope registration. That component's
-   checkpoint tracker, token meter and causal tool/usage observation read the
-   raw event once there; they never subscribe to an instance-wide dispatcher.
-   Captured native retirement closes private delivery before a stale public
-   emit can be refused. Native decisions and history-write provenance still
-   arrive through the ordinary served scoped recorder; masked provenance stays
-   unknown. The existing **real-value path** (`EventDispatcher · onRealEvent`)
-   remains for hosted replies, spend ledgers and text streams. Outside a runner's
-   class it is reached only through
-   `core/runnerLive.ts` (with the run's live state and snapshot, for a host's
-   session store and the context ledger), which no barrel exports and no public
-   runner method hands out — so no consumer reaches it through the library's
-   API, and nothing on it is stored, exported or shown. The fence is the API,
-   not a runtime wall: TypeScript's `protected` is erased at compile time, so
-   code that casts past it (`(runner as any).dispatcher`) reaches the live
-   taps — as it reaches every value in its own process. A consumer's `toSSE`
-   `filter` sees the served record.
+    installs a private port in the existing scope registration. That component's
+    checkpoint tracker, token meter and causal tool/usage observation read the
+    raw event once there; they never subscribe to an instance-wide dispatcher.
+    Captured native retirement closes private delivery before a stale public
+    emit can be refused. Native decisions and history-write provenance still
+    arrive through the ordinary served scoped recorder; masked provenance stays
+    unknown. The existing **real-value path** (`EventDispatcher · onRealEvent`)
+    remains for hosted replies, spend ledgers and text streams. Outside a runner's
+    class it is reached only through
+    `core/runnerLive.ts` (with the run's live state and snapshot, for a host's
+    session store and the context ledger), which no barrel exports and no public
+    runner method hands out — so no consumer reaches it through the library's
+    API, and nothing on it is stored, exported or shown. The fence is the API,
+    not a runtime wall: TypeScript's `protected` is erased at compile time, so
+    code that casts past it (`(runner as any).dispatcher`) reaches the live
+    taps — as it reaches every value in its own process. A consumer's `toSSE`
+    `filter` sees the served record.
 
 ## Readers of a redacted record
 
@@ -360,7 +365,7 @@ bytes, for any recording — an agent's or a chart's.)
   snapshot carries the marker too — its commit log IS scrubbed — but its state
   never is.
 - **The served views** (`servedAt`, `servedViews`) read a redacted piece as
-  absent, and name the fold base a served snapshot lacks (`no-fold-base`).
+  absent, and name a missing fold base (`no-fold-base`) in an older record.
 - **The context ledger** (`context-ledger/contextLedger.ts`) is not a
   reader of the record but a mechanism: its gates decide what LATER runs are
   offered, so a placeholder must never count as "never used". A runner is read
@@ -397,9 +402,10 @@ bytes, for any recording — an agent's or a chart's.)
   can appear in one. The output-schema warning leaves the parser's message out
   when the run keeps the draft out (`stages/route.ts`); route the rest of your
   console in production as you would any log.
-- **A fold of a redacted snapshot.** `getLastSnapshot()` omits `initialState`
-  under a policy (footprintjs: the raw pre-run base never passed the policy), so
-  a fold of it reports `basis: 'log-only'` and `servedAt` names `no-fold-base`.
+- **A fold of a redacted snapshot.** `getLastSnapshot()` carries the engine's
+  native policy-served `initialState` when available, preserving public inherited
+  facts without exposing the raw seed. Older records without that base report
+  `basis: 'log-only'`, and `servedAt` names `no-fold-base`.
 - **Who asked and who approved are kept out under a policy.** `principal` and
   `tenant` on every event's meta, and a check-in decision's `by` (on
   `checkin.decision` and on the `pause.resume` that brought it), are no
@@ -579,11 +585,17 @@ arguments and evidence use the tool's shown view, including its chosen mask; the
 approval remains bound to the actual private call. Protect checkpoints at the host
 boundary: their consistency checks are not authentication.
 
-A private-only snapshot carries the native redaction marker and omits `initialState`.
-Its served views therefore report `no-fold-base`; they cannot claim an exact full
-reconstruction. Public answer-account facts remain readable and `assessAnswer` does
+A private-only snapshot carries the native redaction marker and the engine's
+policy-served `initialState` when supplied. Its served views fold that native base;
+older records without one still report `no-fold-base`. Public answer-account facts remain readable and `assessAnswer` does
 not invent missing caller coverage. A runner without a private mapper or caller
 policy keeps the existing stream bytes, no new mirror, marker or checkpoint field.
+
+The Final branch omits only the closed selector anchor from its inputs before
+reading any value. Native scope/rule bindings retain private-field provenance;
+ordinary argument carriers and caller-selected keys still cross the mapper and
+keep its conservative taint rules. No metadata or private value is reclassified
+by content, and no replay reconstructs an earlier state from the final answer.
 
 Module size: Agent's whole injected-message validation moved to
 `core/agent/run/injectionDelivery.ts` (step 2 extraction); RunnerBase's complete pause

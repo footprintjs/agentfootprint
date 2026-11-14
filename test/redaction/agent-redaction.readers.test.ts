@@ -13,7 +13,7 @@
  *   - `assessAnswer`: no standing over a state key the record keeps out
  *     (`AnswerAssessment.keptOut`) — while `agent.assessment()` reads live;
  *   - the served views (`servedViews`, `servedAt`) read a redacted snapshot
- *     without throwing, and name the fold base it lacks;
+ *     without throwing, using its native served fold base;
  *   - the context ledger, whose gates decide what LATER runs are offered:
  *     a runner is counted from its live run, and a kind nothing can answer
  *     for is left unmetered — a placeholder never reads as "never used";
@@ -22,6 +22,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { RedactionPolicy } from 'footprintjs';
+import { stateAt } from 'foottrace';
 
 import { Agent, absent, defineTool } from '../../src/index.js';
 import { mock } from '../../src/doors/providers.js';
@@ -39,7 +40,7 @@ import type { AnswerAccount, Sentence } from '../../src/answer-account/types.js'
 import { REDACTION_MARKER_ID, servedUnderPolicy } from '../../src/redaction/marker.js';
 import { assessLive } from '../../src/core/agent/assessment/assess.js';
 import { readEmptiness } from '../../src/core/agent/emptiness.js';
-import { conversationPolicy, fixtureAgent, MESSAGE } from './fixture.js';
+import { conversationPolicy, fixtureAgent, leaksIn, MESSAGE } from './fixture.js';
 
 /** Every sentence of an account, as template ids. */
 function idsOf(account: AnswerAccount): string[] {
@@ -259,12 +260,16 @@ describe('the served views over a redacted snapshot', () => {
     ['the conversation', conversationPolicy()],
     ['every name', { patterns: [/./] }],
   ] as const) {
-    it(`${label}: read without throwing, and the missing fold base is named`, async () => {
+    it(`${label}: read without throwing, using the safe native fold base`, async () => {
       const agent = fixtureAgent({ redact: redact as RedactionPolicy });
       await agent.run({ message: MESSAGE });
-      const views = servedViews(agent.getLastSnapshot() as never);
+      const snapshot = agent.getLastSnapshot()!;
+      expect(snapshot.initialState).toEqual({});
+      expect(leaksIn(snapshot.initialState)).toEqual([]);
+      expect(stateAt(snapshot, -1)).toMatchObject({ basis: 'initial+log', state: {} });
+      const views = servedViews(snapshot as never);
       expect(views.length).toBeGreaterThan(0);
-      expect(views.some((v) => v.gaps.some((g) => g.gap === 'no-fold-base'))).toBe(true);
+      expect(views.some((v) => v.gaps.some((g) => g.gap === 'no-fold-base'))).toBe(false);
     });
   }
 });

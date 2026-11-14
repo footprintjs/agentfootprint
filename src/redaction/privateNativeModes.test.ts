@@ -9,6 +9,7 @@ import {
   type RunSetup,
 } from 'footprintjs';
 import { createTypedScopeFactory } from 'footprintjs/advanced';
+import { stateAt } from 'foottrace';
 import { EventDispatcher } from '../events/dispatcher.js';
 import { resumeRedactionOf } from '../core/agent/run/resumeRedaction.js';
 import { createRunRedaction, markPrivateFields, type RunRedaction } from './runRedaction.js';
@@ -26,8 +27,10 @@ for (const mode of ['same', 'fresh'] as const)
         markPrivateFields(scope, [{ root: 'argumentAsk', path: 'progress.0.answer' }]);
         scope.$setValue('argumentAsk', { progress: [{ answer: secret }] });
         scope.$setValue('authorMarked', secret + '-author', true);
+        scope.$setValue('publicBeforePause', 'PUBLIC-BEFORE-RESUME');
         interrupt(scope, { reason: 'Continue public operation?' });
         ran.push(scope.$getValue('argumentAsk'));
+        scope.$setValue('publicAfterResume', 'PUBLIC-AFTER-RESUME');
         return 'public-result';
       },
       'private-native-resume',
@@ -106,5 +109,18 @@ for (const mode of ['same', 'fresh'] as const)
     if (view === undefined) throw new Error('No native view');
     const snapshot = view.snapshot({ redact: true });
     expect(JSON.stringify(snapshot).includes(secret)).toBe(false);
-    expect(snapshot).not.toHaveProperty('initialState');
+    const opening = stateAt(snapshot, -1);
+    expect(opening.basis).toBe('initial+log');
+    expect(opening.state.publicAfterResume).toBeUndefined();
+    if (mode === 'same') {
+      expect(opening.state).toEqual({});
+    } else {
+      expect(opening.state.publicBeforePause).toBe('PUBLIC-BEFORE-RESUME');
+      expect(opening.state.argumentAsk).toEqual({ progress: [{ answer: 'REDACTED' }] });
+      expect(opening.state.authorMarked).toBe('REDACTED');
+      expect(opening.state.privateRecordFields).toBe('REDACTED');
+    }
+    expect(stateAt(snapshot, snapshot.commitLog.length - 1).state.publicAfterResume).toBe(
+      'PUBLIC-AFTER-RESUME',
+    );
   });

@@ -302,19 +302,19 @@ export interface FlowchartAsToolOptions {
    * Either alone is enough to keep a name out; neither can remove one the
    * other selects. With neither, the tool behaves exactly as before.
    *
+   * THE NATIVE FOLD BASE. The engine serves the original `initialState`
+   * through its current state rule, including inherited marks; it never
+   * reconstructs that base from final state. Older records can omit the base
+   * and fold as `basis: 'log-only'`. A subflow's `treeContext.initialState`
+   * travels as footprintjs serves it: its seed is a commit of its own
+   * (`history[0]`), so that base is the nested runtime's pre-seed state.
+   *
    * WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
    *
-   * 1. The run's fold base. The redacted view OMITS `initialState`
-   *    (footprintjs `ExecutionRuntime.getSnapshot`: the raw pre-run seed
-   *    never passed a policy, so it is dropped rather than served). A fold of
-   *    a kept record therefore reports `basis: 'log-only'` — partial, and
-   *    saying so. A subflow's `treeContext.initialState` travels as
-   *    footprintjs serves it: its seed is a commit of its own (`history[0]`),
-   *    so that base is the nested runtime's pre-seed state.
-   * 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
+   * 1. The resume checkpoint. A paused run throws with `err.checkpoint`,
    *    which holds real values because resumption must replay against them;
    *    it goes to the agent loop, never to a model.
-   * 3. What the LOG itself carries — footprintjs's law, not this option's,
+   * 2. What the LOG itself carries — footprintjs's law, not this option's,
    *    and since footprintjs 9.19.0 (this package's floor from 9.89.2) that
    *    law is one rule: a policy covers everything the run retains or serves
    *    — the log in both encodings, the mirror, `stageReads`/`stageWrites`,

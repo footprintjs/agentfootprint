@@ -1773,9 +1773,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
    *
    * **Under `redact` it is the SERVED snapshot** — footprintjs's redacted view
    * (`RunnerBase.getLastSnapshot`): the placeholder wherever the policy
-   * selected a value, and no `initialState`. The agent's own logic never reads
-   * this getter; `checkpoint()`, `followUp()` and the crash checkpoint read the
-   * live run, so redaction never changes what the agent continues from.
+   * selected a value, including the engine's safely served original fold
+   * base. Older recordings can omit that base and declare `basis: 'log-only'`.
+   * The agent's own logic never reads this getter; `checkpoint()`, `followUp()`
+   * and the crash checkpoint read the live run, so redaction never changes
+   * what the agent continues from.
    */
   override getLastSnapshot(): RuntimeSnapshot | undefined {
     return super.getLastSnapshot();

@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { stateAt } from 'foottrace';
 import { Agent, defineTool, servedViews } from '../index.js';
 import { accountForAnswer, assessAnswer, recordRun } from '../observe.js';
 import { runnerLive } from '../core/runnerLive.js';
@@ -24,7 +25,7 @@ it('an agent without a hidden argument keeps the native snapshot bytes and no pr
   }
 });
 
-it('private-only native coverage keeps public facts readable and reports its missing fold base', async () => {
+it('private-only native coverage keeps public facts readable with its native served fold base', async () => {
   const tool = defineTool({
     name: 'lookup',
     description: 'Public lookup',
@@ -50,10 +51,13 @@ it('private-only native coverage keeps public facts readable and reports its mis
     const recording = recorder.toRecording();
     expect(declarationOf(agent)).toEqual({ state: 'declared-none' });
     expect(servedUnderPolicy(recording.snapshot)).toBe(true);
-    expect(recording.snapshot).not.toHaveProperty('initialState');
+    expect(recording.snapshot).toHaveProperty('initialState');
+    expect(stateAt(recording.snapshot, -1).basis).toBe('initial+log');
+    const end = stateAt(recording.snapshot, recording.snapshot!.commitLog.length - 1).state;
+    expect(end.userMessage).toBe('Public question');
     const views = servedViews(recording.snapshot);
     expect(views.length).toBeGreaterThan(0);
-    expect(views.some((view) => view.gaps.some((gap) => gap.gap === 'no-fold-base'))).toBe(true);
+    expect(views.some((view) => view.gaps.some((gap) => gap.gap === 'no-fold-base'))).toBe(false);
     const account = accountForAnswer(recording);
     expect(account.question.status).toBe('recorded');
     expect(account.answer.status).toBe('recorded');

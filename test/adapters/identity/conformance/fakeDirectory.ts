@@ -143,7 +143,8 @@ export function fakeDirectory(
             const account = accounts.find((a) => dnOf(a) === base);
             // One in-chain clause, or an OR of them (`(|(…)(…))`). Anything
             // else matches nothing, so a malformed filter fails the test.
-            const CLAUSE = /\(memberOf:1\.2\.840\.113556\.1\.4\.1941:=((?:[^()\\]|\\[0-9a-f]{2})*)\)/gi;
+            const CLAUSE =
+              /\(memberOf:1\.2\.840\.113556\.1\.4\.1941:=((?:[^()\\]|\\[0-9a-f]{2})*)\)/gi;
             const clauses = [...filter.matchAll(CLAUSE)];
             const whole = clauses.map((c) => c[0]).join('');
             const wellFormed =

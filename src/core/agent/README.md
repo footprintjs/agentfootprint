@@ -17,6 +17,7 @@ Lens: `selfCallNotice.ts`, `stagedRefs.ts` · `stagedRefsNudgeLine`,
 `toolResultCap.ts`.
 
 ## What it reads / what it writes
+
 - The chart builders own the outputMappers that publish the loop's shared facts:
   `activeInjections`, `currentSkillId`, `stepPointer`, `dynamicToolSchemas`
   (`buildAgentChart.ts` · `SUBFLOW_IDS.INJECTION_ENGINE` and
@@ -37,8 +38,17 @@ was secured, beside `answerValidation`, which is about its content.
 Automatic output uses `supportsAutoNativeOutputSchema(model)` as positive model knowledge. Unknown Anthropic names, opaque aliases, older unsupported models and custom providers without that declaration use instructions plus local validation. Explicit `strategy: 'native'` retains its forward-compatible capability policy; `strategy: 'instruct'` opts out of the changed default. No API error causes an automatic format downgrade.
 
 ## The one law here
+
 A builder declares; it must not decide. Anything that has to be true AT a
 moment is composed in `stages/`, where the moment is.
+
+Both chart builders use `stages/breakFinal.ts`'s `finalBranchInput` to select
+the Final branch's read-only inputs. It excludes the exact runtime-private
+selector anchor before reading values, and preserves all ordinary user fields
+for native mapper tracking. Reading that anchor would classify its metadata
+primitives as secret inputs and hide unrelated public facts. Actual private
+argument carriers and caller-selected values remain covered by the native rule;
+the Final child does not own the private anchor's checkpoint provenance.
 
 ## Every library-composed correction is past-anchored and names no destination (9.113.0)
 
@@ -60,6 +70,7 @@ recomposed for every request — the tool list and the `read_skill` description
 — so the two cannot disagree.
 
 **How.** Three checks, each one a reader can make:
+
 1. every clause is past tense about one finished event;
 2. that event is NAMED — "that call", bound by the opening clause, or "call
    'c2' to 'collect_input'" — never pointed at ("this call", "the call you just

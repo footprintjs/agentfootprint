@@ -432,7 +432,10 @@ describe('directory-password — ROI', () => {
     );
     expect(banner).not.toMatch(/no IDENTITY_LDAP_REQUIRED_GROUP/);
     await expect(
-      identityFromConfig(identityConfigFromEnv({ ...env, IDENTITY_LDAP_REQUIRED_GROUP: ' ; ' }), boot),
+      identityFromConfig(
+        identityConfigFromEnv({ ...env, IDENTITY_LDAP_REQUIRED_GROUP: ' ; ' }),
+        boot,
+      ),
     ).rejects.toMatchObject({ key: 'IDENTITY_LDAP_REQUIRED_GROUP' });
   });
 });

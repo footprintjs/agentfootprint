@@ -31,6 +31,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FlowChartExecutor, flowChart, type PausableHandler } from 'footprintjs';
 import { controlDepRecorder } from 'footprintjs/trace';
+import { stateAt } from 'foottrace';
 import { flowchartAsTool, type FlowchartToolSnapshot } from '../../src/index.js';
 import { innerRunsOf } from '../../src/observe.js';
 import { servableSnapshot } from '../../src/core/servableSnapshot.js';
@@ -130,11 +131,14 @@ describe('flowchartAsTool({ redact }) — the tool serves the redacted view', ()
     expect(snapshot.sharedState.apiKey).toBe('REDACTED');
     expect(snapshot.sharedState.used).toBe('called');
     expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
-    // footprintjs's own law for the redacted view: the fold base is the raw
-    // pre-run seed, no policy ever touched it, so it is OMITTED rather than
-    // served. A fold of this record reports `basis: 'log-only'` — a partial
-    // answer that says it is partial.
-    expect(snapshot.initialState).toBeUndefined();
+    // The native served base is the original empty seed, never final state.
+    expect(snapshot.initialState).toEqual({});
+    const opening = stateAt(snapshot, -1);
+    expect(opening.basis).toBe('initial+log');
+    expect(opening.state).toEqual({});
+    const finished = stateAt(snapshot, snapshot.commitLog.length - 1);
+    expect(finished.state.apiKey).toBe('REDACTED');
+    expect(finished.state.used).toBe('called');
   });
 });
 

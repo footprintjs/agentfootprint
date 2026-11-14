@@ -83,12 +83,12 @@
  * (`time-travel/servedView.ts` never prints a placeholder as if the request had carried
  * it), so the view's hash no longer matches this receipt's (the receipt hashed
  * what the model was served). The same holds for `flowchartAsTool({ redact })` /
- * `runbookAsTool({ redact })` on an inner run. A snapshot taken with
- * `redact: true` also omits `initialState`, so folding it reports
- * `basis: 'log-only'` and `time-travel/servedView.ts` raises `no-fold-base` rather than
- * rebuilding a short view in silence. Treat an unredacted recording as the
- * plaintext it is; the salt protects the fingerprints, and only the
- * fingerprints.
+ * `runbookAsTool({ redact })` on an inner run. The engine serves a redacted
+ * snapshot's original `initialState` through its current state rule. Older
+ * recordings can omit that base; their folds report `basis: 'log-only'` and
+ * `time-travel/servedView.ts` raises `no-fold-base` rather than rebuilding a
+ * short view in silence. Treat an unredacted recording as the plaintext it
+ * is; the salt protects the fingerprints, and only the fingerprints.
  *
  * ── THE FOURTH LAW: THE RECEIPT IS MINTED AT THE PROVIDER PORT ─────────────
  * Everything on a receipt describes the request AS HANDED TO

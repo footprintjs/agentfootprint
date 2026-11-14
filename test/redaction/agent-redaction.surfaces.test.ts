@@ -20,6 +20,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { RedactionPolicy, RuntimeSnapshot } from 'footprintjs';
+import { stateAt } from 'foottrace';
 
 import type { AgentfootprintEvent } from '../../src/events/registry.js';
 import {
@@ -73,13 +74,18 @@ describe('agent redaction — the run itself', () => {
 });
 
 describe('agent redaction — snapshot and narrative', () => {
-  it('getLastSnapshot() is the redacted view: no secret, placeholders, no fold base', () => {
+  it('getLastSnapshot() is the redacted view: no secret, placeholders, a served fold base', () => {
     expectServed((r) => r.agent.getLastSnapshot());
     const snapshot = run.agent.getLastSnapshot() as RuntimeSnapshot;
     expect(JSON.stringify(snapshot.commitLog)).toContain('REDACTED');
     expect((snapshot.sharedState as Record<string, unknown>)['history']).toBe('REDACTED');
-    // footprintjs omits the raw pre-run base from the served view.
-    expect(snapshot.initialState).toBeUndefined();
+    expect(snapshot.initialState).toEqual({});
+    expect(leaksIn(snapshot.initialState)).toEqual([]);
+    const opening = stateAt(snapshot, -1);
+    expect(opening.basis).toBe('initial+log');
+    expect(opening.state).toEqual({});
+    const finished = stateAt(snapshot, snapshot.commitLog.length - 1);
+    expect(finished.state.history).toBe('REDACTED');
   });
 
   it('getSnapshot() is the same served view', () => {

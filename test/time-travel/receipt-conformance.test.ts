@@ -76,6 +76,7 @@ import {
   type ServedView,
 } from '../../src/index.js';
 import { flowChart, FlowChartExecutor, type FlowChart } from 'footprintjs';
+import { stateAt } from 'foottrace';
 import { buildMessageApiChart } from '../../src/core/agent/buildMessageApiChart.js';
 import { buildAgentMessageApiChart } from '../../src/core/agent/buildAgentMessageApiChart.js';
 import { innerRunsOf } from '../../src/trace-toolpack/index.js';
@@ -1526,17 +1527,27 @@ describe('what a recording actually contains', () => {
       .system('bot with key sk-abc123')
       .build();
     await agent.run({ message: 'go' });
-    void wire;
+    expect(wire[0]!.systemPrompt).toContain('bot with key sk-abc123');
     const snapshot = agent.getSnapshot()!;
     // footprintjs scrubbed the system prompt's pieces at COMMIT time…
     expect(JSON.stringify(snapshot.commitLog)).not.toContain('sk-abc123');
     expect(JSON.stringify(snapshot)).not.toContain('sk-abc123');
+    // The safe base is the original pre-seed state, never the final state.
+    expect(snapshot.initialState).toEqual({});
+    const opening = stateAt(snapshot, -1);
+    expect(opening.basis).toBe('initial+log');
+    expect(opening.state).toEqual({});
     // …and the rebuild reads the placeholder as absent — never as the text the
     // model was sent — under the gap that says a value it could not recover
     // reads as empty rather than unknown.
     const view = servedAt(snapshot, 1)!;
     expect(view.system.text).not.toContain('REDACTED');
-    expect(view.gaps.map((g) => g.gap)).toContain('no-fold-base');
+    expect(view.system.text).not.toContain('sk-abc123');
+    expect(view.gaps.map((g) => g.gap)).toEqual([
+      'no-conversation-on-record',
+      'cache-transform',
+      'provider-defaults',
+    ]);
     // The receipt is minted live, from the real pieces: hashes only, as always.
     expect(receiptAt(snapshot, 1)!.system.hash).toBe(
       receiptHash(receiptAt(snapshot, 1)!.basis.runId, 'bot with key sk-abc123'),

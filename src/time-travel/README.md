@@ -767,9 +767,11 @@ pins it as the one door. What is true:
   view for everything they show (`src/core/servableSnapshot.ts` ·
   `servableSnapshot`), so a record is scrubbed in every field, not only in its
   log.
-- A snapshot taken with `redact: true` **omits `initialState`**, so a fold of it
-  reports `basis: 'log-only'` and `servedAt` raises the `no-fold-base` gap
-  rather than rebuilding a short view in silence.
+- A snapshot taken with `redact: true` carries the engine's original
+  `initialState` through its current native state rule. Selected seed values
+  stay out, and replay retains its actual base. Older or damaged recordings
+  can omit that base; their folds report `basis: 'log-only'` and `servedAt`
+  raises `no-fold-base` rather than rebuilding a short view in silence.
 
 ### Turning the receipt off
 
