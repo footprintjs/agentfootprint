@@ -636,11 +636,46 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: "the tool-choice question's instruction — sent to the `Classifier` port (`agentfootprint/classify`) as the `choice` question's `instructions`, never a message on the model's wire; what the MODEL is served is the narrowed schema list, which the registry already reads",
     },
   ],
-  'src/core/agent/AgentBuilder.ts': [
+  'src/core/agent/builder/assembly/steps.ts': [
     {
       kind: 'not-model-facing',
-      count: 9,
+      count: 3,
       why: 'build-time refusals thrown when a declared feature cannot be honored, including `.maps()` with nothing mounted',
+    },
+  ],
+  'src/core/agent/builder/consent/configure.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when a declared check-in cannot be honored',
+    },
+  ],
+  'src/core/agent/builder/graph/mount.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 2,
+      why: 'build-time refusals thrown when a declared graph cannot be honored',
+    },
+  ],
+  'src/core/agent/builder/maps/configure.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when `.maps()` has nothing mounted',
+    },
+  ],
+  'src/core/agent/builder/selfExplain/configure.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when a declared self-explain setup cannot be honored',
+    },
+  ],
+  'src/core/agent/builder/window/guards.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'build-time refusal thrown when a declared summarizer cannot be honored',
     },
   ],
   'src/core/agent/stages/route.ts': [
@@ -1373,7 +1408,7 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
         // Agent runtime split: the same seven host-only literals now have four owners.
-        files: 121,
+        files: 126,
         total: 208,
         registry: 8,
         ephemeral: 26,
