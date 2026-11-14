@@ -1,0 +1,1850 @@
+{
+  "schemaVersion": 1,
+  "mode": "deterministic-harness-validation",
+  "seed": 1729,
+  "plan": [
+    {
+      "caseId": "annual-denominator",
+      "arm": "trace"
+    },
+    {
+      "caseId": "monthly-control",
+      "arm": "trace"
+    },
+    {
+      "caseId": "missing-record",
+      "arm": "logs"
+    },
+    {
+      "caseId": "monthly-control",
+      "arm": "logs"
+    },
+    {
+      "caseId": "missing-record",
+      "arm": "trace"
+    },
+    {
+      "caseId": "annual-denominator",
+      "arm": "logs"
+    }
+  ],
+  "conclusion": "Harness verification only. No model debugging quality, token savings or cost advantage was measured.",
+  "usage": {
+    "modelCalls": 0,
+    "providerCalls": 0,
+    "inputTokens": null,
+    "outputTokens": null,
+    "modelSpendUsd": 0,
+    "provenance": "No model/provider adapter is enabled; token usage is not collected. Other computing costs are not measured."
+  },
+  "rows": [
+    {
+      "caseId": "annual-denominator",
+      "arm": "trace",
+      "captureDigest": "b79d2f881bf2b1248f4aac7278ec987bfdd2dfac418791d7cd9eb0c5f4ff8978",
+      "evidence": {
+        "arm": "trace",
+        "status": "available",
+        "task": {
+          "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
+          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "responseShape": {
+            "operation": "keep | denominator",
+            "field": "annualIncome | monthlyIncome (denominator only)"
+          }
+        },
+        "limitations": [
+          "Initial $getArgs() input is untracked; tool responses retain their coverage warnings."
+        ],
+        "responses": [
+          {
+            "tool": "run_overview",
+            "args": {},
+            "content": "TRACE RUN OVERVIEW\nstatus: no step errors recorded\nexecution steps: 4 · distinct stages: 4 · commit-log mode: full\nstep ids look like stageId#executionIndex (e.g. 'intake#0') — pass them to trace_node / trace_slice / get_value.\n\nSTAGES (4 distinct, first-execution order):\n- intake ×1 — \"Intake\"\n- normalize ×1 — \"Normalize\"\n- adjudicate ×1 — \"Adjudicate\"\n- approve ×1 — \"Approve\"\n\nHONESTY: ⚠ 1 step(s) consumed untracked inputs (args/env/silent reads) — causal slices through them may be incomplete; trace_node marks each one.\n\nSHARED STATE KEYS (6): annualIncome, monthlyDebt, creditScore, monthlyIncome, dti, decision — values via who_wrote / get_value.\nNARRATIVE: 23 line(s) available via read_narrative.\nSEARCH: find_in_trace('<text>') locates any phrase in this record and hands back ids."
+          },
+          {
+            "tool": "who_wrote",
+            "args": {
+              "key": "decision"
+            },
+            "content": "'decision' was last written by approve#3 — \"Approve\" (verb: set): \"approve\""
+          },
+          {
+            "tool": "trace_slice",
+            "args": {
+              "runtimeStageId": "approve#3"
+            },
+            "content": "CAUSAL SLICE from approve#3 (maxDepth 6, maxNodes 25)\neach line: Stage (stepId) ← via <the key it provided> [wrote: …]. Drill any (stepId) with trace_node; fetch values with get_value.\n\nApprove (approve#3) [wrote: decision]\n  Adjudicate (adjudicate#2) ← [control: Within policy]\n    Intake (intake#0) ← via creditScore [wrote: annualIncome, monthlyDebt, creditScore, monthlyIncome]\n      ⚠ also consumed args — slice may be incomplete here\n    Normalize (normalize#1) ← via dti [wrote: dti]\n      ↳ intake#0 (see above)"
+          },
+          {
+            "tool": "trace_node",
+            "args": {
+              "runtimeStageId": "normalize#1"
+            },
+            "content": "STEP normalize#1 — \"Normalize\"\nwrote (1):\n- dti (set): 0.035\nread (3): monthlyDebt, annualIncome, dti\nparents:\n- data: monthlyDebt ← intake#0 \"Intake\"\n- data: annualIncome ← intake#0 \"Intake\"\n- data: dti ← (no tracked writer ⚠ never-written)\n⚠ never-written: No commit in the range asked about wrote the key — not its whole value, not a path inside it, and not a container around it in a way that changed it (a forward slice or a timeline also found no recorded read on, inside or around it) — so there is no write to start from: any value it has came from the initial state, the frozen run input or a closure, none of which the commit log can see."
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "intake#0",
+              "key": "monthlyDebt"
+            },
+            "content": "VALUE of 'monthlyDebt' as of intake#0:\n2310"
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "intake#0",
+              "key": "annualIncome"
+            },
+            "content": "VALUE of 'annualIncome' as of intake#0:\n66000"
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "intake#0",
+              "key": "monthlyIncome"
+            },
+            "content": "VALUE of 'monthlyIncome' as of intake#0:\n5500"
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "normalize#1",
+              "key": "dti"
+            },
+            "content": "VALUE of 'dti' as of normalize#1:\n0.035"
+          }
+        ],
+        "toolCalls": 8,
+        "utf8BytesServed": 2264,
+        "evidenceDigest": "ed88d0a3cc21f39cde8158384a22aca0989bbf2915c952393116309addc13941"
+      },
+      "scriptedChecks": [
+        {
+          "id": "monthly-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "monthlyIncome"
+          },
+          "grade": {
+            "status": "checked-pass",
+            "reason": "replay-agrees",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "pass": true
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "annual-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "annualIncome"
+          },
+          "grade": {
+            "status": "checked-fail",
+            "reason": "replay-mismatch",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "decline"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "refer"
+                },
+                "pass": false
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "keep",
+          "candidate": {
+            "operation": "keep"
+          },
+          "grade": {
+            "status": "checked-fail",
+            "reason": "replay-mismatch",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "decline"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "refer"
+                },
+                "pass": false
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "monthly-control",
+      "arm": "trace",
+      "captureDigest": "11505492b24f2499ecbd9089857156a7db67b14930a3d1fdda434c7c99391fb0",
+      "evidence": {
+        "arm": "trace",
+        "status": "available",
+        "task": {
+          "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
+          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "responseShape": {
+            "operation": "keep | denominator",
+            "field": "annualIncome | monthlyIncome (denominator only)"
+          }
+        },
+        "limitations": [
+          "Initial $getArgs() input is untracked; tool responses retain their coverage warnings."
+        ],
+        "responses": [
+          {
+            "tool": "run_overview",
+            "args": {},
+            "content": "TRACE RUN OVERVIEW\nstatus: no step errors recorded\nexecution steps: 4 · distinct stages: 4 · commit-log mode: full\nstep ids look like stageId#executionIndex (e.g. 'intake#0') — pass them to trace_node / trace_slice / get_value.\n\nSTAGES (4 distinct, first-execution order):\n- intake ×1 — \"Intake\"\n- normalize ×1 — \"Normalize\"\n- adjudicate ×1 — \"Adjudicate\"\n- decline ×1 — \"Decline\"\n\nHONESTY: ⚠ 1 step(s) consumed untracked inputs (args/env/silent reads) — causal slices through them may be incomplete; trace_node marks each one.\n\nSHARED STATE KEYS (6): annualIncome, monthlyDebt, creditScore, monthlyIncome, dti, decision — values via who_wrote / get_value.\nNARRATIVE: 21 line(s) available via read_narrative.\nSEARCH: find_in_trace('<text>') locates any phrase in this record and hands back ids."
+          },
+          {
+            "tool": "who_wrote",
+            "args": {
+              "key": "decision"
+            },
+            "content": "'decision' was last written by decline#3 — \"Decline\" (verb: set): \"decline\""
+          },
+          {
+            "tool": "trace_slice",
+            "args": {
+              "runtimeStageId": "decline#3"
+            },
+            "content": "CAUSAL SLICE from decline#3 (maxDepth 6, maxNodes 25)\neach line: Stage (stepId) ← via <the key it provided> [wrote: …]. Drill any (stepId) with trace_node; fetch values with get_value.\n\nDecline (decline#3) [wrote: decision]\n  Adjudicate (adjudicate#2) ← [control: Monthly ratio above ceiling]\n    Intake (intake#0) ← via creditScore [wrote: annualIncome, monthlyDebt, creditScore, monthlyIncome]\n      ⚠ also consumed args — slice may be incomplete here\n    Normalize (normalize#1) ← via dti [wrote: dti]\n      ↳ intake#0 (see above)"
+          },
+          {
+            "tool": "trace_node",
+            "args": {
+              "runtimeStageId": "normalize#1"
+            },
+            "content": "STEP normalize#1 — \"Normalize\"\nwrote (1):\n- dti (set): 0.42\nread (3): monthlyDebt, monthlyIncome, dti\nparents:\n- data: monthlyDebt ← intake#0 \"Intake\"\n- data: monthlyIncome ← intake#0 \"Intake\"\n- data: dti ← (no tracked writer ⚠ never-written)\n⚠ never-written: No commit in the range asked about wrote the key — not its whole value, not a path inside it, and not a container around it in a way that changed it (a forward slice or a timeline also found no recorded read on, inside or around it) — so there is no write to start from: any value it has came from the initial state, the frozen run input or a closure, none of which the commit log can see."
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "intake#0",
+              "key": "monthlyDebt"
+            },
+            "content": "VALUE of 'monthlyDebt' as of intake#0:\n2310"
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "intake#0",
+              "key": "annualIncome"
+            },
+            "content": "VALUE of 'annualIncome' as of intake#0:\n66000"
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "intake#0",
+              "key": "monthlyIncome"
+            },
+            "content": "VALUE of 'monthlyIncome' as of intake#0:\n5500"
+          },
+          {
+            "tool": "get_value",
+            "args": {
+              "runtimeStageId": "normalize#1",
+              "key": "dti"
+            },
+            "content": "VALUE of 'dti' as of normalize#1:\n0.42"
+          }
+        ],
+        "toolCalls": 8,
+        "utf8BytesServed": 2278,
+        "evidenceDigest": "5e7400ce4320555dfadae1b323b3692889d15dd7fb21be0f6565e19fc95043c4"
+      },
+      "scriptedChecks": [
+        {
+          "id": "monthly-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "monthlyIncome"
+          },
+          "grade": {
+            "status": "checked-pass",
+            "reason": "replay-agrees",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "pass": true
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "annual-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "annualIncome"
+          },
+          "grade": {
+            "status": "checked-fail",
+            "reason": "replay-mismatch",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "decline"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "refer"
+                },
+                "pass": false
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "keep",
+          "candidate": {
+            "operation": "keep"
+          },
+          "grade": {
+            "status": "checked-pass",
+            "reason": "replay-agrees",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "pass": true
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "missing-record",
+      "arm": "logs",
+      "captureDigest": "ce576f3f3c2cad6f410b2155ce15712238cb1785943d38edd874ea0f94544c4d",
+      "evidence": {
+        "arm": "logs",
+        "status": "available",
+        "task": {
+          "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
+          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "responseShape": {
+            "operation": "keep | denominator",
+            "field": "annualIncome | monthlyIncome (denominator only)"
+          }
+        },
+        "limitations": [
+          "Initial $getArgs() input is untracked; tool responses retain their coverage warnings."
+        ],
+        "responses": [
+          {
+            "kind": "application-log",
+            "content": "{\"stage\":\"intake\",\"annualIncome\":66000,\"monthlyIncome\":5500,\"monthlyDebt\":2310,\"creditScore\":702}\n{\"stage\":\"normalize\",\"dti\":0.035}\n{\"stage\":\"decision\",\"decision\":\"approve\"}"
+          }
+        ],
+        "toolCalls": 0,
+        "utf8BytesServed": 173,
+        "evidenceDigest": "8d9ee69ad5a4ff2cb2d4c046da959283d4ea773d6eba27ff60b1edd563e274e3"
+      },
+      "scriptedChecks": [
+        {
+          "id": "monthly-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "monthlyIncome"
+          },
+          "grade": {
+            "status": "not-graded",
+            "reason": "capture-unavailable",
+            "checks": []
+          }
+        },
+        {
+          "id": "annual-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "annualIncome"
+          },
+          "grade": {
+            "status": "not-graded",
+            "reason": "capture-unavailable",
+            "checks": []
+          }
+        },
+        {
+          "id": "keep",
+          "candidate": {
+            "operation": "keep"
+          },
+          "grade": {
+            "status": "not-graded",
+            "reason": "capture-unavailable",
+            "checks": []
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "monthly-control",
+      "arm": "logs",
+      "captureDigest": "11505492b24f2499ecbd9089857156a7db67b14930a3d1fdda434c7c99391fb0",
+      "evidence": {
+        "arm": "logs",
+        "status": "available",
+        "task": {
+          "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
+          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "responseShape": {
+            "operation": "keep | denominator",
+            "field": "annualIncome | monthlyIncome (denominator only)"
+          }
+        },
+        "limitations": [
+          "Initial $getArgs() input is untracked; tool responses retain their coverage warnings."
+        ],
+        "responses": [
+          {
+            "kind": "application-log",
+            "content": "{\"stage\":\"intake\",\"annualIncome\":66000,\"monthlyIncome\":5500,\"monthlyDebt\":2310,\"creditScore\":702}\n{\"stage\":\"normalize\",\"dti\":0.42}\n{\"stage\":\"decision\",\"decision\":\"decline\"}"
+          }
+        ],
+        "toolCalls": 0,
+        "utf8BytesServed": 172,
+        "evidenceDigest": "ccb90419a6e9fbf89b12a23b91f6d879414dd3c95257e4fea79464ab2971e88d"
+      },
+      "scriptedChecks": [
+        {
+          "id": "monthly-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "monthlyIncome"
+          },
+          "grade": {
+            "status": "checked-pass",
+            "reason": "replay-agrees",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "pass": true
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "annual-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "annualIncome"
+          },
+          "grade": {
+            "status": "checked-fail",
+            "reason": "replay-mismatch",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "decline"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "refer"
+                },
+                "pass": false
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "keep",
+          "candidate": {
+            "operation": "keep"
+          },
+          "grade": {
+            "status": "checked-pass",
+            "reason": "replay-agrees",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "pass": true
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "missing-record",
+      "arm": "trace",
+      "captureDigest": "ce576f3f3c2cad6f410b2155ce15712238cb1785943d38edd874ea0f94544c4d",
+      "evidence": {
+        "arm": "trace",
+        "status": "missing",
+        "task": {
+          "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
+          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "responseShape": {
+            "operation": "keep | denominator",
+            "field": "annualIncome | monthlyIncome (denominator only)"
+          }
+        },
+        "limitations": [
+          "Initial $getArgs() input is untracked; tool responses retain their coverage warnings."
+        ],
+        "reason": "The paired completed-run capture is missing; this pair is not graded.",
+        "responses": [],
+        "toolCalls": 0,
+        "utf8BytesServed": 0,
+        "evidenceDigest": null
+      },
+      "scriptedChecks": [
+        {
+          "id": "monthly-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "monthlyIncome"
+          },
+          "grade": {
+            "status": "not-graded",
+            "reason": "capture-unavailable",
+            "checks": []
+          }
+        },
+        {
+          "id": "annual-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "annualIncome"
+          },
+          "grade": {
+            "status": "not-graded",
+            "reason": "capture-unavailable",
+            "checks": []
+          }
+        },
+        {
+          "id": "keep",
+          "candidate": {
+            "operation": "keep"
+          },
+          "grade": {
+            "status": "not-graded",
+            "reason": "capture-unavailable",
+            "checks": []
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "annual-denominator",
+      "arm": "logs",
+      "captureDigest": "b79d2f881bf2b1248f4aac7278ec987bfdd2dfac418791d7cd9eb0c5f4ff8978",
+      "evidence": {
+        "arm": "logs",
+        "status": "available",
+        "task": {
+          "question": "Check whether this decision follows the monthly affordability policy. Keep correct code or propose one denominator-field correction.",
+          "policy": "Decline below credit score 620 or above monthly debt/income ratio 0.4; approve score 680 or higher within the ratio; otherwise refer.",
+          "responseShape": {
+            "operation": "keep | denominator",
+            "field": "annualIncome | monthlyIncome (denominator only)"
+          }
+        },
+        "limitations": [
+          "Initial $getArgs() input is untracked; tool responses retain their coverage warnings."
+        ],
+        "responses": [
+          {
+            "kind": "application-log",
+            "content": "{\"stage\":\"intake\",\"annualIncome\":66000,\"monthlyIncome\":5500,\"monthlyDebt\":2310,\"creditScore\":702}\n{\"stage\":\"normalize\",\"dti\":0.035}\n{\"stage\":\"decision\",\"decision\":\"approve\"}"
+          }
+        ],
+        "toolCalls": 0,
+        "utf8BytesServed": 173,
+        "evidenceDigest": "8d9ee69ad5a4ff2cb2d4c046da959283d4ea773d6eba27ff60b1edd563e274e3"
+      },
+      "scriptedChecks": [
+        {
+          "id": "monthly-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "monthlyIncome"
+          },
+          "grade": {
+            "status": "checked-pass",
+            "reason": "replay-agrees",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "pass": true
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "pass": true
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "pass": true
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "annual-field",
+          "candidate": {
+            "operation": "denominator",
+            "field": "annualIncome"
+          },
+          "grade": {
+            "status": "checked-fail",
+            "reason": "replay-mismatch",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "decline"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "refer"
+                },
+                "pass": false
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "keep",
+          "candidate": {
+            "operation": "keep"
+          },
+          "grade": {
+            "status": "checked-fail",
+            "reason": "replay-mismatch",
+            "checks": [
+              {
+                "id": "recorded-bug",
+                "expected": {
+                  "dti": 0.42,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "higher-income",
+                "expected": {
+                  "dti": 0.421,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.035,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "at-boundary",
+                "expected": {
+                  "dti": 0.4,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-boundary",
+                "expected": {
+                  "dti": 0.399,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "above-boundary",
+                "expected": {
+                  "dti": 0.401,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.033,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "credit-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "decline"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "decline"
+                },
+                "pass": false
+              },
+              {
+                "id": "below-prime",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "refer"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "refer"
+                },
+                "pass": false
+              },
+              {
+                "id": "prime-floor",
+                "expected": {
+                  "dti": 0.1,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0.008,
+                  "decision": "approve"
+                },
+                "pass": false
+              },
+              {
+                "id": "zero-debt-control",
+                "expected": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "actual": {
+                  "dti": 0,
+                  "decision": "approve"
+                },
+                "pass": true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
