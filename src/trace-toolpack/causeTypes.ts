@@ -9,6 +9,8 @@ export interface TraceCauseArtifacts {
 
 /** Host-owned cause-query ceilings. Model arguments cannot select or override them. */
 export interface TraceCauseOptions extends WalkLimits {
+  /** Include the existing bounded backward nodes, edges and proof IDs in root_cause only. Default: omitted. */
+  readonly includeBackward?: boolean;
   /** Default: floor(80% of the total node/edge/call limits), at least one. Depth is unchanged. */
   readonly backward?: TraversalLimits;
   /** Omit to leave all remaining total work available to impact. */

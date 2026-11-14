@@ -650,12 +650,13 @@ describe('window strategies — tree-shakeable', () => {
     ]);
 
     expect(Object.keys(globalThis).length).toBe(globalsBefore);
-    // Each module's only export shape is its factory (plus its name constant).
-    for (const mod of mods) {
-      for (const value of Object.values(mod)) {
-        expect(['function', 'string']).toContain(typeof value);
-      }
-    }
+    // Each module's only export is its factory; the name constant stays private.
+    // Exact key lists, so re-exporting SLIDING_WINDOW (or any other name) fails.
+    const factories = ['slidingWindow', 'tokenBudget', 'summarizeOldest'];
+    mods.forEach((mod, i) => {
+      expect(Object.keys(mod)).toEqual([factories[i]]);
+      expect(typeof (mod as Record<string, unknown>)[factories[i]!]).toBe('function');
+    });
   });
 
   it('the package sideEffects allowlist does not (and need not) mention them', async () => {

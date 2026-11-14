@@ -57,6 +57,9 @@ function direction(value: unknown, total: Required<TraversalLimits>): TraversalL
 
 /** Resolve host policy only. Model arguments never enter this resource boundary. */
 export function causeLimits(options: TraceCauseOptions = {}) {
+  const includeBackward = data(options, 'includeBackward');
+  if (includeBackward !== undefined && typeof includeBackward !== 'boolean')
+    throw new TypeError('cause tools: invalid limits');
   const resolved = { ...DEFAULTS };
   for (const key of Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]) {
     resolved[key] = integer(
@@ -74,6 +77,7 @@ export function causeLimits(options: TraceCauseOptions = {}) {
   };
   return {
     ...resolved,
+    includeBackward,
     backward,
     impact: direction(data(options, 'impact'), resolved),
   };
