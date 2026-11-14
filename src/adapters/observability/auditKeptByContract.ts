@@ -97,7 +97,7 @@ export const appReasonWord: BoundRule = exception('app-reason-word', str);
 
 /**
  * A `tryInsteadTool` name: kept only once this strategy has seen that tool run —
- * a tool the agent holds, by construction (`otel.ts` · `coverageAttrs`, the same
+ * a tool the agent holds, by construction (`otel/attributes/projections.ts` · `coverageAttrs`, the same
  * rule); otherwise it is the tool author's word for a tool this agent may not
  * hold.
  */
