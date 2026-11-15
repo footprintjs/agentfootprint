@@ -36,6 +36,12 @@ was secured, beside `answerValidation`, which is about its content.
 
 Automatic output uses `supportsAutoNativeOutputSchema(model)` as positive model knowledge. Unknown Anthropic names, opaque aliases, older unsupported models and custom providers without that declaration use instructions plus local validation. Explicit `strategy: 'native'` retains its forward-compatible capability policy; `strategy: 'instruct'` opts out of the changed default. No API error causes an automatic format downgrade.
 
+Both chart builders select Final input through `stages/breakFinal.ts`'s
+`finalBranchInput`. The runtime-only private-selector carrier is omitted before
+value access; ordinary state values are still read through native mapper
+tracking before writable Final fields are discarded. This preserves caller
+secrecy without letting metadata primitives taint unrelated public facts.
+
 ## The one law here
 A builder declares; it must not decide. Anything that has to be true AT a
 moment is composed in `stages/`, where the moment is.
