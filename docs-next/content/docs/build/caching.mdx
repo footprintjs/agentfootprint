@@ -142,6 +142,14 @@ request-only DATA frame, after the last cache breakpoint. This frame is quoted
 model/record data, not a new human request or verified facts. Judge and argument
 rows are not added to it.
 
+Producer-owned refusal, cancellation and unknown-outcome notices are excluded
+from advisory result IDs. Historical standings remain visible; their
+`referenceStatus` distinguishes a unique result in the current context from
+`not-current-context-result`. This status is advisory, not citation authority.
+The recorded layout distinguishes this frame from earlier versions. Unsupported
+layouts and affected legacy histories report a `findings-layout` replay gap;
+current fields are never silently inserted into an older recorded request.
+
 <CodeFile path="examples/features/105-findings-stable-cache-layout.ts" region="layout" />
 
 `maxContextBytes` is a host-owned UTF-8 ceiling: default 16,384, a positive whole

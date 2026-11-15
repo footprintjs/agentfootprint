@@ -2003,7 +2003,7 @@ export interface AgentState {
    */
   findingsServe?: 'ledger-and-facts' | 'ledger-only';
   /** Recorded layout and resolved bound; absent on older records. */
-  findingsLayout?: 'late-v1';
+  findingsLayout?: 'late-v1' | 'late-v2';
   findingsContextBytes?: number;
   /**
    * The answer-turn ask on this run (9.103.0) — present ONLY when

@@ -666,7 +666,10 @@ describe('a run that paused and resumed', () => {
       expect(last.messages.find((m) => m.toolCallId === 'c3')?.content).toContain(
         'was not executed on that call',
       );
-      expect(findingsFrame(last.messages).data.undeclaredResultIds).toEqual(['c1', 'c2', 'd1']);
+      expect(last.messages.find((m) => m.toolCallId === 'd1')?.content).toContain(
+        'findings-reference',
+      );
+      expect(findingsFrame(last.messages).data.undeclaredResultIds).toEqual(['c1', 'c2']);
       // And no request the provider received carried the marker: the ones
       // after the resume were built on the collapse path (x1 judged noise),
       // which strips after it collapses (`callLLM.ts` · `buildCallLLMStage`).

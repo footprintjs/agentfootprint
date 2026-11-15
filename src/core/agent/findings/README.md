@@ -37,8 +37,8 @@ Unadmitted ledger data has an unknown row count, never a guessed zero. Judge and
 argument rows are not projected into model DATA. `findingsLayout` and
 `findingsContextBytes` are committed with the actual call, including resumed
 legs with a new host configuration. Replay reads these call facts, uses the
-same composer, reads absent-discriminator old records with the legacy formatter,
-and reports an unknown/masked layout or bound as `findings-layout`.
+same composer, reads compatible absent-discriminator records with the legacy formatter,
+and reports unsupported or affected legacy layouts/bounds as `findings-layout`.
 
 The historical sections below describe the earlier ledger/system-piece and
 schema-offer design where labelled. Live code no longer calls that enum path;
@@ -1156,9 +1156,9 @@ result.
 The marker survives ordinary JSON history/checkpoints and is stripped before
 provider transport. Older history without it retains the existing trusted
 host-history contract; no English text, JSON payload or missing marker is
-interpreted as a refusal. The advisory ID offer and ledger presentation are
-unchanged in Phase A: the request-local admission gate, rather than enum
-membership, refuses known notices as executed-result authority.
+interpreted as a refusal. Phase A originally left the offer unchanged; the current offer,
+undeclared and identity readers exclude marked notices. A standing's `referenceStatus` is
+`current-context-result` for a unique valid context result, otherwise `not-current-context-result`; it grants no admission.
 
 Pinned by `test/core/agent/findings-producer-origin.test.ts`: pre-dispatch
 findings/permission/argument/middleware refusals, entered success/error/cache
