@@ -6,12 +6,12 @@ import type { LLMMessage } from '../../../provider-contract/types.js';
 import { copyJson } from '../../../lib/boundedJson.js';
 import { FINDINGS_DATA_FRAME_PREFIX } from '../../../lib/saidByPerson.js';
 import { foldLedger } from './ledger.js';
-import { offeredResultIds, servedToolCallIds, undeclaredIds } from './offer.js';
+import { isResultMessage, offeredResultIds, servedToolCallIds, undeclaredIds } from './offer.js';
 import { FINDINGS_OFFER_CAP } from './reserved.js';
 import { FINDINGS_PIECE_LIMITS } from './serve.js';
 import type { FindingsLedger, StandingRow } from './types.js';
 
-export const FINDINGS_LAYOUT = 'late-v1' as const;
+export const FINDINGS_LAYOUT = 'late-v2' as const;
 export const DEFAULT_FINDINGS_CONTEXT_BYTES = 16_384;
 export const MAX_FINDINGS_CONTEXT_BYTES = 262_144;
 
@@ -53,6 +53,14 @@ function bucketsOf(
   ledger: FindingsLedger,
 ): Record<string, readonly unknown[]> {
   const fold = foldLedger(ledger);
+  // Context membership is advisory, never the final request's citation authority.
+  // Count every tool occurrence: a notice sharing an ID makes that ID ambiguous too.
+  const currentResults = new Map<string, boolean>();
+  for (const message of messages) {
+    const id = message.toolCallId;
+    if (message.role !== 'tool' || typeof id !== 'string' || id.length === 0) continue;
+    currentResults.set(id, !currentResults.has(id) && isResultMessage(message));
+  }
   const standings = [...fold.standingOf.values()];
   const noise = standings.filter((row) => row.standing === 'noise').map((row) => row.toolCallId);
   const propositions = new Map<string, string>();
@@ -61,6 +69,10 @@ function bucketsOf(
       propositions.set(row.toolCallId, row.proposition);
   const proposed = (row: StandingRow) => ({
     ...declaration(row),
+    referenceStatus:
+      currentResults.get(row.toolCallId) === true
+        ? 'current-context-result'
+        : 'not-current-context-result',
     ...(propositions.has(row.toolCallId) && { proposition: propositions.get(row.toolCallId)! }),
   });
   return {
