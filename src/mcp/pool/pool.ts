@@ -39,24 +39,13 @@
 import { eitherSignal, untilAborted } from '../../lib/abort.js';
 import type { Tool } from '../../tools/tools.js';
 import { isLocalSessionHandleLost } from '../../tools/toolSessions.js';
-import {
-  halfOpenOf,
-  type ClientPort,
-  type HalfOpen,
-  type PooledClientSeam,
-} from '../clientPort.js';
+import { halfOpenOf, type HalfOpen, type PooledClientSeam } from '../clientPort.js';
 import { openPooledClient } from '../mcpClient.js';
 import { withGuard, type RequestGuard } from '../requestGuard.js';
 import type { ThrottleFetch } from '../throttleRetry.js';
-import type { Ending } from '../terminate.js';
 import type { McpClientOptions, McpTerminateOutcome } from '../types.js';
 import { ClientSet, previousOf, type PreviousEnd } from './clientSet.js';
-import {
-  definitionOf,
-  SharedDefinitions,
-  type Definition,
-  type DefinitionList,
-} from './definitions.js';
+import { definitionOf, SharedDefinitions, type Definition } from './definitions.js';
 import { McpPoolRefusedError, PoolFullError, type McpPoolLimit } from './errors.js';
 import { encodeIdentityField } from '../../memory/identity/encode.js';
 import { scopeMatcher, type PoolKey } from './identityKey.js';
@@ -72,23 +61,11 @@ import {
   type WorkKind,
 } from './work.js';
 
-/** An app lease, as the pool tracks it for `maxLeaseMs`. */
-export interface HeldLease {
-  readonly client: PooledClient;
-  readonly takenAt: number;
-  /** Revoked: its next use throws `lease-expired`. */
-  revoked: boolean;
-  /** Released: idempotent. */
-  released: boolean;
-}
-
-/** Where a list's definitions live: a client's own, or a shared entry. */
-export interface ServedList {
-  readonly list: DefinitionList;
-  readonly shared: boolean;
-  /** The definitions context: `pc:` or `sh:`. */
-  readonly context: string;
-}
+import type { HeldLease, RequestEvidenceOutcome, ServedList } from './pool/contracts.js';
+import { closeLocally, endingOnly } from './pool/endings.js';
+import { initTimeout, isContextMoved, poolClosed } from './pool/refusals.js';
+import { isToolCall, passesUnguarded } from './pool/requests.js';
+import { isServerAnswer } from './pool/responses.js';
 
 /** What `stats()` returns: counts, never keys. */
 export interface McpPoolStats {
@@ -1095,108 +1072,6 @@ export class Pool {
   }
 }
 
-/** A port that can only end: what a half-opened session leaves the pool. */
-function endingOnly(halfOpen: { end(): ReturnType<ClientPort['end']> }): ClientPort {
-  return {
-    listing: () => Promise.reject(new Error('This client never opened.')),
-    bind: () => {
-      throw new Error('This client never opened.');
-    },
-    end: () => halfOpen.end(),
-  };
-}
-
-/** What a failed request proved about its client, if anything. */
-export type RequestEvidenceOutcome = 'expired' | 'handle-lost' | undefined;
-
-/** The reason an open is aborted at its deadline — a fixed sentence. */
-function initTimeout(): Error {
-  return Object.assign(new Error('The pooled client did not open within its deadline.'), {
-    name: 'TimeoutError',
-  });
-}
-
-/** The reason in-flight work is aborted when the pool closes — a fixed sentence. */
-function poolClosed(): Error {
-  return Object.assign(new Error('The MCP client pool was closed.'), { name: 'AbortError' });
-}
-
-/**
- * A body the pool's fetch passes with no guard: a JSON-RPC notification (a
- * method, no id) or an answer to the server's own request (an id, a result or
- * an error, no method). Never refused, never counted here. Anything else — a
- * request, a batch, a body that is not JSON-RPC — needs a guard.
- */
-function passesUnguarded(body: RequestInit['body'] | undefined): boolean {
-  if (typeof body !== 'string') return false;
-  let message: unknown;
-  try {
-    message = JSON.parse(body);
-  } catch {
-    return false;
-  }
-  if (message === null || typeof message !== 'object' || Array.isArray(message)) return false;
-  const fields = message as {
-    readonly method?: unknown;
-    readonly id?: unknown;
-    readonly result?: unknown;
-    readonly error?: unknown;
-  };
-  if (typeof fields.method === 'string') return fields.id === undefined;
-  return fields.method === undefined && ('result' in fields || 'error' in fields);
-}
-
-/** A listing refused at its send because the app's names moved: listed again under the new context. */
-function isContextMoved(error: unknown): boolean {
-  return error instanceof McpPoolRefusedError && error.reason === 'binding-changed';
-}
-
-/** A `tools/call` request: a pooled one always brings its own call's guard. */
-function isToolCall(message: unknown): boolean {
-  return (
-    message !== null &&
-    typeof message === 'object' &&
-    (message as { readonly method?: unknown }).method === 'tools/call'
-  );
-}
-
-/**
- * A lost handle's ending: nothing can be sent for it, so the remote outcome is
- * known at once — `handle-lost`, unresolved — and the work is the local close
- * alone, which the ending stays charged for until it settles.
- */
-function closeLocally(client: PooledClient): Ending {
-  const target = client.client;
-  const settled =
-    target === undefined
-      ? Promise.resolve()
-      : Promise.resolve()
-          .then(() => target.close())
-          .then(
-            () => undefined,
-            () => undefined,
-          );
-  return {
-    outcome: Promise.resolve({ remote: 'handle-lost', resolved: false, durationMs: 0 }),
-    settled,
-  };
-}
-
-/**
- * Is a 404 the MCP server's own answer — a JSON-RPC error response — rather than
- * an intermediary's (a platform's "not found" for a missing endpoint, a proxy's
- * page)? Read from a copy of the body, which the SDK reads too.
- */
-async function isServerAnswer(response: Response): Promise<boolean> {
-  try {
-    const text = await response.clone().text();
-    const parsed = JSON.parse(text) as { readonly jsonrpc?: unknown; readonly error?: unknown };
-    const error = parsed?.error as { readonly code?: unknown } | undefined;
-    return parsed?.jsonrpc === '2.0' && typeof error?.code === 'number';
-  } catch {
-    return false;
-  }
-}
-
 /** Re-exported for the bound tool: which end reasons name a previous client. */
 export type { PreviousEnd };
+export type { HeldLease, RequestEvidenceOutcome, ServedList } from './pool/contracts.js';
