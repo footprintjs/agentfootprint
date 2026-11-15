@@ -81,10 +81,8 @@ import {
   type FindingsLedger,
 } from './agent/findings/types.js';
 import { MAX_EVIDENCE_RECOVERY_CHARS } from './agent/evidence/recovery.js';
-import {
-  isClaimVerificationRow,
-  readClaimVerificationRow,
-} from './agent/findings/verificationRow.js';
+import { isClaimVerificationRow } from './agent/findings/verificationRow.js';
+import { checkpointWithCarriers } from './agent/sourceEvidence/checkpointValidation.js';
 import { verificationCheckpointOf } from './agent/findings/verificationCheckpoint.js';
 import {
   negativeCheckpointOf,
@@ -92,6 +90,8 @@ import {
 } from './agent/negativeClaims/checkpoint.js';
 import type { ClaimVerificationState } from './agent/findings/verificationState.js';
 import { ownConfigArray } from '../integrity/claim-binding/scope.js';
+import type { SourceEvidenceIndex } from '../artifacts/sourceEvidence/types.js';
+import { sourceEvidenceOf } from './agent/runtime/conversation/checkpointParts.js';
 
 // ─── Public types ────────────────────────────────────────────────────
 
@@ -116,6 +116,8 @@ export interface EvidenceRecoveryCheckpoint {
  * → v2 transitions will be supported via a migration helper.
  */
 export interface AgentRunCheckpoint {
+  /** Host-kept native source index. It contains refs only and does not authenticate an imported checkpoint. */
+  readonly sourceEvidence?: SourceEvidenceIndex;
   /** Private admitted negative evidence; keep checkpoints on the trusted host. */
   readonly negativeClaimState?: NegativeCheckpoint['negativeClaimState'];
   readonly resultIdentities?: NegativeCheckpoint['resultIdentities'];
@@ -645,6 +647,7 @@ export function buildCheckpoint(
   /** Private evidence beside the same committed ledger; absent unless explicitly opted in. */
   claimVerification?: ClaimVerificationState,
   negativeClaims?: NegativeCheckpoint,
+  sourceEvidence?: SourceEvidenceIndex,
 ): AgentRunCheckpoint {
   const verification =
     claimVerification === undefined
@@ -667,6 +670,9 @@ export function buildCheckpoint(
     ...(turnNumber !== undefined && { turnNumber }),
     ...(verification !== undefined && { claimVerification: verification }),
     ...(negativeClaims === undefined ? {} : negativeCheckpointOf(negativeClaims)),
+    ...(sourceEvidence === undefined
+      ? {}
+      : { sourceEvidence: sourceEvidenceOf({ sourceEvidence }) }),
   };
 }
 
@@ -859,6 +865,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
       '[resumeOnError] checkpoint missing required field: originalInput.message.',
     );
   }
+  const sourceEvidence = sourceEvidenceOf(c);
   // Optional fields are validated only when PRESENT — absence is the ordinary
   // pre-SG-C checkpoint and must keep deserializing byte-identically.
   if (c.skillCursor !== undefined && typeof c.skillCursor !== 'string') {
@@ -994,18 +1001,7 @@ export function validateCheckpoint(value: unknown): AgentRunCheckpoint {
     }
   }
   negativeCheckpointOf(c);
-  const hasVerificationRows = c.findingsLedger?.some((row) => row.kind === 'claim-verification');
-  return claimVerification === undefined && !hasVerificationRows
-    ? (c as AgentRunCheckpoint)
-    : ({
-        ...c,
-        ...(claimVerification !== undefined && { claimVerification }),
-        ...(hasVerificationRows && {
-          findingsLedger: c.findingsLedger?.map((row) =>
-            row.kind === 'claim-verification' ? readClaimVerificationRow(row) : row,
-          ),
-        }),
-      } as AgentRunCheckpoint);
+  return checkpointWithCarriers(c, claimVerification, sourceEvidence);
 }
 
 /**

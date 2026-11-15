@@ -1,3 +1,4 @@
+import { sourceLanding } from '../../../sourceEvidence/landing.js';
 import type { ToolCallsHandlerDeps } from '../contracts/handlerDeps.js';
 import { prepareCallState } from '../access/callState.js';
 import { checkToolPermission } from '../access/toolPermission.js';
@@ -22,6 +23,7 @@ import { landCallResult } from './deliveredResult.js';
 import { judgeLanded } from '../evidence/judgeLanded.js';
 import { activateLandedSkill } from '../routing/skillActivation.js';
 import { haltLandedCall } from '../routing/policyHalt.js';
+import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 import type { ToolCallOperations } from '../compose.js';
 import type { DispatchCallRunner } from '../contracts/dispatchCall.js';
 
@@ -478,12 +480,17 @@ export function buildCallDispatch(
           args: callArguments.callArgs,
           result: outcome.result,
           negativeResultId: execution.negativeDispatch?.resultId,
+          ...(execution.sourceCapture && { onSourceWithheld: execution.sourceCapture.withheld }),
           ...(outcome.error === true && { error: true }),
           history: batch.newHistory,
           ...(batch.runIdentity && { identity: batch.runIdentity }),
           ...(batch.env.signal && { signal: batch.env.signal }),
         })
       : outcome.result;
+    if (deps.sourceEvidenceConfig !== undefined && sourceEvidenceHaltOf(scope) !== undefined) {
+      execution.denied = true;
+      execution.haltContext = sourceEvidenceHaltOf(scope)!;
+    }
     // Placement next (9.22.0) — the operator's ref-ing, judged on what
     // the chain let through (a rule that already summarized a huge
     // result is measured on what it produced, the same reasoning as the
@@ -516,6 +523,11 @@ export function buildCallDispatch(
     // the cap composes with governance rather than pre-empting it.
     const capped = operations.capResults(tc.name, placedValues);
     const modelResult = capped.modelResult;
+    if (execution.sourceCapture)
+      await execution.sourceCapture(
+        modelResult,
+        sourceLanding(execution, outcome, capped.modelResult === placedValues.modelResult),
+      );
 
     const durationMs = Date.now() - startMs;
     recordCallSettlement(scope, {

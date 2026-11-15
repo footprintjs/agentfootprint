@@ -40,6 +40,15 @@ export function seedFactory(environment: SeedEnvironment) {
       return l;
     };
     return buildSeedStage({
+      ...(environment.configuration.sourceEvidenceConfig !== undefined && {
+        sourceEvidenceMaxReceipts:
+          environment.configuration.sourceEvidenceConfig.limits.maxReceipts,
+        consumePendingResumeSourceEvidence: () => {
+          const sourceEvidence = run.value.pendingResumeSourceEvidence;
+          run.value.pendingResumeSourceEvidence = undefined;
+          return sourceEvidence;
+        },
+      }),
       maxIterations: environment.maxIterations,
       // The forced-output tool's name (9.88.0) — a build-time constant, put on
       // the record once so a rebuild can name it without reading a receipt.

@@ -1,5 +1,10 @@
 import type { AgentRunOptions } from '../runOptions/options.js';
-import { evidenceRecoveryOf, foldedSpansOf, findingsLedgerOf } from './checkpointParts.js';
+import {
+  evidenceRecoveryOf,
+  foldedSpansOf,
+  findingsLedgerOf,
+  sourceEvidenceOf,
+} from './checkpointParts.js';
 import { pendingQuestionOf } from '../../pauseOwnership.js';
 import { type AgentRunValues } from '../../runValues.js';
 import { type RunnerInvocation, type RunnerSelection } from '../../../runnerExecution.js';
@@ -131,6 +136,9 @@ export function checkpointFor(
     ...(this.configuration.negativeClaimsConfig === undefined || state === undefined
       ? {}
       : negativeCheckpointOf(state)),
+    ...(this.configuration.sourceEvidenceConfig === undefined
+      ? {}
+      : { sourceEvidence: sourceEvidenceOf(state) }),
   };
 }
 
@@ -257,7 +265,7 @@ export function conversationOwner(
  * would ask the same question twice.
  *
  * Only the FLAG is stashed, never the entry (9.112.2). The entry is written
- * by `seed.ts · historyForTurn` from the message the `'input'` middleware
+ * by `runtime/conversation/seedHistory.ts · historyForTurn` from the message the `'input'` middleware
  * chain let through; an entry built here, before that chain has run, is the
  * caller's raw text — which is what a continued turn served the model
  * through 9.112.1, while the record said the rewrite had happened.
@@ -273,6 +281,12 @@ export function applyContinuation(
 ): void {
   assertContinuable(cp, this.configuration.explicitId, door);
   requireVerificationOnResume(cp, false);
+  const sourceEvidence = sourceEvidenceOf(cp);
+  if (this.configuration.sourceEvidenceConfig === undefined && sourceEvidence !== undefined)
+    throw new TypeError(
+      'Continuation requires the source evidence setting used by the recording agent.',
+    );
+  values.pendingResumeSourceEvidence = sourceEvidence;
   if (
     this.configuration.negativeClaimsConfig === undefined &&
     negativeCheckpointOf(cp) !== undefined

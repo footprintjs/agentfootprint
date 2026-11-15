@@ -324,6 +324,7 @@ const ORIGINAL_PROTOTYPE_KEYS = [
   'selfExplain',
   'resolveMapsPlan',
   'answerValidation',
+  'sourceEvidence',
   'negativeClaims',
   'resolveOutputEnforcement',
   'build',

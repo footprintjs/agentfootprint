@@ -16,13 +16,13 @@ import type {
 import type { CacheStrategy } from '../../cache/types.js';
 import type { CredentialProvider } from '../../identity/types.js';
 import type { ArtifactStore } from '../../artifacts/types.js';
+import type { SourceEvidenceOptions } from '../../tools/sourceEvidence.js';
 import type { AuthorizationRequiredMode } from '../../identity/consent.js';
 import type { ToolArgValidationMode } from '../../tools/toolArgsValidation.js';
 import type { TimeOptions } from '../../time/clock.js';
 import type { Classifier } from '../../classify/types.js';
 import type { Ontology, OntologyAsk } from '../../ontology/types.js';
-import type { ObserverDeliveryOptions } from './types/observation.js';
-import type { WriteProvenanceMode } from './types/observation.js';
+import type { ObserverDeliveryOptions, WriteProvenanceMode } from './types/observation.js';
 import type { ExternalGroundsProvider } from './types/grounds.js';
 import type { AgentArtifactsOptions } from './types/artifacts.js';
 import type { InvocationState } from './types/state/invocation.js';
@@ -46,7 +46,7 @@ export type { ObserverDeliveryOptions, WriteProvenanceMode } from './types/obser
 export type { ExternalGroundsProvider } from './types/grounds.js';
 export type { AgentArtifactsOptions, AgentRecordingsOptions } from './types/artifacts.js';
 export type { RunConfig, RunConfigContext, RunConfigFn } from './types/configuration.js';
-export type { AgentInput } from './types/input.js';
+export type { AgentInput, AgentOutput } from './types/input.js';
 
 export interface AgentOptions {
   readonly provider: LLMProvider;
@@ -658,6 +658,8 @@ export interface AgentOptions {
    * naming this option (`ctx.hasArtifacts` is the fact to branch on).
    */
   readonly artifacts?: ArtifactStore | AgentArtifactsOptions;
+  /** Retain declared historical sources in the native store; every later read requires fresh admission. */
+  readonly sourceEvidence?: SourceEvidenceOptions;
   /**
    * Tell the model when it has already made this exact call and already got
    * this exact answer (9.26.0). **On by default.**
@@ -1177,8 +1179,6 @@ export interface AgentOptions {
    */
   readonly observerDeliveryOptions?: ObserverDeliveryOptions;
 }
-
-export type AgentOutput = string;
 
 // ─── INTERNAL state (stage functions) ──────────────────────────────
 

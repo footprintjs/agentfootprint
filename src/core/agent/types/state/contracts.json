@@ -4,6 +4,7 @@
   "sourceSha256": "a3557a4526544c8ce05f0ef43c28ba5fac0d4d54f1f4c10c0c45c1f4fe7470c6",
   "contract": {
     "fields": {
+      "sourceEvidence": ["9de2ced3d73584bbaf0735daadf661e09e8852be7689148cbf4c41c00e21d7c4",true,false],
       "userMessage": ["8a77582ff19aa66b62f6add9bf629519548a815112e647f2889e4c30bd5d94e1",false,false],
       "history": ["d2452b798cffa83a78404e2f7db05027bde27fc6e1efebd376a1dd6d7430f2c3",false,false],
       "iteration": ["3bcfecfc4e8c46bb5b797fbbb08a483b2fadafa1fd42497405eb961515590163",false,false],
@@ -355,7 +356,8 @@
       "4be815720f630eb67239ad748313b64ff24077bbc299b99ff5fdb2cb46750681": 1,
       "ed80665585a52941b1e3787e53ae35e2e9780dcb71adc9873201423582382c0c": 1,
       "66bb407173f5dd72e96c7075b0ec19cf60858e417d670b946a29d3e4ea55b63e": 1,
-      "f177c1b76999e89e1ba16c7bf7c79c3c922915f56e99cdbd0a806eda44115585": 1
+      "f177c1b76999e89e1ba16c7bf7c79c3c922915f56e99cdbd0a806eda44115585": 1,
+      "dc798679b2e7c2296f9c03f50118cd312726dcb089d0dfc6cf447ad3e3860be6": 1
     }
   }
 }

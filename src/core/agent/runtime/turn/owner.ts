@@ -4,6 +4,7 @@ import {
   evidenceRecoveryOf,
   foldedSpansOf,
   findingsLedgerOf,
+  sourceEvidenceOf,
 } from '../conversation/checkpointParts.js';
 import { runInputWith, throughAroundTurn } from '../../aroundTurn/index.js';
 import type { AgentAroundTurnFailedPayload } from '../../../../events/payloads/agent.js';
@@ -312,6 +313,9 @@ export async function runLeg(
         this.configuration.negativeClaimsConfig === undefined
           ? undefined
           : negativeCheckpointOf(this.native.liveSnapshot()?.sharedState ?? {}),
+        this.configuration.sourceEvidenceConfig === undefined
+          ? undefined
+          : sourceEvidenceOf(this.native.liveSnapshot()?.sharedState as Partial<AgentState>),
       );
       throw new RunCheckpointError(cause, checkpoint);
     }
@@ -339,5 +343,6 @@ export async function runLeg(
     invocation.value.pendingResumeFindingsLedger = undefined;
     invocation.value.pendingResumeSkillCursor = undefined;
     invocation.value.pendingEvidenceRecovery = undefined;
+    invocation.value.pendingResumeSourceEvidence = undefined;
   }
 }

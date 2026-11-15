@@ -26,6 +26,7 @@ import type { ToolSettlementOperations } from '../contracts/operations/settlemen
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
+import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 
 interface ResumeCheckInLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -149,6 +150,7 @@ export function buildResumeCheckIn(
           args,
           result,
           negativeResultId,
+          ...(scriptSeen.sourceCapture && { onSourceWithheld: scriptSeen.sourceCapture.withheld }),
           ...(error === true && { error: true }),
           history: [...(scope.history as readonly LLMMessage[])],
           ...(scope.runIdentity && { identity: scope.runIdentity }),
@@ -169,6 +171,13 @@ export function buildResumeCheckIn(
     );
     const decisionCapped = links.capResults(toolName, decisionPlaced);
     modelResult = decisionCapped.modelResult;
+    if (scriptSeen.sourceCapture)
+      await scriptSeen.sourceCapture(modelResult, {
+        eligible: stepToolRan && modelResult === decisionPlaced.modelResult,
+        ...(resumeEnvelope?.status !== undefined && { status: resumeEnvelope.status }),
+      });
+    const sourceHalt = sourceEvidenceHaltOf(scope);
+    if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
     let decisionResultStr =
       typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
     const decisionToolChars = decisionResultStr.length;

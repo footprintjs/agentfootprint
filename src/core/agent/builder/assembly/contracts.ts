@@ -1,3 +1,4 @@
+import { checkAnswerContract } from '../answer/policies.js';
 import { type ResolvedAnswerValidation } from '../../../../answer-validation/index.js';
 import { type OutputSchemaParser } from '../../../../answer-validation/outputSchema.js';
 import { resolveJsonSchema } from '../../outputEnforcement.js';
@@ -45,37 +46,7 @@ export function checkContracts(self: ContractsPort) {
       resolveJsonSchema(self.outputSchemaParser, self.outputSchemaJson),
     );
   }
-  if (self.answerValidationConfig !== undefined) {
-    if (self.outputSchemaParser === undefined) {
-      throw new Error('AgentBuilder.answerValidation requires .outputSchema(parser).');
-    }
-    if (self.outputFallbackCfg !== undefined || self.limitsTravelValue) {
-      throw new Error(
-        'AgentBuilder.answerValidation does not support .outputFallback() or .limitsTravelWithTheAnswer(): a fallback can replace the checked answer after validation, and the validated delivery has no place for the declared limits.',
-      );
-    }
-    // A listed check with nothing to judge is refused, never left to pass.
-    const listed = self.answerValidationConfig.agentChecks;
-    if (listed.includes('negative-claims') && negativeClaims?.mode !== 'typed') {
-      throw new Error(
-        "AgentBuilder.answerValidation({ agentChecks: ['negative-claims'] }) requires typed .negativeClaims({ field, tools }).",
-      );
-    }
-    if (listed.includes('claims') && self.claimsContract === undefined) {
-      throw new Error(
-        "AgentBuilder.answerValidation({ agentChecks: ['claims'] }) needs a .claims() contract: " +
-          'it names which answer field claims which fact, and without one the claim check has ' +
-          "nothing to judge. Declare the contract, or drop 'claims' from agentChecks.",
-      );
-    }
-    if (listed.includes('names-and-numbers') && self.evidenceGate === undefined) {
-      throw new Error(
-        "AgentBuilder.answerValidation({ agentChecks: ['names-and-numbers'] }) needs " +
-          '.namesAndNumbersFromEvidence(): its verdict is what the row reads. Add the gate, or ' +
-          "drop 'names-and-numbers' from agentChecks.",
-      );
-    }
-  }
+  checkAnswerContract(self, negativeClaims);
   // The answer layer (honesty layer 4), resolved ONCE from both doors — the
   // builder's `.answerLayer()` wins; otherwise `AgentOptions.answerLayer`,
   // checked by the same rules — so the refusals below and the arm `Agent`

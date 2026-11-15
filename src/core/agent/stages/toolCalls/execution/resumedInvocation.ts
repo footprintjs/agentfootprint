@@ -41,6 +41,7 @@ import type { ToolLimitsOperations } from '../contracts/operations/limits.js';
 import type { ToolIntegrityOperations } from '../contracts/operations/integrity.js';
 import type { ToolEffectsOperations } from '../contracts/operations/effects.js';
 import type { ResumedInvocation } from '../contracts/operations/resumedInvocation.js';
+import { nativeSourceCapture } from '../../../sourceEvidence/capture.js';
 
 interface ResumedInvocationLinks {
   readonly dispatchRoster: ToolCatalogOperations['dispatchRoster'];
@@ -70,7 +71,13 @@ interface ResumedInvocationLinks {
 export function buildResumedInvocation(
   deps: Pick<
     ToolCallsHandlerDeps,
-    'clearConsentOutstanding' | 'reportConsentOutstanding' | 'time' | 'negativeClaimsArmed'
+    | 'clearConsentOutstanding'
+    | 'reportConsentOutstanding'
+    | 'time'
+    | 'negativeClaimsArmed'
+    | 'sourceEvidenceConfig'
+    | 'currentRun'
+    | 'isRunRetired'
   >,
   links: ResumedInvocationLinks,
 ): ResumedInvocation {
@@ -309,6 +316,15 @@ export function buildResumedInvocation(
               context: executionContext,
             })
           : undefined;
+      const sourceRun = links.runFactsOf(scope)?.runId;
+      if (seen !== undefined)
+        seen.sourceCapture = nativeSourceCapture(
+          scope,
+          tool,
+          executionContext,
+          deps.sourceEvidenceConfig,
+          () => !deps.isRunRetired() && deps.currentRun?.().runId === sourceRun,
+        );
       executed = true;
       if (seen !== undefined) {
         // Read now, before any tool code runs: what the call proposed and
@@ -318,6 +334,7 @@ export function buildResumedInvocation(
         seen.submitted = links.programOfCall(tool, args);
       }
       let result = await tool.execute(args, executionContext);
+      seen?.sourceCapture?.returned();
       // The runner's facts, at this execute boundary as at the batch loop's.
       const codeRun = links.takeCodeRun(scope, tool, codeRunSlot, {
         toolName,

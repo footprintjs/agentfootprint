@@ -42,6 +42,7 @@ import {
   repeatOf,
 } from '../../../../../tools/inputRequest.js';
 import type { DispatchCall } from '../contracts/batchCall.js';
+import { nativeSourceCapture } from '../../../sourceEvidence/capture.js';
 
 type CallStartFacts = ReturnType<ReturnType<typeof buildCallStart>['beginDispatchCall']>;
 type DispatchContext = ReturnType<
@@ -96,7 +97,15 @@ interface InvokeInitialToolFrame {
 /** Existing initialInvocation body; original guard and native pause return stay with the handler. */
 export async function invokeInitialTool(
   scope: TypedScope<AgentState>,
-  deps: Pick<ToolCallsHandlerDeps, 'time' | 'negativeClaimsArmed' | 'answeredAsk'>,
+  deps: Pick<
+    ToolCallsHandlerDeps,
+    | 'time'
+    | 'negativeClaimsArmed'
+    | 'answeredAsk'
+    | 'sourceEvidenceConfig'
+    | 'currentRun'
+    | 'isRunRetired'
+  >,
   frame: InvokeInitialToolFrame,
 ) {
   try {
@@ -187,12 +196,21 @@ export async function invokeInitialTool(
             context: executionContext,
           })
         : undefined;
+    const sourceRun = frame.runFactsOf(scope)?.runId;
+    frame.execution.sourceCapture = nativeSourceCapture(
+      scope,
+      frame.tool,
+      executionContext,
+      deps.sourceEvidenceConfig,
+      () => !deps.isRunRetired() && deps.currentRun?.().runId === sourceRun,
+    );
     frame.execution.executed = true;
     frame.execution.submittedProgram = frame.programOfCall(
       frame.tool,
       frame.callArguments.callArgs,
     );
     frame.outcome.result = await frame.tool.execute(frame.callArguments.callArgs, executionContext);
+    frame.execution.sourceCapture?.returned();
     if (frame.execution.negativeDispatch !== undefined)
       frame.outcome.result = captureNegativeResult(
         scope,

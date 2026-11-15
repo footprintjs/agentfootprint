@@ -108,3 +108,5 @@ export interface AgentInput {
    */
   readonly time?: RunTime;
 }
+
+export type AgentOutput = string;

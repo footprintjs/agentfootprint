@@ -22,6 +22,7 @@ import type { ToolSettlementOperations } from '../contracts/operations/settlemen
 import type { ToolCatalogOperations } from '../contracts/operations/catalog.js';
 import type { ToolScriptsOperations } from '../contracts/operations/scripts.js';
 import type { ToolObservationsOperations } from '../contracts/operations/observations.js';
+import { sourceEvidenceHaltOf } from '../../../sourceEvidence/permissions.js';
 
 interface ResumeCredentialLinks {
   readonly endCall: ToolResourcesOperations['endCall'];
@@ -91,6 +92,7 @@ export function buildResumeCredential(
         args,
         result,
         negativeResultId: dispatched.negativeResultId,
+        ...(scriptSeen.sourceCapture && { onSourceWithheld: scriptSeen.sourceCapture.withheld }),
         ...(error === true && { error: true }),
         history: [...(scope.history as readonly LLMMessage[])],
         ...(scope.runIdentity && { identity: scope.runIdentity }),
@@ -107,6 +109,17 @@ export function buildResumeCredential(
     );
     const consentCapped = links.capResults(toolName, consentPlaced);
     modelResult = consentCapped.modelResult;
+    if (scriptSeen.sourceCapture)
+      await scriptSeen.sourceCapture(modelResult, {
+        eligible:
+          dispatched.executed === true &&
+          error !== true &&
+          dispatched.ceilingRefused !== true &&
+          modelResult === consentPlaced.modelResult,
+        ...(dispatched.envelope?.status !== undefined && { status: dispatched.envelope.status }),
+      });
+    const sourceHalt = sourceEvidenceHaltOf(scope);
+    if (sourceHalt) scope.$break(`policy-halt: ${sourceHalt.reason}`);
     let consentResultStr =
       typeof modelResult === 'string' ? modelResult : safeStringify(modelResult);
     const consentToolChars = consentResultStr.length;

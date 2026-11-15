@@ -12,7 +12,7 @@ types contain no executable code and do not import the facade or each other.
 | `pause.ts` | Outstanding tool, consent, ask and script checkpoints |
 | `middleware.ts` | Middleware decisions and message denials |
 | `output.ts` | Output attempts, validation and unmet contracts |
-| `evidence.ts` | Evidence repair and unsupported-answer records |
+| `evidence.ts` | Evidence repair, unsupported-answer records and the optional native source-ref index |
 | `budget.ts` | Budget counters and wrap-up marker |
 | `delivery.ts` | Injection delivery, served requests and receipts |
 | `routing.ts` | Cache, skill cursor, route, leases and engagement |
