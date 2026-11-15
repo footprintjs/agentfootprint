@@ -9,6 +9,18 @@
  * The following notes describe earlier fixture migrations, not current proof
  * of whole-record equality with pre14 releases.
  *
+ * FINDINGS REFERENCE CONTEXT: recaptured only the same five ledger-enabled
+ * native references for the intentional current-request schema/instruction,
+ * late-v2 layout and advisory referenceStatus changes. Independent comparison
+ * classified all 290 leaf deltas per tree: 100 exact schema/instruction strings,
+ * 20 DATA strings containing only the layout/status delta, five layout values,
+ * five matching instruction-content hashes and 160 derived receipt measurements.
+ * Content hashes and measurement deltas were independently recomputed. Every
+ * other stored JSON reference (55 of 60) remains byte-identical; no other value
+ * or trace ordering changed. Projection, normalizer, guarded update and strict
+ * equality assertions below are unchanged. Notice admission and historical
+ * layout gaps have separate native positive and failing negative controls.
+ *
  * THINKING REPLAY: the `provider-defaults` reader gap's boundary sentence now
  * says that later preparation notes do not prove what was sent or accepted.
  * Exactly 79 `served[n].view.gaps[n].why` values across 30 references were

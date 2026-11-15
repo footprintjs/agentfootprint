@@ -156,3 +156,7 @@ under deferred observation or sanitize provider-authored failure text.
 
 See the role lists above; `types.ts` holds both the public agent types and the
 internal ones the stages share.
+
+`assistantReplay.ts` reads only its owned replay/thinking carrier through the native
+value port and detaches those fields before appending assistant history. Reactive
+proxies never enter frozen callback views; the unsafe whole-turn guard stays closed.
