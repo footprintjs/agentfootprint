@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-158 exported from `agentfootprint`.
+159 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -30,6 +30,7 @@ title: Type Aliases
 - [`BoundAs`](/docs/api/type-aliases/BoundAs)
 - [`BranchOutcome`](/docs/api/type-aliases/BranchOutcome)
 - [`BrowserDriver`](/docs/api/type-aliases/BrowserDriver)
+- [`ChartToolObservability`](/docs/api/type-aliases/ChartToolObservability)
 - [`CheckInAssembler`](/docs/api/type-aliases/CheckInAssembler)
 - [`CheckInDemand`](/docs/api/type-aliases/CheckInDemand)
 - [`CheckInScorer`](/docs/api/type-aliases/CheckInScorer)

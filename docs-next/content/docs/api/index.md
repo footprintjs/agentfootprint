@@ -500,6 +500,7 @@ title: agentfootprint
 - [BoundAs](/docs/api/type-aliases/BoundAs)
 - [BranchOutcome](/docs/api/type-aliases/BranchOutcome)
 - [BrowserDriver](/docs/api/type-aliases/BrowserDriver)
+- [ChartToolObservability](/docs/api/type-aliases/ChartToolObservability)
 - [CheckInAssembler](/docs/api/type-aliases/CheckInAssembler)
 - [CheckInDemand](/docs/api/type-aliases/CheckInDemand)
 - [CheckInScorer](/docs/api/type-aliases/CheckInScorer)

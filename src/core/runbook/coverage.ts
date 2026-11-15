@@ -20,8 +20,8 @@
  *   3. THE BRIDGE'S OWN — one `checked` entry naming the procedure, its
  *      recorded step count and the rule set it ran under; and, for a
  *      verdict-shaped runbook, a `not_checked` entry counting DECLINED rows
- *      (the three-outcome honesty: a row that reached no classification is
- *      ground the answer does not cover).
+ *      (a row that reached no classification is ground the answer does not
+ *      cover), or stating that the served verdict rowset was unavailable.
  */
 
 import { readCoverageResult } from '../../semantics/coverage/read.js';
@@ -105,7 +105,14 @@ export interface LedgerFacts {
   /** Rowset facts — present only for a verdict-shaped runbook. */
   readonly rowsTotal?: number;
   readonly declinedRows?: number;
+  /** A verdict-shaped run supplied no readable complete rowset. */
+  readonly rowsetUnavailable?: boolean;
 }
+
+/** No cause is inferred from an unreadable served rowset. */
+export const VERDICT_ROWS_UNAVAILABLE_NOTE =
+  'The verdict rowset was unavailable in the served procedure state. No row total or ' +
+  'empty result was established, and no verdict table or panel rows were supplied.';
 
 /** The composed `af_coverage` value: three merged lists + the static law
  *  note + this run's own sentence. */
@@ -152,7 +159,15 @@ export function composeLedger(
         ]
       : [];
   const checked = mergeItems([inner.checked, chart.checked, own]);
-  const notChecked = mergeItems([inner.notChecked, chart.notChecked, declinedEntries]);
+  const unavailable = facts.rowsetUnavailable
+    ? [
+        {
+          what: 'the verdict rowset from the served procedure state',
+          why: VERDICT_ROWS_UNAVAILABLE_NOTE,
+        },
+      ]
+    : [];
+  const notChecked = mergeItems([inner.notChecked, chart.notChecked, declinedEntries, unavailable]);
   const cannotCover = mergeItems([inner.cannotCover, chart.cannotCover]);
 
   const rowsPart =

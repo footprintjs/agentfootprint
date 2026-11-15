@@ -77,7 +77,7 @@
     "src/hosting/streamHandler.ts": 817,
     "src/hosting/types.ts": 1635,
     "src/hosting/webSocketConversation.ts": 774,
-    "src/index.ts": 1415,
+    "src/index.ts": 1370,
     "src/injection-engine/buildInjectionEngineSubflow.ts": 920,
     "src/injection-engine/README.md": 1007,
     "src/injection-engine/skillGraph.ts": 1064,

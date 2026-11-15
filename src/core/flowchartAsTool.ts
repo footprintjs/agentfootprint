@@ -143,6 +143,11 @@ import { unionRedactionPolicies } from '../redaction/policy.js';
 import { redactionMarker } from '../redaction/marker.js';
 import { modelFacingState, servableSnapshot, watchRunRule } from './servableSnapshot.js';
 import { argsRedactedBy, SHOWN_ARGS } from './toolShownArgs.js';
+import {
+  chartToolExecutorOptions,
+  resolveChartToolObservability,
+  type ChartToolObservability,
+} from './chartToolObservability.js';
 import { defineTool } from '../tools/tools.js';
 import type { Tool, ToolExecutionContext } from '../tools/tools.js';
 
@@ -183,6 +188,10 @@ export type FlowchartResultMapper = (snapshot: FlowchartToolSnapshot) => string;
  * Options for `flowchartAsTool`.
  */
 export interface FlowchartAsToolOptions {
+  /** Native inner-run observation retention and commit encoding. Omitted fields
+   * keep native defaults; this changes no execution or redaction authority.
+   * Summary writes also summarize native `onCommit` observations. */
+  readonly observability?: ChartToolObservability;
   /** Tool name the LLM dispatches by. Must be unique across the agent's tools. */
   readonly name: string;
   /** Tool description shown to the LLM. */
@@ -376,6 +385,10 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
   if (!opts.flowchart) {
     throw new Error(`flowchartAsTool(${opts.name}): \`flowchart\` is required.`);
   }
+  const observability = resolveChartToolObservability(
+    opts.observability,
+    `flowchartAsTool(${opts.name})`,
+  );
   if (opts.keepRecordLimit !== undefined) {
     if (opts.keepRecord !== true) {
       throw new Error(
@@ -419,7 +432,7 @@ export function flowchartAsTool(opts: FlowchartAsToolOptions): Tool {
       const watch = policy !== opts.redact ? watchRunRule(opts.flowchart) : undefined;
       const executor = new FlowChartExecutor(
         opts.flowchart,
-        watch !== undefined ? { scopeFactory: watch.scopeFactory } : undefined,
+        chartToolExecutorOptions(observability, watch?.scopeFactory),
       );
       if (policy) {
         executor.setRedactionPolicy(policy);
