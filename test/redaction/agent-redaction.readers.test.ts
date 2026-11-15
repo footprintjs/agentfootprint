@@ -13,7 +13,7 @@
  *   - `assessAnswer`: no standing over a state key the record keeps out
  *     (`AnswerAssessment.keptOut`) — while `agent.assessment()` reads live;
  *   - the served views (`servedViews`, `servedAt`) read a redacted snapshot
- *     without throwing, and name the fold base it lacks;
+ *     without throwing, and distinguish privacy from a fold base it lacks;
  *   - the context ledger, whose gates decide what LATER runs are offered:
  *     a runner is counted from its live run, and a kind nothing can answer
  *     for is left unmetered — a placeholder never reads as "never used";
@@ -40,6 +40,7 @@ import { REDACTION_MARKER_ID, servedUnderPolicy } from '../../src/redaction/mark
 import { assessLive } from '../../src/core/agent/assessment/assess.js';
 import { readEmptiness } from '../../src/core/agent/emptiness.js';
 import { conversationPolicy, fixtureAgent, MESSAGE } from './fixture.js';
+import { nativeRetainsSafeBase } from './nativeFoldBase.js';
 
 /** Every sentence of an account, as template ids. */
 function idsOf(account: AnswerAccount): string[] {
@@ -259,12 +260,15 @@ describe('the served views over a redacted snapshot', () => {
     ['the conversation', conversationPolicy()],
     ['every name', { patterns: [/./] }],
   ] as const) {
-    it(`${label}: read without throwing, and the missing fold base is named`, async () => {
+    it(`${label}: privacy is named independently of the installed native fold-base contract`, async () => {
       const agent = fixtureAgent({ redact: redact as RedactionPolicy });
       await agent.run({ message: MESSAGE });
       const views = servedViews(agent.getLastSnapshot() as never);
       expect(views.length).toBeGreaterThan(0);
-      expect(views.some((v) => v.gaps.some((g) => g.gap === 'no-fold-base'))).toBe(true);
+      expect(views.some((v) => v.gaps.some((g) => g.gap === 'no-fold-base'))).toBe(
+        !(await nativeRetainsSafeBase()),
+      );
+      expect(views.every((v) => v.gaps.some((g) => g.gap === 'privacy-policy'))).toBe(true);
     });
   }
 });
