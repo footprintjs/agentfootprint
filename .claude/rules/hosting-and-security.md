@@ -27,3 +27,19 @@ Loaded only when you work on the paths above — moved verbatim out of the root 
 
 ## Change-impact map
 - **Permission capability vocabulary** (9.11.0) → `PermissionCapability` = `ToolCapability | 'tool_call' | 'skill_read'`, defined ONCE in provider-contract/types.ts and imported by events/payloads.ts (`PermissionCheckPayload.capability`) — the two used to be independent copies of the same union. The law is **enforce-when-both-sides-speak**: `Tool.capabilities` (declared, NEVER inferred) × `PermissionChecker.governs` (optional, feature-detected, ABSENCE = NO, `checkerGoverns()` is the one reader). `PermissionPolicy` DERIVES `governs` from its rules bag so "unconfigured" and "never asked" cannot drift. FOUR request sites now: toolCalls' 3 `tool_call` checks + `askCapability` (declared caps + `skill_read`). Memory-pipeline stages still build NO PermissionRequest — say so rather than imply it.
+
+## Standing event protocols
+
+`protocolRoute` on the existing `httpHost` enters the same standing handler and
+session lane. Plan after native ownership-checked hydration, and feed served
+events only for the captured invocation. Forward optional `HostReply.event` and
+`custom` ports by presence through wrappers, including ingress accounting.
+Hosted delivery is explicit: candidate text at every depth and nested answer
+results are withheld until authorized `complete`; app custom delivery is not
+claimed to be a served recording observation. Keep standalone record-only
+defaults unchanged. Store protocol suspension in the existing pause envelope
+before announcing it, preserve closed native refusal codes with fixed words,
+and enforce encoded event/aggregate bounds before publishing a terminal.
+`HostedProtocolRequest.turn` is a detached native plan available after planning;
+its input and accepted containers remain claims rather than authorization.
+Pooled mode refuses per-request frontend tools; never mutate a cached registry.

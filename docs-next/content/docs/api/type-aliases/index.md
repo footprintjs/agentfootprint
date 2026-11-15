@@ -2,7 +2,7 @@
 title: Type Aliases
 ---
 
-155 exported from `agentfootprint`.
+158 exported from `agentfootprint`.
 
 - [`ActKey`](/docs/api/type-aliases/ActKey)
 - [`AgentCheckName`](/docs/api/type-aliases/AgentCheckName)
@@ -116,6 +116,9 @@ title: Type Aliases
 - [`SequenceOutput`](/docs/api/type-aliases/SequenceOutput)
 - [`ServedGapCause`](/docs/api/type-aliases/ServedGapCause)
 - [`ServedGapKind`](/docs/api/type-aliases/ServedGapKind)
+- [`SourceEvidenceMetadata`](/docs/api/type-aliases/SourceEvidenceMetadata)
+- [`SourceEvidencePreparationContext`](/docs/api/type-aliases/SourceEvidencePreparationContext)
+- [`SourceEvidenceRecentResult`](/docs/api/type-aliases/SourceEvidenceRecentResult)
 - [`SourceEvidenceScalar`](/docs/api/type-aliases/SourceEvidenceScalar)
 - [`SourceEvidenceScope`](/docs/api/type-aliases/SourceEvidenceScope)
 - [`StageRole`](/docs/api/type-aliases/StageRole)

@@ -32,24 +32,66 @@ export interface SourceEvidenceOptions {
     context: ToolExecutionContext,
   ) => SourceEvidenceProjection | undefined | Promise<SourceEvidenceProjection | undefined>;
   readonly limits?: SourceEvidenceLimits;
+  /** Opt in to metadata-only discovery during native turn preparation. */
+  readonly preparation?: {
+    /** Fresh source-scope/privacy admission; no tool execution context is fabricated. */
+    readonly admit: (
+      candidate: SourceEvidenceMetadata,
+      context: SourceEvidencePreparationContext,
+    ) => SourceEvidenceMetadata | undefined | Promise<SourceEvidenceMetadata | undefined>;
+  };
+}
+
+/** Native preparation is not a tool call and grants no dispatch or artifact capability. */
+export type SourceEvidencePreparationContext = Readonly<
+  Pick<ToolExecutionContext, 'identity' | 'signal' | 'redact'>
+>;
+/** Historical metadata only; retained values and dataset navigation are deliberately absent. */
+export type SourceEvidenceMetadata = Omit<SourceEvidenceCandidate, 'scalars' | 'datasets'>;
+export interface SourceEvidenceRecentArgs {
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+export type SourceEvidenceRecentResult =
+  | { readonly historical: true; readonly unavailable: true }
+  | {
+      readonly historical: true;
+      readonly candidates: readonly SourceEvidenceMetadata[];
+      readonly shown: number;
+      readonly complete: boolean;
+      readonly nextCursor?: string;
+    };
+/** Live before proceed only. An unavailable or revoked reader never falls back to raw storage. */
+export interface SourceEvidencePreparation {
+  recent(args?: SourceEvidenceRecentArgs): Promise<SourceEvidenceRecentResult>;
 }
 
 /** @internal One detached native mount; dynamic authorization is still called per read. */
 export interface ResolvedSourceEvidenceOptions {
   readonly admit: SourceEvidenceOptions['admit'];
   readonly limits: Readonly<Required<SourceEvidenceLimits>>;
+  readonly preparation?: SourceEvidenceOptions['preparation'];
 }
 
 /** @internal Validate configuration before any run or artifact operation. */
 export function resolveSourceEvidenceOptions(
   input: SourceEvidenceOptions,
 ): ResolvedSourceEvidenceOptions {
-  const data = ownData(input, ['admit', 'limits']);
+  const data = ownData(input, ['admit', 'limits', 'preparation']);
   if (typeof data.admit !== 'function')
     throw new TypeError('Source evidence requires fresh host admission.');
+  const preparation =
+    data.preparation === undefined ? undefined : ownData(data.preparation, ['admit']);
+  if (preparation !== undefined && typeof preparation.admit !== 'function')
+    throw new TypeError('Source metadata preparation requires fresh host admission.');
   return Object.freeze({
     admit: data.admit as SourceEvidenceOptions['admit'],
     limits: sourceEvidenceLimits(data.limits as SourceEvidenceLimits | undefined),
+    ...(preparation !== undefined && {
+      preparation: Object.freeze({
+        admit: preparation.admit as NonNullable<SourceEvidenceOptions['preparation']>['admit'],
+      }),
+    }),
   });
 }
 

@@ -1,6 +1,6 @@
 ---
 title: AG-UI frontends
-description: Serve any agentfootprint agent to AG-UI frontends with no glue code — one Fetch-API handler that treats every request as untrusted, keeps the conversation on the server, and streams text, tool calls, steps, sub-agents and interrupts as AG-UI 1.0 events with nothing a redaction policy hides on the wire.
+description: Choose a pooled conversation host or a fresh runner per request, with native authentication, conversation ownership and event translation.
 ---
 
 > **An AG-UI frontend already knows how to show an agent.** `@ag-ui/client`,
@@ -12,7 +12,47 @@ description: Serve any agentfootprint agent to AG-UI frontends with no glue code
 stream. It reads the same events every listener receives and writes AG-UI 1.0
 events; nothing about the agent changes.
 
-## Serve it
+## Choose the hosting strategy
+
+AG-UI defines the input and event contract. It does not choose an agent's
+lifetime. Both hosting strategies execute the same native agent flowchart:
+
+| Strategy | Reused | New per request | Suitable when |
+| --- | --- | --- | --- |
+| `standingAgent` with `protocolRoute` | A bounded pool, one instance per active conversation | Invocation, credentials and translation | A running server already owns sessions, admission and artifacts |
+| `streamHandler` | Safely shareable provider connections and configuration | Runner, invocation and translation | A Fetch or serverless route restores the conversation per request |
+
+The saved conversation is authoritative in both. A retained instance is an
+optimization; application values held in closures are not automatically saved.
+Use persistent sessions when continuity must survive a restart. Concurrency
+guards are per process: multiple workers need one writer per conversation
+through routing or external coordination.
+
+### Keep an existing pool
+
+Add `protocolRoute` to the existing `httpHost`. Both wires enter the same
+`standingAgent` handler: one identity verifier, admission policy, session lane,
+checkpoint writer and artifact scope.
+
+`protocolRoute` returns an `HttpProtocolRoute`; `ProtocolRouteOptions` selects
+the path, adapter and request/event/response limits. A `HostedProtocolRequest`
+holds parsed input as an untrusted claim. Its accepted values become available
+only after native ownership checks and protocol planning; accepting a
+container does not verify a selected row or authorize a tool.
+
+<CodeFile path="examples/deploy/ag-ui-standing.ts" region="standing-host" title="examples/deploy/ag-ui-standing.ts (region: standing-host)" />
+
+The example follows an AG-UI turn through the JSON wire and verifies that
+both share the instance and conversation:
+
+<CodeFile path="examples/deploy/ag-ui-standing.ts" region="turn" title="examples/deploy/ag-ui-standing.ts (region: turn)" />
+
+This strategy supports server-defined tools. Per-request frontend tools are
+explicitly refused with `ERR_FRONTEND_TOOLS_UNSUPPORTED`; a cached registry
+is never mutated from a page's declaration. Use the fresh strategy below
+when frontend tools are needed.
+
+### Build a fresh runner per request
 
 `streamHandler` (from `agentfootprint/hosting`) is a framework-agnostic handler —
 `StreamHandler`, `(request: Request) => Promise<Response>` — that takes an agent
@@ -82,6 +122,54 @@ What the handler does, for every protocol (`StreamHandlerOptions`):
 Mount it as a Next.js route (`export const POST = handler`), a Hono route
 (`app.post('/agent', (c) => handler(c.req.raw))`), `Bun.serve({ fetch: handler })` or
 `Deno.serve(handler)`.
+
+## Separate execution, conversation and delivery
+
+This is an architecture diagram. The executable agent remains its native
+FootprintJS chart; hosting does not add another executor for the same work.
+
+```mermaid
+flowchart TD
+  input[AG-UI or existing wire] --> check[Authenticate and admit]
+  check --> state[Own and load conversation]
+  state --> strategy{Hosting strategy}
+  strategy --> pool[Reuse bounded session agent]
+  strategy --> fresh[Create request agent]
+  pool --> run[One native agent invocation]
+  fresh --> run
+  run --> events[Served events to per-run translator]
+  run --> save[Save checkpoint and hand over artifacts]
+  events --> stream[Standard and projected custom events]
+  save --> terminal[Authoritative terminal delivery]
+  terminal --> stream
+```
+
+`ProtocolAdapter` owns the wire strategy. The host owns lifecycle and saved
+conversation state; `RunTranslation` owns one run's translated events. Framing
+owns encoding, with frame numbers supplied by the host. A different wire
+does not change tool permissions, evidence rules or native control flow.
+
+Inspect admission through existing host ingress records, and model context,
+tools and evidence through the native run recording. A custom event is a
+notification, not a checkpoint or authorization decision.
+
+### Host delivery and record projection
+
+Standalone `agUiSerializer` translates served record events; policy-hidden
+values remain hidden. The standing bridge explicitly opts into host delivery
+with `ProtocolOpenOptions`:
+candidate answer text at every depth waits for `HostReply.complete`, after native persistence and bounded
+artifact handover. An approved renderer can replace a draft without publishing
+the draft. This final text is the host-authorized reply, not a claim about a
+recording event. `HostReply.custom` likewise publishes app-authorized metadata
+through the custom allow-list and projection. Never close over private state
+in a projection or publish datasets instead of scoped references.
+
+Native `toolArguments` and `toolResults` projections can narrow served tool
+payloads; defaults remain unchanged. `protocolRoute` caps encoded event and
+response bytes. Overflow produces a fixed protocol refusal, never truncated
+success. Terminal events are not durable acknowledgements: reconnects must
+reconcile server-owned conversation and artifact state.
 
 ## What a request may decide
 

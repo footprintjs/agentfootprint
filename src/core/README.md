@@ -5,7 +5,7 @@ Walker: `RunnerBase.ts`, `runner.ts`, `runCheckpoint.ts`, `pause.ts`,
 Fold-feeding: `Agent.ts` · `readSkillOfferFor` and `Agent.ts` ·
 `hiddenSkillIdsNow` — the two resolvers every model-facing composer downstream
 filters with. Trace: `cost.ts`. Support: `runInput.ts`,
-`conversation.ts`, `translator.ts`, `outputFallback.ts`,
+`conversation.ts`, `translator.ts`, `outputFallback.ts`, `consumerEventMeta.ts`,
 `toolShownArgs.ts` (a tool's own `redact` policy on the arguments an event
 may show), `messageFrom.ts` (which runners read `AgentInput.messageFrom`, and
 the one input a composition hands them).

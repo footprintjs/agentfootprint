@@ -1,11 +1,9 @@
-import { copyJson, jsonBytes } from '../../../lib/boundedJson.js';
-import { throwIfAborted, untilAborted } from '../../../lib/abort.js';
+import { createSourceAdmission } from './admission.js';
+import { jsonBytes } from '../../../lib/boundedJson.js';
+import { throwIfAborted } from '../../../lib/abort.js';
 import type { ToolArtifacts } from '../../../artifacts/capability.js';
 import type { Tool, ToolExecutionContext } from '../../../tools/tools.js';
-import {
-  sourceEvidenceDescriptor,
-  type ResolvedSourceEvidenceOptions,
-} from '../../../tools/sourceEvidence.js';
+import { type ResolvedSourceEvidenceOptions } from '../../../tools/sourceEvidence.js';
 import type { SourceEvidenceAccess } from '../../../tools/sourceEvidenceAccess.js';
 import type {
   SourceEvidenceCandidate,
@@ -13,14 +11,10 @@ import type {
   SourceEvidenceFindArgs,
   SourceEvidenceReadArgs,
 } from '../../../artifacts/sourceEvidence/types.js';
-import {
-  SOURCE_EVIDENCE_KIND,
-  sourceEvidenceProjection,
-} from '../../../artifacts/sourceEvidence/guards.js';
 import { sameSourceValue } from '../../../artifacts/sourceEvidence/datasets.js';
 import { withSourceEvidenceDeadline } from './deadline.js';
 import { runSourceEvidenceFlow } from './flow.js';
-import { readSourceCandidate, readSourceDataset, unavailableSourceEvidence } from './read.js';
+import { readSourceDataset, unavailableSourceEvidence } from './read.js';
 import { SourceEvidencePolicyHalt } from './permissions.js';
 import { findArgs, readArgs } from './requests.js';
 
@@ -42,64 +36,7 @@ export function createSourceEvidenceAccess(
   bindings: SourceEvidenceAccessBindings,
 ): SourceEvidenceAccess {
   const { options, artifacts } = bindings;
-  async function retainedNow(candidate: SourceEvidenceCandidate, context: ToolExecutionContext) {
-    if (!bindings.active() || !bindings.index()?.refs.includes(candidate.ref)) return false;
-    const meta = await untilAborted(artifacts.head(candidate.ref), context.signal);
-    throwIfAborted(context.signal);
-    return meta?.kind === SOURCE_EVIDENCE_KIND && meta.createdAt === candidate.recordedAt;
-  }
-  async function admitted(
-    ref: string,
-    index: SourceEvidenceIndex | undefined,
-    context: ToolExecutionContext,
-  ) {
-    throwIfAborted(context.signal);
-    if (!bindings.active()) return undefined;
-    const candidate = await readSourceCandidate(
-      artifacts,
-      index,
-      ref,
-      options.limits.maxReceiptBytes,
-      context.signal,
-    );
-    if (!candidate) return undefined;
-    const current = bindings.currentProducer(candidate.producer.name);
-    if (
-      !current ||
-      current.source !== candidate.producer.source ||
-      !sourceEvidenceDescriptor(current)
-    )
-      return undefined;
-    if (!(await untilAborted(bindings.permit(candidate, context), context.signal)))
-      return undefined;
-    const supplied = await untilAborted(
-      Promise.resolve().then(() => options.admit(candidate, context)),
-      context.signal,
-    );
-    throwIfAborted(context.signal);
-    if (supplied === undefined || !bindings.active()) return undefined;
-    const projection = sourceEvidenceProjection(candidate, supplied);
-    const retained = await readSourceCandidate(
-      artifacts,
-      bindings.index(),
-      ref,
-      options.limits.maxReceiptBytes,
-      context.signal,
-    );
-    throwIfAborted(context.signal);
-    if (!retained || !sameSourceValue(retained, candidate) || !bindings.active()) return undefined;
-    return copyJson(
-      {
-        ...projection,
-        ref: candidate.ref,
-        producer: candidate.producer,
-        recordedAt: candidate.recordedAt,
-        ...(candidate.origin !== undefined && { origin: candidate.origin }),
-      },
-      options.limits.maxReceiptBytes + 2048,
-      true,
-    ) as SourceEvidenceCandidate;
-  }
+  const { admitted, retainedNow } = createSourceAdmission(bindings);
   const bounded = (value: unknown) =>
     jsonBytes(value) <= options.limits.maxResponseBytes ? value : unavailableSourceEvidence();
 

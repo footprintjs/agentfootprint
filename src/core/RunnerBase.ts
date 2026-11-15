@@ -75,6 +75,7 @@ import type {
   AgentfootprintEventType,
 } from '../events/registry.js';
 import type { EventMeta } from '../events/types.js';
+import { consumerEventMeta } from './consumerEventMeta.js';
 import { CONSUMER_SCOPE_RUN_ID } from '../bridge/eventMeta.js';
 import {
   attachObservabilityStrategy,
@@ -1140,14 +1141,7 @@ export abstract class RunnerBase<
    */
   protected minimalMeta(): EventMeta {
     const now = Date.now();
-    return {
-      wallClockMs: now,
-      runOffsetMs: 0,
-      runtimeStageId: 'consumer-emit#0',
-      subflowPath: [],
-      compositionPath: this.compositionPath(),
-      runId: CONSUMER_SCOPE_RUN_ID,
-    };
+    return consumerEventMeta(now, this.compositionPath());
   }
 
   /**

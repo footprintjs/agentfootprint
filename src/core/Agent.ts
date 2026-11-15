@@ -1,3 +1,4 @@
+import { runTurn, resumeTurn, failureEvent } from './agent/aroundTurn/ownedTurn.js';
 import { applyLegacyContinuation } from './agent/runtime/conversation/continuation.js';
 import { sourceEvidenceTools } from '../tools/sourceEvidenceTools.js';
 import {
@@ -9,8 +10,6 @@ import { hostedTurns } from './agent/hostTurn.js';
 import {
   refuseMountedWrapper,
   replacedTurnMethods,
-  runInputWith,
-  throughAroundTurn,
   type AroundTurn,
 } from './agent/aroundTurn/index.js';
 import type { AgentAroundTurnFailedPayload } from '../events/payloads/agent.js';
@@ -32,7 +31,6 @@ import { bindScopeComputation, captureLateEmitter } from '../redaction/runRedact
 import { createAgentRunValues, type AgentRunValues } from './agent/runValues.js';
 import {
   bindRunnerStage,
-  finishLeg,
   type RunnerScopeValues,
   type RunnerInvocation,
   type RunnerSelection,
@@ -338,7 +336,6 @@ import {
   TOOL_TEARDOWN_STAGE_ID,
   LATE_ARTIFACT_FACT_STAGE_ID,
   RUN_MANIFEST_STAGE_ID,
-  AROUND_TURN_STAGE_ID,
   INTEGRITY_DISPOSITION_STAGE_ID,
   GRAPH_DECLARED_STAGE_ID,
 } from './agent/run/eventStageIds.js';
@@ -2083,36 +2080,37 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     );
   }
 
-  /** The funnel, for a new turn. Every top-level run enters here, inside its lease. */
   private runTurn<R>(
     invocation: RunnerInvocation<AgentRunValues>,
     input: AgentInput | string,
     options: AgentRunOptions | undefined,
     leg: (turnInput: AgentInput | string) => Promise<R>,
   ): Promise<R> {
-    return throughAroundTurn(
-      this.aroundTurnPort,
-      { kind: 'run', input, options },
-      (changes) => leg(runInputWith(input, options, changes)),
-      (legFailed) => finishLeg(invocation.run, legFailed),
-      (failure) => this.noteAroundTurnFailed(invocation, failure),
+    return runTurn(
+      {
+        aroundTurnPort: this.aroundTurnPort,
+        sourceEvidenceConfig: this.sourceEvidenceConfig,
+        artifactStore: this.artifactStore,
+        registry: this.registry,
+        injections: this.injections,
+        externalToolProvider: this.externalToolProvider,
+        permissionChecker: this.permissionChecker,
+        explicitId: this.explicitId,
+        runner: this,
+        report: (failure) => this.noteAroundTurnFailed(invocation, failure),
+      },
+      invocation,
+      input,
+      options,
+      leg,
     );
   }
 
-  /** A wrapper failed after its run: the outcome stands, and the record says so. */
   private noteAroundTurnFailed(
     invocation: RunnerInvocation<AgentRunValues>,
     payload: AgentAroundTurnFailedPayload,
   ): void {
-    const meta = { runtimeStageId: AROUND_TURN_STAGE_ID };
-    this.getDispatcher().dispatch({
-      type: 'agentfootprint.agent.around_turn_failed',
-      payload,
-      meta:
-        invocation.run.origin === undefined
-          ? { ...this.minimalMeta(), ...meta }
-          : buildEventMeta(meta, invocation.context()),
-    });
+    this.getDispatcher().dispatch(failureEvent(invocation, payload, () => this.minimalMeta()));
   }
 
   private async runLeg(
@@ -2598,11 +2596,11 @@ export class Agent extends RunnerBase<AgentInput, AgentOutput, AgentRunValues> {
     input?: unknown,
     options?: AgentRunOptions,
   ): Promise<AgentOutput | RunnerPauseOutcome> {
-    return throughAroundTurn(
+    return resumeTurn(
       this.aroundTurnPort,
       { kind: 'resume', checkpoint, answer: input, options },
+      invocation,
       () => this.resumeLeg(invocation, checkpoint, input, options),
-      (legFailed) => finishLeg(invocation.run, legFailed),
       (failure) => this.noteAroundTurnFailed(invocation, failure),
     );
   }

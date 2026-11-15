@@ -39,3 +39,33 @@ Return an exact permitted subset, or undefined. No source query or refresh occur
 > `readonly` `optional` **limits?**: [`SourceEvidenceLimits`](/docs/api/interfaces/SourceEvidenceLimits)
 
 Defined in: [src/tools/sourceEvidence.ts:34](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/sourceEvidence.ts#L34)
+
+***
+
+### preparation?
+
+> `readonly` `optional` **preparation?**: `object`
+
+Defined in: [src/tools/sourceEvidence.ts:36](https://github.com/footprintjs/agentfootprint/blob/main/src/tools/sourceEvidence.ts#L36)
+
+Opt in to metadata-only discovery during native turn preparation.
+
+#### admit
+
+> `readonly` **admit**: (`candidate`, `context`) => [`SourceEvidenceMetadata`](/docs/api/type-aliases/SourceEvidenceMetadata) \| `Promise`\<[`SourceEvidenceMetadata`](/docs/api/type-aliases/SourceEvidenceMetadata) \| `undefined`\> \| `undefined`
+
+Fresh source-scope/privacy admission; no tool execution context is fabricated.
+
+##### Parameters
+
+###### candidate
+
+[`SourceEvidenceMetadata`](/docs/api/type-aliases/SourceEvidenceMetadata)
+
+###### context
+
+[`SourceEvidencePreparationContext`](/docs/api/type-aliases/SourceEvidencePreparationContext)
+
+##### Returns
+
+[`SourceEvidenceMetadata`](/docs/api/type-aliases/SourceEvidenceMetadata) \| `Promise`\<[`SourceEvidenceMetadata`](/docs/api/type-aliases/SourceEvidenceMetadata) \| `undefined`\> \| `undefined`

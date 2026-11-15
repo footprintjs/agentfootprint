@@ -3,6 +3,22 @@ import type { AgentState } from '../types.js';
 import type { SourceEvidenceIndex } from '../../../artifacts/sourceEvidence/types.js';
 import { sourceEvidenceIndex } from '../../../artifacts/sourceEvidence/guards.js';
 
+/** One bounded continuation projection, shared by seed and pre-seed metadata reads. */
+export function boundedSourceEvidenceIndex(
+  input: SourceEvidenceIndex | undefined,
+  maximum: number,
+): SourceEvidenceIndex {
+  const prior =
+    input === undefined
+      ? { version: 1 as const, refs: [], omitted: 0 }
+      : sourceEvidenceIndex(input);
+  const refs = prior.refs.slice(0, maximum),
+    dropped = prior.refs.length - refs.length;
+  if (prior.omitted > Number.MAX_SAFE_INTEGER - dropped)
+    throw new TypeError('Source evidence omission counter overflow.');
+  return { version: 1, refs, omitted: prior.omitted + dropped };
+}
+
 /** Restore only the owner's bounded source index; composition members start empty. */
 export function seedSourceEvidence(
   scope: TypedScope<AgentState>,
@@ -14,15 +30,6 @@ export function seedSourceEvidence(
 ): void {
   if (deps.sourceEvidenceMaxReceipts !== undefined) {
     const inherited = mounted ? undefined : deps.consumePendingResumeSourceEvidence?.();
-    const prior =
-      inherited === undefined
-        ? { version: 1 as const, refs: [], omitted: 0 }
-        : sourceEvidenceIndex(inherited);
-    const refs = prior.refs.slice(0, deps.sourceEvidenceMaxReceipts);
-    const dropped = prior.refs.length - refs.length;
-    if (prior.omitted > Number.MAX_SAFE_INTEGER - dropped)
-      throw new TypeError('Source evidence omission counter overflow.');
-    const omitted = prior.omitted + dropped;
-    scope.sourceEvidence = { version: 1, refs, omitted };
+    scope.sourceEvidence = boundedSourceEvidenceIndex(inherited, deps.sourceEvidenceMaxReceipts);
   }
 }

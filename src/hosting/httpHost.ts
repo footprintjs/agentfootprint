@@ -85,6 +85,11 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
+import type { FailureOrigin, StreamFrame, StreamFraming } from './httpStreaming.js';
+export type { FailureOrigin, StreamFrame, StreamFraming } from './httpStreaming.js';
+import type { AgentfootprintEvent } from '../events/registry.js';
+import type { HostedProtocolRequest } from './protocolAdapter.js';
+import type { HttpProtocolRoute } from './protocolRoute.js';
 import { encodeSSE } from './stream.js';
 import type { ArtifactWireRequest, ArtifactWireResult } from './artifactWire.js';
 import {
@@ -154,71 +159,6 @@ export interface HttpRequestFacts {
  * One Server-Sent Event: the name it is announced under, and the body that
  * rides with it.
  */
-/**
- * Where a failure came from.
- *
- * `'refused'` is the handler CHOOSING to fail with words it picked for the
- * caller. `'threw'` is an exception this host caught — the message is the
- * author's note to their own logs, and may name a query, a path or a token.
- *
- * The distinction exists because a dialect that sanitises has to sanitise the
- * right one: replacing both silences deliberate refusals, and replacing
- * neither publishes stack-trace prose to whoever is on the other end.
- */
-export type FailureOrigin = 'refused' | 'threw';
-
-export interface StreamFrame {
-  readonly event: string;
-  readonly data: unknown;
-}
-
-/**
- * The frames ONE streaming response is made of.
- *
- * ── Why this exists ──────────────────────────────────────────────────────────
- * A wire's body methods answer "what do the fields say". This answers a
- * different question: "what SHAPE is a stream". This host's own dialect frames
- * one homogeneous `chunk` per piece and one terminal frame, and that is a real
- * shape — but it is not the only one. Several protocols in wide use frame a
- * stream as a LIFECYCLE instead: named events that open a response, announce
- * that output is beginning, carry deltas, close each part, and close the
- * response — every event referring to one response object by id, often
- * numbered.
- *
- * Those cannot be expressed as "a body shape per chunk", because one host
- * lifecycle point becomes SEVERAL frames, and because the frames share state
- * (an id minted once, a counter that only goes up). So a dialect that frames
- * this way supplies one of these PER RESPONSE and keeps that state in it.
- *
- * ── The default is one of these ──────────────────────────────────────────────
- * A wire that supplies none gets framing built from its own body methods —
- * `chunk`/`complete`/`error`, exactly as before. The incumbent shape is an
- * INSTANCE of this seam rather than a special case beside it, which is the
- * reason to believe the seam is in the right place.
- */
-export interface StreamFraming {
-  /**
-   * Frames to write the moment the stream opens, before the handler runs.
-   * Absent or empty means the stream announces itself with nothing, which is
-   * this host's own behaviour.
-   */
-  open?(): readonly StreamFrame[];
-  /** Frames for one piece of streamed output. */
-  chunk(text: string): readonly StreamFrame[];
-  /** Frames that close a response that completed. */
-  complete(output: string): readonly StreamFrame[];
-  /** Frames that close a response that failed. */
-  failure(message: string, code?: string, origin?: FailureOrigin): readonly StreamFrame[];
-  /**
-   * Frames that close a response ending in one of the other terminals. Absent
-   * means the single-frame default, so a framing written for text alone keeps
-   * working when an artifact or a paused run comes back through it.
-   */
-  awaiting?(pending: PendingAsk): readonly StreamFrame[];
-  artifact?(result: ArtifactWireResult): readonly StreamFrame[];
-  sessions?(result: SessionWireResult): readonly StreamFrame[];
-}
-
 export interface HttpWire {
   /**
    * Pull the port's vocabulary out of one request. Anything the wire cannot
@@ -229,6 +169,7 @@ export interface HttpWire {
    */
   readRequest(facts: HttpRequestFacts): {
     readonly input: string;
+    readonly protocol?: HostedProtocolRequest;
     readonly sessionId?: string;
     /**
      * The end user this request is for, when this dialect has a place the
@@ -384,6 +325,8 @@ export interface HttpWire {
  * ones; see `doorGuard.ts` for what each costs.
  */
 export interface HttpHostOptions extends CrossSiteOptions {
+  /** Additional event protocols; every route uses this same host, identity and standing session owner. */
+  readonly protocols?: readonly HttpProtocolRoute[];
   /**
    * Which adapter this is. Every refusal names it, so a caller reading an error
    * learns which adapter said no rather than which file it came from.
@@ -647,6 +590,12 @@ export function httpHost(options: HttpHostOptions): HttpHost {
       )}.`,
     );
   }
+  const protocols = new Map((options.protocols ?? []).map((route) => [route.path, route]));
+  if (
+    protocols.size !== (options.protocols?.length ?? 0) ||
+    [...protocols.keys()].some((path) => [invokePath, healthPath, conversationPath].includes(path))
+  )
+    throw new TypeError('httpHost: protocol routes must have distinct, unoccupied paths.');
   const ownServer = options.server;
   // Refused at construction, not ignored at serve time: a `port` next to a
   // server this host does not bind is a caller who believes something untrue
@@ -691,7 +640,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
    * arrives on it that is not one.
    */
   const ownsPath = (path: string): boolean =>
-    path === invokePath || path === healthPath || path === conversationPath;
+    path === invokePath || path === healthPath || path === conversationPath || protocols.has(path);
   // A door that exists is a capability that can be honoured; one built without
   // a path is not, and says so rather than being discovered at runtime.
   const capabilities =
@@ -993,7 +942,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
       const onCheckContinue = (req: IncomingMessage, res: ServerResponse): void => {
         try {
           const path = (req.url ?? '').split('?')[0];
-          if (accepting && req.method === 'POST' && path === invokePath) {
+          if (accepting && req.method === 'POST' && (path === invokePath || protocols.has(path))) {
             const crossSite = guard.check(req);
             if (crossSite !== undefined) {
               refuseAtRequestDoor(req, res, crossSite, false);
@@ -1024,7 +973,7 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           res.end();
           return;
         }
-        if (req.method !== 'POST' || path !== invokePath) {
+        if (req.method !== 'POST' || (path !== invokePath && !protocols.has(path))) {
           // On a server we own, an unmatched path is nobody else's, so saying
           // so is the honest answer. On a server the CALLER owns it is theirs,
           // and a 404 from us would answer for their application.
@@ -1059,7 +1008,18 @@ export function httpHost(options: HttpHostOptions): HttpHost {
           return;
         }
 
-        const served = serveOne(req, res, handler, wire, name, maxBodyBytes, reportRefusal, signIn);
+        const served = serveOne(
+          req,
+          res,
+          handler,
+          protocols.get(path)?.wire ?? wire,
+          name,
+          protocols.has(path)
+            ? Math.min(maxBodyBytes ?? Infinity, protocols.get(path)!.maxBodyBytes)
+            : maxBodyBytes,
+          reportRefusal,
+          signIn,
+        );
         inFlight.add(served);
         // `serveOne` never rejects, by construction — see its doc.
         void served.finally(() => inFlight.delete(served));
@@ -1239,7 +1199,7 @@ async function dispatchOne(
     });
     return;
   }
-  const { input, sessionId, userId, decision, artifact, session, responseHeaders } = read;
+  const { input, sessionId, userId, decision, artifact, session, responseHeaders, protocol } = read;
   // The dialect's own reply headers — a `Set-Cookie` that issues a session, and
   // nothing else so far. Stripped of `content-type` because the framing below
   // is this host's to decide: a dialect that set it would be choosing between
@@ -1250,6 +1210,13 @@ async function dispatchOne(
   // frames belongs to this caller alone.
   const framing = wantsStream ? wire.stream?.(facts) ?? defaultFraming(wire, facts) : undefined;
 
+  let sequence = 0;
+  const sendFrames = (_response: ServerResponse, frames: readonly StreamFrame[]): void => {
+    for (const frame of frames)
+      res.write(
+        framing?.encode?.(frame, { sequence: ++sequence }) ?? encodeSSE(frame.event, frame.data),
+      );
+  };
   if (wantsStream) {
     res.writeHead(200, {
       ...extraHeaders,
@@ -1257,7 +1224,7 @@ async function dispatchOne(
       'cache-control': 'no-cache',
       connection: 'keep-alive',
     });
-    writeFrames(res, framing?.open?.() ?? []);
+    sendFrames(res, framing?.open?.() ?? []);
   }
 
   let settled = false;
@@ -1275,17 +1242,46 @@ async function dispatchOne(
   });
 
   const reply: HostReply = {
+    ...(framing?.event !== undefined && {
+      event(event: AgentfootprintEvent): void {
+        if (settled) return;
+        try {
+          sendFrames(res, framing.event?.(event) ?? []);
+        } catch (error) {
+          try {
+            controller.abort();
+          } finally {
+            reply.fail(asError(error));
+          }
+        }
+      },
+    }),
+    ...(framing?.custom !== undefined && {
+      custom(name: string, payload: Readonly<Record<string, unknown>>): void {
+        if (settled) return;
+        try {
+          sendFrames(res, framing.custom?.(name, payload) ?? []);
+        } catch (error) {
+          try {
+            controller.abort();
+          } finally {
+            reply.fail(asError(error));
+          }
+        }
+      },
+    }),
     emit(chunk: string): void {
       // Not streaming? The chunk is a preview of text `complete` will deliver
       // in full, so there is nothing to send and nothing to keep.
       if (settled || !wantsStream) return;
-      writeFrames(res, framing?.chunk(chunk) ?? []);
+      sendFrames(res, framing?.chunk(chunk) ?? []);
     },
     complete(output: string): void {
       if (settled) return;
+      const closing = wantsStream ? framing?.complete(output) ?? [] : [];
       settled = true;
       if (wantsStream) {
-        writeFrames(res, framing?.complete(output) ?? []);
+        sendFrames(res, closing);
         res.end();
       } else {
         sendJson(res, 200, wire.output(output, facts), extraHeaders);
@@ -1304,7 +1300,7 @@ async function dispatchOne(
       settled = true;
       const payload = wire.artifact(result);
       if (wantsStream) {
-        writeFrames(res, framing?.artifact?.(result) ?? [{ event: 'artifact', data: payload }]);
+        sendFrames(res, framing?.artifact?.(result) ?? [{ event: 'artifact', data: payload }]);
         res.end();
       } else {
         sendJson(res, 200, payload, extraHeaders);
@@ -1331,7 +1327,7 @@ async function dispatchOne(
       settled = true;
       const payload = wire.sessions(result);
       if (wantsStream) {
-        writeFrames(res, framing?.sessions?.(result) ?? [{ event: 'sessions', data: payload }]);
+        sendFrames(res, framing?.sessions?.(result) ?? [{ event: 'sessions', data: payload }]);
         res.end();
       } else {
         sendJson(res, 200, payload, extraHeaders);
@@ -1353,10 +1349,13 @@ async function dispatchOne(
         reply.fail(refusal);
         return;
       }
-      settled = true;
       const payload = wire.awaiting(pending);
+      const closing = wantsStream
+        ? framing?.awaiting?.(pending) ?? [{ event: 'awaiting', data: payload }]
+        : [];
+      settled = true;
       if (wantsStream) {
-        writeFrames(res, framing?.awaiting?.(pending) ?? [{ event: 'awaiting', data: payload }]);
+        sendFrames(res, closing);
         res.end();
       } else {
         sendJson(res, AWAITING_STATUS, payload, extraHeaders);
@@ -1364,12 +1363,13 @@ async function dispatchOne(
     },
     fail(error: Error): void {
       if (settled) return;
-      settled = true;
       const code = (error as { code?: string }).code;
       const origin: FailureOrigin = handlerThrew ? 'threw' : 'refused';
       const payload = wire.failure(error.message, code, facts, origin);
+      const closing = wantsStream ? framing?.failure(error.message, code, origin) ?? [] : [];
+      settled = true;
       if (wantsStream) {
-        writeFrames(res, framing?.failure(error.message, code, origin) ?? []);
+        sendFrames(res, closing);
         res.end();
       } else {
         sendJson(
@@ -1386,6 +1386,7 @@ async function dispatchOne(
     await handler(
       {
         input,
+        ...(protocol !== undefined && { protocol }),
         ...(sessionId !== undefined && { sessionId }),
         ...(userId !== undefined && { userId }),
         ...(decision !== undefined && { decision }),
@@ -1489,9 +1490,6 @@ function drainThenAnswer(req: IncomingMessage, answer: () => void): void {
  * A framing that returns nothing writes nothing — which is how "this lifecycle
  * point has no frame in this dialect" is said.
  */
-function writeFrames(res: ServerResponse, frames: readonly StreamFrame[]): void {
-  for (const frame of frames) res.write(encodeSSE(frame.event, frame.data));
-}
 
 /**
  * This host's own stream shape, expressed as a {@link StreamFraming}.

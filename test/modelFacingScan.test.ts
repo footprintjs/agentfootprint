@@ -739,6 +739,13 @@ const LEDGER: Readonly<Record<string, readonly Entry[]>> = {
       why: 'a runbook warning returned to the caller that ran the walk',
     },
   ],
+  'src/ag-ui/serializer.ts': [
+    {
+      kind: 'not-model-facing',
+      count: 1,
+      why: 'the fixed identity-verifier outage sentence is delivered to the AG-UI caller as RUN_ERROR; it never enters a model request or retained conversation history',
+    },
+  ],
   'src/hosting/admission.ts': [
     {
       kind: 'not-model-facing',
@@ -1358,12 +1365,13 @@ describe('every model-facing-shaped literal in src/ is accounted for', () => {
         // conversation.ts, files115→116, total206→207, notModelFacing137→138.
         // Relative-zone regression: one source-adjacent test title, never delivered.
         // Measured scan: files116→117, total207→208, notModelFacing138→139.
-        files: 119,
-        total: 209,
+        // Standing protocols add one fixed caller-only refusal, not a model instruction.
+        files: 120,
+        total: 210,
         registry: 8,
         ephemeral: 27,
         unrepaired: 35,
-        notModelFacing: 139,
+        notModelFacing: 140,
         unrepairedEntries: 21,
       });
       // And the ledger's own total is the number of literals the scan flagged —
