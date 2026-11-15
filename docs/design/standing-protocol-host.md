@@ -16,8 +16,8 @@ allow it; mutable run state, credentials and translators cannot.
 | Component | Responsibility and evidence |
 | --- | --- |
 | `httpHost` and `protocolRoute` | Shared socket and door guards; parsed input remains a claim. Each exchange has its own encoder counter and bounded response. |
-| `standingAgent/requests/handler` | Verify the caller, distinguish artifact/session operations, apply admission and enter the existing lane. Existing ingress records retain safe decision identifiers, never the request body. |
-| `standingAgent/turn/run` | Hydrate the owned conversation, plan the turn, capture one native invocation, persist and hand over artifacts before terminal delivery. Protocol pause information joins the existing pause envelope. |
+| `standingAgent.ts` | Verify the caller, distinguish artifact/session operations, apply admission and enter the existing lane. Existing ingress records retain safe decision identifiers, never the request body. |
+| `standingTurn.ts` | Hydrate the owned conversation, plan the turn, capture one native invocation, persist and hand over artifacts before terminal delivery. Protocol pause information joins the existing pause envelope. |
 | Native runner | Execute the agent chart once. Its recording owns the actual model context, tool work, evidence and final assessment. |
 | `RunTranslation` | Request-local protocol state. Served events must match the captured invocation; consumer-scope emissions and unrelated runs are excluded. |
 | Host delivery | Explicitly authorized final text and custom metadata. This has different provenance from a served recording observation. |
