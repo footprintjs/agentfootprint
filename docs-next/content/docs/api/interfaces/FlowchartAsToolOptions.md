@@ -175,13 +175,13 @@ joined with this one for the inner run, its result and its kept record.
 Either alone is enough to keep a name out; neither can remove one the
 other selects. With neither, the tool behaves exactly as before.
 
-WHAT IT DOES NOT GOVERN — said here so nobody has to rediscover it:
+NATIVE CONTRACTS AND BOUNDARIES — said here so nobody has to rediscover it:
 
-1. The run's fold base. The redacted view OMITS `initialState`
-   (footprintjs `ExecutionRuntime.getSnapshot`: the raw pre-run seed
-   never passed a policy, so it is dropped rather than served). A fold of
-   a kept record therefore reports `basis: 'log-only'` — partial, and
-   saying so. A subflow's `treeContext.initialState` travels as
+1. The engine's fold-base contract. Older engines omit `initialState`;
+   newer engines retain its policy-filtered base. Only an absent base
+   yields `basis: 'log-only'` and `no-fold-base`. The independent
+   `privacy-policy` caveat warns that values may be withheld. A
+   subflow's `treeContext.initialState` travels as
    footprintjs serves it: its seed is a commit of its own (`history[0]`),
    so that base is the nested runtime's pre-seed state.
 2. The resume checkpoint. A paused run throws with `err.checkpoint`,
