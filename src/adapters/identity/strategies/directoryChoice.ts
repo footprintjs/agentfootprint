@@ -64,6 +64,7 @@ export function directoryPasswordChoice(
     'IDENTITY_LDAP_NETBIOS_DOMAIN',
   );
   const baseDn = need(config.ldapBaseDn, 'ldapBaseDn', 'IDENTITY_LDAP_BASE_DN');
+  const requiredGroups = groupList(config.ldapRequiredGroup);
   const publicUrl = need(config.publicUrl, 'publicUrl', 'IDENTITY_PUBLIC_URL');
   const threshold = needNumber(config.ldapLockoutThreshold, 'IDENTITY_LDAP_LOCKOUT_THRESHOLD');
   const windowMinutes = needNumber(
@@ -113,7 +114,7 @@ export function directoryPasswordChoice(
       domain,
       netbiosDomain,
       baseDn,
-      ...(config.ldapRequiredGroup !== undefined && { requiredGroup: config.ldapRequiredGroup }),
+      ...(requiredGroups !== undefined && { requiredGroup: requiredGroups }),
       log: (line) => console.warn(line),
     });
   } catch (err) {
@@ -168,10 +169,12 @@ export function directoryPasswordChoice(
       ),
       'identity: directory-password is PENDING INDEPENDENT REVIEW before a company install',
       `identity: user id = the authenticated entry's objectGUID (base64) under ${baseDn}` +
-        (config.ldapRequiredGroup !== undefined
-          ? `; required group ${config.ldapRequiredGroup}`
+        (requiredGroups !== undefined
+          ? requiredGroups.length === 1
+            ? `; required group ${requiredGroups[0]}`
+            : `; required group (any one of) ${requiredGroups.join(' | ')}`
           : ''),
-      ...(config.ldapRequiredGroup === undefined && production
+      ...(requiredGroups === undefined && production
         ? [
             'identity: WARNING no IDENTITY_LDAP_REQUIRED_GROUP: every enabled account in the domain can sign in. Set the access group (nested membership is honoured)',
           ]
@@ -232,6 +235,27 @@ function attemptsPerAccount(threshold: number, acceptLow: string | undefined): n
 
 /** The one `IDENTITY_LDAP_CA_FILE` value that is not a file: Node's default CA store. */
 const SYSTEM_TRUST = 'system';
+
+/**
+ * `IDENTITY_LDAP_REQUIRED_GROUP` as a list: DNs separated by `;` (an escaped
+ * `\;` stays inside its DN, RFC 4514), trimmed. Unset is `undefined` (every
+ * account, with the production warning); set but naming nothing refuses the
+ * boot — a value that names no group must not quietly mean "every account".
+ */
+export function groupList(raw: string | undefined): readonly string[] | undefined {
+  if (raw === undefined) return undefined;
+  const groups = raw
+    .split(/(?<!\\);/)
+    .map((g) => g.trim())
+    .filter((g) => g.length > 0);
+  if (groups.length === 0) {
+    throw new IdentityConfigError(
+      'IDENTITY_LDAP_REQUIRED_GROUP is set but names no group. Give one group DN, or several separated by ";", or leave it unset.',
+      'IDENTITY_LDAP_REQUIRED_GROUP',
+    );
+  }
+  return groups;
+}
 
 function need(value: string | undefined, field: string, key: string): string {
   if (typeof value === 'string' && value.trim().length > 0) return value.trim();
