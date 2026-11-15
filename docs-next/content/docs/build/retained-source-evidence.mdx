@@ -53,6 +53,30 @@ The mount adds `find_source_evidence` and `read_source_evidence`. Find uses exac
 typed subject and optional exact operation/scope filters; separate observations
 remain separate. Read accepts an issued receipt reference and an optional named
 dataset, JSON-pointer path and page. A dataset reference is not a receipt.
+
+## Prepare historical metadata before a turn
+
+Opt in separately with `sourceEvidence.preparation.admit` to read retained
+subjects before synchronous `.configure()` runs. A run's `aroundTurn` receives
+`SourceEvidencePreparation`; `recent(SourceEvidenceRecentArgs)` returns a
+`SourceEvidenceRecentResult` page of `SourceEvidenceMetadata`, or a fixed
+unavailable result. Its `SourceEvidencePreparationContext` carries the current
+identity, cancellation and redaction policy, with no fabricated tool call,
+dispatch or artifact capability. Ordinary tool admission is unchanged.
+
+<CodeFile path="examples/artifacts/retained-source-evidence.ts" region="prepare-metadata" title="Explicit metadata admission and preparation" />
+
+Pages contain no scalars, dataset descriptors or rows, including at admission.
+Every retained entry repeats current producer, native permission and preparation
+privacy checks. `complete` describes only the bounded retained-index scan, not
+all prior lookups or source completeness. Index order is historical observation
+order; multiple subjects from one call can be ambiguous. `recordedAt` is retention
+time, not collection time. A current provider catalog is read once per preparation
+at iteration zero; it does not activate a skill or offer an executable tool.
+The capability expires before `proceed` and at wrapper exit. Missing, expired,
+foreign or denied sources cannot be recovered through raw artifact fallback.
+
+## Read retained values through native tools
 Array pages return exact values with `offset`, `shown`, `total` and optional
 `nextOffset`; oversized rows are unavailable rather than silently shortened.
 `SourceEvidenceFindArgs` and `SourceEvidenceReadArgs` describe those requests;

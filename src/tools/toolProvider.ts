@@ -58,7 +58,7 @@ import type { Tool } from './tools.js';
  * the current activation state.
  */
 export interface ToolDispatchContext {
-  /** Current ReAct iteration (1-based). */
+  /** Current ReAct iteration (1-based); 0 is an explicit native metadata-preparation catalog read, never a dispatched iteration. */
   readonly iteration: number;
   /**
    * The id of the currently-activated Skill, if any.
