@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.6.0] - 2026-11-15
+
+### Added
+
+- **Retain exact source evidence across trimmed conversations.** An opt-in native Agent can retain producer-declared subjects, scopes, governed scalars and explicitly permitted dataset fields in the existing artifact store. Bounded find/read tools recheck current host admission and native capabilities on every request, preserve historical status and coverage, and carry only receipt references through native checkpoints. Reads never refresh a source or certify an answer's completeness.
+
+  Mounted findings refusals supply structured recovery through offered retained-source readers while keeping current-request result identity checks strict. Unmounted refusal bytes and terminal decisions remain unchanged.
+
+- **Serve AG-UI through an existing conversation pool.** Event protocols can share the standing host's identity, admission, session lanes, checkpoints and artifact scope. Each run has an isolated translator, explicit host-authorized final delivery, projected custom/tool events and bounded output. The fresh-runner hosting strategy remains available. An opt-in preparation-scoped source metadata reader supports restoring application context from freshly admitted retained evidence without exposing datasets or manufacturing a tool call.
+
+### Fixed
+
+- **Do not offer refused tool calls as findings evidence.** Producer-owned refusal, cancellation and unknown-outcome notices no longer enter advisory result IDs or result identity readers. Historical declarations remain visible with a fresh advisory context-membership status, while citation admission still requires a unique executed result in the actual current request. Stable schemas distinguish those result IDs from historical declarations and artifact references.
+
+  Provider replay and thinking metadata are detached through the native value port before joining assistant history. Valid provider-backed tool proposals retain their call identities in frozen middleware views; the existing unsafe-turn clone guard remains fail-closed.
+
+- **Preserve native sign-in groups and Final input privacy for hosted consumers.** Directory password sign-in accepts any one of several required groups using one bind and one escaped membership search. Empty declarations refuse boot. Final input omits the internal private-selector carrier before reading values while retaining ordinary native secrecy tracking. Both chart builders use the same mapper.
+
 ## [14.5.0] - 2026-11-14
 
 ### Added
